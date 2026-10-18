@@ -42,6 +42,22 @@ SINGLE_AVD_NAME="psphere-single"
 NETCARD_PREFIX="emu-netcard"
 POOL_NETCARD_PREFIX="emu-pool"
 
+# The emulator build every emulator here runs: 36.6.11. install-android-sdk.sh installs it beside the
+# SDK's own emulator, as $ANDROID_HOME/emulator-<build>, because sdkmanager offers only the newest and
+# installs that as a dependency of the system image. Pinned because emulator 37.2.12 never gave back
+# the RenderThreads, and their memory, of an app it had stopped: ten starts and force-stops of the app
+# took it from 89 RenderThreads and 3.9GB to 588 and 7.2GB, so one emulator filled its memory limit
+# part way through the app's Android suite and stopped answering. The same ten on 36.6.11 went from
+# 88 to 108 and 3.9GB to 4.3GB.
+EMULATOR_BUILD="15507667"
+
+#
+# Prints the path of the pinned emulator program, whether or not it is installed.
+#
+pinned_emulator_path() {
+    echo "${ANDROID_HOME:-${HOME}/Android/Sdk}/emulator-$EMULATOR_BUILD/emulator"
+}
+
 #
 # Prints the path of the lock file held for the whole of one test while that test is using the device
 # with the given adb serial. The smoke-test harness takes it in apps/smoke-tests/lib/runner.sh, and

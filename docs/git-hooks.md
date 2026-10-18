@@ -50,7 +50,6 @@ There is one hook, `.githooks/pre-commit`. It delegates to `bun run test:everyth
 | CLI to desktop LAN share tests | `bun run test:lan-share:cli-desktop` | `bun run test:lan-share:cli-desktop` |
 | Mobile harness tests | `bun run test:harness` | `bun run test:harness` |
 | Mobile smoke tests | `bun run test:and` | `bun run test:ios` |
-| Mobile native unit tests | `bun run test:and:unit` | `bun run test:ios:unit` |
 
 The platform split is decided by `what-changed.yaml`, and matches what the parallel runner used to decide with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
 
@@ -100,12 +99,9 @@ With no arguments it considers every target for this platform. With script names
 
 **It stops as soon as anything fails.** The remaining scripts are killed rather than left to finish, along with everything they started, so a failure comes back in seconds instead of after the slowest suite has run its course. There is no point waiting for an answer that is already "no", and one failure is enough to stop a commit or a push. The trade is that a run tells you about the first failure rather than all of them: anything still running is reported as cancelled with its result unknown, so a second failure elsewhere only surfaces once the first is fixed.
 
-Two things to be aware of when running everything at once:
+One thing to be aware of when running everything at once: `compile` writes `dist` while the test suites read the source tree.
 
-- `test:and` and `test:and:unit` both run `bun run sync` and Gradle against the same `apps/android-frontend/android` project, so in parallel they are two builds in one project directory. The same applies to `test:ios` and `test:ios:unit`.
-- `compile` writes `dist` while the test suites read the source tree.
-
-Neither has caused a failure in practice, but if you see a build error that makes no sense, re-run the one script on its own before believing it.
+It has not caused a failure in practice, but if you see a build error that makes no sense, re-run the one script on its own before believing it.
 
 ## When a suite is skipped
 
@@ -119,8 +115,8 @@ The watched paths as they stand:
 | `test` | `packages`, `apps` | any |
 | `test:cli` | `apps/cli`, `packages` | any |
 | `test:electron` | `apps/desktop`, `apps/desktop-frontend`, `packages` | any |
-| `test:and`, `test:and:unit` | `apps/android-frontend`, `apps/smoke-tests`, `packages` | Linux |
-| `test:ios`, `test:ios:unit` | `apps/ios-frontend`, `apps/smoke-tests`, `packages` | macOS |
+| `test:and` | `apps/android-frontend`, `apps/smoke-tests`, `packages` | Linux |
+| `test:ios` | `apps/ios-frontend`, `apps/smoke-tests`, `packages` | macOS |
 
 Every target also watches `always`: `package.json`, `bun.lock`, `mise.toml`, `what-changed.yaml`, `scripts` and `.githooks`. Anything that changes how every suite runs makes every suite run.
 

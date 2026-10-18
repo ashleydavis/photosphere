@@ -171,7 +171,7 @@ bun run test:parallel -- --scripts "test test:cli" # just these two, for a quick
 bun run test:parallel -- --help
 ```
 
-**A default run needs the emulator pool already up.** It checks every suite `bun run test:everything` starts in a parallel lane, plus the mobile suites this machine can actually run: each script alone, then every pair of them. Those are the suites that already run beside each other on every commit, so a pair that contends refuses a commit whether or not this check looked at it. `compile` is left out (a build, not a suite), and so are the native unit suites, which `test:everything` already keeps apart from their own smoke suites. The number of pairs grows with the square of the number of suites, so name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
+**A default run needs the emulator pool already up.** It checks every suite `bun run test:everything` starts in a parallel lane, plus the mobile suites this machine can actually run: each script alone, then every pair of them. Those are the suites that already run beside each other on every commit, so a pair that contends refuses a commit whether or not this check looked at it. `compile` is left out (a build, not a suite). The number of pairs grows with the square of the number of suites, so name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
 
 **Everything runs once.** Each script alone once, each combination once. A conflict that only shows up on some runs will be missed, so this answers whether a conflict is there, not how often it happens. That is a deliberate trade for a run you might actually start: `bun run find-flakey-tests` is the tool for the second question.
 
@@ -179,7 +179,7 @@ bun run test:parallel -- --help
 
 **Self-pairs are included**, so three scripts is 6 combinations rather than 3: each script is also checked against a second copy of itself. Nothing in `test:everything` runs one suite twice at once, but two worktrees, two developers on one machine, or a rerun started before the last one finished all do. A self-pair failure means exactly that: the suite cannot be run twice at once, usually because it hardcodes a path, a port or a lock.
 
-**Nothing is muted.** The pairs `SERIAL_GROUPS` in `scripts/test-everything-parallel.sh` already keeps apart (`test:and:unit` with `test:and`, `test:ios:unit` with `test:ios`) are reported as interference like any other, because a known conflict is still a conflict. They are also the positive control: run `bun run test:parallel -- --scripts "test:and test:and:unit"` and a check that does not report them is a check that is not working.
+**Nothing is muted.** A pair that `SERIAL_GROUPS` in `scripts/test-everything-parallel.sh` keeps apart is reported as interference like any other, because a known conflict is still a conflict.
 
 The three verdicts:
 

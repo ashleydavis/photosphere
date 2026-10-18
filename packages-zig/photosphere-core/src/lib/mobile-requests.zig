@@ -139,7 +139,7 @@ pub fn startBackgroundImportHandler(context: *TaskContext, data: std.json.Value)
     if (!granted.?.bool) {
         utils.log.log.info("Notifications were refused; the background import runs without its notification.");
     }
-    try background_work.startBackgroundWork(context);
+    background_work.startBackgroundWork(context);
     utils.log.log.info("Started the background automatic import.");
     return try context.arena.dupe(u8, "null");
 }

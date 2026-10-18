@@ -145,7 +145,7 @@ targets:
       - apps/smoke-tests
 
   # The mobile suites need a toolchain that only exists on one platform: an Android emulator for
-  # these two, Xcode for the two below. Listing platforms keeps them out of the report entirely on
+  # this one, Xcode for the one below. Listing platforms keeps them out of the report entirely on
   # the other one, so the runner is never asked for a script it cannot run.
   - name: test:and
     paths:
@@ -155,23 +155,7 @@ targets:
     platforms:
       - linux
 
-  - name: test:and:unit
-    paths:
-      - apps/android-frontend
-      - apps/smoke-tests
-      - packages
-    platforms:
-      - linux
-
   - name: test:ios
-    paths:
-      - apps/ios-frontend
-      - apps/smoke-tests
-      - packages
-    platforms:
-      - darwin
-
-  - name: test:ios:unit
     paths:
       - apps/ios-frontend
       - apps/smoke-tests

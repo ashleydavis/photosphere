@@ -518,10 +518,10 @@ fn handleMcpServerEnd(state: *MainState, arena: std.mem.Allocator, end: ziggy.ty
 //
 fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
     const state = main_state.fromCore(core);
-    if (background_work.Loop.fromTaskType(end.task_type)) |loop| {
-        state.releaseBackgroundLoop(loop);
+    if (background_work.Pass.fromTaskType(end.task_type)) |pass| {
+        state.releaseBackgroundPass(pass);
         if (end.status == .failed) {
-            utils.log.log.@"error"(try std.fmt.allocPrint(arena, "The background {s} loop stopped: {s}", .{ loop.label(), errorMessageOrUnknown(end.error_message) }));
+            utils.log.log.@"error"(try std.fmt.allocPrint(arena, "The background {s} pass failed: {s}", .{ pass.label(), errorMessageOrUnknown(end.error_message) }));
         }
     }
     if (std.mem.eql(u8, end.task_type, "ensure-auto-import") and end.status == .failed) {

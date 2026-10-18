@@ -163,10 +163,15 @@ pub const MainState = struct {
     single_instance: ?single_instance.SingleInstance,
     // When the signal of a second copy is next looked for, or null when this copy holds no lock.
     single_instance_check_at: ?i64,
-    // Which of the phone's background loops (see background-work.zig) are queued or running, by loop, so starting one that is already
-    // running does nothing and one that ended is started again.
-    background_loops_running: [background_work.LOOP_COUNT]bool,
-    // What the last completed background prefetch pass said about the replica, which the background sync loop holds back for.
+    // Which pieces of background work (see background-work.zig) are switched on, by pass.
+    background_passes_on: [background_work.PASS_COUNT]bool,
+    // When each pass that is switched on is next due, by pass, or null while it is running or switched off.
+    background_pass_due_at: [background_work.PASS_COUNT]?i64,
+    // Which passes are queued or running, by pass, so a pass is never run twice at once.
+    background_passes_running: [background_work.PASS_COUNT]bool,
+    // Whether the next sync pass is the first since the sync was switched on, which only reads the gap (see runSyncPass).
+    first_sync_pass: bool,
+    // What the last completed background prefetch pass said about the replica, which the background sync pass holds back for.
     prefetch_replica_state: std.atomic.Value(background_work.ReplicaState),
     // Makes the ids of the tasks the main process queues.
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
@@ -240,7 +245,10 @@ pub const MainState = struct {
             .mcp_bridge = mcp_bridge.McpBridge.init(core.allocator, core.io()),
             .single_instance = null,
             .single_instance_check_at = null,
-            .background_loops_running = [_]bool{false} ** background_work.LOOP_COUNT,
+            .background_passes_on = [_]bool{false} ** background_work.PASS_COUNT,
+            .background_pass_due_at = [_]?i64{null} ** background_work.PASS_COUNT,
+            .background_passes_running = [_]bool{false} ** background_work.PASS_COUNT,
+            .first_sync_pass = false,
             .prefetch_replica_state = .init(.unknown),
             .uuid_generator = .{},
             .stopping = .init(false),
@@ -292,27 +300,134 @@ pub const MainState = struct {
     }
 
     //
-    // Takes the right to start a background loop. Returns true when the loop was not queued or running, in which case the caller must
-    // queue it (and give the right back with releaseBackgroundLoop if it cannot), and false when it already is.
+    // Switches a piece of background work on. A pass that was off is due at once. One that is already on changes nothing. While any of
+    // the work is on the app is held running, so the passes go on with the app off screen.
     //
-    pub fn claimBackgroundLoop(self: *MainState, loop: background_work.Loop) bool {
+    pub fn switchOnBackgroundPass(self: *MainState, pass: background_work.Pass) void {
+        {
+            self.lock();
+            defer self.unlock();
+            const index = @intFromEnum(pass);
+            if (self.background_passes_on[index]) {
+                return;
+            }
+            self.background_passes_on[index] = true;
+            self.background_pass_due_at[index] = self.now();
+            if (pass == .sync) {
+                self.first_sync_pass = true;
+            }
+        }
+        // Outside the state's lock, so it is never held while the runner's lock is taken.
+        self.core.runner.holdKeepAlive(true);
+    }
+
+    //
+    // Switches all the background work off, and lets the app go. A pass in flight still ends, and nothing is due after it.
+    //
+    pub fn switchOffBackgroundPasses(self: *MainState) void {
+        {
+            self.lock();
+            defer self.unlock();
+            self.background_passes_on = [_]bool{false} ** background_work.PASS_COUNT;
+            self.background_pass_due_at = [_]?i64{null} ** background_work.PASS_COUNT;
+        }
+        self.core.runner.holdKeepAlive(false);
+    }
+
+    //
+    // Takes the right to run a pass when it is switched on, due by the given time and not queued or running. Returns true when it
+    // took it, in which case the caller must run the pass and give the right back with releaseBackgroundPass, and false otherwise.
+    //
+    pub fn takeDueBackgroundPass(self: *MainState, pass: background_work.Pass, current: i64) bool {
         self.lock();
         defer self.unlock();
-        const index = @intFromEnum(loop);
-        if (self.background_loops_running[index]) {
+        const index = @intFromEnum(pass);
+        const due = self.background_pass_due_at[index] orelse {
+            return false;
+        };
+        if (!self.background_passes_on[index] or self.background_passes_running[index] or current < due) {
             return false;
         }
-        self.background_loops_running[index] = true;
+        self.background_passes_running[index] = true;
+        self.background_pass_due_at[index] = null;
         return true;
     }
 
     //
-    // Says a background loop is no longer queued or running, because its task ended.
+    // Says a pass is no longer queued or running.
     //
-    pub fn releaseBackgroundLoop(self: *MainState, loop: background_work.Loop) void {
+    pub fn releaseBackgroundPass(self: *MainState, pass: background_work.Pass) void {
         self.lock();
         defer self.unlock();
-        self.background_loops_running[@intFromEnum(loop)] = false;
+        self.background_passes_running[@intFromEnum(pass)] = false;
+    }
+
+    //
+    // Records how a pass ended: the next is due after the gap it asked for, unless the work is finished or has been switched off. When
+    // the last of the work finishes, the app is let go.
+    //
+    pub fn backgroundPassEnded(self: *MainState, pass: background_work.Pass, result: background_work.IPassResult) void {
+        {
+            self.lock();
+            defer self.unlock();
+            const index = @intFromEnum(pass);
+            if (!self.background_passes_on[index]) {
+                return;
+            }
+            if (!result.finished) {
+                self.background_pass_due_at[index] = self.now() + @as(i64, @intCast(result.gap_ms));
+                return;
+            }
+            self.background_passes_on[index] = false;
+            self.background_pass_due_at[index] = null;
+            for (self.background_passes_on) |on| {
+                if (on) {
+                    return;
+                }
+            }
+        }
+        self.core.runner.holdKeepAlive(false);
+    }
+
+    //
+    // Whether the next sync pass is the first since the sync was switched on, and from now on it is not.
+    //
+    pub fn takeFirstSyncPass(self: *MainState) bool {
+        self.lock();
+        defer self.unlock();
+        const first = self.first_sync_pass;
+        self.first_sync_pass = false;
+        return first;
+    }
+
+    //
+    // Queues the passes that are due. One that cannot be queued is said out loud and tried again after the fallback gap.
+    //
+    fn queueDueBackgroundPasses(self: *MainState) void {
+        const current = self.now();
+        inline for (std.meta.fields(background_work.Pass)) |field| {
+            const pass: background_work.Pass = @enumFromInt(field.value);
+            if (self.takeDueBackgroundPass(pass, current)) {
+                self.queueBackgroundPass(pass) catch |err| {
+                    utils.log.log.exception("Error queuing a background pass", err);
+                    self.releaseBackgroundPass(pass);
+                    self.backgroundPassEnded(pass, .{
+                        .gap_ms = background_work.FALLBACK_PAUSE_MS,
+                        .finished = false,
+                    });
+                };
+            }
+        }
+    }
+
+    //
+    // Queues one pass as a task of its own, under its own source.
+    //
+    fn queueBackgroundPass(self: *MainState, pass: background_work.Pass) !void {
+        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena_state.deinit();
+        const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
+        try self.core.runner.addTask(task_id, pass.taskType(), pass.source(), "null", .background, null);
     }
 
     //
@@ -640,6 +755,7 @@ pub const MainState = struct {
                 utils.log.log.exception("Error looking for a second instance of the app", err);
             };
         }
+        self.queueDueBackgroundPasses();
     }
 
     //

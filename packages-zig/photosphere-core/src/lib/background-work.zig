@@ -1,15 +1,16 @@
 //
-// The work a phone does with the app off screen: the automatic import, the sync and the prefetch of a partial replica. Each is a loop
-// that asks a planning task what its next pass should do, runs the tasks the plan hands back one after another, waits the gap the plan
-// asked for, and asks again.
+// The background work: the automatic import, the sync and the prefetch of a partial replica. Each is a pass that asks a planning task
+// what to do, runs the tasks the plan hands back one after another, and ends. A pass with nothing to do ends straight away.
 //
-// Each loop is a task of its own whose type is registered as keep-alive, so while any of them is queued or running the core asks the
-// shell to keep the app running (on Android a foreground service with its notification). The loops are queued by startBackgroundWork,
-// which the page's startBackgroundImport request calls, and ended by stopBackgroundWork, which its stopBackgroundImport request calls,
-// or by themselves when their plan says there is nothing left to do.
+// A pass never waits for the next one: it holds a worker thread only while it works. The core's timer starts the next pass when the gap
+// the plan asked for is up (see MainState.runDueTimers). startBackgroundWork, which the page's startBackgroundImport request calls,
+// switches the work on, and stopBackgroundWork, which its stopBackgroundImport request calls, switches it off.
 //
-// The decisions of a pass are in the functions that take a LoopHost, a plain interface over everything that needs the platform or the
-// core, so they are tested with no core and no phone. The loops report what they are doing to the shell, which writes it to the
+// While any of the work is switched on the core holds the app running (on Android a foreground service with its notification), so the
+// timer goes on starting passes with the app off screen. Each pass is also a task whose type is registered as keep-alive.
+//
+// The decisions of a pass are in the functions that take a PassHost, a plain interface over everything that needs the platform or the
+// core, so they are tested with no core and no phone. The passes report what they are doing to the shell, which writes it to the
 // system log: the app's own log file is written through the page, which is suspended exactly when this work matters.
 //
 
@@ -25,8 +26,8 @@ const json_util = ziggy.json_util;
 //
 // The gap between automatic import or prefetch passes when no plan has said what it should be, in milliseconds.
 //
-// Only reached when the very first plan read fails, because every plan carries a gap that the settings file resolves. It exists
-// because a gap of zero is not a gap: the loop would ask for a pass, fail to read a plan, and ask again as fast as it could be answered.
+// Only reached when a plan cannot be read, because every plan carries a gap that the settings file resolves. It exists because a gap
+// of zero is not a gap: the timer would start a pass, the pass would fail to read a plan, and the next would start as fast as it could.
 //
 pub const FALLBACK_PAUSE_MS: u64 = 30_000;
 
@@ -36,14 +37,9 @@ pub const FALLBACK_PAUSE_MS: u64 = 30_000;
 pub const SYNC_FALLBACK_PAUSE_MS: u64 = 5 * 60 * 1000;
 
 //
-// How long a wait between passes sleeps before it looks again at whether the loop has been told to stop, in milliseconds.
+// The three passes.
 //
-const PAUSE_SLICE_MS: u64 = 100;
-
-//
-// The three loops.
-//
-pub const Loop = enum {
+pub const Pass = enum {
     // Automatic import: takes new photos from the device library into the default database.
     import,
     // Sync: pushes the database the user works in to its origin.
@@ -52,9 +48,9 @@ pub const Loop = enum {
     prefetch,
 
     //
-    // The task type the loop runs as.
+    // The task type the pass runs as.
     //
-    pub fn taskType(self: Loop) []const u8 {
+    pub fn taskType(self: Pass) []const u8 {
         return switch (self) {
             .import => "background-auto-import",
             .sync => "background-sync",
@@ -63,9 +59,9 @@ pub const Loop = enum {
     }
 
     //
-    // The source the loop and every task it starts are queued under, so one cancellation stops the loop and the pass it is in.
+    // The source the pass and every task it starts are queued under, so one cancellation stops the pass and what it started.
     //
-    pub fn source(self: Loop) []const u8 {
+    pub fn source(self: Pass) []const u8 {
         return switch (self) {
             .import => "auto-import",
             .sync => "background-sync",
@@ -74,9 +70,9 @@ pub const Loop = enum {
     }
 
     //
-    // What the loop's tasks are called in the messages about them.
+    // What the pass's tasks are called in the messages about them.
     //
-    pub fn label(self: Loop) []const u8 {
+    pub fn label(self: Pass) []const u8 {
         return switch (self) {
             .import => "import",
             .sync => "sync",
@@ -85,13 +81,13 @@ pub const Loop = enum {
     }
 
     //
-    // The loop that runs as a task type, or null when the type is not a loop's.
+    // The pass that runs as a task type, or null when the type is not a pass's.
     //
-    pub fn fromTaskType(task_type: []const u8) ?Loop {
-        inline for (std.meta.fields(Loop)) |field| {
-            const loop: Loop = @enumFromInt(field.value);
-            if (std.mem.eql(u8, loop.taskType(), task_type)) {
-                return loop;
+    pub fn fromTaskType(task_type: []const u8) ?Pass {
+        inline for (std.meta.fields(Pass)) |field| {
+            const pass: Pass = @enumFromInt(field.value);
+            if (std.mem.eql(u8, pass.taskType(), task_type)) {
+                return pass;
             }
         }
         return null;
@@ -99,12 +95,22 @@ pub const Loop = enum {
 };
 
 //
-// How many loops there are.
+// How many passes there are.
 //
-pub const LOOP_COUNT = std.meta.fields(Loop).len;
+pub const PASS_COUNT = std.meta.fields(Pass).len;
 
 //
-// What the last completed prefetch pass says about the replica, for the sync loop, which holds back while a prefetch is making
+// What a finished pass says should happen next.
+//
+pub const IPassResult = struct {
+    // How long to wait before the next pass, in milliseconds.
+    gap_ms: u64,
+    // Whether the work is over until it is switched on again: automatic import is switched off, or the replica is complete.
+    finished: bool,
+};
+
+//
+// What the last completed prefetch pass says about the replica, for the sync pass, which holds back while a prefetch is making
 // progress.
 //
 // A sync that runs while a prefetch is working does the same work slowly and gets in its own way. What a sync must never do is wait for
@@ -118,7 +124,7 @@ pub const ReplicaState = enum(u8) {
     working,
     // The last pass fetched nothing and left files missing, or failed outright. The prefetch is stuck, and syncing stops waiting for it.
     stalled,
-    // The last pass fetched nothing and found nothing missing: the replica is filled in and the loop has stopped. Syncing is allowed.
+    // The last pass fetched nothing and found nothing missing: the replica is filled in and the prefetch has finished. Syncing is allowed.
     complete,
 };
 
@@ -136,8 +142,8 @@ pub const IStep = struct {
 // What running one step did.
 //
 pub const IStepResult = struct {
-    // Whether the step succeeded. A step that failed leaves the loop running, because what would not work is tried again on the next
-    // pass.
+    // Whether the step succeeded. A step that failed leaves the work switched on, because what would not work is tried again on the
+    // next pass.
     succeeded: bool,
     // How many files the step copied down from the origin (a prefetch step), or 0.
     files_fetched: u64,
@@ -162,10 +168,10 @@ pub const IPlan = struct {
 };
 
 //
-// Everything a loop needs that it cannot do itself: running the planning task and the steps, waiting, keeping the CPU awake, and saying
-// what happened. An interface so the loops' decisions are tested with no core, no phone and no clock.
+// Everything a pass needs that it cannot do itself: running the planning task and the steps, keeping the CPU awake, and saying what
+// happened. An interface so the passes' decisions are tested with no core and no phone.
 //
-pub const LoopHost = struct {
+pub const PassHost = struct {
     // The implementation.
     ptr: *anyopaque,
     // The implementation's functions.
@@ -175,48 +181,42 @@ pub const LoopHost = struct {
     // The functions an implementation provides.
     //
     pub const VTable = struct {
-        // Runs the planning task and returns its outputs. Fails when the task fails, which the loop treats as a pass that did not work
+        // Runs the planning task and returns its outputs. Fails when the task fails, which the pass treats as a pass that did not work
         // rather than as a reason to give up.
         readPlan: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value,
         // Runs one step and waits for it to finish.
         runStep: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, step: IStep) anyerror!IStepResult,
-        // Waits for the given number of milliseconds, or until the loop is stopped. Returns false when the wait was cut short by a stop.
-        pause: *const fn (ptr: *anyopaque, millis: u64) bool,
         // Keeps the CPU running while a pass is in flight, and lets it sleep again afterwards.
         holdAwake: *const fn (ptr: *anyopaque, awake: bool) anyerror!void,
-        // Says what the loop is doing.
+        // Says what the pass is doing.
         report: *const fn (ptr: *anyopaque, message: []const u8) void,
         // Says what went wrong.
         reportError: *const fn (ptr: *anyopaque, message: []const u8) void,
-        // Whether the loop has been told to stop.
+        // Whether the pass has been told to stop.
         isStopped: *const fn (ptr: *anyopaque) bool,
     };
 
-    fn readPlan(self: LoopHost, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) !std.json.Value {
+    fn readPlan(self: PassHost, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) !std.json.Value {
         return try self.vtable.readPlan(self.ptr, allocator, plan_task, data);
     }
 
-    fn runStep(self: LoopHost, allocator: std.mem.Allocator, step: IStep) !IStepResult {
+    fn runStep(self: PassHost, allocator: std.mem.Allocator, step: IStep) !IStepResult {
         return try self.vtable.runStep(self.ptr, allocator, step);
     }
 
-    fn pause(self: LoopHost, millis: u64) bool {
-        return self.vtable.pause(self.ptr, millis);
-    }
-
-    fn holdAwake(self: LoopHost, awake: bool) !void {
+    fn holdAwake(self: PassHost, awake: bool) !void {
         try self.vtable.holdAwake(self.ptr, awake);
     }
 
-    fn report(self: LoopHost, message: []const u8) void {
+    fn report(self: PassHost, message: []const u8) void {
         self.vtable.report(self.ptr, message);
     }
 
-    fn reportError(self: LoopHost, message: []const u8) void {
+    fn reportError(self: PassHost, message: []const u8) void {
         self.vtable.reportError(self.ptr, message);
     }
 
-    fn isStopped(self: LoopHost) bool {
+    fn isStopped(self: PassHost) bool {
         return self.vtable.isStopped(self.ptr);
     }
 };
@@ -282,20 +282,10 @@ pub fn parsePlan(allocator: std.mem.Allocator, outputs: std.json.Value, fallback
 }
 
 //
-// What a finished pass says about what should happen next.
+// Reads the plan of a pass, reporting a failure to read it. A plan that cannot be read is not an answer of "finished": treating it as
+// one would switch the work off for good over a single failed task, so the caller counts the pass as run and the next one asks again.
 //
-pub const PassOutcome = enum {
-    // The pass ran, or tried to. Wait the gap and go again.
-    ran,
-    // The loop's work is over: automatic import is switched off, or the replica is complete. End the loop.
-    stop,
-};
-
-//
-// Reads the plan of a pass, reporting a failure to read it. A plan that cannot be read is not an answer of "stop": treating it as one
-// would end the loop for good over a single failed task, so the caller counts the pass as run and the next one asks again.
-//
-fn readPlanOrReport(allocator: std.mem.Allocator, host: LoopHost, plan_task: []const u8, data: std.json.Value, fallback_pause_ms: u64, what: []const u8) ?IPlan {
+fn readPlanOrReport(allocator: std.mem.Allocator, host: PassHost, plan_task: []const u8, data: std.json.Value, fallback_pause_ms: u64, what: []const u8) ?IPlan {
     const outputs = host.readPlan(allocator, plan_task, data) catch |err| {
         const text = std.fmt.allocPrint(allocator, "Could not work out {s}: {s}", .{ what, describe(allocator, err) }) catch "Could not work out what to do.";
         host.reportError(text);
@@ -314,7 +304,7 @@ fn readPlanOrReport(allocator: std.mem.Allocator, host: LoopHost, plan_task: []c
 const StepsOutcome = enum {
     // Every step succeeded.
     completed,
-    // The loop was stopped before a step started.
+    // The pass was stopped before a step started.
     stopped,
     // A step failed or did not succeed, which is reported.
     failed,
@@ -322,11 +312,11 @@ const StepsOutcome = enum {
 
 //
 // Runs the steps of a plan in order, with the CPU held awake for the length of the pass, collecting what each did into results. The
-// rest of the pass is abandoned, and not the loop, when the loop is stopped before a step or a step does not work: what failed is tried
-// again on the next pass, from the plan. A step that does not work is reported even when the loop is being stopped, because a stop
-// cancels the step and says nothing about why it ended.
+// rest of the pass is abandoned when the pass is stopped before a step or a step does not work: what failed is tried again on the next
+// pass, from the plan. A step that does not work is reported even when the pass is being stopped, because a stop cancels the step and
+// says nothing about why it ended.
 //
-fn runSteps(allocator: std.mem.Allocator, host: LoopHost, plan: IPlan, label: []const u8, results: *std.ArrayList(IStepResult)) StepsOutcome {
+fn runSteps(allocator: std.mem.Allocator, host: PassHost, plan: IPlan, label: []const u8, results: *std.ArrayList(IStepResult)) StepsOutcome {
     for (plan.steps) |step| {
         if (host.isStopped()) {
             return .stopped;
@@ -340,7 +330,7 @@ fn runSteps(allocator: std.mem.Allocator, host: LoopHost, plan: IPlan, label: []
             return .failed;
         }
         results.append(allocator, result) catch {
-            host.reportError("The loop ran out of memory.");
+            host.reportError("The pass ran out of memory.");
             return .failed;
         };
     }
@@ -348,20 +338,34 @@ fn runSteps(allocator: std.mem.Allocator, host: LoopHost, plan: IPlan, label: []
 }
 
 //
-// One pass of the automatic import: asks the plan-auto-import task what to do and runs the tasks it hands back.
+// One pass of the automatic import: asks the plan-auto-import task what to do and runs the tasks it hands back. Finished when the plan
+// says automatic import is switched off.
 //
-fn importPass(allocator: std.mem.Allocator, host: LoopHost, pause_ms: *u64) PassOutcome {
+// A pass that fails does not finish the work. The next one runs anyway: an import can fail for a reason that has since gone (no space
+// at that moment, a file being written as it was read), and giving up would leave automatic import switched on in the interface and
+// doing nothing.
+//
+pub fn runImportPass(allocator: std.mem.Allocator, host: PassHost) IPassResult {
     const plan = readPlanOrReport(allocator, host, "plan-auto-import", .null, FALLBACK_PAUSE_MS, "what automatic import should do") orelse {
-        return .ran;
+        return .{
+            .gap_ms = FALLBACK_PAUSE_MS,
+            .finished = false,
+        };
     };
-    pause_ms.* = plan.pause_ms;
+    const ran: IPassResult = .{
+        .gap_ms = plan.pause_ms,
+        .finished = false,
+    };
     if (!plan.should_run) {
         host.report("Automatic import is switched off.");
-        return .stop;
+        return .{
+            .gap_ms = plan.pause_ms,
+            .finished = true,
+        };
     }
     host.holdAwake(true) catch |err| {
         host.reportError(std.fmt.allocPrint(allocator, "Could not keep the phone awake for automatic import: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
-        return .ran;
+        return ran;
     };
     defer host.holdAwake(false) catch |err| {
         host.reportError(std.fmt.allocPrint(allocator, "Could not let the phone sleep again after automatic import: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
@@ -369,33 +373,7 @@ fn importPass(allocator: std.mem.Allocator, host: LoopHost, pause_ms: *u64) Pass
     host.report(std.fmt.allocPrint(allocator, "Automatic import running into \"{s}\".", .{plan.database_path}) catch "Automatic import running.");
     var results: std.ArrayList(IStepResult) = .empty;
     _ = runSteps(allocator, host, plan, "Automatic import", &results);
-    return .ran;
-}
-
-//
-// The automatic import loop. Runs passes until a plan says automatic import is switched off, or until the host says to stop.
-//
-// A pass that fails does not end the loop. The next one is scheduled anyway: an import can fail for a reason that has since gone (no
-// space at that moment, a file being written as it was read), and giving up would leave automatic import switched on in the
-// interface and doing nothing.
-//
-pub fn runImportLoop(allocator: std.mem.Allocator, host: LoopHost) void {
-    var pause_ms: u64 = FALLBACK_PAUSE_MS;
-    while (!host.isStopped()) {
-        var arena_state = std.heap.ArenaAllocator.init(allocator);
-        defer arena_state.deinit();
-        const outcome = importPass(arena_state.allocator(), host, &pause_ms);
-        if (outcome == .stop) {
-            host.report("Automatic import is switched off. The sync loop carries on.");
-            return;
-        }
-        if (host.isStopped()) {
-            return;
-        }
-        if (!host.pause(pause_ms)) {
-            return;
-        }
-    }
+    return ran;
 }
 
 //
@@ -410,32 +388,46 @@ fn replicaStateName(state: ReplicaState) []const u8 {
 // Asks the plan-sync task whether a sync should run. What the prefetch is doing goes with the question, because a sync that runs while
 // a prefetch is working does the same work slowly and gets in its own way.
 //
-fn readSyncPlan(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState)) ?IPlan {
+fn readSyncPlan(allocator: std.mem.Allocator, host: PassHost, replica_state: *std.atomic.Value(ReplicaState)) ?IPlan {
     var request: std.json.ObjectMap = .empty;
     request.put(allocator, "prefetchState", .{
         .string = replicaStateName(replica_state.load(.acquire)),
     }) catch {
-        host.reportError("The sync loop ran out of memory.");
+        host.reportError("The sync pass ran out of memory.");
         return null;
     };
     return readPlanOrReport(allocator, host, "plan-sync", .{ .object = request }, SYNC_FALLBACK_PAUSE_MS, "whether a sync should run");
 }
 
 //
-// One pass of the sync: asks the plan-sync task whether a sync should run, and runs the tasks it hands back.
+// One pass of the sync: asks the plan-sync task whether a sync should run, and runs the tasks it hands back. Never finished, because
+// every reason a sync is refused can go away without the app being touched.
 //
-fn syncPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState), pause_ms: *u64) void {
+// The first pass after the work is switched on only reads the gap, so the first sync waits the configured pause too. The work is switched
+// on when a database is opened, and a sync at that moment would push a database the user has only just opened, racing whatever they do
+// to it next. The pause is a setting only the plan reads.
+//
+pub fn runSyncPass(allocator: std.mem.Allocator, host: PassHost, replica_state: *std.atomic.Value(ReplicaState), first: bool) IPassResult {
     const plan = readSyncPlan(allocator, host, replica_state) orelse {
-        return;
+        return .{
+            .gap_ms = SYNC_FALLBACK_PAUSE_MS,
+            .finished = false,
+        };
     };
-    pause_ms.* = plan.pause_ms;
+    const ran: IPassResult = .{
+        .gap_ms = plan.pause_ms,
+        .finished = false,
+    };
+    if (first) {
+        return ran;
+    }
     if (!plan.should_run) {
         host.report(std.fmt.allocPrint(allocator, "Not syncing: {s}", .{plan.reason}) catch "Not syncing.");
-        return;
+        return ran;
     }
     host.holdAwake(true) catch |err| {
         host.reportError(std.fmt.allocPrint(allocator, "Could not keep the phone awake for a sync: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
-        return;
+        return ran;
     };
     defer host.holdAwake(false) catch |err| {
         host.reportError(std.fmt.allocPrint(allocator, "Could not let the phone sleep again after a sync: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
@@ -443,52 +435,37 @@ fn syncPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.at
     host.report(std.fmt.allocPrint(allocator, "Syncing \"{s}\".", .{plan.database_path}) catch "Syncing.");
     var results: std.ArrayList(IStepResult) = .empty;
     _ = runSteps(allocator, host, plan, "Sync", &results);
-}
-
-//
-// The sync loop. Runs passes until the host says to stop. It never ends itself, because every reason a sync is refused can go away
-// without the app being touched.
-//
-// The first sync waits the configured pause too. The loop starts when a database is opened, and a sync at that moment would push a
-// database the user has only just opened, racing whatever they do to it next. The pause is a setting only the plan reads.
-//
-pub fn runSyncLoop(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState)) void {
-    var pause_ms: u64 = SYNC_FALLBACK_PAUSE_MS;
-    {
-        var arena_state = std.heap.ArenaAllocator.init(allocator);
-        defer arena_state.deinit();
-        if (readSyncPlan(arena_state.allocator(), host, replica_state)) |plan| {
-            pause_ms = plan.pause_ms;
-        }
-    }
-    while (!host.isStopped()) {
-        if (!host.pause(pause_ms)) {
-            return;
-        }
-        var arena_state = std.heap.ArenaAllocator.init(allocator);
-        defer arena_state.deinit();
-        syncPass(arena_state.allocator(), host, replica_state, &pause_ms);
-    }
+    return ran;
 }
 
 //
 // One pass of the prefetch: asks the plan-prefetch task whether a prefetch should run and runs the tasks it hands back. Records what
-// the pass says about the replica for the sync loop, and says whether the replica is now complete.
+// the pass says about the replica for the sync pass. Finished when the replica is complete, because asking again would walk every
+// object at the origin every gap. Opening a database switches it on again.
 //
-fn prefetchPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState), pause_ms: *u64) PassOutcome {
+// A pass that fails does not finish the work. The next one runs anyway: a file can fail to copy for a reason that has since gone, and
+// these passes exist precisely because a prefetch that gave up was never tried again.
+//
+pub fn runPrefetchPass(allocator: std.mem.Allocator, host: PassHost, replica_state: *std.atomic.Value(ReplicaState)) IPassResult {
     const plan = readPlanOrReport(allocator, host, "plan-prefetch", .null, FALLBACK_PAUSE_MS, "what the background prefetch should do") orelse {
-        return .ran;
+        return .{
+            .gap_ms = FALLBACK_PAUSE_MS,
+            .finished = false,
+        };
     };
-    pause_ms.* = plan.pause_ms;
+    const ran: IPassResult = .{
+        .gap_ms = plan.pause_ms,
+        .finished = false,
+    };
     if (!plan.should_run) {
-        // Refused, not finished. The loop keeps asking, because everything that refuses a pass can stop refusing without the app
+        // Refused, not finished. The next pass asks again, because everything that refuses a pass can stop refusing without the app
         // being touched.
         host.report(std.fmt.allocPrint(allocator, "No database to fill in: {s}", .{plan.reason}) catch "No database to fill in.");
-        return .ran;
+        return ran;
     }
     host.holdAwake(true) catch |err| {
         host.reportError(std.fmt.allocPrint(allocator, "Could not keep the phone awake for the prefetch: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
-        return .ran;
+        return ran;
     };
     defer host.holdAwake(false) catch |err| {
         host.reportError(std.fmt.allocPrint(allocator, "Could not let the phone sleep again after the prefetch: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
@@ -499,13 +476,13 @@ fn prefetchPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *st
     switch (runSteps(allocator, host, plan, "Prefetch", &results)) {
         .completed => {},
         .stopped => {
-            return .ran;
+            return ran;
         },
         .failed => {
             // Stalled, not complete. A step that failed tells us nothing about what is left, and a sync that waited on it would wait
             // for ever.
             replica_state.store(.stalled, .release);
-            return .ran;
+            return ran;
         },
     }
 
@@ -520,48 +497,25 @@ fn prefetchPass(allocator: std.mem.Allocator, host: LoopHost, replica_state: *st
         }
     }
     if (!anything_fetched and !anything_left) {
-        // Nothing fetched and nothing missing: the replica is complete and there is nothing left to walk. Opening a database starts
-        // the loop again when there is a reason to.
+        // Nothing fetched and nothing missing: the replica is complete and there is nothing left to walk. Opening a database switches
+        // the prefetch on again when there is a reason to.
         replica_state.store(.complete, .release);
         host.report(std.fmt.allocPrint(allocator, "\"{s}\" is filled in; nothing left to fetch.", .{plan.database_path}) catch "The replica is filled in; nothing left to fetch.");
-        return .stop;
+        return .{
+            .gap_ms = plan.pause_ms,
+            .finished = true,
+        };
     }
     // Fetching anything at all counts as progress, including a pass that fetched files and found nothing left: the next pass confirms
     // that and reports the replica complete, so at worst a sync waits one more gap. Fetching nothing while files are still missing is
     // the stuck case, and it is the one a sync must not wait on.
     replica_state.store(if (anything_fetched) .working else .stalled, .release);
-    return .ran;
-}
-
-//
-// The prefetch loop. Runs passes until one reports the replica complete, or until the host says to stop.
-//
-// A pass that fails does not end the loop. The next one is scheduled anyway: a file can fail to copy for a reason that has since gone,
-// and this loop exists precisely because a prefetch that gave up was never tried again. It ends itself when the replica is complete,
-// because asking again would walk every object at the origin every gap, and is started again when a database is opened.
-//
-pub fn runPrefetchLoop(allocator: std.mem.Allocator, host: LoopHost, replica_state: *std.atomic.Value(ReplicaState)) void {
-    var pause_ms: u64 = FALLBACK_PAUSE_MS;
-    while (!host.isStopped()) {
-        var arena_state = std.heap.ArenaAllocator.init(allocator);
-        defer arena_state.deinit();
-        const outcome = prefetchPass(arena_state.allocator(), host, replica_state, &pause_ms);
-        if (outcome == .stop) {
-            host.report("The replica is filled in, so the background prefetch loop has finished. Opening a database starts it again.");
-            return;
-        }
-        if (host.isStopped()) {
-            return;
-        }
-        if (!host.pause(pause_ms)) {
-            return;
-        }
-    }
+    return ran;
 }
 
 //
 // Reads what a prefetch step did out of the outputs of its task. A task that returned nothing is read as a pass that fetched nothing
-// and left nothing, which is what a prefetch against a full database returns and is the answer that ends the loop.
+// and left nothing, which is what a prefetch against a full database returns and is the answer that finishes the prefetch.
 //
 pub fn readPrefetchStepCounts(outputs: ?std.json.Value) IStepResult {
     var result: IStepResult = .{
@@ -586,26 +540,25 @@ pub fn readPrefetchStepCounts(outputs: ?std.json.Value) IStepResult {
 }
 
 //
-// The loop host of a loop that runs as a task: its steps are child tasks of the loop's own task, so they take its source and are
-// cancelled with it, and the platform is reached through the shell's host requests.
+// The host of a pass that runs as a task: its steps are child tasks of the pass's own task, so they take its source and are cancelled
+// with it, and the platform is reached through the shell's host requests.
 //
-const TaskLoopHost = struct {
-    // The context of the loop's task.
+const TaskPassHost = struct {
+    // The context of the pass's task.
     context: *TaskContext,
-    // Which loop this is.
-    loop: Loop,
+    // Which pass this is.
+    pass: Pass,
 
-    const vtable: LoopHost.VTable = .{
+    const vtable: PassHost.VTable = .{
         .readPlan = readPlanErased,
         .runStep = runStepErased,
-        .pause = pauseErased,
         .holdAwake = holdAwakeErased,
         .report = reportErased,
         .reportError = reportErrorErased,
         .isStopped = isStoppedErased,
     };
 
-    fn host(self: *TaskLoopHost) LoopHost {
+    fn host(self: *TaskPassHost) PassHost {
         return .{
             .ptr = self,
             .vtable = &vtable,
@@ -613,16 +566,15 @@ const TaskLoopHost = struct {
     }
 
     //
-    // Runs a child task and waits for it, keeping nothing of it once it has ended: a loop runs for as long as the phone is switched on, so
-    // what each pass queued must not pile up until it ends. The completion is allocated with the allocator, which is the pass's. A child
-    // that did not succeed is returned as its completion, for the caller to decide on.
+    // Runs a child task and waits for it. The completion is allocated with the allocator, which is the pass's. A child that did not
+    // succeed is returned as its completion, for the caller to decide on.
     //
-    fn runChild(self: *TaskLoopHost, allocator: std.mem.Allocator, task_type: []const u8, data: std.json.Value) !ziggy.types.Completion {
+    fn runChild(self: *TaskPassHost, allocator: std.mem.Allocator, task_type: []const u8, data: std.json.Value) !ziggy.types.Completion {
         return try self.context.runChild(allocator, task_type, data, null);
     }
 
     fn readPlanErased(ptr: *anyopaque, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
+        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
         const completion = try self.runChild(allocator, plan_task, data);
         if (completion.status != .succeeded) {
             return utils.errors.throwError("{s} failed: {s}", .{ plan_task, completion.error_message orelse "no reason given" });
@@ -634,17 +586,17 @@ const TaskLoopHost = struct {
     }
 
     fn runStepErased(ptr: *anyopaque, allocator: std.mem.Allocator, step: IStep) anyerror!IStepResult {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
+        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
         const completion = try self.runChild(allocator, step.@"type", step.data);
         if (completion.status != .succeeded) {
-            self.reportErrorMessage(std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ self.loop.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.");
+            self.reportErrorMessage(std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ self.pass.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.");
             return .{
                 .succeeded = false,
                 .files_fetched = 0,
                 .files_still_missing = 0,
             };
         }
-        if (self.loop != .prefetch) {
+        if (self.pass != .prefetch) {
             return .{
                 .succeeded = true,
                 .files_fetched = 0,
@@ -655,54 +607,37 @@ const TaskLoopHost = struct {
         return readPrefetchStepCounts(outputs);
     }
 
-    fn pauseErased(ptr: *anyopaque, millis: u64) bool {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
-        var waited: u64 = 0;
-        while (waited < millis) {
-            if (self.context.isCancelled()) {
-                return false;
-            }
-            const slice = @min(PAUSE_SLICE_MS, millis - waited);
-            utils.sleep.sleep(self.context.io(), slice) catch |err| {
-                self.reportErrorMessage(std.fmt.allocPrint(self.context.arena, "The background work could not wait between passes, so it stops: {s}", .{utils.errors.errorMessage(err)}) catch "The background work could not wait between passes, so it stops.");
-                return false;
-            };
-            waited += slice;
-        }
-        return !self.context.isCancelled();
-    }
-
     fn holdAwakeErased(ptr: *anyopaque, awake: bool) anyerror!void {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
+        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
         _ = try askShell(self.context, "holdAwake", try json_util.stringify(self.context.arena, .{
             .awake = awake,
         }));
     }
 
     fn reportErased(ptr: *anyopaque, message: []const u8) void {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
+        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
         self.tellShell(message, false);
     }
 
     fn reportErrorErased(ptr: *anyopaque, message: []const u8) void {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
+        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
         self.tellShell(message, true);
     }
 
-    fn reportErrorMessage(self: *TaskLoopHost, message: []const u8) void {
+    fn reportErrorMessage(self: *TaskPassHost, message: []const u8) void {
         self.tellShell(message, true);
     }
 
     fn isStoppedErased(ptr: *anyopaque) bool {
-        const self: *TaskLoopHost = @ptrCast(@alignCast(ptr));
+        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
         return self.context.isCancelled();
     }
 
     //
-    // Tells the shell what the loop is doing, for the system log. A shell that cannot take it is not allowed to make the loop's
+    // Tells the shell what the pass is doing, for the system log. A shell that cannot take it is not allowed to make the pass's
     // report vanish, so the message goes to the app's own log with the reason.
     //
-    fn tellShell(self: *TaskLoopHost, message: []const u8, is_error: bool) void {
+    fn tellShell(self: *TaskPassHost, message: []const u8, is_error: bool) void {
         const request = json_util.stringify(self.context.arena, .{
             .@"error" = is_error,
             .message = message,
@@ -734,73 +669,75 @@ pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const
 }
 
 //
-// The task that is the automatic import loop. Ends when a plan says automatic import is switched off, or when it is cancelled.
+// Runs one pass in the task's own context, and records when the next one is due.
 //
-pub fn autoImportLoopTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    var loop_host: TaskLoopHost = .{
-        .context = context,
-        .loop = .import,
-    };
-    runImportLoop(std.heap.smp_allocator, loop_host.host());
-    return try context.arena.dupe(u8, "null");
-}
-
-//
-// The task that is the sync loop. Ends only when it is cancelled.
-//
-pub fn syncLoopTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    var loop_host: TaskLoopHost = .{
-        .context = context,
-        .loop = .sync,
-    };
-    runSyncLoop(std.heap.smp_allocator, loop_host.host(), &main_state.fromContext(context).prefetch_replica_state);
-    return try context.arena.dupe(u8, "null");
-}
-
-//
-// The task that is the prefetch loop. Ends when a pass finds the replica complete, or when it is cancelled.
-//
-pub fn prefetchLoopTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    var loop_host: TaskLoopHost = .{
-        .context = context,
-        .loop = .prefetch,
-    };
-    runPrefetchLoop(std.heap.smp_allocator, loop_host.host(), &main_state.fromContext(context).prefetch_replica_state);
-    return try context.arena.dupe(u8, "null");
-}
-
-//
-// Starts the loops that are not already running. Starting one that is running does nothing, and a loop that ended (the import loop
-// when automatic import was switched off, the prefetch loop when its replica was complete) is started again, which is how switching
-// the feature back on, or opening a database, brings it back.
-//
-pub fn startBackgroundWork(context: *TaskContext) !void {
+fn runPass(context: *TaskContext, pass: Pass) void {
     const state = main_state.fromContext(context);
-    inline for (std.meta.fields(Loop)) |field| {
-        const loop: Loop = @enumFromInt(field.value);
+    var pass_host: TaskPassHost = .{
+        .context = context,
+        .pass = pass,
+    };
+    const result = switch (pass) {
+        .import => runImportPass(context.arena, pass_host.host()),
+        .sync => runSyncPass(context.arena, pass_host.host(), &state.prefetch_replica_state, state.takeFirstSyncPass()),
+        .prefetch => runPrefetchPass(context.arena, pass_host.host(), &state.prefetch_replica_state),
+    };
+    state.backgroundPassEnded(pass, result);
+}
 
-        // A desktop imports by watching folders (ensureAutoImport), so a second import driver here would import everything twice.
-        if (loop == .import and builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
+//
+// The task that is one pass of the automatic import.
+//
+pub fn autoImportPassTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    runPass(context, .import);
+    return try context.arena.dupe(u8, "null");
+}
+
+//
+// The task that is one pass of the sync.
+//
+pub fn syncPassTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    runPass(context, .sync);
+    return try context.arena.dupe(u8, "null");
+}
+
+//
+// The task that is one pass of the prefetch.
+//
+pub fn prefetchPassTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    runPass(context, .prefetch);
+    return try context.arena.dupe(u8, "null");
+}
+
+//
+// Switches the background work on. Each pass that was off is due at once, and the core's timer starts it. Switching on a pass that is
+// already on changes nothing, and a pass that finished (the import when automatic import was switched off, the prefetch when its
+// replica was complete) is switched on again, which is how switching the feature back on, or opening a database, brings it back.
+//
+pub fn startBackgroundWork(context: *TaskContext) void {
+    const state = main_state.fromContext(context);
+    inline for (std.meta.fields(Pass)) |field| {
+        const pass: Pass = @enumFromInt(field.value);
+
+        // A desktop imports by watching folders (ensureAutoImport), so a second import here would import everything twice.
+        if (pass == .import and builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
             continue;
         }
-        if (state.claimBackgroundLoop(loop)) {
-            errdefer state.releaseBackgroundLoop(loop);
-            const task_id = try state.uuid_generator.generate(context.arena, context.io());
-            try state.core.runner.addTask(task_id, loop.taskType(), loop.source(), "null", .background, null);
-        }
+        state.switchOnBackgroundPass(pass);
     }
 }
 
 //
-// Stops the loops and the passes they are in, and does nothing for a loop that is not running.
+// Switches the background work off and stops the passes in flight.
 //
 pub fn stopBackgroundWork(context: *TaskContext) void {
     const state = main_state.fromContext(context);
-    inline for (std.meta.fields(Loop)) |field| {
-        const loop: Loop = @enumFromInt(field.value);
-        state.core.runner.cancelSource(loop.source());
+    state.switchOffBackgroundPasses();
+    inline for (std.meta.fields(Pass)) |field| {
+        const pass: Pass = @enumFromInt(field.value);
+        state.core.runner.cancelSource(pass.source());
     }
 }

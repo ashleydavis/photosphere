@@ -85,7 +85,7 @@ Read the exit status before reading anything else.
 - 3: too many Bun crashes. Report and restart the rung, using `--ladder "<remaining rungs>" --target <target> --resume <greens>` exactly as the script prints.
 - 4: the pool stopped being healthy and did not come back. See "A sick pool".
 
-On macOS the iOS suites are not in the default rungs and have to be named: `-- --ladder "<the default rungs> test:ios test:ios:unit" --target <target>`, taking the default rungs from `--help`.
+On macOS `test:ios` is not in the default rungs and has to be named: `-- --ladder "<the default rungs> test:ios" --target <target>`, taking the default rungs from `--help`.
 
 ## Fixing a failure
 

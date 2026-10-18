@@ -57,6 +57,7 @@ test "a file opened for synchronous I/O keeps the synchronous description" {
 
 test "a slow reader of an asynchronous pipe gets every byte written to it" {
     if (builtin.os.tag != .windows) {
+        // Asynchronous pipes, the kind an MSYS2 or Cygwin shell hands a native program, exist only on Windows.
         return error.SkipZigTest;
     }
 

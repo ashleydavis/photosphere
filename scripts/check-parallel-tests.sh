@@ -6,9 +6,8 @@
 # `bun run test:everything` starts the suites concurrently, so any two of them that touch the same
 # file, port, directory, lock or device can fail each other in ways that never show up when a suite is
 # run on its own. That is a different failure class from ordinary flakiness: the suite is not
-# unreliable in itself, it is unreliable in company. Nothing else detects it, and the two conflicts
-# already known (the Android pair and the iOS pair kept apart by SERIAL_GROUPS in
-# scripts/test-everything-parallel.sh) were found by being bitten.
+# unreliable in itself, it is unreliable in company. Nothing else detects it, and the conflicts found
+# before this existed were found by being bitten.
 #
 # This runs every selected script alone first, to establish that it is sound on its own, then runs
 # every combination of two of them concurrently, and reports only the failures that appear in company
@@ -35,11 +34,6 @@
 #       Check just those two, which is 3 combinations (2 pairs plus 2 self-pairs). This is how to get
 #       a quick answer without paying for the mobile suites.
 #
-#   bun run test:parallel -- --scripts "test:and test:and:unit"
-#       The positive control: SERIAL_GROUPS in scripts/test-everything-parallel.sh already keeps this
-#       pair apart because they share a build directory, so a run that does not report them as
-#       interference means this check is not working.
-#
 #   bun run test:parallel -- --help
 #
 # Options:
@@ -59,10 +53,8 @@
 #   --help        print this usage and exit.
 #
 # The default set is every suite `bun run test:everything` starts in a parallel lane, plus the mobile
-# suites this machine can actually run, and minus `compile` (a build, not a suite) and the native unit
-# suites (which test:everything already keeps apart from their own smoke suites, so pairing them here
-# would report a known conflict as news). The number of combinations grows with the square of the
-# number of suites: use --scripts to check a few.
+# suites this machine can actually run, and minus `compile` (a build, not a suite). The number of
+# combinations grows with the square of the number of suites: use --scripts to check a few.
 # test:ios is included only on macOS. test:and is included on any platform where the Android
 # tooling is installed and `bun run emu:and:status` reports a ready device, and is dropped with a
 # printed reason otherwise, because a suite that cannot run would fail every combination it is in for
@@ -271,11 +263,7 @@ POOL_BRIDGE_COUNT_AT_START=0
 # that contends refuses a commit whether or not this check ever looked at it. When a new suite is
 # added to the whole set, add it here too.
 #
-# Two things the hook runs are deliberately not here. `compile` is a build rather than a suite. The
-# native unit suites are kept out because test:everything already refuses to run each of them beside
-# its own smoke suite, for a conflict on the Gradle and Xcode project directories that is known and
-# recorded there: pairing them here would report that conflict as news on every run. Name them with
-# --scripts to check them on purpose, which is also how this script is proved to be working at all.
+# `compile` is run by the hook and deliberately not here, because it is a build rather than a suite.
 DEFAULT_SCRIPTS="test test:cli test:cli:encrypted test:cli:lan-share test:cli:sync test:cli:write-lock test:cli:hash-cache test:electron test:lan-share:cli-desktop test:harness"
 
 # The scripts to check, as given by --scripts. Empty until resolved.
@@ -481,8 +469,8 @@ CONSECUTIVE_CRASHES=0
 # Every Bun crash seen this session, reported at the end so none passes unnoticed.
 CRASH_LIST=()
 
-# Whether any interference was found. Every conflict counts: none is muted, not even the pairs
-# SERIAL_GROUPS already keeps apart, because a known conflict is still a conflict and a check that
+# Whether any interference was found. Every conflict counts: none is muted, not even a pair
+# SERIAL_GROUPS keeps apart, because a known conflict is still a conflict and a check that
 # hides some of them cannot be read at a glance.
 FOUND_INTERFERENCE=0
 

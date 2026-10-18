@@ -982,143 +982,6 @@ jobs:
         timeout-minutes: 12
         run: xvfb-run -a ./cli-desktop-lan-share-smoke-tests.sh
 
-  # Android native (JVM) unit tests, split into their own job so they run independently of the slow
-  # emulator smoke job. No emulator needed.
-  android-unit-tests:
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      # AGP 8 requires JDK 17 (the Android build fails on the JDK 21 the runner defaults to).
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
-      - name: Install media processing tools
-        uses: ./.github/actions/install-apt-packages
-        with:
-          packages: imagemagick ffmpeg
-          verify: magick|convert ffmpeg ffprobe
-
-      # The native ImageMagick build (run_magick shim via CMake) and scripts/fetch-mobile-media-tools.sh
-      # both require this exact NDK, which the android-frontend sync (run by test:and:unit) pulls in.
-      - name: Cache the Android NDK
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
-          key: ${{ runner.os }}-android-ndk-25.1.8937393
-
-      - name: Install Android NDK
-        uses: ./.github/actions/retry-install
-        with:
-          run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;25.1.8937393" > /dev/null
-
-      # Engine-pool dispatcher, subtask routing, picker/path helpers, host functions.
-      # Gradle re-downloads its distribution and every dependency on a clean runner, and it runs
-      # inside the test step rather than as a step of its own, so its cost is hidden inside that
-      # step's total. Keyed on the Gradle build files and the wrapper properties, which is what
-      # decides the distribution and the dependency set; restore-keys lets a near-miss still reuse
-      # most of it, which is the normal way to cache Gradle.
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('apps/android-frontend/android/**/*.gradle*', 'apps/android-frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Install what-changed
-        uses: ./.github/actions/install-what-changed
-
-      - name: Run Android native unit tests
-        timeout-minutes: 20
-        run: bun run test:and:unit
-
-  # iOS native (XCTest) unit tests, split into their own job so they run independently of the slow
-  # simulator smoke job.
-  ios-unit-tests:
-    timeout-minutes: 30
-    runs-on: macos-15
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      # ImageMagick/ffmpeg are needed by the CLI that builds the per-test database fixtures.
-      - name: Install media processing tools
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg
-          verify: magick|convert ffmpeg ffprobe
-
-      # Shares the key, and so the cache entry, with the other iOS jobs. See the note on this step in
-      # ios-smoke-tests for why the build is worth caching.
-      - name: Cache iOS ImageMagick build
-        uses: actions/cache@v4
-        with:
-          path: apps/ios-frontend/ios/App/vendor/im
-          key: ${{ runner.os }}-ios-imagemagick-${{ hashFiles('apps/ios-frontend/ios/build-imagemagick.sh') }}
-
-      - name: Install what-changed
-        uses: ./.github/actions/install-what-changed
-
-      # Host bridge, engine pool, subtask routing, path sandbox, media host functions.
-      - name: Run iOS native unit tests
-        timeout-minutes: 20
-        run: bun run test:ios:unit
-
   android-smoke-tests:
     timeout-minutes: 45
     runs-on: ubuntu-latest
@@ -1193,8 +1056,11 @@ jobs:
       # failing, and the run only requires the emulator to be started. Everything else, including the
       # device-to-device share tests and 28-host-emulator-comms (which works over NAT via 10.0.2.2),
       # still runs. Those two paths are covered locally with `bun run emu:and:up`.
-      # Shares the key, and so the cache entry, with the other Android jobs. See the note on this
-      # step in android-unit-tests for why Gradle is worth caching.
+      # Gradle re-downloads its distribution and every dependency on a clean runner, and it runs
+      # inside the test step rather than as a step of its own, so its cost is hidden inside that
+      # step's total. Keyed on the Gradle build files and the wrapper properties, which is what
+      # decides the distribution and the dependency set; restore-keys lets a near-miss still reuse
+      # most of it, which is the normal way to cache Gradle.
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -1302,7 +1168,7 @@ jobs:
 #       # compiles it from source into this git-ignored directory, once for the device slice and once
 #       # for the simulator. It is the longest thing in the job by a wide margin and its cost swings
 #       # wildly with the runner: in one run this took 37 minutes here while the same build took 2.5
-#       # minutes in ios-unit-tests. Everything the build produces is decided by build-imagemagick.sh,
+#       # minutes in another job. Everything the build produces is decided by build-imagemagick.sh,
 #       # which pins the versions and the source URLs, so hashing that one file is a complete key.
 #       #
 #       # A partial restore is safe: the fetch script only skips the build when both slices' libraries
@@ -2475,6 +2341,10 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          # Emulator 36.6.11, the build the local emulator scripts pin (EMULATOR_BUILD in apps/android-frontend/scripts/emulator-config.sh,
+          # which says why): the newest emulator never gives back the memory of an app it has stopped, and this suite starts the app
+          # many times.
+          emulator-build: 15507667
           # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
           script: bun run test:ziggy:and
 
@@ -2788,7 +2658,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-cli-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, android-unit-tests, ios-unit-tests, package-photosphere, package-photosphere-mobile, android-smoke-tests]
+    needs: [prepare-tag, compile, build-aws-sdk, build-zig-linux-x64, build-zig-windows-x64, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-cli-smoke-tests, unit-tests, perf-tests, build-linux, build-windows, build-windows-baseline, build-macos-x64, build-macos-arm64, build-desktop, smoke-test-encrypted, write-lock-tests, mobile-harness-tests, hash-cache-tests, sync-tests, lan-share-smoke-test, cli-desktop-lan-share-smoke-tests, package-photosphere, package-photosphere-mobile, android-smoke-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

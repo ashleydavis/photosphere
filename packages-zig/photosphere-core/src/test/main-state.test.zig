@@ -2,9 +2,48 @@ const std = @import("std");
 const ziggy = @import("ziggy-core");
 const support = @import("test-support.zig");
 const main_state = @import("../lib/main-state.zig");
+const background_work = @import("../lib/background-work.zig");
 
 const MainState = main_state.MainState;
 const TestApp = support.TestApp;
+
+// Where the sync pass is in the state's arrays, which are indexed by pass.
+const sync_index = @intFromEnum(background_work.Pass.sync);
+
+// Where the prefetch pass is in the state's arrays.
+const prefetch_index = @intFromEnum(background_work.Pass.prefetch);
+
+//
+// Waits until the shell has been told as many keep-alive changes as are expected, and checks they are the ones expected.
+//
+fn expectKeepAliveCalls(app: *TestApp, expected: []const bool) !void {
+    const io = app.shell.threaded.io();
+    var waited_ms: u32 = 0;
+    while (waited_ms < 2_000) : (waited_ms += 1) {
+        app.shell.mutex.lockUncancelable(io);
+        const have = app.shell.keep_alive_calls.items.len;
+        app.shell.mutex.unlock(io);
+        if (have >= expected.len) {
+            break;
+        }
+        try std.Io.sleep(io, .fromMilliseconds(1), .awake);
+    }
+    app.shell.mutex.lockUncancelable(io);
+    defer app.shell.mutex.unlock(io);
+    try std.testing.expectEqualSlices(bool, expected, app.shell.keep_alive_calls.items);
+}
+
+//
+// Stops the state's timer thread, so a test of the background pass bookkeeping is not raced by the timer starting a pass that is due.
+//
+fn stopTimerThread(state: *MainState) void {
+    state.stopping.store(true, .release);
+    if (state.timer_thread) |thread| {
+        thread.join();
+        state.timer_thread = null;
+    }
+    state.stopping.store(false, .release);
+}
 
 //
 // A task that sends a message and then runs until it is cancelled.
@@ -138,17 +177,119 @@ test "resetSyncState to the database that is already open cancels nothing, and t
     try app.shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
 }
 
-test "a background loop is claimed once until it is released, and the loops are claimed separately" {
+test "a background pass is taken only while it is switched on, due and not running, and the passes are taken separately" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
     const state = main_state.fromCore(app.core);
-    const background_work = @import("../lib/background-work.zig");
+    stopTimerThread(state);
 
-    try std.testing.expect(state.claimBackgroundLoop(.import));
-    try std.testing.expect(!state.claimBackgroundLoop(.import));
-    try std.testing.expect(state.claimBackgroundLoop(.sync));
-    state.releaseBackgroundLoop(.import);
-    try std.testing.expect(state.claimBackgroundLoop(.import));
+    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
+    state.switchOnBackgroundPass(.import);
+    state.switchOnBackgroundPass(.sync);
+    try std.testing.expect(state.takeDueBackgroundPass(.import, state.now()));
+    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
+    try std.testing.expect(state.takeDueBackgroundPass(.sync, state.now()));
+    state.backgroundPassEnded(.import, .{
+        .gap_ms = 60_000,
+        .finished = false,
+    });
+    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now() + 60_000 + 1_000));
+    state.releaseBackgroundPass(.import);
+    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
+    try std.testing.expect(state.takeDueBackgroundPass(.import, state.now() + 60_000 + 1_000));
     try std.testing.expectEqual(background_work.ReplicaState.unknown, state.prefetch_replica_state.load(.acquire));
+}
+
+test "the app is held running while any background work is switched on, and let go when the last of it finishes or is switched off" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    stopTimerThread(state);
+
+    state.switchOnBackgroundPass(.sync);
+    state.switchOnBackgroundPass(.prefetch);
+    try expectKeepAliveCalls(&app, &[_]bool{true});
+    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
+    state.backgroundPassEnded(.prefetch, .{
+        .gap_ms = 50,
+        .finished = true,
+    });
+    try expectKeepAliveCalls(&app, &[_]bool{true});
+    state.switchOffBackgroundPasses();
+    try expectKeepAliveCalls(&app, &[_]bool{ true, false });
+}
+
+test "a background pass switched on is due at once, and the next is due after the gap the last one asked for" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    stopTimerThread(state);
+
+    const before = state.now();
+    state.switchOnBackgroundPass(.prefetch);
+    try std.testing.expect(state.background_pass_due_at[prefetch_index].? >= before);
+    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
+    try std.testing.expect(state.background_pass_due_at[prefetch_index] == null);
+    const ended_at = state.now();
+    state.backgroundPassEnded(.prefetch, .{
+        .gap_ms = 60_000,
+        .finished = false,
+    });
+    try std.testing.expect(state.background_pass_due_at[prefetch_index].? >= ended_at + 60_000);
+}
+
+test "a background pass that finishes the work switches it off until it is switched on again" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    stopTimerThread(state);
+
+    state.switchOnBackgroundPass(.prefetch);
+    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
+    state.backgroundPassEnded(.prefetch, .{
+        .gap_ms = 60_000,
+        .finished = true,
+    });
+    state.releaseBackgroundPass(.prefetch);
+    try std.testing.expect(!state.background_passes_on[prefetch_index]);
+    try std.testing.expect(state.background_pass_due_at[prefetch_index] == null);
+    try std.testing.expect(!state.takeDueBackgroundPass(.prefetch, state.now()));
+    state.switchOnBackgroundPass(.prefetch);
+    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
+}
+
+test "switching the background work off leaves nothing due, even when a pass in flight ends afterwards" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    stopTimerThread(state);
+
+    state.switchOnBackgroundPass(.sync);
+    try std.testing.expect(state.takeDueBackgroundPass(.sync, state.now()));
+    state.switchOffBackgroundPasses();
+    state.backgroundPassEnded(.sync, .{
+        .gap_ms = 10,
+        .finished = false,
+    });
+    try std.testing.expect(state.background_pass_due_at[sync_index] == null);
+    try std.testing.expect(!state.background_passes_on[sync_index]);
+}
+
+test "only the first sync pass after the sync is switched on is the first" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const state = main_state.fromCore(app.core);
+    stopTimerThread(state);
+
+    state.switchOnBackgroundPass(.sync);
+    try std.testing.expect(state.takeFirstSyncPass());
+    try std.testing.expect(!state.takeFirstSyncPass());
+    state.switchOnBackgroundPass(.sync);
+    try std.testing.expect(!state.takeFirstSyncPass());
 }

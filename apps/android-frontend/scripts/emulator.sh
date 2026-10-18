@@ -476,16 +476,13 @@ bridge_down() {
 }
 
 #
-# Prints the path to the emulator binary, which is usually not on PATH even with the SDK installed.
-# Prints nothing when it cannot be found.
+# Prints the path to the pinned emulator binary (see EMULATOR_BUILD in emulator-config.sh), not the
+# one on PATH or in the SDK's own emulator directory, which is whatever sdkmanager installed last.
+# Prints nothing when it is not installed.
 #
 emulator_path() {
-    if command -v emulator >/dev/null 2>&1; then
-        command -v emulator
-        return 0
-    fi
-
-    local candidate="${ANDROID_HOME:-${HOME}/Android/Sdk}/emulator/emulator"
+    local candidate
+    candidate="$(pinned_emulator_path)"
     if [ -x "$candidate" ]; then
         echo "$candidate"
     fi
@@ -990,7 +987,7 @@ start_emulator_bg() {
     local emulator
     emulator="$(emulator_path)"
     if [ -z "$emulator" ]; then
-        echo "ERROR: emulator not found (looked on PATH and in \${ANDROID_HOME:-\$HOME/Android/Sdk}/emulator)." >&2
+        echo "ERROR: emulator build $EMULATOR_BUILD not found at $(pinned_emulator_path). Install it with: bun run --filter=android-frontend setup" >&2
         exit 1
     fi
 

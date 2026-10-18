@@ -35,6 +35,9 @@ send_command "$APP_PORT" click '{"dataId":"database-browse-button"}' || exit 1
 wait_for_value "$APP_PORT" "database-path-input" "$DB_ONE_PATH"
 send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database created"
+# "Database created" is logged just before the dialog is told to close, and a New database sent before that close has rendered asks
+# for a dialog that is still open, which does nothing. A user cannot be that quick, so the second request waits for the dialog to go.
+wait_for_value_gone "$APP_PORT" "create-database-confirm" "Create" || exit 1
 
 # Second database, a different path chosen via Browse: it must not collide with the first.
 send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1

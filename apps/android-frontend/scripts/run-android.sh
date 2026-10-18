@@ -50,7 +50,6 @@ DATABASES_CONFIG="databases.toml"
 source "$SCRIPT_DIR/android-env.sh"
 
 ADB="$ANDROID_HOME/platform-tools/adb"
-EMULATOR="$ANDROID_HOME/emulator/emulator"
 
 # Where the deploy's output is kept, so a failed deploy can be read after the fact. It stays on
 # screen as well, because the deploy is the slow part of a run.
@@ -72,6 +71,9 @@ NATIVE_RUN="$REPO_DIR/node_modules/native-run/bin/native-run"
 # even when one was up. Sourcing the name is what stops that happening again.
 source "$SCRIPT_DIR/emulator-config.sh"
 NETCARD_NAME="$NETCARD_PREFIX-0"
+
+# The pinned emulator build (see EMULATOR_BUILD in emulator-config.sh).
+EMULATOR="$(pinned_emulator_path)"
 
 # The AVD the emulator half of this script starts and deploys to: the hand-testing one, by name.
 # Naming it is what keeps the pool's clones and the base AVD out of the running, and it is used both

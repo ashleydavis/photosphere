@@ -1211,6 +1211,7 @@ test "getCacheDir ignores an XDG_CACHE_HOME that is set but empty, which means t
 
 test "getCacheDir is ~/Library/Caches/photosphere on macOS" {
     if (builtin.os.tag != .macos) {
+        // getCacheDir answers for the platform it was built for, so the macOS location can only be checked on macOS.
         return error.SkipZigTest;
     }
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1225,6 +1226,7 @@ test "getCacheDir is ~/Library/Caches/photosphere on macOS" {
 
 test "getCacheDir ignores XDG_CACHE_HOME on macOS, which has a location of its own" {
     if (builtin.os.tag != .macos) {
+        // getCacheDir answers for the platform it was built for, so the macOS location can only be checked on macOS.
         return error.SkipZigTest;
     }
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1240,6 +1242,7 @@ test "getCacheDir ignores XDG_CACHE_HOME on macOS, which has a location of its o
 
 test "getCacheDir is under LOCALAPPDATA on Windows" {
     if (builtin.os.tag != .windows) {
+        // getCacheDir answers for the platform it was built for, so the Windows location can only be checked on Windows.
         return error.SkipZigTest;
     }
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -1255,6 +1258,7 @@ test "getCacheDir is under LOCALAPPDATA on Windows" {
 
 test "getCacheDir falls back to AppData/Local on Windows when LOCALAPPDATA is not set" {
     if (builtin.os.tag != .windows) {
+        // getCacheDir answers for the platform it was built for, so the Windows location can only be checked on Windows.
         return error.SkipZigTest;
     }
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

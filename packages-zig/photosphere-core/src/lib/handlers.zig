@@ -142,9 +142,9 @@ pub const tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "plan-prefetch", .handler = mobile_planning.planPrefetchTask },
     .{ .name = "read-config", .handler = mobile_planning.readConfigTask },
     .{ .name = "write-config", .handler = mobile_planning.writeConfigTask },
-    .{ .name = "background-auto-import", .handler = background_work.autoImportLoopTask, .kind = .keep_alive },
-    .{ .name = "background-sync", .handler = background_work.syncLoopTask, .kind = .keep_alive },
-    .{ .name = "background-prefetch", .handler = background_work.prefetchLoopTask, .kind = .keep_alive },
+    .{ .name = "background-auto-import", .handler = background_work.autoImportPassTask, .kind = .keep_alive },
+    .{ .name = "background-sync", .handler = background_work.syncPassTask, .kind = .keep_alive },
+    .{ .name = "background-prefetch", .handler = background_work.prefetchPassTask, .kind = .keep_alive },
 };
 
 //

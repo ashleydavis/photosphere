@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+# The pinned emulator build (EMULATOR_BUILD) and where it is installed (pinned_emulator_path).
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emulator-config.sh"
+
 # The SDK package versions, kept in step with android/variables.gradle and android/app/build.gradle.
 # compileSdkVersion 35 -> platforms;android-35 and build-tools;35.0.0, which is also the build-tools
 # version the Android Gradle Plugin in android/build.gradle asks for.
@@ -114,10 +117,16 @@ fi
 case "$(uname -s)" in
     Linux)
         TOOLS_OS="linux"
+        EMULATOR_OS="linux_x64"
         DEFAULT_SDK_DIR="$HOME/Android/Sdk"
         ;;
     Darwin)
         TOOLS_OS="mac"
+        if [ "$(uname -m)" = "arm64" ]; then
+            EMULATOR_OS="darwin_aarch64"
+        else
+            EMULATOR_OS="darwin_x64"
+        fi
         DEFAULT_SDK_DIR="$HOME/Library/Android/sdk"
         ;;
     *)
@@ -225,6 +234,14 @@ do_status() {
         report_package "$package"
     done
 
+    # The emulator build the emulator scripts run, installed beside the SDK's own (see EMULATOR_BUILD).
+    if [ -x "$(pinned_emulator_path)" ]; then
+        printf '  [installed]  emulator build %s\n' "$EMULATOR_BUILD"
+    else
+        printf '  [ missing ]  emulator build %s\n' "$EMULATOR_BUILD"
+        STATUS_MISSING=$((STATUS_MISSING + 1))
+    fi
+
     echo
     if [ "$STATUS_MISSING" -eq 0 ]; then
         echo "Ready: everything required is installed. Run the app with 'bun run run'."
@@ -315,6 +332,27 @@ do_install() {
         echo "  - $package"
     done
     "$sdkmanager" --sdk_root="$ANDROID_HOME" "${REQUIRED_PACKAGES[@]}"
+
+    # The emulator build the emulator scripts run (see EMULATOR_BUILD in emulator-config.sh). sdkmanager
+    # offers only the newest emulator, so this one is downloaded by its build number and unpacked beside
+    # the SDK's own, which sdkmanager goes on managing. The zip holds a top-level "emulator" directory.
+    local pinned_dir="$ANDROID_HOME/emulator-$EMULATOR_BUILD"
+    if [ -x "$(pinned_emulator_path)" ]; then
+        echo "Emulator build $EMULATOR_BUILD already present, reusing it."
+    else
+        echo "Downloading emulator build $EMULATOR_BUILD..."
+        local staging="$ANDROID_HOME/emulator-$EMULATOR_BUILD-staging"
+        mkdir -p "$staging"
+        curl -fSL "https://dl.google.com/android/repository/emulator-${EMULATOR_OS}-${EMULATOR_BUILD}.zip" -o "$staging/emulator.zip"
+        unzip -q "$staging/emulator.zip" -d "$staging"
+        rm -f "$staging/emulator.zip"
+        mv "$staging/emulator" "$pinned_dir"
+        rmdir "$staging"
+        if [ ! -x "$(pinned_emulator_path)" ]; then
+            echo "ERROR: the emulator was not found at '$(pinned_emulator_path)' after unpacking. The download may have changed shape." >&2
+            exit 1
+        fi
+    fi
 
     echo
     echo "Done. The Android toolchain (including the emulator) is installed under $ANDROID_HOME."

@@ -49,10 +49,10 @@ cd "$REPO_DIR"
 # the iOS ones need a simulator, and neither toolchain exists on the other platform.
 case "$(uname -s)" in
     Darwin)
-        PLATFORM_SCRIPTS=(test:ios test:ios:unit test:ziggy:ios)
+        PLATFORM_SCRIPTS=(test:ios test:ziggy:ios)
         ;;
     *)
-        PLATFORM_SCRIPTS=(test:and test:and:unit test:ziggy:and)
+        PLATFORM_SCRIPTS=(test:and test:ziggy:and)
         ;;
 esac
 
@@ -133,20 +133,8 @@ if [ "$PLAN_ONLY" = true ]; then
 fi
 
 # Scripts that must not run at the same time as each other, one group per line, because they are not
-# actually independent:
-#
-#   test:and and test:and:unit both run `bun run sync` (a Capacitor asset copy) and then Gradle against
-#   the same apps/android-frontend/android project. Run together they are two builds writing one project
-#   directory, which is a race on the generated assets and on Gradle's own state rather than parallel
-#   work. test:ios and test:ios:unit are the same story for the Xcode project.
-#
-# Everything not named here runs fully in parallel. The cost of serialising a group is small: the native
-# unit tests take about nine seconds against the smoke suite's two and a half minutes, so the group is
-# still bounded by the suite it was already bounded by.
-SERIAL_GROUPS=(
-    "test:and:unit test:and"
-    "test:ios:unit test:ios"
-)
+# actually independent. None are at present. Everything not named here runs fully in parallel.
+SERIAL_GROUPS=()
 
 # Builds the lanes to run: each lane is a space-separated list of scripts run one after another, and the
 # lanes themselves run in parallel. A serial group becomes one lane, in the order given above; every
@@ -155,7 +143,7 @@ build_lanes() {
     local remaining=" ${SCRIPTS[*]} "
     local group lane script
 
-    for group in "${SERIAL_GROUPS[@]}"; do
+    for group in ${SERIAL_GROUPS[@]+"${SERIAL_GROUPS[@]}"}; do
         lane=""
         for script in $group; do
             case "$remaining" in
@@ -318,7 +306,7 @@ require_android_emulator() {
 
     for script in "${SCRIPTS[@]}"; do
         case "$script" in
-            test:and|test:and:unit) wanted="yes" ;;
+            test:and) wanted="yes" ;;
         esac
     done
     if [ -z "$wanted" ]; then
