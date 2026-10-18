@@ -1096,6 +1096,10 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          # Emulator 36.6.11, as the Photosphere App Android job pins. On the default 37.2.12 this job failed in 3 of 9 runs the same
+          # way: adb's connection to the emulator ended ("connection terminated: read failed") while test 1-load-fixture read the
+          # logcat, and every test that started in the second before it came back failed with "device offline".
+          emulator-build: 15507667
           # ONE LINE, and it has to stay one line. This action splits `script:` on newlines and runs
           # each line as its own `sh -c`, so a multi-line script shares no variables between lines and
           # each line's exit status dies with it. The four lines that used to be inlined here could
