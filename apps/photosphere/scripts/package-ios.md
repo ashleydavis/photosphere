@@ -7,4 +7,4 @@ Run it on a Mac: `bun run --filter=ziggy package:ios`.
 ## Arguments
 
 - `--output-dir <dir>`: where the packages go. Default: `out/ios`.
-- `--version <version>`: the version in the file names and the app's marketing version, such as `1.2.3` for the tag `v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`.
+- `--version <version>`: the version in the file names and the app's marketing version, such as `1.2.3` for the tag `ios-v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`.

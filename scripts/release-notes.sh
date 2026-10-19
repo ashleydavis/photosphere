@@ -13,6 +13,9 @@
 #   --exclude-tag <tag>      Ignore this tag when looking for the last release tag. The workflow
 #                            passes the tag it is building, so a tagged release reports what changed
 #                            since the tag before it rather than nothing at all.
+#   --tag-pattern <glob>     Consider only tags matching this glob when looking for the last release
+#                            tag. Each platform's release workflow passes its own, such as
+#                            "linux-v*.*.*", so its notes measure from that platform's last release.
 #   --empty-message <text>   What to print when no commit matches (default: "- No changes found").
 #   --limit <n>              Keep only the newest n bullets and say how many were left out. Firebase
 #                            App Distribution rejects long release notes outright, so the Android
@@ -23,6 +26,7 @@ PREFIX=""
 EXCLUDE_TAG=""
 EMPTY_MESSAGE="- No changes found"
 LIMIT=""
+TAG_PATTERN=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -38,30 +42,37 @@ while [ $# -gt 0 ]; do
             EMPTY_MESSAGE="$2"
             shift 2
             ;;
+        --tag-pattern)
+            TAG_PATTERN="$2"
+            shift 2
+            ;;
         --limit)
             LIMIT="$2"
             shift 2
             ;;
         *)
-            echo "ERROR: unknown argument '$1'. Options: --prefix, --exclude-tag, --empty-message, --limit." >&2
+            echo "ERROR: unknown argument '$1'. Options: --prefix, --exclude-tag, --tag-pattern, --empty-message, --limit." >&2
             exit 1
             ;;
     esac
 done
 
-# The last tag a release was cut from, newest first by version number. The nightly tag is skipped
-# because it moves with every nightly build, so measuring from it would report almost nothing.
+# The last tag a release was cut from, newest first by version number. The nightly tags (`nightly`
+# and each platform's `zig-<platform>-nightly`) are skipped because they move with every nightly
+# build, so measuring from one would report almost nothing.
 LAST_TAG=""
 while IFS= read -r tag; do
-    if [ "$tag" = "nightly" ]; then
-        continue
-    fi
+    case "$tag" in
+        nightly|*-nightly)
+            continue
+            ;;
+    esac
     if [ -n "$EXCLUDE_TAG" ] && [ "$tag" = "$EXCLUDE_TAG" ]; then
         continue
     fi
     LAST_TAG="$tag"
     break
-done < <(git tag --list --sort=-version:refname)
+done < <(git tag --list --sort=-version:refname ${TAG_PATTERN:+"$TAG_PATTERN"})
 
 # With no tag to measure from (a fresh clone with none fetched, or a repository that has never been
 # tagged) the whole history is the range, which is the most that can honestly be said about it.

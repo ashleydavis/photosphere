@@ -1,0 +1,432 @@
+name: Release Zig Android
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+  WHAT_CHANGED_VERSION: "v0.0.5"
+  # Each platform has a workflow of its own, so a failure on one shows at a glance and holds up no other platform's release.
+  # Its release tags are <RELEASE_PLATFORM>-v1.2.3, and its GitHub release is zig-<that tag>.
+  RELEASE_PLATFORM: "android"
+  RELEASE_PLATFORM_NAME: "Android"
+
+on:
+  push:
+    branches:
+      - "*"
+    tags:
+      - 'android-v*.*.*'
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release action. none = nightly build. update-latest = move the latest android-v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. android-v0.0.8 -> android-v0.0.9) and release it."
+        type: choice
+        options:
+          - none
+          - update-latest
+          - new-patch
+        default: none
+
+jobs:
+  prepare-tag:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      is-release: ${{ steps.resolve.outputs.is-release }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          RELEASE_INPUT="${{ inputs.release }}"
+          PREFIX="${RELEASE_PLATFORM}-v"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "update-latest" ]; then
+            TAG=$(git tag --list "${PREFIX}*.*.*" --sort=-version:refname | head -1)
+            if [ -z "$TAG" ]; then
+              echo "No existing ${PREFIX}*.*.* tag to update"
+              exit 1
+            fi
+            git tag -f "$TAG"
+            git push --force origin "$TAG"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "new-patch" ]; then
+            LATEST=$(git tag --list "${PREFIX}*.*.*" --sort=-version:refname | head -1)
+            if [ -z "$LATEST" ]; then
+              LATEST="${PREFIX}0.0.0"
+            fi
+            MAJOR=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f1)
+            MINOR=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f2)
+            PATCH=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f3)
+            TAG="${PREFIX}${MAJOR}.${MINOR}.$((PATCH + 1))"
+            git tag "$TAG"
+            git push origin "$TAG"
+            IS_RELEASE="true"
+          else
+            TAG=""
+            IS_RELEASE="false"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
+
+  build-aws-sdk:
+    # Compiles the AWS SDK for C and caches the result, because several jobs build Zig and every one of them
+    # would otherwise compile it from cold: it is the longest single build in this workflow. One job owns it,
+    # so the compile happens once per commit and the others restore what this wrote.
+    # The cache key names this workflow's platform because the Linux workflow builds on the same runner, and
+    # actions/cache/save fails when the key already exists.
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+
+      # `zig build` keeps one HTTP client for its whole run. It fetches the eager packages, compiles and runs
+      # the build script, then fetches the lazy packages the script asked for, reusing the keep-alive
+      # connections it pooled during the first fetch. By then the server has closed them, and Zig 0.16's
+      # client takes a pooled connection without checking it is still open and does not retry, so a lazy
+      # download fails with "invalid HTTP response: HttpConnectionClosing" whenever the package cache missed.
+      # --fetch=all fetches every package, lazy ones included, in one pass and exits before the build script
+      # runs, so no download waits behind it.
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        working-directory: .
+        run: zig build --fetch=all
+
+      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
+      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation mode.
+      - name: Build the Zig CLI, which compiles the AWS SDK
+        working-directory: .
+        run: zig build
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
+
+  photosphere-android-smoke-tests:
+    # The Photosphere App's smoke tests on an Android emulator. The emulator has no host LAN bridge, so PHOTOSPHERE_NO_LAN_BRIDGE
+    # makes the scenarios that need one skip with a logged SKIP line.
+    timeout-minutes: 90
+    needs: [build-aws-sdk]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+      - name: Install media processing tools
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Cache the Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
+      - name: Set up the Android SDK and NDK
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy setup:android
+
+      # Written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+
+      # Allow the hardware-accelerated emulator to use KVM on the runner.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The emulator runner below downloads this system image once, with no retry, and a download can arrive corrupt:
+      # an Android smoke job failed with "Error on ZipFile unknown archive" while it prepared the Google APIs Intel x86_64
+      # Atom System Image, before any test ran. Installing it here, retried, leaves the runner an image that is already
+      # installed. The licence step ends in "|| true" because `yes` is killed when sdkmanager stops reading, which
+      # fails a pipeline under pipefail. sdkmanager is called by its full path because a plain step does not have it on PATH
+      # ("sdkmanager: command not found", exit 127).
+      - name: Install the Android system image
+        uses: ./.github/actions/retry-install
+        with:
+          run: |
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'system-images;android-35;google_apis;x86_64'
+
+      - name: Run the Photosphere App Android smoke tests
+        timeout-minutes: 75
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PHOTOSPHERE_NO_LAN_BRIDGE: "1"
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          # Emulator 36.6.11, the build the local emulator scripts pin (EMULATOR_BUILD in apps/android-frontend/scripts/emulator-config.sh,
+          # which says why): the newest emulator never gives back the memory of an app it has stopped, and this suite starts the app
+          # many times.
+          emulator-build: 15507667
+          # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
+          script: bun run test:ziggy:and
+
+  package-photosphere-mobile:
+    # The Photosphere App packaged for Android, unsigned, by the same package script a developer runs. The version comes from
+    # the release tag: android-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Android version code, which has
+    # to rise with every build that replaces another, is the build time in minutes since the epoch. It is built and not run:
+    # running it needs an emulator, which the smoke test job and the local test runs provide.
+    timeout-minutes: 90
+    needs: [prepare-tag, build-aws-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: android
+            os: ubuntu-latest
+            files: "*.apk"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Cache the Android NDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
+      - name: Set up the Android SDK and NDK (Android)
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy setup:android
+
+      # Written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package (Android)
+        shell: bash
+        run: bun run --filter=ziggy package:android -- --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: photosphere-app-${{ matrix.name }}
+          path: apps/photosphere/out/${{ matrix.name }}/${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 2
+
+  create-release:
+    timeout-minutes: 20
+    needs: [prepare-tag, build-aws-sdk, photosphere-android-smoke-tests, package-photosphere-mobile]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download the Photosphere App packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: photosphere-app-*
+          path: ./artifacts/app
+          merge-multiple: true
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          # The CLI commits made since the last release tag, as bullets. The same script produces the
+          # notes for the Android tester builds, so a release and a tester build never describe the
+          # same commits differently. The tag being built is excluded so a tagged release measures
+          # from the tag before it; for a nightly the tag is empty and nothing is excluded.
+          RELEASE_NOTES=$(bash ./scripts/release-notes.sh \
+            --prefix cli \
+            --exclude-tag "${{ needs.prepare-tag.outputs.tag }}" \
+            --tag-pattern "${RELEASE_PLATFORM}-v*.*.*" \
+            --empty-message "- No CLI-related commits found")
+
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "Generated release notes:"
+          echo "$RELEASE_NOTES"
+
+      - name: Delete existing nightly release
+        if: needs.prepare-tag.outputs.is-release != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "zig-${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
+        continue-on-error: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('zig-{0}', needs.prepare-tag.outputs.tag) || format('zig-{0}-nightly', env.RELEASE_PLATFORM) }}
+          # The zig- tag does not exist yet, so the release creates it. Without this it would be created on the default branch rather than on the commit that was built.
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
+          draft: false
+          prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
+          files: |
+            ./artifacts/app/*
+          body: |
+            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
+
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}
+
+            ## What's Changed
+            ${{ steps.release-notes.outputs.RELEASE_NOTES }}
+
+            ## Download
+            - **Android**: `.apk`
+
+            ## Bundled tools and licences
+            The mobile apps bundle in-process builds of ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and ffmpeg (LGPL-2.1+), along with ImageMagick's libjpeg, libpng, and zlib delegates. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).

@@ -4,7 +4,7 @@ Builds a ReleaseSafe app and packages it twice, unsigned: a zip and an MSI insta
 
 Run it as `bun run --filter=ziggy package:windows -- [arch] [--version <version>]`.
 
-- `--version <version>`: the version in the file names, such as `1.2.3` for the tag `v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`. The MSI needs a numeric `major.minor.build` version, so any version of another kind gives the MSI the version `0.0.0`.
+- `--version <version>`: the version in the file names, such as `1.2.3` for the tag `windows-v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`. The MSI needs a numeric `major.minor.build` version, so any version of another kind gives the MSI the version `0.0.0`.
 - `arch`: `x64`. The default. `arm64` is refused, because the WebView2 loader is linked statically and that needs the `aarch64-windows-msvc` target, which Zig 0.16's standard library does not compile.
 
 The executable carries the icon (`apps/photosphere/icons/photosphere.ico`) as a resource, compiled from `apps/photosphere/shells/windows/photosphere.rc`, and the installer uses the same file for its entry in Installed apps and the Start menu shortcut.

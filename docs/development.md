@@ -175,6 +175,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Automatic photo backup](automatic-photo-backup.md) - Watching for new photos, importing them, and keeping a remote copy.
 - [Syncing](syncing.md) - What a sync moves, when each platform runs one, and how it keeps working while the app is not on screen.
 - [Background tasks](background-tasks.md) - Adding a new background task type.
+- [Releasing](releasing.md) - The release workflow for each platform, the tag that starts each one and the GitHub release it creates.
 - [Delivering the Android app to testers](android-tester-distribution.md) - Getting a Photosphere App build to Android testers through Firebase App Distribution, with `bun run distribute:ziggy:android`.
 - [Setting up Photosphere on Android](android-onboarding.md) - What a user does after installing the app: automatic import, and a private encrypted remote copy to back up to.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.

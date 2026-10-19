@@ -6,4 +6,4 @@ The page is embedded in the executable, so the app is one file. The zip holds on
 
 ## Arguments
 
-- `--version <version>`: the version in the file names, such as `1.2.3` for the tag `v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`. A version that does not start with a digit is written into the deb as `0.0.0~<version>`, because Debian requires a leading digit.
+- `--version <version>`: the version in the file names, such as `1.2.3` for the tag `linux-v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`. A version that does not start with a digit is written into the deb as `0.0.0~<version>`, because Debian requires a leading digit.
