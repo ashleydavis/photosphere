@@ -192,6 +192,17 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
+# Prints the SHA-256 of a file: sha256sum where it exists, otherwise shasum, as on macOS
+sha256_of_file() {
+    local file_path="$1"
+
+    if command -v sha256sum > /dev/null 2>&1; then
+        sha256sum "$file_path" | cut -d ' ' -f 1
+    else
+        shasum -a 256 "$file_path" | cut -d ' ' -f 1
+    fi
+}
+
 # Global variable to store which ImageMagick convert command to use
 IMAGEMAGICK_CONVERT_CMD=""
 
@@ -221,9 +232,9 @@ check_dependencies() {
         exit 1
     fi
     
-    # Check if sha256sum is available
-    if ! command -v sha256sum &> /dev/null; then
-        log_error "sha256sum is required but not installed"
+    # Check if sha256sum (or shasum, which macOS has instead) is available
+    if ! command -v sha256sum &> /dev/null && ! command -v shasum &> /dev/null; then
+        log_error "sha256sum or shasum is required but neither is installed"
         exit 1
     fi
     
@@ -373,7 +384,7 @@ worker_process() {
         sleep "$sleep_time"
         
         # Generate unique filename
-        local timestamp=$(date +%s%N)
+        local timestamp=$(current_milliseconds)
         local filename="process_${process_id}_iter_${i}_${timestamp}.png"
         local file_path="$TEST_FILES_DIR/$filename"
         
@@ -384,11 +395,11 @@ worker_process() {
         fi
         
         # Calculate file hash and size
-        local file_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
-        local file_size=$(stat -c%s "$file_path")
+        local file_hash=$(sha256_of_file "$file_path")
+        local file_size=$(wc -c < "$file_path" | tr -d ' ')
         
         # Add file to database and capture timing and detailed output
-        local start_time=$(date +%s%N)
+        local start_time=$(current_milliseconds)
         local add_stdout_file="$process_dir/stdout_i${i}.tmp"
         local add_stderr_file="$process_dir/stderr_i${i}.tmp"
         local add_exit_code=0
@@ -416,8 +427,8 @@ worker_process() {
             rm -f "$add_stderr_file"
         fi
         
-        local end_time=$(date +%s%N)
-        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+        local end_time=$(current_milliseconds)
+        local duration_ms=$((end_time - start_time))
         
         if [ $add_exit_code -ne 0 ]; then
             add_result="FAILED"
@@ -666,8 +677,8 @@ validate_results() {
         fi
         
         # Verify file hash and size
-        local actual_hash=$(sha256sum "$file_path" | cut -d' ' -f1)
-        local actual_size=$(stat -c%s "$file_path")
+        local actual_hash=$(sha256_of_file "$file_path")
+        local actual_size=$(wc -c < "$file_path" | tr -d ' ')
         
         if [ "$actual_hash" != "$expected_hash" ]; then
             log_error "Hash mismatch for $filename: expected $expected_hash, got $actual_hash"

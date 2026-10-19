@@ -197,6 +197,8 @@
 				MARKETING_VERSION = 1.0.0;
 				OTHER_LDFLAGS = (
 					"-lphotosphere",
+					"-framework",
+					Network,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = Photosphere;
@@ -223,6 +225,8 @@
 				MARKETING_VERSION = 1.0.0;
 				OTHER_LDFLAGS = (
 					"-lphotosphere",
+					"-framework",
+					Network,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = Photosphere;

@@ -157,7 +157,16 @@ if [ -z "$UNDATED_PHOTO_DATE" ]; then
     exit 1
 fi
 
-RECORDED_SECONDS=$(date -u -d "$UNDATED_PHOTO_DATE" +%s 2>/dev/null)
+# The date is ISO 8601 in UTC with milliseconds ("2025-05-27T09:54:16.000Z"). GNU date (Linux) reads it with -d; BSD date (macOS)
+# has no -d and is given an explicit format instead, which cannot express the milliseconds or the "Z", so those are dropped first.
+# Dropping the milliseconds truncates to the second, which is what GNU date's +%s does too.
+UNDATED_PHOTO_DATE_SECONDS_PART="${UNDATED_PHOTO_DATE%Z}"
+UNDATED_PHOTO_DATE_SECONDS_PART="${UNDATED_PHOTO_DATE_SECONDS_PART%%.*}"
+if date --version >/dev/null 2>&1; then
+    RECORDED_SECONDS=$(date -u -d "$UNDATED_PHOTO_DATE" +%s 2>/dev/null)
+else
+    RECORDED_SECONDS=$(date -u -j -f "%Y-%m-%dT%H:%M:%S" "$UNDATED_PHOTO_DATE_SECONDS_PART" +%s 2>/dev/null)
+fi
 if [ -z "$RECORDED_SECONDS" ]; then
     log_error "The photo carrying no EXIF was recorded with \"$UNDATED_PHOTO_DATE\", which is not a date this scenario can read."
     exit 1

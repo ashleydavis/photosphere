@@ -54,6 +54,7 @@ SMOKE_REPO_ROOT="$PHOTOSPHERE_SMOKE_REPO_ROOT"
 # implementation rather than a copy per caller.
 source "$REPO_DIR/scripts/lib/test-lib.sh"
 source "$REPO_DIR/scripts/lib/process-control.sh"
+source "$REPO_DIR/scripts/lib/test-timeout.sh"
 
 # The platform the scenario runs on: linux, windows, macos, android or ios. The runner sets it. A scenario run by hand on a desktop
 # gets the host's.
@@ -842,7 +843,8 @@ LAN_BRIDGE_PROBE_INTERVAL_SECONDS=1
 
 #
 # Runs a command under a wall-clock cap, so a wedged process cannot hang the whole suite. Uses `timeout`, or `gtimeout` where coreutils
-# installs it under that name (MacOS). Stdout passes straight through, so callers can capture it. A machine with neither fails loudly.
+# installs it under that name (MacOS). Stdout passes straight through, so callers can capture it. A machine with neither (a stock MacOS)
+# falls back to run_test_with_timeout's shell cap, which kills the process tree and also returns 124 when the cap is reached.
 # Usage: run_with_timeout <seconds> <command...>
 #
 run_with_timeout() {
@@ -855,8 +857,8 @@ run_with_timeout() {
         timeout_bin="$(type -P gtimeout 2>/dev/null)"
     fi
     if [ -z "$timeout_bin" ]; then
-        log_error "Neither timeout nor gtimeout is installed, so a command cannot be capped to ${seconds}s"
-        return 1
+        run_test_with_timeout "$seconds" "$@"
+        return $?
     fi
     "$timeout_bin" --kill-after=5 "$seconds" "$@"
 }

@@ -207,3 +207,67 @@ allocate_different_pairing_code() {
         fi
     done
 }
+
+# Where held LAN share discovery ports are recorded, one file per port, named by the port and holding
+# the pid that took it, in the same way as the pairing codes above.
+PHOTOSPHERE_LAN_SHARE_PORT_DIR="${TMPDIR:-/tmp}/photosphere-lan-share-ports"
+
+#
+# Prints a UDP port for PHOTOSPHERE_LAN_SHARE_PORT that no other live process on this machine has
+# claimed through this function and that no socket currently holds, and records that this process
+# holds it.
+#
+# LAN share discovery defaults to the fixed UDP port 54321, and any other process holding that port
+# (another worktree's run, or a share left running) can swallow the loopback announcements a receiver
+# sends, so a sender and a receiver under test never find each other. Both ends read
+# PHOTOSPHERE_LAN_SHARE_PORT, so a test that exports a port from here has a discovery channel of its own.
+#
+# The range stops below 32768, where Linux starts handing out ephemeral ports.
+#
+# Usage: port="$(allocate_lan_share_port)"
+#
+allocate_lan_share_port() {
+    mkdir -p "$PHOTOSPHERE_LAN_SHARE_PORT_DIR"
+
+    local port
+    local holder
+    local held
+    local attempts=0
+
+    while true; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -gt 100 ]; then
+            echo "Could not allocate a LAN share port: a hundred draws were all claimed or in use." >&2
+            return 1
+        fi
+
+        port=$(( 20000 + RANDOM % 12768 ))
+
+        if ! ( set -o noclobber; echo "$$" > "$PHOTOSPHERE_LAN_SHARE_PORT_DIR/$port" ) 2>/dev/null; then
+            # Claimed already. A claim whose holder is gone is removed so a later draw can take it.
+            holder="$(cat "$PHOTOSPHERE_LAN_SHARE_PORT_DIR/$port" 2>/dev/null)"
+            if [ -z "$holder" ] || ! kill -0 "$holder" 2>/dev/null; then
+                rm -f "$PHOTOSPHERE_LAN_SHARE_PORT_DIR/$port" 2>/dev/null
+            fi
+            continue
+        fi
+
+        # Claimed, but something outside these claims may already hold it. `ss` on Linux, `netstat`
+        # on macOS and Windows; each prints a bound port as `<address>:<port>` or `<address>.<port>`.
+        if command -v ss >/dev/null 2>&1; then
+            held="$(ss -uan)" || return 1
+        elif command -v netstat >/dev/null 2>&1; then
+            held="$(netstat -an)" || return 1
+        else
+            echo "allocate_lan_share_port: neither ss nor netstat is installed, so a free UDP port cannot be checked for." >&2
+            return 1
+        fi
+        if printf '%s\n' "$held" | grep -q "[.:]$port[[:space:]]"; then
+            rm -f "$PHOTOSPHERE_LAN_SHARE_PORT_DIR/$port"
+            continue
+        fi
+
+        printf '%s\n' "$port"
+        return 0
+    done
+}

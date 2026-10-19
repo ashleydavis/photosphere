@@ -558,17 +558,24 @@ linux_screen_off() {
 }
 
 #
-# Forgets what the app has said so far, by remembering how long its log is, and prints what it has said since. A desktop's sync passes
-# are in the app's own log. Usage: linux_clear_background_log, linux_background_log
+# Forgets what the app has said so far, by remembering which app wrote the log and how long the log is, and prints what it has said
+# since. A desktop's sync passes are in the app's own log. Each start of the app writes its log afresh, so the length only counts while
+# the same app is running: once another has been started, everything in the log came after the clear. Usage: linux_clear_background_log,
+# linux_background_log
 #
 linux_clear_background_log() {
-    wc -l < "$TMP_DIR/app.log" | tr -d ' ' > "$TMP_DIR/background-log-cursor.txt"
+    echo "$(cat "$TMP_DIR/app.pid") $(wc -l < "$TMP_DIR/app.log" | tr -d ' ')" > "$TMP_DIR/background-log-cursor.txt"
 }
 
 linux_background_log() {
     local cursor=0
+    local cursor_pid
+    local cursor_lines
     if [ -f "$TMP_DIR/background-log-cursor.txt" ]; then
-        cursor="$(cat "$TMP_DIR/background-log-cursor.txt")"
+        read -r cursor_pid cursor_lines < "$TMP_DIR/background-log-cursor.txt"
+        if [ "$cursor_pid" = "$(cat "$TMP_DIR/app.pid")" ]; then
+            cursor="$cursor_lines"
+        fi
     fi
     tail -n +$((cursor + 1)) "$TMP_DIR/app.log"
 }

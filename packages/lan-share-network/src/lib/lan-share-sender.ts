@@ -4,11 +4,7 @@ import { request as httpsRequest } from "https";
 import type { Socket as DgramSocket } from "dgram";
 import type { TLSSocket } from "tls";
 import type { IReceiverEndpoint, IPairingCodeHashResponse } from "./lan-share-types";
-
-//
-// UDP port used for discovery broadcasts.
-//
-const DISCOVERY_PORT = 54321;
+import { discoveryPort } from "./lan-share-types";
 
 //
 // Prefix string for receiver broadcast messages.
@@ -149,7 +145,7 @@ export class LanShareSender {
                 });
             });
 
-            this.udpSocket.bind(DISCOVERY_PORT);
+            this.udpSocket.bind(discoveryPort());
         });
     }
 

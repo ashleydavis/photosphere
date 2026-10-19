@@ -82,7 +82,10 @@ pub fn setupEnvironment(io: std.Io) ![]const u8 {
     node_utils.process_env.setEnvironMap(map);
     environment = map;
 
-    worker_pool = try MockWorkerPool.init(io, 4, .{
+    // The pool outlives the test that happens to call this first, and runs every later test's handlers with the Io it is given,
+    // so it takes std.testing.io rather than the caller's: a caller's VirtualTimeIo keeps its vtable in its own stack frame, which
+    // is gone once that test returns.
+    worker_pool = try MockWorkerPool.init(std.testing.io, 4, .{
         .uuidGenerator = pool_uuid_generator.uuidGenerator(),
         .timestampProvider = pool_timestamp_provider.timestampProvider(),
         .sessionId = "test-session",

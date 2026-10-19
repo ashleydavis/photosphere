@@ -136,6 +136,16 @@ ts_psi_cmd() {
     (cd "$SCRIPT_DIR" && bun run --silent start -- --quiet "$@")
 }
 
+# Prints the SHA-256 of standard input as hex, with whichever tool the platform has: macOS has
+# shasum but no sha256sum.
+sha256_of_stdin() {
+    if command -v sha256sum > /dev/null 2>&1; then
+        sha256sum | cut -d' ' -f1
+    else
+        shasum -a 256 | cut -d' ' -f1
+    fi
+}
+
 # The Zig port of psi (apps/cli-zig), built for this run into a directory of its own, never the
 # shared zig-out.
 build_test_zig_cli || exit 1
@@ -159,7 +169,7 @@ run_writer() {
     for ((entryIndex = 0; entryIndex < ENTRIES_PER_PROCESS; entryIndex++)); do
         local entryPath="$writerName/file-$entryIndex.dat"
         local entryHash
-        entryHash=$(printf '%s' "$entryPath" | sha256sum | cut -d' ' -f1)
+        entryHash=$(printf '%s' "$entryPath" | sha256_of_stdin)
         psi_cmd hash-cache set --db "$TEST_DB" "$entryPath" "$entryHash" "$entryIndex"
     done
 
@@ -233,7 +243,7 @@ fi
 
 # Spot check that an entry survived with its own hash, not another writer's.
 SPOT_PATH="writer1/file-0.dat"
-SPOT_EXPECTED=$(printf '%s' "$SPOT_PATH" | sha256sum | cut -d' ' -f1)
+SPOT_EXPECTED=$(printf '%s' "$SPOT_PATH" | sha256_of_stdin)
 SPOT_ACTUAL=$(psi_cmd hash-cache get --db "$TEST_DB" "$SPOT_PATH")
 if [ "$SPOT_ACTUAL" != "$SPOT_EXPECTED" ]; then
     echo -e "${RED}FAIL: $SPOT_PATH has hash $SPOT_ACTUAL, expected $SPOT_EXPECTED${NC}"
@@ -274,7 +284,7 @@ if ! diff "$ZIG_CACHED_PATHS" "$TS_CACHED_PATHS"; then
 fi
 
 TS_SPOT_PATH="writer2/file-1.dat"
-TS_SPOT_EXPECTED=$(printf '%s' "$TS_SPOT_PATH" | sha256sum | cut -d' ' -f1)
+TS_SPOT_EXPECTED=$(printf '%s' "$TS_SPOT_PATH" | sha256_of_stdin)
 TS_SPOT_ACTUAL=$(ts_psi_cmd hash-cache get --db "$TEST_DB" "$TS_SPOT_PATH")
 if [ "$TS_SPOT_ACTUAL" != "$TS_SPOT_EXPECTED" ]; then
     echo -e "${RED}FAIL: the TypeScript CLI reads $TS_SPOT_PATH as $TS_SPOT_ACTUAL, expected $TS_SPOT_EXPECTED${NC}"

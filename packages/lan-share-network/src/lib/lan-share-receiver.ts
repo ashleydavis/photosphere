@@ -5,6 +5,7 @@ import type { Server as HttpsServer } from "https";
 import type { Socket as DgramSocket } from "dgram";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { IPairingCodeHashResponse } from "./lan-share-types";
+import { discoveryPort } from "./lan-share-types";
 
 //
 // Maximum number of incoming requests before the receiver aborts (covers both endpoints).
@@ -16,11 +17,6 @@ const MAX_REQUESTS = 5;
 // Interval in milliseconds between UDP broadcast announcements.
 //
 const BROADCAST_INTERVAL_MS = 1000;
-
-//
-// UDP port used for discovery broadcasts.
-//
-const DISCOVERY_PORT = 54321;
 
 //
 // Generates a self-signed TLS certificate and private key at runtime.
@@ -380,16 +376,17 @@ export class LanShareReceiver {
             // GET /pairing-code-hash, on a receiver that is already broadcasting its port to the
             // whole subnet. That the code is short enough to brute force from its hash is a
             // pre-existing property of the pairing design, not something this line introduces.
+            const discoveryPortNumber = discoveryPort();
             const message = Buffer.from(`PSIE_RECV:${port}:${this.codeHash}:${selfSigned.fingerprint}`);
             this.broadcastTimer = setInterval(() => {
-                this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
+                this.udpSocket!.send(message, 0, message.length, discoveryPortNumber, "255.255.255.255");
                 // Also send to loopback so same-machine discovery works on macOS, where
                 // 255.255.255.255 broadcasts are not reliably looped back between processes.
-                this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "127.0.0.1");
+                this.udpSocket!.send(message, 0, message.length, discoveryPortNumber, "127.0.0.1");
             }, BROADCAST_INTERVAL_MS);
             // Send first broadcast immediately
-            this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "255.255.255.255");
-            this.udpSocket!.send(message, 0, message.length, DISCOVERY_PORT, "127.0.0.1");
+            this.udpSocket!.send(message, 0, message.length, discoveryPortNumber, "255.255.255.255");
+            this.udpSocket!.send(message, 0, message.length, discoveryPortNumber, "127.0.0.1");
         });
     }
 

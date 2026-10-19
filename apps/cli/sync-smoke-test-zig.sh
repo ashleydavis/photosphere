@@ -200,9 +200,9 @@ check_dependencies() {
         exit 1
     fi
     
-    # Check if sha256sum is available
-    if ! command -v sha256sum &> /dev/null; then
-        log_error "sha256sum is required but not installed"
+    # Check if sha256sum (Linux, Windows) or shasum (macOS) is available
+    if ! command -v sha256sum &> /dev/null && ! command -v shasum &> /dev/null; then
+        log_error "sha256sum or shasum is required but not installed"
         exit 1
     fi
 }

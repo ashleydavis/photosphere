@@ -2140,6 +2140,18 @@ test "readFileHead reports running out of memory, and not as a failed read" {
     try std.testing.expectError(error.OutOfMemory, fs.readFileHead(failingAllocator.allocator(), io, filePath, 4));
 }
 
+//
+// A rename that always fails with EBUSY, as a Windows rename does while something has the target open.
+//
+fn busyDirRename(userdata: ?*anyopaque, oldDir: std.Io.Dir, oldSubPath: []const u8, newDir: std.Io.Dir, newSubPath: []const u8) std.Io.Dir.RenameError!void {
+    _ = userdata;
+    _ = oldDir;
+    _ = oldSubPath;
+    _ = newDir;
+    _ = newSubPath;
+    return error.FileBusy;
+}
+
 test "outputFile retries a rename that is refused as busy, then gives up with the refusal" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -2153,19 +2165,24 @@ test "outputFile retries a rename that is refused as busy, then gives up with th
     //
     // On Windows the refusal is the real one: a rename onto a file that another handle holds open without
     // sharing delete access fails with a sharing violation, which is EBUSY to Node and FileBusy to Zig.
-    // POSIX has no such refusal, so there a rename onto "." of the directory stands in for it, which
-    // Linux refuses with EBUSY.
-    const targetPath = if (builtin.os.tag == .windows)
-        try std.fs.path.join(allocator, &.{ dirPath, "held-open.txt" })
-    else
-        try std.fmt.allocPrint(allocator, "{s}/.", .{dirPath});
+    // POSIX has no such refusal, and macOS does not refuse a rename onto "." of a directory with EBUSY as
+    // Linux does, so there the Io handed to outputFile is the real one with only its rename replaced by
+    // one that is always refused as busy: the temporary file is really written and every rename of it into
+    // place is refused.
+    const targetPath = try std.fs.path.join(allocator, &.{ dirPath, if (builtin.os.tag == .windows) "held-open.txt" else "target.txt" });
     const heldOpen: ?std.Io.File = if (builtin.os.tag == .windows) try holdOpenWithoutDeleteSharing(targetPath) else null;
     errdefer if (heldOpen) |file| {
         file.close(io);
     };
+    var busyRenameVtable = io.vtable.*;
+    busyRenameVtable.dirRename = busyDirRename;
+    const busyRenameIo: std.Io = if (builtin.os.tag == .windows) io else .{
+        .userdata = io.userdata,
+        .vtable = &busyRenameVtable,
+    };
 
     const startedAt = std.Io.Timestamp.now(io, .awake).toMilliseconds();
-    try std.testing.expectError(error.FileBusy, fs.outputFile(allocator, io, targetPath, "data"));
+    try std.testing.expectError(error.FileBusy, fs.outputFile(allocator, busyRenameIo, targetPath, "data"));
     try std.testing.expect(std.Io.Timestamp.now(io, .awake).toMilliseconds() - startedAt >= 500);
 
     if (heldOpen) |file| {

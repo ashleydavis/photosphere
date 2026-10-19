@@ -11,6 +11,7 @@ const task_queue_zig = @import("ziggy-core").task_queue;
 const node_api = @import("node-api-zig");
 const http_requests = @import("http-requests.zig");
 const DatabaseFixture = @import("database-fixture.zig").DatabaseFixture;
+const console_capture = @import("console-capture.zig");
 const asset_server_worker = node_api.asset_server_worker;
 const media_file_database = node_api.media_file_database;
 const TaskContext = task_queue_zig.task_context.TaskContext;
@@ -123,7 +124,7 @@ const RunningTask = struct {
     fn cancelAndFinish(self: *RunningTask) !asset_server_worker.IAssetServerTaskResult {
         self.context.cancel();
         self.thread.join();
-        utils.console.setCapture(null, null);
+        console_capture.endConsoleCapture();
         const value = try self.result.?;
         return std.json.parseFromValueLeaky(asset_server_worker.IAssetServerTaskResult, self.arena.allocator(), value, .{});
     }
@@ -284,7 +285,7 @@ test "assetServerHandler binds the port it is asked for" {
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
+    defer console_capture.endConsoleCapture();
     var context = TaskContext.init(uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "test-session", "asset-server-task", .{
         .context = null,
         .function = ignoreMessage,

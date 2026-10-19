@@ -143,21 +143,37 @@ fn checkOnTerminal(allocator: std.mem.Allocator, verbose: bool) ![]const u8 {
     };
 
     // The slave stays open here until the master has been read: macOS discards what is waiting on the master
-    // once the last slave descriptor is closed (Linux keeps it). With the child gone, everything it wrote is
-    // already waiting, so the master is read until nothing more is ready.
+    // once the last slave descriptor is closed (Linux keeps it).
     defer terminal.slave.close(io);
-    const term = try child.wait(io);
-    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, term);
+
+    // The master is read while the child runs, because a macOS terminal holds only about a kilobyte and a child
+    // that writes more blocks until it is read. A thread waits for the child and then closes the write end of a
+    // pipe, so the reading stops once the child is gone and nothing more is waiting on the master.
+    const exitPipe = try std.Io.Threaded.pipe2(.{ .CLOEXEC = true });
+    const exitRead: std.Io.File = .{ .handle = exitPipe[0], .flags = .{ .nonblocking = false } };
+    defer exitRead.close(io);
+    const exitWrite: std.Io.File = .{ .handle = exitPipe[1], .flags = .{ .nonblocking = false } };
+    var term: std.process.Child.WaitError!std.process.Child.Term = undefined;
+    const waiter = try std.Thread.spawn(.{}, waitForChild, .{ io, &child, &term, exitWrite });
+    errdefer waiter.join();
 
     var output: std.ArrayList(u8) = .empty;
     var buffer: [4096]u8 = undefined;
     while (true) {
-        var pollFds = [1]std.posix.pollfd{.{
-            .fd = terminal.master.handle,
-            .events = std.posix.POLL.IN,
-            .revents = 0,
-        }};
-        if (try std.posix.poll(&pollFds, 0) == 0) {
+        var pollFds = [2]std.posix.pollfd{
+            .{
+                .fd = terminal.master.handle,
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            },
+            .{
+                .fd = exitRead.handle,
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            },
+        };
+        _ = try std.posix.poll(&pollFds, -1);
+        if (pollFds[0].revents == 0) {
             break;
         }
         const count = try terminal.master.readStreaming(io, &.{&buffer});
@@ -166,7 +182,18 @@ fn checkOnTerminal(allocator: std.mem.Allocator, verbose: bool) ![]const u8 {
         }
         try output.appendSlice(allocator, buffer[0..count]);
     }
+    waiter.join();
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, try term);
     return output.items;
+}
+
+//
+// Waits for the child, keeps how it ended, and closes the write end of the pipe so the reader of the terminal sees
+// that the child has gone.
+//
+fn waitForChild(io: std.Io, child: *std.process.Child, term: *std.process.Child.WaitError!std.process.Child.Term, exited: std.Io.File) void {
+    term.* = child.wait(io);
+    exited.close(io);
 }
 
 test "writeProgress clears the line and writes the message on a TTY" {

@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "ziggy",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ashleydavis/ziggy",
+      "state" : {
+        "revision" : "c46564e90b1c0e74cd733ded7c0cfcfcb515958a",
+        "version" : "0.0.2"
+      }
+    }
+  ],
+  "version" : 2
+}

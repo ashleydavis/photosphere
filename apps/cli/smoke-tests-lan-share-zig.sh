@@ -39,6 +39,22 @@ source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/process-control.sh"
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
 
+# macOS ships neither GNU `timeout` nor `sha256sum`, and the broadcast capture uses both. Without
+# these the capture silently came back empty there. Each is defined only when the real command is
+# missing, so Linux and Windows keep running the real one.
+if [ -z "$(type -P timeout 2>/dev/null)" ]; then
+    # Runs a command with a time limit, through the shared timeout's own killer.
+    timeout() {
+        run_test_with_timeout "$@"
+    }
+fi
+if [ -z "$(type -P sha256sum 2>/dev/null)" ]; then
+    # Prints SHA-256 hashes in sha256sum's format, with the shasum macOS has.
+    sha256sum() {
+        shasum -a 256 "$@"
+    }
+fi
+
 # The suite root. It is NOT where a test runs: run_test points TEST_TMP_DIR at a uniquely named
 # directory for the length of each test.
 #

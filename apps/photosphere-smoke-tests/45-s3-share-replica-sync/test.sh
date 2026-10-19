@@ -53,8 +53,13 @@ DESCRIPTION="Edited on the device"
 # failing here must not run a teardown for an app that was never started. receive-database does the same.
 require_lan_bridge
 
-# Stop the app AND the S3 emulator, so a failed assertion never leaves a MinIO server running.
-trap 'stop_app "$APP_PORT" "$TMP_DIR"; stop_s3_emulator "$S3_STATE_DIR"' EXIT
+# Stop the app AND the S3 emulator, so a failed assertion never leaves a MinIO server running. cleanup_apps rather than stop_app,
+# because APP_PORT is unset until start_app runs and under set -u expanding it would abort the trap before the emulator is stopped.
+cleanup() {
+    cleanup_apps "$TMP_DIR"
+    stop_s3_emulator "$S3_STATE_DIR"
+}
+trap cleanup EXIT
 
 mkdir -p "$TMP_DIR"
 

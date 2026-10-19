@@ -161,6 +161,8 @@ apple_sync_native() {
             extracted="$(find "$members_dir/one" -type f)"
             [ -n "$extracted" ] || apple_fail "taking $member out of $archive wrote no file."
             mv "$extracted" "$members_dir/$count.o" || apple_fail "could not move $member out of the extraction directory."
+            # The archives Zig writes record every member's mode as 0 and zig ar x gives the file that mode, so libtool could not read it.
+            chmod 644 "$members_dir/$count.o" || apple_fail "could not make $member from $archive readable."
             find "$members_dir/one" -depth -mindepth 1 -type d -empty -delete
         done <<< "$names"
     done
