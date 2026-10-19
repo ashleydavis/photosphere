@@ -504,6 +504,15 @@ fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.
 }
 
 //
+// A stand-in for the create-default-database task that fails, as it does when the database cannot be made.
+//
+fn createDefaultDatabaseFailsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    _ = data;
+    return utils.errors.throwError("the default database could not be made", .{});
+}
+
+//
 // A stand-in for the import-assets task, which another part of the app provides: it reports that it started and then runs until it is
 // cancelled.
 //
@@ -596,8 +605,10 @@ test "a failure to start automatic import at startup is logged, not lost" {
     defer allocator.free(database_path);
     const config_yaml = try autoImportConfigYaml(allocator, database_path);
     defer allocator.free(config_yaml);
-    // No create-default-database task is registered, so making the default database fails.
-    try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{}, config_yaml);
+    // Making the default database fails. The real create-default-database task would make it on disk wherever the path lets it.
+    try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{
+        .{ .name = "create-default-database", .handler = createDefaultDatabaseFailsTask },
+    }, config_yaml);
     defer app.stop();
     _ = try app.core.uiQuery();
     var waited_ms: i64 = 0;

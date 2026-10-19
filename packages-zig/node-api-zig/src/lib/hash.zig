@@ -75,7 +75,11 @@ pub fn computeFileHash(allocator: std.mem.Allocator, io: std.Io, filePath: []con
         return hasher.function(hasher.context, allocator, filePath);
     }
 
-    const file = std.Io.Dir.cwd().openFile(io, filePath, .{}) catch |err| {
+    // A directory is refused at the open, so it fails as error.IsDir, which is the EISDIR Node reports for it, rather
+    // than opening and then failing the read with an error.ReadFailed that does not say why.
+    const file = std.Io.Dir.cwd().openFile(io, filePath, .{
+        .allow_directory = false,
+    }) catch |err| {
         if (err == error.FileNotFound) {
             return errors.throwError("ENOENT: no such file or directory, open '{s}'", .{filePath});
         }

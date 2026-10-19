@@ -220,7 +220,9 @@ test "normalizedPath resolves a relative bare path against the current directory
     const result = try createStorage(allocator, std.testing.io, "some/../relative/./path/", null, null);
     const currentPath = try std.process.currentPathAlloc(std.testing.io, allocator);
     std.mem.replaceScalar(u8, currentPath, '\\', '/');
-    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ currentPath, "relative", "path" }), result.normalizedPath);
+
+    // Node's `path.resolve(...).replace(/\\/g, '/')` has forward slashes throughout, so the expected path is joined with `/`.
+    try std.testing.expectEqualStrings(try pathJoin(allocator, &.{ currentPath, "relative", "path" }), result.normalizedPath);
 }
 
 test "returns type \"encrypted-fs\" when both keys are provided" {

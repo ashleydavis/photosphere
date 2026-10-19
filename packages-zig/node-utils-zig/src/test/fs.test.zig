@@ -2148,15 +2148,68 @@ test "outputFile retries a rename that is refused as busy, then gives up with th
     const dirPath = try tempFilePath(allocator, io, "busy-rename");
     try fs.ensureDir(io, dirPath);
 
-    // A rename onto "." of the directory fails with EBUSY on Linux, which is the refusal a Windows rename
-    // gets while something has the target open, so it is retried with a growing wait before it is thrown.
-    // The waits add up to far more than a rename that was tried only once could take.
-    const targetPath = try std.fmt.allocPrint(allocator, "{s}/.", .{dirPath});
+    // The refusal is retried with a growing wait before it is thrown, and the waits add up to far more
+    // than a rename that was tried only once could take.
+    //
+    // On Windows the refusal is the real one: a rename onto a file that another handle holds open without
+    // sharing delete access fails with a sharing violation, which is EBUSY to Node and FileBusy to Zig.
+    // POSIX has no such refusal, so there a rename onto "." of the directory stands in for it, which
+    // Linux refuses with EBUSY.
+    const targetPath = if (builtin.os.tag == .windows)
+        try std.fs.path.join(allocator, &.{ dirPath, "held-open.txt" })
+    else
+        try std.fmt.allocPrint(allocator, "{s}/.", .{dirPath});
+    const heldOpen: ?std.Io.File = if (builtin.os.tag == .windows) try holdOpenWithoutDeleteSharing(targetPath) else null;
+    errdefer if (heldOpen) |file| {
+        file.close(io);
+    };
+
     const startedAt = std.Io.Timestamp.now(io, .awake).toMilliseconds();
     try std.testing.expectError(error.FileBusy, fs.outputFile(allocator, io, targetPath, "data"));
     try std.testing.expect(std.Io.Timestamp.now(io, .awake).toMilliseconds() - startedAt >= 500);
 
+    if (heldOpen) |file| {
+        file.close(io);
+    }
     try fs.remove(io, dirPath);
+}
+
+//
+// Opens or creates a file (kernel32). Used to hold a file open with a sharing mode that std's openFile never asks for.
+//
+extern "kernel32" fn CreateFileW(
+    fileName: [*:0]const u16,
+    desiredAccess: std.os.windows.DWORD,
+    shareMode: std.os.windows.DWORD,
+    securityAttributes: ?*anyopaque,
+    creationDisposition: std.os.windows.DWORD,
+    flagsAndAttributes: std.os.windows.DWORD,
+    templateFile: ?std.os.windows.HANDLE,
+) callconv(.winapi) std.os.windows.HANDLE;
+
+//
+// Creates a file and holds it open the way a virus scanner or the search indexer does on Windows,
+// sharing read and write access but not delete access, so a rename onto it is refused while the
+// returned handle stays open. std's own openFile always shares delete access, so this asks Windows
+// directly. The caller closes the returned file.
+//
+fn holdOpenWithoutDeleteSharing(filePath: []const u8) !std.Io.File {
+    const windows = std.os.windows;
+    var pathWide: [windows.PATH_MAX_WIDE:0]u16 = undefined;
+    const pathLength = try std.unicode.wtf8ToWtf16Le(&pathWide, filePath);
+    pathWide[pathLength] = 0;
+
+    // GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_ALWAYS and FILE_ATTRIBUTE_NORMAL.
+    const fileHandle = CreateFileW(&pathWide, 0x80000000, 0x1 | 0x2, null, 4, 0x80, null);
+    if (fileHandle == windows.INVALID_HANDLE_VALUE) {
+        return windows.unexpectedError(windows.GetLastError());
+    }
+    return .{
+        .handle = fileHandle,
+        .flags = .{
+            .nonblocking = false,
+        },
+    };
 }
 
 test "remove throws when a file that exists cannot be deleted, rather than treating it as gone" {

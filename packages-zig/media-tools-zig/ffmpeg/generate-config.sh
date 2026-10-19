@@ -193,6 +193,15 @@ case "$ZIG_TARGET" in
         ;;
 esac
 
+# With HAVE_COMMANDLINETOARGVW the command line programs on Windows throw away the arguments main is called with and read the
+# process's own command line instead (prepare_app_arguments in fftools/cmdutils.c). The programs are called as functions here, with
+# arguments of their own, inside a process whose command line is something else, so it is turned off. configure has no option for it.
+case "$ZIG_TARGET" in
+    *-windows-*)
+        sed -i.bak 's/^#define HAVE_COMMANDLINETOARGVW 1$/#define HAVE_COMMANDLINETOARGVW 0/' config.h
+        ;;
+esac
+
 # The files configure and make write that the sources include or that are lists of the components, and the sources of the
 # resources of the command line programs, which make writes from files it compresses.
 mkdir -p fftools/resources

@@ -64,6 +64,139 @@ fn randomUUID(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 //
+// Renames a file over its target on Windows the way Zig 0.16 std's rename does (dirRenameWindowsInner
+// in lib/std/Io/Threaded.zig), mapping every status to the error std maps it to, with one difference:
+// STATUS_SHARING_VIOLATION is error.FileBusy. std returns error.Unexpected for it, and it is what a rename
+// gets while another handle holds the target open without sharing delete access, so the retry in
+// renameIntoPlace would never happen for it. libuv reports the same refusal as EBUSY and the TypeScript
+// retries it.
+//
+fn renameWindows(tempPath: []const u8, filePath: []const u8) !void {
+    const windows = std.os.windows;
+    const cwdHandle = std.Io.Dir.cwd().handle;
+    const tempPathSpace = try std.Io.Threaded.sliceToPrefixedFileW(cwdHandle, tempPath, .{});
+    const tempPathWide = tempPathSpace.span();
+    const filePathSpace = try std.Io.Threaded.sliceToPrefixedFileW(cwdHandle, filePath, .{});
+    const filePathWide = filePathSpace.span();
+
+    // The source is opened with delete access, which a rename needs, and without following a symlink,
+    // as std opens it.
+    var sourceHandle: windows.HANDLE = undefined;
+    var openStatusBlock: windows.IO_STATUS_BLOCK = undefined;
+    const openStatus = windows.ntdll.NtCreateFile(
+        &sourceHandle,
+        .{
+            .GENERIC = .{
+                .WRITE = true,
+            },
+            .STANDARD = .{
+                .RIGHTS = .{
+                    .DELETE = true,
+                },
+                .SYNCHRONIZE = true,
+            },
+        },
+        &.{
+            .RootDirectory = if (std.fs.path.isAbsoluteWindowsWtf16(tempPathWide)) null else cwdHandle,
+            .ObjectName = @constCast(&windows.UNICODE_STRING.init(tempPathWide)),
+        },
+        &openStatusBlock,
+        null,
+        .{
+            .NORMAL = true,
+        },
+        .VALID_FLAGS,
+        .OPEN,
+        .{
+            .IO = .ASYNCHRONOUS,
+            .OPEN_REPARSE_POINT = true,
+        },
+        null,
+        0,
+    );
+    switch (openStatus) {
+        .SUCCESS => {},
+        // std retries these two a few times for a kernel bug and then returns FileBusy, which
+        // renameIntoPlace retries anyway.
+        .SHARING_VIOLATION => return error.FileBusy,
+        .DELETE_PENDING => return error.FileBusy,
+        .OBJECT_NAME_INVALID => return error.BadPathName,
+        .OBJECT_NAME_NOT_FOUND => return error.FileNotFound,
+        .OBJECT_PATH_NOT_FOUND => return error.FileNotFound,
+        .BAD_NETWORK_PATH => return error.NetworkNotFound,
+        .BAD_NETWORK_NAME => return error.NetworkNotFound,
+        .NO_MEDIA_IN_DEVICE => return error.NoDevice,
+        .ACCESS_DENIED => return error.AccessDenied,
+        .PIPE_BUSY => return error.PipeBusy,
+        .PIPE_NOT_AVAILABLE => return error.NoDevice,
+        // std's rename turns its PathAlreadyExists into Unexpected.
+        .OBJECT_NAME_COLLISION => return windows.unexpectedStatus(openStatus),
+        .FILE_IS_A_DIRECTORY => return error.IsDir,
+        .NOT_A_DIRECTORY => return error.NotDir,
+        .USER_MAPPED_FILE => return error.AccessDenied,
+        .VIRUS_INFECTED, .VIRUS_DELETED => return error.AntivirusInterference,
+        .INVALID_PARAMETER, .OBJECT_PATH_SYNTAX_BAD, .INVALID_HANDLE => return windows.statusBug(openStatus),
+        else => return windows.unexpectedStatus(openStatus),
+    }
+    defer windows.CloseHandle(sourceHandle);
+
+    // FileRenameInformationEx is tried first, and FileRenameInformation without the extra flags where
+    // the filesystem or the operating system does not support it, as std does.
+    var renameStatus = setRenameInformation(sourceHandle, cwdHandle, filePathWide, .{
+        .REPLACE_IF_EXISTS = true,
+        .POSIX_SEMANTICS = true,
+        .IGNORE_READONLY_ATTRIBUTE = true,
+    }, .RenameEx);
+    if (renameStatus == .INVALID_PARAMETER or renameStatus == .INVALID_INFO_CLASS or renameStatus == .NOT_SUPPORTED) {
+        renameStatus = setRenameInformation(sourceHandle, cwdHandle, filePathWide, .{
+            .REPLACE_IF_EXISTS = true,
+        }, .Rename);
+    }
+    switch (renameStatus) {
+        .SUCCESS => {},
+        .SHARING_VIOLATION => return error.FileBusy,
+        .INVALID_HANDLE, .INVALID_PARAMETER, .OBJECT_PATH_SYNTAX_BAD => return windows.statusBug(renameStatus),
+        .ACCESS_DENIED => return error.AccessDenied,
+        .OBJECT_NAME_NOT_FOUND => return error.FileNotFound,
+        .OBJECT_PATH_NOT_FOUND => return error.FileNotFound,
+        .NOT_SAME_DEVICE => return error.CrossDevice,
+        // std's rename turns its PathAlreadyExists into Unexpected.
+        .OBJECT_NAME_COLLISION => return windows.unexpectedStatus(renameStatus),
+        .DIRECTORY_NOT_EMPTY => return error.DirNotEmpty,
+        .FILE_IS_A_DIRECTORY => return error.IsDir,
+        .NOT_A_DIRECTORY => return error.NotDir,
+        else => return windows.unexpectedStatus(renameStatus),
+    }
+}
+
+//
+// Asks Windows to rename the file behind a handle to a path, through the given rename information class.
+//
+fn setRenameInformation(
+    sourceHandle: std.os.windows.HANDLE,
+    cwdHandle: std.os.windows.HANDLE,
+    filePathWide: []const u16,
+    flags: std.os.windows.FILE.RENAME_INFORMATION.FLAGS,
+    informationClass: std.os.windows.FILE.INFORMATION_CLASS,
+) std.os.windows.NTSTATUS {
+    const windows = std.os.windows;
+    var renameInformation: windows.FILE.RENAME_INFORMATION = .init(.{
+        .Flags = flags,
+        .RootDirectory = if (std.fs.path.isAbsoluteWindowsWtf16(filePathWide)) null else cwdHandle,
+        .FileName = filePathWide,
+    });
+    const renameInformationBuffer = renameInformation.toBuffer();
+    var statusBlock: windows.IO_STATUS_BLOCK = undefined;
+    return windows.ntdll.NtSetInformationFile(
+        sourceHandle,
+        &statusBlock,
+        renameInformationBuffer.ptr,
+        @intCast(renameInformationBuffer.len),
+        informationClass,
+    );
+}
+
+//
 // Renames a freshly written temporary file over its target, retrying the refusals Windows gives while
 // something else has the target open.
 //
@@ -84,7 +217,11 @@ fn renameIntoPlace(io: std.Io, tempPath: []const u8, filePath: []const u8) !void
     const cwd = std.Io.Dir.cwd();
     var attempt: u32 = 0;
     while (true) : (attempt += 1) {
-        cwd.rename(tempPath, cwd, filePath, io) catch |err| {
+        // On Windows std 0.16 returns error.Unexpected for STATUS_SHARING_VIOLATION on rename, so a target
+        // held open without delete sharing would never be retried, where libuv reports it as EBUSY and the
+        // TypeScript retries it. renameWindows renames as std does but reports that refusal as FileBusy.
+        const renamed = if (builtin.os.tag == .windows) renameWindows(tempPath, filePath) else cwd.rename(tempPath, cwd, filePath, io);
+        renamed catch |err| {
             // EPERM is PermissionDenied, EACCES is AccessDenied and EBUSY is FileBusy.
             const refusedForContention = err == error.PermissionDenied or err == error.AccessDenied or err == error.FileBusy;
             if (!refusedForContention or attempt >= RENAME_RETRY_ATTEMPTS) {

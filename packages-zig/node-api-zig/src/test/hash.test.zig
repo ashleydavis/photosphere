@@ -288,11 +288,11 @@ test "computeFileHash passes on a failure to open the file that is not a missing
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const workingDir = try temp_dirs.makeTempDir(allocator, io, "compute-file-hash-not-dir");
+    const workingDir = try temp_dirs.makeTempDir(allocator, io, "compute-file-hash-is-dir");
     defer temp_dirs.removeTempDir(io, workingDir);
-    const filePath = try writeTestFile(allocator, io, workingDir, "plain.bin", "plain");
 
-    // A path that runs through a file names nothing that can be opened, and the error says why rather than claiming the
-    // file is missing.
-    try std.testing.expectError(error.NotDir, hash.computeFileHash(allocator, io, try std.fs.path.join(allocator, &.{ filePath, "inner.bin" }), null));
+    // A directory exists but cannot be hashed as a file, and the error says why rather than claiming the file is
+    // missing. Node reports EISDIR for it on every platform. A path running through a regular file is not used here
+    // because Windows reports that as a missing path, which Node turns into ENOENT there.
+    try std.testing.expectError(error.IsDir, hash.computeFileHash(allocator, io, workingDir, null));
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
@@ -222,7 +223,11 @@ const MARKED_TREE_TIME_NANOSECONDS: i96 = 1_000_000_000;
 // Gives the local merkle tree file a modification time long ago, so that a later rewrite of it can be seen.
 //
 fn markLocalTree(io: std.Io, allocator: std.mem.Allocator, world: *World) !void {
-    try std.Io.Dir.cwd().setTimestamps(io, try std.fs.path.join(allocator, &.{ world.local.dir, node_api.tree.FILES_TREE_PATH }), .{
+    // Set through the open file, like libuv's utimes on Windows: Zig 0.16 panics in Dir.setTimestamps
+    // on Windows ("TODO implement dirSetTimestamps windows"), while File.setTimestamps is implemented.
+    const treeFile = try std.Io.Dir.cwd().openFile(io, try std.fs.path.join(allocator, &.{ world.local.dir, node_api.tree.FILES_TREE_PATH }), .{ .mode = .write_only });
+    defer treeFile.close(io);
+    try treeFile.setTimestamps(io, .{
         .modify_timestamp = .{
             .new = .fromNanoseconds(MARKED_TREE_TIME_NANOSECONDS),
         },
@@ -791,8 +796,18 @@ test "getDeviceFreeBytes reports a filesystem it cannot measure rather than gues
         .data = "not a directory",
     });
 
-    // A path that runs through a file is not a missing directory to walk up from: it cannot be measured at all.
     const underFile = try std.fs.path.join(allocator, &.{ filePath, "database" });
+    if (builtin.os.tag == .windows) {
+        // Node's statfs on Windows reports a path under a file as ENOENT, not ENOTDIR, so the walk goes up to the
+        // file, and libuv measures a file through the directory holding it: the result is that directory's filesystem.
+        const measuredUnderFile: f64 = try evict_originals_worker.getDeviceFreeBytes(allocator, io, underFile);
+        const measuredAtDirectory: f64 = try evict_originals_worker.getDeviceFreeBytes(allocator, io, tempDir);
+        try std.testing.expect(measuredUnderFile > 0);
+        try std.testing.expect(@abs(measuredAtDirectory - measuredUnderFile) < 1024.0 * 1024.0 * 1024.0);
+        return;
+    }
+
+    // A path that runs through a file is not a missing directory to walk up from: it cannot be measured at all.
     try std.testing.expectError(error.Thrown, evict_originals_worker.getDeviceFreeBytes(allocator, io, underFile));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "ENOTDIR, statfs '{s}'", .{underFile}), utils.errors.lastErrorMessage());
 }

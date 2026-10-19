@@ -221,10 +221,16 @@ pub fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 
     if (std.mem.indexOfAny(u8, rest, "?#")) |cut| {
         rest = rest[0..cut];
     }
-    const hostEnd = std.mem.indexOfScalar(u8, rest, '/') orelse rest.len;
+    var hostEnd = std.mem.indexOfScalar(u8, rest, '/') orelse rest.len;
     var hostname = rest[0..hostEnd];
     if (std.ascii.eqlIgnoreCase(hostname, "localhost")) {
         hostname = "";
+    }
+
+    // A drive letter where the host would be ("file://C:/dir") is no host: the URL parser makes it the first segment of the path.
+    if (isDriveLetterSegment(hostname)) {
+        hostname = "";
+        hostEnd = 0;
     }
     const pathname = try normalizeUrlPath(allocator, rest[hostEnd..]);
 

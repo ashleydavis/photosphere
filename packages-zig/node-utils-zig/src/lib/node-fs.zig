@@ -188,14 +188,29 @@ pub fn statfsPath(allocator: std.mem.Allocator, filePath: []const u8) !IStatFs {
             return errors.throwError("E{s}, statfs '{s}'", .{ @tagName(code), filePath });
         },
         .windows => {
-            const pathW = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filePath);
             var freeBytesAvailable: u64 = 0;
             var totalBytes: u64 = 0;
             var totalFreeBytes: u64 = 0;
-            if (GetDiskFreeSpaceExW(pathW.ptr, &freeBytesAvailable, &totalBytes, &totalFreeBytes) == .FALSE) {
+            var measuredPath = filePath;
+            var askedForParent = false;
+            while (true) {
+                const pathW = try std.unicode.utf8ToUtf16LeAllocZ(allocator, measuredPath);
+                if (GetDiskFreeSpaceExW(pathW.ptr, &freeBytesAvailable, &totalBytes, &totalFreeBytes) != .FALSE) {
+                    break;
+                }
                 const code = std.os.windows.GetLastError();
                 if (code == .FILE_NOT_FOUND or code == .PATH_NOT_FOUND) {
                     return error.FileNotFound;
+                }
+
+                // GetDiskFreeSpaceExW refuses a regular file with ERROR_DIRECTORY. libuv's statfs asks once more
+                // for the directory holding the file, so Node measures a file's filesystem, and so does this.
+                if (code == .DIRECTORY and !askedForParent) {
+                    if (std.fs.path.dirname(filePath)) |parentPath| {
+                        measuredPath = parentPath;
+                        askedForParent = true;
+                        continue;
+                    }
                 }
                 return errors.throwError("{s}, statfs '{s}'", .{ @tagName(code), filePath });
             }

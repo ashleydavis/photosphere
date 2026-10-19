@@ -414,7 +414,7 @@ test "getShardId matches the shard files of the test databases" {
     while (try shards.next(io)) |shardRecords| {
         for (shardRecords) |record| {
             const shardId = try collection.getShardId(record._id);
-            const shardPath = try std.fs.path.join(allocator, &.{ "db", "collections", "metadata", "shards", shardId });
+            const shardPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "db", "collections", "metadata", "shards", shardId });
             try std.testing.expect(storage.getFile(shardPath) != null);
             const shard = try collection.shard(shardId);
             try std.testing.expect((try shard.record(io, record._id)) != null);
@@ -471,7 +471,7 @@ test "commit should flush dirty state and allow flush to succeed" {
 
     // The commit wrote the shard, its merkle tree and the collection merkle tree.
     const shardId = try collection.getShardId("123e4567-e89b-12d3-a456-426614174000");
-    try std.testing.expect(storage.getFile(try std.fs.path.join(allocator, &.{ "collections", "users", "shards", shardId })) != null);
+    try std.testing.expect(storage.getFile(try storage_zig.storage_factory.pathJoin(allocator, &.{ "collections", "users", "shards", shardId })) != null);
     try std.testing.expect(storage.getFile(try storage_zig.storage_factory.pathJoin(allocator, &.{ "collections", "users", "shards", try std.mem.concat(allocator, u8, &.{ shardId, ".dat" }) })) != null);
     try std.testing.expect(storage.getFile("collections/users/collection.dat") != null);
 }

@@ -231,6 +231,9 @@ test "fileURLToPath parses the URL first, as Bun's fileURLToPath does" {
     if (builtin.os.tag == .windows) {
         try std.testing.expectEqualStrings("C:\\b\\c", try fileURLToPath(allocator, "file:///C:/a/../b/./c?x=1#y"));
         try std.testing.expectEqualStrings("\\\\server\\share\\f", try fileURLToPath(allocator, "file://server/share/f"));
+        // A drive letter where the host would be is the start of the path, written with slashes or backslashes.
+        try std.testing.expectEqualStrings("C:\\a\\b", try fileURLToPath(allocator, "file://C:\\a\\b"));
+        try std.testing.expectEqualStrings("C:\\a\\b", try fileURLToPath(allocator, "file://C:/a/b"));
         try std.testing.expectError(error.Thrown, fileURLToPath(allocator, "file:///C:/a%2Fb"));
         try std.testing.expectEqualStrings("File URL path must not include encoded \\ or / characters", utils.errors.lastErrorMessage());
         return;
@@ -244,6 +247,8 @@ test "fileURLToPath parses the URL first, as Bun's fileURLToPath does" {
     try std.testing.expectEqualStrings("/a b/%zz/\u{E9}", try fileURLToPath(allocator, "file:///a%20b/%zz/%C3%A9"));
     // An empty path is the root.
     try std.testing.expectEqualStrings("/", try fileURLToPath(allocator, "file://"));
+    // A drive letter where the host would be is no host but the first segment of the path.
+    try std.testing.expectEqualStrings("/C:/a/b", try fileURLToPath(allocator, "file://C:/a/b"));
 
     try std.testing.expectError(error.Thrown, fileURLToPath(allocator, "file://host/a/b"));
     try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
