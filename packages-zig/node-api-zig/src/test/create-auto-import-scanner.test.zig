@@ -7,6 +7,7 @@ const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
+const mock_log = @import("mock-log.zig");
 const createAutoImportScanner = node_api.create_auto_import_scanner.createAutoImportScanner;
 const registerFolderMediaSourceBuilder = node_api.create_auto_import_scanner.registerFolderMediaSourceBuilder;
 const IAutoImportScannerProgress = node_api.auto_import_scanner.IAutoImportScannerProgress;
@@ -121,6 +122,11 @@ const ScannerTest = struct {
     // The task the scanner runs in.
     context: TaskContext,
 
+    // Swallows what the scanner logs ("Automatic import found ..."). log.info writes to stdout, which in this test program is the
+    // channel it reports its results to the build runner on, and a test of another package that ran earlier may have put the console
+    // back on the real stdout; a line written there is read as a message header and the build runner waits for a body that never comes.
+    mutedLog: mock_log.MutedLog,
+
     //
     // Makes the folder with one photo in it, an empty hash cache and an empty database.
     //
@@ -128,6 +134,8 @@ const ScannerTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
+        self.mutedLog = .{};
+        self.mutedLog.install();
         _ = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
 
@@ -160,6 +168,7 @@ const ScannerTest = struct {
         self.hashCache.deinit();
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
+        self.mutedLog.uninstall();
     }
 
     //

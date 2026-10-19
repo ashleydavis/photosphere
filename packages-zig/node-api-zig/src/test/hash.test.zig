@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -291,8 +292,15 @@ test "computeFileHash passes on a failure to open the file that is not a missing
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "compute-file-hash-not-dir");
     defer temp_dirs.removeTempDir(io, workingDir);
     const filePath = try writeTestFile(allocator, io, workingDir, "plain.bin", "plain");
+    const underFile = try std.fs.path.join(allocator, &.{ filePath, "inner.bin" });
+    if (builtin.os.tag == .windows) {
+        // Windows reports a path that runs through a file as a path that is not found, and Node's open says ENOENT for it.
+        try std.testing.expectError(error.Thrown, hash.computeFileHash(allocator, io, underFile, null));
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{underFile}), utils.errors.lastErrorMessage());
+        return;
+    }
 
     // A path that runs through a file names nothing that can be opened, and the error says why rather than claiming the
     // file is missing.
-    try std.testing.expectError(error.NotDir, hash.computeFileHash(allocator, io, try std.fs.path.join(allocator, &.{ filePath, "inner.bin" }), null));
+    try std.testing.expectError(error.NotDir, hash.computeFileHash(allocator, io, underFile, null));
 }

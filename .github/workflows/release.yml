@@ -1955,9 +1955,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: restore macos-latest, windows-latest and macos-15-intel once their Zig unit tests have been seen to pass with the media
+        # TODO: restore macos-latest and macos-15-intel once their Zig unit tests have been seen to pass with the media
         # libraries built in.
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -2085,13 +2085,13 @@ jobs:
           - os: ubuntu-latest
             artifact: photosphere-cli-zig-linux-x64
             binary: psi
-          # TODO: restore macOS and Windows once their Zig CLI smoke tests have been seen to pass with the media libraries built in.
+          # TODO: restore macOS once its Zig CLI smoke tests have been seen to pass with the media libraries built in.
           # - os: macos-latest
           #   artifact: photosphere-cli-zig-macos-arm64
           #   binary: psi
-          # - os: windows-latest
-          #   artifact: photosphere-cli-zig-windows-x64
-          #   binary: psi.exe
+          - os: windows-latest
+            artifact: photosphere-cli-zig-windows-x64
+            binary: psi.exe
           # - os: macos-15-intel
           #   artifact: photosphere-cli-zig-macos-x64
           #   binary: psi

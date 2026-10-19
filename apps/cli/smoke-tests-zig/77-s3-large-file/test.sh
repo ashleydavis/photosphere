@@ -32,10 +32,11 @@ TEST_DIR="$(get_test_dir "$TEST_NUMBER")/run-$$"
 S3_STATE_DIR="$TEST_DIR/s3"
 
 # The generated fixture has to clear the 100 MB part size with room to spare, so the upload is at
-# least two parts and the read at least two chunks. Three seconds of 720p30 noise at lossless quality
-# comes out around 145 MB and takes under a second to produce.
+# least two parts and the read at least two chunks. Four seconds of 720p30 noise at mpeg4's finest quantizer
+# comes out around 127 MB and takes under a second to produce. mpeg4 is built into every ffmpeg, unlike
+# libx264, which only GPL builds carry.
 MINIMUM_FIXTURE_BYTES=$((100 * 1024 * 1024))
-FIXTURE_SECONDS=3
+FIXTURE_SECONDS=4
 
 cleanup_s3_and_show_summary() {
     local exit_code=$?
@@ -69,7 +70,7 @@ test_s3_large_file() {
     # -nostdin is ffmpeg's non-interactive flag: without it ffmpeg reads the terminal for keyboard
     # commands, which freezes it here. See the same call in 74-s3-failures for the detail.
     if ! ffmpeg -nostdin -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=$FIXTURE_SECONDS,noise=alls=100:allf=t+u" \
-        -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p "$fixture" >/dev/null 2>&1; then
+        -c:v mpeg4 -q:v 1 -pix_fmt yuv420p "$fixture" >/dev/null 2>&1; then
         log_error "ffmpeg could not generate the large test video"
         exit 1
     fi

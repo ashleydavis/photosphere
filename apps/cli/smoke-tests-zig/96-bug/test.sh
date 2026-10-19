@@ -52,48 +52,43 @@ wait_for_opened_url() {
 }
 
 #
-# Builds a SYSTEMROOT at the given directory that holds everything the real one holds except Windows
-# PowerShell: each entry of the real SYSTEMROOT but System32 is linked in, and so is each entry of its
-# System32 but WindowsPowerShell. The TypeScript CLI is a Bun executable, and Windows does not start it
+# Builds a SYSTEMROOT at the given directory that holds the directories the real one holds except Windows
+# PowerShell: each directory of the real SYSTEMROOT but System32 is joined in, and so is each directory of
+# its System32 but WindowsPowerShell. The TypeScript CLI is a Bun executable, and Windows does not start it
 # under a SYSTEMROOT without the rest of Windows in it (Git Bash reports exit code 127 with no output),
 # so a SYSTEMROOT holding nothing but PowerShell only works for the Zig CLI. Prints the SYSTEMROOT as a
 # Windows path.
+#
+# The directories are joined with directory junctions, which Windows follows and which, unlike symbolic
+# links, need neither Developer Mode nor an elevated account to create. Files cannot be joined that way:
+# a symbolic link needs that privilege, and a hard link needs write access to the file, which System32's
+# files do not give. Of System32's files only rsaenh.dll is needed, because CryptoAPI loads its provider
+# from %SystemRoot%\System32\rsaenh.dll, and Bun stops with a fail-fast (0xC0000409) without it, so that
+# one file is copied.
 #
 build_system_root() {
     local system_root="$1"
     local real_system_root
     real_system_root="$(cygpath -u "$SYSTEMROOT")"
 
-    local windows_entries=()
-    local system32_entries=()
+    mkdir -p "$system_root/System32"
     local entry
-    for entry in "$real_system_root"/*; do
+    for entry in "$real_system_root"/* "$real_system_root"/System32/*; do
         local entry_name
         entry_name="${entry##*/}"
-        if [ "${entry_name,,}" = "system32" ]; then
-            local system32_entry
-            for system32_entry in "$entry"/*; do
-                local system32_entry_name
-                system32_entry_name="${system32_entry##*/}"
-                if [ "${system32_entry_name,,}" != "windowspowershell" ]; then
-                    system32_entries+=("$system32_entry")
-                fi
-            done
-        else
-            windows_entries+=("$entry")
+        if [ ! -d "$entry" ] || [ "${entry_name,,}" = "system32" ] || [ "${entry_name,,}" = "windowspowershell" ]; then
+            continue
+        fi
+        local link
+        link="$system_root/${entry#"$real_system_root"/}"
+        # cmd expands %NAME% in its command line, and System32 can hold a directory named that way
+        # (%userprofile% is one), so cmd is given no environment variables to expand.
+        if ! env -i "$(cygpath -u "$COMSPEC")" //c mklink //J "$(cygpath -w "$link")" "$(cygpath -w "$entry")" > /dev/null; then
+            log_error "Could not join $entry into $system_root" >&2
+            exit 1
         fi
     done
-
-    # Native Windows symbolic links, which Windows follows, not the copies Git Bash makes by default.
-    mkdir -p "$system_root/System32"
-    if ! MSYS=winsymlinks:nativestrict ln -s "${windows_entries[@]}" "$system_root/" >&2; then
-        log_error "Could not link the entries of $real_system_root into $system_root" >&2
-        exit 1
-    fi
-    if ! MSYS=winsymlinks:nativestrict ln -s "${system32_entries[@]}" "$system_root/System32/" >&2; then
-        log_error "Could not link the entries of $real_system_root/System32 into $system_root/System32" >&2
-        exit 1
-    fi
+    cp "$real_system_root/System32/rsaenh.dll" "$system_root/System32/"
     cygpath -w "$system_root"
 }
 

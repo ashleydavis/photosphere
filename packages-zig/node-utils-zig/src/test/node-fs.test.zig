@@ -118,3 +118,22 @@ test "statfsPath reports the free space of the filesystem holding a path, and a 
     try std.testing.expect(stats.bavail > 0);
     try std.testing.expectError(error.FileNotFound, node_fs.statfsPath(allocator, try std.fs.path.join(allocator, &.{ root, "missing" })));
 }
+
+test "statfsPath of a file reports the free space of the filesystem holding it, as Node's statfs does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const root = try makeTempDir(allocator, io);
+    defer std.Io.Dir.cwd().deleteTree(io, root) catch {};
+    const filePath = try std.fs.path.join(allocator, &.{ root, "a-file" });
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = filePath,
+        .data = "not a directory",
+    });
+
+    const stats = try node_fs.statfsPath(allocator, filePath);
+
+    try std.testing.expect(stats.bsize > 0);
+    try std.testing.expect(stats.bavail > 0);
+}

@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
+const storage_zig = @import("storage-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
@@ -73,7 +74,12 @@ test "refuses a directory that already holds a database" {
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
     try std.testing.expectError(error.Thrown, run(allocator, io, &context, databaseDir));
-    const expectedMessage = try std.fmt.allocPrint(allocator, "Cannot create new media file database in fs:{s}. This storage location already contains files! Please create your database in a new empty directory.", .{databaseDir});
+
+    // The location is `pathJoin("fs:", path)` with forward slashes, so on Windows it reads "fs:/C:/...".
+    const forwardSlashDir = try allocator.dupe(u8, databaseDir);
+    std.mem.replaceScalar(u8, forwardSlashDir, '\\', '/');
+    const location = try storage_zig.storage_factory.pathJoin(allocator, &.{ "fs:", forwardSlashDir });
+    const expectedMessage = try std.fmt.allocPrint(allocator, "Cannot create new media file database in {s}. This storage location already contains files! Please create your database in a new empty directory.", .{location});
     try std.testing.expectEqualStrings(expectedMessage, errors.lastErrorMessage());
 }
 

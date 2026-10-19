@@ -205,9 +205,9 @@ fn percentDecode(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 //
 // Converts a URL starting "file://" to a file path. The URL is parsed first: tabs and
 // newlines are dropped, backslashes are slashes, the query and fragment are cut off, "localhost" is no host at
-// all, and `.` and `..` segments are resolved. Then the path is checked and percent-decoded. On Windows the path
-// uses backslashes and loses the slash before the drive letter ("C:\dir\file"), and a host makes it a UNC path
-// ("\\host\share\file").
+// all, a host that is a drive letter ("file://C:/dir") is the start of the path, and `.` and `..` segments are
+// resolved. Then the path is checked and percent-decoded. On Windows the path uses backslashes and loses the
+// slash before the drive letter ("C:\dir\file"), and a host makes it a UNC path ("\\host\share\file").
 //
 pub fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 {
     var cleaned: std.ArrayList(u8) = .empty;
@@ -226,7 +226,13 @@ pub fn fileURLToPath(allocator: std.mem.Allocator, url: []const u8) ![]const u8 
     if (std.ascii.eqlIgnoreCase(hostname, "localhost")) {
         hostname = "";
     }
-    const pathname = try normalizeUrlPath(allocator, rest[hostEnd..]);
+
+    // A host that is a Windows drive letter ("file://C:/dir") is no host: the URL parser takes it as the first segment of the path.
+    const hostIsDriveLetter = isDriveLetterSegment(hostname);
+    if (hostIsDriveLetter) {
+        hostname = "";
+    }
+    const pathname = try normalizeUrlPath(allocator, if (hostIsDriveLetter) rest else rest[hostEnd..]);
 
     if (builtin.os.tag == .windows) {
         if (std.ascii.indexOfIgnoreCase(pathname, "%2f") != null or std.ascii.indexOfIgnoreCase(pathname, "%5c") != null) {

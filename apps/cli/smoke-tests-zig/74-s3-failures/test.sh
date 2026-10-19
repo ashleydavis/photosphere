@@ -101,8 +101,8 @@ test_s3_failures() {
     # process group, and a process outside the terminal's foreground group that reads the terminal is
     # stopped by the kernel and never resumes. Run from a terminal this froze a 0.2s ffmpeg call
     # until the suite's 300s timeout killed the test.
-    if ! ffmpeg -nostdin -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=3,noise=alls=100:allf=t+u" \
-        -c:v libx264 -preset ultrafast -qp 0 -pix_fmt yuv420p "$big_fixture" >/dev/null 2>&1; then
+    if ! ffmpeg -nostdin -y -f lavfi -i "color=c=black:s=1280x720:r=30:d=4,noise=alls=100:allf=t+u" \
+        -c:v mpeg4 -q:v 1 -pix_fmt yuv420p "$big_fixture" >/dev/null 2>&1; then
         log_error "ffmpeg could not generate the large test video"
         exit 1
     fi

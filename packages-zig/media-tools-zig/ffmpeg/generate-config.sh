@@ -193,6 +193,15 @@ case "$ZIG_TARGET" in
         ;;
 esac
 
+# With HAVE_COMMANDLINETOARGVW, fftools/cmdutils.c on Windows throws away the arguments its main is given and reads the process's own
+# command line instead (GetCommandLineW), keeping what it read for every later call. The programs here are not processes of their
+# own: their main is called in the app's process with the arguments of each command, already UTF-8, so on Windows it is switched off.
+case "$ZIG_TARGET" in
+    *-windows-*)
+        sed -i.bak 's/^#define HAVE_COMMANDLINETOARGVW 1$/#define HAVE_COMMANDLINETOARGVW 0/' config.h
+        ;;
+esac
+
 # The files configure and make write that the sources include or that are lists of the components, and the sources of the
 # resources of the command line programs, which make writes from files it compresses.
 mkdir -p fftools/resources

@@ -1,6 +1,7 @@
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const support = @import("test-support.zig");
+const main_state = @import("../lib/main-state.zig");
 
 const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
 
@@ -57,6 +58,9 @@ test "the asset-server task serves the asset routes on a loopback port the page 
     try std.testing.expectEqual(std.http.Status.bad_request, result.status);
     try std.testing.expectEqualStrings("Missing 'id' parameter", body.written());
 
+    // An asset server that ends while the app runs is started again by the main process on the port it had, so the app is marked as
+    // stopping first, as its shutdown does, before the source is cancelled.
+    main_state.fromCore(app.core).stopping.store(true, .release);
     app.core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":\"asset-server\"}");
     try app.shell.expectMessageContaining("\"taskId\":\"asset-server-1\",\"result\":{\"taskId\":\"asset-server-1\",\"status\":\"failed\"");
 

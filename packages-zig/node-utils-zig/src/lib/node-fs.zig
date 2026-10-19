@@ -148,6 +148,16 @@ extern "kernel32" fn GetDiskFreeSpaceExW(
 ) callconv(.winapi) std.os.windows.BOOL;
 
 //
+// Gets the full path of a path and where its last component starts (kernel32).
+//
+extern "kernel32" fn GetFullPathNameW(
+    fileName: [*:0]const u16,
+    bufferLength: u32,
+    buffer: ?[*]u16,
+    filePart: ?*?[*]u16,
+) callconv(.winapi) u32;
+
+//
 // Reads the free space of the filesystem that holds a path. A path that does not
 // exist returns error.FileNotFound, as Node's ENOENT does; any other failure throws `E<NAME>, statfs '<path>'`.
 // Zig's standard library has no statfs, so this calls the operating system: the statfs system call on Linux and Android,
@@ -188,12 +198,30 @@ pub fn statfsPath(allocator: std.mem.Allocator, filePath: []const u8) !IStatFs {
             return errors.throwError("E{s}, statfs '{s}'", .{ @tagName(code), filePath });
         },
         .windows => {
-            const pathW = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filePath);
+            var pathW = try std.unicode.utf8ToUtf16LeAllocZ(allocator, filePath);
             var freeBytesAvailable: u64 = 0;
             var totalBytes: u64 = 0;
             var totalFreeBytes: u64 = 0;
-            if (GetDiskFreeSpaceExW(pathW.ptr, &freeBytesAvailable, &totalBytes, &totalFreeBytes) == .FALSE) {
+            var isSecond = false;
+            while (GetDiskFreeSpaceExW(pathW.ptr, &freeBytesAvailable, &totalBytes, &totalFreeBytes) == .FALSE) {
                 const code = std.os.windows.GetLastError();
+
+                // A path naming a file is measured on the directory holding it, as libuv's statfs does on Windows,
+                // so Node's statfs of a file succeeds here as it does on Linux and macOS.
+                if (code == .DIRECTORY and !isSecond) {
+                    const fullLength = GetFullPathNameW(pathW.ptr, 0, null, null);
+                    if (fullLength != 0) {
+                        const fullPathW = try allocator.allocSentinel(u16, fullLength, 0);
+                        var filePart: ?[*]u16 = null;
+                        const written = GetFullPathNameW(pathW.ptr, fullLength, fullPathW.ptr, &filePart);
+                        if (written != 0 and written <= fullLength and filePart != null) {
+                            filePart.?[0] = 0;
+                            pathW = fullPathW;
+                            isSecond = true;
+                            continue;
+                        }
+                    }
+                }
                 if (code == .FILE_NOT_FOUND or code == .PATH_NOT_FOUND) {
                     return error.FileNotFound;
                 }

@@ -34,17 +34,22 @@ const TEST_MP4_METADATA = [_]IMetadataEntry{
 };
 
 //
-// Expects the information to be what Video reports for test/multiple-files/test.mp4: 1280x720,
-// 7.874533 seconds (format.duration), 30000/1001 frames a second (r_frame_rate), 2100080 bits a second
-// (format.bit_rate), with audio, no creation_time tag and the metadata above.
+// Expects the information to be what Video reports for test/multiple-files/test.mp4: 1280x720, the
+// duration (format.duration) and bit rate (format.bit_rate) the installed ffprobe reads for it,
+// 30000/1001 frames a second (r_frame_rate), with audio, no creation_time tag and the metadata above.
+// The duration and bit rate are read from ffprobe rather than written here because ffprobe versions
+// work them out differently for this file: 4.4 reads 7.875 seconds and 2099955 bits a second, 8.1
+// reads 7.874533 seconds and 2100080 bits a second.
 //
-fn expectTestMp4Info(info: tools.types.AssetInfo) !void {
+fn expectTestMp4Info(allocator: std.mem.Allocator, info: tools.types.AssetInfo) !void {
+    const durationText = try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", "../test/multiple-files/test.mp4" });
+    const bitRateText = try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "format=bit_rate", "-of", "csv=p=0", "../test/multiple-files/test.mp4" });
     try std.testing.expectEqualStrings("../test/multiple-files/test.mp4", info.filePath);
     try std.testing.expectEqual(@as(f64, 1280), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 720), info.dimensions.height);
-    try std.testing.expectEqual(@as(?f64, 7.874533), info.duration);
+    try std.testing.expectEqual(@as(?f64, try std.fmt.parseFloat(f64, durationText)), info.duration);
     try std.testing.expectEqual(@as(?f64, 30000.0 / 1001.0), info.fps);
-    try std.testing.expectEqual(@as(?f64, 2100080), info.bitrate);
+    try std.testing.expectEqual(@as(?f64, try std.fmt.parseFloat(f64, bitRateText)), info.bitrate);
     try std.testing.expectEqual(@as(?bool, true), info.hasAudio);
     try std.testing.expect(info.createdAt == null);
     const fields = info.metadata.?.document.fields.items;
@@ -91,7 +96,7 @@ test "getInfo reads a video" {
     try requireFfmpeg(allocator);
     var video = Video.init(allocator, std.testing.io, null, "../test/multiple-files/test.mp4");
     const info = try video.getInfo(allocator, std.testing.io, null);
-    try expectTestMp4Info(info);
+    try expectTestMp4Info(allocator, info);
     try std.testing.expectEqual(info.dimensions, try video.getDimensions(allocator, std.testing.io, null));
 }
 
@@ -151,7 +156,7 @@ test "getFileInfo reads images and videos and nothing else" {
     try std.testing.expect(image.metadata == null);
 
     // A video goes to the Video.
-    try expectTestMp4Info((try tools.getFileInfo(allocator, std.testing.io, null, "../test/multiple-files/test.mp4", "video/mp4")).?);
+    try expectTestMp4Info(allocator, (try tools.getFileInfo(allocator, std.testing.io, null, "../test/multiple-files/test.mp4", "video/mp4")).?);
 
     // Anything else has no information.
     try std.testing.expect((try tools.getFileInfo(allocator, std.testing.io, null, "../test/test.png", "text/plain")) == null);

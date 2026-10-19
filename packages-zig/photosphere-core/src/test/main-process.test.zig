@@ -516,11 +516,24 @@ test "automatic import is started again by the periodic check after its task die
 test "a failure to start automatic import at startup is logged, not lost" {
     var app: TestApp = undefined;
     const allocator = std.testing.allocator;
-    const database_path = try allocator.dupe(u8, "/nowhere/failing-default-db");
+    const io = std.testing.io;
+    // The default database is to be made inside a file, which fails on every system. (A folder at the root, which a test cannot make on
+    // Linux, is one Windows lets it make, and the database made there is found by every later run.)
+    var blocker = std.testing.tmpDir(.{});
+    defer blocker.cleanup();
+    try blocker.dir.writeFile(io, .{
+        .sub_path = "a-file",
+        .data = "",
+    });
+    const current_path = try std.process.currentPathAlloc(io, allocator);
+    defer allocator.free(current_path);
+    const database_path = try std.fs.path.join(allocator, &.{ current_path, ".zig-cache", "tmp", &blocker.sub_path, "a-file", "failing-default-db" });
     defer allocator.free(database_path);
-    const config_yaml = try autoImportConfigYaml(allocator, database_path);
+    // The path goes in a double-quoted YAML string, where a backslash starts an escape.
+    const yaml_database_path = try std.mem.replaceOwned(u8, allocator, database_path, "\\", "\\\\");
+    defer allocator.free(yaml_database_path);
+    const config_yaml = try autoImportConfigYaml(allocator, yaml_database_path);
     defer allocator.free(config_yaml);
-    // No create-default-database task is registered, so making the default database fails.
     try app.startWithTasksAndConfigFile(&[_]ziggy.task_runner.TaskHandlerEntry{}, config_yaml);
     defer app.stop();
     _ = try app.core.uiQuery();

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
@@ -220,9 +221,12 @@ const MARKED_TREE_TIME_NANOSECONDS: i96 = 1_000_000_000;
 
 //
 // Gives the local merkle tree file a modification time long ago, so that a later rewrite of it can be seen.
+// Set through the open file: Zig 0.16 panics in Dir.setTimestamps on Windows, while File.setTimestamps is implemented.
 //
 fn markLocalTree(io: std.Io, allocator: std.mem.Allocator, world: *World) !void {
-    try std.Io.Dir.cwd().setTimestamps(io, try std.fs.path.join(allocator, &.{ world.local.dir, node_api.tree.FILES_TREE_PATH }), .{
+    const treeFile = try std.Io.Dir.cwd().openFile(io, try std.fs.path.join(allocator, &.{ world.local.dir, node_api.tree.FILES_TREE_PATH }), .{ .mode = .write_only });
+    defer treeFile.close(io);
+    try treeFile.setTimestamps(io, .{
         .modify_timestamp = .{
             .new = .fromNanoseconds(MARKED_TREE_TIME_NANOSECONDS),
         },
@@ -791,8 +795,15 @@ test "getDeviceFreeBytes reports a filesystem it cannot measure rather than gues
         .data = "not a directory",
     });
 
-    // A path that runs through a file is not a missing directory to walk up from: it cannot be measured at all.
     const underFile = try std.fs.path.join(allocator, &.{ filePath, "database" });
+    if (builtin.os.tag == .windows) {
+        // Node's statfs on Windows reports a path that runs through a file as ENOENT, so it is walked up from, and
+        // measures the file itself on the directory holding it.
+        try std.testing.expect(try evict_originals_worker.getDeviceFreeBytes(allocator, io, underFile) > 0);
+        return;
+    }
+
+    // A path that runs through a file is not a missing directory to walk up from: it cannot be measured at all.
     try std.testing.expectError(error.Thrown, evict_originals_worker.getDeviceFreeBytes(allocator, io, underFile));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "ENOTDIR, statfs '{s}'", .{underFile}), utils.errors.lastErrorMessage());
 }
