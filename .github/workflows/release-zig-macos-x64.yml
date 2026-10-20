@@ -1,4 +1,4 @@
-name: Release Zig macOS
+name: Release Zig macOS x64
 
 env:
   BUN_VERSION: "1.3.14"
@@ -6,8 +6,8 @@ env:
   WHAT_CHANGED_VERSION: "v0.0.6"
   # Each platform has a workflow of its own, so a failure on one shows at a glance and holds up no other platform's release.
   # Its release tags are <RELEASE_PLATFORM>-v1.2.3, and its GitHub release is zig-<that tag>.
-  RELEASE_PLATFORM: "macos"
-  RELEASE_PLATFORM_NAME: "macOS"
+  RELEASE_PLATFORM: "macos-x64"
+  RELEASE_PLATFORM_NAME: "macOS x64"
 
 on:
   # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
@@ -15,7 +15,7 @@ on:
   #   branches:
   #     - "*"
   #   tags:
-  #     - 'macos-v*.*.*'
+  #     - 'macos-x64-v*.*.*'
 
   # pull_request:
   #   branches:
@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Release action. none = nightly build. update-latest = move the latest macos-v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. macos-v0.0.8 -> macos-v0.0.9) and release it."
+        description: "Release action. none = nightly build. update-latest = move the latest macos-x64-v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. macos-x64-v0.0.8 -> macos-x64-v0.0.9) and release it."
         type: choice
         options:
           - none
@@ -85,22 +85,11 @@ jobs:
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
   # The third-party libraries, each built once by its own action and cached, so a library an earlier run has already built is
-  # restored rather than compiled again. Each is built on each architecture's runner for the macOS 11.0 the app targets, which the
-  # CLI's native build links too. Every job that runs the Zig build restores them from that cache with the third-party-libraries
-  # action.
+  # restored rather than compiled again. Each is built for the macOS 11.0 the app targets, which the CLI's native build links too.
+  # Every job that runs the Zig build restores them from that cache with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            platform: macos-arm64
-            target: aarch64-macos.11.0
-          - os: macos-15-intel
-            platform: macos-x64
-            target: x86_64-macos.11.0
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -108,22 +97,12 @@ jobs:
       - name: Build the AWS SDK for C
         uses: ./.github/actions/build-aws-sdk
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
 
   build-zlib-ng:
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            platform: macos-arm64
-            target: aarch64-macos.11.0
-          - os: macos-15-intel
-            platform: macos-x64
-            target: x86_64-macos.11.0
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -131,22 +110,12 @@ jobs:
       - name: Build zlib-ng
         uses: ./.github/actions/build-zlib-ng
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
 
   build-imagemagick:
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            platform: macos-arm64
-            target: aarch64-macos.11.0
-          - os: macos-15-intel
-            platform: macos-x64
-            target: x86_64-macos.11.0
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -154,22 +123,12 @@ jobs:
       - name: Build ImageMagick
         uses: ./.github/actions/build-imagemagick
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
 
   build-ffmpeg:
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            platform: macos-arm64
-            target: aarch64-macos.11.0
-          - os: macos-15-intel
-            platform: macos-x64
-            target: x86_64-macos.11.0
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -177,15 +136,15 @@ jobs:
       - name: Build FFmpeg
         uses: ./.github/actions/build-ffmpeg
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
 
   build-zig-macos-x64:
     # Builds the Zig CLI for macOS x64 on a runner of that platform, and publishes the binary. Nothing here
     # cross-compiles, so a build that works is a build that runs on the platform it names.
     #
-    # This is one of the two jobs that build the Zig CLI, one per architecture: zig-cli-smoke-tests downloads
-    # the binary this uploads and create-release publishes it, so the binary is built once and used by both.
+    # zig-cli-smoke-tests downloads the binary this uploads and create-release publishes it, so the binary is
+    # built once and used by both.
     timeout-minutes: 40
     needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: macos-15-intel
@@ -277,118 +236,15 @@ jobs:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
-  build-zig-macos-arm64:
-    # Builds the Zig CLI for macOS arm64 on a runner of that platform, and publishes the binary. Nothing here
-    # cross-compiles, so a build that works is a build that runs on the platform it names.
-    #
-    # This is one of the two jobs that build the Zig CLI, one per architecture: zig-cli-smoke-tests downloads
-    # the binary this uploads and create-release publishes it, so the binary is built once and used by both.
-    timeout-minutes: 40
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-
-
-      - name: Start a fresh Zig build cache when the restored one has grown too big
-        shell: bash
-        run: |
-          if [ -d .zig-cache ]; then
-              megabytes="$(du -sm .zig-cache | cut -f1)"
-              echo "Restored Zig build cache: ${megabytes} MB"
-              if [ "$megabytes" -ge 5120 ]; then
-                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
-                  echo "Moved it aside to start a fresh one"
-              fi
-          fi
-
-      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
-      - name: Fetch every package Zig needs, lazy ones included, in one pass
-        working-directory: .
-        run: zig build --fetch=all
-
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: macos-arm64
-          build-args: -Dtarget=aarch64-macos.11.0
-
-      - name: Build the Zig CLI natively for macOS arm64
-        working-directory: .
-        run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/arm64/mac --prefix-exe-dir .
-
-      - name: Check the binary was produced
-        working-directory: ./apps/cli-zig
-        run: |
-          ls -la bin/arm64/mac/psi
-          file bin/arm64/mac/psi
-
-      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
-      # unpacking both releases into one directory would otherwise overwrite one with the other.
-      - name: Collect the Zig CLI binary
-        shell: bash
-        run: |
-          mkdir -p out
-          chmod +x apps/cli-zig/bin/arm64/mac/psi
-          cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
-          ls -la out
-
-      - name: Upload the Zig CLI binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: photosphere-cli-zig-macos-arm64
-          path: out
-
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
-
   zig-cli-smoke-tests:
-    # The Zig CLI smoke suites on each architecture, because the byte-identical output (gzip OS byte, paths, file
-    # times) differs between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
-    # reported as a failure of the other.
-    # The binary is not built here: each build-zig job builds the one for its own architecture and this job
-    # downloads it, so the Zig CLI is compiled once per architecture and both this job and the release use it.
-    # Every architecture the release ships a Zig binary for is in the matrix, so a shipped binary is one the
-    # suites have run against.
+    # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs between
+    # platforms. The unit tests are in the Zig CI workflow, so a failure in one is not reported as a failure of the other.
+    # The binary is not built here: build-zig-macos-x64 builds it and this job downloads it, so the Zig CLI is
+    # compiled once and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-macos-arm64, build-zig-macos-x64]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            artifact: photosphere-cli-zig-macos-arm64
-            binary: psi
-          - os: macos-15-intel
-            artifact: photosphere-cli-zig-macos-x64
-            binary: psi
-    runs-on: ${{ matrix.os }}
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-macos-x64]
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -436,23 +292,23 @@ jobs:
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
-          platform: ${{ runner.arch == 'ARM64' && 'macos-arm64' || 'macos-x64' }}
-          build-args: -Dtarget=${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}-macos.11.0
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
 
       # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads.
       - name: Download the Zig CLI built for this platform
         uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: photosphere-cli-zig-macos-x64
           path: ./zig-binary
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
         run: |
           mkdir -p zig-out/bin
-          cp zig-binary/${{ matrix.artifact }} zig-out/bin/${{ matrix.binary }}
+          cp zig-binary/photosphere-cli-zig-macos-x64 zig-out/bin/psi
           # The artifact is downloaded without the executable bit, and the smoke suites fail with exit 126
           # (found but not executable) without it.
-          chmod +x zig-out/bin/${{ matrix.binary }}
+          chmod +x zig-out/bin/psi
           ls -la zig-out/bin
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 30
@@ -486,97 +342,13 @@ jobs:
         shell: bash
         run: ./hash-cache-smoke-test-zig.sh
 
-  photosphere-desktop-smoke-tests:
-    # The Photosphere App's smoke tests on macOS, in a real window on the runner's own display. The Zig build links the
-    # third-party libraries the build jobs built.
-    timeout-minutes: 75
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
-
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install what-changed
-        uses: ./.github/actions/install-what-changed
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
-      - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
-
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: ${{ runner.arch == 'ARM64' && 'macos-arm64' || 'macos-x64' }}
-          build-args: -Dtarget=${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}-macos.11.0
-
-      # run-desktop.sh builds the page and the app's shell itself, through build-macos.sh.
-      - name: Run the Photosphere App smoke tests
-        timeout-minutes: 60
-        shell: bash
-        run: bun run test:ziggy
-
   package-photosphere:
-    # The Photosphere App packaged for each macOS architecture, unsigned, by the same package script a developer runs. The
-    # version comes from the release tag: macos-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Zig build links
-    # the third-party libraries the build jobs built.
+    # The Photosphere App packaged for macOS x64, unsigned, by the same package script a developer runs. The version
+    # comes from the release tag: macos-x64-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Zig build
+    # links the third-party libraries the build jobs built.
     timeout-minutes: 75
     needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macos-arm64
-            os: macos-latest
-            package: package:macos
-            arguments: ""
-          - name: macos-x64
-            os: macos-15-intel
-            package: package:macos
-            arguments: ""
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -620,8 +392,8 @@ jobs:
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
-          platform: ${{ runner.arch == 'ARM64' && 'macos-arm64' || 'macos-x64' }}
-          build-args: -Dtarget=${{ runner.arch == 'ARM64' && 'aarch64' || 'x86_64' }}-macos.11.0
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
 
       - name: Set config
         shell: bash
@@ -637,19 +409,19 @@ jobs:
 
       - name: Package
         shell: bash
-        run: bun run --filter=ziggy ${{ matrix.package }} -- ${{ matrix.arguments }} --version "$VERSION"
+        run: bun run --filter=ziggy package:macos -- --version "$VERSION"
 
       - name: Upload the packages
         uses: actions/upload-artifact@v4
         with:
-          name: photosphere-app-${{ matrix.name }}
+          name: photosphere-app-macos-x64
           path: apps/photosphere/out/macos/*
           if-no-files-found: error
           retention-days: 2
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-macos-arm64, build-zig-macos-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-macos-x64, zig-cli-smoke-tests, package-photosphere]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -675,19 +447,16 @@ jobs:
 
       - name: Create compressed archives
         run: |
-          # The Zig CLI, one archive per architecture, with the binary named after the platform it is for.
+          # The Zig CLI, with the binary named after the platform it is for.
           cd ./artifacts/zig
-          # Every binary the build jobs upload, listed here: a name that is missing or misspelled fails
-          # the step with this message rather than with chmod's, which says nothing about what is wrong.
-          for binary in photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64; do
-              if [ ! -f "$binary" ]; then
-                  echo "::error::The Zig build jobs did not produce $binary. Uploaded: $(ls)"
-                  exit 1
-              fi
-          done
-          chmod +x photosphere-cli-zig-macos-x64 photosphere-cli-zig-macos-arm64
+          # A binary that is missing fails the step with this message rather than with chmod's, which says
+          # nothing about what is wrong.
+          if [ ! -f photosphere-cli-zig-macos-x64 ]; then
+              echo "::error::The Zig build job did not produce photosphere-cli-zig-macos-x64. Uploaded: $(ls)"
+              exit 1
+          fi
+          chmod +x photosphere-cli-zig-macos-x64
           tar -czf ../photosphere-cli-zig-macos-x64.tar.gz photosphere-cli-zig-macos-x64
-          tar -czf ../photosphere-cli-zig-macos-arm64.tar.gz photosphere-cli-zig-macos-arm64
           cd ../..
 
       - name: Generate release notes
@@ -729,7 +498,6 @@ jobs:
           prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
           files: |
             ./artifacts/photosphere-cli-zig-macos-x64.tar.gz
-            ./artifacts/photosphere-cli-zig-macos-arm64.tar.gz
             ./artifacts/app/*
           body: |
             ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
@@ -742,16 +510,15 @@ jobs:
 
             ## CLI Download
             - **macOS (Intel)**: `photosphere-cli-zig-macos-x64.tar.gz`
-            - **macOS (Apple Silicon)**: `photosphere-cli-zig-macos-arm64.tar.gz`
 
             ## CLI Installation
-            1. Download the appropriate file for your Mac
+            1. Download the file
             2. Extract the archive
-            3. Make the binary executable: `chmod +x photosphere-cli-zig-<platform>`
+            3. Make the binary executable: `chmod +x photosphere-cli-zig-macos-x64`
             4. Move to your PATH or run directly
 
             ## Desktop Download
-            - **macOS**: `.dmg` disk image or `.zip`
+            - **macOS (Intel)**: `.dmg` disk image or `.zip`
 
             ## Bundled tools and licences
             The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).

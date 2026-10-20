@@ -8,7 +8,8 @@ Photosphere is built and released by one GitHub Actions workflow per platform, s
 | --- | --- | --- | --- | --- |
 | Release Zig Linux | `.github/workflows/release-zig-linux.yml` | `linux-v1.2.3` | `zig-linux-v1.2.3` | The Zig CLI (`.tar.gz`) and the Photosphere App for Linux (`.deb`, `.zip`) |
 | Release Zig Windows | `.github/workflows/release-zig-windows.yml` | `windows-v1.2.3` | `zig-windows-v1.2.3` | The Zig CLI (`.zip`) and the Photosphere App for Windows (MSI installer, `.zip`) |
-| Release Zig macOS | `.github/workflows/release-zig-macos.yml` | `macos-v1.2.3` | `zig-macos-v1.2.3` | The Zig CLI for Intel and Apple Silicon (`.tar.gz`) and the Photosphere App for both (`.dmg`, `.zip`) |
+| Release Zig macOS arm64 | `.github/workflows/release-zig-macos-arm64.yml` | `macos-arm64-v1.2.3` | `zig-macos-arm64-v1.2.3` | The Zig CLI for Apple Silicon (`.tar.gz`) and the Photosphere App for Apple Silicon (`.dmg`, `.zip`) |
+| Release Zig macOS x64 | `.github/workflows/release-zig-macos-x64.yml` | `macos-x64-v1.2.3` | `zig-macos-x64-v1.2.3` | The Zig CLI for Intel (`.tar.gz`) and the Photosphere App for Intel (`.dmg`, `.zip`) |
 | Release Zig Android | `.github/workflows/release-zig-android.yml` | `android-v1.2.3` | `zig-android-v1.2.3` | The Photosphere App for Android (`.apk`) |
 | Release Zig iOS | `.github/workflows/release-zig-ios.yml` | `ios-v1.2.3` | `zig-ios-v1.2.3` | The Photosphere App for iOS (unsigned `.ipa`) |
 
