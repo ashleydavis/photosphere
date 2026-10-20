@@ -5,6 +5,7 @@ const temp_dirs = @import("temp-dirs.zig");
 const test_environment = @import("test-environment.zig");
 const test_task_context = @import("test-task-context.zig");
 const resetAppStorageHandler = node_api.reset_app_storage_worker.resetAppStorageHandler;
+const resetAppStorage = node_api.reset_app_storage_worker.resetAppStorage;
 const IResetAppStorageResult = node_api.reset_app_storage_worker.IResetAppStorageResult;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTaskContext = test_task_context.TestTaskContext;
@@ -212,4 +213,56 @@ test "succeeds when the directories do not exist yet" {
     const result = try run(allocator, io, &testContext);
 
     try std.testing.expectEqual(@as(u64, 0), result.entriesRemoved);
+}
+
+test "empties a phone's data directory as well, where the databases are, when it is neither the config nor the cache directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_environment.setupEnvironment(io);
+    const saved = try SavedDirectories.save(allocator);
+    defer saved.restore();
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "reset-app-storage-worker");
+    defer temp_dirs.removeTempDir(io, tempDir);
+    // The iOS case: the config and cache directories are not the data directory the databases are made in.
+    const configDir = try std.fs.path.join(allocator, &.{ tempDir, "config" });
+    const cacheDir = try std.fs.path.join(allocator, &.{ tempDir, "cache" });
+    const dataDir = try std.fs.path.join(allocator, &.{ tempDir, "Application Support", "the.app.id" });
+    try writeTestFile(allocator, io, configDir, "databases.toml", "databases = []");
+    try std.Io.Dir.cwd().createDirPath(io, cacheDir);
+    try writeTestFile(allocator, io, try std.fs.path.join(allocator, &.{ dataDir, "test-db", ".db" }), "files.dat", "bytes");
+    try useDirectories(configDir, cacheDir);
+
+    const result = try resetAppStorage(allocator, io, dataDir);
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, configDir)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dataDir)).len);
+    try std.testing.expectEqual(@as(u64, 2), result.entriesRemoved);
+    try std.testing.expectEqual(@as(usize, 3), result.directoriesCleared.len);
+    try std.testing.expectEqualStrings(dataDir, result.directoriesCleared[2]);
+}
+
+test "empties a phone's data directory once when the cache directory is the same place" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_environment.setupEnvironment(io);
+    const saved = try SavedDirectories.save(allocator);
+    defer saved.restore();
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "reset-app-storage-worker");
+    defer temp_dirs.removeTempDir(io, tempDir);
+    // The Android case: the cache directory is the home directory, which is the data directory.
+    const configDir = try std.fs.path.join(allocator, &.{ tempDir, "config" });
+    const sandboxDir = try std.fs.path.join(allocator, &.{ tempDir, "sandbox" });
+    try std.Io.Dir.cwd().createDirPath(io, configDir);
+    try writeTestFile(allocator, io, try std.fs.path.join(allocator, &.{ sandboxDir, "test-db" }), "files.dat", "bytes");
+    try useDirectories(configDir, sandboxDir);
+
+    const result = try resetAppStorage(allocator, io, sandboxDir);
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, sandboxDir)).len);
+    try std.testing.expectEqual(@as(u64, 1), result.entriesRemoved);
+    try std.testing.expectEqual(@as(usize, 2), result.directoriesCleared.len);
 }

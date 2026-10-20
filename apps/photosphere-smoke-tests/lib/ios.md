@@ -8,6 +8,8 @@ It implements the `photosphere_platform_*` functions `common.sh` lists, `photosp
 
 A simulator process shares the host's file system and network, so the control port file, the settings, the vault and the logs are host paths inside the scenario's directory, and the control connection is reached at `127.0.0.1`. Variables named `SIMCTL_CHILD_<name>` reach the app's environment as `<name>`. The app's process is not a child of the shell, so it is recorded by its process id and stopped with `simctl`.
 
+The core's background passes (automatic import, sync and prefetch) report what they are doing to the simulator's system log under the `AutoImportService` category, not to the app's log file. Each start of the app streams that category into `background-<start>.log` in the scenario's directory with `simctl spawn <udid> log stream`, before the app is launched, and `ios_background_log` and `ios_clear_background_log` read those files the way the Android library reads logcat. `ios_background_work_running` reads the app's log for the core saying the background work was started and not since stopped.
+
 ## Environment
 
 - `PHOTOSPHERE_IOS_SIMULATOR`: the simulator to use, by name or identifier.

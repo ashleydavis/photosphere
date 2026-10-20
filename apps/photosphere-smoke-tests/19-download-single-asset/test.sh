@@ -10,13 +10,6 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 19 "download-single-asset"
 
-case "$PLATFORM" in
-    ios)
-        log_info "SKIP: the iOS shell has no way to stage the share sheet outcome yet. Skipping."
-        exit 77
-        ;;
-esac
-
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
 IMAGES_DIR="$REPO_DIR/test/multiple-files"
@@ -25,7 +18,7 @@ DOWNLOAD_DIR="$TMP_DIR/downloads"
 DOWNLOAD_FILE="$DOWNLOAD_DIR/test-1.jpeg"
 
 case "$PLATFORM" in
-    android)
+    android|ios)
         # Wipe everything the app has stored on the device before launch, with the app stopped, so the test starts from a known state.
         "${PLATFORM}_reset_app_state" || exit 1
         ;;
@@ -35,7 +28,7 @@ log_info "Pre-creating a database with one fixture..."
 create_database "$SOURCE_DB" "$IMAGES_DIR/test-1.jpeg"
 
 case "$PLATFORM" in
-    android)
+    android|ios)
         DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
         ;;
     *)
@@ -58,9 +51,9 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 case "$PLATFORM" in
-    android)
+    android|ios)
         # Copy the database into the app's sandbox.
-        "${PLATFORM}_seed_database" "$SOURCE_DB" "test-db"
+        "${PLATFORM}_seed_database" "$SOURCE_DB" "test-db" || exit 1
         ;;
 esac
 
@@ -80,9 +73,10 @@ wait_for_log "$TMP_DIR" "AssetView opened"
 log_success "The AssetView is open"
 
 case "$PLATFORM" in
-    android)
-        # The system save picker cannot be answered from outside the app, so the outcome it would give is staged for the next export.
-        # Everything above the picker stays real: the save task, the temporary file and the host request.
+    android|ios)
+        # The system save picker (Android) or share sheet (iOS) cannot be answered from outside the app, so the outcome it would give is
+        # staged for the next export.
+        # Everything above the picker or sheet stays real: the save task, the temporary file and the host request.
         log_info "Staging the save picker outcome and clicking the Download icon..."
         send_command "$APP_PORT" stage-export '{"exportOutcome":"shared"}' || exit 1
         send_command "$APP_PORT" click '{"dataId":"download-asset-button"}' || exit 1

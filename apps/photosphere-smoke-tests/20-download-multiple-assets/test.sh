@@ -10,13 +10,6 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 20 "download-multiple-assets"
 
-case "$PLATFORM" in
-    ios)
-        log_info "SKIP: the iOS shell has no way to stage the share sheet outcome yet. Skipping."
-        exit 77
-        ;;
-esac
-
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
 IMAGES_DIR="$REPO_DIR/test/multiple-files"
@@ -24,7 +17,7 @@ SOURCE_DB="$TMP_DIR/test-db"
 DOWNLOAD_DIR="$TMP_DIR/downloads"
 
 case "$PLATFORM" in
-    android)
+    android|ios)
         # Wipe everything the app has stored on the device before launch, with the app stopped, so the test starts from a known state.
         "${PLATFORM}_reset_app_state" || exit 1
         ;;
@@ -34,7 +27,7 @@ log_info "Pre-creating a database with two fixtures..."
 create_database "$SOURCE_DB" "$IMAGES_DIR/test-1.jpeg" "$IMAGES_DIR/test-2.png"
 
 case "$PLATFORM" in
-    android)
+    android|ios)
         DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
         ;;
     *)
@@ -57,9 +50,9 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 case "$PLATFORM" in
-    android)
+    android|ios)
         # Copy the database into the app's sandbox.
-        "${PLATFORM}_seed_database" "$SOURCE_DB" "test-db"
+        "${PLATFORM}_seed_database" "$SOURCE_DB" "test-db" || exit 1
         ;;
 esac
 
@@ -87,9 +80,10 @@ send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1
 wait_for_value "$APP_PORT" "download-selected-button" "Download 2 assets"
 
 case "$PLATFORM" in
-    android)
-        # The system folder picker cannot be answered from outside the app, so the outcome it would give is staged for the next
-        # export. Everything above the picker stays real: the batch save task, the temporary files and the host request.
+    android|ios)
+        # The system folder picker (Android) or share sheet (iOS) cannot be answered from outside the app, so the outcome it would give is
+        # staged for the next export. Everything above the picker or sheet stays real: the batch save task, the temporary files and the
+        # host request.
         log_info "Staging the folder picker outcome and clicking Download 2 assets..."
         send_command "$APP_PORT" stage-export '{"exportOutcome":"shared"}' || exit 1
         send_command "$APP_PORT" click '{"dataId":"download-selected-button"}' || exit 1

@@ -22,10 +22,14 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 55 "existing-remote-auto-import"
 
-# Not on iOS, for the same reason as the other automatic import scenarios: the photo permission has to be granted from outside the
-# app, and the iOS simulator has no supported way to take a seeded photo back out of its library.
+# Not on iOS. The photo permission can be granted from outside the app there (ios_grant_media_permission), but what this scenario counts
+# cannot be pinned to its own photos. The iOS shell lists every library item with no album, so automatic import there cannot be pointed
+# at the scenario's photos and imports the whole library, which already holds the simulator's own photos: the replica would pass both
+# of its asset counts before either of this scenario's photos was imported. And the simulator has no supported way to take a seeded photo
+# back out of its library, so every run would leave its photos for the next. Many of the helpers this scenario calls have no iOS version
+# either.
 if [ "$PLATFORM" = "ios" ]; then
-    log_info "SKIP: this scenario needs the photo permission granted from outside the app, which is not available on the iOS simulator."
+    log_info "SKIP: on iOS automatic import cannot be pointed at this scenario's own photos, so its counts could not fail, and a seeded photo cannot be removed from the simulator's library."
     exit "$TEST_SKIPPED_EXIT_CODE"
 fi
 

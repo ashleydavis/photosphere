@@ -13,21 +13,25 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 51 "database-list-live"
 
-# Not on iOS: switching automatic import on needs the photo permission granted from outside the app, and the iOS simulator's
-# permission is granted through `simctl privacy`, which cannot be run or checked on the machines this is written for.
-if [ "$PLATFORM" = "ios" ]; then
-    log_info "SKIP: this scenario needs the photo permission granted from outside the app, which is not available on the iOS simulator."
-    exit 77
-fi
-
 # The name the app lists the database it makes for itself under.
 DEFAULT_DATABASE_NAME="My Photos"
 
 # The folder this scenario's photo goes in, which is what automatic import is pointed at. A desktop imports from folders and has none
-# by default, and a phone would otherwise watch the whole photo library, so both are given this scenario's own.
+# by default, and an Android phone would otherwise watch the whole photo library, so both are given this scenario's own.
+#
+# Not on iOS. The iOS shell lists every library item with no album, so automatic import there cannot be pointed at one and always
+# watches the whole library, and the simulator has no supported way to take a seeded photo back out of its library, so a photo put in
+# here would stay for every run after this one. Nothing is seeded there: the whole library, as the simulator ships it, is watched, and
+# nothing this scenario asserts depends on what the library holds.
+SEEDS_LIBRARY=1
+if [ "$PLATFORM" = "ios" ]; then
+    SEEDS_LIBRARY=0
+fi
 LIBRARY_PREFIX="psphere-database-list-live"
-LIBRARY="$("${PLATFORM}_library_dir" "$LIBRARY_PREFIX")"
 PHOTO_NAME="$LIBRARY_PREFIX-$$.jpeg"
+if [ "$SEEDS_LIBRARY" -eq 1 ]; then
+    LIBRARY="$("${PLATFORM}_library_dir" "$LIBRARY_PREFIX")"
+fi
 
 # Automatic import is left switched on by this scenario, and the app's data outlives it on a shared emulator, so it is wiped on the way
 # out as well as on the way in.
@@ -35,7 +39,9 @@ on_exit() {
     local exit_code=$?
     cleanup_apps "$TMP_DIR"
     "${PLATFORM}_reset_app_state" >/dev/null 2>&1 || true
-    "${PLATFORM}_library_remove" "$LIBRARY" "$PHOTO_NAME" 2>/dev/null || true
+    if [ "$SEEDS_LIBRARY" -eq 1 ]; then
+        "${PLATFORM}_library_remove" "$LIBRARY" "$PHOTO_NAME" 2>/dev/null || true
+    fi
     return $exit_code
 }
 trap on_exit EXIT
@@ -44,9 +50,11 @@ trap on_exit EXIT
 
 # Sweep up anything an earlier run left in the library, then put the photo in and point automatic import at the folder, switched off.
 # Switching it on is what the scenario does through the settings card below.
-"${PLATFORM}_library_sweep" "$LIBRARY_PREFIX" || exit 1
-"${PLATFORM}_library_add" "$LIBRARY" "$REPO_DIR/test/multiple-files/test-1.jpeg" "$PHOTO_NAME" || exit 1
-"${PLATFORM}_seed_library_auto_import_config" "false" "" "5000" "$LIBRARY" "$PHOTO_NAME" || exit 1
+if [ "$SEEDS_LIBRARY" -eq 1 ]; then
+    "${PLATFORM}_library_sweep" "$LIBRARY_PREFIX" || exit 1
+    "${PLATFORM}_library_add" "$LIBRARY" "$REPO_DIR/test/multiple-files/test-1.jpeg" "$PHOTO_NAME" || exit 1
+    "${PLATFORM}_seed_library_auto_import_config" "false" "" "5000" "$LIBRARY" "$PHOTO_NAME" || exit 1
+fi
 
 # Grant the photo permission from outside the app, because the system dialog cannot be tapped by a test.
 "${PLATFORM}_grant_media_permission" || exit 1

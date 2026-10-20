@@ -26,12 +26,8 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 59 "prefetch-encrypted-replica"
 
-# Not on iOS, for the reason 57 gives: this asserts on a loop that runs inside a foreground service,
-# and iOS has no such thing.
-if [ "$PLATFORM" = "ios" ]; then
-    log_info "SKIP: the background prefetch loop is covered on Android and the desktop only. iOS runs its passes when the system decides, and there is no supported way to make one happen from a test."
-    exit "$TEST_SKIPPED_EXIT_CODE"
-fi
+# On iOS the same loop runs, with no foreground service: the core runs its passes while the app is on
+# screen, which is the whole of this test, since nothing here takes the app off screen.
 
 S3_STATE_DIR="$TMP_DIR/s3"
 S3_SECRET_NAME="prefetch-enc-s3"

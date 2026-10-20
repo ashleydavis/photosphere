@@ -525,6 +525,10 @@ ios_seed_database() {
     photosphere_ios_not_available ios_seed_database
 }
 
+ios_fetch_database() {
+    photosphere_ios_not_available ios_fetch_database
+}
+
 ios_seed_databases_config() {
     photosphere_ios_not_available ios_seed_databases_config
 }
@@ -549,6 +553,18 @@ ios_grant_media_permission() {
     photosphere_ios_not_available ios_grant_media_permission
 }
 
+ios_refuse_media_permission() {
+    photosphere_ios_not_available ios_refuse_media_permission
+}
+
+ios_background_work_running() {
+    photosphere_ios_not_available ios_background_work_running
+}
+
+ios_wait_for_background_service_gone() {
+    photosphere_ios_not_available ios_wait_for_background_service_gone
+}
+
 ios_grant_notification_permission() {
     photosphere_ios_not_available ios_grant_notification_permission
 }
@@ -565,8 +581,36 @@ ios_read_config_file() {
     photosphere_ios_not_available ios_read_config_file
 }
 
+ios_config_file_exists() {
+    photosphere_ios_not_available ios_config_file_exists
+}
+
+ios_damage_vault() {
+    photosphere_ios_not_available ios_damage_vault
+}
+
 ios_path_exists() {
     photosphere_ios_not_available ios_path_exists
+}
+
+#
+# How a connected iPhone or iPad's system log, where the background work reports its passes, is read from the host is not worked out
+# yet, so these stop the scenario with a message and do not guess.
+#
+ios_background_work_running() {
+    photosphere_ios_not_available ios_background_work_running
+}
+
+ios_background_log() {
+    photosphere_ios_not_available ios_background_log
+}
+
+ios_clear_background_log() {
+    photosphere_ios_not_available ios_clear_background_log
+}
+
+ios_dump_background_diagnostics() {
+    photosphere_ios_not_available ios_dump_background_diagnostics
 }
 
 #

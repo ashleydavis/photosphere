@@ -260,14 +260,15 @@ fn setFlag(handle: Handle, option: u32, operation: []const u8) !void {
 
 //
 // Creates an IPv4 UDP socket. With reuseAddress, several sockets can bind the same port (SO_REUSEADDR, and
-// SO_REUSEPORT on macOS). With allowBroadcast, the socket can send to 255.255.255.255.
+// SO_REUSEPORT on macOS and iOS, where SO_REUSEADDR alone does not let a second socket bind a port a first still holds).
+// With allowBroadcast, the socket can send to 255.255.255.255.
 //
 pub fn createUdp(reuseAddress: bool, allowBroadcast: bool) !Handle {
     const handle = try create(if (is_windows) std.os.windows.ws2_32.SOCK.DGRAM else std.c.SOCK.DGRAM);
     errdefer close(handle);
     if (reuseAddress) {
         try setFlag(handle, if (is_windows) std.os.windows.ws2_32.SO.REUSEADDR else std.c.SO.REUSEADDR, "setsockopt(SO_REUSEADDR)");
-        if (builtin.os.tag == .macos) {
+        if (builtin.os.tag.isDarwin()) {
             try setFlag(handle, std.c.SO.REUSEPORT, "setsockopt(SO_REUSEPORT)");
         }
     }

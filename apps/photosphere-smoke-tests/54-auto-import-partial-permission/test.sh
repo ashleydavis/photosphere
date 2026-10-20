@@ -16,10 +16,13 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 54 "auto-import-partial-permission"
 
-# Android only. iOS has its own limited-photos answer, but the simulator's photo permissions are set through `simctl privacy`, which
-# this machine cannot run or check, so the other automatic import scenarios skip there too.
+# Android only. iOS has a limited-photos answer of its own, but it cannot be tested this way there, for two reasons. The simctl that
+# ships with Xcode 14.2 can grant or revoke full photo access and nothing between (`xcrun simctl help privacy` lists `photos` and
+# `photos-add` only), so limited access cannot be set from outside the app. And the iOS shell counts limited access as granted and never
+# reports it as partial (requestMediaPermission in PhotosphereHostRequests.swift), so the switch-off this scenario asserts does not
+# happen on iOS.
 if [ "$PLATFORM" != "android" ]; then
-    log_info "SKIP: this scenario sets up partial photo access through Android's permission flags. The iOS equivalent has not been written or run."
+    log_info "SKIP: partial photo access is an Android answer. Xcode 14.2's simctl cannot set limited photo access, and the iOS app counts limited access as granted."
     exit "$TEST_SKIPPED_EXIT_CODE"
 fi
 

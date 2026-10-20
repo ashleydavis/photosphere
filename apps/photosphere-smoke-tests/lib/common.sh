@@ -1191,8 +1191,61 @@ damaged_vault_errors_pattern() {
 # Prints the path of the database automatic import writes to, as the app recorded it in its settings, or nothing when none is recorded.
 # The settings file holds one such path, so it can name only one database. Usage: read_default_database_path
 #
+# The app's YAML dump wraps a string longer than its line width into a folded block scalar (`>-`), breaking it at a space, so a path
+# with a space in it (an iOS container's "Application Support") arrives over several lines. Reading the value back means joining the
+# folded lines with a single space, as a YAML loader does. A plain value and a single-quoted one are read too; any other form fails
+# loudly rather than returning part of a path.
+#
 read_default_database_path() {
-    read_config_file config.yaml | tr '\n' ' ' | sed -n 's/.*default_database_path: *\(>-\)\{0,1\} *\([^ ]*\).*/\1\2/p' | sed 's/^>-//'
+    local quote="'"
+    local line
+    local stripped
+    local indent
+    local key_indent=""
+    local value=""
+    local folding="false"
+    while IFS= read -r line; do
+        if [ "$folding" = "true" ]; then
+            stripped="${line#"${line%%[! ]*}"}"
+            indent=$(( ${#line} - ${#stripped} ))
+            if [ -z "$stripped" ]; then
+                echo "read_default_database_path: a blank line inside the folded default_database_path is not supported" >&2
+                return 1
+            fi
+            if [ "$indent" -le "$key_indent" ]; then
+                break
+            fi
+            if [ -z "$value" ]; then
+                value="$stripped"
+            else
+                value="$value $stripped"
+            fi
+            continue
+        fi
+        if [[ "$line" =~ ^(\ *)default_database_path:\ *(.*)$ ]]; then
+            key_indent="${#BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            case "$value" in
+                ">-"|">")
+                    folding="true"
+                    value=""
+                    ;;
+                "$quote"*"$quote")
+                    value="${value:1:${#value}-2}"
+                    value="${value//$quote$quote/$quote}"
+                    break
+                    ;;
+                ""|"|"*|"\""*|"$quote"*)
+                    echo "read_default_database_path: unsupported form of default_database_path: '$value'" >&2
+                    return 1
+                    ;;
+                *)
+                    break
+                    ;;
+            esac
+        fi
+    done < <(read_config_file config.yaml)
+    printf '%s' "$value"
 }
 
 #
@@ -1206,7 +1259,7 @@ expect_default_database() {
     local row_count="$3"
     local database_path="$4"
     local recorded
-    recorded="$(read_default_database_path)"
+    recorded="$(read_default_database_path)" || exit 1
     if [ "$recorded" != "$database_path" ]; then
         log_error "The recorded default database is '$recorded', expected '$database_path'"
         exit 1

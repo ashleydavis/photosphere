@@ -115,6 +115,7 @@ pub const tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "set-config", .handler = config_and_state.setConfigHandler },
     .{ .name = "get-state", .handler = config_and_state.getStateHandler },
     .{ .name = "set-state", .handler = config_and_state.setStateHandler },
+    .{ .name = "reset-app-storage", .handler = config_and_state.resetAppStorageHandler },
     .{ .name = "save-asset-request", .handler = saving_assets.saveAssetHandler },
     .{ .name = "save-assets", .handler = saving_assets.saveAssetsHandler },
     .{ .name = "open-path", .handler = saving_assets.openPathHandler },

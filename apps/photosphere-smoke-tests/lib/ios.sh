@@ -32,6 +32,14 @@ ios_reset_app_state() {
     photosphere_platform_reset_app_state
 }
 
+#
+# The line the app logs when automatic import starts, which the page says once the photo permission has had its say. The same on the
+# simulator and on a connected device, because it is the page's. Usage: ios_auto_import_started_log
+#
+ios_auto_import_started_log() {
+    echo "Starting automatic import."
+}
+
 if [ -n "$(apple_connected_device)" ]; then
     source "$PHOTOSPHERE_SMOKE_DIR/lib/ios-device.sh"
     return 0
@@ -48,14 +56,51 @@ IOS_PID_FILE_NAME="app.pid"
 IOS_SIMULATOR_UDID=""
 
 #
-# Chooses the simulator once, booting it when it is not running, and sets IOS_SIMULATOR_UDID. A later call keeps the choice, so the
-# reset before a start and the start itself use the same one.
+# Claims the simulator for this scenario, waiting while a scenario of another run holds it, because every run picks the same simulator
+# and the app's bundle identifier is the same in each, so two scenarios at once would stop, uninstall and wipe each other's app. The
+# lock is a directory, made atomically by mkdir, holding the process id of the scenario's shell, as the claim on a connected device in
+# ios-device.sh is. A lock left by a scenario that has ended, or was killed, is taken over. The scenario never lets go: its shell ending
+# is what frees the simulator. A lock this scenario's own shell holds is already claimed, which is what a subshell of the scenario
+# (a $(...) that reaches here) finds. Usage: photosphere_ios_claim_simulator <udid>
+#
+photosphere_ios_claim_simulator() {
+    local udid="$1"
+    local lock_dir="${TMPDIR:-/tmp}/photosphere-ios-simulator-$udid.lock"
+    local waited=0
+    local owner
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        owner="$(cat "$lock_dir/owner" 2>/dev/null || true)"
+        if [ "$owner" = "$$" ]; then
+            return 0
+        fi
+        if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+            echo "Taking over the lock on the simulator $udid from scenario process $owner, which has gone." >&2
+            rm -f "$lock_dir/owner"
+            rmdir "$lock_dir" 2>/dev/null || true
+            continue
+        fi
+        if [ "$waited" -ge 1800 ]; then
+            echo "The simulator $udid was not free within 1800s; scenario process ${owner:-unknown} holds it." >&2
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    echo "$$" > "$lock_dir/owner"
+}
+
+#
+# Chooses the simulator once, booting it when it is not running, claims it for this scenario, and sets IOS_SIMULATOR_UDID. A later call
+# keeps the choice, so the reset before a start and the start itself use the same one.
 #
 photosphere_ios_pick_simulator() {
     if [ -n "$IOS_SIMULATOR_UDID" ]; then
         return 0
     fi
-    IOS_SIMULATOR_UDID="$(apple_pick_simulator)" || return 1
+    local udid
+    udid="$(apple_pick_simulator)" || return 1
+    photosphere_ios_claim_simulator "$udid" || return 1
+    IOS_SIMULATOR_UDID="$udid"
 }
 
 #
@@ -71,13 +116,26 @@ photosphere_platform_prepare() {
 }
 
 #
+# Installs the app the run built on the chosen simulator, once per scenario. Installing again keeps the app's data but moves its
+# container to a new path, so a database path the scenario seeded or the app saved would then name nothing; a file in the scenario's
+# directory records that this scenario has installed, and a later call does nothing. The reset removes the file before it installs.
+#
+photosphere_ios_install() {
+    photosphere_ios_pick_simulator || return 1
+    if [ -f "$TMP_DIR/ios-installed" ]; then
+        return 0
+    fi
+    xcrun simctl install "$IOS_SIMULATOR_UDID" "$PHOTOSPHERE_SMOKE_RUN_DIR/test-build/Build/Products/Release-iphonesimulator/Photosphere.app" || return 1
+    : > "$TMP_DIR/ios-installed"
+}
+
+#
 # Starts the app for one scenario. Sets PHOTOSPHERE_CONTROL_HOST and PHOTOSPHERE_CONTROL_PORT to where the test control connection can
 # be reached. A fresh start installs the app; with keep-data it starts the installed app again on the data the last run left.
 # Usage: photosphere_platform_start <test_dir> [keep-data]
 #
 photosphere_platform_start() {
     local test_dir="$1"
-    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/test-build/Build/Products/Release-iphonesimulator/Photosphere.app"
     local port_file="$test_dir/control-port.txt"
     rm -f "$port_file"
     mkdir -p "$test_dir"
@@ -91,8 +149,12 @@ photosphere_platform_start() {
     # Terminating first fails when the app is not running, which is the usual case and not an error. A restart does not install
     # again, which keeps the app's data.
     xcrun simctl terminate "$udid" "$IOS_BUNDLE_ID" > /dev/null 2>&1 || true
+    # Installs the run's build unless this scenario already has, so a later start is a restart of the installed app, as on Android.
+    # The log generation is counted from the first start, so each later start gets a log directory of its own.
     if [ "${2:-}" != "keep-data" ]; then
-        xcrun simctl install "$udid" "$app" || return 1
+        photosphere_ios_install || return 1
+    fi
+    if [ ! -f "$test_dir/log-generation.txt" ]; then
         echo 0 > "$test_dir/log-generation.txt"
     fi
 
@@ -102,6 +164,29 @@ photosphere_platform_start() {
     generation=$(($(cat "$test_dir/log-generation.txt") + 1))
     echo "$generation" > "$test_dir/log-generation.txt"
     local log_dir="$test_dir/logs-$generation"
+
+    # The background work's passes report to the system log, not to the core's log file (see ios_background_log), so the simulator's
+    # system log is streamed into a file of this start's own, and is streaming before the app is launched so nothing the first pass says
+    # is missed. The stream prints its "Filtering" line once it is running.
+    local background_log_file="$test_dir/background-$generation.log"
+    local stream_pid stream_pgid
+    read -r stream_pid stream_pgid < <(launch_in_process_group "$background_log_file" xcrun simctl spawn "$udid" log stream --level info --style compact --predicate "subsystem == \"$IOS_BUNDLE_ID\" AND category == \"AutoImportService\"") || return 1
+    echo "$stream_pgid" > "$test_dir/background-stream.pgid"
+    local stream_waited=0
+    while ! grep -q "^Filtering the log data" "$background_log_file"; do
+        if ! kill -0 "$stream_pid" 2>/dev/null; then
+            echo "The simulator's system log stream ended before it started streaming. It said:" >&2
+            cat "$background_log_file" >&2
+            return 1
+        fi
+        if [ "$stream_waited" -ge 300 ]; then
+            echo "The simulator's system log stream did not start streaming within 30s. It said:" >&2
+            cat "$background_log_file" >&2
+            return 1
+        fi
+        sleep 0.1
+        stream_waited=$((stream_waited + 1))
+    done
 
     local launched
     launched="$(SIMCTL_CHILD_PHOTOSPHERE_TEST_MODE=1 \
@@ -161,7 +246,8 @@ photosphere_platform_start() {
 }
 
 #
-# Stops the app and the tail of its log. Usage: photosphere_platform_stop <test_dir>
+# Stops the app, the tail of its log and the stream of the system log. Stopping simctl stops the log process it spawned in the
+# simulator, because simctl hands the signal on to it. Usage: photosphere_platform_stop <test_dir>
 #
 photosphere_platform_stop() {
     local test_dir="$1"
@@ -169,10 +255,13 @@ photosphere_platform_stop() {
         # Fails when the app has already exited, which is a normal end for a scenario that quit it.
         xcrun simctl terminate "$(cat "$test_dir/$IOS_UDID_FILE_NAME")" "$IOS_BUNDLE_ID" > /dev/null 2>&1 || true
     fi
-    if [ -s "$test_dir/log-stream.pgid" ]; then
-        kill_process_group "$(cat "$test_dir/log-stream.pgid")" || true
-        : > "$test_dir/log-stream.pgid"
-    fi
+    local stream_name
+    for stream_name in log-stream background-stream; do
+        if [ -s "$test_dir/$stream_name.pgid" ]; then
+            kill_process_group "$(cat "$test_dir/$stream_name.pgid")" || true
+            : > "$test_dir/$stream_name.pgid"
+        fi
+    done
 }
 
 #
@@ -203,7 +292,10 @@ photosphere_platform_is_running() {
 #
 # Clears everything the app has stored on the simulator, as the mobile suite's ios_reset_app_state does: uninstalling the app removes
 # its container (Documents, Library and the web view's storage), and the simulator's keychain, which holds items outside the container,
-# is reset. Call it before the start, which installs the app again. An app that is not installed has no container to remove.
+# is reset. The app is then installed again, so its empty container is there for a scenario to seed before its start, as the reset on
+# Android leaves the app installed with its data cleared. An app that is not installed has no container to remove. The photo permission
+# is put back to never having been asked, as clearing an Android app's data does, because it is kept by the simulator and not in the
+# container, so a scenario that refused it would otherwise leave every later scenario refused.
 #
 photosphere_platform_reset_app_state() {
     photosphere_ios_pick_simulator || return 1
@@ -211,6 +303,12 @@ photosphere_platform_reset_app_state() {
         xcrun simctl terminate "$IOS_SIMULATOR_UDID" "$IOS_BUNDLE_ID" > /dev/null 2>&1 || true
         xcrun simctl uninstall "$IOS_SIMULATOR_UDID" "$IOS_BUNDLE_ID" || return 1
     fi
+    rm -f "$TMP_DIR/ios-installed"
+    photosphere_ios_install || return 1
+    xcrun simctl privacy "$IOS_SIMULATOR_UDID" reset photos "$IOS_BUNDLE_ID" || {
+        echo "Could not reset the photo library permission of $IOS_BUNDLE_ID on the simulator $IOS_SIMULATOR_UDID; a refusal from an earlier scenario may still be in force." >&2
+        return 1
+    }
     xcrun simctl keychain "$IOS_SIMULATOR_UDID" reset || {
         echo "Could not reset the simulator keychain; a secret from an earlier scenario may still be present." >&2
         return 1
@@ -234,11 +332,11 @@ ios_expose_host_port() {
 }
 
 #
-# Prints the host path of the app's data container on the simulator. The container exists once the app is installed, which the start
-# does, so a scenario seeds after its start (or after a start that kept the data). Fails, saying so, when the app is not installed.
+# Prints the host path of the app's data container on the simulator. The container exists once the app is installed, so the scenario's
+# install is made first if it has not been, as the Android seed helpers install the app before they seed.
 #
 photosphere_ios_container() {
-    photosphere_ios_pick_simulator || return 1
+    photosphere_ios_install || return 1
     local container
     container="$(xcrun simctl get_app_container "$IOS_SIMULATOR_UDID" "$IOS_BUNDLE_ID" data 2> /dev/null)" || true
     if [ -z "$container" ]; then
@@ -291,6 +389,28 @@ ios_seed_database() {
     mkdir -p "$root/$rel_dest" || return 1
     rsync -a --delete "$host_src/" "$root/$rel_dest/" || return 1
     echo "Seeded database fixture '$(basename "$host_src")' into the app's storage directory at $rel_dest" >&2
+}
+
+#
+# Copies a database out of the app's storage directory to a directory on the host, so the host's CLI can read what the app wrote. The
+# simulator's container is on the host filesystem, so a copy is enough. The destination must not exist.
+# Usage: ios_fetch_database <relative_path_under_storage> <host_dest>
+#
+ios_fetch_database() {
+    local rel_path="$1"
+    local host_dest="$2"
+    local root
+    root="$(photosphere_ios_storage_root)" || return 1
+    if [ ! -d "$root/$rel_path" ]; then
+        echo "$rel_path is not a directory in the app's storage directory ($root), so nothing was copied out" >&2
+        return 1
+    fi
+    mkdir -p "$host_dest" || return 1
+    rsync -a "$root/$rel_path/" "$host_dest/" || return 1
+    if [ -z "$(ls -A "$host_dest")" ]; then
+        echo "$rel_path held nothing, so nothing was copied out of the app's storage directory" >&2
+        return 1
+    fi
 }
 
 #
@@ -374,7 +494,7 @@ ios_seed_sync_config() {
     # The file as it stands, minus its sync section, which runs from the line "sync:" to the next line that is not indented.
     : > "$rendered"
     if [ -f "$file" ]; then
-        tr -d '\r' < "$file" | sed -e '/^sync:/,/^[^[:space:]]/{/^sync:/d;/^[[:space:]]/d}' > "$rendered" || return 1
+        tr -d '\r' < "$file" | sed -e '/^sync:/,/^[^[:space:]]/{' -e '/^sync:/d' -e '/^[[:space:]]/d' -e '}' > "$rendered" || return 1
     fi
     {
         echo "sync:"
@@ -452,7 +572,65 @@ ios_grant_media_permission() {
         echo "Could not grant the photo library permission to $IOS_BUNDLE_ID on the simulator $IOS_SIMULATOR_UDID, so the app would wait on a dialog no scenario can tap." >&2
         return 1
     fi
+
+    # simctl (Xcode 14.2) records the grant at version 1 of the permission scheme. iOS 14 and later read the photo permission at
+    # version 2 and take a version 1 grant to mean "not asked yet", so PHPhotoLibrary.requestAuthorization raises a prompt the system
+    # holds back and never answers, and the app waits on it for good. The record is moved to version 2, which is what the user allowing
+    # full access in the dialog writes.
+    local tcc_db
+    tcc_db="$(xcrun simctl getenv "$IOS_SIMULATOR_UDID" HOME)/Library/TCC/TCC.db" || return 1
+    local updated
+    updated="$(sqlite3 "$tcc_db" "UPDATE access SET auth_version = 2 WHERE service = 'kTCCServicePhotos' AND client = '$IOS_BUNDLE_ID' AND auth_value = 2; SELECT changes();")" || return 1
+    if [ "$updated" != "1" ]; then
+        echo "The photo library grant simctl made for $IOS_BUNDLE_ID was not found in $tcc_db ($updated rows updated), so the app would wait on a dialog no scenario can tap." >&2
+        return 1
+    fi
     echo "Granted the photo library permission from outside the app" >&2
+}
+
+#
+# Refuses the app the photo library permission from outside the app, as a user who chose "Don't Allow": the app's next request is
+# answered "denied" without a dialog. Done with the app stopped, because changing a permission terminates an app that is running.
+# Usage: ios_refuse_media_permission
+#
+ios_refuse_media_permission() {
+    photosphere_ios_pick_simulator || return 1
+    if ! xcrun simctl privacy "$IOS_SIMULATOR_UDID" revoke photos "$IOS_BUNDLE_ID"; then
+        echo "Could not refuse the photo library permission to $IOS_BUNDLE_ID on the simulator $IOS_SIMULATOR_UDID." >&2
+        return 1
+    fi
+    echo "Refused the photo library permission, as a user who chose \"Don't Allow\"" >&2
+}
+
+#
+# Succeeds when the core's background work (automatic import, sync and prefetch) is running. iOS has no foreground service to list, so
+# the work is read from the app's log: the core logs a line when the page starts it and another when the page stops it, and it is
+# running when the last start is later than the last stop. Usage: ios_background_work_running
+#
+ios_background_work_running() {
+    local app_log="$TMP_DIR/app.log"
+    local started
+    local stopped
+    started="$(grep -n "Started the background automatic import\." "$app_log" | tail -1 | cut -d: -f1 || true)"
+    stopped="$(grep -n "Stopped the background automatic import\." "$app_log" | tail -1 | cut -d: -f1 || true)"
+    [ -n "$started" ] && [ "$started" -gt "${stopped:-0}" ]
+}
+
+#
+# Waits until the core's background work is not running, as ios_background_work_running reads it. Returns 0 once it is not, non-zero
+# when it is still running after the given number of seconds. Usage: ios_wait_for_background_service_gone <seconds>
+#
+ios_wait_for_background_service_gone() {
+    local seconds="$1"
+    local waited=0
+    while [ "$waited" -lt "$seconds" ]; do
+        if ! ios_background_work_running; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 1
 }
 
 #
@@ -462,6 +640,75 @@ ios_grant_media_permission() {
 #
 ios_grant_notification_permission() {
     echo "The app asks for no notification permission on iOS, so there is nothing to grant" >&2
+}
+
+#
+# Succeeds when the core's background work (automatic import, sync and prefetch) is switched on in the running app. iOS has no
+# foreground service: the core runs the passes itself while the app is on screen, from the moment the page asks for them, which it says
+# in the app's log as "Started the background automatic import." and, when both features go off, "Stopped the background automatic
+# import.". The last of the two decides, and an app that is no longer running has no work running whatever its log says.
+# Usage: ios_background_work_running
+#
+ios_background_work_running() {
+    local test_dir="${APP_TMP_DIR:-$TMP_DIR}"
+    if ! photosphere_platform_is_running "$test_dir"; then
+        return 1
+    fi
+    local started stopped
+    started="$(grep -n "Started the background automatic import\." "$test_dir/app.log" | tail -1 | cut -d: -f1 || true)"
+    stopped="$(grep -n "Stopped the background automatic import\." "$test_dir/app.log" | tail -1 | cut -d: -f1 || true)"
+    [ -n "$started" ] && [ "$started" -gt "${stopped:-0}" ]
+}
+
+#
+# Prints everything the background work has said in the system log since the scenario's first start, oldest first: each start streams it
+# into a file of its own (see photosphere_platform_start), and the files are read in the order of the starts.
+# Usage: photosphere_ios_background_log_all
+#
+photosphere_ios_background_log_all() {
+    local test_dir="${APP_TMP_DIR:-$TMP_DIR}"
+    if [ ! -f "$test_dir/log-generation.txt" ]; then
+        return 0
+    fi
+    local last_generation
+    last_generation="$(cat "$test_dir/log-generation.txt")"
+    local generation=1
+    while [ "$generation" -le "$last_generation" ]; do
+        cat "$test_dir/background-$generation.log" || return 1
+        generation=$((generation + 1))
+    done
+}
+
+#
+# Prints the lines the background work has written since the last ios_clear_background_log. The passes report what they are doing
+# through the shell's backgroundLog, which writes them to the system log under the AutoImportService category rather than to the app's
+# log file, as the Android shell writes them to logcat. Usage: ios_background_log
+#
+ios_background_log() {
+    local cursor=0
+    local cursor_file="${APP_TMP_DIR:-$TMP_DIR}/background-log-cursor.txt"
+    if [ -f "$cursor_file" ]; then
+        cursor="$(cat "$cursor_file")"
+    fi
+    photosphere_ios_background_log_all | tail -n +$((cursor + 1))
+}
+
+#
+# Forgets what the background work has said so far, by recording how many lines it has said, which ios_background_log then skips.
+# The streams of later starts are appended after it, so the count holds across a restart. Usage: ios_clear_background_log
+#
+ios_clear_background_log() {
+    local lines
+    lines="$(photosphere_ios_background_log_all | wc -l | tr -d ' ')" || return 1
+    echo "$lines" > "${APP_TMP_DIR:-$TMP_DIR}/background-log-cursor.txt"
+}
+
+#
+# Prints what the app and its background work have said, for a failure to show. Usage: ios_dump_background_diagnostics
+#
+ios_dump_background_diagnostics() {
+    tail -40 "${APP_TMP_DIR:-$TMP_DIR}/app.log" || true
+    photosphere_ios_background_log_all | tail -60 || true
 }
 
 #
@@ -535,6 +782,28 @@ ios_read_config_file() {
     if [ -f "$file" ]; then
         cat "$file"
     fi
+}
+
+#
+# Succeeds when a file of the app's settings directory exists, even when it is empty. Usage: ios_config_file_exists <name>
+#
+ios_config_file_exists() {
+    [ -f "$(photosphere_ios_config_dir)/$1" ]
+}
+
+#
+# Damages the vault the app keeps its secrets in, from outside the app, with the app stopped. On the simulator the app runs in test
+# mode with the plaintext vault, a vault.json in the scenario's directory on the host, so it is replaced with something that is not
+# JSON, which is what a truncated write leaves behind, and reading the vault fails. Fails when there is no vault to damage.
+# Usage: ios_damage_vault
+#
+ios_damage_vault() {
+    local vault_file="${APP_TMP_DIR:-$TMP_DIR}/vault/vault.json"
+    if [ ! -f "$vault_file" ]; then
+        echo "No vault file at $vault_file to damage; the secret was never stored" >&2
+        return 1
+    fi
+    printf '%s' 'this is not json' > "$vault_file" || return 1
 }
 
 #

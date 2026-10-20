@@ -10,6 +10,7 @@
 //
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ziggy = @import("ziggy-core");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
@@ -210,3 +211,24 @@ pub const getConfigHandler = logExceptions(getConfig, "Error getting config valu
 // The set-config channel's handler: setConfig, with its errors logged.
 //
 pub const setConfigHandler = logExceptions(setConfig, "Error setting config value");
+
+//
+// reset-app-storage: no payload. Empties the app's config and cache directories and, on a phone, the app's data directory, which is
+// where every database the app made sits. The reply is what was removed (node-api's IResetAppStorageResult).
+//
+// Ziggy runs this ahead of the handler node-api registers under the same task type, because that one cannot know the data directory:
+// on Android the data directory is the home directory, which the cache directory already is, but on iOS it is the app's Application
+// Support directory, which neither the config nor the cache directory is, so without this a reset on iOS left every database on the
+// device. On desktop the data directory holds the default database, the user's photos, so it is left alone there.
+//
+fn resetAppStorage(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = data;
+    const device_data_dir: ?[]const u8 = if (builtin.os.tag == .ios or builtin.abi.isAndroid()) std.mem.span(context.config().data_dir) else null;
+    const result = try node_api.reset_app_storage_worker.resetAppStorage(context.arena, context.io(), device_data_dir);
+    return try json_util.stringify(context.arena, result);
+}
+
+//
+// The reset-app-storage task's handler: resetAppStorage, with its errors logged.
+//
+pub const resetAppStorageHandler = logExceptions(resetAppStorage, "Error resetting the app's storage");

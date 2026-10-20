@@ -272,3 +272,56 @@ test "config and state requests that succeed log nothing to the error output" {
     allocator.free(try app.requestOk("get-config", "\"theme\""));
     try std.testing.expectEqual(@as(usize, 0), app.console_err.written().len);
 }
+
+test "reset-app-storage on desktop empties the settings and cache directories and leaves the app's data directory, which holds the default database, alone" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    // The cache directory is pointed into the test's own directory, or the reset would empty the developer's real one.
+    const cache_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "cache" });
+    defer allocator.free(cache_dir);
+    try app.environ_map.put("PHOTOSPHERE_CACHE_DIR", cache_dir);
+    const config_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "config" });
+    defer allocator.free(config_dir);
+    const settings_path = try std.fs.path.join(allocator, &.{ config_dir, "databases.toml" });
+    defer allocator.free(settings_path);
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = settings_path,
+        .data = "databases = []",
+    });
+    const hash_cache_dir = try std.fs.path.join(allocator, &.{ cache_dir, "a-database-key" });
+    defer allocator.free(hash_cache_dir);
+    try std.Io.Dir.cwd().createDirPath(io, hash_cache_dir);
+    // The data directory is the test's own directory (TestApp gives the core tmp_path as data_dir).
+    const default_database_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "default-database", ".db" });
+    defer allocator.free(default_database_dir);
+    try std.Io.Dir.cwd().createDirPath(io, default_database_dir);
+
+    const message = try utils.json.stringify(allocator, .{
+        .channel = "add-task",
+        .data = .{
+            .taskId = "reset-1",
+            .taskType = "reset-app-storage",
+            .source = "reset",
+            .data = utils.json.Raw{
+                .text = "{}",
+            },
+            .priority = "interactive",
+        },
+    });
+    defer allocator.free(message);
+    app.core.postMessage(message);
+
+    try app.shell.expectMessageContaining("\"taskId\":\"reset-1\",\"status\":\"succeeded\"");
+    try app.shell.expectMessageContaining("\"entriesRemoved\":2}");
+    var config_contents = try std.Io.Dir.cwd().openDir(io, config_dir, .{
+        .iterate = true,
+    });
+    defer config_contents.close(io);
+    var config_iterator = config_contents.iterate();
+    try std.testing.expect((try config_iterator.next(io)) == null);
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, hash_cache_dir, .{}));
+    try std.Io.Dir.cwd().access(io, default_database_dir, .{});
+}

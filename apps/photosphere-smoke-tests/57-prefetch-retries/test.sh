@@ -26,15 +26,8 @@ source "$TEST_DIR/../lib/common.sh"
 
 print_test_header 57 "prefetch-retries"
 
-# Not on iOS, for the same reason 50-background-sync is: this test asserts on a loop that runs
-# inside a foreground service, and iOS has no such thing. There the loop runs while the app is
-# foregrounded and otherwise through a BGProcessingTask the system schedules when it chooses, and the
-# only way to force one is an lldb command against a running app, which this harness cannot issue on
-# Xcode 14.2.
-if [ "$PLATFORM" = "ios" ]; then
-    log_info "SKIP: the background prefetch loop is covered on Android and the desktop only. iOS runs its passes when the system decides, and there is no supported way to make one happen from a test."
-    exit "$TEST_SKIPPED_EXIT_CODE"
-fi
+# On iOS the same loop runs, with no foreground service: the core runs its passes while the app is on
+# screen, which is the whole of this test, since nothing here takes the app off screen.
 
 S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="prefetch-origin-s3"

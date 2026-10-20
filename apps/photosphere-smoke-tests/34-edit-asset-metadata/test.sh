@@ -29,8 +29,10 @@ case "$PLATFORM" in
     android|ios)
         DB_NAME="edit-db"
         SOURCE_DB="$TMP_DIR/$DB_NAME"
-        OPEN_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
         "${PLATFORM}_reset_app_state" || exit 1
+        # Read after the reset: on iOS the reset reinstalls the app, which gives it a new data container, so a path read before it
+        # names a container that no longer exists.
+        OPEN_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
         ;;
     *)
         OPEN_PATH="$SOURCE_DB"

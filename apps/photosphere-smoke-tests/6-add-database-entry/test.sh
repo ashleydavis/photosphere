@@ -15,9 +15,10 @@ case "$PLATFORM" in
     android|ios)
         # The name carries no spaces because the assertion below reads the row back through the control connection.
         ENTRY_NAME="my-test-db"
-        DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
         # Wipe everything the app has stored on the device before launch, with the app stopped, so the test starts from a known state.
         "${PLATFORM}_reset_app_state" || exit 1
+        # Read after the reset, because on iOS the reset installs the app again, which moves its storage to a new path.
+        DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
         ;;
     *)
         ENTRY_NAME="My Test DB"

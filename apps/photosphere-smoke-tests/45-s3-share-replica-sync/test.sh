@@ -39,9 +39,6 @@ S3_SECRET_NAME="shared-s3"
 ENC_KEY_NAME="shared-enc-key"
 DB_NAME="shared-db"
 REPLICA_NAME="local-replica"
-# Where the replica lives on the device. The app resolves nothing relative, so the replicate dialog and the Add Database dialog are
-# both given the full path inside the app's own storage.
-REPLICA_PATH="$("${PLATFORM}_app_path" "$REPLICA_NAME")"
 # Drawn per run, never hardcoded: the code is the only thing that tells two concurrent shares apart.
 PAIRING_CODE="$(allocate_pairing_code)"
 
@@ -128,6 +125,12 @@ cli_expect_success "Adding a photo to the encrypted database" \
 # and the keychain) so this test starts from a known state. Done before launch, with the app stopped,
 # so nothing can write state back underneath it.
 "${PLATFORM}_reset_app_state" || exit 1
+
+# Where the replica lives on the device. The app resolves nothing relative, so the replicate dialog and the Add Database dialog are
+# both given the full path inside the app's own storage. Asked for after the reset, not before it: on the iOS simulator the reset
+# uninstalls and reinstalls the app, which moves its data container to a new path, so a path taken before it names a directory the
+# app no longer owns and the checks below would look for the replica somewhere the app never wrote it.
+REPLICA_PATH="$("${PLATFORM}_app_path" "$REPLICA_NAME")"
 
 start_app "$TMP_DIR" || exit 1
 wait_for_ready "$APP_PORT" || exit 1
