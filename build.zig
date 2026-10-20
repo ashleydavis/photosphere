@@ -320,6 +320,20 @@ fn addPackageModules(
             for (aws.archives) |archive| {
                 module.addObjectFile(archive);
             }
+            // The system libraries and frameworks those libraries link, which a prebuilt archive does not record: the ones aws-lc,
+            // aws-c-common, aws-c-cal and aws-c-io link in third-party/aws. Without them the macOS CLI failed to link with
+            // CoreFoundation's symbols undefined. Linux and Android need none beyond the C library.
+            if (target.result.os.tag == .windows) {
+                for ([_][]const u8{ "bcrypt", "kernel32", "ws2_32", "shlwapi", "psapi", "secur32", "crypt32", "ncrypt" }) |system_library| {
+                    module.linkSystemLibrary(system_library, .{});
+                }
+            }
+            if (target.result.os.tag == .macos or target.result.os.tag == .ios) {
+                for ([_][]const u8{ "CoreFoundation", "Security", "Network" }) |framework| {
+                    module.linkFramework(framework, .{});
+                }
+                apple_sdk.addSdkFrameworks(b, module, target);
+            }
             module.addImport("openssl", try translateHeader(b, target, aws.include_directory, encryption_openssl_header));
         }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
@@ -341,6 +355,14 @@ fn addPackageModules(
             }
             for (ffmpeg.archives) |archive| {
                 module.addObjectFile(archive);
+            }
+            // The system libraries those libraries link, which a prebuilt archive does not record: urlmon, which ImageMagick reads URLs
+            // with on Windows, and oldnames, which maps the POSIX names FFmpeg calls to Microsoft's C library.
+            if (target.result.os.tag == .windows) {
+                module.linkSystemLibrary("urlmon", .{});
+                if (target.result.abi == .msvc) {
+                    module.linkSystemLibrary("oldnames", .{});
+                }
             }
             module.addImport("magick", b.createModule(.{
                 .root_source_file = imagemagick.zig_directory.path(b, "magick.zig"),
