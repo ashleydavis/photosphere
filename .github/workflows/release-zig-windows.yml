@@ -84,6 +84,82 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
+  # The third-party libraries, each built once by its own action and cached, so a library an earlier run has already built is
+  # restored rather than compiled again. Each is built twice: for the runner (x86_64-windows-gnu), which the CLI and the tests
+  # build for, and for x86_64-windows-msvc, which the Photosphere App builds for. Every job that runs the Zig build restores
+  # them from that cache with the third-party-libraries action.
+  build-aws-sdk:
+    timeout-minutes: 60
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build the AWS SDK for C
+        uses: ./.github/actions/build-aws-sdk
+        with:
+          platform: windows-x64
+
+      - name: Build the AWS SDK for C for the MSVC ABI
+        uses: ./.github/actions/build-aws-sdk
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
+
+  build-zlib-ng:
+    timeout-minutes: 30
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build zlib-ng
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: windows-x64
+
+      - name: Build zlib-ng for the MSVC ABI
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
+
+  build-imagemagick:
+    timeout-minutes: 45
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build ImageMagick
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: windows-x64
+
+      - name: Build ImageMagick for the MSVC ABI
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
+
+  build-ffmpeg:
+    timeout-minutes: 60
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build FFmpeg
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: windows-x64
+
+      - name: Build FFmpeg for the MSVC ABI
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
+
   build-zig-windows-x64:
     # Builds the Zig CLI for Windows x64 on a runner of that platform, and publishes the binary. Nothing here
     # cross-compiles, so a build that works is a build that runs on the platform it names.
@@ -91,15 +167,11 @@ jobs:
     # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
     # and create-release publishes it, so the binary is built once and used by both.
     timeout-minutes: 40
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
@@ -113,14 +185,6 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
 
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
@@ -152,6 +216,11 @@ jobs:
       - name: Fetch every package Zig needs, lazy ones included, in one pass
         working-directory: .
         run: zig build --fetch=all
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
 
       - name: Build the Zig CLI natively for Windows x64
         working-directory: .
@@ -186,63 +255,6 @@ jobs:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
-  build-aws-sdk:
-    # Compiles the AWS SDK for C and caches the result, because several jobs build Zig and every one of them
-    # would otherwise compile it from cold: it is the longest single build in this workflow. One job owns it,
-    # so the compile happens once per commit and the others restore what this wrote.
-    # The cache key names this workflow's platform because another platform's workflow may build on the same
-    # kind of runner, and actions/cache/save fails when the key already exists.
-    timeout-minutes: 40
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
-
-      # See the same step in build-zig-windows-x64 for why the packages are fetched before the build.
-      - name: Fetch every package Zig needs, lazy ones included, in one pass
-        working-directory: .
-        run: zig build --fetch=all
-
-      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
-      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
-      # mode, and the storage integration tests build in this mode too.
-      - name: Build the Zig CLI, which compiles the AWS SDK
-        working-directory: .
-        run: zig build
-
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-
   zig-cli-smoke-tests:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
     # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
@@ -251,7 +263,7 @@ jobs:
     # is compiled once and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
-    needs: [build-aws-sdk, build-zig-windows-x64]
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-windows-x64]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -299,16 +311,12 @@ jobs:
         run: |
           df -h .
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
-      # The Zig CLI is built by build-zig-windows-x64, but this job still builds Zig itself, and the AWS SDK
-      # for C it needs is compiled by build-aws-sdk and cached under the key below. Restoring it is what
-      # keeps this job from compiling the AWS SDK from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      # The Zig CLI is built by build-zig-windows-x64, but this job still runs the Zig build, which links the libraries the build
+      # jobs built.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: windows-x64
 
       # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads.
       - name: Download the Zig CLI built for this platform
@@ -361,9 +369,9 @@ jobs:
 
   photosphere-desktop-smoke-tests:
     # The Photosphere App's smoke tests on Windows. Windows needs the WebView2 SDK and the WiX Toolset, which the setup
-    # step fetches. The Zig build restores the AWS SDK for C that build-aws-sdk compiled, so it is not compiled again here.
+    # step fetches. The Zig build links the third-party libraries the build jobs built.
     timeout-minutes: 75
-    needs: [build-aws-sdk]
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -422,14 +430,17 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy setup
 
-      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      # The scenarios' fixtures are made by the CLI, built for the runner, and the app is built for the MSVC ABI.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: windows-x64
+
+      - name: Restore the third-party libraries for the MSVC ABI
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
 
       # run-desktop.sh builds the page and the app's shell itself, through sync-windows.sh.
       - name: Run the Photosphere App smoke tests
@@ -440,10 +451,9 @@ jobs:
   package-photosphere:
     # The Photosphere App packaged for Windows, unsigned, by the same package script a developer runs. The version comes
     # from the release tag: windows-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. Windows needs the WebView2 SDK
-    # and the WiX Toolset, which the setup step fetches. The Zig build restores the AWS SDK for C that build-aws-sdk
-    # compiled, so it is not compiled again here.
+    # and the WiX Toolset, which the setup step fetches. The Zig build links the third-party libraries the build jobs built.
     timeout-minutes: 75
-    needs: [prepare-tag, build-aws-sdk]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -489,14 +499,11 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy setup
 
-      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      - name: Restore the third-party libraries for the MSVC ABI
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
 
       - name: Set config
         shell: bash
@@ -524,7 +531,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zig-windows-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-windows-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
     runs-on: ubuntu-latest
     permissions:
       contents: write
