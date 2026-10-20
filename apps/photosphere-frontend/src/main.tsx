@@ -9,6 +9,7 @@ import { isTestMode } from "./lib/test-mode";
 import type { IPlatformInfo } from "./lib/platform-provider-ziggy";
 import { sendRendererLog } from "./lib/renderer-log";
 import { createZiggyTestTransport } from "./lib/ziggy-test-transport";
+import { isResizeObserverLoopReport } from "./lib/resize-observer-report";
 
 //
 // The bridge the shell injects into the page before its scripts run.
@@ -27,6 +28,12 @@ const testMode = isTestMode();
 // Handle uncaught errors in the page
 //
 window.onerror = (message, source, lineno, colno, error) => {
+    // Late ResizeObserver notifications are not an exception (see isResizeObserverLoopReport), so they are logged as information.
+    if (isResizeObserverLoopReport(message, error)) {
+        console.log(`ResizeObserver delivered notifications a frame late: ${message}`);
+        return true;
+    }
+
     const errorMessage = `Uncaught error: ${message} at ${source}:${lineno}:${colno}`;
     console.error(errorMessage, error);
 
