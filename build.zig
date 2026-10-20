@@ -948,6 +948,21 @@ fn addPhotosphere(
     };
     try ziggy_build.addLinuxShell(b, photosphere_app, strip, target, optimize, ziggy, libraries.static_library);
     try ziggy_build.addWindowsShell(b, photosphere_app, compile_only, strip, target, optimize, ziggy, libraries.static_library);
+    // Each shell's executable links the core as a static library, and Zig gives the archives a module links only to the compile that
+    // owns the module, so the third-party libraries the packages link reach the core's static library, which does not hold them, and
+    // not the executable. Without this the Linux shell failed to link with every symbol of the AWS SDK for C, aws-lc, ImageMagick and
+    // FFmpeg undefined. Each shell's executable, which Ziggy makes and installs under the step, links them itself.
+    for ([_][]const u8{ "photosphere-linux", "photosphere-windows" }) |step_name| {
+        const shell_step = &b.top_level_steps.get(step_name).?.step;
+        for (shell_step.dependencies.items) |dependency| {
+            const install = dependency.cast(std.Build.Step.InstallArtifact) orelse continue;
+            for ([_][]const u8{ "aws", "zlib-ng", "imagemagick", "ffmpeg" }) |name| {
+                for ((try findThirdPartyLibraries(b, target, name)).archives) |archive| {
+                    install.artifact.root_module.addObjectFile(archive);
+                }
+            }
+        }
+    }
 }
 
 //
