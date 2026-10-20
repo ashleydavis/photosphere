@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- The Zig CLI, built with `zig build` in the repository root (the script fails at once if `../../zig-out/bin/psi` is missing).
+- `zig` on the PATH (`mise install`). The script builds the Zig CLI itself, with `zig build --prefix` into a directory of the run's own rather than the shared `zig-out`, and removes it when the run ends (see `test-cli-binaries.md`).
 - `bun install` from the repo root, for the TypeScript CLI in the interop check.
 - `sha256sum`, which the TypeScript suite also uses.
 

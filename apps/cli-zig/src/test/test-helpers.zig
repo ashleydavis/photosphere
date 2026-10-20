@@ -8,6 +8,21 @@ const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const lan_share_network = @import("lan-share-network-zig");
 
+// The paths of the programs this `zig build test` built, handed in by build.zig, so the tests run exactly those
+// rather than whatever was last installed in the shared zig-out.
+const cli_test_options = @import("cli-test-options");
+
+//
+// Makes a path the build handed in absolute: build.zig gives them relative to the directory the build ran from (build_cwd),
+// and the tests run from apps/cli-zig.
+//
+fn buildPath(comptime path: []const u8) []const u8 {
+    if (comptime std.fs.path.isAbsolute(path)) {
+        return path;
+    }
+    return cli_test_options.build_cwd ++ std.fs.path.sep_str ++ path;
+}
+
 //
 // Reads and parses a JSON fixture from src/test/fixtures (the tests run with the package directory as cwd).
 //
@@ -269,9 +284,9 @@ pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
 }
 
 //
-// The path of the built psi binary (zig-out/bin/psi, psi.exe on Windows).
+// The path of the psi this `zig build test` built (in the build cache, psi.exe on Windows).
 //
-pub const psi_path = "../../zig-out/bin/psi" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
+pub const psi_path = buildPath(cli_test_options.psi_path);
 
 //
 // Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, with its
@@ -397,9 +412,9 @@ pub fn startCliAndWaitFor(allocator: std.mem.Allocator, argv: []const []const u8
 
 //
 // The path of the program the Windows `psi bug` tests put where `psi bug` looks for PowerShell
-// (src/test/drivers/opener-recorder.zig), installed to zig-out/test-bin.
+// (src/test/drivers/opener-recorder.zig), as this `zig build test` built it (in the build cache).
 //
-pub const opener_recorder_path = "../../zig-out/test-bin/opener-recorder" ++ builtin.os.tag.exeFileExt(builtin.cpu.arch);
+pub const opener_recorder_path = buildPath(cli_test_options.opener_recorder_path);
 
 //
 // Keys typed into one prompt of psi: once the prompt's text has appeared on stdout, the keys are

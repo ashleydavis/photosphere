@@ -30,6 +30,9 @@ NC='\033[0m' # No Color
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
 source "$_CLI_ABS_DIR/../../scripts/lib/test-lib.sh"
 
+# Building psi, mk and bdb into a directory of this run's own, and naming them for the tests.
+source "$_CLI_ABS_DIR/test-cli-binaries.sh"
+
 # Starting and stopping background processes: the tree walk the traps below use to take a batch
 # subshell together with the CLI processes underneath it. Shared with the desktop and mobile suites
 # so there is one implementation rather than a copy per caller.
@@ -84,7 +87,10 @@ account_test_timing() {
 
 # Test configuration
 #
-# The suite root, which holds the build output and whatever the setup and reset commands work on.
+# The suite root, which holds whatever the setup command and the runner itself write. Allocated per
+# run, so a second run never shares it and there is nothing left over to wipe on the way in. It
+# used to be a fixed directory in the checkout that every run deleted as it started, out from under
+# any other run using it.
 # It is NOT where a test runs: each test is given a uniquely named directory of its own by
 # allocate_isolated_test_dir below, so two runs out of one checkout cannot collide.
 #
@@ -94,7 +100,7 @@ account_test_timing() {
 # and scratch files of concurrent runs land on top of each other. This suite used to run
 # `hash-cache clear` four times as well, which deleted that whole directory and once took out the
 # log directory of a suite running alongside in the middle of writing to it.
-export TEST_TMP_DIR="${TEST_TMP_DIR:-$_CLI_ABS_DIR/test/tmp-zig}"
+export TEST_TMP_DIR="${TEST_TMP_DIR:-$(photosphere_test_temp_dir cli-zig-suite)}"
 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
 TEST_FILES_DIR="../../test"
 MULTIPLE_IMAGES_DIR="../../test/multiple-files"
@@ -186,6 +192,9 @@ cleanup_and_show_summary() {
         kill_process_tree "$job_pid"
     done
 
+    # After the kill, because Windows cannot delete an executable that is still running.
+    remove_test_cli_binaries
+
     echo ""
     echo "============================================================================"
     if [ $exit_code -eq 0 ]; then
@@ -242,38 +251,16 @@ log_warning() {
 # Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
     if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "./bin/x64/linux/psi"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "./bin/arm64/mac/psi"
-                else
-                    echo "./bin/x64/mac/psi"
-                fi
-                ;;
-            "win")
-                echo "./bin/x64/win/psi.exe"
-                ;;
-            *)
-                echo "./bin/x64/linux/psi"  # Default to linux
-                ;;
-        esac
+        test_cli_binary_path psi
     else
         echo "bun run start --"
     fi
 }
 
-# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
+# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
+# for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
 get_zig_cli_command() {
-    if [ "$(detect_platform)" = "win" ]; then
-        echo "../../zig-out/bin/psi.exe"
-    else
-        echo "../../zig-out/bin/psi"
-    fi
+    test_zig_cli_path
 }
 
 # Detect platform and set build command
@@ -347,69 +334,16 @@ invoke_command() {
 }
 
 #
-# Builds the three executables the tests run: psi, mk and bdb.
-#
-# Must be called with the CLI directory as the working directory, because each build is invoked
-# through the package it belongs to.
+# Builds the three executables the tests run: psi, mk and bdb, into a directory of this run's own
+# (see test-cli-binaries.sh), never the package's shared bin/. A failed build ends the run.
 #
 build_cli_binaries() {
-    local platform=$(detect_platform)
-    local arch=$(detect_architecture)
-
-    log_info "Building CLI executable for platform: $platform ($arch)"
-    case "$platform" in
-        "linux")
-            invoke_command "Build Linux executable" "bun run build-linux"
-            ;;
-        "mac")
-            if [ "$arch" = "arm64" ]; then
-                invoke_command "Build macOS ARM64 executable" "bun run build-mac-arm64"
-            else
-                invoke_command "Build macOS x64 executable" "bun run build-mac-x64"
-            fi
-            ;;
-        "win")
-            invoke_command "Build Windows executable" "bun run build-win"
-            ;;
-    esac
-
-    log_info "Building mk CLI executable for platform: $platform ($arch)"
-    cd ../mk-cli
-    case "$platform" in
-        "linux")
-            invoke_command "Build mk Linux executable" "bun run build-linux"
-            ;;
-        "mac")
-            if [ "$arch" = "arm64" ]; then
-                invoke_command "Build mk macOS ARM64 executable" "bun run build-mac-arm64"
-            else
-                invoke_command "Build mk macOS x64 executable" "bun run build-mac-x64"
-            fi
-            ;;
-        "win")
-            invoke_command "Build mk Windows executable" "bun run build-win"
-            ;;
-    esac
-    cd ../cli
-
-    log_info "Building bdb CLI executable for platform: $platform ($arch)"
-    cd ../bdb-cli
-    case "$platform" in
-        "linux")
-            invoke_command "Build bdb Linux executable" "bun run build-linux"
-            ;;
-        "mac")
-            if [ "$arch" = "arm64" ]; then
-                invoke_command "Build bdb macOS ARM64 executable" "bun run build-mac-arm64"
-            else
-                invoke_command "Build bdb macOS x64 executable" "bun run build-mac-x64"
-            fi
-            ;;
-        "win")
-            invoke_command "Build bdb Windows executable" "bun run build-win"
-            ;;
-    esac
-    cd ../cli
+    log_info "Building psi, mk and bdb for this run"
+    if ! build_test_cli_binaries; then
+        log_error "Failed to build the CLI executables"
+        exit 1
+    fi
+    log_success "Built psi, mk and bdb into $PHOTOSPHERE_CLI_BIN_DIR"
 }
 
 # Individual test functions (remain inline — not tests, just setup)
@@ -428,9 +362,6 @@ test_setup() {
     local cli_command=$(get_cli_command)
     log_info "Using CLI command: $cli_command"
 
-    log_info "Cleaning up previous test run"
-    rm -rf "$TEST_TMP_DIR"
-
     # Ensure tmp directory exists
     mkdir -p "$TEST_TMP_DIR"
 
@@ -443,58 +374,6 @@ check_tools() {
     # shellcheck source=./check-tools.sh
     source "$SMOKE_TESTS_DIR/check-tools.sh"
     run_check_tools "$(get_zig_cli_command)"
-}
-
-# Reset function to clean up test artifacts
-reset_environment() {
-    echo "======================================"
-    echo "Photosphere Zig CLI Smoke Tests - RESET"
-    echo "======================================"
-    
-    log_info "Changing to CLI directory"
-    if ! cd "$(dirname "$0")"; then
-        log_error "Failed to change to CLI directory"
-        return 1
-    fi
-    
-    log_info "Current directory: $(pwd)"
-    log_info "Cleaning up test artifacts..."
-    
-    # Reset UUID counter for deterministic test results
-    local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
-    if [ -f "$UUID_COUNTER_FILE" ]; then
-        log_info "Resetting test UUID counter"
-        rm -f "$UUID_COUNTER_FILE"
-        log_success "Removed UUID counter file"
-    else
-        log_info "UUID counter file not found (already clean)"
-    fi
-    
-    # Remove the specific test database directory
-    if [ -d "$TEST_TMP_DIR" ]; then
-        log_info "Removing all test databases: $TEST_TMP_DIR"
-        rm -rf "$TEST_TMP_DIR"
-        log_success "Removed $TEST_TMP_DIR"
-    else
-        log_info "Test tmp directory not found (already clean): $TEST_TMP_DIR"
-    fi
-    
-    # Remove the replicated database directory
-    local replica_dir="$TEST_DB_DIR-replica"
-    if [ -d "$replica_dir" ]; then
-        log_info "Removing replicated database: $replica_dir"
-        rm -rf "$replica_dir"
-        log_success "Removed $replica_dir"
-    else
-        log_info "Replicated database directory not found (already clean): $replica_dir"
-    fi
-    
-    log_success "Environment reset complete!"
-    echo ""
-    log_info "You can now run tests with a clean environment:"
-    log_info "  $0 all              # Run all tests"
-    log_info "  $0 setup            # Run just setup"
-    log_info "  $0 create-database  # Run specific test"
 }
 
 # Extract the numeric prefix from a test script path (e.g. smoke-tests-zig/27-v2-readonly/test.sh -> 27)
@@ -630,34 +509,6 @@ start_cli_pool_job() {
         local_start=$SECONDS
         TEST_TMP_DIR="$test_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
         local_exit=$?
-
-        # Retry once, and only when Bun itself crashed rather than a test failing an assertion.
-        #
-        # Bun 1.3.14 intermittently dies inside its own runtime while the CLI is using worker
-        # threads, printing "Bun has crashed. This indicates a bug in Bun, not your code" and a
-        # panic line, then killing the process with SIGILL or SIGSEGV. It has hit six different
-        # tests across three different commands at roughly one run in six, so it is neither any one
-        # test nor this repository's code, and there is no newer Bun to move to.
-        #
-        # The match is on that crash signature in the test's own log, not on the exit code: the
-        # crash happens to a `bun run` child inside the test, which the test catches and reports as
-        # an ordinary failure exiting 1, so an exit code cannot tell the two apart. An assertion
-        # failure leaves no panic line and is never retried, so a real regression still fails the
-        # run exactly as it did before.
-        #
-        # The retry is announced rather than silent, and the crashed run's log is kept alongside as
-        # .signal-death. A suite that quietly re-runs things until they pass is worse than one that
-        # fails, because it hides a rising failure rate.
-        if [ "$local_exit" -ne 0 ] && grep -qE "Bun has crashed|panic: |terminated by signal SIG(ILL|SEGV|BUS|ABRT)" "$log_file" 2>/dev/null; then
-            printf "${YELLOW}RETRY${NC} %2s  %s hit a Bun runtime crash (not an assertion), retrying once\n" "$num" "$name"
-            mv "$log_file" "$log_file.signal-death" 2>/dev/null || true
-            # The retry gets a freshly allocated directory rather than the crashed run's
-            # directory emptied and reused, so the crashed run's state is still there to
-            # look at and the retry cannot inherit half-written files from it.
-            retry_dir="$(allocate_isolated_test_dir "$dir_name")"
-            TEST_TMP_DIR="$retry_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$test_sh" >"$log_file" 2>&1
-            local_exit=$?
-        fi
 
         echo $((SECONDS - local_start)) > "$test_dir/test-duration.txt"
         exit $local_exit
@@ -816,7 +667,10 @@ build_shared_fixtures() {
 get_script_for_test() {
     local test_number="$1"
     local script
-    script=$(find smoke-tests-zig -maxdepth 2 -name "test.sh" | sort -V | grep -E "smoke-tests-zig/${test_number}-" | head -1)
+    # The directories are zero-padded (01-create-database), so the number is matched as a number:
+    # "1", "01" and "001" all name test 1.
+    local number=$((10#$test_number))
+    script=$(find smoke-tests-zig -maxdepth 2 -name "test.sh" | sort -V | grep -E "smoke-tests-zig/0*${number}-" | head -1)
     echo "$script"
 }
 
@@ -840,13 +694,6 @@ run_all_tests() {
     # Exported so the test scripts see it: smoke-tests-zig/lib/common.sh reads it to decide which command
     # each of psi, mk and bdb is.
     export USE_BINARY
-
-    # Reset environment
-    log_info "Resetting testing environment"
-    if [ -d "$TEST_TMP_DIR" ]; then
-        rm -rf "$TEST_TMP_DIR"
-        log_success "Removed existing test databases"
-    fi
 
     # Reset UUID counter
     local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
@@ -913,10 +760,6 @@ run_test() {
     case "$test_name" in
         "all")
             run_all_tests
-            return
-            ;;
-        "reset")
-            reset_environment
             return
             ;;
         "setup")
@@ -1012,7 +855,6 @@ run_multiple_commands() {
     # Always preserve database for inspection
     echo ""
     log_info "Database preserved for inspection at: $TEST_DB_DIR"
-    log_info "To clean up when done: $0 reset"
     
     exit 0
 }
@@ -1028,7 +870,7 @@ show_usage() {
     echo "  -b, --binary          - Run tests using the built executable. A full run does this anyway;"
     echo "                          this is how a single test does it"
     echo "  --source              - Run against the TypeScript sources instead of the built executables"
-    echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: ./test/tmp-zig)."
+    echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: a directory allocated for the run)."
     echo "  --sequential          - Run independent tests sequentially instead of in parallel"
     echo "  --parallel [N]        - Run independent tests in a rolling pool of N. The default comes"
     echo "                          from the core count and is $PARALLEL_N on this machine"
@@ -1044,9 +886,8 @@ show_usage() {
     echo "  all                 - Run all tests (default if no command given)"
     local test_count=$(get_test_count)
     echo "  to <number>         - Run tests 1 through <number> (1-$test_count)"
-    echo "  setup               - Build executable"
+    echo "  setup               - Build the executables, to check they build (removed when the run ends)"
     echo "  check-tools         - Check required media processing tools are available"
-    echo "  reset               - Clean up test artifacts and reset environment"
     echo "  help                - Show this help message"
     echo ""
     echo "Individual tests:"
@@ -1071,9 +912,8 @@ show_usage() {
     echo "  $0 to 5                      # Run tests 1-5"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
-    echo "  $0 setup                     # Build executable only"
+    echo "  $0 setup                     # Check the executables build"
     echo "  $0 check-tools               # Check tools only"
-    echo "  $0 reset                     # Clean up test artifacts"
     echo "  $0 create-database          # Run only database creation test"
     echo "  $0 3                         # Run test 3 (add single file)"
     echo "  $0 27                        # Run test 27 (v2-readonly) independently"
@@ -1149,9 +989,17 @@ main() {
         set -- "all"
     fi
     
-    # Show binary mode status if enabled
+    # Show binary mode status if enabled, and build the executables this run's tests are to use.
     if [ "$USE_BINARY" = "true" ]; then
         log_info "Using built executable for smoke tests"
+        build_cli_binaries
+    fi
+
+    # Every command runs the Zig CLI, built for this run into a directory of its own.
+    log_info "Building the Zig CLI for this run"
+    if ! build_test_zig_cli; then
+        log_error "Failed to build the Zig CLI"
+        exit 1
     fi
 
     # Handle "to X" command
@@ -1161,12 +1009,6 @@ main() {
         if [[ "$end_test" =~ ^[0-9]+$ ]] && [ "$end_test" -ge 1 ] && [ "$end_test" -le "$max_test" ]; then
             cd "$(dirname "$0")"
             log_info "Running tests 1 through $end_test"
-            log_info "Resetting testing environment"
-            if [ -d "$TEST_TMP_DIR" ]; then
-                rm -rf "$TEST_TMP_DIR"
-                log_success "Removed existing test databases"
-            fi
-
             local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
             if [ -f "$UUID_COUNTER_FILE" ]; then
                 rm -f "$UUID_COUNTER_FILE"
@@ -1210,12 +1052,6 @@ main() {
     if [ "$1" = "all" ]; then
         run_all_tests
         return
-    fi
-    
-    # Check if running reset command
-    if [ "$1" = "reset" ]; then
-        reset_environment
-        exit 0
     fi
     
     # Check if running setup command

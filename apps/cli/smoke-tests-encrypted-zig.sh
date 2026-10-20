@@ -25,6 +25,9 @@ NC='\033[0m'
 _ENCRYPTED_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
+# Building psi, mk and bdb into a directory of this run's own, for --binary.
+source "$_ENCRYPTED_SCRIPT_DIR/test-cli-binaries.sh"
+
 # The per-test timeout every suite in this repository shares, and the reporting that goes with it.
 source "$_ENCRYPTED_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
 
@@ -105,6 +108,9 @@ cleanup_and_show_summary() {
     fi
     echo "============================================================================"
     echo "============================================================================"
+
+    # The executables a --binary run built for itself, which nothing else uses.
+    remove_test_cli_binaries
 
     # Exit with the appropriate code
     exit $exit_code
@@ -222,54 +228,19 @@ test_failed() {
 # Get CLI command (binary or bun run)
 get_cli_command() {
     if [ "$USE_BINARY" = "true" ]; then
-        # Reuse same paths as main smoke-tests.sh
-        local platform
-        platform="$(uname | tr '[:upper:]' '[:lower:]')"
-        case "$platform" in
-            linux*)
-                echo "./bin/x64/linux/psi"
-                ;;
-            darwin*)
-                # Default to x64/mac; adjust if arm64 builds are available
-                echo "./bin/x64/mac/psi"
-                ;;
-            msys*|mingw*|cygwin*)
-                echo "./bin/x64/win/psi.exe"
-                ;;
-            *)
-                echo "./bin/x64/linux/psi"
-                ;;
-        esac
+        test_cli_binary_path psi
     else
         echo "bun run start --"
     fi
 }
 
-# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
+# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
+# for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
 get_zig_cli_command() {
-    if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
-        echo "../../zig-out/bin/psi.exe"
-    else
-        echo "../../zig-out/bin/psi"
-    fi
+    test_zig_cli_path
 }
 
 # Run a command and assert exit code is 0.
-#
-# A command that died in the Bun shutdown panic is run a second time, and only that one. Bun crashes
-# on exit after a `psi verify` that has already finished its work and printed
-# "Database verification passed - all files are intact", panicking with either
-# "Unexpected JS error: JSError" and SIGILL or a segmentation fault, and saying itself that it
-# indicates a bug in Bun rather than in the code it was running. It has failed this suite four times
-# now across three of its tests, most recently `encrypt-reencrypt` in Release run 34014186020, and it
-# is recorded as BUN-PANIC-ON-EXIT-AFTER-VERIFY in docs/flaky-tests-registry.md, where its cause is
-# still unestablished after two attempts at it. There is nothing in this repository to fix, so the
-# retry is what carries the suite past an upstream crash.
-#
-# It is deliberately narrow. The marker Bun prints when it panics is the only thing that triggers it,
-# so an ordinary non-zero exit still fails on the first attempt exactly as it did before, and the
-# retry says loudly that it happened rather than swallowing it. If the second attempt crashes the
-# same way, or fails for any other reason, that is the failure the test reports.
 #
 # Usage: invoke_command "description" "actual command"
 invoke_command() {
@@ -280,14 +251,6 @@ invoke_command() {
     local output
     output=$(eval "$command" 2>&1)
     local exit_code=$?
-
-    if [ $exit_code -ne 0 ] && [[ "$output" == *"oh no: Bun has crashed"* ]]; then
-        log_error "Bun crashed on exit (exit $exit_code) running: $command"
-        echo "$output"
-        log_info "Bun panicked rather than the command failing, so running it once more. See BUN-PANIC-ON-EXIT-AFTER-VERIFY in docs/flaky-tests-registry.md."
-        output=$(eval "$command" 2>&1)
-        exit_code=$?
-    fi
 
     if [ $exit_code -ne 0 ]; then
         log_error "Command failed (exit $exit_code): $command"
@@ -1808,7 +1771,7 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  -b, --binary        Use built CLI binary instead of bun run start --"
-    echo "  -t, --tmp-dir PATH  Override test tmp directory (default: ./test/tmp-encrypted)"
+    echo "  -t, --tmp-dir PATH  Override test tmp directory (default: a directory allocated for the run)"
     echo "  -h, --help          Show this help message"
     echo ""
     echo "Available tests:"
@@ -1857,6 +1820,14 @@ main() {
     done
 
     set -- "${positional[@]}"
+
+    # A --binary run builds the executables it uses into a directory of its own.
+    if [ "$USE_BINARY" = "true" ]; then
+        build_test_cli_binaries || exit 1
+    fi
+
+    # Every test runs the Zig CLI, built for this run into a directory of its own.
+    build_test_zig_cli || exit 1
 
     # Default command is "all"
     local command="${1:-all}"

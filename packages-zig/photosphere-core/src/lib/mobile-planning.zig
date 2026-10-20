@@ -14,6 +14,7 @@ const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy-core").task_queue;
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
+const background_work = @import("background-work.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -49,7 +50,8 @@ const ContextBridge = struct {
 
 //
 // Asks the shell for the connection type through the host request callback, by the method `networkConnectionType`, and gives its
-// answer, which is a JSON string such as "wifi". A platform with no such callback, and a shell that cannot answer, are errors with a
+// answer, which is a JSON string such as "wifi". On Windows, whose shell has no such callback, the core answers it (windows-host.zig).
+// Another platform with no such callback, and a shell that cannot answer, are errors with a
 // sentence the user can act on.
 //
 const ShellNetworkStatus = struct {
@@ -62,16 +64,8 @@ const ShellNetworkStatus = struct {
 
     fn networkConnectionTypeErased(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror![]const u8 {
         const self: *ShellNetworkStatus = @ptrCast(@alignCast(ptr));
-        const reply = self.context.hostRequest("networkConnectionType", "null") catch |err| {
-            if (err == error.HostCallbackMissing) {
-                return utils.errors.throwError("networkConnectionType is only available in the Photosphere app on a phone.", .{});
-            }
-            return err;
-        };
-        if (!reply.succeeded) {
-            return utils.errors.throwError("{s}", .{reply.text});
-        }
-        const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, reply.text, .{}) catch {
+        const answer = try background_work.askShell(self.context, "networkConnectionType", "null");
+        const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{}) catch {
             return utils.errors.throwError("The phone's answer to networkConnectionType could not be read.", .{});
         };
         if (parsed != .string) {

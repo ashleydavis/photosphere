@@ -28,6 +28,9 @@ NC='\033[0m'
 _LAN_SHARE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_LAN_SHARE_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
+# Building psi, mk and bdb into a directory of this run's own, for --binary.
+source "$_LAN_SHARE_SCRIPT_DIR/test-cli-binaries.sh"
+
 # Starting and stopping background processes: the tree walk this suite kills its receiver with.
 # Shared with the desktop and mobile suites so there is one implementation rather than a copy per
 # caller.
@@ -71,19 +74,10 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 TESTS_PASSED=0
 TESTS_FAILED=0
 
-# The Zig port of psi (apps/cli-zig), built with `zig build` in the repository root.
-case "$(uname -s)" in
-    CYGWIN*|MINGW*|MSYS*)
-        ZIG_CLI_CMD="../../zig-out/bin/psi.exe"
-        ;;
-    *)
-        ZIG_CLI_CMD="../../zig-out/bin/psi"
-        ;;
-esac
-if [ ! -x "$ZIG_CLI_CMD" ]; then
-    echo -e "${RED}[FAIL]${NC} The Zig CLI is not built: $ZIG_CLI_CMD (run `zig build` in the repository root)"
-    exit 1
-fi
+# The Zig port of psi (apps/cli-zig), built for this run into a directory of its own, never the
+# shared zig-out. The exit trap below removes it.
+build_test_zig_cli
+ZIG_CLI_CMD="$(test_zig_cli_path)"
 
 # The TypeScript CLI, for the interop tests (default: run from source; --binary for the built one).
 TS_CLI_CMD="bun run start --"
@@ -202,6 +196,9 @@ cleanup() {
         kill_process_tree "$job_pid"
     done
     wait 2>/dev/null || true
+
+    # After the kill, because Windows cannot delete an executable that is still running.
+    remove_test_cli_binaries
 }
 trap cleanup EXIT
 
@@ -330,6 +327,22 @@ start_receiver_with_code() {
     return 1
 }
 
+# Waits for the receiver to finish and exit, so its vault and config are complete before a test reads
+# them.
+#
+# A sender reports success as soon as the receiver has accepted the payload, and only then does the
+# receiver import it, so the sender exiting says nothing about whether the receiver's files have been
+# written yet. A fixed sleep after the sender exits was a race: it held while the TypeScript sender
+# took long enough to shut down, and lost against the Zig sender, which exits at once, paired with
+# the TypeScript receiver, which wrote its vault a second later. Waiting on the receiver's own pid
+# waits exactly as long as the import takes. A receiver that never exits is caught by the per-test
+# watchdog, which kills it and fails the test as timed out.
+# Usage: wait_for_receiver_exit
+wait_for_receiver_exit() {
+    wait "$RECEIVER_PID" 2>/dev/null || true
+    RECEIVER_PID=""
+}
+
 # Reset test dirs.
 reset_dirs() {
     rm -rf "$SENDER_VAULT_DIR" "$SENDER_CONFIG_DIR" "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
@@ -438,9 +451,6 @@ test_share_database() {
         PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
         $SENDER_CLI_CMD dbs send --name share-test-db --yes --code "$test_code" || true
 
-    # Give receiver a moment to process.
-    sleep 0.2
-
     if grep -q "sent successfully" "$sender_log" 2>/dev/null; then
         log_success "Database share: sender reports success"
     else
@@ -448,6 +458,8 @@ test_share_database() {
         cat "$sender_log" 2>/dev/null || true
         return 1
     fi
+
+    wait_for_receiver_exit
 
     local receiver_secrets
     receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
@@ -494,8 +506,6 @@ test_share_secret() {
         PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
         $SENDER_CLI_CMD secrets send --name "apikey01" --yes --code "$test_code" || true
 
-    sleep 0.2
-
     if grep -q "sent successfully" "$sender_log" 2>/dev/null; then
         log_success "Secret share: sender reports success"
     else
@@ -503,6 +513,8 @@ test_share_secret() {
         cat "$sender_log" 2>/dev/null || true
         return 1
     fi
+
+    wait_for_receiver_exit
 
     local receiver_secrets
     receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
@@ -586,8 +598,6 @@ test_share_database_no_secrets() {
         PHOTOSPHERE_CONFIG_DIR="$SENDER_CONFIG_DIR" \
         $SENDER_CLI_CMD dbs send --name plain-db --yes --code "$test_code" || true
 
-    sleep 0.2
-
     if grep -q "sent successfully" "$sender_log" 2>/dev/null; then
         log_success "No-secrets DB share: sender reports success"
     else
@@ -595,6 +605,8 @@ test_share_database_no_secrets() {
         cat "$sender_log" 2>/dev/null || true
         return 1
     fi
+
+    wait_for_receiver_exit
 
     local receiver_secrets
     receiver_secrets=$(count_vault_secrets "$RECEIVER_VAULT_DIR")
@@ -833,7 +845,9 @@ echo ""
 while [ $# -gt 0 ]; do
     case "$1" in
         -b|--binary)
-            TS_CLI_CMD="./bin/x64/linux/psi"
+            # Built into a directory of this run's own, never the package's shared bin/.
+            build_test_cli_binaries
+            TS_CLI_CMD="$(test_cli_binary_path psi)"
             shift
             ;;
         *)

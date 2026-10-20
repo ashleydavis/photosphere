@@ -754,7 +754,7 @@ export function initContext<TArgs extends any[], TReturn>(
         
         // Register cleanup handler for termination
         registerTerminationCallback(async (exitCode: number) => {
-            workerPool.shutdown();
+            await workerPool.shutdown();
             if (exitCode === 0) {
                 // Successful exit - clean up temp directory
                 try {

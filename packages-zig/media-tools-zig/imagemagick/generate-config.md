@@ -9,6 +9,8 @@ packages-zig/media-tools-zig/imagemagick/generate-config.sh <zig-target> [<libc-
 - `<zig-target>`: the target as Zig names it: `x86_64-linux-gnu`, `aarch64-linux-gnu`, `x86_64-linux-android`, `aarch64-linux-android`, `x86_64-windows-gnu`, `aarch64-windows-gnu`, `x86_64-windows-msvc`, `x86_64-macos`, `aarch64-macos`, `aarch64-ios`, `aarch64-ios-simulator` or `x86_64-ios-simulator`. The iOS targets need Apple's iOS SDK (found with `xcrun` and given to the compiler as its sysroot), so they can only be generated on a Mac with Xcode. `x86_64-windows-msvc` (what the Photosphere App's Windows shell is built for) needs the Windows SDK's headers, so it can only be generated on Windows with Visual Studio or its Build Tools.
 - `<libc-file>`: Zig's libc file for the Android NDK, which the Android targets need. `apps/photosphere/scripts/sync-android.sh` writes one for each ABI.
 
+It needs `pkg-config` on the PATH, because `configure` finds libpng, libwebp and zlib only through it. Git Bash has none, so on Windows install one first (MSYS2's `pkgconf`, for one). The script stops with an error when there is none, and when the header it made has any of the JPEG, PNG, WebP or zlib delegates off, since `configure` turns a delegate it cannot find off without an error.
+
 How it works:
 
 - It runs `vendor/imagemagick/configure` out of tree under `tmp/imagemagick-config/<target>/`, with `zig cc -target <target>` as the compiler, so the answers are the ones for that target's C library headers and not for the machine running the script.

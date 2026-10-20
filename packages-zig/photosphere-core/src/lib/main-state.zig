@@ -27,6 +27,7 @@ const file_logger = @import("file-logger.zig");
 const background_work = @import("background-work.zig");
 const mcp_bridge = @import("mcp-bridge.zig");
 const single_instance = @import("single-instance.zig");
+const windows_host = @import("windows-host.zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
@@ -175,6 +176,8 @@ pub const MainState = struct {
     prefetch_replica_state: std.atomic.Value(background_work.ReplicaState),
     // Makes the ids of the tasks the main process queues.
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
+    // What answers the background work's host requests on Windows, whose shell has no host request callback (see windows-host.zig).
+    windows_host: windows_host.WindowsHost,
     // Tells the timer thread to end.
     stopping: std.atomic.Value(bool),
     // The timer thread.
@@ -251,6 +254,7 @@ pub const MainState = struct {
             .first_sync_pass = false,
             .prefetch_replica_state = .init(.unknown),
             .uuid_generator = .{},
+            .windows_host = windows_host.WindowsHost.init(core.io()),
             .stopping = .init(false),
             .timer_thread = null,
         };
@@ -441,6 +445,7 @@ pub const MainState = struct {
         self.freeOwned(&self.auto_import_settings_json);
         self.freeOwned(&self.asset_server_error);
         self.mcp_bridge.deinit();
+        self.windows_host.deinit();
         if (self.single_instance) |*instance| {
             instance.release(self.io);
         }

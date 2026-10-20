@@ -4,8 +4,9 @@
 //
 // Each is a task type, because the phone's shell shows native interface (a permission prompt, a share sheet) and waits for the user, and
 // the thread that handles the page's messages must not wait for that. Each asks the shell through the core's one host request callback,
-// by the method's name, and passes the shell's answer to the page unchanged. A platform that has no such callback (every desktop) answers
-// with an error that says so.
+// by the method's name, and passes the shell's answer to the page unchanged. A platform that has no such callback answers with an error
+// that says so, except that on Windows, whose shell has none, the core answers startBackgroundImport's notification permission itself
+// (windows-host.zig).
 //
 // A test can stage the outcome of the share sheet: exportFile and exportFiles pass a "testOutcome" ("shared" or "cancelled") on to the
 // shell, which then skips its sheet and completes the export as that outcome. The request is passed on unchanged apart from that.

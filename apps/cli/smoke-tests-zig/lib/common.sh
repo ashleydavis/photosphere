@@ -9,6 +9,16 @@ SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 # Absolute path to the repository root, for reaching the helper scripts under scripts/.
 REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
 
+# The compiled psi, mk and bdb the runner built for this run, when it runs with them. A run that says
+# it uses them but names none stops here rather than running whatever an empty path resolves to.
+source "$REPO_ROOT/apps/cli/test-cli-binaries.sh"
+if [ "${USE_BINARY:-false}" = "true" ]; then
+    test_cli_binary_path psi > /dev/null || exit 1
+fi
+
+# The Zig CLI every test here runs, which the runner built for this run.
+test_zig_cli_path > /dev/null || exit 1
+
 # LAN pairing codes, allocated so a test cannot take one another run on the machine is using.
 source "$REPO_ROOT/scripts/lib/test-lib.sh"
 
@@ -22,8 +32,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 # Where this test keeps its fixtures, vault, config and scratch space. The orchestrator allocates a
 # directory per test and passes it in; a test run straight from the command line inherits whatever is
-# set, and falls back to the suite's own directory.
-export TEST_TMP_DIR="${TEST_TMP_DIR:-./test/tmp}"
+# set, and otherwise gets a directory allocated for it, never one shared with another run.
+export TEST_TMP_DIR="${TEST_TMP_DIR:-$(photosphere_test_temp_dir cli-test)}"
 
 # The same directory again under Photosphere's own temp-directory setting, so the temporary files
 # every psi process this test starts writes (the log directory among them) land inside this test's
@@ -53,26 +63,7 @@ get_test_dir() {
 # Get CLI command: default is from code (bun run start --); use --binary for built executable
 get_cli_command() {
     if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "./bin/x64/linux/psi"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "./bin/arm64/mac/psi"
-                else
-                    echo "./bin/x64/mac/psi"
-                fi
-                ;;
-            "win")
-                echo "./bin/x64/win/psi.exe"
-                ;;
-            *)
-                echo "./bin/x64/linux/psi"  # Default to linux
-                ;;
-        esac
+        test_cli_binary_path psi
     else
         # --silent keeps bun from echoing the script line into the output, so what the TypeScript CLI
         # prints can be compared with what the Zig CLI prints when the tests run from the sources.
@@ -80,38 +71,16 @@ get_cli_command() {
     fi
 }
 
-# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
+# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
+# for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
 get_zig_cli_command() {
-    if [ "$(detect_platform)" = "win" ]; then
-        echo "../../zig-out/bin/psi.exe"
-    else
-        echo "../../zig-out/bin/psi"
-    fi
+    test_zig_cli_path
 }
 
 # Get mk command: default is from code; use --binary for built executable
 get_mk_command() {
     if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "../mk-cli/bin/x64/linux/mk"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "../mk-cli/bin/arm64/mac/mk"
-                else
-                    echo "../mk-cli/bin/x64/mac/mk"
-                fi
-                ;;
-            "win")
-                echo "../mk-cli/bin/x64/win/mk.exe"
-                ;;
-            *)
-                echo "../mk-cli/bin/x64/linux/mk"  # Default to linux
-                ;;
-        esac
+        test_cli_binary_path mk
     else
         echo "bun run ../mk-cli/src/index.ts --"
     fi
@@ -120,26 +89,7 @@ get_mk_command() {
 # Get bdb command: default is from code; use --binary for built executable
 get_bdb_command() {
     if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "../bdb-cli/bin/x64/linux/bdb"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "../bdb-cli/bin/arm64/mac/bdb"
-                else
-                    echo "../bdb-cli/bin/x64/mac/bdb"
-                fi
-                ;;
-            "win")
-                echo "../bdb-cli/bin/x64/win/bdb.exe"
-                ;;
-            *)
-                echo "../bdb-cli/bin/x64/linux/bdb"  # Default to linux
-                ;;
-        esac
+        test_cli_binary_path bdb
     else
         echo "bun run ../bdb-cli/src/index.ts"
     fi

@@ -139,6 +139,11 @@ fi
 mkdir -p "$TMP_DIR"
 TMP_DIR="$(cd "$TMP_DIR" && native_pwd)"
 
+# The fixtures a scenario hands the app (a database to open, photos to drop) are paths in the repository, so the repository's path is
+# converted to the native form too. Git Bash converts a path that is a whole argument of a native program by itself, but not one inside
+# a JSON message, which is how most of them reach the app.
+REPO_DIR="$(cd "$REPO_DIR" && native_pwd)"
+
 #
 # Sends one command line on the test control connection and prints the answer line. Every call opens a connection of its own, so
 # several instances can be driven from one scenario by naming the port of each. A signal that reaches this script while bash connects,

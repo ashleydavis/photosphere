@@ -19,4 +19,4 @@ The shell is built by the `build.zig` at the root of the repository. `sync:windo
 
 ## Icon and second copies
 
-The executable carries `icons/photosphere.ico` as a resource (`photosphere.rc`), and the shell's window class loads it as `icon_resource`. The shell does the `focus-window` action the core asks for when a second copy of the app was started by restoring the window if it is minimised and bringing it to the front, and flashes the taskbar button when Windows refuses the foreground.
+The executable carries `icons/photosphere.ico` as a resource (`photosphere.rc`), and the shell's window class loads it as `icon_resource`. The resource number is 2, not 1: Ziggy's shell casts it to a wide string pointer, which must be 2-aligned, so an odd number panics with "incorrect alignment" at startup. The shell does the `focus-window` action the core asks for when a second copy of the app was started by restoring the window if it is minimised and bringing it to the front, and flashes the taskbar button when Windows refuses the foreground.

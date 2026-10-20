@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
@@ -159,4 +160,23 @@ test "requests with a field missing are error replies that name the field" {
     defer std.testing.allocator.free(delete_reply);
     try std.testing.expectEqualStrings("secureStoreDelete needs \"key\".", delete_reply);
     try std.testing.expect(app.last_host_method == null);
+}
+
+test "on Windows, whose shell has no host request callback, the core starts and stops the background work itself" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    support.removeHostRequest(&app);
+    if (builtin.os.tag != .windows) {
+        const refused = try app.requestError("startBackgroundImport", "null");
+        defer std.testing.allocator.free(refused);
+        try std.testing.expectEqualStrings("requestNotificationPermission is only available in the Photosphere app on a phone.", refused);
+        return;
+    }
+    const started = try app.requestOk("startBackgroundImport", "null");
+    defer std.testing.allocator.free(started);
+    try std.testing.expectEqualStrings("null", started);
+    const stopped = try app.requestOk("stopBackgroundImport", "null");
+    defer std.testing.allocator.free(stopped);
+    try std.testing.expectEqualStrings("null", stopped);
 }

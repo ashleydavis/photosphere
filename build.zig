@@ -168,15 +168,11 @@ const lan_share_openssl_header =
 const stand_in_names = [_][]const u8{ "which", "secret-tool", "powershell", "photosphere-stand-in-output" };
 
 //
-// The stand-in tools the test programs run in place of the real ones: the directory they are installed to and the step that
-// installs them.
+// The stand-in tools the test programs run in place of the real ones: the directory of the build cache they are copied to.
 //
 const IStandIns = struct {
-    // The directory the stand-ins are installed to, put first on the PATH of the test programs.
-    directory: []const u8,
-
-    // The step that builds and installs the stand-ins.
-    install_step: *std.Build.Step,
+    // The directory the stand-ins are copied to, put first on the PATH of the test programs.
+    directory: std.Build.LazyPath,
 };
 
 //
@@ -593,10 +589,11 @@ fn addStorageIntegrationTests(
 }
 
 //
-// Builds the stand-in tool and installs a copy of it under each name in stand_in_names to a directory of the install prefix
-// (installed, rather than left in the cache, because the PATH of a test program is set before anything is built). The
-// directory, one for each target, holds nothing but the stand-ins of that target: a PATH search would also find copies built for
-// another target (wine runs a Linux program it finds that way, with no handle to wait on).
+// Builds the stand-in tool and copies it under each name in stand_in_names into a directory of the build cache. The directory,
+// one for each target, holds nothing but the stand-ins of that target: a PATH search would also find copies built for another
+// target (wine runs a Linux program it finds that way, with no handle to wait on). It is a cache directory, named by its
+// content, rather than a directory of the install prefix: zig-out is one path for every run in the checkout, and on Windows a
+// stand-in one run is running cannot be replaced by another run's install.
 //
 fn addStandIns(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) IStandIns {
     const stand_in = b.addExecutable(.{
@@ -607,35 +604,74 @@ fn addStandIns(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bu
             .optimize = optimize,
         }),
     });
-    const install_step = b.step("install-vault-stand-ins", "Install the stand-in tools the vault tests run");
-    const install_dir: std.Build.InstallDir = .{
-        .custom = b.fmt("vault-test-stand-ins/{s}", .{target.result.zigTriple(b.allocator) catch @panic("OOM")}),
-    };
+    const stand_in_files = b.addWriteFiles();
     for (stand_in_names) |stand_in_name| {
-        const file_name = b.fmt("{s}{s}", .{ stand_in_name, target.result.exeFileExt() });
-        install_step.dependOn(&b.addInstallFileWithDir(stand_in.getEmittedBin(), install_dir, file_name).step);
+        _ = stand_in_files.addCopyFile(stand_in.getEmittedBin(), b.fmt("{s}{s}", .{ stand_in_name, target.result.exeFileExt() }));
     }
     return .{
-        .directory = b.pathResolve(&.{ b.graph.cache.cwd, b.getInstallPath(install_dir, "") }),
-        .install_step = install_step,
+        .directory = stand_in_files.getDirectory(),
     };
 }
 
 //
-// Puts the stand-in tools first on the PATH of a test program, and makes it wait for them to be installed. Under wine a Windows
+// A step that puts the stand-ins' directory first on the PATH of a test program once that directory exists. The PATH of a Run
+// step is otherwise fixed before anything is built, when the path of a cache directory is not yet known, so this step, which the
+// Run step depends on, writes it into the Run step's environment when it runs, just before the test program starts.
+//
+const IStandInsPathStep = struct {
+    // The step itself.
+    step: std.Build.Step,
+
+    // The Run step of the test program whose PATH this sets.
+    run: *std.Build.Step.Run,
+
+    // The directory holding the stand-ins.
+    directory: std.Build.LazyPath,
+
+    // PATH, or WINEPATH when a Windows test program runs under wine (which searches WINEPATH before the PATH of its prefix).
+    path_variable: []const u8,
+
+    // The separator of the entries of that variable.
+    path_delimiter: u8,
+
+    //
+    // Prepends the stand-ins' directory, made absolute, to the variable in the Run step's environment.
+    //
+    fn make(step: *std.Build.Step, options: std.Build.Step.MakeOptions) anyerror!void {
+        _ = options;
+        const self: *IStandInsPathStep = @fieldParentPtr("step", step);
+        const b = step.owner;
+        const directory = b.pathResolve(&.{ b.graph.cache.cwd, self.directory.getPath2(b, step) });
+        const environ_map = self.run.getEnvMap();
+        const search_path = if (environ_map.get(self.path_variable)) |previous_path|
+            b.fmt("{s}{c}{s}", .{ directory, self.path_delimiter, previous_path })
+        else
+            directory;
+        self.run.setEnvironmentVariable(self.path_variable, search_path);
+    }
+};
+
+//
+// Puts the stand-in tools first on the PATH of a test program, and makes it wait for them to be built. Under wine a Windows
 // program searches WINEPATH (before the PATH of the wine prefix) instead of PATH.
 //
 fn addStandInsToPath(b: *std.Build, run: *std.Build.Step.Run, target: std.Build.ResolvedTarget, stand_ins: IStandIns) void {
     const use_wine = b.enable_wine and b.graph.host.result.os.tag != .windows and target.result.os.tag == .windows;
-    const path_variable = if (use_wine) "WINEPATH" else "PATH";
-    const path_delimiter: u8 = if (use_wine or target.result.os.tag == .windows) ';' else ':';
-    const environ_map = run.getEnvMap();
-    const search_path = if (environ_map.get(path_variable)) |previous_path|
-        b.fmt("{s}{c}{s}", .{ stand_ins.directory, path_delimiter, previous_path })
-    else
-        stand_ins.directory;
-    run.setEnvironmentVariable(path_variable, search_path);
-    run.step.dependOn(stand_ins.install_step);
+    const path_step = b.allocator.create(IStandInsPathStep) catch @panic("OOM");
+    path_step.* = .{
+        .step = std.Build.Step.init(.{
+            .id = .custom,
+            .name = "put the vault stand-ins on the PATH",
+            .owner = b,
+            .makeFn = IStandInsPathStep.make,
+        }),
+        .run = run,
+        .directory = stand_ins.directory,
+        .path_variable = if (use_wine) "WINEPATH" else "PATH",
+        .path_delimiter = if (use_wine or target.result.os.tag == .windows) ';' else ':',
+    };
+    stand_ins.directory.addStepDependencies(&path_step.step);
+    run.step.dependOn(&path_step.step);
 }
 
 //
@@ -687,9 +723,9 @@ const cli_dependency_names = [_][]const u8{
 };
 
 //
-// Builds the CLI (`psi`, installed to zig-out/bin) and registers its tests. The tests run psi and a test driver (a program
-// that runs CLI functions against the real process streams, installed to zig-out/test-bin, which is not shipped) from
-// apps/cli-zig, and need both installed first.
+// Builds the CLI (`psi`, installed to zig-out/bin) and registers its tests. The tests run from apps/cli-zig, and run psi and
+// the opener recorder (a program the `psi bug` tests stand in for PowerShell, which is not shipped) as this build compiled
+// them, from the build cache, never from zig-out.
 //
 fn addCli(
     b: *std.Build,
@@ -755,10 +791,9 @@ fn addCli(
     });
     const run_test = b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("apps/cli-zig"));
-    run_test.step.dependOn(b.getInstallStep());
 
-    // The program the Windows `psi bug` tests put where `psi bug` looks for PowerShell, so that no browser is opened (installed to
-    // zig-out/test-bin, not zig-out/bin: it is not shipped). It imports nothing from the CLI and runs no CLI code.
+    // The program the Windows `psi bug` tests put where `psi bug` looks for PowerShell, so that no browser is opened. It is not
+    // shipped, and imports nothing from the CLI and runs no CLI code.
     const opener_recorder = b.addExecutable(.{
         .name = "opener-recorder",
         .root_module = b.createModule(.{
@@ -767,14 +802,17 @@ fn addCli(
             .optimize = optimize,
         }),
     });
-    const install_opener_recorder = b.addInstallArtifact(opener_recorder, .{
-        .dest_dir = .{
-            .override = .{
-                .custom = "test-bin",
-            },
-        },
-    });
-    run_test.step.dependOn(&install_opener_recorder.step);
+
+    // The tests are handed the paths of the psi and the opener recorder this build compiled, in the build cache, rather than
+    // reading them from zig-out: a path every build installs to is shared by every run in the checkout, and on Windows an
+    // executable one run is running cannot be replaced by another run's install.
+    // The paths come out relative to the directory the build runs from, and the tests run from apps/cli-zig, so that directory
+    // goes with them for the tests to resolve them against.
+    const cli_test_options = b.addOptions();
+    cli_test_options.addOption([]const u8, "build_cwd", b.graph.cache.cwd);
+    cli_test_options.addOptionPath("psi_path", psi.getEmittedBin());
+    cli_test_options.addOptionPath("opener_recorder_path", opener_recorder.getEmittedBin());
+    test_module.addOptions("cli-test-options", cli_test_options);
     test_step.dependOn(&run_test.step);
 }
 

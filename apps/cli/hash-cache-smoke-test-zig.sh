@@ -59,6 +59,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Per-run temporary directory, the same allocator every other suite in this repository uses.
 source "$SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
+# Building the Zig CLI into a directory of this run's own.
+source "$SCRIPT_DIR/test-cli-binaries.sh"
+
 # Everything this run writes lives under a directory allocated for this run alone. It used to be a
 # fixed path under test/tmp, which broke two ways at once: that tree belongs to smoke-tests.sh, which
 # deletes all of it at the start and end of its own run, and a fixed path collides with a second copy
@@ -95,7 +98,8 @@ stop_writers() {
     done
     WRITER_PIDS=()
 }
-trap stop_writers EXIT
+# On exit the Zig CLI this run built goes too, after the writers running it.
+trap 'stop_writers; remove_test_cli_binaries' EXIT
 trap 'stop_writers; exit 130' INT
 trap 'stop_writers; exit 143' TERM
 
@@ -119,28 +123,23 @@ EXPECTED_ENTRIES=$((NUM_PROCESSES * ENTRIES_PER_PROCESS))
 #
 # Every psi command here runs in the Zig CLI.
 psi_cmd() {
+    # Every step of this suite is a psi command, so starting one is the progress the suite watchdog
+    # waits for.
+    suite_progress
     "$ZIG_CLI" --quiet "$@"
 }
 
 # Runs a psi command in the TypeScript CLI, quietly, for the interop checks that read back what the
 # Zig CLI wrote.
 ts_psi_cmd() {
+    suite_progress
     (cd "$SCRIPT_DIR" && bun run --silent start -- --quiet "$@")
 }
 
-# The Zig port of psi (apps/cli-zig), built with `zig build` in the repository root.
-case "$(uname -s)" in
-    CYGWIN*|MINGW*|MSYS*)
-        ZIG_CLI="$SCRIPT_DIR/../../zig-out/bin/psi.exe"
-        ;;
-    *)
-        ZIG_CLI="$SCRIPT_DIR/../../zig-out/bin/psi"
-        ;;
-esac
-if [ ! -x "$ZIG_CLI" ]; then
-    echo -e "${RED}FAIL: the Zig CLI is not built: $ZIG_CLI (run `zig build` in the repository root)${NC}"
-    exit 1
-fi
+# The Zig port of psi (apps/cli-zig), built for this run into a directory of its own, never the
+# shared zig-out.
+build_test_zig_cli || exit 1
+ZIG_CLI="$(test_zig_cli_path)"
 
 echo -e "${BLUE}=== Hash Cache Concurrency Smoke Test (Zig) ===${NC}"
 echo "Writer processes:    $NUM_PROCESSES"

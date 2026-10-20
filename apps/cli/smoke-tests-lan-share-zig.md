@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- The Zig CLI, built with `zig build` in the repository root (the script fails at once if `../../zig-out/bin/psi` is missing).
+- `zig` on the PATH (`mise install`). The script builds the Zig CLI itself, with `zig build --prefix` into a directory of the run's own rather than the shared `zig-out`, and removes it when the run ends (see `test-cli-binaries.md`).
 - `bun install` from the repo root, for the TypeScript CLI in the interop tests and the databases config helper.
 - `jq`, `curl` and `openssl`, which the TypeScript suite also uses.
 
@@ -20,7 +20,7 @@ bun run test:cli:lan-share:zig
 
 | Option | Description |
 |--------|-------------|
-| `-b`, `--binary` | Run the TypeScript side of the interop tests from the compiled binary (`./bin/x64/linux/psi`) instead of `bun run start` |
+| `-b`, `--binary` | Run the TypeScript side of the interop tests from a compiled binary instead of `bun run start`. The binary is built for this run into a directory of its own (see `test-cli-binaries.md`) and removed when the run ends |
 
 ## Tests
 

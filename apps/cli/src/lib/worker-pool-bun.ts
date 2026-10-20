@@ -98,6 +98,14 @@ export interface IWorkerCancelTasksMessage {
 }
 
 //
+// Message sent from main thread to worker to ask the worker to end its own thread.
+//
+export interface IWorkerShutdownMessage {
+    // Discriminant for the message union; always "shutdown".
+    type: "shutdown";
+}
+
+//
 // Worker response message types
 //
 export interface IWorkerReadyMessage {
@@ -209,6 +217,11 @@ export class WorkerPoolBun implements IQueueBackend {
 
     // Callbacks registered per source via onTasksCancelled.
     private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
+
+    // One promise per worker thread that has been started and has not yet closed, resolved by the
+    // thread's "close" event. Holds the threads that were terminated and replaced as well as the ones
+    // in `workers`, because a terminated thread is still tearing down until it closes.
+    private unclosedWorkers: Set<Promise<void>> = new Set();
 
     //
     // Creates a new task queue with the specified number of workers.
@@ -404,6 +417,24 @@ export class WorkerPoolBun implements IQueueBackend {
     }
 
     //
+    // Starts a worker thread and records it as unclosed until its "close" event, so shutdown can wait
+    // for it to finish tearing down.
+    //
+    private startWorker(env: any): Worker {
+        const worker = new Worker("./worker.ts", { env });
+        const closed = new Promise<void>(resolve => {
+            worker.addEventListener("close", () => {
+                resolve();
+            });
+        });
+        this.unclosedWorkers.add(closed);
+        closed.then(() => {
+            this.unclosedWorkers.delete(closed);
+        });
+        return worker;
+    }
+
+    //
     // Creates a single worker and adds it to the pool.
     // Returns the worker state.
     //
@@ -417,7 +448,7 @@ export class WorkerPoolBun implements IQueueBackend {
         };
         env.WORKER_OPTIONS = JSON.stringify(workerOptions);
         
-        const worker = new Worker("./worker.ts", { env });
+        const worker = this.startWorker(env);
         const workerState: IWorkerState = {
             worker,
             workerId,
@@ -470,7 +501,7 @@ export class WorkerPoolBun implements IQueueBackend {
         };
         env.WORKER_OPTIONS = JSON.stringify(workerOptions);
         
-        const worker = new Worker("./worker.ts", { env });
+        const worker = this.startWorker(env);
         const newWorkerState: IWorkerState = {
             worker,
             workerId,
@@ -794,22 +825,48 @@ export class WorkerPoolBun implements IQueueBackend {
     }
 
     //
-    // Shuts down all the workers.
+    // Shuts down all the workers and resolves once every worker thread this pool started has closed.
     //
-    shutdown(): void {
+    // Each worker is asked to end its own thread rather than being stopped with Worker.terminate. On
+    // Windows, Bun 1.3.14 segfaults inside its own runtime (always at the same offset in the
+    // executable) when worker threads that have run tasks are torn down by terminate: the compiled psi
+    // crashed after `psi verify` had printed its result, about one run in a hundred when process.exit
+    // followed terminate at once, and about one run in five when it waited for the terminated threads
+    // to close. A worker that exits itself takes Bun's ordinary exit path and did not crash once in 360
+    // runs. The terminate calls that remain are for a worker that is stuck or has already failed.
+    //
+    // Waiting for every thread to close before returning means process.exit never runs with a worker
+    // thread still alive, which is the state the crash report described (workers_spawned greater than
+    // workers_terminated). A worker that never closes is a bug, so the wait is bounded and fails loudly
+    // rather than hanging the command.
+    //
+    async shutdown(): Promise<void> {
         // Clear all timeouts first to prevent any timeout callbacks from running
         for (const timeout of this.taskTimeouts.values()) {
             clearTimeout(timeout);
         }
         this.taskTimeouts.clear();
 
+        const shutdownMessage: IWorkerShutdownMessage = {
+            type: "shutdown",
+        };
         for (const workerState of this.workers) {
-            try {
-                workerState.worker.terminate();
-            } catch (e) {
-                // Ignore termination errors
-            }
+            workerState.worker.postMessage(shutdownMessage);
         }
         this.workers = [];
+
+        const unclosedCount = this.unclosedWorkers.size;
+        let closeTimeout: NodeJS.Timeout | undefined;
+        const timedOut = new Promise<never>((resolve, reject) => {
+            closeTimeout = setTimeout(() => {
+                reject(new Error(`${this.unclosedWorkers.size} of ${unclosedCount} worker threads had not closed 60 seconds after being asked to shut down.`));
+            }, 60_000);
+        });
+        try {
+            await Promise.race([Promise.all(this.unclosedWorkers), timedOut]);
+        }
+        finally {
+            clearTimeout(closeTimeout);
+        }
     }
 }

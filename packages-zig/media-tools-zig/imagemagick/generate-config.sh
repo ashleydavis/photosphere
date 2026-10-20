@@ -114,6 +114,13 @@ case "$ZIG_TARGET" in
         ;;
 esac
 
+# configure finds libpng, libwebp and zlib only through pkg-config, and without one it leaves their delegates off and says nothing,
+# which builds an ImageMagick that cannot read a PNG. Git Bash has no pkg-config, so it is checked for here.
+if ! command -v pkg-config >/dev/null 2>&1; then
+    echo "ERROR: pkg-config is not on the PATH. configure finds libpng, libwebp and zlib through it, and would turn their delegates off without it." >&2
+    exit 1
+fi
+
 mkdir -p "$WORK_DIR/bin" "$WORK_DIR/build" "$WORK_DIR/jpeg-include" "$WORK_DIR/no-pkgconfig"
 
 # Configure takes the compiler as one program, so Zig's is wrapped.
@@ -177,6 +184,14 @@ CC="$WORK_DIR/bin/cc" AR="$WORK_DIR/bin/ar" RANLIB="$WORK_DIR/bin/ranlib" \
     echo "ERROR: config.status failed. See $WORK_DIR/build/configure.log" >&2
     exit 1
 }
+
+# A delegate configure could not find is left off without an error, so each one the build links is checked for in the result.
+for delegate in JPEG PNG WEBP ZLIB; do
+    if ! grep -q "^#define MAGICKCORE_${delegate}_DELEGATE 1$" MagickCore/magick-baseconfig.h; then
+        echo "ERROR: configure left the $delegate delegate off. See $WORK_DIR/build/configure.log" >&2
+        exit 1
+    fi
+done
 
 mkdir -p "$OUTPUT_DIR/MagickCore"
 cp MagickCore/magick-baseconfig.h MagickCore/version.h "$OUTPUT_DIR/MagickCore/"

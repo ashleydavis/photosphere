@@ -160,6 +160,11 @@ function initWorker(): void {
             }
             workerBackend.cancelTasks(message.source);
         }
+        else if (message.type === "shutdown") {
+            // Ends this worker's thread, not the process. The pool asks for this instead of calling
+            // Worker.terminate, which crashes Bun on Windows; see WorkerPoolBun.shutdown.
+            process.exit(0);
+        }
         else if (message.type === "task-completed") {
             const taskCompletedMessage = message as IWorkerTaskCompletedMessage;
             await workerBackend.notifyTaskCompleted(taskCompletedMessage.result);

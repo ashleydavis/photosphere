@@ -53,11 +53,13 @@ case "$PLATFORM" in
         ;;
     *)
         # Compared with cmp against a file, not as a shell string, because command substitution strips trailing newlines and the PEM's
-        # trailing newline is exactly what this checks survived the round trip. -b keeps jq's output in binary mode: on Windows jq
-        # writes stdout in text mode by default, which would turn each newline into CRLF and fail the comparison even when the value
-        # round-tripped perfectly. The flag does nothing on Linux and macOS.
-        jq -jb --arg name enc-key-1 '.[$name].value' "$TMP_DIR/vault/vault.json" > "$TMP_DIR/saved.pem"
-        if ! cmp -s "$TMP_DIR/raw.pem" "$TMP_DIR/saved.pem"; then
+        # trailing newline is exactly what this checks survived the round trip. The saved value and the raw PEM are both compared as
+        # JSON strings, as jq encodes them, so every newline and carriage return in either is an escape sequence and the comparison is
+        # byte-exact on every platform. Writing the raw value instead is not: on Windows jq writes stdout in text mode, turning each
+        # newline into CRLF, and the -b flag that stops that only exists from jq 1.7.
+        jq -n --rawfile value "$TMP_DIR/raw.pem" '$value' > "$TMP_DIR/raw.json"
+        jq --arg name enc-key-1 '.[$name].value' "$TMP_DIR/vault/vault.json" > "$TMP_DIR/saved.json"
+        if ! cmp -s "$TMP_DIR/raw.json" "$TMP_DIR/saved.json"; then
             log_error "Vault value differs from the raw PEM"
             exit 1
         fi

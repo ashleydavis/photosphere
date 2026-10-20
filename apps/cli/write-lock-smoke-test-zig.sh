@@ -22,6 +22,9 @@ NC='\033[0m' # No Color
 _WRITE_LOCK_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_WRITE_LOCK_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
 
+# Building psi, mk and bdb into a directory of this run's own, for --binary.
+source "$_WRITE_LOCK_SCRIPT_DIR/test-cli-binaries.sh"
+
 # This suite is one script rather than a set of separate tests, so the script itself is what gets
 # held to the shared timeout. Without it a wedged run here had no limit at all and kept going until
 # something above it gave up, which in CI is the job timeout, and a job killed that way has its log
@@ -130,26 +133,7 @@ detect_architecture() {
 # Get CLI command: default from code; use --binary for built executable
 get_cli_command() {
     if [ "$USE_BINARY" = "true" ]; then
-        local platform=$(detect_platform)
-        local arch=$(detect_architecture)
-        case "$platform" in
-            "linux")
-                echo "./bin/x64/linux/psi"
-                ;;
-            "mac")
-                if [ "$arch" = "arm64" ]; then
-                    echo "./bin/arm64/mac/psi"
-                else
-                    echo "./bin/x64/mac/psi"
-                fi
-                ;;
-            "win")
-                echo "./bin/x64/win/psi.exe"
-                ;;
-            *)
-                echo "./bin/x64/linux/psi"  # Default to linux
-                ;;
-        esac
+        test_cli_binary_path psi
     else
         echo "bun run start --"
     fi
@@ -171,13 +155,10 @@ ts_verify() {
     record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
 }
 
-# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands.
+# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
+# for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
 get_zig_cli_command() {
-    if [ "$(detect_platform)" = "win" ]; then
-        echo "../../zig-out/bin/psi.exe"
-    else
-        echo "../../zig-out/bin/psi"
-    fi
+    test_zig_cli_path
 }
 
 # Get database directory based on cloud mode
@@ -194,6 +175,9 @@ get_test_db_dir() {
 # Helper functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
+    # Every step the suite takes logs a line, so a line logged is the progress the suite watchdog waits
+    # for.
+    suite_progress
 }
 
 log_success() {
@@ -527,7 +511,23 @@ cleanup_processes() {
 
 # Set up cleanup trap
 background_pids=()
-trap cleanup_processes EXIT INT TERM
+# Each of these ends the script once the workers are stopped. A trap that only cleaned up let the
+# script carry on after the suite watchdog had stopped it, so a timed-out run went on verifying and
+# could still report a pass.
+trap 'cleanup_processes; exit 130' INT
+trap 'cleanup_processes; exit 143' TERM
+
+# On exit the executables a --binary run built for itself go too, after the processes running them.
+trap 'cleanup_processes; remove_test_cli_binaries' EXIT
+
+# A --binary run builds the executables it uses into a directory of its own, never the package's
+# shared bin/. Built once the trap that removes them is in place.
+if [ "$USE_BINARY" = "true" ]; then
+    build_test_cli_binaries || exit 1
+fi
+
+# The Zig CLI this suite tests, built for this run into a directory of its own, never the shared zig-out.
+build_test_zig_cli || exit 1
 
 # Start parallel processes
 start_parallel_processes() {

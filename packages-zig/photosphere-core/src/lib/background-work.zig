@@ -658,7 +658,7 @@ const TaskPassHost = struct {
 pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
     const reply = context.hostRequest(method, request_json) catch |err| {
         if (err == error.HostCallbackMissing) {
-            return utils.errors.throwError("{s} is only available in the Photosphere app on a phone.", .{method});
+            return try answerWithoutShell(context, method, request_json);
         }
         return err;
     };
@@ -666,6 +666,19 @@ pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const
         return utils.errors.throwError("{s}", .{reply.text});
     }
     return reply.text;
+}
+
+//
+// Answers a host request when the shell has no host request callback. Ziggy's Windows shell has none, so on Windows the core answers the
+// requests a desktop can itself (windows-host.zig). Anywhere else, and for a request only a phone can answer, it is an error that says so.
+//
+pub fn answerWithoutShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
+    if (builtin.os.tag == .windows) {
+        if (try main_state.fromContext(context).windows_host.answer(context.arena, method, request_json)) |answer| {
+            return answer;
+        }
+    }
+    return utils.errors.throwError("{s} is only available in the Photosphere app on a phone.", .{method});
 }
 
 //
