@@ -355,6 +355,75 @@ jobs:
         shell: bash
         run: ./hash-cache-smoke-test-zig.sh
 
+  app-smoke-tests:
+    # The Photosphere App's smoke tests on macOS x64, in a real window on the runner's own display. The Zig build links the
+    # third-party libraries the build jobs built. This workflow had no app smoke tests when the macOS workflow was split by
+    # architecture, so it released an Intel app that had never been run.
+    timeout-minutes: 75
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+      - name: Install media processing tools (macOS)
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-x64
+          build-args: -Dtarget=x86_64-macos.11.0
+
+      # run-desktop.sh builds the page and the app's shell itself, through build-macos.sh.
+      - name: Run the Photosphere App smoke tests
+        timeout-minutes: 60
+        shell: bash
+        run: bun run test:ziggy
+
   package-release:
     # The Photosphere App packaged for macOS x64, unsigned, by the same package script a developer runs. The version
     # comes from the release tag: macos-x64-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Zig build
@@ -434,7 +503,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-macos-x64, cli-smoke-tests, package-release]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-macos-x64, cli-smoke-tests, app-smoke-tests, package-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
