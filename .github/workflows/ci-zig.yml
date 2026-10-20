@@ -93,9 +93,6 @@ jobs:
         uses: ./.github/actions/build-aws-sdk
         with:
           platform: linux-x64
-          # Built for any x86-64 CPU, not the CPU of the runner that builds it. The library is cached and run on other
-          # runners, and a build for the builder's own CPU crashed zig-unit-tests with "Illegal instruction" in zlib.
-          build-args: -Dcpu=baseline
 
   # Builds zlib-ng with its own build in third-party/zlib-ng, and hands the library to zig-unit-tests.
   build-zlib-ng:
@@ -109,8 +106,6 @@ jobs:
         uses: ./.github/actions/build-zlib-ng
         with:
           platform: linux-x64
-          # Built for any x86-64 CPU, not the CPU of the runner that builds it (see build-aws-sdk).
-          build-args: -Dcpu=baseline
 
   # Builds ImageMagick and its delegates with their own build in third-party/imagemagick, runs the tests of its threshold map
   # maker, and hands the libraries to zig-unit-tests.
@@ -125,8 +120,6 @@ jobs:
         uses: ./.github/actions/build-imagemagick
         with:
           platform: linux-x64
-          # Built for any x86-64 CPU, not the CPU of the runner that builds it (see build-aws-sdk).
-          build-args: -Dcpu=baseline
 
       - name: Run the tests of the threshold map maker
         working-directory: third-party/imagemagick
@@ -144,8 +137,6 @@ jobs:
         uses: ./.github/actions/build-ffmpeg
         with:
           platform: linux-x64
-          # Built for any x86-64 CPU, not the CPU of the runner that builds it (see build-aws-sdk).
-          build-args: -Dcpu=baseline
 
   # The unit tests of the Zig CLI and of every Zig package.
   zig-unit-tests:

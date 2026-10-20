@@ -14,8 +14,8 @@ inputs:
 
   build-args:
     description: >
-      Extra arguments passed to zig build, such as -Dtarget=aarch64-ios or -Dcpu=baseline. Left empty,
-      the library is built for the runner.
+      Extra arguments passed to zig build, such as -Dtarget=aarch64-ios. Left empty,
+      the library is built for the runner's architecture and operating system.
     required: false
     default: ""
 
@@ -35,14 +35,16 @@ runs:
       uses: actions/cache@v4
       with:
         path: third-party/zlib-ng/zig-out
-        key: zlib-ng-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/zlib-ng/**') }}
+        key: zlib-ng-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/zlib-ng/**') }}
 
     - name: Build zlib-ng
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: third-party/zlib-ng
-      # Word splitting is intended: the input is a space-separated list of arguments.
-      run: zig build ${{ inputs.build-args }}
+      # Built for any CPU of the architecture, not the CPU of the runner that builds it, because the library is cached and run on
+      # other runners. A build for the builder's own CPU crashed zig-unit-tests with "Illegal instruction" in zlib. Word splitting
+      # of build-args is intended: it is a space-separated list of arguments.
+      run: zig build -Dcpu=baseline ${{ inputs.build-args }}
 
     - name: Upload zlib-ng
       uses: actions/upload-artifact@v4
