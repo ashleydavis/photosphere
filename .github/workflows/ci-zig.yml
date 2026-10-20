@@ -15,8 +15,42 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
+  typescript-compile:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # bun run compile records a what-changed baseline when it succeeds.
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Compile TypeScript
+        timeout-minutes: 12
+        run: bun run compile
+
   # The TypeScript unit tests.
-  unit-tests:
+  typescript-unit-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
