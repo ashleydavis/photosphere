@@ -11,9 +11,9 @@ env:
 
 on:
   # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
-  # push:
-  #   branches:
-  #     - "*"
+  push:
+    branches:
+      - "*"
   #   tags:
   #     - 'macos-arm64-v*.*.*'
 
