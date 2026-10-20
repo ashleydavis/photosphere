@@ -12,6 +12,12 @@ runs:
       with:
         bun-version: ${{ env.BUN_VERSION }}
 
+    # setup-android.sh checks that the pinned tools are on the PATH.
+    - name: Setup Zig and jq (versions from mise.toml)
+      uses: jdx/mise-action@v2
+      with:
+        install_args: zig jq
+
     - name: Cache the Android NDK
       uses: actions/cache@v4
       with:
