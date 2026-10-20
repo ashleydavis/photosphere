@@ -10,15 +10,16 @@ env:
   RELEASE_PLATFORM_NAME: "Linux"
 
 on:
-  push:
-    branches:
-      - "*"
-    tags:
-      - 'linux-v*.*.*'
+  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run by hand.
+  # push:
+  #   branches:
+  #     - "*"
+  #   tags:
+  #     - 'linux-v*.*.*'
 
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #     - main
 
   workflow_dispatch:
     inputs:
