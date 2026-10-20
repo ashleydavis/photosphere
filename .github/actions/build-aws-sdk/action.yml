@@ -21,8 +21,21 @@ inputs:
 runs:
   using: composite
   steps:
-    # Installed even when the build is cached, so the job's later steps can run zig.
+    # Installed even when the build is cached, so the job's later steps can run zig. Not again when an earlier step put it on the
+    # PATH: a second mise-action in a job looks through the workspace for its cache key, and on Windows it failed with EPERM on a
+    # file of the zig-pkg the previous library build had fetched.
+    - name: Find Zig
+      id: zig
+      shell: bash
+      run: |
+        if command -v zig > /dev/null; then
+            echo "found=yes" >> "$GITHUB_OUTPUT"
+        else
+            echo "found=no" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Setup Zig (version from mise.toml)
+      if: steps.zig.outputs.found != 'yes'
       uses: jdx/mise-action@v2
       with:
         install_args: zig
