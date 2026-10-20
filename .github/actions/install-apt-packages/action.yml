@@ -33,9 +33,17 @@ runs:
     # Refreshing the index is cheap even when the mirror is slow (11 MB, two seconds in the runs
     # where the packages themselves took 18 minutes) and it has to happen before the plan below can
     # be worked out, so it is not worth caching.
+    # The runner image also lists Microsoft's package repository, which nothing installed here comes from, and an Android smoke job
+    # failed here when it answered 403 Forbidden ("The repository 'https://packages.microsoft.com/ubuntu/24.04/prod noble
+    # InRelease' is no longer signed"). Its source files are removed first, so the index is refreshed from Ubuntu's own repositories.
     - name: Refresh the apt index
       shell: bash
-      run: sudo apt-get update
+      run: |
+        set -euo pipefail
+        for source_file in $(grep -l -r "packages.microsoft.com" /etc/apt/sources.list.d/ || true); do
+            sudo rm "$source_file"
+        done
+        sudo apt-get update
 
     # The cache key is a hash of what apt says it is about to install, which is a list of package
     # names and their exact versions. That makes the key follow the thing it is caching: adding a
