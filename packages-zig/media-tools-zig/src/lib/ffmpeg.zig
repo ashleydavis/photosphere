@@ -7,7 +7,7 @@ const in_process_tools = node_utils.in_process_tools;
 
 //
 // FFmpeg, built into the program and run in its process: the `ffmpeg` and `ffprobe` command line programs, whose `main` functions
-// are compiled under the names `ffmpeg_main` and `ffprobe_main` (see packages-zig/media-tools-zig/ffmpeg), called with the arguments
+// are compiled under the names `ffmpeg_main` and `ffprobe_main` (see third-party/ffmpeg), called with the arguments
 // of a command line.
 //
 // The programs keep their state in variables of the whole program, so one command runs at a time (the mutex), and the counts the

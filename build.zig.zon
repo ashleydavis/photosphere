@@ -10,11 +10,6 @@
             .url = "git+https://github.com/ashleydavis/ziggy.git?ref=v0.0.2#c46564e90b1c0e74cd733ded7c0cfcfcb515958a",
             .hash = "ziggy-0.0.0-Yh04rjzdEwDE6oZfjLxVOGHTlCgXdgaCpx67UriT7FDg",
         },
-        // zlib-ng, the zlib Bun's node:zlib is built on (see serialization-zig/zlib-ng/zlib-ng.zig).
-        .@"zlib-ng" = .{
-            .url = "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.3.3.tar.gz",
-            .hash = "N-V-__8AAPaJcABkB6U-96R7h2xuXX5TlDMvwPbE4PucPI59",
-        },
     },
     .paths = .{ "build.zig", "build.zig.zon" },
 }

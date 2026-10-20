@@ -2,7 +2,7 @@
 
 The Photosphere App bundles third-party software on every platform (Windows, MacOS, Linux, Android and iOS) so that image and video processing runs inside the app without anything installed on the machine. The old Electron desktop app and Capacitor mobile apps, and the command line tool, use ImageMagick and ffmpeg installed on the host (the mobile apps carried their own builds, see below).
 
-This file lists the bundled components and their licences. It must be kept up to date when the bundled versions change. The versions are in `vendor/*/VENDORED_VERSION`.
+This file lists the bundled components and their licences. It must be kept up to date when the bundled versions change. The versions are in `third-party/*/vendor/*/VENDORED_VERSION`, and for zlib-ng, the AWS SDK for C, s2n-tls and aws-lc in the `build.zig.zon` of `third-party/zlib-ng` and `third-party/aws`.
 
 ## ImageMagick
 

@@ -11,11 +11,11 @@ The Photosphere App calls ImageMagick and FFmpeg inside its own process on every
 
 ## Source, builds and scripts
 
-Vendored source (never edited) is in `vendor/imagemagick`, `vendor/libjpeg`, `vendor/libpng`, `vendor/libwebp` and `vendor/ffmpeg`, each with a `VENDORED_VERSION`. The files each target needs that the libraries' own `configure` writes are kept in `packages-zig/media-tools-zig/imagemagick/config` and `packages-zig/media-tools-zig/ffmpeg/config`.
+Vendored source (never edited) is in `third-party/imagemagick/vendor/imagemagick`, `third-party/imagemagick/vendor/libjpeg`, `third-party/imagemagick/vendor/libpng`, `third-party/imagemagick/vendor/libwebp` and `third-party/ffmpeg/vendor/ffmpeg`, each with a `VENDORED_VERSION`. The files each target needs that the libraries' own `configure` writes are kept in `third-party/imagemagick/config` and `third-party/ffmpeg/config`.
 
-- Take a version: `scripts/update-imagemagick.sh`, `scripts/update-libjpeg.sh`, `scripts/update-libpng.sh`, `scripts/update-libwebp.sh`, `scripts/update-ffmpeg.sh` (see their `.md` files).
-- Make the generated files for a target: `packages-zig/media-tools-zig/imagemagick/generate-config.sh` and `packages-zig/media-tools-zig/ffmpeg/generate-config.sh`.
-- Build one library alone for a target: `scripts/build-imagemagick.sh` and `scripts/build-ffmpeg.sh`.
+- Take a version: `third-party/imagemagick/update-imagemagick.sh`, `third-party/imagemagick/update-libjpeg.sh`, `third-party/imagemagick/update-libpng.sh`, `third-party/imagemagick/update-libwebp.sh`, `third-party/ffmpeg/update-ffmpeg.sh` (see their `.md` files).
+- Make the generated files for a target: `third-party/imagemagick/generate-config.sh` and `third-party/ffmpeg/generate-config.sh`.
+- Build one library alone for a target: `zig build -Dtarget=<target>` in `third-party/imagemagick` and in `third-party/ffmpeg`.
 
 Targets with generated files and a build that has been run here: Linux (x86_64, aarch64), Android (x86_64, aarch64), Windows (x86_64, aarch64) and MacOS (x86_64, aarch64); only Linux x86_64 and Android (on the emulator) have also been run. The iOS targets (device, and simulator on arm64 and x86_64) are defined the same way but can only be built and generated on a Mac with Xcode: elsewhere the build stops with a message naming the iOS SDK. Nothing for iOS has been built or run yet. The core library, including the AWS SDK for C and aws-lc, is defined for the iOS targets (device and both simulators, with the iOS SDK from `xcrun`) and for Windows aarch64, which builds from Linux.
 

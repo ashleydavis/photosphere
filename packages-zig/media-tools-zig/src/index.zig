@@ -1,6 +1,3 @@
-// Makes ImageMagick's built-in threshold maps from its configuration file, for the build.
-pub const threshold_map = @import("lib/threshold-map.zig");
-
 // ImageMagick, built into the program and run in its process.
 pub const image_magick = @import("lib/image-magick.zig");
 pub const ImageMagick = image_magick.ImageMagick;

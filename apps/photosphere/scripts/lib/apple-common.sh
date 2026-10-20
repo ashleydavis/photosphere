@@ -96,10 +96,10 @@ apple_generate_media_config() {
     esac
     local library
     for library in imagemagick ffmpeg; do
-        local config_dir="$APPLE_REPO_ROOT/packages-zig/media-tools-zig/$library/config/$name"
+        local config_dir="$APPLE_REPO_ROOT/third-party/$library/config/$name"
         if [ ! -d "$config_dir" ]; then
             echo "Making the $library files for $name..."
-            bash "$APPLE_REPO_ROOT/packages-zig/media-tools-zig/$library/generate-config.sh" "$name" || apple_fail "making the $library files for $name failed."
+            bash "$APPLE_REPO_ROOT/third-party/$library/generate-config.sh" "$name" || apple_fail "making the $library files for $name failed."
         fi
     done
 }

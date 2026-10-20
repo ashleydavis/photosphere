@@ -73,6 +73,7 @@ targets:
       - apps/cli-zig
       - packages
       - packages-zig
+      - third-party
       - build.zig
       - build.zig.zon
 
@@ -82,6 +83,7 @@ targets:
       - apps/cli-zig
       - packages
       - packages-zig
+      - third-party
       - build.zig
       - build.zig.zon
 
@@ -91,6 +93,7 @@ targets:
       - apps/cli-zig
       - packages
       - packages-zig
+      - third-party
       - build.zig
       - build.zig.zon
 
@@ -100,6 +103,7 @@ targets:
       - apps/cli-zig
       - packages
       - packages-zig
+      - third-party
       - build.zig
       - build.zig.zon
 
@@ -109,6 +113,7 @@ targets:
       - apps/cli-zig
       - packages
       - packages-zig
+      - third-party
       - build.zig
       - build.zig.zon
 
@@ -118,6 +123,7 @@ targets:
       - apps/cli-zig
       - packages
       - packages-zig
+      - third-party
       - build.zig
       - build.zig.zon
 
@@ -174,7 +180,7 @@ targets:
       - apps/photosphere-smoke-tests
       - packages
       - packages-zig
-      - vendor
+      - third-party
       - build.zig
       - build.zig.zon
       - apps/photosphere-frontend/package.json
@@ -190,7 +196,7 @@ targets:
       - apps/photosphere-smoke-tests
       - packages
       - packages-zig
-      - vendor
+      - third-party
       - build.zig
       - build.zig.zon
       - apps/photosphere-frontend/package.json
@@ -208,7 +214,7 @@ targets:
       - apps/photosphere-smoke-tests
       - packages
       - packages-zig
-      - vendor
+      - third-party
       - build.zig
       - build.zig.zon
       - apps/photosphere-frontend/package.json
@@ -223,6 +229,6 @@ targets:
     paths:
       - apps/cli-zig
       - packages-zig
-      - vendor
+      - third-party
       - build.zig
       - build.zig.zon

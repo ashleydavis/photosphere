@@ -1,0 +1,13 @@
+.{
+    .name = .imagemagick,
+    .version = "1.0.0",
+    .fingerprint = 0x49c0344e4fa59bf8,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        // The zlib ImageMagick and libpng are built over.
+        .zlib = .{
+            .path = "../zlib-ng",
+        },
+    },
+    .paths = .{""},
+}

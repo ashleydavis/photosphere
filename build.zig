@@ -1,7 +1,4 @@
 const std = @import("std");
-const zlib_ng = @import("packages-zig/serialization-zig/zlib-ng/zlib-ng.zig");
-const imagemagick = @import("packages-zig/media-tools-zig/imagemagick/imagemagick.zig");
-const ffmpeg = @import("packages-zig/media-tools-zig/ffmpeg/ffmpeg.zig");
 const android_libc = @import("packages-zig/android-libc.zig");
 const apple_sdk = @import("packages-zig/apple-sdk.zig");
 const translate_target = @import("packages-zig/translate-target.zig");
@@ -193,14 +190,6 @@ pub fn build(b: *std.Build) !void {
     // ReleaseSafe by default: the tests keep the safety checks, and the work of the database and storage tests is several times
     // slower in Debug.
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size (default: ReleaseSafe)") orelse .ReleaseSafe;
-    // The media libraries have steps of their own for every target, which build one library by itself (see packages-zig/media-tools-zig).
-    // The files FFmpeg needs for a target are made by a script (ffmpeg/generate-config.sh) that needs zlib built for the target first, and
-    // FFmpeg's steps and the packages need those files, so the script asks for the zlib step alone.
-    const zlib_only = b.option(bool, "zlib-only", "Register only the step that builds zlib, which is what the script that makes FFmpeg's files uses") orelse false;
-    try addMediaToolSteps(b, target, zlib_only);
-    if (zlib_only) {
-        return;
-    }
     // The packages, the CLI and their tests are built for the machine running the build only (Windows, iOS and Android are cross builds of Photosphere's core only, below): the AWS SDK for C builds for Linux,
     // Windows, iOS and macOS (iOS with the SDK of Xcode, macOS natively), and zlib-ng for x86_64 and aarch64 on Windows. For any other
     // target the steps of Photosphere say why they cannot be built. The steps of the packages and the tests are not registered, so asking
@@ -302,11 +291,11 @@ fn addPackageModules(
 ) !?std.StringHashMap(*std.Build.Module) {
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
     try modules.put("ziggy-core", ziggy_core);
-    // zlib-ng, built once for the packages that use it (serialization-zig and the media tools).
-    var zlib: ?zlib_ng.IZlibNg = null;
-
-    // The AWS SDK for C and aws-lc, built for the target beforehand by the build in third-party/aws.
-    const aws = try findAwsLibraries(b, target);
+    // The third-party libraries, each built for the target beforehand by its own build under third-party.
+    const aws = try findThirdPartyLibraries(b, target, "aws");
+    const zlib = try findThirdPartyLibraries(b, target, "zlib-ng");
+    const imagemagick = try findThirdPartyLibraries(b, target, "imagemagick");
+    const ffmpeg = try findThirdPartyLibraries(b, target, "ffmpeg");
     for (packages) |package| {
         const module = b.addModule(package.name, .{
             .root_source_file = b.path(b.fmt("packages-zig/{s}/src/index.zig", .{package.name})),
@@ -331,19 +320,35 @@ fn addPackageModules(
             module.addImport("openssl", try translateHeader(b, target, aws.include_directory, encryption_openssl_header));
         }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
-            // zlib-ng, which gzip compression and decompression bind to.
-            zlib = try zlib_ng.buildZlibNg(b, target);
-            try zlib_ng.addZlibNg(b, module, target, zlib.?);
+            // zlib-ng, which gzip compression and decompression bind to, and which ImageMagick and FFmpeg are built over: the program
+            // has one copy of it.
+            for (zlib.archives) |archive| {
+                module.addObjectFile(archive);
+            }
+            module.addImport("zlib", b.createModule(.{
+                .root_source_file = zlib.zig_directory.path(b, "zlib.zig"),
+                .target = target,
+                .optimize = optimize,
+            }));
         }
         if (std.mem.eql(u8, package.name, "media-tools-zig")) {
-            // ImageMagick and FFmpeg, built over the same zlib-ng as serialization-zig's, which the program has one copy of.
-            try imagemagick.addImageMagick(b, module, target, zlib.?);
-            try ffmpeg.addFfmpeg(b, module, target, zlib.?);
+            // ImageMagick and FFmpeg, built over serialization-zig's zlib-ng.
+            for (imagemagick.archives) |archive| {
+                module.addObjectFile(archive);
+            }
+            for (ffmpeg.archives) |archive| {
+                module.addObjectFile(archive);
+            }
+            module.addImport("magick", b.createModule(.{
+                .root_source_file = imagemagick.zig_directory.path(b, "magick.zig"),
+                .target = target,
+                .optimize = optimize,
+            }));
         }
         if (std.mem.eql(u8, package.name, "storage-zig")) {
             // The AWS SDK for C's headers translated to Zig, which the S3 client binds to. Its libraries are linked by encryption-zig.
             const aws_c = b.createModule(.{
-                .root_source_file = aws.aws_c_source,
+                .root_source_file = aws.zig_directory.path(b, "aws-c.zig"),
                 .target = target,
                 .optimize = optimize,
             });
@@ -377,29 +382,29 @@ fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, include_dire
 }
 
 //
-// The AWS SDK for C and aws-lc for one target, built beforehand by the build in third-party/aws.
+// One third-party library for one target, built beforehand by its own build in third-party/<name>.
 //
-const IAwsLibraries = struct {
+const IThirdPartyLibraries = struct {
     // Every static library, one path each.
     archives: []const std.Build.LazyPath,
 
     // The directory of their headers.
     include_directory: std.Build.LazyPath,
 
-    // The SDK's headers translated to Zig, the root of the "aws-c" module.
-    aws_c_source: std.Build.LazyPath,
+    // The directory of the Zig modules translated from their headers.
+    zig_directory: std.Build.LazyPath,
 };
 
 //
-// Finds the AWS SDK for C and aws-lc that third-party/aws built for the target, under its zig-out/<arch>-<os>-<abi>. Stops the build
-// with the command that builds them when they are not there.
+// Finds what the build in third-party/<name> installed for the target, under its zig-out/<arch>-<os>-<abi>. Stops the build with
+// the command that builds it when it has not been built for the target.
 //
-fn findAwsLibraries(b: *std.Build, target: std.Build.ResolvedTarget) !IAwsLibraries {
-    const directory = b.fmt("third-party/aws/zig-out/{s}-{s}-{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
+fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !IThirdPartyLibraries {
+    const directory = b.fmt("third-party/{s}/zig-out/{s}-{s}-{s}", .{ name, @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
     const io = b.graph.io;
     var library_directory = b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => {
-            std.log.err("The AWS SDK for C is not built for this target: there is no {s}. Build it with `zig build{s}` in third-party/aws.", .{ directory, if (target.query.isNative()) "" else b.fmt(" -Dtarget={s}", .{try target.query.zigTriple(b.allocator)}) });
+            std.log.err("third-party/{s} is not built for this target: there is no {s}. Build it with `zig build{s}` in third-party/{s}.", .{ name, directory, if (target.query.isNative()) "" else b.fmt(" -Dtarget={s}", .{try target.query.zigTriple(b.allocator)}), name });
             std.process.exit(1);
         },
         else => {
@@ -418,7 +423,7 @@ fn findAwsLibraries(b: *std.Build, target: std.Build.ResolvedTarget) !IAwsLibrar
     return .{
         .archives = archives.items,
         .include_directory = b.path(b.fmt("{s}/include", .{directory})),
-        .aws_c_source = b.path(b.fmt("{s}/zig/aws-c.zig", .{directory})),
+        .zig_directory = b.path(b.fmt("{s}/zig", .{directory})),
     };
 }
 
@@ -908,11 +913,13 @@ fn addPhotosphere(
                 },
             }).step);
         }
-        // The AWS SDK for C and aws-lc, which third-party/aws built beforehand, go beside them too.
-        for ((try findAwsLibraries(b, target)).archives) |archive| {
-            core_step.dependOn(&b.addInstallFileWithDir(archive, .{
-                .custom = "lib/dependencies",
-            }, std.fs.path.basename(archive.src_path.sub_path)).step);
+        // The third-party libraries, which their own builds under third-party built beforehand, go beside them too.
+        for ([_][]const u8{ "aws", "zlib-ng", "imagemagick", "ffmpeg" }) |name| {
+            for ((try findThirdPartyLibraries(b, target, name)).archives) |archive| {
+                core_step.dependOn(&b.addInstallFileWithDir(archive, .{
+                    .custom = "lib/dependencies",
+                }, std.fs.path.basename(archive.src_path.sub_path)).step);
+            }
         }
     }
     if (libraries.shared_library) |shared_library| {
@@ -944,47 +951,6 @@ fn addPhotosphere(
 // The directory the page of Photosphere's app is built into (`bun run bundle:ui` in apps/photosphere), which the core embeds and serves to every shell.
 //
 const photosphere_page_directory = "apps/photosphere-frontend/dist";
-
-//
-// Registers the steps that build one media library by itself as a static library for the target, so a library can be built and
-// checked on its own (`zig build imagemagick -Dtarget=<target>`): ImageMagick (with libjpeg, libpng and zlib), FFmpeg (with zlib), and
-// zlib-ng with its headers (what FFmpeg's configure is pointed at). For a target one cannot be built for, the step says why.
-//
-fn addMediaToolSteps(b: *std.Build, target: std.Build.ResolvedTarget, zlib_only: bool) !void {
-    const zlib_step = b.step("zlib", "Build zlib-ng as a static library, installed with its headers, for the target");
-    const imagemagick_step = b.step("imagemagick", "Build ImageMagick (with libjpeg, libpng and zlib) as a static library for the target");
-    const ffmpeg_step = b.step("ffmpeg", "Build FFmpeg (with the ffmpeg and ffprobe programs compiled in, and zlib) as a static library for the target");
-    if (imagemagick.zlibUnsupportedReason(b, target)) |reason| {
-        zlib_step.dependOn(&b.addFail(reason).step);
-        imagemagick_step.dependOn(&b.addFail(imagemagick.unsupportedReason(b, target).?).step);
-        ffmpeg_step.dependOn(&b.addFail(ffmpeg.unsupportedReason(b, target).?).step);
-        return;
-    }
-    const zlib = try zlib_ng.buildZlibNg(b, target);
-    zlib_step.dependOn(&b.addInstallArtifact(zlib.library, .{}).step);
-    zlib_step.dependOn(&b.addInstallDirectory(.{
-        .source_dir = zlib.include_directory,
-        .install_dir = .prefix,
-        .install_subdir = "include",
-    }).step);
-    if (zlib_only) {
-        return;
-    }
-    if (imagemagick.unsupportedReason(b, target)) |reason| {
-        imagemagick_step.dependOn(&b.addFail(reason).step);
-    }
-    else {
-        const library = try imagemagick.buildImageMagick(b, target, zlib);
-        imagemagick_step.dependOn(&b.addInstallArtifact(library.library, .{}).step);
-    }
-    if (ffmpeg.unsupportedReason(b, target)) |reason| {
-        ffmpeg_step.dependOn(&b.addFail(reason).step);
-    }
-    else {
-        const library = try ffmpeg.buildFfmpeg(b, target, zlib);
-        ffmpeg_step.dependOn(&b.addInstallArtifact(library.library, .{}).step);
-    }
-}
 
 //
 // Registers Photosphere's steps for a target its core cannot be built for, so asking for one says why instead of reporting an unknown
