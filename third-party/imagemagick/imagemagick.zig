@@ -195,6 +195,9 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
     // AM_CPPFLAGS: the build and source directories. The generated headers come first.
     module.addIncludePath(b.path(config_path));
     module.addIncludePath(b.path("vendor/imagemagick"));
+    // MagickCore/threshold-map.h, which threshold.c includes in a zero configuration build. ImageMagick's Makefile makes it from
+    // config/thresholds.xml, and update-imagemagick.sh makes it the same way when ImageMagick is updated.
+    module.addIncludePath(b.path("config/common"));
     module.addConfigHeader(jpeg.config_header);
     module.addIncludePath(jpeg.include_directory);
     module.addIncludePath(png.include_directory);
@@ -229,13 +232,11 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         }
     }
 
-    // MAGICKCORE_BASE_SRCS: every .c file of MagickCore but vms.c, which is for VMS, and threshold.c, whose dithering Photosphere
-    // never uses and which needs a header ImageMagick's Makefile generates, and MAGICKCORE_PLATFORM_SRCS: nt-base.c and
+    // MAGICKCORE_BASE_SRCS: every .c file of MagickCore but vms.c, which is for VMS, and MAGICKCORE_PLATFORM_SRCS: nt-base.c and
     // nt-feature.c for Windows.
     const windows_only = [_][]const u8{ "nt-base.c", "nt-feature.c" };
     var core_excluded: std.ArrayList([]const u8) = .empty;
     try core_excluded.append(b.allocator, "vms.c");
-    try core_excluded.append(b.allocator, "threshold.c");
     if (!is_windows) {
         try core_excluded.appendSlice(b.allocator, &windows_only);
     }

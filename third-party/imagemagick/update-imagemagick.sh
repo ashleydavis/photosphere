@@ -16,3 +16,11 @@ vendor_library "$PACKAGE_DIR" imagemagick \
     "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/$1.tar.gz" "$1" \
     PerlMagick www Magick++ tests oss-fuzz app-image api_examples logo scripts m4 index.html \
     .github .devcontainer .gitignore .gitattributes .editorconfig .auto-changelog
+
+# MagickCore/threshold-map.h, which MagickCore/threshold.c includes, made from config/thresholds.xml with the command
+# MagickCore/Makefile.am makes it with.
+mkdir -p "$PACKAGE_DIR/config/common/MagickCore"
+{
+    printf '%s\n  %s=\n' 'static const char *const' BuiltinMap
+    sed -e 's/"/\\"/g; s/^.*$/    "&\\n"/; $s/$/;/' "$PACKAGE_DIR/vendor/imagemagick/config/thresholds.xml"
+} > "$PACKAGE_DIR/config/common/MagickCore/threshold-map.h"
