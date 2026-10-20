@@ -167,7 +167,7 @@ jobs:
     # This is the only job that builds the Zig CLI: cli-smoke-tests downloads the binary this uploads
     # and create-release publishes it, so the binary is built once and used by both.
     timeout-minutes: 40
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -221,6 +221,19 @@ jobs:
         uses: ./.github/actions/third-party-libraries
         with:
           platform: windows-x64
+
+      # Stamps the release's version and commit into the CLI's config before it is compiled, the same way package-release does for
+      # the app. Without it the released CLI says it is version "dev".
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+            bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}"
+          else
+            bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
+          fi
 
       - name: Build the Zig CLI natively for Windows x64
         working-directory: .
