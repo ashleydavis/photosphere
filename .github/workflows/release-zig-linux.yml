@@ -84,6 +84,57 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
+  # The third-party libraries, each built once by its own action and cached under the same keys as the Zig CI workflow, so a
+  # library either workflow has already built is restored rather than compiled again. Every job that runs the Zig build
+  # restores them from that cache with the third-party-libraries action.
+  build-aws-sdk:
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build the AWS SDK for C
+        uses: ./.github/actions/build-aws-sdk
+        with:
+          platform: linux-x64
+
+  build-zlib-ng:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build zlib-ng
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: linux-x64
+
+  build-imagemagick:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build ImageMagick
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: linux-x64
+
+  build-ffmpeg:
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build FFmpeg
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: linux-x64
+
   build-zig-linux-x64:
     # Builds the Zig CLI for Linux x64 on a runner of that platform, and publishes the binary. Nothing here
     # cross-compiles, so a build that works is a build that runs on the platform it names.
@@ -91,15 +142,11 @@ jobs:
     # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
     # and create-release publishes it, so the binary is built once and used by both.
     timeout-minutes: 40
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
@@ -113,14 +160,6 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
 
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
@@ -152,6 +191,11 @@ jobs:
       - name: Fetch every package Zig needs, lazy ones included, in one pass
         working-directory: .
         run: zig build --fetch=all
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: linux-x64
 
       - name: Build the Zig CLI natively for Linux x64
         working-directory: .
@@ -186,63 +230,6 @@ jobs:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
-  build-aws-sdk:
-    # Compiles the AWS SDK for C and caches the result, because several jobs build Zig and every one of them
-    # would otherwise compile it from cold: it is the longest single build in this workflow. One job owns it,
-    # so the compile happens once per commit and the others restore what this wrote.
-    # The cache key names this workflow's platform because the Android workflow builds on the same runner,
-    # and actions/cache/save fails when the key already exists.
-    timeout-minutes: 40
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
-
-      # See the same step in build-zig-linux-x64 for why the packages are fetched before the build.
-      - name: Fetch every package Zig needs, lazy ones included, in one pass
-        working-directory: .
-        run: zig build --fetch=all
-
-      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
-      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
-      # mode, and the storage integration tests build in this mode too.
-      - name: Build the Zig CLI, which compiles the AWS SDK
-        working-directory: .
-        run: zig build
-
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-
   zig-cli-smoke-tests:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
     # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
@@ -251,7 +238,7 @@ jobs:
     # is compiled once and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
-    needs: [build-aws-sdk, build-zig-linux-x64]
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-linux-x64]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -297,16 +284,12 @@ jobs:
         run: |
           df -h .
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
-      # The Zig CLI is built by build-zig-linux-x64, but this job still builds Zig itself, and the AWS SDK
-      # for C it needs is compiled by build-aws-sdk and cached under the key below. Restoring it is what
-      # keeps this job from compiling the AWS SDK from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      # The Zig CLI is built by build-zig-linux-x64, but this job still runs the Zig build, which links the libraries the build
+      # jobs built.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: linux-x64
 
       # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads.
       - name: Download the Zig CLI built for this platform
@@ -362,10 +345,9 @@ jobs:
         run: ./smoke-tests-lan-share-zig.sh
 
   photosphere-desktop-smoke-tests:
-    # The Photosphere App's smoke tests on Linux, run under xvfb. The Zig build restores the AWS SDK for C that
-    # build-aws-sdk compiled, so it is not compiled again here.
+    # The Photosphere App's smoke tests on Linux, run under xvfb, over the third-party libraries the build jobs built.
     timeout-minutes: 75
-    needs: [build-aws-sdk]
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -418,14 +400,10 @@ jobs:
           packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb imagemagick ffmpeg
           verify: xvfb-run magick|convert ffmpeg ffprobe
 
-      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: linux-x64
 
       - name: Run the Photosphere App smoke tests
         timeout-minutes: 60
@@ -434,10 +412,10 @@ jobs:
 
   package-photosphere:
     # The Photosphere App packaged for Linux, unsigned, by the same package script a developer runs. The version comes
-    # from the release tag: linux-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Zig build restores the
-    # AWS SDK for C that build-aws-sdk compiled, so it is not compiled again here.
+    # from the release tag: linux-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Zig build links the
+    # third-party libraries the build jobs built.
     timeout-minutes: 75
-    needs: [prepare-tag, build-aws-sdk]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -487,14 +465,10 @@ jobs:
         with:
           run: bun install
 
-      # The same cache zig-cli-smoke-tests restores, written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: linux-x64
 
       - name: Set config
         shell: bash
@@ -522,7 +496,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zig-linux-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-linux-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
     runs-on: ubuntu-latest
     permissions:
       contents: write

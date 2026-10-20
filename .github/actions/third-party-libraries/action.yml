@@ -1,0 +1,42 @@
+name: Third-party libraries
+description: >
+  Puts the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg into third-party/<library>/zig-out for the job's Zig build, by running
+  each library's build action. Each one restores its library from the cache the build jobs filled, and only builds it when the
+  cache has nothing for it. The job has to check the repository out first.
+
+inputs:
+  platform:
+    description: The platform the libraries are built for, as the build jobs pass it (for example linux-x64).
+    required: true
+
+  build-args:
+    description: Extra arguments passed to zig build, as the build jobs pass them. Left empty, none.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: The AWS SDK for C
+      uses: ./.github/actions/build-aws-sdk
+      with:
+        platform: ${{ inputs.platform }}
+        build-args: ${{ inputs.build-args }}
+
+    - name: zlib-ng
+      uses: ./.github/actions/build-zlib-ng
+      with:
+        platform: ${{ inputs.platform }}
+        build-args: ${{ inputs.build-args }}
+
+    - name: ImageMagick
+      uses: ./.github/actions/build-imagemagick
+      with:
+        platform: ${{ inputs.platform }}
+        build-args: ${{ inputs.build-args }}
+
+    - name: FFmpeg
+      uses: ./.github/actions/build-ffmpeg
+      with:
+        platform: ${{ inputs.platform }}
+        build-args: ${{ inputs.build-args }}

@@ -1,15 +1,14 @@
 name: Build ImageMagick
 description: >
-  Builds ImageMagick and its delegates with their own build in third-party/imagemagick and uploads what it installs in
-  third-party/imagemagick/zig-out as the artifact imagemagick-<platform>, for a later job to download with the
-  download-third-party-libraries action. The build is cached, and skipped when nothing it is built
-  from has changed. The job has to check the repository out first.
+  Builds ImageMagick and its delegates with their own build in third-party/imagemagick, into
+  third-party/imagemagick/zig-out where Photosphere's Zig build looks for it. The result is cached, and the build is
+  skipped when nothing it is built from has changed, so a job that needs the library runs this too and
+  restores it. The job has to check the repository out first.
 
 inputs:
   platform:
     description: >
-      The platform the library is built for, as the artifact names it (for example linux-x64). It must
-      match the platform passed to download-third-party-libraries.
+      The platform the library is built for, which goes into its cache key (for example linux-x64).
     required: true
 
   build-args:
@@ -45,11 +44,3 @@ runs:
       # other runners. A build for the builder's own CPU crashed zig-unit-tests with "Illegal instruction" in zlib. Word splitting
       # of build-args is intended: it is a space-separated list of arguments.
       run: zig build -Dcpu=baseline ${{ inputs.build-args }}
-
-    - name: Upload ImageMagick and its delegates
-      uses: actions/upload-artifact@v4
-      with:
-        name: imagemagick-${{ inputs.platform }}
-        path: third-party/imagemagick/zig-out
-        if-no-files-found: error
-        retention-days: 2

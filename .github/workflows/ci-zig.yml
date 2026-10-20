@@ -180,9 +180,9 @@ jobs:
           packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      # The libraries the build jobs built, which the Zig build links.
-      - name: Download the third-party libraries
-        uses: ./.github/actions/download-third-party-libraries
+      # The libraries the build jobs built, restored from the cache for the Zig build to link.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
           platform: linux-x64
 
