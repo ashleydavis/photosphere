@@ -1,6 +1,4 @@
 const std = @import("std");
-const aws_lc = @import("packages-zig/encryption-zig/aws/aws-lc.zig");
-const aws_sdk = @import("packages-zig/storage-zig/aws/aws-sdk.zig");
 const zlib_ng = @import("packages-zig/serialization-zig/zlib-ng/zlib-ng.zig");
 const imagemagick = @import("packages-zig/media-tools-zig/imagemagick/imagemagick.zig");
 const ffmpeg = @import("packages-zig/media-tools-zig/ffmpeg/ffmpeg.zig");
@@ -304,11 +302,11 @@ fn addPackageModules(
 ) !?std.StringHashMap(*std.Build.Module) {
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
     try modules.put("ziggy-core", ziggy_core);
-    var crypto: ?*std.Build.Step.Compile = null;
-    var ssl: ?*std.Build.Step.Compile = null;
     // zlib-ng, built once for the packages that use it (serialization-zig and the media tools).
     var zlib: ?zlib_ng.IZlibNg = null;
 
+    // The AWS SDK for C and aws-lc, built for the target beforehand by the build in third-party/aws.
+    const aws = try findAwsLibraries(b, target);
     for (packages) |package| {
         const module = b.addModule(package.name, .{
             .root_source_file = b.path(b.fmt("packages-zig/{s}/src/index.zig", .{package.name})),
@@ -325,12 +323,12 @@ fn addPackageModules(
         try modules.put(package.name, module);
 
         if (std.mem.eql(u8, package.name, "encryption-zig")) {
-            // aws-lc's libcrypto, whose functions node-crypto.zig calls and which the AWS SDK for C links as well, and libssl
-            // over it for lan-share-network-zig.
-            crypto = try aws_lc.build(b, target, b.dependency("aws-lc", .{}));
-            module.linkLibrary(crypto.?);
-            ssl = try aws_lc.buildSsl(b, target, b.dependency("aws-lc", .{}), crypto.?);
-            module.addImport("openssl", try translateHeader(b, target, crypto.?, encryption_openssl_header));
+            // aws-lc's libcrypto, whose functions node-crypto.zig calls, with libssl over it for lan-share-network-zig and the AWS SDK
+            // for C's libraries, which link the same libcrypto: every library third-party/aws built.
+            for (aws.archives) |archive| {
+                module.addObjectFile(archive);
+            }
+            module.addImport("openssl", try translateHeader(b, target, aws.include_directory, encryption_openssl_header));
         }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
             // zlib-ng, which gzip compression and decompression bind to.
@@ -343,18 +341,20 @@ fn addPackageModules(
             try ffmpeg.addFfmpeg(b, module, target, zlib.?);
         }
         if (std.mem.eql(u8, package.name, "storage-zig")) {
-            // The AWS SDK for C, which the S3 client binds to, over the libcrypto that encryption-zig builds. False means a lazy
-            // dependency is being fetched first.
-            if (!try aws_sdk.addAwsSdk(b, module, target, crypto.?)) {
-                return null;
-            }
+            // The AWS SDK for C's headers translated to Zig, which the S3 client binds to. Its libraries are linked by encryption-zig.
+            const aws_c = b.createModule(.{
+                .root_source_file = aws.aws_c_source,
+                .target = target,
+                .optimize = optimize,
+            });
+            apple_sdk.addSdkFrameworks(b, aws_c, target);
+            module.addImport("aws-c", aws_c);
         }
         if (std.mem.eql(u8, package.name, "lan-share-network-zig")) {
-            module.linkLibrary(ssl.?);
             if (target.result.os.tag == .windows) {
                 module.linkSystemLibrary("ws2_32", .{});
             }
-            module.addImport("openssl", try translateHeader(b, target, crypto.?, lan_share_openssl_header));
+            module.addImport("openssl", try translateHeader(b, target, aws.include_directory, lan_share_openssl_header));
         }
     }
     return modules;
@@ -365,15 +365,61 @@ fn addPackageModules(
 // MinGW headers define fortified inline wrappers of memset and friends, which translate-c turns into Zig that does not
 // compile. The declarations are the same.
 //
-fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, crypto: *std.Build.Step.Compile, header: []const u8) !*std.Build.Module {
+fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, include_directory: std.Build.LazyPath, header: []const u8) !*std.Build.Module {
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.addWriteFiles().add("openssl.h", header),
         .target = translate_target.translateTarget(b, target),
         .optimize = .Debug,
     });
-    translate_c.addIncludePath(crypto.getEmittedIncludeTree());
+    translate_c.addIncludePath(include_directory);
     try android_libc.addLibcIncludes(b, translate_c, target);
     return translate_c.createModule();
+}
+
+//
+// The AWS SDK for C and aws-lc for one target, built beforehand by the build in third-party/aws.
+//
+const IAwsLibraries = struct {
+    // Every static library, one path each.
+    archives: []const std.Build.LazyPath,
+
+    // The directory of their headers.
+    include_directory: std.Build.LazyPath,
+
+    // The SDK's headers translated to Zig, the root of the "aws-c" module.
+    aws_c_source: std.Build.LazyPath,
+};
+
+//
+// Finds the AWS SDK for C and aws-lc that third-party/aws built for the target, under its zig-out/<arch>-<os>-<abi>. Stops the build
+// with the command that builds them when they are not there.
+//
+fn findAwsLibraries(b: *std.Build, target: std.Build.ResolvedTarget) !IAwsLibraries {
+    const directory = b.fmt("third-party/aws/zig-out/{s}-{s}-{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
+    const io = b.graph.io;
+    var library_directory = b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true }) catch |err| switch (err) {
+        error.FileNotFound => {
+            std.log.err("The AWS SDK for C is not built for this target: there is no {s}. Build it with `zig build{s}` in third-party/aws.", .{ directory, if (target.query.isNative()) "" else b.fmt(" -Dtarget={s}", .{try target.query.zigTriple(b.allocator)}) });
+            std.process.exit(1);
+        },
+        else => {
+            return err;
+        },
+    };
+    defer library_directory.close(io);
+    var archives: std.ArrayList(std.Build.LazyPath) = .empty;
+    var iterator = library_directory.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (entry.kind != .file) {
+            continue;
+        }
+        try archives.append(b.allocator, b.path(b.fmt("{s}/lib/{s}", .{ directory, entry.name })));
+    }
+    return .{
+        .archives = archives.items,
+        .include_directory = b.path(b.fmt("{s}/include", .{directory})),
+        .aws_c_source = b.path(b.fmt("{s}/zig/aws-c.zig", .{directory})),
+    };
 }
 
 //
@@ -448,7 +494,7 @@ fn addUnitTests(
     const encryption = modules.get("encryption-zig").?;
     test_module.addImport("openssl", encryption.import_table.get("openssl").?);
     const storage = modules.get("storage-zig").?;
-    test_module.addImport(aws_sdk.aws_c_module_name, storage.import_table.get(aws_sdk.aws_c_module_name).?);
+    test_module.addImport("aws-c", storage.import_table.get("aws-c").?);
 
     // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md). The tests are then
     // compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
@@ -862,6 +908,12 @@ fn addPhotosphere(
                 },
             }).step);
         }
+        // The AWS SDK for C and aws-lc, which third-party/aws built beforehand, go beside them too.
+        for ((try findAwsLibraries(b, target)).archives) |archive| {
+            core_step.dependOn(&b.addInstallFileWithDir(archive, .{
+                .custom = "lib/dependencies",
+            }, std.fs.path.basename(archive.src_path.sub_path)).step);
+        }
     }
     if (libraries.shared_library) |shared_library| {
         // aws-c-common writes its logs to Android's log (CMake: PLATFORM_LIBS log), which is in the C library's directory. It is linked
@@ -941,11 +993,11 @@ fn addMediaToolSteps(b: *std.Build, target: std.Build.ResolvedTarget, zlib_only:
 //
 fn addPhotosphereUnavailable(b: *std.Build, target: std.Build.ResolvedTarget) !void {
     const message = if (target.result.os.tag == .ios)
-        b.fmt("Photosphere's core for iOS needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. It holds the AWS SDK for C and aws-lc, whose Apple sources include headers of that SDK, which Zig does not ship. Build for iOS on a Mac with Xcode installed. See docs/aws-sdk.md.", .{ apple_sdk.sdkName(target.result.os.tag, target.result.abi).?, apple_sdk.sdkName(target.result.os.tag, target.result.abi).? })
+        b.fmt("Photosphere's core for iOS needs Apple's {s} SDK, which comes with Xcode on a Mac and is found with `xcrun --sdk {s} --show-sdk-path`. It was not found here. It holds the AWS SDK for C and aws-lc, whose Apple sources include headers of that SDK, which Zig does not ship. Build for iOS on a Mac with Xcode installed. See third-party/aws/docs/aws-sdk.md.", .{ apple_sdk.sdkName(target.result.os.tag, target.result.abi).?, apple_sdk.sdkName(target.result.os.tag, target.result.abi).? })
     else if (target.result.os.tag == .macos)
         "Photosphere's core for macOS can only be built on a Mac: it holds the AWS SDK for C and aws-lc, whose Apple sources include the Security, Network, CoreFoundation and CoreServices headers of the macOS SDK, which comes with Xcode or its Command Line Tools and is found with `xcrun --sdk macosx --show-sdk-path`. It was not found here."
     else
-        "Photosphere's core is built for the machine running the build, for Windows (x86_64 and aarch64), for iOS (on a Mac with Xcode) and for Android (with the NDK's C library as a libc file). See docs/aws-sdk.md.";
+        "Photosphere's core is built for the machine running the build, for Windows (x86_64 and aarch64), for iOS (on a Mac with Xcode) and for Android (with the NDK's C library as a libc file). See third-party/aws/docs/aws-sdk.md.";
     for ([_][]const u8{ "photosphere-backend", "photosphere-linux", "photosphere-windows", "photosphere-windows-check" }) |name| {
         const step = b.step(name, "Build Photosphere (only for the machine running the build)");
         step.dependOn(&b.addFail(message).step);

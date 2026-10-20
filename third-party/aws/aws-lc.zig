@@ -1,5 +1,5 @@
 const std = @import("std");
-const apple_sdk = @import("../../apple-sdk.zig");
+const apple_sdk = @import("support/apple-sdk.zig");
 
 //
 // Builds aws-lc's libcrypto (the `crypto` target) as its CMakeLists.txt files do for a Release, non-FIPS, static build,

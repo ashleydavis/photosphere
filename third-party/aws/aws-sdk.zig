@@ -9,9 +9,9 @@ const aws_c_sdkutils = @import("aws-c-sdkutils.zig");
 const aws_c_auth = @import("aws-c-auth.zig");
 const aws_c_s3 = @import("aws-c-s3.zig");
 const s2n_tls = @import("s2n-tls.zig");
-const android_libc = @import("../../android-libc.zig");
-const translate_target = @import("../../translate-target.zig");
-const apple_sdk = @import("../../apple-sdk.zig");
+const android_libc = @import("support/android-libc.zig");
+const translate_target = @import("support/translate-target.zig");
+const apple_sdk = @import("support/apple-sdk.zig");
 
 //
 // Builds the AWS SDK for C (aws-c-s3 and the libraries under it) from the unmodified upstream sources fetched as the
@@ -210,11 +210,11 @@ const aws_c_header =
 ;
 
 //
-// Builds the SDK for the target over aws-lc's libcrypto (built by encryption-zig, see its aws/aws-lc.zig), links it into
-// the module and adds the "aws-c" module translated from its headers.
-// Returns false when a lazy dependency still has to be fetched (the build runner fetches it and runs the build again).
+// Builds the SDK for the target over aws-lc's libcrypto (see aws-lc.zig) and returns the "aws-c" module
+// translated from its headers, with the libraries linked into it.
+// Returns null when a lazy dependency still has to be fetched (the build runner fetches it and runs the build again).
 //
-pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, libcrypto: *std.Build.Step.Compile) !bool {
+pub fn build(b: *std.Build, target: std.Build.ResolvedTarget, libcrypto: *std.Build.Step.Compile) !?*std.Build.Module {
     const os = target.result.os.tag;
     const arch = target.result.cpu.arch;
     if (os != .linux and os != .windows and os != .macos and os != .ios) {
@@ -258,7 +258,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     var s2n: ?*std.Build.Step.Compile = null;
     if (context.isLinux or context.isMacos) {
         const s2n_tls_dependency = b.lazyDependency("s2n-tls", .{}) orelse {
-            return false;
+            return null;
         };
         crypto = libcrypto;
         s2n = try s2n_tls.build(&context, s2n_tls_dependency, libcrypto);
@@ -312,7 +312,7 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
             .cwd_relative = b.pathJoin(&.{ sdk_path, "System", "Library", "Frameworks" }),
         });
     }
-    module.addImport(aws_c_module_name, translate_c.createModule());
+    const module = translate_c.createModule();
     apple_sdk.addSdkFrameworks(b, module, target);
 
     for ([_]*std.Build.Step.Compile{ s3, auth, sdkutils, http, compression, io, cal, checksums, common }) |library| {
@@ -324,5 +324,5 @@ pub fn addAwsSdk(b: *std.Build, module: *std.Build.Module, target: std.Build.Res
     if (crypto) |library| {
         module.linkLibrary(library);
     }
-    return true;
+    return module;
 }
