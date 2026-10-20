@@ -84,73 +84,123 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
+  # The third-party libraries, each built once by its own action and cached, so a library an earlier run (or another workflow) has
+  # already built is restored rather than compiled again. Each is built for both Android architectures the app ships, and for the
+  # runner, which the CLI that makes the smoke tests' fixtures builds for. Every job that runs the Zig build restores them from that
+  # cache with the third-party-libraries action.
   build-aws-sdk:
-    # Compiles the AWS SDK for C and caches the result, because several jobs build Zig and every one of them
-    # would otherwise compile it from cold: it is the longest single build in this workflow. One job owns it,
-    # so the compile happens once per commit and the others restore what this wrote.
-    # The cache key names this workflow's platform because the Linux workflow builds on the same runner, and
-    # actions/cache/save fails when the key already exists.
-    timeout-minutes: 40
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
+
+      - name: Build the AWS SDK for C for the runner
+        uses: ./.github/actions/build-aws-sdk
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          platform: linux-x64
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
+      - name: Build the AWS SDK for C for Android x86_64
+        uses: ./.github/actions/build-aws-sdk
         with:
-          install_args: zig
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
+      - name: Build the AWS SDK for C for Android arm64
+        uses: ./.github/actions/build-aws-sdk
         with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+  build-zlib-ng:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
+
+      - name: Build zlib-ng for the runner
+        uses: ./.github/actions/build-zlib-ng
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: linux-x64
 
-      # `zig build` keeps one HTTP client for its whole run. It fetches the eager packages, compiles and runs
-      # the build script, then fetches the lazy packages the script asked for, reusing the keep-alive
-      # connections it pooled during the first fetch. By then the server has closed them, and Zig 0.16's
-      # client takes a pooled connection without checking it is still open and does not retry, so a lazy
-      # download fails with "invalid HTTP response: HttpConnectionClosing" whenever the package cache missed.
-      # --fetch=all fetches every package, lazy ones included, in one pass and exits before the build script
-      # runs, so no download waits behind it.
-      - name: Fetch every package Zig needs, lazy ones included, in one pass
-        working-directory: .
-        run: zig build --fetch=all
-
-      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
-      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation mode.
-      - name: Build the Zig CLI, which compiles the AWS SDK
-        working-directory: .
-        run: zig build
-
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
+      - name: Build zlib-ng for Android x86_64
+        uses: ./.github/actions/build-zlib-ng
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
+
+      - name: Build zlib-ng for Android arm64
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
+
+  build-imagemagick:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
+
+      - name: Build ImageMagick for the runner
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: linux-x64
+
+      - name: Build ImageMagick for Android x86_64
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
+
+      - name: Build ImageMagick for Android arm64
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
+
+  build-ffmpeg:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
+
+      - name: Build FFmpeg for the runner
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: linux-x64
+
+      - name: Build FFmpeg for Android x86_64
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
+
+      - name: Build FFmpeg for Android arm64
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
   photosphere-android-smoke-tests:
     # The Photosphere App's smoke tests on an Android emulator. The emulator has no host LAN bridge, so PHOTOSPHERE_NO_LAN_BRIDGE
     # makes the scenarios that need one skip with a logged SKIP line.
     timeout-minutes: 90
-    needs: [build-aws-sdk]
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -202,26 +252,20 @@ jobs:
           packages: imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
-      - name: Cache the Android NDK
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
-          key: ${{ runner.os }}-android-ndk-25.1.8937393
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
 
-      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
-      - name: Set up the Android SDK and NDK
-        uses: ./.github/actions/retry-install
+      # The CLI that makes the scenarios' fixtures is built for the runner, and the app for the emulator.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          run: bun run --filter=ziggy setup:android
+          platform: linux-x64
 
-      # Written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      - name: Restore the third-party libraries for Android x86_64
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
 
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
@@ -265,7 +309,7 @@ jobs:
     # to rise with every build that replaces another, is the build time in minutes since the epoch. It is built and not run:
     # running it needs an emulator, which the smoke test job and the local test runs provide.
     timeout-minutes: 90
-    needs: [prepare-tag, build-aws-sdk]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -307,26 +351,20 @@ jobs:
         with:
           run: bun install
 
-      - name: Cache the Android NDK
-        uses: actions/cache@v4
-        with:
-          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
-          key: ${{ runner.os }}-android-ndk-25.1.8937393
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
 
-      # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
-      - name: Set up the Android SDK and NDK (Android)
-        uses: ./.github/actions/retry-install
+      - name: Restore the third-party libraries for Android x86_64
+        uses: ./.github/actions/third-party-libraries
         with:
-          run: bun run --filter=ziggy setup:android
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
 
-      # Written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      - name: Restore the third-party libraries for Android arm64
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
       - name: Set config
         shell: bash
@@ -354,7 +392,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, photosphere-android-smoke-tests, package-photosphere-mobile]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, photosphere-android-smoke-tests, package-photosphere-mobile]
     runs-on: ubuntu-latest
     permissions:
       contents: write

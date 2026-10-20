@@ -1,0 +1,35 @@
+name: Android C library
+description: >
+  Sets up the Android SDK and the NDK (the NDK from the cache when it is there) and writes the libc files Zig is given for the
+  Android targets, tmp/android-libc/x86_64.txt and tmp/android-libc/arm64.txt, because Zig has no C library for Android and uses
+  the NDK's. The third-party library builds for Android pass them with --libc. The job has to check the repository out first.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ env.BUN_VERSION }}
+
+    - name: Cache the Android NDK
+      uses: actions/cache@v4
+      with:
+        path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+        key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+    # Retried because the SDK manager downloads from Google and a download can arrive corrupt.
+    - name: Set up the Android SDK and NDK
+      uses: ./.github/actions/retry-install
+      with:
+        run: bun run --filter=ziggy setup:android
+
+    - name: Write the libc files
+      shell: bash
+      run: |
+        set -euo pipefail
+        source apps/photosphere/scripts/android-common.sh
+        mkdir -p tmp/android-libc
+        for arch in x86_64 arm64; do
+            photosphere_android_write_libc_file "$arch" "tmp/android-libc/$arch.txt" "$(photosphere_android_min_sdk)"
+        done
