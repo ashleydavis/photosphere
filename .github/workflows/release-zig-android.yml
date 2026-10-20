@@ -196,7 +196,7 @@ jobs:
           platform: android
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
-  photosphere-android-smoke-tests:
+  app-smoke-tests:
     # The Photosphere App's smoke tests on an Android emulator. The emulator has no host LAN bridge, so PHOTOSPHERE_NO_LAN_BRIDGE
     # makes the scenarios that need one skip with a logged SKIP line.
     timeout-minutes: 90
@@ -303,7 +303,7 @@ jobs:
           # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
           script: bun run test:ziggy:and
 
-  package-photosphere-mobile:
+  package-release:
     # The Photosphere App packaged for Android, unsigned, by the same package script a developer runs. The version comes from
     # the release tag: android-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Android version code, which has
     # to rise with every build that replaces another, is the build time in minutes since the epoch. It is built and not run:
@@ -392,7 +392,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, photosphere-android-smoke-tests, package-photosphere-mobile]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, app-smoke-tests, package-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write

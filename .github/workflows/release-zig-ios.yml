@@ -168,7 +168,7 @@ jobs:
           build-args: -Dtarget=aarch64-ios.14.0
           config-name: aarch64-ios
 
-  ziggy-photosphere-ios-smoke-tests:
+  app-smoke-tests:
     # The Photosphere App's smoke tests on an iOS simulator. run.sh picks the first available iPhone simulator and boots it,
     # builds the page and the Zig library, and builds and installs the app with xcodebuild. The runner's default Xcode is used,
     # because apple-common.sh only requires one that works and setup-ios.sh checks for 14.2 or newer.
@@ -246,7 +246,7 @@ jobs:
         timeout-minutes: 75
         run: bun run test:ziggy:ios
 
-  package-photosphere-mobile:
+  package-release:
     # The Photosphere App packaged for iOS, unsigned, by the same package script a developer runs. The version comes from the
     # release tag: ios-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The archive is made by xcodebuild with code
     # signing off, and only its .ipa is attached to the release, because an .xcarchive is a folder. It is built and not run:
@@ -330,7 +330,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, ziggy-photosphere-ios-smoke-tests, package-photosphere-mobile]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, app-smoke-tests, package-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write

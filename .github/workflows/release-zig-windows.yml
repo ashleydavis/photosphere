@@ -164,7 +164,7 @@ jobs:
     # Builds the Zig CLI for Windows x64 on a runner of that platform, and publishes the binary. Nothing here
     # cross-compiles, so a build that works is a build that runs on the platform it names.
     #
-    # This is the only job that builds the Zig CLI: zig-cli-smoke-tests downloads the binary this uploads
+    # This is the only job that builds the Zig CLI: cli-smoke-tests downloads the binary this uploads
     # and create-release publishes it, so the binary is built once and used by both.
     timeout-minutes: 40
     needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
@@ -255,7 +255,7 @@ jobs:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
-  zig-cli-smoke-tests:
+  cli-smoke-tests:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
     # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
     # reported as a failure of the other.
@@ -367,7 +367,7 @@ jobs:
         shell: bash
         run: ./hash-cache-smoke-test-zig.sh
 
-  photosphere-desktop-smoke-tests:
+  app-smoke-tests:
     # The Photosphere App's smoke tests on Windows. Windows needs the WebView2 SDK and the WiX Toolset, which the setup
     # step fetches. The Zig build links the third-party libraries the build jobs built.
     timeout-minutes: 75
@@ -448,7 +448,7 @@ jobs:
         shell: bash
         run: bun run test:ziggy
 
-  package-photosphere:
+  package-release:
     # The Photosphere App packaged for Windows, unsigned, by the same package script a developer runs. The version comes
     # from the release tag: windows-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. Windows needs the WebView2 SDK
     # and the WiX Toolset, which the setup step fetches. The Zig build links the third-party libraries the build jobs built.
@@ -531,7 +531,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-windows-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-windows-x64, cli-smoke-tests, app-smoke-tests, package-release]
     runs-on: ubuntu-latest
     permissions:
       contents: write

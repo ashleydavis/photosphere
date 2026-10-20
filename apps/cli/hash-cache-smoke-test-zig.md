@@ -39,4 +39,4 @@ Everything the run writes lives in a temporary directory from `scripts/lib/test-
 
 ## CI
 
-The Release workflow runs this suite on Linux, macOS and Windows in the `zig-cli-smoke-tests` job, like the other Zig suites.
+The Release workflow runs this suite on Linux, macOS and Windows in the `cli-smoke-tests` job, like the other Zig suites.
