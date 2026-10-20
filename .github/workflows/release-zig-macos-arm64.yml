@@ -422,6 +422,29 @@ jobs:
         shell: bash
         run: bun run test:ziggy
 
+      # The import scenarios timed out on arm64 with the app's log ending at the moment the import started, and the job kept nothing
+      # else, so there was no way to tell a crash from a hang. A failed scenario keeps its directory, which holds the app's log and the
+      # core's own log, and macOS writes a crash report for a process that crashed.
+      - name: Collect the logs of failed scenarios and any crash reports
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+          if [ -d "${TMPDIR%/}/photosphere-tests" ]; then
+              cp -R "${TMPDIR%/}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"
+          fi
+          if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
+              cp -R "$HOME/Library/Logs/DiagnosticReports/." "$RUNNER_TEMP/app-smoke-logs/crash-reports/"
+          fi
+          ls -R "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+
+      - name: Upload the logs of failed scenarios and any crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-smoke-logs-macos-arm64
+          path: ${{ runner.temp }}/app-smoke-logs
+
   package-release:
     # The Photosphere App packaged for macOS arm64, unsigned, by the same package script a developer runs. The version
     # comes from the release tag: macos-arm64-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Zig build
