@@ -72,38 +72,6 @@ apple_zig_arch() {
     esac
 }
 
-# Makes the files ImageMagick and FFmpeg need for the Zig target, by the generate-config.sh of each, when they are not there yet. The
-# target is named as the sync scripts give it to Zig ("aarch64-ios.14.0", "x86_64-ios.14.0-simulator", "aarch64-macos.11.0"), and the
-# generated files are kept by the name without the version. The scripts take the iOS SDK from xcrun, so this runs on a Mac only.
-# Usage: apple_generate_media_config <zig_target>
-apple_generate_media_config() {
-    local zig_target="$1"
-    local arch="${zig_target%%-*}"
-    local name
-    case "$zig_target" in
-        *-ios.*-simulator | *-ios-simulator)
-            name="$arch-ios-simulator"
-            ;;
-        *-ios.* | *-ios)
-            name="$arch-ios"
-            ;;
-        *-macos.* | *-macos)
-            name="$arch-macos"
-            ;;
-        *)
-            apple_fail "no media library files are made for the Zig target '$zig_target'."
-            ;;
-    esac
-    local library
-    for library in imagemagick ffmpeg; do
-        local config_dir="$APPLE_REPO_ROOT/third-party/$library/config/$name"
-        if [ ! -d "$config_dir" ]; then
-            echo "Making the $library files for $name..."
-            bash "$APPLE_REPO_ROOT/third-party/$library/generate-config.sh" "$name" || apple_fail "making the $library files for $name failed."
-        fi
-    done
-}
-
 # Bundles Photosphere's page and builds the Zig static library, which embeds the page, so an Xcode build has everything it links.
 # <native_dir> gets lib/libphotosphere.a and include/ziggy.h.
 # Usage: apple_sync_native <zig_target> <native_dir> <yes|no test hooks> <zig optimize mode> <yes|no minify the page>
@@ -118,7 +86,6 @@ apple_sync_native() {
         bundle_arguments=(--minify)
     fi
     apple_require_tool bun zig rsync xcrun
-    apple_generate_media_config "$zig_target"
     echo "Bundling the page..."
     (cd "$APPLE_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}") || apple_fail "bundling the page failed."
     echo "Building the Zig library for $zig_target (optimize $optimize, test hooks $test_hooks)..."

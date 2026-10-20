@@ -25,7 +25,7 @@ What ImageMagick and FFmpeg say about a failure goes to standard error and not i
 
 ## iOS
 
-The iOS scripts (`apps/photosphere/scripts/sync-ios.sh`, and so `build-ios.sh`, `package-ios.sh` and `open-ios.sh`) make the ImageMagick and FFmpeg files for the target when they are missing, by the two `generate-config.sh` scripts and the SDK from `xcrun`, then build the libraries into the core static library. This is written and has not been run: it needs a Mac. The core library itself still does not build for iOS, because `aws-lc.zig` and `aws-sdk.zig` stop the build for any target that is not Linux, Windows or macOS.
+The ImageMagick and FFmpeg files for the iOS targets are not checked in: they come from the SDK of the Mac doing the build. Make them with the two `generate-config.sh` scripts (`aarch64-ios` for a device, `aarch64-ios-simulator` for the simulator on an arm64 Mac), then build each library in its `third-party` directory for the target (`zig build -Dtarget=aarch64-ios.14.0`). The iOS scripts (`apps/photosphere/scripts/sync-ios.sh`, and so `build-ios.sh`, `package-ios.sh` and `open-ios.sh`) link what those builds installed. The iOS release workflow does both through the library build actions.
 
 ## The old mobile apps (deprecated)
 

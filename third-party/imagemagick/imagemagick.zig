@@ -1,6 +1,7 @@
 const std = @import("std");
 const android_libc = @import("support/android-libc.zig");
 const translate_target = @import("support/translate-target.zig");
+const apple_sdk = @import("support/apple-sdk.zig");
 const zlib_ng = @import("zlib").zlib_ng;
 const libjpeg = @import("libjpeg.zig");
 const libpng = @import("libpng.zig");
@@ -172,7 +173,9 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         );
         return error.ConfigMissing;
     };
-
+    // Zig ships no C library for iOS, so an iOS build, and a macOS build for a version other than the machine's, compiles against
+    // the SDK's.
+    try apple_sdk.useSdk(b, target, "ImageMagick");
 
     const library_target = libraryTarget(b, target);
     const jpeg = libjpeg.buildLibjpeg(b, library_target);

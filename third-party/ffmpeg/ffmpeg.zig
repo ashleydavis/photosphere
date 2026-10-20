@@ -2,6 +2,7 @@ const std = @import("std");
 const zlib_ng = @import("zlib").zlib_ng;
 const media_target = @import("support/media-target.zig");
 const host_libc = @import("support/host-libc.zig");
+const apple_sdk = @import("support/apple-sdk.zig");
 
 //
 // Builds FFmpeg from the unmodified source in vendor/ffmpeg as one static library: libavutil, libavcodec, libavformat, libavfilter,
@@ -139,6 +140,9 @@ fn contains(list: []const []const u8, path: []const u8) bool {
 //
 pub fn buildFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, zlib: zlib_ng.IZlibNg) !IFfmpeg {
     const config_path = try configPath(b, target);
+    // Zig ships no C library for iOS, so an iOS build, and a macOS build for a version other than the machine's, compiles against
+    // the SDK's.
+    try apple_sdk.useSdk(b, target, "FFmpeg");
     const entries = try readList(b, b.fmt("{s}/lists.txt", .{config_path}));
     // The library ends up in Android's shared library. FFmpeg's aarch64 assembly addresses its tables with relocations that a
     // shared library allows only for symbols that cannot be replaced by another library's, which FFmpeg's own shared build gets by

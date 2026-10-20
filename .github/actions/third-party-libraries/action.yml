@@ -14,6 +14,11 @@ inputs:
     required: false
     default: ""
 
+  config-name:
+    description: Passed to the ImageMagick and FFmpeg build actions, as the build jobs pass it (iOS). Left empty, none.
+    required: false
+    default: ""
+
 runs:
   using: composite
   steps:
@@ -34,9 +39,11 @@ runs:
       with:
         platform: ${{ inputs.platform }}
         build-args: ${{ inputs.build-args }}
+        config-name: ${{ inputs.config-name }}
 
     - name: FFmpeg
       uses: ./.github/actions/build-ffmpeg
       with:
         platform: ${{ inputs.platform }}
         build-args: ${{ inputs.build-args }}
+        config-name: ${{ inputs.config-name }}

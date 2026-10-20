@@ -18,6 +18,13 @@ inputs:
     required: false
     default: ""
 
+  config-name:
+    description: >
+      A directory of third-party/imagemagick/config to make with generate-config.sh before the build when it is missing, for a target
+      whose generated files are not checked in (iOS, whose come from the SDK of the Mac doing the build). Left empty, none is made.
+    required: false
+    default: ""
+
 runs:
   using: composite
   steps:
@@ -37,6 +44,15 @@ runs:
       with:
         path: third-party/imagemagick/zig-out
         key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', '!third-party/imagemagick/zig-out/**', '!third-party/imagemagick/zig-pkg/**', '!third-party/imagemagick/.zig-cache/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
+
+    # After the cache key is worked out, so the files it makes do not change the key a job that only restores the library works out.
+    - name: Make ImageMagick's generated files for the target
+      if: steps.cache.outputs.cache-hit != 'true' && inputs.config-name != ''
+      shell: bash
+      run: |
+        if [ ! -d "third-party/imagemagick/config/${{ inputs.config-name }}" ]; then
+            bash "third-party/imagemagick/generate-config.sh" "${{ inputs.config-name }}"
+        fi
 
     - name: Build ImageMagick and its delegates
       if: steps.cache.outputs.cache-hit != 'true'

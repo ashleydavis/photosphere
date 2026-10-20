@@ -208,6 +208,9 @@ pub fn build(b: *std.Build) !void {
         try addPhotosphereUnavailable(b, target);
         return;
     }
+    // Zig ships no C library for iOS, so an iOS build, and a macOS build for a version other than the machine's, compiles against the
+    // SDK's: the translated C headers and the C code of the packages need it.
+    try apple_sdk.useSdk(b, target, "Photosphere's core");
     // Ziggy, from the dependency named "ziggy" in build.zig.zon, with the test hooks when the app is built with them. The packages, the
     // CLI and the app all use this one.
     const ziggy = ziggy_build.dependency(b, target, optimize, test_hooks);
