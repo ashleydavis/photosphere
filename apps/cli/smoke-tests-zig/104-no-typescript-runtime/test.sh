@@ -2,8 +2,9 @@
 DESCRIPTION="The Zig CLI runs on its own: a copy of the binary, with no bun or node on the PATH, runs the common commands"
 
 # The Zig binary is copied alone into a directory of this test and run with a PATH that holds only the
-# directories of magick, ffmpeg and ffprobe, the external tools the TypeScript CLI also needs. The test
-# fails if bun or node can be found in any of those directories. init, add, summary, list, export and
+# directories of magick, ffmpeg and ffprobe, the external tools the TypeScript CLI also needs (or a directory
+# of links to them, for a tool whose own directory also holds bun or node). The test fails if bun or node can be
+# found in any of those directories. init, add, summary, list, export and
 # verify are run with asserted output and exit codes, then the TypeScript CLI checks the database with the
 # normal PATH. The binary is also checked not to be a bun-compiled executable: a bun-compiled executable
 # carries bun's embedded-files trailer, which the TypeScript CLI binary has and the Zig binary must not.
@@ -14,10 +15,13 @@ trap cleanup_and_show_summary EXIT
 
 #
 # Builds a PATH out of the directories of the ImageMagick command (magick, or convert where ImageMagick 6 has no
-# magick, as the CLI itself falls back), ffmpeg and ffprobe, each once. Prints nothing and fails when a tool is
-# missing, so the caller reports it.
+# magick, as the CLI itself falls back), ffmpeg and ffprobe, each once. A tool whose directory also holds bun or
+# node (Homebrew puts all of them in /opt/homebrew/bin on an arm64 Mac) is linked into <links directory> instead,
+# and that directory is used for it. Prints nothing and fails when a tool is missing, so the caller reports it.
+# Usage: tool_directories_path <links directory>
 #
 tool_directories_path() {
+    local links_directory="$1"
     local result=""
     local tool_name
     for tool_name in magick ffmpeg ffprobe; do
@@ -31,6 +35,11 @@ tool_directories_path() {
         fi
         local tool_directory
         tool_directory="$(dirname "$tool_path")"
+        if [ -e "$tool_directory/bun" ] || [ -e "$tool_directory/node" ]; then
+            mkdir -p "$links_directory"
+            ln -s "$tool_path" "$links_directory/$(basename "$tool_path")"
+            tool_directory="$links_directory"
+        fi
         case ":$result:" in
             *":$tool_directory:"*) ;;
             *) result="${result:+$result:}$tool_directory" ;;
@@ -63,7 +72,7 @@ test_no_typescript_runtime() {
 
     # Neither bun nor node can be reached with the restricted PATH.
     local restricted_path
-    if ! restricted_path="$(tool_directories_path)"; then
+    if ! restricted_path="$(tool_directories_path "$test_dir/tools")"; then
         log_error "magick (or convert), ffmpeg or ffprobe is not on the PATH, so the Zig CLI cannot be run with only the tool directories"
         exit 1
     fi
