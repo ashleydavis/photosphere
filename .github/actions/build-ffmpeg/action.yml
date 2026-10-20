@@ -2,7 +2,8 @@ name: Build FFmpeg
 description: >
   Builds FFmpeg with its own build in third-party/ffmpeg and uploads what it installs in
   third-party/ffmpeg/zig-out as the artifact ffmpeg-<platform>, for a later job to download with the
-  download-third-party-libraries action. The job has to check the repository out first.
+  download-third-party-libraries action. The build is cached, and skipped when nothing it is built
+  from has changed. The job has to check the repository out first.
 
 inputs:
   platform:
@@ -21,12 +22,23 @@ inputs:
 runs:
   using: composite
   steps:
+    # Installed even when the build is cached, so the job's later steps can run zig.
     - name: Setup Zig (version from mise.toml)
       uses: jdx/mise-action@v2
       with:
         install_args: zig
 
+    # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/ffmpeg and third-party/zlib-ng (which it builds against),
+    # the platform and the build arguments. Any change to one of them builds it again.
+    - name: Restore FFmpeg from the cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: third-party/ffmpeg/zig-out
+        key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/ffmpeg/**', 'third-party/zlib-ng/**') }}
+
     - name: Build FFmpeg
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: third-party/ffmpeg
       # Word splitting is intended: the input is a space-separated list of arguments.

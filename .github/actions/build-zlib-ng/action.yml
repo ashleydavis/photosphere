@@ -2,7 +2,8 @@ name: Build zlib-ng
 description: >
   Builds zlib-ng with its own build in third-party/zlib-ng and uploads what it installs in
   third-party/zlib-ng/zig-out as the artifact zlib-ng-<platform>, for a later job to download with the
-  download-third-party-libraries action. The job has to check the repository out first.
+  download-third-party-libraries action. The build is cached, and skipped when nothing it is built
+  from has changed. The job has to check the repository out first.
 
 inputs:
   platform:
@@ -21,12 +22,23 @@ inputs:
 runs:
   using: composite
   steps:
+    # Installed even when the build is cached, so the job's later steps can run zig.
     - name: Setup Zig (version from mise.toml)
       uses: jdx/mise-action@v2
       with:
         install_args: zig
 
+    # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/zlib-ng,
+    # the platform and the build arguments. Any change to one of them builds it again.
+    - name: Restore zlib-ng from the cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: third-party/zlib-ng/zig-out
+        key: zlib-ng-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/zlib-ng/**') }}
+
     - name: Build zlib-ng
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: third-party/zlib-ng
       # Word splitting is intended: the input is a space-separated list of arguments.

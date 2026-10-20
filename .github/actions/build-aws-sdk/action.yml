@@ -2,7 +2,8 @@ name: Build the AWS SDK for C
 description: >
   Builds the AWS SDK for C and aws-lc with their own build in third-party/aws and uploads what it installs in
   third-party/aws/zig-out as the artifact aws-sdk-<platform>, for a later job to download with the
-  download-third-party-libraries action. The job has to check the repository out first.
+  download-third-party-libraries action. The build is cached, and skipped when nothing it is built
+  from has changed. The job has to check the repository out first.
 
 inputs:
   platform:
@@ -21,18 +22,29 @@ inputs:
 runs:
   using: composite
   steps:
+    # Installed even when the build is cached, so the job's later steps can run zig.
     - name: Setup Zig (version from mise.toml)
       uses: jdx/mise-action@v2
       with:
         install_args: zig
 
-    - name: Build the AWS SDK for C
+    # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/aws,
+    # the platform and the build arguments. Any change to one of them builds it again.
+    - name: Restore the AWS SDK for C and aws-lc from the cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: third-party/aws/zig-out
+        key: aws-sdk-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/aws/**') }}
+
+    - name: Build the AWS SDK for C and aws-lc
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: third-party/aws
       # Word splitting is intended: the input is a space-separated list of arguments.
       run: zig build ${{ inputs.build-args }}
 
-    - name: Upload the AWS SDK for C
+    - name: Upload the AWS SDK for C and aws-lc
       uses: actions/upload-artifact@v4
       with:
         name: aws-sdk-${{ inputs.platform }}

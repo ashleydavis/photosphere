@@ -2,7 +2,8 @@ name: Build ImageMagick
 description: >
   Builds ImageMagick and its delegates with their own build in third-party/imagemagick and uploads what it installs in
   third-party/imagemagick/zig-out as the artifact imagemagick-<platform>, for a later job to download with the
-  download-third-party-libraries action. The job has to check the repository out first.
+  download-third-party-libraries action. The build is cached, and skipped when nothing it is built
+  from has changed. The job has to check the repository out first.
 
 inputs:
   platform:
@@ -21,18 +22,29 @@ inputs:
 runs:
   using: composite
   steps:
+    # Installed even when the build is cached, so the job's later steps can run zig.
     - name: Setup Zig (version from mise.toml)
       uses: jdx/mise-action@v2
       with:
         install_args: zig
 
-    - name: Build ImageMagick
+    # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/imagemagick and third-party/zlib-ng (which it builds against),
+    # the platform and the build arguments. Any change to one of them builds it again.
+    - name: Restore ImageMagick and its delegates from the cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: third-party/imagemagick/zig-out
+        key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', 'third-party/zlib-ng/**') }}
+
+    - name: Build ImageMagick and its delegates
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: third-party/imagemagick
       # Word splitting is intended: the input is a space-separated list of arguments.
       run: zig build ${{ inputs.build-args }}
 
-    - name: Upload ImageMagick
+    - name: Upload ImageMagick and its delegates
       uses: actions/upload-artifact@v4
       with:
         name: imagemagick-${{ inputs.platform }}
