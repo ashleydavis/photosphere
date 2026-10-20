@@ -80,12 +80,18 @@ pub fn build(context: *const aws_sdk.Context, dependency: *std.Build.Dependency,
         }, &.{"source/intel/intrin/crc64nvme_clmul.c"});
     }
     else if (aws_c_common.useCpuExtensions(context) and context.isAarch64) {
-        // ${AWS_ARMv8_1_FLAG}: -march=armv8-a+crc+crypto (the -mtune it may add only affects scheduling).
-        addAcceleratedSources(context, library, dependency, common, "aws-checksums-arm", &.{
+        // ${AWS_ARMv8_1_FLAG}: -march=armv8-a+crc+crypto (the -mtune it may add only affects scheduling). Without outlined
+        // atomics on Apple, for the reason aws_c_common.libraryTarget gives.
+        const arm_features: []const std.Target.Cpu.Feature.Set.Index = if (context.isApple) &.{
+            @intFromEnum(std.Target.aarch64.Feature.crc),
+            @intFromEnum(std.Target.aarch64.Feature.crypto),
+        }
+        else &.{
             @intFromEnum(std.Target.aarch64.Feature.crc),
             @intFromEnum(std.Target.aarch64.Feature.crypto),
             @intFromEnum(std.Target.aarch64.Feature.outline_atomics),
-        }, &.{ "source/arm/crc32c_arm.c", "source/arm/crc64_arm.c" });
+        };
+        addAcceleratedSources(context, library, dependency, common, "aws-checksums-arm", arm_features, &.{ "source/arm/crc32c_arm.c", "source/arm/crc64_arm.c" });
     }
 
     library.installHeadersDirectory(dependency.path("include"), "", .{ .include_extensions = &.{ ".h", ".inl" } });

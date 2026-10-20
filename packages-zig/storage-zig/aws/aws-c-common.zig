@@ -17,10 +17,12 @@ pub fn useCpuExtensions(context: *const aws_sdk.Context) bool {
 
 //
 // The target the aws-c-* libraries are compiled for: aws_set_common_properties (AwsCFlags.cmake) adds
-// `-moutline-atomics` on ARM64 when the compiler supports it, which Zig's does.
+// `-moutline-atomics` on ARM64 when the compiler supports it, which Zig's does. Not on Apple: the outlined atomics call
+// helpers (`__aarch64_ldadd8_relax` and the like) that Zig's compiler-rt supplies only when Zig links the executable, and
+// on macOS and iOS Xcode's linker links the app, and Apple's toolchain has no such helpers.
 //
 pub fn libraryTarget(context: *const aws_sdk.Context) std.Build.ResolvedTarget {
-    if (context.isAarch64) {
+    if (context.isAarch64 and !context.isApple) {
         return context.targetWithFeatures(&.{@intFromEnum(std.Target.aarch64.Feature.outline_atomics)});
     }
     return context.target;
