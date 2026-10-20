@@ -96,7 +96,10 @@ build_test_cli_binaries() {
     echo "Building psi, mk and bdb for $target into $bin_dir"
     local cli_dir="$_TEST_CLI_BINARIES_CLI_DIR"
     mkdir -p "$bin_dir/psi" "$bin_dir/mk" "$bin_dir/bdb"
-    if ! (cd "$bin_dir/psi" && bun build --env=disable --compile --minify --sourcemap --target="$target" --outfile "$bin_dir/psi/$(test_cli_executable_name psi)" "$cli_dir/index.ts" "$cli_dir/worker.ts"); then
+    # psi is built without a source map. With one, Bun 1.3.14 segfaulted as psi exited after a verify that had passed (exit code
+    # 132, "Bun has crashed"), in its source map lookup under Error.captureStackTrace (Mapping.Lookup.displaySourceURLIfNeeded),
+    # which failed a different Zig CLI smoke test each run on Linux and macOS.
+    if ! (cd "$bin_dir/psi" && bun build --env=disable --compile --minify --target="$target" --outfile "$bin_dir/psi/$(test_cli_executable_name psi)" "$cli_dir/index.ts" "$cli_dir/worker.ts"); then
         echo "Failed to build psi into $bin_dir/psi" >&2
         return 1
     fi
