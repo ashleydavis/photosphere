@@ -75,7 +75,7 @@ add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_
 
 # --- 2. Create the database on S3 through the New Database dialog. ---
 
-send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+click_sidebar_item "$APP_PORT" new-database || exit 1
 wait_for_log "$TMP_DIR" "Create database dialog opened"
 
 send_command "$APP_PORT" type "{\"dataId\":\"database-name-input\",\"text\":\"$DB_NAME\"}" || exit 1
@@ -106,7 +106,7 @@ case "$PLATFORM" in
         # completes.
         ;;
     *)
-        send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" open-database || exit 1
         wait_for_log "$TMP_DIR" "Open database dialog opened"
         send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
         ;;
@@ -168,7 +168,7 @@ case "$PLATFORM" in
         # "/" then replaces that redirect with the route already showing, and the gallery never mounts.
         wait_for_log "$TMP_DIR" "Load assets task completed: 2 assets loaded"
 
-        send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" open-database || exit 1
         wait_for_log "$TMP_DIR" "Open database dialog opened"
         send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
         wait_for_log "$TMP_DIR" "Opening database"

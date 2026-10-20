@@ -57,7 +57,7 @@ wait_for_ready "$APP_PORT"
 wait_for_log "$TMP_DIR" "Sync gate set to true"
 
 # Open the Configuration dialog and confirm the sync settings rendered.
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_value "$APP_PORT" "configuration-dialog" "Syncing"
 
 # Turning off "Enable syncing" disallows syncing and persists syncEnabled=false.

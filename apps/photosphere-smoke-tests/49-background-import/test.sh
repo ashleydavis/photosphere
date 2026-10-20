@@ -127,7 +127,7 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Switch automatic import on through the settings card, which is the only thing the user does.
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_log "$TMP_DIR" "Automatic import settings loaded"
 
 send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
@@ -158,7 +158,7 @@ fi
 # are delivered to whatever is listening at the time: while the app is off screen there is nothing listening, and nothing replays them
 # afterwards. So a gallery opened after the app comes back would be right for the wrong reason, having loaded everything from disk.
 # Opened before, it has to be brought up to date on its own.
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 wait_for_log "$TMP_DIR" "Load assets task completed: 1 assets loaded" 120 || exit 1

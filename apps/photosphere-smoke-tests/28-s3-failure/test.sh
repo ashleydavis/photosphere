@@ -80,7 +80,7 @@ case "$PLATFORM" in
         wait_for_log "$TMP_DIR" "Secrets page loaded"
         add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_EMULATOR_ACCESS_KEY" "$S3_EMULATOR_SECRET_KEY" || exit 1
 
-        send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" new-database || exit 1
         wait_for_log "$TMP_DIR" "Create database dialog opened"
         send_command "$APP_PORT" type "{\"dataId\":\"database-name-input\",\"text\":\"$DB_NAME\"}" || exit 1
         send_command "$APP_PORT" click '{"dataId":"database-storage-type-select"}' || exit 1
@@ -94,7 +94,7 @@ case "$PLATFORM" in
         send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
         wait_for_log "$TMP_DIR" "Database created"
 
-        send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" open-database || exit 1
         wait_for_log "$TMP_DIR" "Open database dialog opened"
         send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
         wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
@@ -126,7 +126,7 @@ esac
 
 # --- 3. Opening it must report a failure, not an empty gallery. ---
 
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 

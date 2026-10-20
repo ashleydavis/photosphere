@@ -1037,6 +1037,18 @@ open_page_actions_menu() {
 }
 
 #
+# Opens the left sidebar and clicks one of its items, the way a user opens the New database, Open database and Configuration
+# dialogs on every platform. A phone has no menu bar, so the sidebar is the one path that is the same everywhere.
+# Usage: click_sidebar_item <port> <new-database|open-database|configuration>
+#
+click_sidebar_item() {
+    local port="$1"
+    local item="$2"
+    send_command "$port" click '{"dataId":"sidebar-toggle-button"}' || return 1
+    send_command "$port" click "{\"dataId\":\"sidebar-$item\"}" || return 1
+}
+
+#
 # Clicks one of a database row's actions on the Databases page. A phone folds a row's actions into the row's menu, which is opened
 # first, and the open menu holds the one set of action buttons. A desktop shows every row's buttons, so the row is the button's index.
 # Usage: click_database_row_action <port> <row_index> <action_data_id>

@@ -104,7 +104,7 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Switch automatic import on, which is the only thing the user does.
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_log "$TMP_DIR" "Automatic import settings loaded"
 send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "$("${PLATFORM}_auto_import_started_log")" || exit 1

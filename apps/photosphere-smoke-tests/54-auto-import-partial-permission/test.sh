@@ -56,7 +56,7 @@ android_grant_partial_media_permission || exit 1
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_log "$TMP_DIR" "Automatic import settings loaded"
 
 send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1

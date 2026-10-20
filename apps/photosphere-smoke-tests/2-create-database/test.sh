@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Drives the new-database flow from the app menu and creates a new empty database. On a desktop the path is absolute and the database
+# Drives the new-database flow from the left sidebar and creates a new empty database. On a desktop the path is absolute and the database
 # is checked on disk. On a phone the path is relative to the app's storage sandbox, the only place the app may write.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -30,7 +30,7 @@ case "$PLATFORM" in
         ;;
 esac
 
-send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+click_sidebar_item "$APP_PORT" new-database || exit 1
 wait_for_log "$TMP_DIR" "Create database dialog opened"
 
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"test-db"}' || exit 1

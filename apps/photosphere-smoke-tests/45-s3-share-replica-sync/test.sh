@@ -167,7 +167,7 @@ log_success "The encrypted S3 database was received onto the device over the LAN
 
 # --- 3. Open the received S3 database and see the one photo. ---
 
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 # Assert which entry index 0 is before clicking it, rather than trusting the list order. The button's
 # text is the entry name followed by its path.
@@ -222,7 +222,7 @@ log_success "The encrypted S3 database was partially replicated onto the device"
 # A successful replication registers its destination in the databases list as the task ends, so the replica is already an entry and is
 # opened from the Open Database dialog. It was registered after the received database, so it is the second entry, which is asserted
 # rather than assumed.
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 wait_for_value "$APP_PORT" "database-list-item-1" "$REPLICA_NAME"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-1"}' || exit 1
@@ -298,7 +298,7 @@ send_command "$APP_PORT" click '{"dataId":"right-sidebar-button"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"close-database-button"}' || exit 1
 wait_for_value "$APP_PORT" "no-database-loaded" "."
 
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 wait_for_value "$APP_PORT" "database-list-item-1" "$REPLICA_NAME"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-1"}' || exit 1
@@ -370,7 +370,7 @@ log_success "The edit was pushed up to the encrypted S3 origin (confirmed by rea
 # anything.
 send_command "$APP_PORT" click '{"dataId":"asset-view-close-button"}' || exit 1
 
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 # shared-db was registered first, so it keeps index 0 and the replica is index 1. Asserted rather
 # than assumed, because opening the replica here would prove nothing about the origin.

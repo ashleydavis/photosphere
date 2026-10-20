@@ -52,7 +52,7 @@ wait_for_log "$TMP_DIR" "Secrets page loaded"
 add_s3_secret_via_ui "$APP_PORT" "$SECRET_NAME" "$S3_ENDPOINT" "us-east-1" "$S3_EMULATOR_ACCESS_KEY" "$S3_EMULATOR_SECRET_KEY"
 
 # The database, in the bucket, through the New Database dialog.
-send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+click_sidebar_item "$APP_PORT" new-database || exit 1
 wait_for_log "$TMP_DIR" "Create database dialog opened"
 send_command "$APP_PORT" type "{\"dataId\":\"database-name-input\",\"text\":\"$DB_NAME\"}" || exit 1
 send_command "$APP_PORT" click '{"dataId":"database-storage-type-select"}' || exit 1
@@ -67,7 +67,7 @@ send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database created"
 
 # A photo in it, so the bucket holds something a user would be devastated to lose.
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"
@@ -114,7 +114,7 @@ fi
 log_success "The S3 credentials are in the vault before the reset"
 
 # Reset the device.
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_value "$APP_PORT" "configuration-dialog" "Reset device"
 send_command "$APP_PORT" click '{"dataId":"reset-device-open"}' || exit 1
 wait_for_value "$APP_PORT" "reset-device-dialog" "cannot be undone"

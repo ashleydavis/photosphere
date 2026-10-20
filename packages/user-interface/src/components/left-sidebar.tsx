@@ -137,6 +137,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
             <div className="flex flex-col" style={{ paddingLeft: "15px" }}>
                 <List>
                     <ListItem
+                        data-id="sidebar-new-database"
                         onClick={() => {
                             setSidebarOpen(false);
                             onNewDatabase();
@@ -161,6 +162,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     </ListItem>
 
                     <ListItem
+                        data-id="sidebar-open-database"
                         onClick={() => {
                             setSidebarOpen(false);
                             onOpenDatabase();
@@ -375,6 +377,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     </NavLink>
 
                     <ListItem
+                        data-id="sidebar-configuration"
                         onClick={() => {
                             setSidebarOpen(false);
                             onOpenConfiguration();

@@ -245,7 +245,7 @@ run_one_pass() {
     start_app "$TMP_DIR"
     wait_for_ready "$APP_PORT"
 
-    send_command "$APP_PORT" menu '{"action":"open-configuration"}' || return 1
+    click_sidebar_item "$APP_PORT" configuration || return 1
     wait_for_log "$TMP_DIR" "Automatic import settings loaded" || return 1
 
     # Android refuses a foreground service started by an app it considers backgrounded, and an app

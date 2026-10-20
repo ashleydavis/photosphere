@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_MENU_EVENT, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
@@ -908,10 +908,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         if (!testMode) {
             return;
         }
-        const handleMenu = (event: Event) => {
-            const action = (event as CustomEvent<string>).detail;
-            platformEventCallbacksRef.current.forEach(callback => callback({ type: 'menu-action', action }));
-        };
         const handleOpenDatabase = (event: Event) => {
             const databasePath = (event as CustomEvent<string>).detail;
             openedCallbacksRef.current.forEach(callback => callback(databasePath));
@@ -934,14 +930,12 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         const handleNotifyDatabaseEdited = () => {
             notifyDatabaseEdited();
         };
-        window.addEventListener(TEST_MENU_EVENT, handleMenu);
         window.addEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
         window.addEventListener(TEST_SEED_NEWS_EVENT, handleSeedNews);
         window.addEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);
         window.addEventListener(TEST_STAGE_EXPORT_EVENT, handleStageExport);
         signalTestPageReady(ziggy);
         return () => {
-            window.removeEventListener(TEST_MENU_EVENT, handleMenu);
             window.removeEventListener(TEST_OPEN_DATABASE_EVENT, handleOpenDatabase);
             window.removeEventListener(TEST_SEED_NEWS_EVENT, handleSeedNews);
             window.removeEventListener(TEST_NOTIFY_DATABASE_EDITED_EVENT, handleNotifyDatabaseEdited);

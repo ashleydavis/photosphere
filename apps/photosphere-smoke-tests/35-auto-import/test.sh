@@ -138,7 +138,7 @@ case "$PLATFORM" in
         wait_for_ready "$APP_PORT"
 
         # Switch automatic import on through the settings card, which is the only thing the user does.
-        send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+        click_sidebar_item "$APP_PORT" configuration || exit 1
         wait_for_log "$TMP_DIR" "Automatic import settings loaded"
 
         send_command "$APP_PORT" click '{"dataId":"auto-import-toggle"}' || exit 1
@@ -307,7 +307,7 @@ YAMLEOF
 
         # --- 1. Switching automatic import on creates the default database. ---
 
-        send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+        click_sidebar_item "$APP_PORT" configuration || exit 1
         wait_for_value "$APP_PORT" "configuration-dialog" "Automatic import"
         log_success "The automatic import card is on the configuration dialog"
 
@@ -370,7 +370,7 @@ YAMLEOF
 
         wait_for_asset_count 2
 
-        send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+        click_sidebar_item "$APP_PORT" configuration || exit 1
         wait_for_value "$APP_PORT" "configuration-dialog" "Automatic import"
 
         # The first press counts, and says what it found rather than deleting anything.
@@ -481,7 +481,7 @@ YAMLEOF
         start_app "$TMP_DIR"
         wait_for_ready "$APP_PORT"
 
-        send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" open-database || exit 1
         wait_for_log "$TMP_DIR" "Open database dialog opened"
         send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
         wait_for_log "$TMP_DIR" "Database opened"

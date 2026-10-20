@@ -66,7 +66,7 @@ start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
 # Open the database dialog while there is nothing to list. It stays open for the rest of the scenario.
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 
 # The list is empty. Asserted rather than assumed, because a list that already held the database would make the final wait pass
@@ -74,7 +74,7 @@ wait_for_log "$TMP_DIR" "Open database dialog opened"
 wait_for_value "$APP_PORT" "no-databases-configured" "No databases configured"
 
 # Switch automatic import on through the settings card, which opens over the database dialog.
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 
 # The card renders nothing until the settings are in, so the toggle carrying its label is the state to wait for.
 wait_for_value "$APP_PORT" "auto-import-toggle" "Automatic import"

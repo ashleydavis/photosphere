@@ -57,7 +57,7 @@ damage_vault || exit 1
 log_info "Replaced the vault with something that cannot be read"
 
 # Reset the device. It gets as far as the secrets and stops.
-send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_value "$APP_PORT" "configuration-dialog" "Reset device"
 send_command "$APP_PORT" click '{"dataId":"reset-device-open"}' || exit 1
 wait_for_value "$APP_PORT" "reset-device-dialog" "cannot be undone"

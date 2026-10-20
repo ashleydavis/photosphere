@@ -42,7 +42,7 @@ printf '{"origin":"%s"}\n' "$("${PLATFORM}_app_path" "$ORIGIN_NAME")" > "$LOCAL_
 DATABASE_APP_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
 "${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DATABASE_APP_PATH\"}]" || exit 1
 
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 wait_for_log "$TMP_DIR" "Database opened"

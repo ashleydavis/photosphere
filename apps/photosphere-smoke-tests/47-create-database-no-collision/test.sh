@@ -25,7 +25,7 @@ DB_ONE_PATH="$("${PLATFORM}_app_path" "db-one")"
 DB_TWO_PATH="$("${PLATFORM}_app_path" "db-two")"
 
 # First database, path chosen via Browse.
-send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+click_sidebar_item "$APP_PORT" new-database || exit 1
 wait_for_log "$TMP_DIR" "Create database dialog opened"
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"db-one"}' || exit 1
 send_command "$APP_PORT" pick-answer "$(jq -cn --arg path "$DB_ONE_PATH" '{paths: [$path]}')" || exit 1
@@ -40,7 +40,7 @@ wait_for_log "$TMP_DIR" "Database created"
 wait_for_value_gone "$APP_PORT" "create-database-confirm" "Create" || exit 1
 
 # Second database, a different path chosen via Browse: it must not collide with the first.
-send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+click_sidebar_item "$APP_PORT" new-database || exit 1
 wait_for_log "$TMP_DIR" "Create database dialog opened"
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"db-two"}' || exit 1
 send_command "$APP_PORT" pick-answer "$(jq -cn --arg path "$DB_TWO_PATH" '{paths: [$path]}')" || exit 1

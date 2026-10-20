@@ -283,7 +283,7 @@ fi
 log_success "The replication registered the replica"
 
 # Opened from the open-database dialog, where the remote is the first entry and the replica the second.
-send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+click_sidebar_item "$APP_PORT" open-database || exit 1
 wait_for_log "$TMP_DIR" "Open database dialog opened"
 send_command "$APP_PORT" click '{"dataId":"database-list-item-1"}' || exit 1
 wait_for_log "$TMP_DIR" "Database opened"

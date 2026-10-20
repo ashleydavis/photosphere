@@ -72,7 +72,7 @@ require_state_intact() {
 # Opens the Configuration dialog and the reset confirmation on its first step.
 #
 open_reset_dialog() {
-    send_command "$APP_PORT" menu '{"action":"open-configuration"}' || exit 1
+    click_sidebar_item "$APP_PORT" configuration || exit 1
     wait_for_value "$APP_PORT" "configuration-dialog" "Reset device"
     send_command "$APP_PORT" click '{"dataId":"reset-device-open"}' || exit 1
     wait_for_value "$APP_PORT" "reset-device-dialog" "cannot be undone"
@@ -93,7 +93,7 @@ wait_for_ready "$APP_PORT"
 # A database entry and a secret, added the way a user adds them, so the reset has something real to remove.
 case "$PLATFORM" in
     android|ios)
-        send_command "$APP_PORT" menu '{"action":"new-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" new-database || exit 1
         wait_for_log "$TMP_DIR" "Create database dialog opened"
         send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"test-db"}' || exit 1
         send_command "$APP_PORT" type "$(jq -cn --arg text "$DATABASE_PATH" '{dataId: "database-path-input", text: $text}')" || exit 1
@@ -117,7 +117,7 @@ case "$PLATFORM" in
 
         # One photo imported into it, so the database on disk has something to lose and the app has written a real hash cache and
         # import record into its cache directory for the reset to clear.
-        send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+        click_sidebar_item "$APP_PORT" open-database || exit 1
         wait_for_log "$TMP_DIR" "Open database dialog opened"
         send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
         wait_for_log "$TMP_DIR" "Load assets task completed: 0 assets loaded"

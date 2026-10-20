@@ -10,7 +10,7 @@
 #   2. A bad credential surfaces an error in the browser rather than an empty list. An empty list is the failure this test exists to
 #      catch: it looks exactly like an empty bucket.
 #
-# On a desktop the dialog is New Database, reached from the menu. On a phone it is Add Database, reached from the databases page's
+# On a desktop the dialog is New Database, reached from the left sidebar. On a phone it is Add Database, reached from the databases page's
 # actions menu, and each listing runs as a background task on the embedded worker, so the second browse also covers the worker pool
 # reviving a task source the first browser closed and cancelled.
 #
@@ -68,7 +68,7 @@ open_s3_browser() {
             wait_for_log "$TMP_DIR" "Add database dialog opened"
             ;;
         *)
-            send_command "$APP_PORT" menu '{"action":"new-database"}' || return 1
+            click_sidebar_item "$APP_PORT" new-database || return 1
             wait_for_log "$TMP_DIR" "Create database dialog opened"
             ;;
     esac
