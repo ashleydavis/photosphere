@@ -56,10 +56,20 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
         headerSent = true;
     }
 
+    // A key the readers cannot slice back out is refused by handing the error to the callback, which makes the stream emit it.
+    // Thrown out of transform it escaped as an uncaught exception instead: the Zig CI unit-tests job failed "a key the format
+    // cannot read back > fails the stream rather than writing a file nothing can decrypt" with the "wraps into 256 bytes" error
+    // reported as uncaught and the test timing out after 30 s, because the stream never emitted the error it was waiting for.
     return new Transform({
         transform(chunk, encoding, callback) {
             if (!headerSent) {
-                sendHeader(this);
+                try {
+                    sendHeader(this);
+                }
+                catch (error) {
+                    callback(error as Error);
+                    return;
+                }
             }
             this.push(cipher.update(chunk));
             callback();
@@ -67,7 +77,13 @@ export function createEncryptionStream(publicKey: KeyObject): Duplex {
 
         flush(callback) {
             if (!headerSent) {
-                sendHeader(this);
+                try {
+                    sendHeader(this);
+                }
+                catch (error) {
+                    callback(error as Error);
+                    return;
+                }
             }
             this.push(cipher.final());
             callback();
