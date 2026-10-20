@@ -28,13 +28,15 @@ runs:
         install_args: zig
 
     # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/imagemagick and third-party/zlib-ng (which it builds against),
-    # the platform and the build arguments. Any change to one of them builds it again.
+    # the platform and the build arguments. Any change to one of them builds it again. What a build writes (zig-out, zig-pkg,
+    # .zig-cache) is left out of the hash: a job that has already restored or built one library would otherwise see a different hash
+    # for the next library that is built over it, and miss the cache.
     - name: Restore ImageMagick and its delegates from the cache
       id: cache
       uses: actions/cache@v4
       with:
         path: third-party/imagemagick/zig-out
-        key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', 'third-party/zlib-ng/**') }}
+        key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', '!third-party/imagemagick/zig-out/**', '!third-party/imagemagick/zig-pkg/**', '!third-party/imagemagick/.zig-cache/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
 
     - name: Build ImageMagick and its delegates
       if: steps.cache.outputs.cache-hit != 'true'

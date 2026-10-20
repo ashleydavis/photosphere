@@ -28,13 +28,15 @@ runs:
         install_args: zig
 
     # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/ffmpeg and third-party/zlib-ng (which it builds against),
-    # the platform and the build arguments. Any change to one of them builds it again.
+    # the platform and the build arguments. Any change to one of them builds it again. What a build writes (zig-out, zig-pkg,
+    # .zig-cache) is left out of the hash: a job that has already restored or built one library would otherwise see a different hash
+    # for the next library that is built over it, and miss the cache.
     - name: Restore FFmpeg from the cache
       id: cache
       uses: actions/cache@v4
       with:
         path: third-party/ffmpeg/zig-out
-        key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/ffmpeg/**', 'third-party/zlib-ng/**') }}
+        key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/ffmpeg/**', '!third-party/ffmpeg/zig-out/**', '!third-party/ffmpeg/zig-pkg/**', '!third-party/ffmpeg/.zig-cache/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
 
     - name: Build FFmpeg
       if: steps.cache.outputs.cache-hit != 'true'
