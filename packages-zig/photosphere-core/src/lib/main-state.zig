@@ -28,6 +28,7 @@ const background_work = @import("background-work.zig");
 const mcp_bridge = @import("mcp-bridge.zig");
 const single_instance = @import("single-instance.zig");
 const windows_host = @import("windows-host.zig");
+const macos_host = @import("macos-host.zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
@@ -178,6 +179,8 @@ pub const MainState = struct {
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
     // What answers the background work's host requests on Windows, whose shell has no host request callback (see windows-host.zig).
     windows_host: windows_host.WindowsHost,
+    // What answers the background work's host requests on MacOS, whose bridge has no host request callback (see macos-host.zig).
+    macos_host: macos_host.MacosHost,
     // Tells the timer thread to end.
     stopping: std.atomic.Value(bool),
     // The timer thread.
@@ -255,6 +258,7 @@ pub const MainState = struct {
             .prefetch_replica_state = .init(.unknown),
             .uuid_generator = .{},
             .windows_host = windows_host.WindowsHost.init(core.io()),
+            .macos_host = macos_host.MacosHost.init(core.io()),
             .stopping = .init(false),
             .timer_thread = null,
         };
@@ -446,6 +450,7 @@ pub const MainState = struct {
         self.freeOwned(&self.asset_server_error);
         self.mcp_bridge.deinit();
         self.windows_host.deinit();
+        self.macos_host.deinit();
         if (self.single_instance) |*instance| {
             instance.release(self.io);
         }

@@ -199,6 +199,10 @@
 					"-lphotosphere",
 					"-framework",
 					Network,
+					"-framework",
+					IOKit,
+					"-framework",
+					CoreFoundation,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = Photosphere;
@@ -227,6 +231,10 @@
 					"-lphotosphere",
 					"-framework",
 					Network,
+					"-framework",
+					IOKit,
+					"-framework",
+					CoreFoundation,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = au.com.codecapers.photosphere;
 				PRODUCT_NAME = Photosphere;

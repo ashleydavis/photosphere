@@ -669,12 +669,18 @@ pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const
 }
 
 //
-// Answers a host request when the shell has no host request callback. Ziggy's Windows shell has none, so on Windows the core answers the
-// requests a desktop can itself (windows-host.zig). Anywhere else, and for a request only a phone can answer, it is an error that says so.
+// Answers a host request when the shell has no host request callback. Ziggy's Windows shell and MacOS bridge have none, so on Windows
+// and MacOS the core answers the requests a desktop can itself (windows-host.zig, macos-host.zig). Anywhere else, and for a request only
+// a phone can answer, it is an error that says so.
 //
 pub fn answerWithoutShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
     if (builtin.os.tag == .windows) {
         if (try main_state.fromContext(context).windows_host.answer(context.arena, method, request_json)) |answer| {
+            return answer;
+        }
+    }
+    if (builtin.os.tag == .macos) {
+        if (try main_state.fromContext(context).macos_host.answer(context.arena, method, request_json)) |answer| {
             return answer;
         }
     }

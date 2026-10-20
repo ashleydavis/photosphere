@@ -162,12 +162,12 @@ test "requests with a field missing are error replies that name the field" {
     try std.testing.expect(app.last_host_method == null);
 }
 
-test "on Windows, whose shell has no host request callback, the core starts and stops the background work itself" {
+test "on Windows and MacOS, whose shells have no host request callback, the core starts and stops the background work itself" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
     support.removeHostRequest(&app);
-    if (builtin.os.tag != .windows) {
+    if (builtin.os.tag != .windows and builtin.os.tag != .macos) {
         const refused = try app.requestError("startBackgroundImport", "null");
         defer std.testing.allocator.free(refused);
         try std.testing.expectEqualStrings("requestNotificationPermission is only available in the Photosphere app on a phone.", refused);

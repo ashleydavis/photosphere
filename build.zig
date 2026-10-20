@@ -336,6 +336,10 @@ fn addPackageModules(
             }
             module.addImport("openssl", try translateHeader(b, target, aws.include_directory, encryption_openssl_header));
         }
+        if (std.mem.eql(u8, package.name, "photosphere-core") and target.result.os.tag == .macos) {
+            // IOKit, whose power assertion macos-host.zig takes to hold the computer awake, which a static library does not record.
+            module.linkFramework("IOKit", .{});
+        }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
             // zlib-ng, which gzip compression and decompression bind to, and which ImageMagick and FFmpeg are built over: the program
             // has one copy of it.
