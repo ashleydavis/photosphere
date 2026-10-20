@@ -165,6 +165,17 @@ jobs:
         with:
           platform: linux-x64
 
+      # Zig skips any compile step whose inputs are unchanged and already in .zig-cache. Without this the test binaries and psi are
+      # compiled from nothing every run, which is most of this job's time. The key changes with any Zig source, and the newest
+      # earlier cache is restored when there is no exact match, so only the binaries a change touches are compiled again.
+      - name: Cache Zig's build cache
+        uses: actions/cache@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ hashFiles('mise.toml', '**/*.zig', '**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-build-
+
       - name: Run the Zig unit tests
         timeout-minutes: 40
         shell: bash
