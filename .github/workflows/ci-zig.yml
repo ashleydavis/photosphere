@@ -55,22 +55,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
       - name: Build the AWS SDK for C
-        working-directory: third-party/aws
-        run: zig build
-
-      - name: Upload the AWS SDK for C
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/build-aws-sdk
         with:
-          name: aws-sdk-linux-x64
-          path: third-party/aws/zig-out
-          if-no-files-found: error
-          retention-days: 2
+          platform: linux-x64
 
   # Builds zlib-ng with its own build in third-party/zlib-ng, and hands the library to zig-unit-tests.
   build-zlib-ng:
@@ -80,22 +68,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
       - name: Build zlib-ng
-        working-directory: third-party/zlib-ng
-        run: zig build
-
-      - name: Upload zlib-ng
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/build-zlib-ng
         with:
-          name: zlib-ng-linux-x64
-          path: third-party/zlib-ng/zig-out
-          if-no-files-found: error
-          retention-days: 2
+          platform: linux-x64
 
   # Builds ImageMagick and its delegates with their own build in third-party/imagemagick, runs the tests of its threshold map
   # maker, and hands the libraries to zig-unit-tests.
@@ -106,26 +82,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
       - name: Build ImageMagick
-        working-directory: third-party/imagemagick
-        run: zig build
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: linux-x64
 
       - name: Run the tests of the threshold map maker
         working-directory: third-party/imagemagick
         run: zig build test
-
-      - name: Upload ImageMagick
-        uses: actions/upload-artifact@v4
-        with:
-          name: imagemagick-linux-x64
-          path: third-party/imagemagick/zig-out
-          if-no-files-found: error
-          retention-days: 2
 
   # Builds FFmpeg with its own build in third-party/ffmpeg, and hands the library to zig-unit-tests.
   build-ffmpeg:
@@ -135,22 +99,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
       - name: Build FFmpeg
-        working-directory: third-party/ffmpeg
-        run: zig build
-
-      - name: Upload FFmpeg
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/build-ffmpeg
         with:
-          name: ffmpeg-linux-x64
-          path: third-party/ffmpeg/zig-out
-          if-no-files-found: error
-          retention-days: 2
+          platform: linux-x64
 
   # The unit tests of the Zig CLI and of every Zig package.
   zig-unit-tests:
@@ -199,29 +151,10 @@ jobs:
           verify: magick|convert ffmpeg ffprobe
 
       # The libraries the build jobs built, which the Zig build links.
-      - name: Download the AWS SDK for C
-        uses: actions/download-artifact@v4
+      - name: Download the third-party libraries
+        uses: ./.github/actions/download-third-party-libraries
         with:
-          name: aws-sdk-linux-x64
-          path: third-party/aws/zig-out
-
-      - name: Download zlib-ng
-        uses: actions/download-artifact@v4
-        with:
-          name: zlib-ng-linux-x64
-          path: third-party/zlib-ng/zig-out
-
-      - name: Download ImageMagick
-        uses: actions/download-artifact@v4
-        with:
-          name: imagemagick-linux-x64
-          path: third-party/imagemagick/zig-out
-
-      - name: Download FFmpeg
-        uses: actions/download-artifact@v4
-        with:
-          name: ffmpeg-linux-x64
-          path: third-party/ffmpeg/zig-out
+          platform: linux-x64
 
       - name: Run the Zig unit tests
         timeout-minutes: 40

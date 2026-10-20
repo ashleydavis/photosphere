@@ -1,0 +1,40 @@
+name: Download the third-party libraries
+description: >
+  Downloads the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg that the build-aws-sdk, build-zlib-ng,
+  build-imagemagick and build-ffmpeg actions uploaded, each into third-party/<library>/zig-out where
+  Photosphere's Zig build looks for it. The job has to check the repository out first and needs the
+  jobs that ran those actions.
+
+inputs:
+  platform:
+    description: >
+      The platform the libraries were built for, as passed to the build actions (for example
+      linux-x64).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download the AWS SDK for C
+      uses: actions/download-artifact@v4
+      with:
+        name: aws-sdk-${{ inputs.platform }}
+        path: third-party/aws/zig-out
+
+    - name: Download zlib-ng
+      uses: actions/download-artifact@v4
+      with:
+        name: zlib-ng-${{ inputs.platform }}
+        path: third-party/zlib-ng/zig-out
+
+    - name: Download ImageMagick
+      uses: actions/download-artifact@v4
+      with:
+        name: imagemagick-${{ inputs.platform }}
+        path: third-party/imagemagick/zig-out
+
+    - name: Download FFmpeg
+      uses: actions/download-artifact@v4
+      with:
+        name: ffmpeg-${{ inputs.platform }}
+        path: third-party/ffmpeg/zig-out

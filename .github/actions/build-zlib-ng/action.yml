@@ -1,0 +1,41 @@
+name: Build zlib-ng
+description: >
+  Builds zlib-ng with its own build in third-party/zlib-ng and uploads what it installs in
+  third-party/zlib-ng/zig-out as the artifact zlib-ng-<platform>, for a later job to download with the
+  download-third-party-libraries action. The job has to check the repository out first.
+
+inputs:
+  platform:
+    description: >
+      The platform the library is built for, as the artifact names it (for example linux-x64). It must
+      match the platform passed to download-third-party-libraries.
+    required: true
+
+  build-args:
+    description: >
+      Extra arguments passed to zig build, such as -Dtarget=aarch64-ios or -Dcpu=baseline. Left empty,
+      the library is built for the runner.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Zig (version from mise.toml)
+      uses: jdx/mise-action@v2
+      with:
+        install_args: zig
+
+    - name: Build zlib-ng
+      shell: bash
+      working-directory: third-party/zlib-ng
+      # Word splitting is intended: the input is a space-separated list of arguments.
+      run: zig build ${{ inputs.build-args }}
+
+    - name: Upload zlib-ng
+      uses: actions/upload-artifact@v4
+      with:
+        name: zlib-ng-${{ inputs.platform }}
+        path: third-party/zlib-ng/zig-out
+        if-no-files-found: error
+        retention-days: 2

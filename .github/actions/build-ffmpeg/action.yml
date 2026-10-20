@@ -1,0 +1,41 @@
+name: Build FFmpeg
+description: >
+  Builds FFmpeg with its own build in third-party/ffmpeg and uploads what it installs in
+  third-party/ffmpeg/zig-out as the artifact ffmpeg-<platform>, for a later job to download with the
+  download-third-party-libraries action. The job has to check the repository out first.
+
+inputs:
+  platform:
+    description: >
+      The platform the library is built for, as the artifact names it (for example linux-x64). It must
+      match the platform passed to download-third-party-libraries.
+    required: true
+
+  build-args:
+    description: >
+      Extra arguments passed to zig build, such as -Dtarget=aarch64-ios or -Dcpu=baseline. Left empty,
+      the library is built for the runner.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Zig (version from mise.toml)
+      uses: jdx/mise-action@v2
+      with:
+        install_args: zig
+
+    - name: Build FFmpeg
+      shell: bash
+      working-directory: third-party/ffmpeg
+      # Word splitting is intended: the input is a space-separated list of arguments.
+      run: zig build ${{ inputs.build-args }}
+
+    - name: Upload FFmpeg
+      uses: actions/upload-artifact@v4
+      with:
+        name: ffmpeg-${{ inputs.platform }}
+        path: third-party/ffmpeg/zig-out
+        if-no-files-found: error
+        retention-days: 2
