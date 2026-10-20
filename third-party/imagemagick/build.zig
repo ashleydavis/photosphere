@@ -5,21 +5,10 @@ const zlib_ng = @import("zlib").zlib_ng;
 //
 // Builds ImageMagick with its delegates (libjpeg, libpng and libwebp) for the target, over the zlib-ng of third-party/zlib-ng, and
 // installs them under zig-out/<arch>-<os>-<abi>: the static libraries in lib and MagickWand.h translated to Zig as zig/magick.zig.
-// zlib-ng is not installed here: Photosphere's build links the one third-party/zlib-ng installs. `zig build test` runs the tests of
-// the program that makes ImageMagick's threshold maps.
+// zlib-ng is not installed here: Photosphere's build links the one third-party/zlib-ng installs.
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-
-    const test_step = b.step("test", "Run the tests of the program that makes ImageMagick's threshold maps");
-    const tests = b.addTest(.{
-        .name = "threshold-map",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("threshold-map.test.zig"),
-            .target = b.graph.host,
-        }),
-    });
-    test_step.dependOn(&b.addRunArtifact(tests).step);
 
     if (imagemagick.unsupportedReason(b, target)) |reason| {
         b.getInstallStep().dependOn(&b.addFail(reason).step);

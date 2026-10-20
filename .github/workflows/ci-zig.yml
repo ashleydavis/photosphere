@@ -107,8 +107,7 @@ jobs:
         with:
           platform: linux-x64
 
-  # Builds ImageMagick and its delegates with their own build in third-party/imagemagick, runs the tests of its threshold map
-  # maker, and hands the libraries to zig-unit-tests.
+  # Builds ImageMagick and its delegates with their own build in third-party/imagemagick, and hands the libraries to zig-unit-tests.
   build-imagemagick:
     timeout-minutes: 30
     runs-on: ubuntu-latest
@@ -120,10 +119,6 @@ jobs:
         uses: ./.github/actions/build-imagemagick
         with:
           platform: linux-x64
-
-      - name: Run the tests of the threshold map maker
-        working-directory: third-party/imagemagick
-        run: zig build test
 
   # Builds FFmpeg with its own build in third-party/ffmpeg, and hands the library to zig-unit-tests.
   build-ffmpeg:

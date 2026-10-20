@@ -4,7 +4,7 @@ const std = @import("std");
 // A build for Android or for an Apple target that needs the SDK has a libc file for the target (the NDK's, given with --libc, or the SDK's,
 // see packages-zig/apple-sdk.zig), and Zig gives that file to every compile step that has none of its own, including the programs the
 // build runs on the machine doing it. A program that links the C library (every program on macOS) then links the target's, and fails, as
-// ImageMagick's threshold-map-tool did on a Mac building for iOS ("undefined symbol: __NSGetExecutablePath").
+// a program the build ran did on a Mac building for iOS ("undefined symbol: __NSGetExecutablePath").
 //
 
 //

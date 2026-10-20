@@ -1,7 +1,6 @@
 const std = @import("std");
 const android_libc = @import("support/android-libc.zig");
 const translate_target = @import("support/translate-target.zig");
-const host_libc = @import("support/host-libc.zig");
 const zlib_ng = @import("zlib").zlib_ng;
 const libjpeg = @import("libjpeg.zig");
 const libpng = @import("libpng.zig");
@@ -174,31 +173,6 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         return error.ConfigMissing;
     };
 
-    // MagickCore/threshold-map.h, which a zero configuration build includes in threshold.c and which Makefile.am makes from
-    // config/thresholds.xml. A program run on the machine doing the build makes it, because the build cannot count on sed.
-    const threshold_tool = b.addExecutable(.{
-        .name = "threshold-map-tool",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("threshold-map-tool.zig"),
-            .target = b.graph.host,
-            .optimize = .ReleaseSafe,
-            .imports = &.{
-                .{
-                    .name = "threshold-map",
-                    .module = b.createModule(.{
-                        .root_source_file = b.path("threshold-map.zig"),
-                        .target = b.graph.host,
-                    }),
-                },
-            },
-        }),
-    });
-    host_libc.useHostLibc(b, threshold_tool);
-    const threshold_command = b.addRunArtifact(threshold_tool);
-    threshold_command.addFileArg(b.path("vendor/imagemagick/config/thresholds.xml"));
-    const threshold_map_header = threshold_command.addOutputFileArg("threshold-map.h");
-    const generated = b.addWriteFiles();
-    _ = generated.addCopyFile(threshold_map_header, "MagickCore/threshold-map.h");
 
     const library_target = libraryTarget(b, target);
     const jpeg = libjpeg.buildLibjpeg(b, library_target);
@@ -221,7 +195,6 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
     // AM_CPPFLAGS: the build and source directories. The generated headers come first.
     module.addIncludePath(b.path(config_path));
     module.addIncludePath(b.path("vendor/imagemagick"));
-    module.addIncludePath(generated.getDirectory());
     module.addConfigHeader(jpeg.config_header);
     module.addIncludePath(jpeg.include_directory);
     module.addIncludePath(png.include_directory);
@@ -256,11 +229,13 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         }
     }
 
-    // MAGICKCORE_BASE_SRCS: every .c file of MagickCore but vms.c, which is for VMS, and MAGICKCORE_PLATFORM_SRCS: nt-base.c and
+    // MAGICKCORE_BASE_SRCS: every .c file of MagickCore but vms.c, which is for VMS, and threshold.c, whose dithering Photosphere
+    // never uses and which needs a header ImageMagick's Makefile generates, and MAGICKCORE_PLATFORM_SRCS: nt-base.c and
     // nt-feature.c for Windows.
     const windows_only = [_][]const u8{ "nt-base.c", "nt-feature.c" };
     var core_excluded: std.ArrayList([]const u8) = .empty;
     try core_excluded.append(b.allocator, "vms.c");
+    try core_excluded.append(b.allocator, "threshold.c");
     if (!is_windows) {
         try core_excluded.appendSlice(b.allocator, &windows_only);
     }
