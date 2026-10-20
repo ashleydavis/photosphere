@@ -10,7 +10,7 @@ env:
   RELEASE_PLATFORM_NAME: "Android"
 
 on:
-  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run by hand.
+  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
   # push:
   #   branches:
   #     - "*"
@@ -266,14 +266,7 @@ jobs:
     # running it needs an emulator, which the smoke test job and the local test runs provide.
     timeout-minutes: 90
     needs: [prepare-tag, build-aws-sdk]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: android
-            os: ubuntu-latest
-            files: "*.apk"
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -354,8 +347,8 @@ jobs:
       - name: Upload the packages
         uses: actions/upload-artifact@v4
         with:
-          name: photosphere-app-${{ matrix.name }}
-          path: apps/photosphere/out/${{ matrix.name }}/${{ matrix.files }}
+          name: photosphere-app-android
+          path: apps/photosphere/out/android/*.apk
           if-no-files-found: error
           retention-days: 2
 

@@ -10,7 +10,7 @@ env:
   RELEASE_PLATFORM_NAME: "macOS"
 
 on:
-  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run by hand.
+  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
   # push:
   #   branches:
   #     - "*"
@@ -332,7 +332,7 @@ jobs:
 
       # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
       # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation
-      # mode, and the unit tests and the storage integration tests build in this mode too.
+      # mode, and the storage integration tests build in this mode too.
       - name: Build the Zig CLI, which compiles the AWS SDK
         working-directory: .
         run: zig build
@@ -344,110 +344,9 @@ jobs:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
 
-  zig-unit-tests:
-    # The unit tests of the Zig CLI and of every Zig package, on each architecture. This is a job of its own so a
-    # failure in a test is not reported as a failure of a smoke suite, which is what happens when the two share a
-    # job: the job is named after the smoke tests and a red unit test looks like a red smoke test.
-    # Setup takes about 5 minutes and a cold unit test build, which compiles ImageMagick and FFmpeg too, up to 40 on the Intel Mac.
-    timeout-minutes: 50
-    needs: [build-aws-sdk]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig
-
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
-
-      # Every run compiled the Zig CLI, every package and the AWS SDK for C from nothing. Zig's cache is
-      # content addressed, so the one from an earlier run holds most of what this run compiles. It is saved
-      # by the build-zig job for the same architecture.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-
-
-      # Every commit adds a new generation of Zig artifacts and nothing removes the old ones, so the
-      # cache grew from 2.4 GB (run 674) to 6.1 GB (run 699). Saving only under 6 GB then stopped every
-      # save, runs kept restoring an ever staler cache, and once GitHub evicted that last entry run 700
-      # built everything cold and passed the step's timeout. A cache this big is moved out of the way
-      # instead, so this run builds and saves a fresh one.
-      - name: Start a fresh Zig build cache when the restored one has grown too big
-        shell: bash
-        run: |
-          if [ -d .zig-cache ]; then
-              megabytes="$(du -sm .zig-cache | cut -f1)"
-              echo "Restored Zig build cache: ${megabytes} MB"
-              if [ "$megabytes" -ge 5120 ]; then
-                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
-                  echo "Moved it aside to start a fresh one"
-              fi
-          fi
-
-      # See the same step in build-zig-macos-x64 for why the packages are fetched before the build.
-      - name: Fetch every package Zig needs, lazy ones included, in one pass
-        working-directory: .
-        run: zig build --fetch=all
-
-      # A cold build also compiles aws-lc, zlib-ng and the rest of the AWS SDK for C first, which took
-      # longer than 12 minutes (run 700).
-      - name: Run the Zig unit tests
-        timeout-minutes: 40
-        shell: bash
-        run: |
-          # The Zig CLI and every Zig package in one build, so each dependency, the AWS SDK for C among
-          # them, is compiled once rather than once in each package that uses it.
-          zig build test --summary all --test-timeout 20m
-
   zig-cli-smoke-tests:
     # The Zig CLI smoke suites on each architecture, because the byte-identical output (gzip OS byte, paths, file
-    # times) differs between platforms. The unit tests are the zig-unit-tests job above, so a failure in one is not
+    # times) differs between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
     # reported as a failure of the other.
     # The binary is not built here: each build-zig job builds the one for its own architecture and this job
     # downloads it, so the Zig CLI is compiled once per architecture and both this job and the release use it.
@@ -738,7 +637,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zig-macos-arm64, build-zig-macos-x64, zig-unit-tests, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
+    needs: [prepare-tag, build-aws-sdk, build-zig-macos-arm64, build-zig-macos-x64, zig-cli-smoke-tests, photosphere-desktop-smoke-tests, package-photosphere]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -1,0 +1,144 @@
+name: Zig CI
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+
+on:
+  push:
+    branches:
+      - "*"
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  # The TypeScript unit tests.
+  unit-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run unit tests
+        timeout-minutes: 12
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+
+  # The unit tests of the Zig CLI and of every Zig package.
+  # Setup takes about 5 minutes and a cold unit test build, which compiles the AWS SDK for C, ImageMagick and FFmpeg too, up to 40.
+  zig-unit-tests:
+    timeout-minutes: 50
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (Linux)
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      # Zig's cache is content addressed, so the one from an earlier run holds most of what this run compiles.
+      # The key holds the run id and attempt, because actions/cache/save fails when the key already exists.
+      - name: Restore the Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-ci-unit-tests-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-ci-unit-tests-
+
+      # Every commit adds a new generation of Zig artifacts and nothing removes the old ones, so a cache that has grown this big
+      # is moved out of the way and this run builds and saves a fresh one.
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      - name: Fetch every package Zig needs, lazy ones included, in one pass
+        run: zig build --fetch=all
+
+      - name: Run the Zig unit tests
+        timeout-minutes: 40
+        shell: bash
+        run: zig build test --summary all --test-timeout 20m
+
+      - name: Save the Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-ci-unit-tests-${{ github.run_id }}-${{ github.run_attempt }}

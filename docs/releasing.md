@@ -18,6 +18,10 @@ Each platform's versions are independent. Releasing `linux-v1.2.3` releases noth
 
 The TypeScript release workflow (`.github/workflows/release-typescript.yml`) is disabled in GitHub and does not run.
 
+For now the release workflows run only when started manually from the Actions tab: their push and pull request triggers, release tag pushes included, are commented out until every platform's workflow passes. Until then a pushed tag starts nothing, and pushes and pull requests build no nightly.
+
+The unit tests (TypeScript and Zig) are not part of any release workflow. They run in the Zig CI workflow (`.github/workflows/ci-zig.yml`), on Linux, for every push to a branch, every pull request into `main` and every manual run.
+
 ## Making a release
 
 Push a tag for the platform:
@@ -27,7 +31,7 @@ git tag linux-v1.2.3
 git push origin linux-v1.2.3
 ```
 
-Or run the platform's workflow by hand from the Actions tab and pick a release action:
+Or run the platform's workflow manually from the Actions tab and pick a release action:
 
 - `none` builds a nightly (see below).
 - `new-patch` creates the next patch tag for that platform (`linux-v1.2.3` becomes `linux-v1.2.4`), pushes it and releases it.
