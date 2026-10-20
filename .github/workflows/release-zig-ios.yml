@@ -84,75 +84,123 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
+  # The third-party libraries, each built once by its own action and cached, so a library an earlier run (or the macOS workflow) has
+  # already built is restored rather than compiled again. Each is built for the iOS simulator the smoke tests run on, for an iOS
+  # device, which the package is built for, and for the runner's macOS, which the CLI that makes the smoke tests' fixtures builds for.
+  # ImageMagick's and FFmpeg's generated files for iOS are not checked in, so their builds make them first. Every job that runs the
+  # Zig build restores the libraries from that cache with the third-party-libraries action.
   build-aws-sdk:
-    # Compiles the AWS SDK for C and caches the result, because several jobs build Zig and every one of them
-    # would otherwise compile it from cold: it is the longest single build in this workflow. One job owns it,
-    # so the compile happens once per commit and the others restore what this wrote. It runs on the same
-    # runner as the jobs that restore it, because the cache key names the runner's operating system and architecture.
-    # The cache key names this workflow's platform because the macOS workflow builds on a macOS runner too, and
-    # actions/cache/save fails when the key already exists.
-    timeout-minutes: 40
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            target: aarch64-macos.11.0
+            config: ""
+          - platform: ios
+            target: aarch64-ios.14.0-simulator
+            config: aarch64-ios-simulator
+          - platform: ios
+            target: aarch64-ios.14.0
+            config: aarch64-ios
     runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Build the AWS SDK for C
+        uses: ./.github/actions/build-aws-sdk
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          platform: ${{ matrix.platform }}
+          build-args: -Dtarget=${{ matrix.target }}
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
+  build-zlib-ng:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            target: aarch64-macos.11.0
+            config: ""
+          - platform: ios
+            target: aarch64-ios.14.0-simulator
+            config: aarch64-ios-simulator
+          - platform: ios
+            target: aarch64-ios.14.0
+            config: aarch64-ios
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build zlib-ng
+        uses: ./.github/actions/build-zlib-ng
         with:
-          install_args: zig
+          platform: ${{ matrix.platform }}
+          build-args: -Dtarget=${{ matrix.target }}
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
+  build-imagemagick:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            target: aarch64-macos.11.0
+            config: ""
+          - platform: ios
+            target: aarch64-ios.14.0-simulator
+            config: aarch64-ios-simulator
+          - platform: ios
+            target: aarch64-ios.14.0
+            config: aarch64-ios
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build ImageMagick
+        uses: ./.github/actions/build-imagemagick
         with:
-          path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+          platform: ${{ matrix.platform }}
+          build-args: -Dtarget=${{ matrix.target }}
+          config-name: ${{ matrix.config }}
 
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+  build-ffmpeg:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            target: aarch64-macos.11.0
+            config: ""
+          - platform: ios
+            target: aarch64-ios.14.0-simulator
+            config: aarch64-ios-simulator
+          - platform: ios
+            target: aarch64-ios.14.0
+            config: aarch64-ios
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build FFmpeg
+        uses: ./.github/actions/build-ffmpeg
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
-
-      # `zig build` keeps one HTTP client for its whole run. It fetches the eager packages, compiles and runs
-      # the build script, then fetches the lazy packages the script asked for, reusing the keep-alive
-      # connections it pooled during the first fetch. By then the server has closed them, and Zig 0.16's
-      # client takes a pooled connection without checking it is still open and does not retry, so a lazy
-      # download fails with "invalid HTTP response: HttpConnectionClosing" whenever the package cache missed.
-      # --fetch=all fetches every package, lazy ones included, in one pass and exits before the build script
-      # runs, so no download waits behind it.
-      - name: Fetch every package Zig needs, lazy ones included, in one pass
-        working-directory: .
-        run: zig build --fetch=all
-
-      # The CLI's own build, which compiles the AWS SDK for C and runs nothing. Every job that needs the AWS
-      # SDK builds in this same mode, so one cache serves all of them: the Zig cache is keyed by optimisation mode.
-      - name: Build the Zig CLI, which compiles the AWS SDK
-        working-directory: .
-        run: zig build
-
-      - name: Save the Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
+          platform: ${{ matrix.platform }}
+          build-args: -Dtarget=${{ matrix.target }}
+          config-name: ${{ matrix.config }}
 
   ziggy-photosphere-ios-smoke-tests:
     # The Photosphere App's smoke tests on an iOS simulator. run.sh picks the first available iPhone simulator and boots it,
     # builds the page and the Zig library, and builds and installs the app with xcodebuild. The runner's default Xcode is used,
     # because apple-common.sh only requires one that works and setup-ios.sh checks for 14.2 or newer.
     timeout-minutes: 90
-    needs: [build-aws-sdk]
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: macos-15
     steps:
       - name: Checkout code
@@ -207,14 +255,19 @@ jobs:
       - name: Check the iOS toolchain
         run: bun run --filter=ziggy setup:ios
 
-      # Written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      # The CLI that makes the scenarios' fixtures is built for the runner's macOS, and the app for the simulator.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: macos-arm64
+          build-args: -Dtarget=aarch64-macos.11.0
+
+      - name: Restore the third-party libraries for the iOS simulator
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
 
       - name: Run the Photosphere App iOS smoke tests
         timeout-minutes: 75
@@ -226,7 +279,7 @@ jobs:
     # signing off, and only its .ipa is attached to the release, because an .xcarchive is a folder. It is built and not run:
     # running it needs a simulator, which the smoke test job and the local test runs provide.
     timeout-minutes: 90
-    needs: [prepare-tag, build-aws-sdk]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: macos-15
     steps:
       - name: Checkout code
@@ -271,14 +324,12 @@ jobs:
       - name: Check the iOS toolchain (iOS)
         run: bun run --filter=ziggy setup:ios
 
-      # Written by build-aws-sdk, so the AWS SDK for C is not compiled from cold.
-      - name: Restore the Zig build cache
-        uses: actions/cache/restore@v4
+      - name: Restore the third-party libraries for an iOS device
+        uses: ./.github/actions/third-party-libraries
         with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-build-aws-sdk-${{ env.RELEASE_PLATFORM }}-
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+          config-name: aarch64-ios
 
       - name: Set config
         shell: bash
@@ -306,7 +357,7 @@ jobs:
 
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, ziggy-photosphere-ios-smoke-tests, package-photosphere-mobile]
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, ziggy-photosphere-ios-smoke-tests, package-photosphere-mobile]
     runs-on: ubuntu-latest
     permissions:
       contents: write
