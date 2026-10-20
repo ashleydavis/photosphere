@@ -84,116 +84,89 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
-  # The third-party libraries, each built once by its own action and cached, so a library an earlier run (or the macOS workflow) has
-  # already built is restored rather than compiled again. Each is built for the iOS simulator the smoke tests run on, for an iOS
-  # device, which the package is built for, and for the runner's macOS, which the CLI that makes the smoke tests' fixtures builds for.
-  # ImageMagick's and FFmpeg's generated files for iOS are not checked in, so their builds make them first. Every job that runs the
-  # Zig build restores the libraries from that cache with the third-party-libraries action.
+  # The third-party libraries, each built once by its own action and cached, so a library an earlier run has already built is
+  # restored rather than compiled again. Each is built for the iOS simulator the smoke tests run on and for an iOS device, which the
+  # package is built for. ImageMagick's and FFmpeg's generated files for iOS are not checked in, so their builds make them first.
+  # Every job that runs the Zig build restores the libraries from that cache with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-arm64
-            target: aarch64-macos.11.0
-            config: ""
-          - platform: ios
-            target: aarch64-ios.14.0-simulator
-            config: aarch64-ios-simulator
-          - platform: ios
-            target: aarch64-ios.14.0
-            config: aarch64-ios
     runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build the AWS SDK for C
+      - name: Build the AWS SDK for C for the iOS simulator
         uses: ./.github/actions/build-aws-sdk
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+
+      - name: Build the AWS SDK for C for an iOS device
+        uses: ./.github/actions/build-aws-sdk
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
 
   build-zlib-ng:
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-arm64
-            target: aarch64-macos.11.0
-            config: ""
-          - platform: ios
-            target: aarch64-ios.14.0-simulator
-            config: aarch64-ios-simulator
-          - platform: ios
-            target: aarch64-ios.14.0
-            config: aarch64-ios
     runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build zlib-ng
+      - name: Build zlib-ng for the iOS simulator
         uses: ./.github/actions/build-zlib-ng
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+
+      - name: Build zlib-ng for an iOS device
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
 
   build-imagemagick:
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-arm64
-            target: aarch64-macos.11.0
-            config: ""
-          - platform: ios
-            target: aarch64-ios.14.0-simulator
-            config: aarch64-ios-simulator
-          - platform: ios
-            target: aarch64-ios.14.0
-            config: aarch64-ios
     runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build ImageMagick
+      - name: Build ImageMagick for the iOS simulator
         uses: ./.github/actions/build-imagemagick
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
-          config-name: ${{ matrix.config }}
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Build ImageMagick for an iOS device
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+          config-name: aarch64-ios
 
   build-ffmpeg:
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-arm64
-            target: aarch64-macos.11.0
-            config: ""
-          - platform: ios
-            target: aarch64-ios.14.0-simulator
-            config: aarch64-ios-simulator
-          - platform: ios
-            target: aarch64-ios.14.0
-            config: aarch64-ios
     runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build FFmpeg
+      - name: Build FFmpeg for the iOS simulator
         uses: ./.github/actions/build-ffmpeg
         with:
-          platform: ${{ matrix.platform }}
-          build-args: -Dtarget=${{ matrix.target }}
-          config-name: ${{ matrix.config }}
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Build FFmpeg for an iOS device
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+          config-name: aarch64-ios
 
   ziggy-photosphere-ios-smoke-tests:
     # The Photosphere App's smoke tests on an iOS simulator. run.sh picks the first available iPhone simulator and boots it,
