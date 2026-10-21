@@ -2,7 +2,7 @@
 
 Builds the MacOS app in Debug for this Mac's architecture with `build-macos.sh`, then runs its executable directly, so its output appears in the terminal.
 
-Run it on a Mac in a graphical session: `bun run --filter=ziggy run:macos -- [app arguments]`.
+Run it on a Mac in a graphical session: `bun run --filter=ziggy macos -- [app arguments]`.
 
 ## Arguments
 
