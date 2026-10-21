@@ -1,5 +1,5 @@
 //
-// Logs the error of a channel handler before the page is told about it: the handler runs, and when it fails the error is logged with the
+// Logs the error of a message handler before the page is told about it: the handler runs, and when it fails the error is logged with the
 // message given for it (`log.exception(message, error)`) and passed on unchanged, so the page still gets the error reply.
 //
 

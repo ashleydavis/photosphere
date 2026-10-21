@@ -149,7 +149,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - [UI stories](packages/user-interface/src/stories/README.md) - The stories browser (every page/modal/dialog/component in isolation) and the cross-platform story player. Run the stories on Android/iOS to check pages fit on a phone screen
 - [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - [Background tasks](docs/background-tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
-- [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) - The Zig and system web view application framework the Photosphere App is built on, in its own repository: parts, message protocol, adding a channel, a task type or a native host callback, and test hooks
+- [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) - The Zig and system web view application framework the Photosphere App is built on, in its own repository: parts, message protocol, adding a message, a task type or a native host callback, and test hooks
 - [Photosphere on Ziggy](docs/photosphere-on-ziggy.md) - How the Photosphere App takes Ziggy at a version tag, how to move to a newer one, how Photosphere is built on it, and the edits made to existing UI code
 - [Photosphere App](apps/photosphere/README.md) - Building, running and packaging the Photosphere App on each platform, and which platform each script runs on
 - [Delivering the Android app to testers](docs/android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution

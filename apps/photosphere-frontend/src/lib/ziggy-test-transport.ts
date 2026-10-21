@@ -116,17 +116,14 @@ export function toLogLevel(level: string): LogLevel {
 
 //
 // A test transport for the shared test driver over the core's test-command events. Each command arrives as a test-command event,
-// is performed by the driver's handler and is answered on the test-result channel with the request id it came with.
+// is performed by the driver's handler and is answered with sendTestResult and the request id it came with.
 //
 export function createZiggyTestTransport(ziggy: IZiggyBridge): ITestTransport {
     return {
         onCommand(handler: (command: string, payload: ITestCommandPayload) => Promise<string | undefined>): void {
-            ziggy.onMessage<ITestCommandEvent>("test-command", event => {
+            ziggy.onTestCommand<ITestCommandBody>(event => {
                 answerTestCommand(handler, event.command)
-                    .then(result => ziggy.invoke("test-result", {
-                        requestId: event.requestId,
-                        result: testCommandResultToJson(result),
-                    }));
+                    .then(result => ziggy.sendTestResult(event.requestId, testCommandResultToJson(result)));
             });
         },
 
@@ -144,5 +141,5 @@ export function createZiggyTestTransport(ziggy: IZiggyBridge): ITestTransport {
 // reach is in place.
 //
 export function signalTestPageReady(ziggy: IZiggyBridge): void {
-    ziggy.send("test-ui-ready", null);
+    ziggy.testUiReady();
 }

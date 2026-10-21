@@ -1,5 +1,5 @@
 //
-// The import-share-payload channel: imports what was
+// The import-share-payload message: imports what was
 // received from another device, a database (its secrets go to the vault and its entry to the databases list) or a single secret.
 //
 // It is a task type, because it writes to the vault and to a file.
@@ -106,6 +106,29 @@ fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]c
 }
 
 //
-// The import-share-payload channel's handler: importSharePayload, with its errors logged.
+// The import-share-payload message's handler: importSharePayload, with its errors logged.
 //
 pub const importSharePayloadHandler = logExceptions(importSharePayload, "Error importing share payload");
+
+//
+// The data of import-share-payload.
+//
+pub const ImportSharePayloadRequest = struct {
+    // What was shared: a database or a secret, with its "type".
+    payload: std.json.Value,
+    // The page's choices for the incoming secrets whose names are already taken, keyed by secret name, or null when it made none.
+    conflictResolutions: std.json.Value = .null,
+};
+
+//
+// import-share-payload: answered by the import-share-payload task. The response is null.
+//
+pub fn importSharePayloadMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ImportSharePayloadRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "import-share-payload",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

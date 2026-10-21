@@ -4,9 +4,8 @@ import { App } from './app';
 import '@fortawesome/fontawesome-free/css/all.css';
 import './tailwind.css';
 import { installTestDriver } from "user-interface";
-import type { IZiggyBridge } from "ziggy-ui";
+import type { IPlatformInfo, IZiggyBridge } from "ziggy-ui";
 import { isTestMode } from "./lib/test-mode";
-import type { IPlatformInfo } from "./lib/platform-provider-ziggy";
 import { sendRendererLog } from "./lib/renderer-log";
 import { createZiggyTestTransport } from "./lib/ziggy-test-transport";
 import { isResizeObserverLoopReport } from "./lib/resize-observer-report";
@@ -100,7 +99,7 @@ if (testMode) {
 // Asks the core what kind of device this is, then renders the app.
 //
 async function start(bridge: IZiggyBridge): Promise<void> {
-    const platform = await bridge.invoke<IPlatformInfo>('get-platform', null);
+    const platform: IPlatformInfo = await bridge.getPlatform();
 
     if (platform.platformKind !== "desktop" && platform.platformKind !== "mobile") {
         throw new Error(`Unknown platform kind "${String(platform.platformKind)}" from get-platform.`);

@@ -1,6 +1,6 @@
 const std = @import("std");
 const node_utils = @import("node-utils-zig");
-const environment = @import("../lib/environment.zig");
+const environment = @import("photosphere-core").environment;
 
 const process_env = node_utils.process_env;
 

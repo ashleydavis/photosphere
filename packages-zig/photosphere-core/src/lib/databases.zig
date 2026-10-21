@@ -1,5 +1,5 @@
 //
-// The database list channels: get-databases, find-database, add-database, update-database, remove-database-entry,
+// The database list messages: get-databases, find-database, add-database, update-database, remove-database-entry,
 // set-database-origin and list-s3-dirs. They read and write
 // databases.toml, and (for the last two) a database's .db/config.json and an S3 bucket.
 //
@@ -299,36 +299,184 @@ fn listS3Dirs(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
 }
 
 //
-// The remove-database-entry channel's handler: removeDatabaseEntry, with its errors logged.
+// The remove-database-entry message's handler: removeDatabaseEntry, with its errors logged.
 //
 pub const removeDatabaseEntryHandler = logExceptions(removeDatabaseEntry, "Error removing database entry");
 
 //
-// The find-database channel's handler: findDatabase, with its errors logged.
+// The find-database message's handler: findDatabase, with its errors logged.
 //
 pub const findDatabaseHandler = logExceptions(findDatabase, "Error finding database");
 
 //
-// The get-databases channel's handler: getDatabases, with its errors logged.
+// The get-databases message's handler: getDatabases, with its errors logged.
 //
 pub const getDatabasesHandler = logExceptions(getDatabases, "Error getting databases");
 
 //
-// The add-database channel's handler: addDatabase, with its errors logged.
+// The add-database message's handler: addDatabase, with its errors logged.
 //
 pub const addDatabaseHandler = logExceptions(addDatabase, "Error adding database");
 
 //
-// The update-database channel's handler: updateDatabase, with its errors logged.
+// The update-database message's handler: updateDatabase, with its errors logged.
 //
 pub const updateDatabaseHandler = logExceptions(updateDatabase, "Error updating database");
 
 //
-// The set-database-origin channel's handler: setDatabaseOrigin, with its errors logged.
+// The set-database-origin message's handler: setDatabaseOrigin, with its errors logged.
 //
 pub const setDatabaseOriginHandler = logExceptions(setDatabaseOrigin, "Error setting database origin");
 
 //
-// The list-s3-dirs channel's handler: listS3Dirs, with its errors logged.
+// The list-s3-dirs message's handler: listS3Dirs, with its errors logged.
 //
 pub const listS3DirsHandler = logExceptions(listS3Dirs, "Error listing S3 directories");
+
+//
+// The data of get-databases, which has none.
+//
+pub const NoRequest = struct {};
+
+//
+// remove-database-entry: the data is a database name, answered by the remove-database-entry task. The response is null.
+//
+pub fn removeDatabaseEntryMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "remove-database-entry",
+            .data = try json.stringify(arena, name),
+        },
+    };
+}
+
+//
+// find-database: the data is a database name, answered by the find-database task. The response is the entry, or null.
+//
+pub fn findDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(?IDatabaseEntry) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "find-database",
+            .data = try json.stringify(arena, name),
+        },
+    };
+}
+
+//
+// get-databases: answered by the get-databases task. The response is every configured database entry.
+//
+pub fn getDatabasesMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer([]const IDatabaseEntry) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "get-databases",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of add-database, and the entry of update-database: a database entry as the page sends it.
+//
+pub const AddDatabaseRequest = struct {
+    // The name of the database.
+    name: []const u8,
+    // What the database is for.
+    description: []const u8,
+    // Where the database is.
+    path: []const u8,
+    // The path of the database this one was replicated from, or null.
+    origin: ?[]const u8 = null,
+    // The name of the vault secret that holds the S3 credentials, or null.
+    s3Key: ?[]const u8 = null,
+    // The name of the vault secret that holds the encryption key, or null.
+    encryptionKey: ?[]const u8 = null,
+    // The name of the vault secret that holds the geocoding key, or null.
+    geocodingKey: ?[]const u8 = null,
+};
+
+//
+// add-database: answered by the add-database task, which adds the entry. The response is the entry.
+//
+pub fn addDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: AddDatabaseRequest) !ziggy.core.Answer(IDatabaseEntry) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "add-database",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of update-database.
+//
+pub const UpdateDatabaseRequest = struct {
+    // The name of the entry to update.
+    originalName: []const u8,
+    // The entry to save in its place.
+    entry: AddDatabaseRequest,
+};
+
+//
+// update-database: answered by the update-database task. The response is null.
+//
+pub fn updateDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: UpdateDatabaseRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "update-database",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of set-database-origin.
+//
+pub const SetDatabaseOriginRequest = struct {
+    // The path of the database.
+    databasePath: []const u8,
+    // The origin to record, or null to clear it.
+    origin: ?[]const u8 = null,
+};
+
+//
+// set-database-origin: answered by the set-database-origin task. The response is null.
+//
+pub fn setDatabaseOriginMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SetDatabaseOriginRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "set-database-origin",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of list-s3-dirs.
+//
+pub const ListS3DirsRequest = struct {
+    // The name of the vault secret that holds the S3 credentials.
+    s3Key: []const u8,
+    // The S3 bucket to list.
+    bucket: []const u8,
+    // The folder in the bucket to list.
+    prefix: []const u8,
+};
+
+//
+// list-s3-dirs: answered by the list-s3-dirs task. The response is the names of the directories under the prefix.
+//
+pub fn listS3DirsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ListS3DirsRequest) !ziggy.core.Answer([]const []const u8) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "list-s3-dirs",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

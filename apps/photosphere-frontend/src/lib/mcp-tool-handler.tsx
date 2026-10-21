@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
 import type { IZiggyBridge } from "ziggy-ui";
+import { AppMessages } from "./app-messages";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import { useAssetDatabase, useGallery, useSearch, type IAssetDatabase, type IGalleryContext, type ISearchContext, type IGalleryItem, type IDatabaseEntry } from "user-interface";
@@ -20,7 +21,7 @@ interface IMcpToolRequest {
 }
 
 //
-// What the import-directories channel replies with when an import started.
+// What the import-directories message replies with when an import started.
 //
 interface IImportSession {
     // The id of the import session.
@@ -37,7 +38,7 @@ export interface IMcpToolHandlerProps {
 
 //
 // Registers a page-side listener for MCP tool requests. Dispatches each tool to the
-// appropriate frontend context and sends back a result on the mcp-tool-response channel.
+// appropriate frontend context and sends back a result on the mcp-tool-response message.
 //
 // Renders nothing; lives near the root of the component tree so it has access to the
 // AssetDatabase and Gallery contexts.
@@ -47,25 +48,32 @@ export function McpToolHandler({ ziggy }: IMcpToolHandlerProps): React.ReactElem
     const gallery = useGallery();
     const search = useSearch();
     const navigate = useNavigate();
+    const messages = useMemo(() => new AppMessages(ziggy), [ziggy]);
 
     useEffect(() => {
         const handler = (request: IMcpToolRequest): void => {
-            void dispatchTool(request, assetDatabase, gallery, search, navigate, ziggy)
+            void dispatchTool(request, assetDatabase, gallery, search, navigate, messages)
                 .then(result => {
-                    ziggy.send("mcp-tool-response", { requestId: request.requestId, result });
+                    messages.send("mcp-tool-response", {
+                        requestId: request.requestId,
+                        result,
+                    });
                 })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);
-                    ziggy.send("mcp-tool-response", { requestId: request.requestId, error: message });
+                    messages.send("mcp-tool-response", {
+                        requestId: request.requestId,
+                        error: message,
+                    });
                 });
         };
 
-        ziggy.onMessage(MCP_TOOL_REQUEST, handler);
+        messages.onEvent(MCP_TOOL_REQUEST, handler);
 
         return () => {
-            ziggy.removeAllListeners(MCP_TOOL_REQUEST);
+            messages.removeAllListeners(MCP_TOOL_REQUEST);
         };
-    }, [ ziggy, assetDatabase, gallery, search, navigate ]);
+    }, [ messages, assetDatabase, gallery, search, navigate ]);
 
     return null;
 }
@@ -80,11 +88,11 @@ async function dispatchTool(
     gallery: IGalleryContext,
     search: ISearchContext,
     navigate: NavigateFunction,
-    ziggy: IZiggyBridge,
+    messages: AppMessages,
 ): Promise<string> {
     switch (request.tool) {
         case "list_databases": {
-            const databases = await ziggy.invoke<IDatabaseEntry[]>("get-databases", null);
+            const databases = await messages.invoke<IDatabaseEntry[]>("get-databases", null);
             return JSON.stringify(databases, null, 2);
         }
         case "open_database": {
@@ -185,7 +193,7 @@ async function dispatchTool(
             // (no dialog, because the model has already chosen the destination via Claude).
             //
             const defaultFilename = args.outputPath.split(/[\\/]/).pop() || args.outputPath;
-            await ziggy.invoke("save-asset", { assetId: args.assetId, assetType: args.type, filename: defaultFilename, databasePath, destPath: args.outputPath });
+            await messages.invoke("save-asset", { assetId: args.assetId, assetType: args.type, filename: defaultFilename, databasePath, destPath: args.outputPath });
             return `Saving ${args.type} of media file ${args.assetId} to ${args.outputPath}`;
         }
         case "import_media_files": {
@@ -193,7 +201,7 @@ async function dispatchTool(
             if (args.dryRun) {
                 return "Dry-run import is not supported from the desktop MCP server. Use `psi mcp` (CLI) for dry runs.";
             }
-            const session = await ziggy.invoke<IImportSession | null>("import-directories", args.paths);
+            const session = await messages.invoke<IImportSession | null>("import-directories", args.paths);
             return session
                 ? `Started import session ${session.sessionId}`
                 : "Import cancelled or no database open.";

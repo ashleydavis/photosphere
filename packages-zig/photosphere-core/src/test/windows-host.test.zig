@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
-const windows_host = @import("../lib/windows-host.zig");
+const windows_host = @import("photosphere-core").windows_host;
 
 const WindowsHost = windows_host.WindowsHost;
 

@@ -3,8 +3,8 @@ const ziggy = @import("ziggy-core");
 const node_api = @import("node-api-zig");
 const utils = @import("utils-zig");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
-const main_process = @import("../lib/main-process.zig");
+const main_state = @import("photosphere-core").main_state;
+const main_process = @import("photosphere-core").main_process;
 
 const TestApp = support.TestApp;
 
@@ -111,7 +111,7 @@ test "notify-database-opened without a path is an error reply" {
     defer app.stop();
     const reply = try app.requestError("notify-database-opened", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The database that was opened needs a path.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "notify-database-closed forgets the database to reopen and the open database" {
@@ -245,7 +245,7 @@ fn awaitChildrenTask(context: *ziggy.task_runner.TaskContext, data: std.json.Val
 }
 
 test "main-command cancel-tasks lets a task waiting on its children end when some of them never started" {
-    // The cancel the Import page sends. Ziggy's own cancel-tasks channel cancels in the runner alone, which drops a child that was
+    // The cancel the Import page sends. Ziggy's own cancel-tasks message cancels in the runner alone, which drops a child that was
     // still waiting for a worker without saying so, and the task queue counting it waits for it for good. That is what the Release
     // Zig workflow's desktop smoke tests on ubuntu-latest saw in 33-import-cancel: on a runner with four workers the cancelled import
     // never ended and held a worker, and the import after it timed out waiting for "1 assets imported".
@@ -265,7 +265,8 @@ test "main-command cancel-tasks lets a task waiting on its children end when som
     errdefer app.core.queue_backend.cancelTasks(AWAIT_CHILDREN_SOURCE);
     const allocator = std.testing.allocator;
     const message = try utils.json.stringify(allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = "await-children-parent",
             .taskType = "await-children",
@@ -320,7 +321,8 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
     defer allocator.free(second_json);
     allocator.free(try app.requestOk("notify-database-opened", first_json));
     const message = try utils.json.stringify(allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = "long-1",
             .taskType = "spin",
@@ -331,7 +333,7 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
     });
     defer allocator.free(message);
     app.core.postMessage(message);
-    try waitFor(&app, "\"channel\":\"task-message\"");
+    try waitFor(&app, "\"kind\":\"system\",\"name\":\"task-message\"");
     allocator.free(try app.requestOk("notify-database-opened", second_json));
     try waitFor(&app, "\"errorMessage\":\"Cancelled\"");
 }
@@ -350,7 +352,7 @@ test "a failed import tells the user, and an automatic import that stops clears 
         .result_json = null,
         .started = true,
     });
-    try waitFor(&app, "{\"channel\":\"show-notification\",\"data\":{\"message\":\"Import failed: disk on fire\",\"color\":\"danger\",\"duration\":8000}}");
+    try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"Import failed: disk on fire\",\"color\":\"danger\",\"duration\":8000}}}");
     try waitForStartupCheck(&app);
     const state = main_state.fromCore(app.core);
     state.lock();
@@ -391,8 +393,8 @@ test "a replication that worked registers its destination and tells the user, an
         .result_json = null,
         .started = true,
     });
-    try waitFor(&app, "{\"channel\":\"databases-changed\",\"data\":null}");
-    try waitFor(&app, "{\"channel\":\"show-notification\",\"data\":{\"message\":\"Replication completed for \\\"copy\\\"\",\"color\":\"success\"}}");
+    try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"databases-changed\",\"data\":null}}");
+    try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"Replication completed for \\\"copy\\\"\",\"color\":\"success\"}}}");
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const entry = (try node_api.databases_config.findDatabase(arena.allocator(), std.testing.io, "copy")).?;
@@ -445,7 +447,7 @@ test "a sync that fails tells the page it completed, and one that succeeds does 
         .result_json = null,
         .started = true,
     });
-    try waitFor(&app, "{\"channel\":\"sync-completed\",\"data\":null}");
+    try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-completed\",\"data\":null}}");
 }
 
 test "a sync task's started and completed messages are passed to the page as events" {
@@ -458,14 +460,14 @@ test "a sync task's started and completed messages are passed to the page as eve
         .source = "/db",
         .message_json = "{\"type\":\"sync-started\"}",
     });
-    try waitFor(&app, "{\"channel\":\"sync-started\",\"data\":null}");
+    try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-started\",\"data\":null}}");
     main_process.onTaskMessage(app.core, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
         .message_json = "{\"type\":\"sync-completed\"}",
     });
-    try waitFor(&app, "{\"channel\":\"sync-completed\",\"data\":null}");
+    try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-completed\",\"data\":null}}");
     main_process.onTaskMessage(app.core, .{
         .task_id = "other",
         .task_type = "other",
@@ -745,7 +747,7 @@ test "a replication of a database that is already listed does not list it again 
     try waitFor(&app, "Replication completed for");
     main_process.onTaskEnd(app.core, end);
     try waitForCount(&app, "Replication completed for", 2);
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"channel\":\"databases-changed\""));
+    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"type\":\"databases-changed\""));
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const databases = try node_api.databases_config.getDatabases(arena.allocator(), std.testing.io);

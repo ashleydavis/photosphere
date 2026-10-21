@@ -9,7 +9,8 @@ const TestApp = support.TestApp;
 //
 fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8, data_json: []const u8) !void {
     const message = try utils.json.stringify(std.testing.allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = task_id,
             .taskType = task_type,
@@ -50,4 +51,13 @@ test "a task type nothing is registered for still fails as an unknown type" {
     defer app.stop();
     try addTask(&app, "nothing-1", "no-such-task-type", "null");
     try app.shell.expectMessageContaining("\"taskId\":\"nothing-1\",\"status\":\"failed\",\"error\":{\"message\":\"UnknownTaskType\"}");
+}
+
+test "a message of a name Photosphere does not answer is an UnknownMessageName error" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const unknown = try app.requestError("no-such-message", "null");
+    defer std.testing.allocator.free(unknown);
+    try std.testing.expectEqualStrings("UnknownMessageName", unknown);
 }

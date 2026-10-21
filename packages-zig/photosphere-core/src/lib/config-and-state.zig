@@ -1,5 +1,5 @@
 //
-// The channels the page reads and writes its settings and its remembered state through: get-config and set-config (config.yaml, what the
+// The messages the page reads and writes its settings and its remembered state through: get-config and set-config (config.yaml, what the
 // user chose), and get-state and set-state (state.yaml, what the
 // app remembered).
 //
@@ -182,7 +182,7 @@ fn setConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
         try events.sendThemeChanged(main_state.fromContext(context).core, arena, json_value);
     }
     // Switching automatic import on or off, or changing what it watches, takes effect now rather than at the next restart. The main
-    // process reads the same config the page just wrote, so this needs no channel of its own.
+    // process reads the same config the page just wrote, so this needs no message of its own.
     for (AUTO_IMPORT_CONFIG_KEYS) |auto_import_key| {
         if (std.mem.eql(u8, key, auto_import_key)) {
             try main_process.ensureAutoImport(context);
@@ -193,22 +193,22 @@ fn setConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
 }
 
 //
-// The get-state channel's handler: getState, with its errors logged.
+// The get-state message's handler: getState, with its errors logged.
 //
 pub const getStateHandler = logExceptions(getState, "Error getting state value");
 
 //
-// The set-state channel's handler: setState, with its errors logged.
+// The set-state message's handler: setState, with its errors logged.
 //
 pub const setStateHandler = logExceptions(setState, "Error setting state value");
 
 //
-// The get-config channel's handler: getConfig, with its errors logged.
+// The get-config message's handler: getConfig, with its errors logged.
 //
 pub const getConfigHandler = logExceptions(getConfig, "Error getting config value");
 
 //
-// The set-config channel's handler: setConfig, with its errors logged.
+// The set-config message's handler: setConfig, with its errors logged.
 //
 pub const setConfigHandler = logExceptions(setConfig, "Error setting config value");
 
@@ -232,3 +232,75 @@ fn resetAppStorage(context: *TaskContext, data: std.json.Value) anyerror!?[]cons
 // The reset-app-storage task's handler: resetAppStorage, with its errors logged.
 //
 pub const resetAppStorageHandler = logExceptions(resetAppStorage, "Error resetting the app's storage");
+
+//
+// get-config: the data is a config key, answered by the get-config task. The response is the setting, or null.
+//
+pub fn getConfigMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, key: []const u8) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "get-config",
+            .data = try json.stringify(arena, key),
+        },
+    };
+}
+
+//
+// The data of set-config.
+//
+pub const SetConfigRequest = struct {
+    // The config key to write.
+    key: []const u8,
+    // The value to write, or null to remove the key.
+    value: std.json.Value = .null,
+};
+
+//
+// set-config: answered by the set-config task. The response is null.
+//
+pub fn setConfigMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SetConfigRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "set-config",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// get-state: the data is a state key, answered by the get-state task. The response is the value remembered, or null.
+//
+pub fn getStateMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, key: []const u8) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "get-state",
+            .data = try json.stringify(arena, key),
+        },
+    };
+}
+
+//
+// The data of set-state.
+//
+pub const SetStateRequest = struct {
+    // The state key to write.
+    key: []const u8,
+    // The value to remember, or null to remove the key.
+    value: std.json.Value = .null,
+};
+
+//
+// set-state: answered by the set-state task. The response is null.
+//
+pub fn setStateMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SetStateRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "set-state",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

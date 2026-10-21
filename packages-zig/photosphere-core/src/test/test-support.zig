@@ -1,5 +1,5 @@
 //
-// What the tests of Photosphere's handlers share: a core running Photosphere's channels and task types on a stand-in shell,
+// What the tests of Photosphere's handlers share: a core running Photosphere's app, as app.zig registers it, on a stand-in shell,
 // with the settings, the data and the vault pointed at directories that belong to the test.
 //
 
@@ -7,7 +7,7 @@ const std = @import("std");
 const ziggy = @import("ziggy-core");
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
-const handlers = @import("../lib/handlers.zig");
+const photosphere_app = @import("photosphere-app");
 
 const process_env = node_utils.process_env;
 
@@ -132,10 +132,10 @@ pub const TestApp = struct {
         const data_dir = try allocator.dupeZ(u8, self.tmp_path);
         defer allocator.free(data_dir);
         config.data_dir = data_dir.ptr;
-        self.tasks = try allocator.alloc(ziggy.task_runner.TaskHandlerEntry, handlers.tasks.len + extra_tasks.len);
-        @memcpy(self.tasks[0..handlers.tasks.len], &handlers.tasks);
-        @memcpy(self.tasks[handlers.tasks.len..], extra_tasks);
-        var app = handlers.appHandlers("[]", &[_]ziggy.ui_files.UiFile{});
+        self.tasks = try allocator.alloc(ziggy.task_runner.TaskHandlerEntry, photosphere_app.app.tasks.len + extra_tasks.len);
+        @memcpy(self.tasks[0..photosphere_app.app.tasks.len], photosphere_app.app.tasks);
+        @memcpy(self.tasks[photosphere_app.app.tasks.len..], extra_tasks);
+        var app = photosphere_app.app;
         app.tasks = self.tasks;
         self.core = try ziggy.core.Core.create(allocator, config, app);
         self.next_request_id = 1;
@@ -190,16 +190,18 @@ pub const TestApp = struct {
     }
 
     //
-    // Sends a request on a channel with the data (JSON text) and waits for its reply, which it returns as the JSON text of the
-    // whole reply message ({"id":..,"ok":..,"data":..} or {"id":..,"ok":false,"error":..}). The caller frees it.
+    // Sends an app message of the name with the data (JSON text), as the page does ({"kind":"app", "id", "name", "data"}), and waits for its
+    // reply, which it returns as the JSON text of the whole reply message ({"id":..,"ok":..,"data":..} or {"id":..,"ok":false,"error":..}).
+    // The caller frees it.
     //
-    pub fn request(self: *TestApp, channel: []const u8, data_json: []const u8) ![]u8 {
+    pub fn request(self: *TestApp, message_name: []const u8, data_json: []const u8) ![]u8 {
         const allocator = std.testing.allocator;
         const id = self.next_request_id;
         self.next_request_id += 1;
         const message = try utils.json.stringify(allocator, .{
+            .kind = "app",
             .id = id,
-            .channel = channel,
+            .name = message_name,
             .data = utils.json.Raw{ .text = data_json },
         });
         defer allocator.free(message);
@@ -213,13 +215,13 @@ pub const TestApp = struct {
     //
     // Sends a request that is expected to succeed and returns the JSON text of the reply's data. The caller frees it.
     //
-    pub fn requestOk(self: *TestApp, channel: []const u8, data_json: []const u8) ![]u8 {
+    pub fn requestOk(self: *TestApp, message_name: []const u8, data_json: []const u8) ![]u8 {
         const allocator = std.testing.allocator;
-        const reply = try self.request(channel, data_json);
+        const reply = try self.request(message_name, data_json);
         defer allocator.free(reply);
         const marker = ",\"ok\":true,\"data\":";
         const marker_at = std.mem.indexOf(u8, reply, marker) orelse {
-            std.debug.print("the request on {s} did not succeed: {s}\n", .{ channel, reply });
+            std.debug.print("the {s} message did not succeed: {s}\n", .{ message_name, reply });
             return error.RequestFailed;
         };
         const data_start = marker_at + marker.len;
@@ -229,13 +231,13 @@ pub const TestApp = struct {
     //
     // Sends a request that is expected to fail and returns the text of the reply's error. The caller frees it.
     //
-    pub fn requestError(self: *TestApp, channel: []const u8, data_json: []const u8) ![]u8 {
+    pub fn requestError(self: *TestApp, message_name: []const u8, data_json: []const u8) ![]u8 {
         const allocator = std.testing.allocator;
-        const reply = try self.request(channel, data_json);
+        const reply = try self.request(message_name, data_json);
         defer allocator.free(reply);
         const marker = ",\"ok\":false,\"error\":";
         const marker_at = std.mem.indexOf(u8, reply, marker) orelse {
-            std.debug.print("the request on {s} did not fail: {s}\n", .{ channel, reply });
+            std.debug.print("the {s} message did not fail: {s}\n", .{ message_name, reply });
             return error.RequestSucceeded;
         };
         const error_json = reply[marker_at + marker.len .. reply.len - 1];

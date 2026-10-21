@@ -4,9 +4,9 @@ const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
 
-fn expectForwarded(app: *TestApp, channel: []const u8, request_json: []const u8, answer_json: []const u8, expected_method: []const u8, expected_request: []const u8) !void {
+fn expectForwarded(app: *TestApp, message_type: []const u8, request_json: []const u8, answer_json: []const u8, expected_method: []const u8, expected_request: []const u8) !void {
     app.host_answer = answer_json;
-    const reply = try app.requestOk(channel, request_json);
+    const reply = try app.requestOk(message_type, request_json);
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings(answer_json, reply);
     try std.testing.expectEqualStrings(expected_method, app.last_host_method.?);

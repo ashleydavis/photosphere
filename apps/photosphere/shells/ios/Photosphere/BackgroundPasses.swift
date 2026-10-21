@@ -10,7 +10,7 @@
 //
 // The loops themselves are the core's. When the system runs a task, this asks the core to start its background work, as the page's
 // startBackgroundImport request does (starting loops that are running does nothing), and when the system's time for the task is up it
-// cancels the loop that task stands for, through the same cancel-tasks message the page uses.
+// cancels the loop that task stands for, through the same main-command cancel-tasks message the page uses.
 //
 
 import BackgroundTasks
@@ -162,7 +162,10 @@ final class BackgroundPasses {
         let passRun = BackgroundPassRun(task: task)
         task.expirationHandler = { [weak self] in
             // The system's time is up. The loop this task stands for is cancelled, the same way the page cancels it, and the task is over.
-            self?.bridge()?.send(channel: "cancel-tasks", data: pass.source)
+            self?.bridge()?.send(name: "main-command", data: [
+                "command": "cancel-tasks",
+                "source": pass.source,
+            ])
             passRun.complete(success: false)
         }
 
@@ -182,7 +185,7 @@ final class BackgroundPasses {
         guard let bridge = bridge() else {
             BackgroundPasses.fail("the background work was started with no bridge to the core")
         }
-        bridge.request(channel: "startBackgroundImport", data: NSNull(), completion: completion)
+        bridge.request(name: "startBackgroundImport", data: NSNull(), completion: completion)
     }
 
     // Writes a problem to standard error and carries on.

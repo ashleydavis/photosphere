@@ -1,7 +1,7 @@
 const std = @import("std");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
-const page_query = @import("../lib/page-query.zig");
+const main_state = @import("photosphere-core").main_state;
+const page_query = @import("photosphere-core").page_query;
 
 const TestApp = support.TestApp;
 

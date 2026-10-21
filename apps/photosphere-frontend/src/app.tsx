@@ -17,8 +17,8 @@ import {
 } from "user-interface";
 import { ZiggyQueueBackend } from "./lib/ziggy-queue-backend";
 import { setQueueBackend } from "task-queue";
-import { PlatformProviderZiggy, type IPlatformInfo } from "./lib/platform-provider-ziggy";
-import type { IZiggyBridge } from "ziggy-ui";
+import { PlatformProviderZiggy } from "./lib/platform-provider-ziggy";
+import type { IPlatformInfo, IZiggyBridge } from "ziggy-ui";
 import { setLog } from "utils";
 import { createRendererLog } from "./lib/renderer-log";
 import { isTestMode } from "./lib/test-mode";

@@ -1,27 +1,5 @@
 import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "task-queue";
-import type { IJsonValue, IZiggyBridge } from "ziggy-ui";
-
-//
-// Task completion event from the core.
-//
-interface ITaskCompletionResponse {
-    // The ID of the completed task.
-    taskId: string;
-
-    // The result of the completed task.
-    result: ITaskResult;
-}
-
-//
-// Task message event from the core.
-//
-interface ITaskMessageData {
-    // The ID of the task that sent the message.
-    taskId: string;
-
-    // The message payload sent by the task.
-    message: IJsonValue;
-}
+import type { IAddTask, IJsonValue, ITaskCompletedEvent, ITaskMessageEvent, IZiggyBridge } from "ziggy-ui";
 
 //
 // Ziggy bridge-based queue backend.
@@ -60,6 +38,20 @@ export class ZiggyQueueBackend implements IQueueBackend {
     private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
 
     //
+    // The listener this registers for Ziggy's task-completed events, kept so shutdown can remove it.
+    //
+    private readonly taskCompletedListener = (data: ITaskCompletedEvent): void => {
+        this.handleTaskCompleted(data);
+    };
+
+    //
+    // The listener this registers for Ziggy's task-message events, kept so shutdown can remove it.
+    //
+    private readonly taskMessageListener = (data: ITaskMessageEvent<IJsonValue>): void => {
+        this.notifyMessageCallbacks(data.taskId, data.message);
+    };
+
+    //
     // Creates a new backend that communicates with the core over the bridge.
     //
     constructor(ziggy: IZiggyBridge) {
@@ -71,13 +63,8 @@ export class ZiggyQueueBackend implements IQueueBackend {
     // Sets up bridge listeners for task completion and task messages.
     //
     private setupMessageHandlers(): void {
-        this.ziggy.onMessage<ITaskCompletionResponse>('task-completed', data => {
-            this.handleTaskCompleted(data);
-        });
-
-        this.ziggy.onMessage<ITaskMessageData>('task-message', data => {
-            this.notifyMessageCallbacks(data.taskId, data.message);
-        });
+        this.ziggy.onTaskCompleted(this.taskCompletedListener);
+        this.ziggy.onTaskMessage<IJsonValue>(this.taskMessageListener);
     }
 
     //
@@ -148,13 +135,16 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     addTask(type: string, data: IJsonValue, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? crypto.randomUUID();
-        this.ziggy.send('add-task', {
+        const task: IAddTask = {
             taskType: type,
             data,
             source,
             taskId: id,
-            priority: priority ?? null,
-        });
+        };
+        if (priority !== undefined) {
+            task.priority = priority;
+        }
+        this.ziggy.addTask(task);
         const callbacks = this.taskAddedCallbacks.get(source);
         if (callbacks) {
             for (const callback of callbacks) {
@@ -167,7 +157,7 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     // Forwards the cancel signal to the core and fires local cancellation callbacks.
     //
-    // Sent as the cancel-tasks main-command rather than on Ziggy's own cancel-tasks channel, which cancels in the core's runner alone:
+    // Sent as the cancel-tasks main-command rather than on Ziggy's own cancelTasks, which cancels in the core's runner alone:
     // a task still waiting for a worker is dropped there without a word, so a task queue in the core that counted it (an import
     // waiting on its children) waited for it for good. The main-command cancels through the core's queue backend, which also tells
     // those task queues that their source was cancelled. Found by 33-import-cancel in the Release Zig workflow's desktop smoke tests on
@@ -207,8 +197,8 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     // Handles a task-completed event from the core.
     //
-    private handleTaskCompleted(data: ITaskCompletionResponse): void {
-        this.notifyCompletionCallbacks(data.result);
+    private handleTaskCompleted(data: ITaskCompletedEvent): void {
+        this.notifyCompletionCallbacks(data.result as ITaskResult);
     }
 
     //
@@ -258,8 +248,8 @@ export class ZiggyQueueBackend implements IQueueBackend {
     // Removes all bridge listeners. Call when the queue is no longer needed.
     //
     shutdown(): void {
-        this.ziggy.removeAllListeners('task-completed');
-        this.ziggy.removeAllListeners('task-message');
+        this.ziggy.removeTaskCompletedListener(this.taskCompletedListener);
+        this.ziggy.removeTaskMessageListener<IJsonValue>(this.taskMessageListener);
     }
 }
 

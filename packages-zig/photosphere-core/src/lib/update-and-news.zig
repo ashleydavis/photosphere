@@ -1,10 +1,10 @@
 //
 // Updates and news: the checks the main process makes once the page has loaded (checkForUpdate and checkForNews),
-// and the channels the page uses to say it has shown the user an update or a news item
+// and the messages the page uses to say it has shown the user an update or a news item
 // (mark-update-shown and mark-news-shown). Each of the latter records the fact in the
 // state file, so the same update or news item is not announced again at the next start.
 //
-// The channels are task types, because they write a file. The two checks are functions the main process calls from a task, because
+// The messages are task types, because they write a file. The two checks are functions the main process calls from a task, because
 // they wait on the network.
 //
 
@@ -73,7 +73,7 @@ fn announceUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_ver
 // Compares the running build version against the latest GitHub release and, when a newer version is available that the user has not
 // yet been notified about, sends an `update-available` event to the page (which renders the navbar pill and a primary-coloured sticky
 // toast). The version is recorded in the state file's news section, `last_shown_update_version`, only when the user dismisses the
-// toast (via the mark-update-shown channel), so closing the app without dismissing causes the notification to re-fire on the next
+// toast (via the mark-update-shown message), so closing the app without dismissing causes the notification to re-fire on the next
 // startup.
 //
 // Skipped for `dev` and `nightly` builds (no real release to compare against) and in test mode unless explicitly opted in
@@ -137,7 +137,7 @@ fn announceNews(core: *Core, arena: std.mem.Allocator, io: std.Io, news_url: []c
 //
 // Fetches the published news feed and, if there is an unseen item, sends the oldest one to the page as a toast notification. The item
 // id is recorded in the state file's news section, `shown_news_ids`, only when the user dismisses the toast (via the mark-news-shown
-// channel), so closing the app without dismissing causes the same item to re-fire next startup. Network errors and malformed feeds are
+// message), so closing the app without dismissing causes the same item to re-fire next startup. Network errors and malformed feeds are
 // logged and skipped so news failures never block app startup.
 //
 // In test mode the check is skipped unless PHOTOSPHERE_NEWS_URL points it at a test feed.
@@ -198,11 +198,38 @@ fn markNewsShown(context: *TaskContext, data: std.json.Value) anyerror!?[]const 
 }
 
 //
-// The mark-update-shown channel's handler: markUpdateShown, with its errors logged.
+// The mark-update-shown message's handler: markUpdateShown, with its errors logged.
 //
 pub const markUpdateShownHandler = logExceptions(markUpdateShown, "Error marking update notification as shown");
 
 //
-// The mark-news-shown channel's handler: markNewsShown, with its errors logged.
+// The mark-news-shown message's handler: markNewsShown, with its errors logged.
 //
 pub const markNewsShownHandler = logExceptions(markNewsShown, "Error marking news notification as shown");
+
+//
+// mark-update-shown: the data is the version of the update that was shown, answered by the mark-update-shown task. The response
+// is null.
+//
+pub fn markUpdateShownMessageHandler(core: *Core, arena: std.mem.Allocator, version: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "mark-update-shown",
+            .data = try json.stringify(arena, version),
+        },
+    };
+}
+
+//
+// mark-news-shown: the data is the id of the news item that was shown, answered by the mark-news-shown task. The response is null.
+//
+pub fn markNewsShownMessageHandler(core: *Core, arena: std.mem.Allocator, news_id: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "mark-news-shown",
+            .data = try json.stringify(arena, news_id),
+        },
+    };
+}

@@ -518,12 +518,25 @@ fn addUnitTests(
     });
     var module_iterator = modules.iterator();
     while (module_iterator.next()) |entry| {
-        // The tests of photosphere-core import its files by path.
-        if (std.mem.eql(u8, entry.key_ptr.*, "photosphere-core")) {
-            continue;
-        }
         test_module.addImport(entry.key_ptr.*, entry.value_ptr.*);
     }
+    // The whole Photosphere App, as its backend source file declares it, for the tests of photosphere-core that run the app's core.
+    // The tests need no page, so it embeds none.
+    const no_page = b.addWriteFiles();
+    const no_page_module = b.createModule(.{
+        .root_source_file = no_page.add("ui-files.zig", "const ziggy = @import(\"ziggy-core\");\n\npub const files = [_]ziggy.UiFile{};\n"),
+    });
+    no_page_module.addImport("ziggy-core", modules.get("ziggy-core").?);
+    const photosphere_app = b.createModule(.{
+        .root_source_file = b.path("apps/photosphere/core/src/app.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    photosphere_app.addImport("ziggy-core", modules.get("ziggy-core").?);
+    photosphere_app.addImport("photosphere-core", modules.get("photosphere-core").?);
+    photosphere_app.addImport("ui-files", no_page_module);
+    test_module.addImport("photosphere-app", photosphere_app);
     // The modules the tests of encryption-zig and storage-zig import that are not packages: the C headers each of them translates.
     const encryption = modules.get("encryption-zig").?;
     test_module.addImport("openssl", encryption.import_table.get("openssl").?);
@@ -914,7 +927,7 @@ fn addPhotosphere(
     const libraries = try ziggy_build.addAppBackend(b, ziggy, .{
         .name = "photosphere",
         .title = "Photosphere",
-        .backend_source_file = "apps/photosphere/core/src/index.zig",
+        .backend_source_file = "apps/photosphere/core/src/app.zig",
         .ui_directory = photosphere_page_directory,
         .imports = &.{
             .{

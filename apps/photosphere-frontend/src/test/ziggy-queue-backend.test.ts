@@ -12,8 +12,8 @@ describe('ZiggyQueueBackend', () => {
 
         expect(ziggy.sent).toEqual([
             {
-                channel: 'add-task',
-                data: { taskType: 'my-type', data: { foo: 1 }, source: 'my-source', taskId: 'my-task-id', priority: null },
+                name: 'add-task',
+                data: { taskType: 'my-type', data: { foo: 1 }, source: 'my-source', taskId: 'my-task-id' },
             },
         ]);
     });
@@ -26,7 +26,7 @@ describe('ZiggyQueueBackend', () => {
 
         expect(ziggy.sent).toEqual([
             {
-                channel: 'add-task',
+                name: 'add-task',
                 data: { taskType: 'my-type', data: { foo: 1 }, source: 'my-source', taskId: 'my-task-id', priority: 'interactive' },
             },
         ]);
@@ -115,7 +115,7 @@ describe('ZiggyQueueBackend', () => {
 
         expect(ziggy.sent).toEqual([
             {
-                channel: 'main-command',
+                name: 'main-command',
                 data: {
                     command: 'cancel-tasks',
                     source: 'my-source',
@@ -246,5 +246,7 @@ describe('ZiggyQueueBackend', () => {
         backend.shutdown();
 
         expect(ziggy.removed).toEqual(['task-completed', 'task-message']);
+        expect(ziggy.listenerCount('task-completed')).toBe(0);
+        expect(ziggy.listenerCount('task-message')).toBe(0);
     });
 });

@@ -2,7 +2,7 @@
 // The meeting point of the MCP server and the page.
 //
 // A tool call arrives on a thread of the MCP server's HTTP server, and the page is the one that knows how to do it. The server asks
-// the page by sending it an `mcp-tool-request` event, and waits here until the page answers on the `mcp-tool-response` channel. Each
+// the page by sending it an `mcp-tool-request` event, and waits here until the page answers on the `mcp-tool-response` message. Each
 // request is told apart from the others by the id the server gave it, so any number can be waiting at once.
 //
 

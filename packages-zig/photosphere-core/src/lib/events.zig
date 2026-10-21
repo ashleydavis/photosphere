@@ -2,10 +2,11 @@
 // The events Photosphere's core sends to the page (including those of the
 // worker pool it forwards from): database-opened, database-closed, databases-changed, sync-started, sync-completed,
 // theme-changed, navigate, show-notification, update-available and platform-event. The page's side of each is in
-// the platform provider of the page. task-message and task-completed are Ziggy's own events.
+// the platform provider of the page. task-message and task-completed are Ziggy's own events (system events, {"kind":"system","name",...}).
 //
-// Each function sends one event, on the channel of that name with the payload the page's handler takes, the payload being null
-// where there is none. An event is a JSON message {"channel", "data"}.
+// Each function sends one event of the type of that name with the payload the page's handler takes, the payload being null
+// where there is none. An event is an app event to Ziggy ({"kind":"app","data":...}), whose data is {"type", "data"}: the page's onEvent listener
+// hands it to the page's listeners for that type.
 //
 
 const std = @import("std");
@@ -45,14 +46,14 @@ pub const IShowNotification = struct {
 };
 
 //
-// Sends an event: a message on the channel with the payload, which is any value std.json can serialise.
+// Sends an event: the type and the payload, which is any value std.json can serialise.
 //
-pub fn sendEvent(core: *Core, arena: std.mem.Allocator, channel: []const u8, payload: anytype) !void {
-    const message = try json.stringify(arena, .{
-        .channel = channel,
+pub fn sendEvent(core: *Core, arena: std.mem.Allocator, event_type: []const u8, payload: anytype) !void {
+    const data_json = try json.stringify(arena, .{
+        .type = event_type,
         .data = payload,
     });
-    core.deliver(message);
+    try core.sendEvent(arena, data_json);
 }
 
 //

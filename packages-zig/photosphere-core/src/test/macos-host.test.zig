@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
-const macos_host = @import("../lib/macos-host.zig");
+const macos_host = @import("photosphere-core").macos_host;
 
 const MacosHost = macos_host.MacosHost;
 

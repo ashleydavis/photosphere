@@ -1,5 +1,5 @@
 const std = @import("std");
-const background_work = @import("../lib/background-work.zig");
+const background_work = @import("photosphere-core").background_work;
 
 const PassHost = background_work.PassHost;
 const IPassResult = background_work.IPassResult;

@@ -1,5 +1,5 @@
 //
-// The recent-database channels: get-recent-databases, get-last-database and remove-recent-database-name. They read and write the recents and the last database in databases.toml.
+// The recent-database messages: get-recent-databases, get-last-database and remove-recent-database-name. They read and write the recents and the last database in databases.toml.
 //
 // Each is a task type, because they read and write a file, and the thread that handles the page's messages must not wait for that.
 //
@@ -50,16 +50,60 @@ fn removeRecentDatabaseName(context: *TaskContext, data: std.json.Value) anyerro
 }
 
 //
-// The get-recent-databases channel's handler: getRecentDatabases, with its errors logged.
+// The get-recent-databases message's handler: getRecentDatabases, with its errors logged.
 //
 pub const getRecentDatabasesHandler = logExceptions(getRecentDatabases, "Error getting recent databases");
 
 //
-// The get-last-database channel's handler: getLastDatabase, with its errors logged.
+// The get-last-database message's handler: getLastDatabase, with its errors logged.
 //
 pub const getLastDatabaseHandler = logExceptions(getLastDatabase, "Error getting the last database");
 
 //
-// The remove-recent-database-name channel's handler: removeRecentDatabaseName, with its errors logged.
+// The remove-recent-database-name message's handler: removeRecentDatabaseName, with its errors logged.
 //
 pub const removeRecentDatabaseNameHandler = logExceptions(removeRecentDatabaseName, "Error removing recent database name");
+
+//
+// The data of get-recent-databases and get-last-database, which have none.
+//
+pub const NoRequest = struct {};
+
+//
+// get-recent-databases: answered by the get-recent-databases task. The response is the most recently opened database entries.
+//
+pub fn getRecentDatabasesMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer([]const databases_config.IDatabaseEntry) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "get-recent-databases",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// get-last-database: answered by the get-last-database task. The response is the path of the database to reopen, or null.
+//
+pub fn getLastDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(?[]const u8) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "get-last-database",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// remove-recent-database-name: the data is a database name, answered by the remove-recent-database-name task. The response is null.
+//
+pub fn removeRecentDatabaseNameMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "remove-recent-database-name",
+            .data = try json.stringify(arena, name),
+        },
+    };
+}

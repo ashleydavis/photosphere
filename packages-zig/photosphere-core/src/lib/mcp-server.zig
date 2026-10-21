@@ -5,7 +5,7 @@
 //
 // The server does none of the work itself. Every tool forwards its call to the page, which holds the open database and knows what the
 // user is looking at, and gives the page's answer back to the client: the server sends the page an `mcp-tool-request` event and waits
-// for the page to answer on the `mcp-tool-response` channel (see mcp-bridge.zig).
+// for the page to answer on the `mcp-tool-response` message (see mcp-bridge.zig).
 //
 // The server runs for the life of the app, started when the main window is created and stopped when the app stops (see
 // MainState.mainWindowCreated and MainState.stop). A phone has no MCP server.
@@ -375,23 +375,32 @@ fn forwardToPage(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io,
 }
 
 //
-// The mcp-tool-response channel: the page's answer to a tool call. The payload holds the `requestId` of the call and either a `result`, the
-// text to give the client, or an `error`, the reason the page could not do what was asked. There is no reply.
+// The mcp-tool-response message: the page's answer to a tool call. The payload holds the `requestId` of the call and either a `result`, the
+// text to give the client, or an `error`, the reason the page could not do what was asked. The response is null.
 //
-pub fn mcpToolResponseHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
+pub fn mcpToolResponseHandler(core: *Core, arena: std.mem.Allocator, request: McpToolResponseRequest) !void {
+    _ = arena;
     const state = main_state.fromCore(core);
-    const request_id = json.getString(data, "requestId") orelse {
-        return utils.errors.throwError("The MCP tool response has no requestId.", .{});
-    };
-    const failure = json.getString(data, "error") orelse "";
+    const failure = request.@"error" orelse "";
     if (failure.len > 0) {
-        try state.mcp_bridge.respond(request_id, true, failure);
+        try state.mcp_bridge.respond(request.requestId, true, failure);
     }
     else {
-        try state.mcp_bridge.respond(request_id, false, json.getString(data, "result") orelse "");
+        try state.mcp_bridge.respond(request.requestId, false, request.result orelse "");
     }
-    return try arena.dupe(u8, "null");
 }
+
+//
+// The data of mcp-tool-response.
+//
+pub const McpToolResponseRequest = struct {
+    // The id of the tool call this answers.
+    requestId: []const u8,
+    // The text to give the client, or null when the call failed.
+    result: ?[]const u8 = null,
+    // Why the page could not do what was asked, or null when it could.
+    @"error": ?[]const u8 = null,
+};
 
 //
 // The port the server asks for: the fixed one, or a free one (0) in test mode so that two instances running together do not collide.

@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const file_logger = @import("../lib/file-logger.zig");
+const file_logger = @import("photosphere-core").file_logger;
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
@@ -110,19 +110,19 @@ test "renderer-log with a bad message is an error reply that says what is wrong"
     const allocator = std.testing.allocator;
     const not_object = try app.requestError("renderer-log", "\"just text\"");
     defer allocator.free(not_object);
-    try std.testing.expectEqualStrings("The log message must be an object with a level and a message.", not_object);
+    try std.testing.expectEqualStrings("InvalidMessageData: the data is not an object", not_object);
     const no_level = try app.requestError("renderer-log", "{\"message\":\"x\"}");
     defer allocator.free(no_level);
-    try std.testing.expectEqualStrings("The log message needs a level.", no_level);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"level\" is missing", no_level);
     const bad_level = try app.requestError("renderer-log", "{\"level\":\"shout\",\"message\":\"x\"}");
     defer allocator.free(bad_level);
     try std.testing.expectEqualStrings("The log message has the level \"shout\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", bad_level);
     const no_message = try app.requestError("renderer-log", "{\"level\":\"info\"}");
     defer allocator.free(no_message);
-    try std.testing.expectEqualStrings("The log message needs a message.", no_message);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"message\" is missing", no_message);
     const bad_tool_data = try app.requestError("renderer-log", "{\"level\":\"tool\",\"message\":\"x\",\"toolData\":5}");
     defer allocator.free(bad_tool_data);
-    try std.testing.expectEqualStrings("The tool data of a log message must be an object.", bad_tool_data);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"toolData\" does not fit (UnexpectedToken)", bad_tool_data);
 }
 
 test "get-log-details replies with the path of the log file and its header" {

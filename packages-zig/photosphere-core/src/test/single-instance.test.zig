@@ -7,8 +7,8 @@
 
 const std = @import("std");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
-const single_instance = @import("../lib/single-instance.zig");
+const main_state = @import("photosphere-core").main_state;
+const single_instance = @import("photosphere-core").single_instance;
 
 const TestApp = support.TestApp;
 const io = std.testing.io;

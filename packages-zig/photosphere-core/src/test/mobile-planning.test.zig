@@ -10,7 +10,8 @@ const TestApp = support.TestApp;
 //
 fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8) !void {
     const message = try utils.json.stringify(std.testing.allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = task_id,
             .taskType = task_type,
@@ -87,7 +88,8 @@ test "write-config records the database to sync in the config file the core read
     defer app.stop();
 
     const write = try utils.json.stringify(std.testing.allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = "write-config-1",
             .taskType = "write-config",
@@ -111,7 +113,8 @@ test "write-config records the database to sync in the config file the core read
     try app.shell.expectMessageContaining("\"taskId\":\"write-config-1\",\"status\":\"succeeded\"");
 
     const read = try utils.json.stringify(std.testing.allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = "read-config-1",
             .taskType = "read-config",

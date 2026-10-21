@@ -1,5 +1,5 @@
 //
-// The channels that show a file or folder dialog: pick-folder, pick-file, pick-files and open-database.
+// The messages that show a file or folder dialog: pick-folder, pick-file, pick-files and open-database.
 //
 // Each is a task type, because a dialog waits for the user and the thread that handles the page's messages must not.
 //
@@ -136,7 +136,7 @@ pub fn pickFile(context: *TaskContext, default_filename: []const u8) !?[]const u
 
 //
 // Shows a save dialog with a suggested file name, remembers the folder of the path chosen as the folder to download to, and returns
-// the path, or null when the user cancelled. This is the dialog the pick-file channel shows, and the one the save-asset handler
+// the path, or null when the user cancelled. This is the dialog the pick-file message shows, and the one the save-asset handler
 // shows for itself, which has no test mode answer.
 //
 pub fn showSaveDialog(context: *TaskContext, default_filename: []const u8) !?[]const u8 {
@@ -193,21 +193,89 @@ fn openDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u
 }
 
 //
-// The pick-folder channel's handler: pickFolderChannel, with its errors logged.
+// The pick-folder message's handler: pickFolderChannel, with its errors logged.
 //
 pub const pickFolderHandler = logExceptions(pickFolderChannel, "Error picking folder");
 
 //
-// The pick-file channel's handler: pickFileChannel, with its errors logged.
+// The pick-file message's handler: pickFileChannel, with its errors logged.
 //
 pub const pickFileHandler = logExceptions(pickFileChannel, "Error picking save location");
 
 //
-// The pick-files channel's handler: pickFilesChannel, with its errors logged.
+// The pick-files message's handler: pickFilesChannel, with its errors logged.
 //
 pub const pickFilesHandler = logExceptions(pickFilesChannel, "Error picking files");
 
 //
-// The open-database channel's handler: openDatabase, with its errors logged.
+// The open-database message's handler: openDatabase, with its errors logged.
 //
 pub const openDatabaseHandler = logExceptions(openDatabase, "Error opening database");
+
+//
+// The data of open-database, which has none.
+//
+pub const NoRequest = struct {};
+
+//
+// The data of pick-folder: options the page may leave out, or null for none.
+//
+pub const PickFolderRequest = struct {
+    // The dialog's title, or null for "Select Folder".
+    title: ?[]const u8 = null,
+    // The state key the folder is remembered under, or null for "lastFolder".
+    folderKey: ?[]const u8 = null,
+};
+
+//
+// pick-folder: answered by the pick-folder task. The response is the folder's path, or null when the user cancelled.
+//
+pub fn pickFolderMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: PickFolderRequest) !ziggy.core.Answer(?[]const u8) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "pick-folder",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// pick-file: the data is the suggested file name, answered by the pick-file task. The response is the path chosen, or null.
+//
+pub fn pickFileMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, suggested_name: []const u8) !ziggy.core.Answer(?[]const u8) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "pick-file",
+            .data = try json.stringify(arena, suggested_name),
+        },
+    };
+}
+
+//
+// pick-files: the data is the dialog's title, answered by the pick-files task. The response is the paths chosen, or null.
+//
+pub fn pickFilesMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, title: []const u8) !ziggy.core.Answer(?[]const []const u8) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "pick-files",
+            .data = try json.stringify(arena, title),
+        },
+    };
+}
+
+//
+// open-database: answered by the open-database task, which shows the dialog and tells the page to load the database. The response
+// is null.
+//
+pub fn openDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "open-database",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

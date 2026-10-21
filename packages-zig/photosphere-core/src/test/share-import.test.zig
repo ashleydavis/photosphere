@@ -103,7 +103,7 @@ test "import-share-payload reports a request with no payload as an error" {
     defer app.stop();
     const reply = try app.requestError("import-share-payload", "{\"conflictResolutions\":{}}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the payload that was shared.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"payload\" is missing", reply);
 }
 
 test "import-share-payload with no conflictResolutions is an error reply when a secret's name is taken" {

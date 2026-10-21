@@ -123,7 +123,7 @@ describe('toLogLevel', () => {
 });
 
 describe('createZiggyTestTransport', () => {
-    test('answers each test-command event on the test-result channel with its request id', async () => {
+    test('answers each test-command event on the sendTestResult with its request id', async () => {
         const ziggy = new FakeZiggy();
         ziggy.replies.set('test-result', null);
         const transport = createZiggyTestTransport(ziggy);
@@ -134,17 +134,17 @@ describe('createZiggyTestTransport', () => {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         expect(ziggy.invoked).toEqual([
-            { channel: 'test-result', data: { requestId: 7, result: { ok: true, value: 'hello' } } },
+            { name: 'test-result', data: { requestId: 7, result: { ok: true, value: 'hello' } } },
         ]);
     });
 
-    test('forwards the driver log lines to the renderer-log channel', () => {
+    test('forwards the driver log lines to the renderer-log message', () => {
         const ziggy = new FakeZiggy();
         const transport = createZiggyTestTransport(ziggy);
 
         transport.sendLog('warn', 'careful');
 
-        expect(ziggy.sent).toEqual([{ channel: 'renderer-log', data: { level: 'warn', message: 'careful' } }]);
+        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'warn', message: 'careful' } }]);
     });
 });
 
@@ -154,6 +154,6 @@ describe('signalTestPageReady', () => {
 
         signalTestPageReady(ziggy);
 
-        expect(ziggy.sent).toEqual([{ channel: 'test-ui-ready', data: null }]);
+        expect(ziggy.sent).toEqual([{ name: 'test-ui-ready', data: null }]);
     });
 });

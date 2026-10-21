@@ -91,7 +91,7 @@ test "pick-file without a suggested name is an error reply" {
     defer app.stop();
     const reply = try app.requestError("pick-file", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The save dialog needs a suggested file name.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "pick-files replies every path chosen, in a dialog that starts in the last folder" {
@@ -128,7 +128,7 @@ test "open-database tells the page to load the folder chosen and remembers the f
     defer allocator.free(reply);
     try std.testing.expectEqualStrings("null", reply);
     try std.testing.expectEqualStrings("Open Database", app.last_pick_title.?);
-    try app.shell.expectMessageContaining("{\"channel\":\"database-opened\",\"data\":\"/databases/my-photos\"}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"database-opened\",\"data\":\"/databases/my-photos\"}}");
     try expectState(&app, "lastFolder", "\"/databases\"");
 }
 
@@ -152,14 +152,16 @@ test "pick-folder treats an empty title and an empty key as none" {
     try expectState(&app, "lastFolder", "\"/chosen/dir\"");
 }
 
-test "a failing dialog request logs the error with the message of its handler" {
+test "a failing dialog task logs the error with the message of its handler" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    allocator.free(try app.requestError("pick-file", "null"));
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"pick-file-1\",\"taskType\":\"pick-file\",\"source\":\"test\",\"data\":null,\"priority\":\"interactive\"}}");
+    try app.shell.expectMessageContaining("\"taskId\":\"pick-file-1\",\"status\":\"failed\"");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error picking save location") != null);
-    allocator.free(try app.requestError("pick-files", "null"));
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"pick-files-1\",\"taskType\":\"pick-files\",\"source\":\"test\",\"data\":null,\"priority\":\"interactive\"}}");
+    try app.shell.expectMessageContaining("\"taskId\":\"pick-files-1\",\"status\":\"failed\"");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error picking files") != null);
     allocator.free(try app.requestError("pick-folder", "{\"folderKey\":\"gallerySort\"}"));
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error picking folder") != null);

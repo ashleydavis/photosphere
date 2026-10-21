@@ -1,5 +1,5 @@
 //
-// The channels that save assets to the user's disk and open a folder: save-asset, save-assets and open-path.
+// The messages that save assets to the user's disk and open a folder: save-asset, save-assets and open-path.
 //
 // Each is a task type, because they show dialogs, wait for the tasks that write the files, and start the operating system's opener.
 //
@@ -49,7 +49,7 @@ const ISaveAssetItem = struct {
 //
 // What the page is told when it asked for assets to be saved (ISaveAssetsResult).
 //
-const ISaveAssetsReply = struct {
+pub const ISaveAssetsReply = struct {
     // "saved", "cancelled" or "failed".
     outcome: []const u8,
     // How many assets were written.
@@ -226,16 +226,81 @@ fn openPath(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
 }
 
 //
-// The save-asset channel's handler: saveAsset, with its errors logged.
+// The save-asset message's handler: saveAsset, with its errors logged.
 //
 pub const saveAssetHandler = logExceptions(saveAsset, "Error saving asset");
 
 //
-// The save-assets channel's handler: saveAssets, with its errors logged.
+// The save-assets message's handler: saveAssets, with its errors logged.
 //
 pub const saveAssetsHandler = logExceptions(saveAssets, "Error saving assets");
 
 //
-// The open-path channel's handler: openPath, with its errors logged.
+// The open-path message's handler: openPath, with its errors logged.
 //
 pub const openPathHandler = logExceptions(openPath, "Error opening path");
+
+//
+// The data of save-asset.
+//
+pub const SaveAssetRequest = struct {
+    // The id of the asset.
+    assetId: []const u8,
+    // The asset type to fetch (such as "asset").
+    assetType: []const u8,
+    // The database the asset lives in.
+    databasePath: []const u8,
+    // The file name to suggest in the save dialog, needed only when there is no destPath.
+    filename: ?[]const u8 = null,
+    // The path to write to without a dialog, or null to ask the user.
+    destPath: ?[]const u8 = null,
+};
+
+//
+// save-asset: answered by the save-asset-request task. The response is null.
+//
+pub fn saveAssetMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SaveAssetRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "save-asset-request",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of save-assets.
+//
+pub const SaveAssetsRequest = struct {
+    // The assets to write (ISaveAssetItem).
+    items: []const std.json.Value,
+    // The database the assets live in.
+    databasePath: []const u8,
+};
+
+//
+// save-assets: answered by the save-assets task. The response is what happened to the assets.
+//
+pub fn saveAssetsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SaveAssetsRequest) !ziggy.core.Answer(ISaveAssetsReply) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "save-assets",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// open-path: the data is the path of a folder, answered by the open-path task. The response is null.
+//
+pub fn openPathMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, path: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "open-path",
+            .data = try json.stringify(arena, path),
+        },
+    };
+}

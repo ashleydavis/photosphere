@@ -1,5 +1,5 @@
 //
-// The check-tools channel: reports whether the tools Photosphere
+// The check-tools message: reports whether the tools Photosphere
 // needs to read photos and videos (ImageMagick, ffprobe and ffmpeg) are available, which the page shows when they are not.
 //
 // It is a task type, because it asks each tool for its version.
@@ -25,6 +25,24 @@ fn checkTools(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
 }
 
 //
-// The check-tools channel's handler: checkTools, with its errors logged.
+// The check-tools message's handler: checkTools, with its errors logged.
 //
 pub const checkToolsHandler = logExceptions(checkTools, "Error checking tools");
+
+//
+// The data of check-tools, which has none.
+//
+pub const NoRequest = struct {};
+
+//
+// check-tools: answered by the check-tools task. The response is whether each tool is available, and its version.
+//
+pub fn checkToolsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(tools_zig.ToolsStatus) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "check-tools",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

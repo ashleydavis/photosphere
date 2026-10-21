@@ -1,9 +1,9 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
-const file_logger = @import("../lib/file-logger.zig");
-const main_process = @import("../lib/main-process.zig");
+const main_state = @import("photosphere-core").main_state;
+const file_logger = @import("photosphere-core").file_logger;
+const main_process = @import("photosphere-core").main_process;
 
 const TestApp = support.TestApp;
 

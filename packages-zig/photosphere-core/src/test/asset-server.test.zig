@@ -1,7 +1,7 @@
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
+const main_state = @import("photosphere-core").main_state;
 
 const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
 
@@ -38,7 +38,7 @@ test "the asset-server task serves the asset routes on a loopback port the page 
     try app.start();
     defer app.stop();
 
-    app.core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"asset-server-1\",\"taskType\":\"asset-server\",\"source\":\"asset-server\",\"data\":{\"port\":0},\"priority\":\"background\"}}");
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"asset-server-1\",\"taskType\":\"asset-server\",\"source\":\"asset-server\",\"data\":{\"port\":0},\"priority\":\"background\"}}");
     const port = try readyPort(&app, allocator);
     try std.testing.expect(port > 0);
 
@@ -61,7 +61,7 @@ test "the asset-server task serves the asset routes on a loopback port the page 
     // The main process starts an asset server that ends while the app runs again on the port it had, so the app is marked as
     // stopping first, as it is when it quits. Otherwise the restarted server answers on the port.
     main_state.fromCore(app.core).stopping.store(true, .release);
-    app.core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":\"asset-server\"}");
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"cancel-tasks\",\"data\":\"asset-server\"}");
     try app.shell.expectMessageContaining("\"taskId\":\"asset-server-1\",\"result\":{\"taskId\":\"asset-server-1\",\"status\":\"failed\"");
 
     // The task is over, so nothing of ours answers on the port.

@@ -1,6 +1,6 @@
 const std = @import("std");
 const node_api = @import("node-api-zig");
-const update_and_news = @import("../lib/update-and-news.zig");
+const update_and_news = @import("photosphere-core").update_and_news;
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
@@ -102,7 +102,7 @@ test "checkForNews sends the first item that has not been shown, and logs it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try update_and_news.checkForNews(app.core, arena.allocator(), std.testing.io);
-    try app.shell.expectMessageContaining("{\"channel\":\"show-notification\",\"data\":{\"message\":\"First news\",\"color\":\"success\",\"duration\":5000,\"newsId\":\"first\"}}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"First news\",\"color\":\"success\",\"duration\":5000,\"newsId\":\"first\"}}}");
     try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Showed news notification: first") != null);
 }
 
@@ -115,7 +115,7 @@ test "checkForNews skips the items already shown, and gives an item without a co
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     try update_and_news.checkForNews(app.core, arena.allocator(), std.testing.io);
-    try app.shell.expectMessageContaining("{\"channel\":\"show-notification\",\"data\":{\"message\":\"Second news\",\"color\":\"primary\",\"duration\":0,\"newsId\":\"second\"}}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"Second news\",\"color\":\"primary\",\"duration\":0,\"newsId\":\"second\"}}}");
 }
 
 test "checkForNews sends nothing when every item has been shown" {
@@ -178,7 +178,7 @@ test "main-command page-loaded checks the news feed, and does it once however of
     try useNewsFeed(&app, two_item_feed);
     const allocator = std.testing.allocator;
     allocator.free(try app.requestOk("main-command", "{\"command\":\"page-loaded\"}"));
-    try app.shell.expectMessageContaining("{\"channel\":\"show-notification\",\"data\":{\"message\":\"First news\",\"color\":\"success\",\"duration\":5000,\"newsId\":\"first\"}}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"First news\",\"color\":\"success\",\"duration\":5000,\"newsId\":\"first\"}}}");
     allocator.free(try app.requestOk("main-command", "{\"command\":\"page-loaded\"}"));
     app.shell.sleepMs(300);
     try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("show-notification"));

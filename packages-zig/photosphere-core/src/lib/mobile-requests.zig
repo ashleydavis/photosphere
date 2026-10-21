@@ -195,3 +195,184 @@ pub fn secureStoreKeysHandler(context: *TaskContext, data: std.json.Value) anyer
     _ = data;
     return try askShell(context, "secureStoreKeys", "null");
 }
+
+//
+// The data of requestMediaPermission, startBackgroundImport, stopBackgroundImport and secureStoreKeys, which have none.
+//
+pub const NoRequest = struct {};
+
+//
+// requestMediaPermission: answered by the requestMediaPermission task. The response is the phone's answer, {granted, partial}.
+//
+pub fn requestMediaPermissionMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "requestMediaPermission",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of exportFile.
+//
+pub const ExportFileRequest = struct {
+    // The sandbox-relative path of the finished file.
+    path: []const u8,
+    // The outcome a test staged in place of the sheet ("shared" or "cancelled"), or null.
+    testOutcome: ?[]const u8 = null,
+};
+
+//
+// exportFile: answered by the exportFile task. The response is the phone's answer, {path}.
+//
+pub fn exportFileMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ExportFileRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "exportFile",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of exportFiles.
+//
+pub const ExportFilesRequest = struct {
+    // The sandbox-relative paths of the finished files.
+    paths: []const []const u8,
+    // The outcome a test staged in place of the sheet ("shared" or "cancelled"), or null.
+    testOutcome: ?[]const u8 = null,
+};
+
+//
+// exportFiles: answered by the exportFiles task. The response is the phone's answer, {paths}.
+//
+pub fn exportFilesMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ExportFilesRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "exportFiles",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of exportTempFolder.
+//
+pub const ExportTempFolderRequest = struct {
+    // The sandbox-relative folder for the files of one export.
+    folder: []const u8,
+};
+
+//
+// exportTempFolder: answered by the exportTempFolder task. The response is the phone's answer, {path}.
+//
+pub fn exportTempFolderMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ExportTempFolderRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "exportTempFolder",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// startBackgroundImport: answered by the startBackgroundImport task. The response is null.
+//
+pub fn startBackgroundImportMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "startBackgroundImport",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// stopBackgroundImport: answered by the stopBackgroundImport task. The response is null.
+//
+pub fn stopBackgroundImportMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "stopBackgroundImport",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// The data of secureStoreGet and secureStoreDelete.
+//
+pub const SecureStoreKeyRequest = struct {
+    // The key of the item in the phone's keychain.
+    key: []const u8,
+};
+
+//
+// The data of secureStoreSet.
+//
+pub const SecureStoreSetRequest = struct {
+    // The key of the item in the phone's keychain.
+    key: []const u8,
+    // The value to store under it.
+    value: []const u8,
+};
+
+//
+// secureStoreGet: answered by the secureStoreGet task. The response is the phone's answer, {value}.
+//
+pub fn secureStoreGetMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SecureStoreKeyRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "secureStoreGet",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// secureStoreSet: answered by the secureStoreSet task. The response is the phone's answer.
+//
+pub fn secureStoreSetMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SecureStoreSetRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "secureStoreSet",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// secureStoreDelete: answered by the secureStoreDelete task. The response is the phone's answer.
+//
+pub fn secureStoreDeleteMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SecureStoreKeyRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "secureStoreDelete",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// secureStoreKeys: answered by the secureStoreKeys task. The response is the phone's answer, {keys}.
+//
+pub fn secureStoreKeysMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(std.json.Value) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "secureStoreKeys",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

@@ -1,7 +1,7 @@
 //
 // What the main process does about databases being opened and closed, about syncing and about
-// the tasks the worker pool reports on: the `notify-database-opened`, `notify-database-closed` and `notify-database-edited` channels,
-// the `main-command` channel, and the functions that hear every task end and every task message from the worker pool.
+// the tasks the worker pool reports on: the `notify-database-opened`, `notify-database-closed` and `notify-database-edited` messages,
+// the `main-command` message, and the functions that hear every task end and every task message from the worker pool.
 //
 // The state these use is in main-state.zig.
 //
@@ -89,7 +89,7 @@ fn notifyDatabaseOpened(context: *TaskContext, data: std.json.Value) anyerror!?[
 }
 
 //
-// The notify-database-opened channel's handler: notifyDatabaseOpened, with its errors logged.
+// The notify-database-opened message's handler: notifyDatabaseOpened, with its errors logged.
 //
 pub const notifyDatabaseOpenedHandler = logExceptions(notifyDatabaseOpened, "Error notifying database opened");
 
@@ -118,22 +118,60 @@ fn notifyDatabaseClosed(context: *TaskContext, data: std.json.Value) anyerror!?[
 }
 
 //
-// The notify-database-closed channel's handler: notifyDatabaseClosed, with its errors logged.
+// The notify-database-closed message's handler: notifyDatabaseClosed, with its errors logged.
 //
 pub const notifyDatabaseClosedHandler = logExceptions(notifyDatabaseClosed, "Error notifying database closed");
 
 //
-// notify-database-edited: no payload and no reply. Schedules a debounced sync.
+// The data of notify-database-closed and notify-database-edited, which have none.
 //
-pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
-    _ = data;
-    main_state.fromCore(core).scheduleSync();
-    return try arena.dupe(u8, "null");
+pub const NoRequest = struct {};
+
+//
+// notify-database-opened: the data is the path of the database the page opened, answered by the notify-database-opened task. The
+// response is null.
+//
+pub fn notifyDatabaseOpenedMessageHandler(core: *Core, arena: std.mem.Allocator, request: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "notify-database-opened",
+            .data = try json.stringify(arena, request),
+        },
+    };
 }
 
 //
+// notify-database-closed: answered by the notify-database-closed task. The response is null.
+//
+pub fn notifyDatabaseClosedMessageHandler(core: *Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "notify-database-closed",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// notify-database-edited: no payload and no reply. Schedules a debounced sync.
+//
+pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, request: NoRequest) !void {
+    _ = arena;
+    _ = request;
+    main_state.fromCore(core).scheduleSync();
+}
+
+//
+// The data of main-command: the command's name, or an object with the name in `command` and its arguments beside it. The page
+// sends both, so the data is taken as it comes.
+//
+pub const MainCommandRequest = std.json.Value;
+
+//
 // main-command: the payload is the name of a command, or an object with the name in `command` and the command's arguments beside it.
-// A generic channel that lets the page trigger named actions in the main process. The commands are:
+// A generic message that lets the page trigger named actions in the main process. The commands are:
 //
 //  - toggle-devtools: opens the developer tools, or closes them when they are open, which the shell does as it does for the menu item.
 //  - page-loaded: says the page has loaded and is listening for events, which starts the checks for an update and for news. Only the
@@ -144,10 +182,10 @@ pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, data: 
 // toggle-devtools needs the shell's help, so it is an error when the shell offers no way to do it. A payload with no command name
 // is an unknown command called "undefined".
 //
-pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
-    const command: []const u8 = switch (data) {
+pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, request: MainCommandRequest) !void {
+    const command: []const u8 = switch (request) {
         .string => |text| text,
-        else => json.getString(data, "command") orelse "undefined",
+        else => json.getString(request, "command") orelse "undefined",
     };
     if (std.mem.eql(u8, command, "toggle-devtools")) {
         const menu_action = core.config.menu_action orelse {
@@ -160,7 +198,7 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
     }
     else if (std.mem.eql(u8, command, "set-sync-allowed")) {
         const state = main_state.fromCore(core);
-        const allowed = data == .object and data.object.get("allowed") != null and data.object.get("allowed").? == .bool and data.object.get("allowed").?.bool;
+        const allowed = request == .object and request.object.get("allowed") != null and request.object.get("allowed").? == .bool and request.object.get("allowed").?.bool;
         {
             state.lock();
             defer state.unlock();
@@ -174,14 +212,14 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
         }
     }
     else if (std.mem.eql(u8, command, "cancel-tasks")) {
-        // The page's cancel, sent here rather than on Ziggy's own cancel-tasks channel. That channel cancels in the runner alone, which
+        // The page's cancel, sent here rather than on Ziggy's own cancel-tasks message. That message cancels in the runner alone, which
         // drops a task still waiting for a worker without reporting it, so a task queue that counted it, such as the one an import
         // waits on for its children, waits for good and the import holds its worker. The queue backend cancels in the runner and
         // also tells the task queues of the source, which stop waiting, as the original app's worker pool tells its workers
         // (apps/desktop/src/lib/worker-pool-electron-main.ts cancelTasks, apps/desktop/src/worker.ts "cancel-tasks"). Found by
         // 33-import-cancel in the Release Zig workflow's desktop smoke tests on ubuntu-latest, whose four workers left the cancelled
         // import's children queued, so the import after it timed out waiting for "1 assets imported".
-        const source = json.getString(data, "source") orelse {
+        const source = json.getString(request, "source") orelse {
             return utils.errors.throwError("main-command cancel-tasks needs the source of the tasks to cancel.", .{});
         };
         core.queue_backend.cancelTasks(source);
@@ -189,7 +227,6 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
     else {
         utils.console.errorFormat("Unknown main-command: {s}", .{command});
     }
-    return try arena.dupe(u8, "null");
 }
 
 //

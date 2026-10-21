@@ -1,5 +1,5 @@
 //
-// The vault channels: vault-get, vault-set, vault-delete and vault-list. Each opens the default vault (getVault(getDefaultVaultType()))
+// The vault messages: vault-get, vault-set, vault-delete and vault-list. Each opens the default vault (getVault(getDefaultVaultType()))
 // and does what its name says.
 //
 // Each is a task type, because a keychain answers by asking the operating system, which can take a while and can show the user a
@@ -86,21 +86,90 @@ fn vaultList(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
 }
 
 //
-// The vault-get channel's handler: vaultGet, with its errors logged.
+// The vault-get message's handler: vaultGet, with its errors logged.
 //
 pub const vaultGetHandler = logExceptions(vaultGet, "Error getting vault secret");
 
 //
-// The vault-set channel's handler: vaultSet, with its errors logged.
+// The vault-set message's handler: vaultSet, with its errors logged.
 //
 pub const vaultSetHandler = logExceptions(vaultSet, "Error setting vault secret");
 
 //
-// The vault-delete channel's handler: vaultDelete, with its errors logged.
+// The vault-delete message's handler: vaultDelete, with its errors logged.
 //
 pub const vaultDeleteHandler = logExceptions(vaultDelete, "Error deleting vault secret");
 
 //
-// The vault-list channel's handler: vaultList, with its errors logged.
+// The vault-list message's handler: vaultList, with its errors logged.
 //
 pub const vaultListHandler = logExceptions(vaultList, "Error listing vault secrets");
+
+//
+// The data of vault-list, which has none.
+//
+pub const NoRequest = struct {};
+
+//
+// vault-get: the data is the name of a secret, answered by the vault-get task. The response is the secret, or null.
+//
+pub fn vaultGetMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(?ISecret) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "vault-get",
+            .data = try json.stringify(arena, name),
+        },
+    };
+}
+
+//
+// The data of vault-set.
+//
+pub const VaultSetRequest = struct {
+    // The name of the secret.
+    name: []const u8,
+    // The kind of secret, such as "s3-credentials".
+    type: []const u8,
+    // The secret itself.
+    value: []const u8,
+};
+
+//
+// vault-set: answered by the vault-set task, which writes the secret. The response is null.
+//
+pub fn vaultSetMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: VaultSetRequest) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "vault-set",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}
+
+//
+// vault-delete: the data is the name of a secret, answered by the vault-delete task. The response is null.
+//
+pub fn vaultDeleteMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(void) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "vault-delete",
+            .data = try json.stringify(arena, name),
+        },
+    };
+}
+
+//
+// vault-list: answered by the vault-list task. The response is every secret in the vault.
+//
+pub fn vaultListMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer([]const ISecret) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "vault-list",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

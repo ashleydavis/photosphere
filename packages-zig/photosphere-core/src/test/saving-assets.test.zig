@@ -40,8 +40,8 @@ const failing_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "save-assets-batch", .handler = failingSaveTask },
 };
 
-fn expectReply(app: *TestApp, channel: []const u8, data_json: []const u8, expected_json: []const u8) !void {
-    const reply = try app.requestOk(channel, data_json);
+fn expectReply(app: *TestApp, message_type: []const u8, data_json: []const u8, expected_json: []const u8) !void {
+    const reply = try app.requestOk(message_type, data_json);
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings(expected_json, reply);
 }
@@ -147,7 +147,7 @@ test "save-asset without the path of its database is an error reply" {
     defer app.stop();
     const reply = try app.requestError("save-asset", "{\"assetId\":\"a1\",\"assetType\":\"asset\",\"filename\":\"photo.jpg\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The asset to save needs the path of its database.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"databasePath\" is missing", reply);
 }
 
 test "open-path without a path is an error reply" {
@@ -156,19 +156,21 @@ test "open-path without a path is an error reply" {
     defer app.stop();
     const reply = try app.requestError("open-path", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The folder to open needs a path.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
-test "a failing save request logs the error with the message of its handler" {
+test "a failing save task logs the error with the message of its handler" {
     var app: TestApp = undefined;
     try app.startWithTasks(&saving_tasks);
     defer app.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestError("save-asset", "null"));
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"save-asset-1\",\"taskType\":\"save-asset-request\",\"source\":\"test\",\"data\":null,\"priority\":\"interactive\"}}");
+    try app.shell.expectMessageContaining("\"taskId\":\"save-asset-1\",\"status\":\"failed\"");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error saving asset") != null);
-    allocator.free(try app.requestError("save-assets", "null"));
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"save-assets-1\",\"taskType\":\"save-assets\",\"source\":\"test\",\"data\":null,\"priority\":\"interactive\"}}");
+    try app.shell.expectMessageContaining("\"taskId\":\"save-assets-1\",\"status\":\"failed\"");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error saving assets") != null);
-    allocator.free(try app.requestError("open-path", "null"));
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"open-path-1\",\"taskType\":\"open-path\",\"source\":\"test\",\"data\":null,\"priority\":\"interactive\"}}");
+    try app.shell.expectMessageContaining("\"taskId\":\"open-path-1\",\"status\":\"failed\"");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error opening path") != null);
 }
 

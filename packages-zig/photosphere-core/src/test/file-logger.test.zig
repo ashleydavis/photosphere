@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const file_logger = @import("../lib/file-logger.zig");
+const file_logger = @import("photosphere-core").file_logger;
 
 const FileLogger = file_logger.FileLogger;
 

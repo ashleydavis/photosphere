@@ -3,13 +3,13 @@
 //
 // Each test runs the real core on a stand-in shell with the MCP server task running on a free loopback port (the test sets test mode in the
 // environment the core reads, which is what makes the server not claim its fixed port), and plays the part of the page: it reads the
-// `mcp-tool-request` events the stand-in shell records and answers them on the `mcp-tool-response` channel.
+// `mcp-tool-request` events the stand-in shell records and answers them with `mcp-tool-response` messages.
 //
 
 const std = @import("std");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
-const mcp_server = @import("../lib/mcp-server.zig");
+const main_state = @import("photosphere-core").main_state;
+const mcp_server = @import("photosphere-core").mcp_server;
 const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
 
 const TestApp = support.TestApp;
@@ -133,29 +133,31 @@ fn startServer(app: *TestApp) !u16 {
 //
 fn waitForRequest(app: *TestApp, tool: []const u8) ![]u8 {
     const allocator = std.testing.allocator;
-    const marker = try std.fmt.allocPrint(allocator, "\"channel\":\"mcp-tool-request\",\"data\":{{\"requestId\":\"", .{});
+    const marker = try std.fmt.allocPrint(allocator, "\"type\":\"mcp-tool-request\",\"data\":{{\"requestId\":\"", .{});
     defer allocator.free(marker);
     try app.shell.expectMessageContaining(marker);
     const text = try app.shell.messageAt(allocator, app.shell.indexOfContaining(marker).?);
     defer allocator.free(text);
     const parsed = try std.json.parseFromSlice(struct {
         data: struct {
-            requestId: []const u8,
-            tool: []const u8,
+            data: struct {
+                requestId: []const u8,
+                tool: []const u8,
+            },
         },
     }, allocator, text, .{
         .ignore_unknown_fields = true,
     });
     defer parsed.deinit();
-    try std.testing.expectEqualStrings(tool, parsed.value.data.tool);
-    return try allocator.dupe(u8, parsed.value.data.requestId);
+    try std.testing.expectEqualStrings(tool, parsed.value.data.data.tool);
+    return try allocator.dupe(u8, parsed.value.data.data.requestId);
 }
 
 //
 // Answers a tool call the way the page does: a `mcp-tool-response` message holding the request id and the payload.
 //
 fn answerRequest(app: *TestApp, request_id: []const u8, payload_json: []const u8) !void {
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"channel\":\"mcp-tool-response\",\"data\":{{\"requestId\":\"{s}\",{s}}}}}", .{ request_id, payload_json });
+    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"kind\":\"app\",\"name\":\"mcp-tool-response\",\"data\":{{\"requestId\":\"{s}\",{s}}}}}", .{ request_id, payload_json });
     defer std.testing.allocator.free(message);
     app.core.postMessage(message);
 }
@@ -187,7 +189,7 @@ test "the arguments the tool was called with, with the defaults filled in, are s
     try call.start(port, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_media_files\",\"arguments\":{\"pageId\":\"page-2\"}}}");
     const request_id = try waitForRequest(&app, "list_media_files");
     defer std.testing.allocator.free(request_id);
-    const text = try app.shell.messageAt(std.testing.allocator, app.shell.indexOfContaining("\"channel\":\"mcp-tool-request\"").?);
+    const text = try app.shell.messageAt(std.testing.allocator, app.shell.indexOfContaining("\"type\":\"mcp-tool-request\"").?);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "\"tool\":\"list_media_files\",\"args\":{\"limit\":20,\"pageId\":\"page-2\"}") != null);
     try answerRequest(&app, request_id, "\"result\":\"ok\"");
@@ -224,7 +226,7 @@ test "a tool call with arguments that do not match the tool's input is refused w
     defer std.testing.allocator.free(answer);
 
     try std.testing.expect(std.mem.indexOf(u8, answer, "Input validation error") != null);
-    try std.testing.expect(app.shell.indexOfContaining("\"channel\":\"mcp-tool-request\"") == null);
+    try std.testing.expect(app.shell.indexOfContaining("\"type\":\"mcp-tool-request\"") == null);
 }
 
 test "every tool of the desktop app is listed, in order" {
@@ -288,7 +290,7 @@ test "an answer from the page with no request id is refused" {
     const message = try app.requestError("mcp-tool-response", "{\"result\":\"x\"}");
     defer std.testing.allocator.free(message);
 
-    try std.testing.expectEqualStrings("The MCP tool response has no requestId.", message);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"requestId\" is missing", message);
 }
 
 test "an answer from the page to a request nobody is waiting for is ignored" {
@@ -320,7 +322,7 @@ test "the MCP server holds no worker of the task runner, so an app with one work
     defer app.stop();
     _ = try startServer(&app);
 
-    app.core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"after-mcp-1\",\"taskType\":\"get-databases\",\"source\":\"test\",\"data\":null,\"priority\":\"background\"}}");
+    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"after-mcp-1\",\"taskType\":\"get-databases\",\"source\":\"test\",\"data\":null,\"priority\":\"background\"}}");
     try app.shell.expectMessageContaining("\"taskId\":\"after-mcp-1\",\"result\":{\"taskId\":\"after-mcp-1\",\"status\":\"succeeded\"");
 }
 

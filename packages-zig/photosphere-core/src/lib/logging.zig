@@ -1,10 +1,10 @@
 //
-// The logging channels: renderer-log, get-log-details and fps-measurement.
+// The logging messages: renderer-log, get-log-details and fps-measurement.
 //
 // The log they use is the one installed with utils.log.setLog, which the app makes a FileLogger (file-logger.zig) at startup.
 // renderer-log does what it does only when that log is a FileLogger.
 //
-// renderer-log is a channel answered on the thread that handles the page's messages, and still never waits for the disk: the
+// renderer-log is a message answered on the thread that handles the page's messages, and still never waits for the disk: the
 // FileLogger queues the line in memory and a thread of its own appends it. get-log-details reads the log file, so it is a task type.
 //
 
@@ -21,52 +21,60 @@ const FileLogger = file_logger.FileLogger;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
-// renderer-log: the payload is {level, message, error?, toolData?{stdout?, stderr?}}, an IRendererLogMessage. It is written to the
-// log as the message of a worker is, with the source "Renderer". The reply is null. When the log is not a FileLogger the message is
-// dropped.
+// The output of a tool, in a renderer-log message.
 //
-// A message that is not laid out as an IRendererLogMessage (not an object, no level or message, a level that is not one of the
-// eight, a toolData that is not an object) is an error reply that says what is wrong. The level has to be one of the eight to be
-// read into the log's level type, and nothing is dropped without being said, which is what the repository requires. The check
-// happens before the test for a file logger, so a bad message is reported even when there is no file logger.
+pub const ToolDataRequest = struct {
+    // What the tool wrote to its standard output, or null.
+    stdout: ?[]const u8 = null,
+    // What the tool wrote to its standard error, or null.
+    stderr: ?[]const u8 = null,
+};
+
 //
-pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
+// The data of renderer-log, an IRendererLogMessage.
+//
+pub const RendererLogRequest = struct {
+    // The level, one of info, verbose, error, exception, warn, debug, tool or event.
+    level: []const u8,
+    // The text of the message.
+    message: []const u8,
+    // The text of the error the message is about, or null.
+    @"error": ?[]const u8 = null,
+    // The output of the tool the message is about, or null.
+    toolData: ?ToolDataRequest = null,
+};
+
+//
+// renderer-log: written to the log as the message of a worker is, with the source "Renderer". The response is null. When the log is
+// not a FileLogger the message is dropped.
+//
+// Data that is not laid out as an IRendererLogMessage is refused by Ziggy as InvalidMessageData. A level that is not one of the
+// eight is an error reply that says so, because the level has to be one of them to be read into the log's level type, and nothing
+// is dropped without being said, which is what the repository requires. The check happens before the test for a file logger, so a
+// bad message is reported even when there is no file logger.
+//
+pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, request: RendererLogRequest) !void {
     _ = core;
-    if (data != .object) {
-        return utils.errors.throwError("The log message must be an object with a level and a message.", .{});
-    }
-    const level_text = json.getString(data, "level") orelse {
-        return utils.errors.throwError("The log message needs a level.", .{});
-    };
-    const level = std.meta.stringToEnum(file_logger.WorkerLogLevel, level_text) orelse {
-        return utils.errors.throwError("The log message has the level \"{s}\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", .{level_text});
-    };
-    const message = json.getString(data, "message") orelse {
-        return utils.errors.throwError("The log message needs a message.", .{});
+    _ = arena;
+    const level = std.meta.stringToEnum(file_logger.WorkerLogLevel, request.level) orelse {
+        return utils.errors.throwError("The log message has the level \"{s}\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", .{request.level});
     };
     var tool_data: ?utils.log.IToolOutput = null;
-    if (data.object.get("toolData")) |tool_data_value| {
-        // A null toolData is absent.
-        if (tool_data_value != .null) {
-            if (tool_data_value != .object) {
-                return utils.errors.throwError("The tool data of a log message must be an object.", .{});
-            }
-            tool_data = .{
-                .stdout = json.getString(tool_data_value, "stdout"),
-                .stderr = json.getString(tool_data_value, "stderr"),
-            };
-        }
+    if (request.toolData) |tool_data_request| {
+        tool_data = .{
+            .stdout = tool_data_request.stdout,
+            .stderr = tool_data_request.stderr,
+        };
     }
     const logger = FileLogger.fromILog(utils.log.log) orelse {
-        return try arena.dupe(u8, "null");
+        return;
     };
     try logger.handleWorkerLogMessage(.{
         .level = level,
-        .message = message,
-        .@"error" = json.getString(data, "error"),
+        .message = request.message,
+        .@"error" = request.@"error",
         .tool_data = tool_data,
     }, "Renderer");
-    return try arena.dupe(u8, "null");
 }
 
 //
@@ -86,20 +94,15 @@ fn getLogDetails(context: *TaskContext, data: std.json.Value) anyerror!?[]const 
 //
 // The file is in the app's data directory, because a fixed path under /tmp does not exist on Windows
 // and nothing may claim a fixed machine-wide path. The column header row is written when the file is empty or not there,
-// because the channels are a fixed list and there is no moment of registration to write it at. The
+// because the messages are a fixed list and there is no moment of registration to write it at. The
 // environment variable is read for each message, and a message with it off is an error reply. A value that is
-// not a number is an error reply, because all failures here are noisy.
+// not a number is refused by Ziggy as InvalidMessageData, because all failures here are noisy.
 //
-pub fn fpsMeasurementHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
+pub fn fpsMeasurementHandler(core: *Core, arena: std.mem.Allocator, fps: f64) !void {
     const enabled = node_utils.process_env.getEnv("FPS_LOGGING") orelse "";
     if (!std.mem.eql(u8, enabled, "1")) {
         return utils.errors.throwError("FPS logging is off. Start Photosphere with the environment variable FPS_LOGGING set to 1 to record frame rates.", .{});
     }
-    const fps: f64 = switch (data) {
-        .integer => |integer| @floatFromInt(integer),
-        .float => |float| float,
-        else => return utils.errors.throwError("The frames per second must be a number.", .{}),
-    };
     const fps_path = try std.fs.path.join(arena, &.{ core.data_dir, "photosphere-fps.csv" });
     const io = core.threaded.io();
     var rows = std.Io.Writer.Allocating.init(arena);
@@ -115,7 +118,6 @@ pub fn fpsMeasurementHandler(core: *Core, arena: std.mem.Allocator, data: std.js
     file_logger.appendToFile(io, fps_path, rows.written()) catch |err| {
         return utils.errors.throwError("The frame rate could not be written to {s}: {s}", .{ fps_path, @errorName(err) });
     };
-    return try arena.dupe(u8, "null");
 }
 
 //
@@ -133,6 +135,24 @@ fn existingLength(io: std.Io, file_path: []const u8) !u64 {
 }
 
 //
-// The get-log-details channel's handler: getLogDetails, with its errors logged.
+// The get-log-details message's handler: getLogDetails, with its errors logged.
 //
 pub const getLogDetailsHandler = logExceptions(getLogDetails, "Error getting log details");
+
+//
+// The data of get-log-details, which has none.
+//
+pub const NoRequest = struct {};
+
+//
+// get-log-details: answered by the get-log-details task. The response is the path of the log file and its header.
+//
+pub fn getLogDetailsMessageHandler(core: *Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(utils.log.ILogDetails) {
+    _ = core;
+    return .{
+        .task = .{
+            .task_type = "get-log-details",
+            .data = try json.stringify(arena, request),
+        },
+    };
+}

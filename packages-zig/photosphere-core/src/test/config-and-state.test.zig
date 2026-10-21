@@ -1,13 +1,13 @@
 const std = @import("std");
 const ziggy = @import("ziggy-core");
 const support = @import("test-support.zig");
-const main_state = @import("../lib/main-state.zig");
+const main_state = @import("photosphere-core").main_state;
 const utils = @import("utils-zig");
 
 const TestApp = support.TestApp;
 
-fn expectReply(app: *TestApp, channel: []const u8, data_json: []const u8, expected_json: []const u8) !void {
-    const reply = try app.requestOk(channel, data_json);
+fn expectReply(app: *TestApp, message_type: []const u8, data_json: []const u8, expected_json: []const u8) !void {
+    const reply = try app.requestOk(message_type, data_json);
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings(expected_json, reply);
 }
@@ -103,7 +103,7 @@ test "set-config of the theme tells the page, so the menu bar can follow" {
     defer app.stop();
     try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":\"dark\"}", "null");
     try expectReply(&app, "get-config", "\"theme\"", "\"dark\"");
-    try app.shell.expectMessageContaining("{\"channel\":\"theme-changed\",\"data\":\"dark\"}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\",\"data\":\"dark\"}}");
 }
 
 test "set-config of a theme that does not exist is an error reply and stores nothing" {
@@ -187,7 +187,7 @@ test "switching automatic import on creates the default database and starts the 
 
     // The default database does not exist at that path, so it is created, and the page is told the databases changed.
     try app.shell.expectMessageContaining("\"createdDefaultDatabaseFor\":{\"databasePath\":");
-    try app.shell.expectMessageContaining("{\"channel\":\"databases-changed\",\"data\":null}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"databases-changed\",\"data\":null}}");
 
     // The import is started, with the job the page lists and can cancel.
     try app.shell.expectMessageContaining("\"importing\":{\"paths\":[],\"storageDescriptor\":{\"databasePath\":");
@@ -244,7 +244,7 @@ test "set-config of the theme with no value removes it and tells the page, with 
     try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":null}", "null");
     try expectReply(&app, "get-config", "\"theme\"", "null");
     // A removed theme has no value to send, so the event carries no data.
-    try app.shell.expectMessageContaining("{\"channel\":\"theme-changed\"}");
+    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\"}}");
 }
 
 test "a failing config or state request logs the error with the message of its handler" {
@@ -300,7 +300,8 @@ test "reset-app-storage on desktop empties the settings and cache directories an
     try std.Io.Dir.cwd().createDirPath(io, default_database_dir);
 
     const message = try utils.json.stringify(allocator, .{
-        .channel = "add-task",
+        .kind = "system",
+        .name = "add-task",
         .data = .{
             .taskId = "reset-1",
             .taskType = "reset-app-storage",
