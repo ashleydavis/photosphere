@@ -15,7 +15,7 @@ ImageMagick and FFmpeg are built into the core static library and run in the app
 
 ## Project and build
 
-An Xcode project that builds with Xcode 14.2 on macOS 12.7.6. No version is raised. `sync:ios` builds the UI and the core as a static library (`libphotosphere.a`, with the UI embedded) into `shells/ios/zig-out`; the bundle id is `au.com.codecapers.photosphere.ziggy`, then `xcodebuild` builds the app. `open:ios` opens the project in Xcode. Runs on MacOS only. See [Photosphere App](../../README.md).
+An Xcode project that builds with Xcode 14.2 on macOS 12.7.6. No version is raised. `sync:ios` builds the UI and the core as a static library (`libphotosphere.a`, with the UI embedded) into `native/ios/zig-out`; the bundle id is `au.com.codecapers.photosphere.ziggy`, then `xcodebuild` builds the app. `open:ios` opens the project in Xcode. Runs on MacOS only. See [Photosphere App](../../README.md).
 
 ## Icon
 

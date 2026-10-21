@@ -11,7 +11,7 @@ apple_require_macos
 apple_require_xcode
 apple_require_tool ditto jq rsync
 OUTPUT_DIR="$APPLE_APP_DIR/out/ios"
-BUILD_DIR="$APPLE_APP_DIR/shells/ios/zig-out/package"
+BUILD_DIR="$APPLE_APP_DIR/native/ios/zig-out/package"
 VERSION="$(apple_package_version)"
 
 while [ $# -gt 0 ]; do
@@ -35,7 +35,7 @@ mkdir -p "$OUTPUT_DIR" "$BUILD_DIR"
 
 bash "$SCRIPT_DIR/sync-ios.sh" --sdk device --arch arm64 --minify --native-dir "$BUILD_DIR/native"
 xcodebuild archive \
-    -project "$APPLE_APP_DIR/shells/ios/Photosphere.xcodeproj" \
+    -project "$APPLE_APP_DIR/native/ios/Photosphere.xcodeproj" \
     -scheme Photosphere \
     -configuration Release \
     -sdk iphoneos \

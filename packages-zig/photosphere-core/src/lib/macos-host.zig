@@ -1,7 +1,7 @@
 //
 // The answers the MacOS app gives to the host requests the background work makes of the platform. Ziggy's MacOS bridge has no host
 // request callback, so the core answers these itself on MacOS, in place of the shell, with what the Linux shell answers
-// (apps/photosphere/shells/linux/src/main.zig). Without it every one of them failed with "... is only available in the Photosphere app
+// (apps/photosphere/native/linux/src/main.zig). Without it every one of them failed with "... is only available in the Photosphere app
 // on a phone", which failed the app smoke tests of the MacOS release workflow: opening a database logged the error from
 // requestNotificationPermission, and the background import and sync never ran.
 //

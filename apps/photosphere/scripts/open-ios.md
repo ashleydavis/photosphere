@@ -1,6 +1,6 @@
 # open-ios
 
-Runs `sync-ios.sh`, then opens `shells/ios/Photosphere.xcodeproj` in Xcode.
+Runs `sync-ios.sh`, then opens `native/ios/Photosphere.xcodeproj` in Xcode.
 
 Run it on a Mac: `bun run --filter=ziggy open:ios`.
 

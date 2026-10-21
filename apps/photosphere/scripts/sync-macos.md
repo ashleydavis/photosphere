@@ -7,7 +7,7 @@ Run it on a Mac: `bun run --filter=ziggy sync:macos`.
 ## Arguments
 
 - `--arch <arm64|x86_64>`: the architecture to build. Default: this Mac's.
-- `--native-dir <dir>`: where to put the files. Default: `shells/macos/zig-out`.
+- `--native-dir <dir>`: where to put the files. Default: `native/macos/zig-out`.
 - `--minify`: minify the page, for a release package.
 - `--test-hooks`: build the library with the test control connection. Never use it for a release.
 - `--optimize <mode>`: the Zig optimize mode. Default: `ReleaseSafe`.

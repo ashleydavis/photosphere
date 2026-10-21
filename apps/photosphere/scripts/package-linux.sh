@@ -6,7 +6,7 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SHELL_DIR="$APP_DIR/shells/linux"
+SHELL_DIR="$APP_DIR/native/linux"
 OUTPUT_DIR="$APP_DIR/out/linux"
 
 VERSION="$(jq -r '.version' "$APP_DIR/package.json")"

@@ -983,7 +983,7 @@ fn addPhotosphere(
         .title = "Photosphere",
         .directory = "apps/photosphere",
         .linux_icon = "apps/photosphere/icons/photosphere-512.png",
-        .windows_resource = "apps/photosphere/shells/windows/photosphere.rc",
+        .windows_resource = "apps/photosphere/native/windows/photosphere.rc",
     };
     try ziggy_build.addLinuxShell(b, photosphere_app, strip, target, optimize, ziggy, libraries.static_library);
     try ziggy_build.addWindowsShell(b, photosphere_app, compile_only, strip, target, optimize, ziggy, libraries.static_library);

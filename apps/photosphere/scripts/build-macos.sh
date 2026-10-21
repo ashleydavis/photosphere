@@ -10,8 +10,8 @@ source "$SCRIPT_DIR/lib/apple-common.sh"
 apple_require_macos
 apple_require_xcode
 ARCH="$(apple_host_arch)"
-NATIVE_DIR="$APPLE_APP_DIR/shells/macos/zig-out"
-BUILD_DIR="$APPLE_APP_DIR/shells/macos/zig-out/xcode"
+NATIVE_DIR="$APPLE_APP_DIR/native/macos/zig-out"
+BUILD_DIR="$APPLE_APP_DIR/native/macos/zig-out/xcode"
 CONFIGURATION="Debug"
 TEST_HOOKS="no"
 MINIFY="no"
@@ -63,7 +63,7 @@ fi
 bash "$SCRIPT_DIR/sync-macos.sh" "${SYNC_ARGUMENTS[@]}"
 
 xcodebuild \
-    -project "$APPLE_APP_DIR/shells/macos/Photosphere.xcodeproj" \
+    -project "$APPLE_APP_DIR/native/macos/Photosphere.xcodeproj" \
     -scheme Photosphere \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$BUILD_DIR" \

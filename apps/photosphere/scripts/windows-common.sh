@@ -14,7 +14,7 @@ else
     WINDOWS_APP_DIR="$(cd "$WINDOWS_SCRIPTS_DIR/.." && pwd)"
 fi
 
-WINDOWS_SHELL_DIR="$WINDOWS_APP_DIR/shells/windows"
+WINDOWS_SHELL_DIR="$WINDOWS_APP_DIR/native/windows"
 WINDOWS_SDK_DIR="$WINDOWS_APP_DIR/webview2-sdk"
 
 # The pinned WiX Toolset that fetch-wix.sh extracts, which package-windows.sh builds the MSI installer with.

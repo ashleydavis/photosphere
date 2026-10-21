@@ -7,4 +7,4 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 bash "$SCRIPT_DIR/sync-linux.sh"
-code "$SCRIPT_DIR/../shells/linux"
+code "$SCRIPT_DIR/../native/linux"

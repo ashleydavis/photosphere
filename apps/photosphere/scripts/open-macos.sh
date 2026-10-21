@@ -10,4 +10,4 @@ source "$SCRIPT_DIR/lib/apple-common.sh"
 apple_require_macos
 apple_require_xcode
 bash "$SCRIPT_DIR/sync-macos.sh" "$@"
-open "$APPLE_APP_DIR/shells/macos/Photosphere.xcodeproj"
+open "$APPLE_APP_DIR/native/macos/Photosphere.xcodeproj"

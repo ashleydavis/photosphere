@@ -7,4 +7,4 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 bash "$SCRIPT_DIR/build-linux.sh"
-exec "$SCRIPT_DIR/../shells/linux/zig-out/bin/photosphere" "$@"
+exec "$SCRIPT_DIR/../native/linux/zig-out/bin/photosphere" "$@"

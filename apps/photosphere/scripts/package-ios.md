@@ -1,6 +1,6 @@
 # package-ios
 
-Runs `xcodebuild archive` for a device with code signing off (`CODE_SIGNING_ALLOWED=NO`), producing `photosphere-<version>-ios-arm64.xcarchive`, and packs the unsigned app from it as `photosphere-<version>-ios-arm64.ipa`, both in `out/ios`. The build files go in `shells/ios/zig-out/package`. The artifacts must be signed before they install on a device.
+Runs `xcodebuild archive` for a device with code signing off (`CODE_SIGNING_ALLOWED=NO`), producing `photosphere-<version>-ios-arm64.xcarchive`, and packs the unsigned app from it as `photosphere-<version>-ios-arm64.ipa`, both in `out/ios`. The build files go in `native/ios/zig-out/package`. The artifacts must be signed before they install on a device.
 
 Run it on a Mac: `bun run --filter=ziggy package:ios`.
 

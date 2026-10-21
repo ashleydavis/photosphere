@@ -12,7 +12,7 @@ apple_require_macos
 UDID="$(apple_connected_device)"
 if [ -n "$UDID" ]; then
     bash "$SCRIPT_DIR/build-ios.sh" --sdk device --arch arm64
-    APP="$APPLE_APP_DIR/shells/ios/zig-out/xcode/Build/Products/Debug-iphoneos/Photosphere.app"
+    APP="$APPLE_APP_DIR/native/ios/zig-out/xcode/Build/Products/Debug-iphoneos/Photosphere.app"
     node "$SCRIPT_DIR/ios-device.ts" install "$UDID" au.com.codecapers.photosphere.ziggy "$APP"
     # The helper launches the app under the device's debugserver, paused, and lldb detaches from it, which lets it run on
     # by itself. A launch that just drops the debugserver connection, as native-run's does, ends the app with it.
@@ -35,7 +35,7 @@ if [ -n "$UDID" ]; then
 fi
 bash "$SCRIPT_DIR/build-ios.sh" --sdk simulator
 UDID="$(apple_pick_simulator)"
-APP="$APPLE_APP_DIR/shells/ios/zig-out/xcode/Build/Products/Debug-iphonesimulator/Photosphere.app"
+APP="$APPLE_APP_DIR/native/ios/zig-out/xcode/Build/Products/Debug-iphonesimulator/Photosphere.app"
 xcrun simctl install "$UDID" "$APP"
 open -a Simulator
 xcrun simctl launch --console-pty "$UDID" au.com.codecapers.photosphere.ziggy

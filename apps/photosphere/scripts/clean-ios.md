@@ -6,5 +6,5 @@ Run it on a Mac: `bun run --filter=ziggy clean:ios`.
 
 ## Arguments
 
-- `--native-dir <dir>`: default: `shells/ios/zig-out`.
-- `--build-dir <dir>`: default: `shells/ios/zig-out/xcode`.
+- `--native-dir <dir>`: default: `native/ios/zig-out`.
+- `--build-dir <dir>`: default: `native/ios/zig-out/xcode`.

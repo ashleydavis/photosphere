@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/lib/apple-common.sh"
 
 apple_require_macos
 ARCH="$(apple_host_arch)"
-NATIVE_DIR="$APPLE_APP_DIR/shells/macos/zig-out"
+NATIVE_DIR="$APPLE_APP_DIR/native/macos/zig-out"
 TEST_HOOKS="no"
 MINIFY="no"
 OPTIMIZE="ReleaseSafe"

@@ -7,7 +7,7 @@ Run it as `bun run --filter=ziggy sync:windows -- [options]`. It works under Git
 Options:
 
 - `--arch <x64>`: the architecture to build for. Default `x64`. `arm64` is refused, see `package-windows.md`.
-- `--prefix <dir>`: the install prefix. Default `apps/photosphere/shells/windows/zig-out`.
+- `--prefix <dir>`: the install prefix. Default `apps/photosphere/native/windows/zig-out`.
 - `--optimize <Debug|ReleaseSafe|ReleaseFast|ReleaseSmall>`: the Zig optimize mode. Default `ReleaseSafe`.
 - `--minify`: minifies the page, which is what a release package wants.
 - `--strip`: leaves the debug information out of the executable, which is what a release package wants.

@@ -9,4 +9,4 @@ source "$SCRIPT_DIR/lib/apple-common.sh"
 
 apple_require_macos
 bash "$SCRIPT_DIR/build-macos.sh"
-exec "$APPLE_APP_DIR/shells/macos/zig-out/xcode/Build/Products/Debug/Photosphere.app/Contents/MacOS/Photosphere" "$@"
+exec "$APPLE_APP_DIR/native/macos/zig-out/xcode/Build/Products/Debug/Photosphere.app/Contents/MacOS/Photosphere" "$@"

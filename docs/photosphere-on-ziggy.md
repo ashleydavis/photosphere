@@ -8,8 +8,8 @@ Ziggy is not part of this repository. Photosphere takes every part of it from Zi
 
 - The Zig package: the `ziggy` dependency in `build.zig.zon` (`git+https://github.com/ashleydavis/ziggy.git#<tag>` and its hash). It gives the module `ziggy-core`, which holds Ziggy's core and its task queue (`@import("ziggy-core").task_queue`), and the build functions `build.zig` uses to build the app's core and its Linux and Windows shells.
 - The UI package: `ziggy-ui` in `apps/photosphere-frontend/package.json` (`git+https://github.com/ashleydavis/ziggy.git#<tag>`).
-- The Android native app: the `sourceControl` block in `apps/photosphere/shells/android/settings.gradle` and the dependency `dev.ziggy:ziggy-native-android:<tag>` in `apps/photosphere/shells/android/app/build.gradle`.
-- The Apple native apps: the remote Swift package `https://github.com/ashleydavis/ziggy` at the exact version in the Xcode projects under `apps/photosphere/shells/ios` and `apps/photosphere/shells/macos`, with the products `ZiggyNativeIOS` and `ZiggyNativeMacOS`.
+- The Android native app: the `sourceControl` block in `apps/photosphere/native/android/settings.gradle` and the dependency `dev.ziggy:ziggy-native-android:<tag>` in `apps/photosphere/native/android/app/build.gradle`.
+- The Apple native apps: the remote Swift package `https://github.com/ashleydavis/ziggy` at the exact version in the Xcode projects under `apps/photosphere/native/ios` and `apps/photosphere/native/macos`, with the products `ZiggyNativeIOS` and `ZiggyNativeMacOS`.
 
 Every one of these names the same version. To move to a newer tag, change all of them together: put the new tag in each URL and version, run `zig fetch "git+https://github.com/ashleydavis/ziggy.git#<tag>"` for the new hash in `build.zig.zon`, run `bun install` to update `bun.lock`, and run the whole test set.
 
@@ -19,7 +19,7 @@ Within one program, the app, `photosphere-core` and every package in `packages-z
 
 
 - **Core library:** `packages-zig/photosphere-core`, which gives Ziggy's core Photosphere's message handler and task handlers and builds the libraries the shells link.
-- **Shells:** `apps/photosphere/shells/<platform>`, the app half of each shell: the photo library, pickers, menu content, permission strings and background work. The iOS project builds with Xcode 14.2 on macOS 12.7.6, and no version is raised.
+- **Shells:** `apps/photosphere/native/<platform>`, the app half of each shell: the photo library, pickers, menu content, permission strings and background work. The iOS project builds with Xcode 14.2 on macOS 12.7.6, and no version is raised.
 - **User interface:** the shared `packages/user-interface`, with its platform layer in `apps/photosphere-frontend`. The layer implements the shared UI's `IQueueBackend` (the queue backend) and `IPlatformContext` (the platform provider) on top of `window.ziggy`.
 - **Zig packages:** the existing ports of the TypeScript packages in `packages-zig/*`. The rest of the non-UI TypeScript is ported into them, each Zig file beside the Zig package that mirrors the TypeScript package it came from.
 

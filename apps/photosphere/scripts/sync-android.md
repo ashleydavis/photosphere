@@ -1,6 +1,6 @@
 # sync-android.sh
 
-Builds what the Android app packages and puts it where Gradle expects it, under `shells/android/app/build/ziggy`. Gradle never runs `zig`: this script does, and the Gradle build fails with a message naming this script when its output is missing.
+Builds what the Android app packages and puts it where Gradle expects it, under `native/android/app/build/ziggy`. Gradle never runs `zig`: this script does, and the Gradle build fails with a message naming this script when its output is missing.
 
 Invoke: `bun run --filter=ziggy sync:android -- [options]`
 

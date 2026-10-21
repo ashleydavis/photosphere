@@ -12,7 +12,7 @@ Firebase signs in with a Google account, so there is no separate account to crea
 
 1. Create a project called Photosphere. Google Analytics is not needed. Leaving it on does nothing here either way, since the app does not include the Analytics SDK.
 2. Add an Android app to it: the gear next to Project Overview > Project settings > General > Your apps > Add app > Android. The platform icons on the project overview page open the same wizard when they are there.
-3. The distribute script finds the app by its package name, `au.com.codecapers.photosphere.ziggy`, the `applicationId` in `apps/photosphere/shells/android/app/build.gradle`, and creates the Firebase app itself when the project has none for that package. Adding it by hand is only needed to give it a nickname or a signing certificate SHA-1, and then the package name has to match exactly.
+3. The distribute script finds the app by its package name, `au.com.codecapers.photosphere.ziggy`, the `applicationId` in `apps/photosphere/native/android/app/build.gradle`, and creates the Firebase app itself when the project has none for that package. Adding it by hand is only needed to give it a nickname or a signing certificate SHA-1, and then the package name has to match exactly.
 4. Skip the `google-services.json` download and the SDK and verification steps the wizard offers. App Distribution needs none of them, and the CLI upload needs nothing inside the app.
 5. Open App Distribution and click Get started, which turns the API on for the project. Reach it from the search box at the top of the console, or from All products at the bottom of the left nav: the console's nav sections get renamed often, so search for the product by name rather than looking for a particular heading.
 6. On the Testers & Groups tab, create a group named Testers and check the alias it generates is `testers`, because the alias is what the upload command names. Add tester email addresses to it, including your own.
@@ -55,7 +55,7 @@ The script builds the release APK that `bun run --filter=ziggy package:android` 
 
 - Android's Play Protect shows "Unsafe app blocked" on install. On a recent phone the reason given is that the app "was built for an older version of Android and doesn't include the latest privacy protections", which is about `targetSdkVersion` in `apps/android-frontend/android/variables.gradle`, and not about the signing. A debug-signed build can draw the warning on its own too. Some phones offer **More details** and then **Install anyway**. Others offer only **OK**, and the build cannot be installed until Play Protect's app scanning is turned off in the Play Store (profile icon > Play Protect > settings).
 
-Getting past it means signing release builds: a release keystore created with `keytool`, and a `signingConfig` in `shells/android/app/build.gradle` reading the keystore path and passwords from a file kept out of git. That is a change to the build, not a step in this doc, and it is not done.
+Getting past it means signing release builds: a release keystore created with `keytool`, and a `signingConfig` in `native/android/app/build.gradle` reading the keystore path and passwords from a file kept out of git. That is a change to the build, not a step in this doc, and it is not done.
 
 ## How the build is versioned
 

@@ -1,6 +1,6 @@
 # open-macos
 
-Runs `sync-macos.sh`, then opens `shells/macos/Photosphere.xcodeproj` in Xcode, so a build from Xcode finds the library and the page.
+Runs `sync-macos.sh`, then opens `native/macos/Photosphere.xcodeproj` in Xcode, so a build from Xcode finds the library and the page.
 
 Run it on a Mac: `bun run --filter=ziggy open:macos`.
 

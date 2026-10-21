@@ -1,6 +1,6 @@
 # build-android.sh
 
-Runs `sync-android.sh`, then `gradlew assembleDebug`. The APK is `shells/android/app/build/outputs/apk/debug/app-debug.apk`.
+Runs `sync-android.sh`, then `gradlew assembleDebug`. The APK is `native/android/app/build/outputs/apk/debug/app-debug.apk`.
 
 Invoke: `bun run --filter=ziggy build:android -- [--arch "<list>"] [--optimize <mode>] [--test-hooks]`
 

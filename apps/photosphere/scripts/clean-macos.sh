@@ -9,8 +9,8 @@ source "$SCRIPT_DIR/lib/apple-common.sh"
 
 apple_require_macos
 apple_require_xcode
-NATIVE_DIR="$APPLE_APP_DIR/shells/macos/zig-out"
-BUILD_DIR="$APPLE_APP_DIR/shells/macos/zig-out/xcode"
+NATIVE_DIR="$APPLE_APP_DIR/native/macos/zig-out"
+BUILD_DIR="$APPLE_APP_DIR/native/macos/zig-out/xcode"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -30,7 +30,7 @@ done
 
 for configuration in Debug Release; do
     xcodebuild \
-        -project "$APPLE_APP_DIR/shells/macos/Photosphere.xcodeproj" \
+        -project "$APPLE_APP_DIR/native/macos/Photosphere.xcodeproj" \
         -scheme Photosphere \
         -configuration "$configuration" \
         -derivedDataPath "$BUILD_DIR" \

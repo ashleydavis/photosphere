@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/apple-common.sh"
 apple_require_macos
 SDK="simulator"
 ARCH="$(apple_host_arch)"
-NATIVE_DIR="$APPLE_APP_DIR/shells/ios/zig-out"
+NATIVE_DIR="$APPLE_APP_DIR/native/ios/zig-out"
 TEST_HOOKS="no"
 MINIFY="no"
 OPTIMIZE="ReleaseSafe"

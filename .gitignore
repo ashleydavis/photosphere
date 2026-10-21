@@ -86,6 +86,6 @@ apps/cli/test/tmp-zig/
 # build its package-windows script packages, what its package scripts produce and the page build in progress
 apps/photosphere/webview2-sdk/
 apps/photosphere/wix/
-apps/photosphere/shells/windows/package/
+apps/photosphere/native/windows/package/
 apps/photosphere/out/
 apps/photosphere-frontend/dist-build.*

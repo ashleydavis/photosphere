@@ -11,8 +11,8 @@ apple_require_macos
 apple_require_xcode
 SDK="simulator"
 ARCH="$(apple_host_arch)"
-NATIVE_DIR="$APPLE_APP_DIR/shells/ios/zig-out"
-BUILD_DIR="$APPLE_APP_DIR/shells/ios/zig-out/xcode"
+NATIVE_DIR="$APPLE_APP_DIR/native/ios/zig-out"
+BUILD_DIR="$APPLE_APP_DIR/native/ios/zig-out/xcode"
 CONFIGURATION="Debug"
 TEST_HOOKS="no"
 OPTIMIZE="ReleaseSafe"
@@ -90,7 +90,7 @@ else
 fi
 
 xcodebuild \
-    -project "$APPLE_APP_DIR/shells/ios/Photosphere.xcodeproj" \
+    -project "$APPLE_APP_DIR/native/ios/Photosphere.xcodeproj" \
     -scheme Photosphere \
     -configuration "$CONFIGURATION" \
     -sdk "$XCODE_SDK" \

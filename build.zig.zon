@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         // Ziggy, from the local checkout beside this repository. apps/photosphere-frontend/package.json and
-        // apps/photosphere/shells/android/settings.gradle take the same checkout. The Xcode projects under apps/photosphere/shells
+        // apps/photosphere/native/android/settings.gradle take the same checkout. The Xcode projects under apps/photosphere/native
         // still take the version tag.
         .ziggy = .{
             .path = "../ziggy",

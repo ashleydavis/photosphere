@@ -1,6 +1,6 @@
 # sync-linux.sh
 
-Builds Photosphere's page (`bun run bundle:ui`) and its Linux shell (the `photosphere-linux` step of the root `build.zig`, installed to `shells/linux/zig-out`). The shell's build embeds every file of the built page in the executable, so `shells/linux/zig-out/bin/photosphere` is the whole app and needs no files beside it. Runs on Linux.
+Builds Photosphere's page (`bun run bundle:ui`) and its Linux shell (the `photosphere-linux` step of the root `build.zig`, installed to `native/linux/zig-out`). The shell's build embeds every file of the built page in the executable, so `native/linux/zig-out/bin/photosphere` is the whole app and needs no files beside it. Runs on Linux.
 
 ## Usage
 

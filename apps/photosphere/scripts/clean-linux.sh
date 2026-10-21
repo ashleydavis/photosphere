@@ -7,7 +7,7 @@ set -eu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-for directory in "$APP_DIR/../photosphere-frontend/dist" "$APP_DIR/shells/linux/zig-out" "$APP_DIR/shells/linux/.zig-cache" "$APP_DIR/out/linux"; do
+for directory in "$APP_DIR/../photosphere-frontend/dist" "$APP_DIR/native/linux/zig-out" "$APP_DIR/native/linux/.zig-cache" "$APP_DIR/out/linux"; do
     if [ -d "$directory" ]; then
         find "$directory" -type f -delete
     fi

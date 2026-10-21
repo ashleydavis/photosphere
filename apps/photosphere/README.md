@@ -28,7 +28,7 @@ Every command is a `package.json` script in `apps/photosphere`, run with `bun ru
 | `clean`, `clean:android`, `clean:ios`, `clean:linux`, `clean:macos`, `clean:windows` | Removes the build output of every platform, or of one. Gradle's and `xcodebuild`'s own clean for Android, iOS and MacOS, and one named file at a time for the rest | `clean`: any. `clean:ios` and `clean:macos`: MacOS |
 | `stories:ziggy`, `stories:ziggy:and`, `stories:ziggy:ios` | Cycle the app through every UI story and capture screenshots, on the host operating system, the Android emulator or device, and the iOS simulator. The phone runs show whether pages fit a small screen. Defined in the root `package.json`; see the [stories README](../../packages/user-interface/src/stories/README.md) | Host: any desktop. Android: Linux, MacOS. iOS: MacOS |
 
-Every platform has its own native project under `shells/`, and every project is built from a copy of the core and the UI placed inside it. `sync` puts the copy there, so the project is current whether it is built from the command line or opened in an IDE or editor.
+Every platform has its own native project under `native/`, and every project is built from a copy of the core and the UI placed inside it. `sync` puts the copy there, so the project is current whether it is built from the command line or opened in an IDE or editor.
 
 ## Tests
 

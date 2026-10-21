@@ -12,7 +12,7 @@ apple_require_xcode
 apple_require_tool hdiutil ditto jq
 ARCH="$(apple_host_arch)"
 OUTPUT_DIR="$APPLE_APP_DIR/out/macos"
-BUILD_DIR="$APPLE_APP_DIR/shells/macos/zig-out/package"
+BUILD_DIR="$APPLE_APP_DIR/native/macos/zig-out/package"
 VERSION="$(apple_package_version)"
 
 while [ $# -gt 0 ]; do
