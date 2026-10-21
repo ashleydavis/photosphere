@@ -957,3 +957,34 @@ seed_databases_config() {
     DATABASES="$databases_json" RECENT="[]" \
         bun "$REPO_ROOT/apps/smoke-tests/lib/write-databases-config.ts" "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"
 }
+
+# Writes a PNG of random size (100 to 299 pixels a side) filled with one random colour, so every call
+# produces a file whose content differs from the last. Uses ImageMagick 7's magick where it exists and
+# ImageMagick 6's convert otherwise. Logs and returns 1 when ImageMagick fails or neither is present.
+# Usage: generate_png_file <file path>
+generate_png_file() {
+    local file_path="$1"
+    local width=$((100 + RANDOM % 200))
+    local height=$((100 + RANDOM % 200))
+    local red=$((RANDOM % 256))
+    local green=$((RANDOM % 256))
+    local blue=$((RANDOM % 256))
+
+    # Determine which ImageMagick command to use
+    local imagemagick_cmd=""
+    if command -v magick &> /dev/null; then
+        imagemagick_cmd="magick"
+    elif command -v convert &> /dev/null; then
+        imagemagick_cmd="convert"
+    fi
+
+    # Generate a random colored PNG using ImageMagick
+    $imagemagick_cmd -size ${width}x${height} "xc:rgb($red,$green,$blue)" "$file_path"
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to generate PNG file: $file_path"
+        return 1
+    fi
+
+    return 0
+}

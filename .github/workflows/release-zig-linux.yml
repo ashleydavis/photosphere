@@ -330,32 +330,6 @@ jobs:
         run: |
           echo "Testing version command after building..."
           ../../zig-out/bin/psi version
-      - name: Run the Zig CLI encrypted smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./smoke-tests-encrypted-zig.sh all
-      - name: Run the Zig CLI write lock smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./write-lock-smoke-test-zig.sh
-      - name: Run the Zig CLI sync smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./sync-smoke-test-zig.sh
-      - name: Run the Zig CLI hash cache smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./hash-cache-smoke-test-zig.sh
-      # Linux only, like the TypeScript lan-share-smoke-test job it mirrors.
-      - name: Run the Zig CLI LAN share smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./smoke-tests-lan-share-zig.sh
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on Linux, run under xvfb, over the third-party libraries the build jobs built.

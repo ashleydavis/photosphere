@@ -281,7 +281,7 @@ bun run screenshots
 
 ## The Zig port of psi
 
-`bun run test:zig` runs the unit tests of the Zig CLI and of every Zig package, and `bun run test:cli:zig` (with its encrypted, sync, write lock, LAN share and hash cache variants) runs the Zig counterparts of the TypeScript CLI smoke suites. [Zig test coverage](../zig-test-coverage.md) says how coverage is measured and where it stands.
+`bun run test:zig` runs the unit tests of the Zig CLI and of every Zig package, and `bun run test:cli:zig` runs the Zig counterparts of the TypeScript CLI smoke suites, one directory per test under `apps/cli/smoke-tests-zig/`. The encrypted database, LAN share, parallel sync, parallel write lock and hash cache concurrency tests are part of `test:cli:zig`, and any one test runs on its own with `bun run test:cli:zig -- <number or name>`. [Zig test coverage](../zig-test-coverage.md) says how coverage is measured and where it stands.
 
 ## UI stories
 

@@ -334,26 +334,6 @@ jobs:
         run: |
           echo "Testing version command after building..."
           ../../zig-out/bin/psi version
-      - name: Run the Zig CLI encrypted smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./smoke-tests-encrypted-zig.sh all
-      - name: Run the Zig CLI write lock smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./write-lock-smoke-test-zig.sh
-      - name: Run the Zig CLI sync smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./sync-smoke-test-zig.sh
-      - name: Run the Zig CLI hash cache smoke tests
-        timeout-minutes: 12
-        working-directory: ./apps/cli
-        shell: bash
-        run: ./hash-cache-smoke-test-zig.sh
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on macOS x64, in a real window on the runner's own display. The Zig build links the

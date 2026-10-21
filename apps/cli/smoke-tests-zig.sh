@@ -122,6 +122,13 @@ USE_BINARY=false
 # path is not left to rot.
 USE_SOURCE=false
 
+# Set by --capture-baseline <target>: the what-changed target to record as passed once a full run
+# passes. The package.json script passes it here rather than chaining `what-changed baseline capture`
+# after this script, because bun appends the arguments after `--` to the last command of a chain, so
+# `bun run test:cli:zig -- 105` used to hand "105" to what-changed and run every test. A run narrowed
+# to some tests never records it: the baseline says the whole target passed.
+CAPTURE_BASELINE_TARGET=""
+
 # Execution mode: "parallel" (default) or "sequential"
 EXECUTION_MODE=parallel
 
@@ -749,6 +756,9 @@ run_all_tests() {
     if [ $exit_code -ne 0 ]; then
         exit $exit_code
     fi
+    if [ -n "$CAPTURE_BASELINE_TARGET" ]; then
+        (cd "$_CLI_ABS_DIR/../.." && what-changed baseline capture "$CAPTURE_BASELINE_TARGET") || exit 1
+    fi
     exit 0
 }
 
@@ -777,8 +787,10 @@ run_test() {
     local test_number
     if [[ "$test_name" =~ ^[0-9]+$ ]]; then
         test_number="$test_name"
-        if [ "$test_number" -lt 1 ] || [ "$test_number" -gt "$(get_test_count)" ]; then
-            log_error "Invalid test number: $test_number (must be 1-$(get_test_count))"
+        # Checked against the directories rather than the number of tests, because the numbers have
+        # gaps: the highest number is above the count, and a check against the count refused it.
+        if [ -z "$(get_script_for_test "$test_number")" ]; then
+            log_error "Invalid test number: $test_number (no smoke-tests-zig/<number>-<name> directory has it)"
             echo ""
             show_usage
             exit 1
@@ -874,6 +886,8 @@ show_usage() {
     echo "  --sequential          - Run independent tests sequentially instead of in parallel"
     echo "  --parallel [N]        - Run independent tests in a rolling pool of N. The default comes"
     echo "                          from the core count and is $PARALLEL_N on this machine"
+    echo "  --capture-baseline <target>"
+    echo "                        - Record <target> as passed with what-changed when a full run passes"
     echo "  -h, --help            - Show this help message"
     echo ""
     echo "Environment:"
@@ -948,6 +962,14 @@ main() {
                 TEST_TMP_DIR="${1#*=}"
                 TEST_DB_DIR="$TEST_TMP_DIR/shared/test-db"
                 shift
+                ;;
+            --capture-baseline)
+                if [ $# -lt 2 ]; then
+                    log_error "Option $1 requires a what-changed target"
+                    exit 1
+                fi
+                CAPTURE_BASELINE_TARGET="$2"
+                shift 2
                 ;;
             --sequential)
                 EXECUTION_MODE=sequential

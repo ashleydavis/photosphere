@@ -15,9 +15,7 @@ It is sourced, never run:
 source "<apps/cli>/smoke-tests-zig/lib/ts-verify-timing.sh"
 ```
 
-It is sourced by `smoke-tests-zig/lib/common.sh` (for the `ts_verify` helper the tests call), by the
-`smoke-tests-zig.sh` runner (to total the time the tests report), and by the other Zig suites:
-`smoke-tests-encrypted-zig.sh`, `sync-smoke-test-zig.sh` and `write-lock-smoke-test-zig.sh`.
+It is sourced by `smoke-tests-zig/lib/common.sh` (for the `ts_verify` helper the tests call, and for the tests that keep a `ts_verify` of their own) and by the `smoke-tests-zig.sh` runner (to total the time the tests report).
 
 ## Functions
 

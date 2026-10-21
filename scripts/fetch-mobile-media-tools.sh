@@ -147,8 +147,48 @@ android_assert_quantum_depth() {
     log "Verified $abi ImageMagick is Q16 HDRI."
 }
 
+# The claim one fetch holds on the work area, holding its pid. test:everything runs the Android suites
+# side by side and each one runs this fetch, so in a checkout that has not fetched yet two of them
+# fetched into the one work area at once: one curl rewrote the zip while the other was unzipping it,
+# and unzip failed with "invalid compressed data to inflate", every run.
+FETCH_CLAIM_FILE="$WORK_DIR.claim"
+
+# Waits until this process holds FETCH_CLAIM_FILE. `set -o noclobber` makes the claim refuse to write
+# a file that already exists, in the one operation that creates it, so exactly one of two fetches
+# gets it, on bash 3.2 and with no flock (which macOS does not have). A claim whose holder is gone is
+# left over from a fetch that was killed, so it is removed and claimed again.
+claim_work_area() {
+    mkdir -p "$(dirname "$FETCH_CLAIM_FILE")"
+    local holder
+    local waiting_logged=false
+    while ! ( set -o noclobber; echo "$$" > "$FETCH_CLAIM_FILE" ) 2>/dev/null; do
+        # The holder may finish and remove its claim between the two lines, and under `set -e` a cat
+        # of a file that has gone would end this fetch, so that reads as "no holder".
+        holder="$(cat "$FETCH_CLAIM_FILE" 2>/dev/null || true)"
+        if [ -z "$holder" ] || ! kill -0 "$holder" 2>/dev/null; then
+            rm -f "$FETCH_CLAIM_FILE"
+            continue
+        fi
+        if [ "$waiting_logged" = false ]; then
+            log "Another fetch (pid $holder) is using $WORK_DIR; waiting for it to finish."
+            waiting_logged=true
+        fi
+        sleep 1
+    done
+    trap 'rm -f "$FETCH_CLAIM_FILE"' EXIT
+}
+
 # Fetches + builds all Android ImageMagick artifacts, unless already present.
 fetch_android() {
+    if android_already_fetched; then
+        log "Android ImageMagick already present; skipping (delete $JNILIBS_DIR and $IM_DIR to refetch)."
+        return 0
+    fi
+
+    claim_work_area
+
+    # Asked again now the work area is this fetch's own: a fetch that held it while this one waited
+    # has usually put everything in place.
     if android_already_fetched; then
         log "Android ImageMagick already present; skipping (delete $JNILIBS_DIR and $IM_DIR to refetch)."
         return 0

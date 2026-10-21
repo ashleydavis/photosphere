@@ -1,132 +1,51 @@
 #!/bin/bash
+DESCRIPTION="Parallel Zig CLI processes edit and sync four copies of one database until every copy has the same root hash"
 
-# Photosphere CLI Sync Smoke Tests (Zig)
-# Tests syncing functionality with parallel processes
+# One database and three replicas of it. One worker process per database edits the description of the
+# same asset and syncs its database with every other one, all at the same time, for a fixed number of
+# iterations. A final round syncs every database with every other one, after which all of them must
+# have the same root hash. The TypeScript CLI verifies every database the Zig CLI writes.
 
-set -e
+# The runner exports NODE_ENV=testing, which the standalone script this test was ported from never
+# set, so the CLIs here run without it as they did there. For the same reason this test calls neither
+# invoke_command nor lib/common.sh's ts_verify: both put NODE_ENV=testing back in front of the
+# command.
+unset NODE_ENV
 
-# Disable colors for consistent output parsing
-export NO_COLOR=1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/common.sh"
 
-# Use plaintext vault so tests don't require secret-tool or a keychain daemon
-export PHOTOSPHERE_VAULT_TYPE="plaintext"
+# The tree walk the exit trap stops the workers with.
+source "$REPO_ROOT/scripts/lib/process-control.sh"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Per-run temporary directory, the same allocator every other suite in this repository uses.
-_SYNC_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$_SYNC_SCRIPT_DIR/../../scripts/lib/test-lib.sh"
-
-# Building psi, mk and bdb into a directory of this run's own, for --binary.
-source "$_SYNC_SCRIPT_DIR/test-cli-binaries.sh"
-
-# This suite is one script rather than a set of separate tests, so the script itself is what gets
-# held to the shared timeout. Without it a wedged run here had no limit at all and kept going until
-# something above it gave up, which in CI is the job timeout, and a job killed that way has its log
-# discarded rather than written.
-source "$_SYNC_SCRIPT_DIR/../../scripts/lib/test-timeout.sh"
-
-# Timing for the TypeScript verify calls ts_verify makes on every database the Zig CLI writes.
-source "$_SYNC_SCRIPT_DIR/smoke-tests-zig/lib/ts-verify-timing.sh"
-start_suite_watchdog "sync-smoke-test"
-
-# Test configuration.
-#
-# Everything this run writes lives under a directory allocated for this run alone. It used to be a
-# fixed path under test/tmp, which broke two ways at once: that tree belongs to smoke-tests.sh, which
-# deletes all of it at the start and end of its own run, and a fixed path collides with a second copy
-# of this suite from another worktree or an overlapping rerun. Neither showed up while this suite was
-# the only thing running.
-SYNC_TEST_ROOT="$(photosphere_test_temp_dir "cli-sync-zig")"
-photosphere_export_test_temp "$SYNC_TEST_ROOT"
-TEST_DB_DIR="$SYNC_TEST_ROOT/sync-test-db"
-TEST_FILES_DIR="$SYNC_TEST_ROOT/sync-test-files"
-PROCESS_OUTPUT_DIR="$SYNC_TEST_ROOT/sync-test-outputs"
-
-# Where ts_verify records how long each TypeScript verify took.
-TS_VERIFY_TIMING_LOG="$SYNC_TEST_ROOT/ts-verify-milliseconds.log"
-
-# Default: run from code; use --binary for built executable
-USE_BINARY=false
+# Total databases (the original and its replicas), and the edit and sync iterations each worker runs.
 NUM_REPLICAS=4
 NUM_ITERATIONS=10
 
-# Global variables
+# Where this test keeps its databases, its generated asset and each worker's output. The database has
+# a name of its own rather than lib/common.sh's test database variable, because test_passed and
+# test_failed check the database at that path, which the script this test was ported from never did.
+SYNC_DB_DIR="$TEST_TMP_DIR/sync-test-db"
+SYNC_FILES_DIR="$TEST_TMP_DIR/sync-test-files"
+PROCESS_OUTPUT_DIR="$TEST_TMP_DIR/sync-test-outputs"
+
+# Where ts_verify records how long each TypeScript verify took: the file the runner sums.
+TS_VERIFY_TIMING_LOG="$TEST_TMP_DIR/ts-verify-milliseconds.log"
+
+# The ID of the asset every worker edits, and the path of every database in the test.
 ASSET_ID=""
 declare -a DB_PATHS
 
-# Parse command line arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --binary)
-            USE_BINARY=true
-            shift
-            ;;
-        --replicas)
-            NUM_REPLICAS="$2"
-            shift 2
-            ;;
-        --iterations)
-            NUM_ITERATIONS="$2"
-            shift 2
-            ;;
-        -h|--help)
-            echo "Usage: $0 [--binary] [--replicas N] [--iterations N]"
-            echo "  --binary      Use built executable (default: run from code with bun run start)"
-            echo "  --replicas    Number of total databases (original + replicas, default: 4)"
-            echo "  --iterations  Number of edit/sync iterations per process (default: 10)"
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
-    esac
-done
-
-# Platform detection functions
-detect_platform() {
-    local os="$(uname -s)"
-    case "$os" in
-        Linux*)     echo "linux";;
-        Darwin*)    echo "mac";;
-        CYGWIN*|MINGW*|MSYS*) echo "win";;
-        *)          echo "unknown";;
-    esac
-}
-
-detect_architecture() {
-    local arch="$(uname -m)"
-    case "$arch" in
-        x86_64|amd64) echo "x64";;
-        arm64|aarch64) echo "arm64";;
-        *) echo "x64";;  # Default to x64
-    esac
-}
-
-# Get CLI command: default from code; use --binary for built executable
-get_cli_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        test_cli_binary_path psi
-    else
-        echo "bun run start --"
-    fi
-}
-
-# Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
-# for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
-get_zig_cli_command() {
-    test_zig_cli_path
-}
+# Every worker this test backgrounds, so a run that ends early takes them with it.
+background_pids=()
 
 # Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
-# exits the suite unless it passes, so the reference implementation checks the integrity of every
+# fails the test unless it passes, so the reference implementation checks the integrity of every
 # database the Zig CLI writes. The time it takes is appended to TS_VERIFY_TIMING_LOG.
+#
+# This replaces lib/common.sh's ts_verify for this test alone. That one runs through invoke_command,
+# which puts NODE_ENV=testing in front of the command, and the script this test was ported from ran
+# the verify without it.
 # Usage: ts_verify <database>
 ts_verify() {
     local database_dir="$1"
@@ -134,39 +53,9 @@ ts_verify() {
     verify_start="$(current_milliseconds)"
     log_info "Verifying $database_dir with the TypeScript CLI"
     if ! $(get_cli_command) verify --db "$database_dir" --yes; then
-        log_error "The TypeScript CLI does not verify $database_dir"
-        exit 1
+        test_failed "The TypeScript CLI does not verify $database_dir"
     fi
     record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
-}
-
-# Get bdb command: default from code; use --binary for built executable
-get_bdb_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        test_cli_binary_path bdb
-    else
-        echo "bun run ../bdb-cli/src/index.ts"
-    fi
-}
-
-# Helper functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-    # Every step the suite takes logs a line, so a line logged is the progress the suite watchdog waits
-    # for.
-    suite_progress
-}
-
-log_success() {
-    echo -e "${GREEN}[PASS]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[FAIL]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 # Generate a random UUID
@@ -179,174 +68,117 @@ generate_uuid() {
     fi
 }
 
-# Check if required tools are available
+# Fails the test unless sha256sum (Linux, Windows) or shasum (macOS) is available. The runner checks
+# ImageMagick before any test runs.
 check_dependencies() {
-    # Check ImageMagick - determine which convert command to use
-    local imagemagick_cmd=""
-    if command -v magick &> /dev/null; then
-        local magick_output=$(magick --version 2>/dev/null || echo "")
-        if [ -n "$magick_output" ]; then
-            log_info "ImageMagick 7.x detected (using 'magick')"
-            imagemagick_cmd="magick"
-        fi
-    elif command -v convert &> /dev/null; then
-        local convert_output=$(convert -version 2>/dev/null | head -1 || echo "")
-        if [ -n "$convert_output" ]; then
-            log_info "ImageMagick 6.x detected (using 'convert')"
-            imagemagick_cmd="convert"
-        fi
-    else
-        log_error "ImageMagick not found in system PATH (tried both 'magick' and 'convert')"
-        exit 1
-    fi
-    
-    # Check if sha256sum (Linux, Windows) or shasum (macOS) is available
     if ! command -v sha256sum &> /dev/null && ! command -v shasum &> /dev/null; then
-        log_error "sha256sum or shasum is required but not installed"
-        exit 1
+        test_failed "sha256sum or shasum is required but not installed"
     fi
 }
 
-# Generate a unique PNG file
-generate_png_file() {
-    local file_path="$1"
-    local width=$((100 + RANDOM % 200))
-    local height=$((100 + RANDOM % 200))
-    local red=$((RANDOM % 256))
-    local green=$((RANDOM % 256))
-    local blue=$((RANDOM % 256))
-    
-    # Determine which ImageMagick command to use
-    local imagemagick_cmd=""
-    if command -v magick &> /dev/null; then
-        imagemagick_cmd="magick"
-    elif command -v convert &> /dev/null; then
-        imagemagick_cmd="convert"
-    fi
-    
-    # Generate a random colored PNG using ImageMagick
-    $imagemagick_cmd -size ${width}x${height} "xc:rgb($red,$green,$blue)" "$file_path"
-    
-    if [ $? -ne 0 ]; then
-        log_error "Failed to generate PNG file: $file_path"
-        return 1
-    fi
-    
-    return 0
-}
-
-# Setup test environment
+# Creates the original database, generates a PNG and adds it, recording its ID in ASSET_ID. Each step
+# the Zig CLI takes is verified by the TypeScript CLI.
 setup_test_environment() {
     log_info "Setting up test environment..."
-    
-    # Clean up any existing test directories from previous runs
-    rm -rf "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
-    
+
     # Create directories
-    mkdir -p "$TEST_DB_DIR" "$TEST_FILES_DIR" "$PROCESS_OUTPUT_DIR"
-    
+    mkdir -p "$SYNC_DB_DIR" "$SYNC_FILES_DIR" "$PROCESS_OUTPUT_DIR"
+
     # Initialize database
     log_info "Initializing test database..."
-    $(get_zig_cli_command) init --db "$TEST_DB_DIR" --yes --session-id "setup-process"
-    
-    if [ $? -ne 0 ]; then
-        log_error "Failed to initialize database"
-        exit 1
+    if ! $(get_zig_cli_command) init --db "$SYNC_DB_DIR" --yes --session-id "setup-process"; then
+        test_failed "Failed to initialize database"
     fi
-    ts_verify "$TEST_DB_DIR"
+    ts_verify "$SYNC_DB_DIR"
 
     # Generate a test PNG file
-    local test_file="$TEST_FILES_DIR/test.png"
+    local test_file="$SYNC_FILES_DIR/test.png"
     log_info "Generating test asset..."
     if ! generate_png_file "$test_file"; then
-        log_error "Failed to generate test PNG file"
-        exit 1
+        test_failed "Failed to generate test PNG file"
     fi
-    
+
     # Add the test asset to the database
     log_info "Adding test asset to database..."
     local add_output
-    add_output=$($(get_zig_cli_command) add --db "$TEST_DB_DIR" "$test_file" --verbose --yes --session-id "setup-process" 2>&1)
-    
-    if [ $? -ne 0 ]; then
-        log_error "Failed to add test asset to database"
+    if ! add_output=$($(get_zig_cli_command) add --db "$SYNC_DB_DIR" "$test_file" --verbose --yes --session-id "setup-process" 2>&1); then
         echo "$add_output"
-        exit 1
+        test_failed "Failed to add test asset to database"
     fi
-    
+
     # Extract asset ID from output (declare as global)
     ASSET_ID=$(echo "$add_output" | grep "Added file.*with ID" | sed -n 's/.*with ID "\([^"]*\)".*/\1/p' | head -1)
-    
+
     if [ -z "$ASSET_ID" ]; then
-        log_error "Failed to extract asset ID from add output"
         echo "Add output:"
         echo "$add_output"
-        exit 1
+        test_failed "Failed to extract asset ID from add output"
     fi
-    
+
     log_info "Test asset added with ID: $ASSET_ID"
-    ts_verify "$TEST_DB_DIR"
-    
+    ts_verify "$SYNC_DB_DIR"
+
     log_success "Test environment setup complete"
 }
 
-# Create replica databases
+# Replicates the original database into NUM_REPLICAS - 1 replicas, recording every database's path in
+# DB_PATHS, original first. Each replica is verified by the TypeScript CLI.
 create_replicas() {
     log_info "Creating $NUM_REPLICAS replica databases..."
-    
+
     # Create array to store database paths (declare as global)
-    DB_PATHS=("$TEST_DB_DIR")
-    
+    DB_PATHS=("$SYNC_DB_DIR")
+
     # Create replica databases
     for ((i=1; i<NUM_REPLICAS; i++)); do
-        local replica_dir="$TEST_DB_DIR-replica-$i"
+        local replica_dir="$SYNC_DB_DIR-replica-$i"
         DB_PATHS+=("$replica_dir")
-        
+
         log_info "Creating replica $i: $replica_dir"
-        rm -rf "$replica_dir"
-        
+
         # Replicate the original database
-        $(get_zig_cli_command) replicate --db "$TEST_DB_DIR" --dest "$replica_dir" --yes --force > /dev/null 2>&1
-        
-        if [ $? -ne 0 ]; then
-            log_error "Failed to create replica $i"
-            exit 1
+        if ! $(get_zig_cli_command) replicate --db "$SYNC_DB_DIR" --dest "$replica_dir" --yes --force > /dev/null 2>&1; then
+            test_failed "Failed to create replica $i"
         fi
         ts_verify "$replica_dir"
     done
-    
+
     log_success "Created $NUM_REPLICAS databases (1 original + $((NUM_REPLICAS-1)) replicas)"
 }
 
-# Worker process function
+# One worker: for each iteration, edits the asset's description in its own database with bdb, checks
+# the root hash changed, and syncs its database to every other one. Every outcome is written to the
+# worker's output file. A failed step is logged and the worker moves to its next iteration; the final
+# root hash comparison is what fails the test.
+# Usage: worker_process <index into DB_PATHS>
 worker_process() {
     local process_id="$1"
     local db_path="${DB_PATHS[$process_id]}"
     local output_file="$PROCESS_OUTPUT_DIR/process_${process_id}.log"
-    
+
     log_info "Starting worker process $process_id (database: $db_path)"
-    
+
     # Initialize process output file
     echo "# Process $process_id output" > "$output_file"
     echo "# Database: $db_path" >> "$output_file"
     echo "# Format: iteration,edit_uuid,hash_before,hash_after,hash_changed,sync_results" >> "$output_file"
-    
+
     for ((i=1; i<=NUM_ITERATIONS; i++)); do
         # Generate random UUID for description
         local edit_uuid=$(generate_uuid)
-        
+
         log_info "Process $process_id, iteration $i: Editing description to $edit_uuid"
-        
+
         # Get root hash before edit
         local hash_before
         hash_before=$($(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        
+
         if [ -z "$hash_before" ]; then
             log_error "Process $process_id, iteration $i: Failed to get root hash before edit"
             echo "$i,$edit_uuid,,,HASH_BEFORE_FAILED," >> "$output_file"
             continue
         fi
-        
+
         # Edit the description field using bdb-cli.
         #
         # The collection root is <database>/.db/bson, which is where the BSON database actually
@@ -354,8 +186,12 @@ worker_process() {
         # answered "Record not found in collection metadata", the failure was tolerated by the
         # `continue` below, and the suite then passed by comparing four databases that nothing had
         # ever modified.
+        #
+        # The exit code is taken straight after bdb. It used to be taken after the rm below, so it was
+        # the rm's, and a failed edit was never reported.
         local edit_output
-        edit_output=$($(get_bdb_command) edit "$db_path/.db/bson" metadata "$ASSET_ID" description string "$edit_uuid" 2>&1)
+        local edit_exit_code=0
+        edit_output=$($(get_bdb_command) edit "$db_path/.db/bson" metadata "$ASSET_ID" description string "$edit_uuid" 2>&1) || edit_exit_code=$?
 
         # bdb writes straight into the BSON database and knows nothing about the database state file
         # one level above it, which is where the application records the content hash. Sync reads that
@@ -365,25 +201,24 @@ worker_process() {
         # it. Nothing the application itself does needs this, because every write it makes stamps the
         # hash as it goes.
         rm -f "$db_path/.db/state.dat"
-        local edit_exit_code=$?
-        
+
         if [ $edit_exit_code -ne 0 ]; then
             log_error "Process $process_id, iteration $i: Failed to edit description"
             echo "$edit_output" >> "$output_file"
             echo "$i,$edit_uuid,$hash_before,,EDIT_FAILED," >> "$output_file"
             continue
         fi
-        
+
         # Get root hash after edit
         local hash_after
         hash_after=$($(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        
+
         if [ -z "$hash_after" ]; then
             log_error "Process $process_id, iteration $i: Failed to get root hash after edit"
             echo "$i,$edit_uuid,$hash_before,,HASH_AFTER_FAILED," >> "$output_file"
             continue
         fi
-        
+
         # Verify root hash changed after edit
         if [ "$hash_before" = "$hash_after" ]; then
             log_error "Process $process_id, iteration $i: Root hash did not change after edit (expected different)"
@@ -394,19 +229,19 @@ worker_process() {
         else
             log_info "Process $process_id, iteration $i: Root hash changed (before: ${hash_before:0:8}..., after: ${hash_after:0:8}...)"
         fi
-        
+
         # Sync with each of the other databases
         local sync_results=""
         for ((j=0; j<NUM_REPLICAS; j++)); do
             if [ $j -ne $process_id ]; then
                 local other_db="${DB_PATHS[$j]}"
                 log_info "Process $process_id, iteration $i: Syncing with database $j ($other_db)"
-                
+
                 # Sync from this database to the other
                 local sync_output
-                sync_output=$($(get_zig_cli_command) sync --db "$db_path" --dest "$other_db" --yes 2>&1)
-                local sync_exit_code=$?
-                
+                local sync_exit_code=0
+                sync_output=$($(get_zig_cli_command) sync --db "$db_path" --dest "$other_db" --yes 2>&1) || sync_exit_code=$?
+
                 if [ $sync_exit_code -eq 0 ]; then
                     sync_results="${sync_results}sync_${j}=OK;"
                 else
@@ -416,62 +251,41 @@ worker_process() {
                 fi
             fi
         done
-        
+
         echo "$i,$edit_uuid,$hash_before,$hash_after,YES,$sync_results" >> "$output_file"
         log_info "Process $process_id, iteration $i: Completed"
     done
-    
+
     log_success "Worker process $process_id completed"
 }
 
-# Cleanup function to kill any orphaned processes
+# Stops every worker still running, keeping the exit code it was entered with so the summary that runs
+# after it reports the test's own result. Each worker is a shell whose psi and bdb children do the
+# work, so the tree has to be taken rather than the recorded pid alone.
 cleanup_processes() {
+    local exit_code=$?
     if [ ${#background_pids[@]} -gt 0 ]; then
         log_warning "Cleaning up background processes..."
+        local pid
         for pid in "${background_pids[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-                log_info "Terminating process $pid"
-                kill "$pid" 2>/dev/null || true
-            fi
-        done
-        # Give processes time to exit gracefully
-        sleep 2
-        # Force kill any remaining processes
-        for pid in "${background_pids[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-                log_warning "Force killing process $pid"
-                kill -9 "$pid" 2>/dev/null || true
-            fi
+            log_info "Terminating process tree $pid"
+            kill_process_tree "$pid"
         done
     fi
+    background_pids=()
+    return $exit_code
 }
-
-# Set up cleanup trap
-background_pids=()
-# Each of these ends the script once the workers are stopped. A trap that only cleaned up let the
-# script carry on after the suite watchdog had stopped it, so a timed-out run went on verifying and
-# could still report a pass.
+trap 'cleanup_processes; cleanup_and_show_summary' EXIT
 trap 'cleanup_processes; exit 130' INT
 trap 'cleanup_processes; exit 143' TERM
 
-# On exit the executables a --binary run built for itself go too, after the processes running them.
-trap 'cleanup_processes; remove_test_cli_binaries' EXIT
-
-# A --binary run builds the executables it uses into a directory of its own, never the package's
-# shared bin/. Built once the trap that removes them is in place.
-if [ "$USE_BINARY" = "true" ]; then
-    build_test_cli_binaries || exit 1
-fi
-
-# The Zig CLI this suite tests, built for this run into a directory of its own, never the shared zig-out.
-build_test_zig_cli || exit 1
-
-# Start parallel processes
+# Starts one worker per database in the background, recording each pid as it starts, and waits for
+# them all. Returns 1 when any worker exited non-zero.
 start_parallel_processes() {
     log_info "Starting $NUM_REPLICAS parallel processes, $NUM_ITERATIONS iterations each"
-    
+
     local pids=()
-    
+
     # Start worker processes in background
     for ((p=0; p<NUM_REPLICAS; p++)); do
         worker_process "$p" &
@@ -480,7 +294,7 @@ start_parallel_processes() {
         background_pids+=($pid)
         log_info "Started worker process $p with PID $pid"
     done
-    
+
     # Wait for all processes to complete
     log_info "Waiting for all processes to complete..."
     local failed_processes=0
@@ -493,19 +307,19 @@ start_parallel_processes() {
             ((failed_processes++))
         fi
     done
-    
+
     if [ $failed_processes -gt 0 ]; then
         log_error "$failed_processes worker processes failed"
         return 1
     fi
-    
+
     log_success "All parallel processes completed"
 }
 
-# Final round of syncing
+# Syncs every database to every other database once. Returns 1 at the first sync that fails.
 final_sync_round() {
     log_info "Performing final round of syncing between all databases..."
-    
+
     # Sync each database with every other database
     for ((i=0; i<NUM_REPLICAS; i++)); do
         for ((j=0; j<NUM_REPLICAS; j++)); do
@@ -513,85 +327,84 @@ final_sync_round() {
                 local source_db="${DB_PATHS[$i]}"
                 local dest_db="${DB_PATHS[$j]}"
                 log_info "Syncing database $i -> $j"
-                
-                $(get_zig_cli_command) sync --db "$source_db" --dest "$dest_db" --yes > /dev/null 2>&1
-                
-                if [ $? -ne 0 ]; then
+
+                if ! $(get_zig_cli_command) sync --db "$source_db" --dest "$dest_db" --yes > /dev/null 2>&1; then
                     log_error "Failed to sync database $i -> $j"
                     return 1
                 fi
             fi
         done
     done
-    
+
     log_success "Final sync round completed"
 }
 
-# Verify root hashes match
+# Returns 0 when every replica has the original database's root hash, and 1 when any root hash cannot
+# be read or differs.
 verify_root_hashes() {
     log_info "Verifying all databases have the same root hash..."
-    
+
     local original_hash
     original_hash=$($(get_zig_cli_command) root-hash --db "${DB_PATHS[0]}" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-    
+
     if [ -z "$original_hash" ]; then
         log_error "Failed to get root hash from original database"
         return 1
     fi
-    
+
     log_info "Original database root hash: $original_hash"
-    
+
     # Check each replica
     for ((i=1; i<NUM_REPLICAS; i++)); do
         local replica_hash
         replica_hash=$($(get_zig_cli_command) root-hash --db "${DB_PATHS[$i]}" --yes 2>/dev/null | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        
+
         if [ -z "$replica_hash" ]; then
             log_error "Failed to get root hash from replica $i"
             return 1
         fi
-        
+
         log_info "Replica $i root hash: $replica_hash"
-        
+
         if [ "$original_hash" != "$replica_hash" ]; then
             log_error "Root hash mismatch: original ($original_hash) != replica $i ($replica_hash)"
             return 1
         fi
     done
-    
+
     log_success "All databases have the same root hash: $original_hash"
     return 0
 }
 
-# Main test execution
-main() {
+# The test: set up, replicate, edit and sync in parallel, a final sync round, then every root hash
+# must match and every database must verify.
+test_sync_parallel() {
     echo "============================================================================"
     echo "=== PHOTOSPHERE SYNC SMOKE TEST ==="
     echo "============================================================================"
     echo "Configuration:"
     echo "  Total databases: $NUM_REPLICAS"
     echo "  Iterations per process: $NUM_ITERATIONS"
-    echo "  Use binary: $USE_BINARY"
+    echo "  Use binary: ${USE_BINARY:-false}"
     echo "  CLI command: $(get_cli_command)"
     echo "  Zig CLI command: $(get_zig_cli_command)"
     echo "  BDB command: $(get_bdb_command)"
     echo "============================================================================"
-    
+
     # Check dependencies
     check_dependencies
-    
+
     # Setup test environment
     setup_test_environment
-    
+
     # Create replica databases
     create_replicas
-    
+
     # Start parallel processes
     if ! start_parallel_processes; then
-        log_error "Parallel processes failed"
-        exit 1
+        test_failed "Parallel processes failed"
     fi
-    
+
     # Clear background_pids since all processes completed successfully
     background_pids=()
 
@@ -604,14 +417,12 @@ main() {
 
     # Final round of syncing
     if ! final_sync_round; then
-        log_error "Final sync round failed"
-        exit 1
+        test_failed "Final sync round failed"
     fi
-    
+
     # Verify root hashes
     if ! verify_root_hashes; then
-        log_error "Root hash verification failed"
-        exit 1
+        test_failed "Root hash verification failed"
     fi
 
     # Verify every database the Zig CLI synced with the TypeScript CLI
@@ -623,12 +434,10 @@ main() {
     echo "TypeScript verify: $(count_ts_verify_calls "$TS_VERIFY_TIMING_LOG") calls, $(format_milliseconds_as_seconds "$(sum_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG")")"
 
     log_success "Sync smoke test PASSED"
-    log_info "Test data preserved in: $TEST_DB_DIR, $TEST_FILES_DIR, $PROCESS_OUTPUT_DIR"
+    log_info "Test data preserved in: $SYNC_DB_DIR, $SYNC_FILES_DIR, $PROCESS_OUTPUT_DIR"
     log_info "Process logs: $PROCESS_OUTPUT_DIR/process_*.log"
-    
-    exit 0
+
+    test_passed
 }
 
-# Run main function
-main "$@"
-
+test_sync_parallel
