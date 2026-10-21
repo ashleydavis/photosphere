@@ -71,7 +71,7 @@ test "vault-set without a value is an error reply" {
     defer app.stop();
     const reply = try app.requestError("vault-set", "{\"name\":\"vault-test-no-value\",\"type\":\"api-key\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The secret needs a value.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"value\" is missing", reply);
 }
 
 test "vault-get without a name is an error reply" {
@@ -80,7 +80,7 @@ test "vault-get without a name is an error reply" {
     defer app.stop();
     const reply = try app.requestError("vault-get", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the name of a secret.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "vault-set without a name is an error reply" {
@@ -89,7 +89,7 @@ test "vault-set without a name is an error reply" {
     defer app.stop();
     const reply = try app.requestError("vault-set", "{\"type\":\"api-key\",\"value\":\"v\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the name of a secret.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"name\" is missing", reply);
 }
 
 test "vault-set without a type is an error reply" {
@@ -98,7 +98,7 @@ test "vault-set without a type is an error reply" {
     defer app.stop();
     const reply = try app.requestError("vault-set", "{\"name\":\"vault-test-no-type\",\"value\":\"v\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The secret needs a type.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"type\" is missing", reply);
 }
 
 test "vault-delete without a name is an error reply" {
@@ -107,19 +107,18 @@ test "vault-delete without a name is an error reply" {
     defer app.stop();
     const reply = try app.requestError("vault-delete", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the name of a secret.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "a failing vault request logs the error with the message of its handler" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestError("vault-get", "null"));
+    try app.queueFailingTask("vault-get", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting vault secret") != null);
-    allocator.free(try app.requestError("vault-set", "{\"name\":\"vault-test-log\",\"type\":\"api-key\"}"));
+    try app.queueFailingTask("vault-set", "{\"name\":\"vault-test-log\",\"type\":\"api-key\"}");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting vault secret") != null);
-    allocator.free(try app.requestError("vault-delete", "null"));
+    try app.queueFailingTask("vault-delete", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error deleting vault secret") != null);
 }
 

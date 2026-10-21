@@ -122,6 +122,6 @@ test "a failing import-share-payload request logs the error with the message of 
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    std.testing.allocator.free(try app.requestError("import-share-payload", "null"));
+    try app.queueFailingTask("import-share-payload", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error importing share payload") != null);
 }

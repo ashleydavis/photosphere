@@ -77,7 +77,7 @@ test "remove-recent-database-name without a name is an error reply" {
     defer app.stop();
     const reply = try app.requestError("remove-recent-database-name", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The database needs a name.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "remove-recent-database-name logs which name was removed" {
@@ -92,6 +92,6 @@ test "a failing recent database request logs the error with the message of its h
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    std.testing.allocator.free(try app.requestError("remove-recent-database-name", "null"));
+    try app.queueFailingTask("remove-recent-database-name", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error removing recent database name") != null);
 }

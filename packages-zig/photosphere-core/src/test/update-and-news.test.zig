@@ -26,7 +26,7 @@ test "mark-update-shown without a version is an error reply" {
     defer app.stop();
     const reply = try app.requestError("mark-update-shown", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the version of the update that was shown.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "mark-news-shown adds the id to the news items shown, once" {
@@ -52,17 +52,16 @@ test "mark-news-shown without an id is an error reply" {
     defer app.stop();
     const reply = try app.requestError("mark-news-shown", "null");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the id of the news item that was shown.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
 }
 
 test "a failing mark-shown request logs the error with the message of its handler" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestError("mark-update-shown", "null"));
+    try app.queueFailingTask("mark-update-shown", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error marking update notification as shown") != null);
-    allocator.free(try app.requestError("mark-news-shown", "null"));
+    try app.queueFailingTask("mark-news-shown", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error marking news notification as shown") != null);
 }
 

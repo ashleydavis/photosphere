@@ -245,6 +245,33 @@ pub const TestApp = struct {
         defer parsed.deinit();
         return try allocator.dupe(u8, parsed.value);
     }
+
+    //
+    // Queues a task of the type with the data (JSON text), as Ziggy's add-task system message does, and waits for it to end as
+    // failed. A test of what a task does with data its message would refuse reaches the task this way.
+    //
+    pub fn queueFailingTask(self: *TestApp, task_type: []const u8, data_json: []const u8) !void {
+        const allocator = std.testing.allocator;
+        const task_id = try std.fmt.allocPrint(allocator, "failing-{s}-{d}", .{ task_type, self.next_request_id });
+        defer allocator.free(task_id);
+        self.next_request_id += 1;
+        const message = try utils.json.stringify(allocator, .{
+            .kind = "system",
+            .name = "add-task",
+            .data = .{
+                .taskId = task_id,
+                .taskType = task_type,
+                .source = "test",
+                .data = utils.json.Raw{ .text = data_json },
+                .priority = "interactive",
+            },
+        });
+        defer allocator.free(message);
+        self.core.postMessage(message);
+        const failed = try std.fmt.allocPrint(allocator, "\"taskId\":\"{s}\",\"status\":\"failed\"", .{task_id});
+        defer allocator.free(failed);
+        try self.shell.expectMessageContaining(failed);
+    }
 };
 
 //

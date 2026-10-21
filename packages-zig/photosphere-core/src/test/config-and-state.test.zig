@@ -65,10 +65,10 @@ test "get-state and set-state without a key are error replies" {
     defer app.stop();
     const get_reply = try app.requestError("get-state", "null");
     defer std.testing.allocator.free(get_reply);
-    try std.testing.expectEqualStrings("The state request needs the name of a key.", get_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", get_reply);
     const set_reply = try app.requestError("set-state", "{\"value\":1}");
     defer std.testing.allocator.free(set_reply);
-    try std.testing.expectEqualStrings("The state request needs the name of a key.", set_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"key\" is missing", set_reply);
 }
 
 test "set-config stores a setting that get-config then returns" {
@@ -139,10 +139,10 @@ test "get-config and set-config without a key are error replies" {
     defer app.stop();
     const get_reply = try app.requestError("get-config", "null");
     defer std.testing.allocator.free(get_reply);
-    try std.testing.expectEqualStrings("The config request needs the name of a key.", get_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", get_reply);
     const set_reply = try app.requestError("set-config", "{\"value\":1}");
     defer std.testing.allocator.free(set_reply);
-    try std.testing.expectEqualStrings("The config request needs the name of a key.", set_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"key\" is missing", set_reply);
 }
 
 //
@@ -251,14 +251,13 @@ test "a failing config or state request logs the error with the message of its h
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestError("get-config", "null"));
+    try app.queueFailingTask("get-config", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting config value") != null);
-    allocator.free(try app.requestError("set-config", "null"));
+    try app.queueFailingTask("set-config", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting config value") != null);
-    allocator.free(try app.requestError("get-state", "null"));
+    try app.queueFailingTask("get-state", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting state value") != null);
-    allocator.free(try app.requestError("set-state", "null"));
+    try app.queueFailingTask("set-state", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting state value") != null);
 }
 

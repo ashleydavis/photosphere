@@ -54,7 +54,7 @@ test "exportFile refuses a test outcome that is not text" {
     defer app.stop();
     const reply = try app.requestError("exportFile", "{\"path\":\"a.jpg\",\"testOutcome\":3}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("exportFile needs \"testOutcome\" to be text.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"testOutcome\" does not fit (UnexpectedToken)", reply);
     try std.testing.expect(app.last_host_method == null);
 }
 
@@ -140,25 +140,25 @@ test "requests with a field missing are error replies that name the field" {
     defer app.stop();
     const export_reply = try app.requestError("exportFile", "{}");
     defer std.testing.allocator.free(export_reply);
-    try std.testing.expectEqualStrings("exportFile needs \"path\".", export_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"path\" is missing", export_reply);
     const paths_reply = try app.requestError("exportFiles", "{\"paths\":[1]}");
     defer std.testing.allocator.free(paths_reply);
-    try std.testing.expectEqualStrings("exportFiles needs \"paths\" to be a list of paths.", paths_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"paths\" does not fit (UnexpectedToken)", paths_reply);
     const missing_paths = try app.requestError("exportFiles", "{}");
     defer std.testing.allocator.free(missing_paths);
-    try std.testing.expectEqualStrings("exportFiles needs \"paths\".", missing_paths);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"paths\" is missing", missing_paths);
     const folder_reply = try app.requestError("exportTempFolder", "{}");
     defer std.testing.allocator.free(folder_reply);
-    try std.testing.expectEqualStrings("exportTempFolder needs \"folder\".", folder_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"folder\" is missing", folder_reply);
     const key_reply = try app.requestError("secureStoreGet", "{}");
     defer std.testing.allocator.free(key_reply);
-    try std.testing.expectEqualStrings("secureStoreGet needs \"key\".", key_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"key\" is missing", key_reply);
     const value_reply = try app.requestError("secureStoreSet", "{\"key\":\"k\"}");
     defer std.testing.allocator.free(value_reply);
-    try std.testing.expectEqualStrings("secureStoreSet needs \"value\".", value_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"value\" is missing", value_reply);
     const delete_reply = try app.requestError("secureStoreDelete", "{}");
     defer std.testing.allocator.free(delete_reply);
-    try std.testing.expectEqualStrings("secureStoreDelete needs \"key\".", delete_reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"key\" is missing", delete_reply);
     try std.testing.expect(app.last_host_method == null);
 }
 

@@ -97,7 +97,7 @@ test "add-database without a path is an error reply" {
     defer app.stop();
     const reply = try app.requestError("add-database", "{\"name\":\"photos\",\"description\":\"\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The database needs a path.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"path\" is missing", reply);
 }
 
 test "find-database replies with the entry whatever the letter case of the name" {
@@ -151,7 +151,7 @@ test "update-database without an entry is an error reply" {
     defer app.stop();
     const reply = try app.requestError("update-database", "{\"originalName\":\"alpha\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the database entry to save.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"entry\" is missing", reply);
 }
 
 test "remove-database-entry removes the entry and its recent name, and replies null" {
@@ -281,7 +281,7 @@ test "set-database-origin without a database path is an error reply" {
     defer app.stop();
     const reply = try app.requestError("set-database-origin", "{\"origin\":\"/o\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The database needs a path.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"databasePath\" is missing", reply);
 }
 
 test "list-s3-dirs replies an empty array when the vault holds no secret of that name" {
@@ -299,7 +299,7 @@ test "list-s3-dirs without a bucket is an error reply" {
     defer app.stop();
     const reply = try app.requestError("list-s3-dirs", "{\"s3Key\":\"k\",\"prefix\":\"p\"}");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The request needs the name of the S3 bucket.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: the field \"bucket\" is missing", reply);
 }
 
 test "list-s3-dirs with a secret that is not JSON is an error reply" {
@@ -362,18 +362,17 @@ test "a failing database request logs the error with the message of its handler"
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestError("remove-database-entry", "null"));
+    try app.queueFailingTask("remove-database-entry", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error removing database entry") != null);
-    allocator.free(try app.requestError("find-database", "null"));
+    try app.queueFailingTask("find-database", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error finding database") != null);
-    allocator.free(try app.requestError("add-database", "{\"name\":\"x\",\"description\":\"\"}"));
+    try app.queueFailingTask("add-database", "{\"name\":\"x\",\"description\":\"\"}");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error adding database") != null);
-    allocator.free(try app.requestError("update-database", "null"));
+    try app.queueFailingTask("update-database", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error updating database") != null);
-    allocator.free(try app.requestError("set-database-origin", "null"));
+    try app.queueFailingTask("set-database-origin", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting database origin") != null);
-    allocator.free(try app.requestError("list-s3-dirs", "null"));
+    try app.queueFailingTask("list-s3-dirs", "null");
     try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error listing S3 directories") != null);
 }
 

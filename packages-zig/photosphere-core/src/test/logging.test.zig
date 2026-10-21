@@ -228,7 +228,7 @@ test "fps-measurement with something that is not a number is an error reply" {
     try app.environ_map.put("FPS_LOGGING", "1");
     const reply = try app.requestError("fps-measurement", "\"fast\"");
     defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("The frames per second must be a number.", reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: InvalidCharacter", reply);
     try std.testing.expectError(error.FileNotFound, readFpsFile(&app));
 }
 
