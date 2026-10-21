@@ -4,7 +4,7 @@ A minimal, Storybook-like browser that mounts every page, modal, dialog, and com
 
 ## Why it exists
 
-The stories browser lets developers view, exercise, and visually compare each UI surface without launching the full application or seeding a real database. The story player (`bun run stories`, see below) cycles the live app through every story on any platform, dwelling at each one, capturing a screenshot, and failing on any story that crashes while rendering.
+The stories browser lets developers view, exercise, and visually compare each UI surface without launching the full application or seeding a real database. The story player (`bun run stories:ziggy`, see below) cycles the live app through every story on any platform, dwelling at each one, capturing a screenshot, and failing on any story that crashes while rendering.
 
 Playing the stories is the only thing that catches a broken story. There is no unit test that mounts them: the project does not unit-test React components, so a story that throws (say, a dialog whose context provider is missing from the mocks) will not fail `bun run test`. Play the stories after changing a page, component, or the mock provider stack.
 
@@ -33,44 +33,32 @@ The initial color mode is controlled by the `PHOTOSPHERE_THEME` build-time env v
 
 ## Running the stories
 
-### Web
-
-The web build has no scripted player (a plain browser has no test-mode harness for the player to drive), so run it by hand. Start the dev server and web frontend:
-
-```bash
-bun run dev:web
-```
-
-Then open `http://localhost:8080/#/stories` and either browse the stories from the ☰ menu, or click **▶ Play on automatic** to cycle every story. To start the cycle straight from the address bar, open `http://localhost:8080/#/stories?cycle=1`.
-
-### Electron, Android, and iOS
-
 `scripts/story-player.sh` is the story player. It builds the app, launches it in test mode, navigates it to `#/stories?cycle=1`, walks every story in light and then dark, captures a screenshot of each, and fails the run if any story crashes while rendering:
 
 ```bash
-bun run stories            # Electron desktop (default)
-bun run stories:and    # Android emulator or attached device
-bun run stories:ios        # iOS simulator
+bun run stories:ziggy      # Photosphere App on the host operating system
+bun run stories:ziggy:and  # Photosphere App on an Android emulator from the pool, or an attached device
+bun run stories:ziggy:ios  # Photosphere App on the iOS simulator
 ```
 
-On Android the player boots an emulator if no device is attached, builds and installs the APK, and needs a JDK 17 (`ANDROID_HOME` is auto-detected). On iOS it needs the simulator and Xcode.
+On Android the player plays on an emulator from the pool, or an attached device, and builds and installs the APK. On iOS it needs the simulator and Xcode.
 
-Options are passed after `--`, e.g. `bun run stories:and -- --open`:
+Options are passed after `--`, e.g. `bun run stories:ziggy:and -- --open`:
 
 | Option | Meaning |
 |---|---|
-| `--platform <electron\|android\|ios>` | Which shell to run on. The `stories:*` scripts set this for you. |
-| `--duration <ms>` | Dwell per story. This is only a fallback and does not pace a normal run: the player advances as soon as it has captured the screenshot. It must comfortably outlast a single capture, because if it expires mid-capture the app advances underneath the screenshot and the wrong image is saved under that story's name. Defaults to 5000ms on Electron and 30000ms on mobile, where `adb`/`simctl` capture can take seconds. |
+| `--platform <ziggy\|ziggy-android\|ziggy-ios>` | Which shell to run on. The `stories:ziggy*` scripts set this for you. |
+| `--duration <ms>` | Dwell per story. This is only a fallback and does not pace a normal run: the player advances as soon as it has captured the screenshot. It must comfortably outlast a single capture, because if it expires mid-capture the app advances underneath the screenshot and the wrong image is saved under that story's name. Defaults to 5000ms on the host operating system and 30000ms on mobile, where `adb`/`simctl` capture can take seconds. |
 | `--screenshots <dir>` | Where the PNGs go. Defaults to `stories-screenshots/<platform>/`. |
 | `--no-screenshots` | Play the stories without capturing anything (a pure crash check). |
 | `--open` | Open the generated index in a browser when the run finishes. |
-| `--headless` | Electron only: hide the window and run under `xvfb` (for CI). |
+| `--headless` | The Photosphere App on Linux only: hide the window and run under `xvfb` (for CI). |
 
-The app is **visible by default** so you can watch the stories cycle: the Electron window opens, and the Android emulator / iOS simulator is on screen anyway. Pass `--headless` when you do not want the Electron window (the smoke tests, by contrast, are headless by default).
+The app is **visible by default** so you can watch the stories cycle: the Photosphere App window opens, and the Android emulator / iOS simulator is on screen anyway. Pass `--headless` when you do not want the window on Linux (the smoke tests, by contrast, are headless by default).
 
 Screenshots land in `<dir>/<theme>/<category>/<story-id>.png`, and an `index.html` is generated at the root of the screenshots directory showing each story's light and dark shots **side by side**, with a search box that filters by story id. Open it to review every story in both themes at once. Output directories are gitignored.
 
-Because Android and iOS run at phone resolution, `bun run stories:and` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
+Because Android and iOS run at phone resolution, `bun run stories:ziggy:and` is the fastest way to catch a page that overflows a small screen (content pushed off-screen, buttons out of reach, text clipped).
 
 ### How it works on each platform
 

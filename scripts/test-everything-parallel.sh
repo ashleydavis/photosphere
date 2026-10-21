@@ -23,7 +23,7 @@
 #   2. Run those, all at once.
 #
 # Nothing here records a baseline. Each script in package.json captures its own target on success, so
-# `bun run test:cli` alone marks test:cli as up to date whether it was run from here or by hand. That
+# `bun run test:cli:zig` alone marks test:cli:zig as up to date whether it was run from here or by hand. That
 # is why a script's capture is chained with && : a failing suite never reaches it, so a broken tree is
 # never marked as tested, and one suite passing never marks another as passed.
 #
@@ -49,10 +49,10 @@ cd "$REPO_DIR"
 # the iOS ones need a simulator, and neither toolchain exists on the other platform.
 case "$(uname -s)" in
     Darwin)
-        PLATFORM_SCRIPTS=(test:ios test:ziggy:ios)
+        PLATFORM_SCRIPTS=(test:ziggy:ios)
         ;;
     *)
-        PLATFORM_SCRIPTS=(test:and test:ziggy:and)
+        PLATFORM_SCRIPTS=(test:ziggy:and)
         ;;
 esac
 
@@ -86,16 +86,7 @@ elif [ "$FORCE" = true ]; then
         compile
         test
         test:zig
-        test:cli
-        test:cli:encrypted
-        test:cli:lan-share
-        test:cli:sync
-        test:cli:write-lock
-        test:cli:hash-cache
         test:cli:zig
-        test:electron
-        test:lan-share:cli-desktop
-        test:harness
         test:ziggy
         "${PLATFORM_SCRIPTS[@]}"
     )
@@ -301,7 +292,7 @@ require_android_emulator() {
 
     for script in "${SCRIPTS[@]}"; do
         case "$script" in
-            test:and) wanted="yes" ;;
+            test:ziggy:and) wanted="yes" ;;
         esac
     done
     if [ -z "$wanted" ]; then
@@ -326,47 +317,6 @@ require_android_emulator() {
 }
 
 require_android_emulator
-
-# Builds the desktop bundle once, for the whole run, when a suite that needs it is in the set.
-#
-# Both desktop suites bundle for themselves so that each works when run on its own, and both write the
-# same directories: `bun run bundle` empties apps/desktop/bundle/frontend (vite's emptyOutDir) and
-# rewrites apps/desktop/bundle. Started together that is one suite deleting the renderer the other is
-# about to launch Electron against.
-#
-# Keeping the two suites in one lane fixed it and cost the run the shorter suite's whole runtime, about
-# a minute, for a build that takes five seconds. Building it here instead, before any lane starts, costs
-# five seconds once: PHOTOSPHERE_SKIP_DESKTOP_BUNDLE tells the suites it is already done, so they skip
-# their own build and run at the same time as each other.
-bundle_desktop_once() {
-    local script wanted=""
-
-    for script in "${SCRIPTS[@]}"; do
-        case "$script" in
-            test:electron|test:lan-share:cli-desktop) wanted="yes" ;;
-        esac
-    done
-    if [ -z "$wanted" ]; then
-        return 0
-    fi
-
-    local bundle_status=0
-    echo "Bundling the desktop app once for this run..."
-    if command -v mise >/dev/null 2>&1; then
-        mise exec -- bun run bundle || bundle_status=$?
-    else
-        bun run bundle || bundle_status=$?
-    fi
-
-    if [ "$bundle_status" -ne 0 ]; then
-        echo "The desktop bundle failed (exit $bundle_status), so nothing has been started." >&2
-        exit 1
-    fi
-
-    export PHOTOSPHERE_SKIP_DESKTOP_BUNDLE=1
-}
-
-bundle_desktop_once
 
 RUN_STARTED=$SECONDS
 

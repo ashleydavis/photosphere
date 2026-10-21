@@ -51,8 +51,8 @@ bun run emu:and:pool:status -- --quiet
 
 Exit 0 means at least one pool emulator is up and on the LAN bridge, exit 1 means none is.
 
-- Pool down before `test:parallel`: say so, and say that `test:and` will be dropped from the set, so every combination it appears in goes unchecked. Start it anyway. The run prints the count itself.
-- Pool down before `find-flakey-tests`: say so, and say that `test:and` is the last rung and needs the pool by the time the climb reaches it. Start it anyway, because every rung below it touches no device.
+- Pool down before `test:parallel`: say so, and say that `test:ziggy:and` will be dropped from the set, so every combination it appears in goes unchecked. Start it anyway. The run prints the count itself.
+- Pool down before `find-flakey-tests`: say so, and say that `test:ziggy:and` is the last rung and needs the pool by the time the climb reaches it. Start it anyway, because every rung below it touches no device.
 
 Never bring the pool up, take it down or restart it. That is the human's.
 
@@ -85,7 +85,7 @@ Read the exit status before reading anything else.
 - 3: too many Bun crashes. Report and restart the rung, using `--ladder "<remaining rungs>" --target <target> --resume <greens>` exactly as the script prints.
 - 4: the pool stopped being healthy and did not come back. See "A sick pool".
 
-On macOS `test:ios` is not in the default rungs and has to be named: `-- --ladder "<the default rungs> test:ios" --target <target>`, taking the default rungs from `--help`.
+On macOS `test:ziggy:ios` is not in the default rungs and has to be named: `-- --ladder "<the default rungs> test:ziggy:ios" --target <target>`, taking the default rungs from `--help`.
 
 ## Fixing a failure
 
@@ -168,7 +168,7 @@ Then write:
 - The evidence that proved each fix, or plainly that a red run could not be produced.
 - Any commit removed for not fixing an observed failure, and why, along with what you found while writing it. Removing one is a normal outcome of this skill, not an admission of having wasted the time: the code stays as it was and the human gets the finding.
 - Which fixes are proven and which are not, kept apart rather than listed together. A change whose red/green pair you watched and a change you reasoned your way to are not the same claim, and running them together in one list overstates the weaker ones.
-- Any Bun crash, sick pool or dropped suite either run reported, and what it leaves unchecked. A dropped suite takes every combination it appears in with it, and the run prints how many; a run on Linux always drops `test:ios`.
+- Any Bun crash, sick pool or dropped suite either run reported, and what it leaves unchecked. A dropped suite takes every combination it appears in with it, and the run prints how many; a run on Linux always drops `test:ziggy:ios`.
 - The session directories: `tmp/parallel-check/<timestamp>` and `tmp/find-flakey-tests/<timestamp>`.
 - **The worktree path and branch the work is on**, so the human can go and look at it themselves.
 

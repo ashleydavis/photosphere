@@ -6,13 +6,7 @@ Manual and automated test documentation for Photosphere.
 
 All commands are run from the repo root.
 
-Run everything (unit tests plus all smoke tests):
-
-```bash
-bun run test:all
-```
-
-Note that `test:all` covers no mobile suite, so it can pass while the mobile app is broken. For the genuine full set for your platform, all at once and in about a third of the time:
+Run the full set for your platform, all at once (compile, the unit tests, the Zig unit tests, the Zig CLI smoke tests, the Photosphere App smoke tests on the host and the mobile Photosphere App smoke tests):
 
 ```bash
 bun run test:everything
@@ -42,49 +36,17 @@ Run unit tests in watch mode:
 bun run test:watch
 ```
 
-Run the Electron smoke tests. This builds the Electron app and runs the smoke tests against it:
+Run all CLI smoke tests (see [The Zig port of psi](#the-zig-port-of-psi)):
 
 ```bash
-bun run test:electron
-```
-
-Run all CLI smoke tests:
-
-```bash
-bun run test:cli
+bun run test:cli:zig
 ```
 
 Run a single CLI smoke test by number or name:
 
 ```bash
-bun run test:cli -- 43
-bun run test:cli -- replicate-partial
-```
-
-Run the encrypted CLI smoke tests:
-
-```bash
-bun run test:cli:encrypted
-```
-
-Run the hash cache concurrency smoke test, which proves that parallel processes can share one hash cache without losing entries:
-
-```bash
-bun run test:cli:hash-cache
-```
-
-Run the other CLI suites: LAN share (CLI to CLI), sync and write lock, the last two driving several processes against one database at once:
-
-```bash
-bun run test:cli:lan-share
-bun run test:cli:sync
-bun run test:cli:write-lock
-```
-
-Run the CLI to desktop LAN share suite, which shares secrets and databases in both directions between the CLI and the Electron app:
-
-```bash
-bun run test:lan-share:cli-desktop
+bun run test:cli:zig -- 43
+bun run test:cli:zig -- replicate-partial
 ```
 
 Run the Photosphere App smoke tests, which drive the Photosphere App on Ziggy through its test hooks (see [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md), [Photosphere on Ziggy](../photosphere-on-ziggy.md) and [Photosphere smoke tests](../../apps/photosphere-smoke-tests/README.md)). The desktop suite runs on the host operating system, the mobile suites on the Android emulator pool or device and on the iOS simulator or a connected iOS device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` in front of any of them runs one scenario:
@@ -97,49 +59,22 @@ bun run test:ziggy:ios   # iOS simulator or connected device (needs macOS with X
 
 `bun run test:zig` runs `zig build test` at the root of the repository: the unit tests of every package in `packages-zig` and the tests of the Zig CLI, in one build. Ziggy's own tests run in its repository. `-Dtest-file=<package>/<file>.test.zig` (for the CLI `-Dcli-test-file=<file>.test.zig`) runs one file.
 
-Run the mobile test harness's own tests, covering the device run lock, the work queue and worker pool, and the timeout helper. They drive shell rather than the app, so they need no device and take seconds:
-
-```bash
-bun run test:harness
-```
-
-Run the mobile smoke tests. Each test lives at `apps/smoke-tests/tests/<n>-<name>/test.sh`, and each `test.sh` is platform-neutral: the same file runs against the Android emulator/device and the iOS simulator. List the directory to see what is there; the numbers have gaps, so the highest one is not a count:
-
-```bash
-bun run test:and   # Android emulator or attached device
-bun run test:ios   # iOS simulator (needs macOS with Xcode)
-```
-
-Run a single mobile smoke test by number or by name:
-
-```bash
-bun run test:and 26                     # by number
-bun run test:and receive-database       # by part of the name
-bun run test:and 26-receive-database    # by full directory name
-```
-
-A number matches the number in front of the directory name exactly, so `2` runs `2-create-database` and not `12-edit-api-key` or `22-edit-database-origin`. Where two tests share a number, that number selects both. Anything that is not all digits is a case-insensitive substring of the directory name. The same argument works on `bun run test:ios`.
-
-Tests are selected before the emulator check and the build, so a mistyped name fails immediately and lists the available tests instead of wasting a build. `bun run test:and -- 26` also still works, if you prefer the explicit `--`.
-
-The assertion helpers the tests call (`wait_for_value`, `assert_value`, and the rest of `common.sh`) are fatal: a helper failure ends the test immediately rather than letting it continue past a bad assumption.
-
 ### Hunting flaky tests
 
 A suite that passes once has told you very little. A mode that fails one run in two hundred passes every normal check and still breaks a build later. `find-flakey-tests` drives the full suite in a loop and only calls it clean after a long unbroken streak of green runs:
 
 ```bash
 bun run find-flakey-tests                    # asks what to loop, then how long a streak
-bun run find-flakey-tests -- --script test   # loop one suite: test, test:cli, test:electron, test:and, test:ios
+bun run find-flakey-tests -- --script test   # loop one suite: test, test:cli:zig, test:ziggy, test:ziggy:and, test:ziggy:ios
 bun run find-flakey-tests -- --target 500    # a longer streak
 bun run find-flakey-tests -- --resume 42     # carry on from a session that banked 42 green runs
 bun run find-flakey-tests -- --ladder        # each suite in turn, cheapest first
 bun run find-flakey-tests -- --help
 ```
 
-**Run with no arguments on a terminal and it asks** rather than assuming: which suite to loop (the five above plus `everything` and `ladder`), then, for a single suite, whether to narrow to one test by number or part of its name, then how many consecutive green runs to require. Every prompt has a default, so pressing enter three times gives you `everything` until 100 green runs, which is what it used to do without asking. Passing `--script`, `--command` or `--ladder` skips the questions, and so does a run with no terminal attached, which is why the git hook and CI never block on it.
+**Run with no arguments on a terminal and it asks** rather than assuming: which suite to loop (the suites above plus `everything` and `ladder`), then, for a single suite, whether to narrow to one test by number or part of its name, then how many consecutive green runs to require. Every prompt has a default, so pressing enter three times gives you `everything` until 100 green runs, which is what it used to do without asking. Passing `--script`, `--command` or `--ladder` skips the questions, and so does a run with no terminal attached, which is why the git hook and CI never block on it.
 
-`--ladder` climbs the suites one at a time instead of looping the whole set: the full streak of the cheapest suite, then the next, on up through every suite the pre-commit hook runs, stopping at the first rung that fails. Looping everything is the slowest possible way to find a flaky unit test, and a red unit run names its test in seconds where the same failure inside a parallel run of everything has to be dug out of a lane. Each rung's run logs go in their own numbered subdirectory of the session, and a failure prints the command to carry on from that rung once it is fixed, since the rungs below it are already proven on this tree. `--target` is the streak required of every rung, and `--resume` applies to the first rung only, the one the session restarts on. Name your own rungs (from the same suites `--script` accepts) to climb something else: `--ladder "test test:cli test:ios"` is how to include the iOS suite on macOS, which the default rungs leave out because it can never pass on Linux.
+`--ladder` climbs the suites one at a time instead of looping the whole set: the full streak of the cheapest suite, then the next, on up through every suite the pre-commit hook runs, stopping at the first rung that fails. Looping everything is the slowest possible way to find a flaky unit test, and a red unit run names its test in seconds where the same failure inside a parallel run of everything has to be dug out of a lane. Each rung's run logs go in their own numbered subdirectory of the session, and a failure prints the command to carry on from that rung once it is fixed, since the rungs below it are already proven on this tree. `--target` is the streak required of every rung, and `--resume` applies to the first rung only, the one the session restarts on. Name your own rungs (from the same suites `--script` accepts) to climb something else: `--ladder "test test:cli:zig test:ziggy:ios"` is how to include the iOS suite on macOS, which the default rungs leave out because it can never pass on Linux.
 
 Before each run it prints when that run should end and when the whole streak should, as a clock time and as a time from now. The estimate is the mean of the last ten runs, so it appears from the second run onwards, tightens as the session goes on, and follows the machine as it speeds up or slows down instead of staying anchored to how the session began. It counts time spent running only, so a pause waiting for an emulator pool, or a crashed run that is retried, puts the real finish later than the estimate says.
 
@@ -149,7 +84,7 @@ It stops at the first real failure, because the point is the streak and a streak
 
 A crash of the Bun runtime itself (SIGSEGV, SIGILL, a panic) is not a failure of the code under test, so such a run is retried rather than counted against the streak. Five in a row stops the session, since a result resting on that many crashes would mean nothing. Every crash is listed in the summary either way, so they can never pass unnoticed.
 
-A sick Android emulator pool is treated the same way, and only when the looped command actually drives the emulators (`test:and` and the whole set do; the unit tests, the CLI suite, the Electron suite and the iOS suite do not). The loop pauses rather than failing: it says the pool is sick, keeps the streak, and waits up to an hour for the emulators to come back, resuming by itself with however many devices are restarted. A run that went red while the pool was sick is not counted against the streak either. It gives up only if the pool stays away, or if five runs in a row go red with a sick pool.
+A sick Android emulator pool is treated the same way, and only when the looped command drives the emulators (`test:ziggy:and` and the whole set do; the unit tests, the CLI suite, the Photosphere App on the host and the iOS suite do not). The loop pauses rather than failing: it says the pool is sick, keeps the streak, and waits up to an hour for the emulators to come back, resuming by itself with however many devices are restarted. A run that went red while the pool was sick is not counted against the streak either. It gives up only if the pool stays away, or if five runs in a row go red with a sick pool.
 
 Everything is written under `tmp/find-flakey-tests/<timestamp>/` (gitignored): one log per run, plus `report.txt` on failure. The paths are printed on the last lines of output.
 
@@ -167,15 +102,15 @@ Once a suite is sound on its own, the next question is whether it is sound in co
 
 ```bash
 bun run test:parallel                              # everything this machine can run, mobile included
-bun run test:parallel -- --scripts "test test:cli" # just these two, for a quick answer
+bun run test:parallel -- --scripts "test test:cli:zig" # just these two, for a quick answer
 bun run test:parallel -- --help
 ```
 
-**A default run needs the emulator pool already up.** It checks every suite `bun run test:everything` starts in a parallel lane, plus the mobile suites this machine can actually run: each script alone, then every pair of them. Those are the suites that already run beside each other on every commit, so a pair that contends refuses a commit whether or not this check looked at it. `compile` is left out (a build, not a suite). The number of pairs grows with the square of the number of suites, so name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
+**A default run needs the emulator pool already up.** It checks every suite `bun run test:everything` starts in a parallel lane, plus the mobile suites this machine can run: each script alone, then every pair of them. Those are the suites that already run beside each other on every commit, so a pair that contends refuses a commit whether or not this check looked at it. `compile` (a build, not a suite) and `test:zig` are left out. The number of pairs grows with the square of the number of suites, so name `--scripts` explicitly when you want a quick answer: that gives you precisely the scripts you asked for and no mobile detection.
 
 **Everything runs once.** Each script alone once, each combination once. A conflict that only shows up on some runs will be missed, so this answers whether a conflict is there, not how often it happens. That is a deliberate trade for a run you might actually start: `bun run find-flakey-tests` is the tool for the second question.
 
-`test:ios` is included only on macOS, and `test:and` only where the Android tooling is installed and `bun run emu:and:status` reports a ready device. Either one that cannot run is dropped with a printed reason rather than left in to fail every combination it appears in, and the summary says how many combinations went unchecked as a result, so a reduced run can never be mistaken for a clean one. The check never starts, stops or restarts an emulator: that is the human's job.
+`test:ziggy:ios` is included only on macOS, and `test:ziggy:and` only where the Android tooling is installed and `bun run emu:and:status` reports a ready device. Either one that cannot run is dropped with a printed reason rather than left in to fail every combination it appears in, and the summary says how many combinations went unchecked as a result, so a reduced run can never be mistaken for a clean one. The check never starts, stops or restarts an emulator: that is the human's job.
 
 **Self-pairs are included**, so three scripts is 6 combinations rather than 3: each script is also checked against a second copy of itself. Nothing in `test:everything` runs one suite twice at once, but two worktrees, two developers on one machine, or a rerun started before the last one finished all do. A self-pair failure means exactly that: the suite cannot be run twice at once, usually because it hardcodes a path, a port or a lock.
 
@@ -203,16 +138,7 @@ The command is at `.claude/commands/test/harden.md`, and everything it does can 
 
 ### Running the Android tests over several emulators
 
-`bun run test:and` uses every emulator that is on the LAN bridge, one worker per device, so the suite finishes several times faster. Measured on this repo: 375s originally, 276s after the wait helpers were made to poll five times a second, and 113s across six emulators.
-
-Measured again on five emulators with 43 tests, standalone with a warm build and nothing else running: **161s before, 135-138s after**. It came down from four places, none of which deleted a test, skipped one or loosened an assertion:
-
-- One test waited out a fixed minute for an outcome the app had already ruled out (`43-s3-failure`, 73s to 11s).
-- The kill helpers poll for the process being gone instead of sleeping a fixed second per test.
-- The APK checksum is hashed once per run rather than once before each of the 43 tests.
-- The LAN-share tests are no longer serialised against each other, which was 102s that could not overlap inside a 145s loop.
-
-Take any measurement only when the machine is quiet. The same suite measured 231s while another `bun run test:everything` was running beside it, because `suite_share` hands a competing suite a fraction of the emulators.
+`bun run test:ziggy:and` runs one scenario per device at a time across every pool emulator on the LAN bridge, so the suite finishes faster with more emulators. See [the run script's notes](../../apps/photosphere-smoke-tests/run.md) for how the devices are chosen.
 
 Bring up a pool of five alongside your own emulator:
 
@@ -246,14 +172,14 @@ On an emulator that costs nothing, since a pool emulator holds only what a test 
 Set `PHOTOSPHERE_ALLOW_DEVICE_WIPE=1` to say the phone's data is yours to destroy:
 
 ```bash
-PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 PHOTOSPHERE_ANDROID_DEVICES="<serial>" bun run test:and
+PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 PHOTOSPHERE_ANDROID_DEVICES="<serial>" bun run test:ziggy:and
 ```
 
 That is what the import performance test needs, since it measures an import starting from an empty database. Without the flag, a mobile test run against a real phone stops at the first test that wants a clean app.
 
 Anything reached by `adb connect` counts as a real device and is protected the same way. Only a local `emulator-<port>` target is wiped without asking.
 
-`bun run and` never wipes anything: it installs over the top and leaves the app's data alone, so it is the way to put a new build on a phone whose database you want to keep. Passing a fixture (`bun run and 50`, `and1`, `and0`) does replace that one fixture database, and nothing else.
+`bun run run:ziggy:android` never wipes anything: it installs over the top and leaves the app's data alone, so it is the way to put a new build on a phone whose database you want to keep. The fixture variants (`run:ziggy:android:50`, `run:ziggy:android:1`, `run:ziggy:android:0`) also copy that one fixture database onto the device over any earlier copy and register it in the app's `databases.toml`. Nothing else is touched.
 
 Tests are dispatched in the order they are numbered, and nothing reorders or serialises them: there are no scheduling markers, so any test may run beside any other. The LAN-share tests are safe in company because discovery is disambiguated by the pairing code rather than by scheduling. See [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md).
 
@@ -271,12 +197,6 @@ Run performance benchmarks:
 
 ```bash
 bun run perf
-```
-
-Capture desktop app screenshots headlessly (for UX review / docs):
-
-```bash
-bun run screenshots
 ```
 
 ## The Zig port of psi
@@ -301,7 +221,7 @@ Screenshots go to `stories-screenshots/<platform>/` (`ziggy`, `ziggy-android` an
 
 Running the stories on the Photosphere App on Android or iOS (`stories:ziggy:and`, `stories:ziggy:ios`) renders every page at phone resolution, which is the quickest way to catch a page that does not fit on mobile (content pushed off-screen, buttons out of reach, text clipped).
 
-These runs are long, so they are excluded from `bun run test:all`.
+These runs are long, so `bun run test:everything` does not run them.
 
 See [the stories README](../../packages/user-interface/src/stories/README.md) for the full reference: entry points on each platform, all runner options, how the cycle works, and how to add a new story.
 
@@ -352,7 +272,7 @@ That job control really does this is checked at runtime rather than trusted, onc
 
 The leak check runs at the end of `apps/desktop/smoke-tests.sh` and `apps/smoke-tests/run.sh`. Each app or control bridge a test launches records its process group in the file named by `PHOTOSPHERE_LAUNCHED_GROUPS`, which the runner exports before it starts anything; at the end the runner reports whatever is still alive in those groups and fails the run. **A leak check failure on a run whose tests all passed is a real failure, not noise.** It means the suite left something on the machine, and enough of those is what took the machine into an out-of-memory kill that took the Android emulator pool with it. Fix the cleanup that missed; do not delete the check.
 
-It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs a dozen suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the others' live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
+It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs several suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the others' live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
 
 The CLI suite has no leak check. Nothing in it launches through `launch_in_process_group` (a test starts `psi` directly inside its batch subshell), so there is no group to scope to, and a check there could never fire. What keeps that suite from leaking is that its interrupt and exit traps kill each batch subshell's whole process tree rather than just the subshell.
 
@@ -429,5 +349,4 @@ The one exception is the news feed. `POST /seed-news` still goes through the app
 - [e2e/](e2e/) - End-to-end manual test scripts covering full user workflows
 - [screenshots.md](screenshots.md) - Capturing desktop app screenshots via the test control server
 - [stories README](../../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player
-- `apps/smoke-tests/tests/<n>-<name>/` - Mobile smoke tests (`bun run test:and` / `bun run test:ios`), platform-neutral and numbered
 - `apps/photosphere-smoke-tests/<n>-<name>/` - Photosphere App smoke tests (`bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios`), platform-neutral and numbered. See [its README](../../apps/photosphere-smoke-tests/README.md)

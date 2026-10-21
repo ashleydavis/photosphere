@@ -40,20 +40,14 @@ There is one hook, `.githooks/pre-commit`. It delegates to `bun run test:everyth
 | --- | --- | --- |
 | Compile | `bun run compile` | `bun run compile` |
 | Unit tests | `bun run test` | `bun run test` |
-| CLI smoke tests | `bun run test:cli` | `bun run test:cli` |
-| CLI encrypted database tests | `bun run test:cli:encrypted` | `bun run test:cli:encrypted` |
-| CLI LAN share tests | `bun run test:cli:lan-share` | `bun run test:cli:lan-share` |
-| CLI sync tests | `bun run test:cli:sync` | `bun run test:cli:sync` |
-| CLI write lock tests | `bun run test:cli:write-lock` | `bun run test:cli:write-lock` |
-| CLI hash cache tests | `bun run test:cli:hash-cache` | `bun run test:cli:hash-cache` |
-| Electron smoke tests | `bun run test:electron` | `bun run test:electron` |
-| CLI to desktop LAN share tests | `bun run test:lan-share:cli-desktop` | `bun run test:lan-share:cli-desktop` |
-| Mobile harness tests | `bun run test:harness` | `bun run test:harness` |
-| Mobile smoke tests | `bun run test:and` | `bun run test:ios` |
+| Zig unit tests | `bun run test:zig` | `bun run test:zig` |
+| Zig CLI smoke tests | `bun run test:cli:zig` | `bun run test:cli:zig` |
+| Photosphere App smoke tests on the host | `bun run test:ziggy` | `bun run test:ziggy` |
+| Photosphere App mobile smoke tests | `bun run test:ziggy:and` | `bun run test:ziggy:ios` |
 
 The platform split is decided by `what-changed.yaml`, and matches what the parallel runner used to decide with `uname`. The mobile toolchains do not exist on the other platform, so there is no way to run both sets from one machine.
 
-**The set above is filtered by what changed.** `bun run test:everything` no longer runs everything unconditionally. `scripts/test-everything-parallel.sh` asks `what-changed` which targets are affected, runs those, and records a new baseline only if they all pass.
+**The set above is filtered by what changed.** `bun run test:everything` no longer runs everything unconditionally. `scripts/test-everything-parallel.sh` asks `what-changed` which targets are affected and runs those. Each script records a new baseline for its own target when it passes.
 
 `what-changed` is a separate project, installed as a single executable from [its releases page](https://github.com/ashleydavis/what-changed/releases), and must be on your `PATH`. It only reports; it runs nothing itself. A docs-only change runs nothing at all. Pass `--force` to run the whole set regardless:
 
@@ -63,7 +57,7 @@ bun run test:everything -- --plan       # print what would run, run nothing
 bun run test:everything:force             # the same as --force
 ```
 
-**Only a gated or forced run records a baseline.** Naming scripts explicitly (`bun run test:everything compile test`) runs exactly those and records nothing, because a partial run is not evidence that the rest still passes.
+**Each script records only its own baseline.** The scripts in `package.json` capture their own target on success, so `bun run test:cli:zig` marks `test:cli:zig` as up to date whether `test:everything` ran it or you ran it by hand. One suite passing never marks another as passed. Naming scripts explicitly (`bun run test:everything compile test`) runs exactly those, without asking `what-changed`.
 
 The full rules are in the section below.
 
@@ -75,7 +69,7 @@ That split checked at the wrong moment. It let a broken commit exist and only co
 
 ## What this costs you
 
-The mobile suites need a device or emulator attached. With none running, any commit that touches a path they watch is refused, because `test:and` fails immediately with `emulator not started`. A commit that touches only `docs/` or `.claude/` no longer asks for them at all, so it goes through without a device.
+The mobile suites need a device or emulator attached. With none running, any commit that touches a path they watch is refused, because `test:everything` refuses the whole set with `No emulator is on the LAN bridge, so the Android suites cannot run.` before starting anything. A commit that touches only `docs/` or `.claude/` no longer asks for them at all, so it goes through without a device.
 
 Use `--no-verify` when you do need to commit a mobile-touching change without a device. That is a normal part of using this, not a workaround.
 
@@ -90,7 +84,7 @@ You can run it yourself, which is the fastest way to see where you stand before 
 ```
 bun run test:everything                 # whatever changed, for this platform
 bun run tev                             # the same thing, shorter
-bun run test:everything compile test    # just those two, still gated and still in parallel
+bun run test:everything compile test    # just those two, changed or not, still in parallel
 bun run tev -- --force                  # everything, changed or not
 bun run tev -- --plan                   # print the decision, run nothing
 ```
@@ -113,10 +107,11 @@ The watched paths as they stand:
 | --- | --- | --- |
 | `compile` | `packages`, `apps` | any |
 | `test` | `packages`, `apps` | any |
-| `test:cli` | `apps/cli`, `packages` | any |
-| `test:electron` | `apps/desktop`, `apps/desktop-frontend`, `packages` | any |
-| `test:and` | `apps/android-frontend`, `apps/smoke-tests`, `packages` | Linux |
-| `test:ios` | `apps/ios-frontend`, `apps/smoke-tests`, `packages` | macOS |
+| `test:cli:zig` | `apps/cli`, `apps/cli-zig`, `packages`, `packages-zig`, `third-party`, `build.zig`, `build.zig.zon` | any |
+| `test:ziggy` | `apps/photosphere`, `apps/photosphere-frontend`, `apps/photosphere-smoke-tests`, `packages`, `packages-zig`, `third-party`, `build.zig`, `build.zig.zon` | any |
+| `test:ziggy:and` | the same as `test:ziggy` | Linux |
+| `test:ziggy:ios` | the same as `test:ziggy` | macOS |
+| `test:zig` | `apps/cli-zig`, `packages-zig`, `third-party`, `build.zig`, `build.zig.zon` | any |
 
 Every target also watches `always`: `package.json`, `bun.lock`, `mise.toml`, `what-changed.yaml`, `scripts` and `.githooks`. Anything that changes how every suite runs makes every suite run.
 
@@ -124,7 +119,7 @@ Every target also watches `always`: `package.json`, `bun.lock`, `mise.toml`, `wh
 
 The umbrella `packages` entry is deliberate. Narrowing a target to the packages it actually depends on is a config edit with no code change, but a wrong narrowing silently skips a suite that should have run, so the config does not guess. What it already buys is real: a change confined to `docs/`, `apps/cli/`, `apps/desktop/` or `.claude/` no longer runs the mobile suites, and a docs-only or plan-only change runs nothing at all.
 
-**A failing run records nothing.** `what-changed baseline capture` appears exactly once in `scripts/test-everything-parallel.sh`, inside the branch reached only when every script passed. The runner kills the remaining lanes at the first failure, so there is no trustworthy per-script result to record anyway, and a target that passed inside a failing run will run again next time. That wastes some time and cannot produce a wrong answer, which is the right way round.
+**A failing script records nothing.** Each script's capture runs only after that script has passed, so a broken tree is never marked as tested. The runner kills the remaining lanes at the first failure, so a script cancelled part way records nothing and runs again next time, while a script that had already passed in that run keeps the baseline it recorded.
 
 **The gate cannot see changes outside the working tree.** If a suite passed and then the environment changed (a different emulator, a new SDK, a changed environment variable), the gate will still skip it. That is what `--force` is for.
 
@@ -151,7 +146,7 @@ The tool is a separate project: https://github.com/ashleydavis/what-changed. It 
 
 The mobile suites are in the default set on the platform that can run them, and only the path rules above take them out.
 
-Unit tests cannot see embedded-worker task ordering or the on-device config file, and those are exactly what commit `61ac4cee` broke: it moved the mobile database list into `databases.toml` and broke 8 of 37 Android smoke tests, and it was committed and pushed without the mobile suite ever being run. `bun run test:all` would not have caught it either, because `test:all` covers no mobile suite at all. That is why anything under `packages/`, `apps/android-frontend/`, `apps/ios-frontend/` or `apps/smoke-tests/` still pulls them in.
+Unit tests cannot see embedded-worker task ordering or the on-device config file, and those are exactly what commit `61ac4cee` broke: it moved the mobile database list into `databases.toml` and broke 8 of 37 Android smoke tests, and it was committed and pushed without the mobile suite ever being run. That is why anything under `packages/`, `packages-zig/`, `apps/photosphere/`, `apps/photosphere-frontend/` or `apps/photosphere-smoke-tests/` still pulls them in.
 
 ## Checking they actually work
 
@@ -195,7 +190,7 @@ With a breakage still in place, `git commit --no-verify`. It should commit with 
 
 **7. Confirm what happens with no device.**
 
-Stop the emulators (`bun run emu:and:pool:down`) and try to commit a change under `packages/`. Expect a refusal naming `test:and`, with `emulator not started`. Then try a change under `docs/` only: expect the gate to report every target as unchanged and the commit to go through with no suite run at all. Both are worth seeing once so neither is a surprise later.
+Stop the emulators (`bun run emu:and:pool:down`) and try to commit a change under `packages/`. Expect a refusal before any suite starts, saying `No emulator is on the LAN bridge, so the Android suites cannot run.` Then try a change under `docs/` only: expect `test:everything` to report every target as unchanged and the commit to go through with no suite run at all. Both are worth seeing once so neither is a surprise later.
 
 You can also run the whole thing without committing at all, which is the same set the hook runs:
 

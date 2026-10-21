@@ -20,7 +20,7 @@ Use the skill:
 
 This will:
 
-- Capture screenshots (runs `bun run screenshots` under the hood).
+- Capture screenshots.
 - Analyse each screen from a new user's point of view.
 - Write the review to `ux-review/review.md`.
 - Save screenshots to `ux-review/screenshots/`.
@@ -42,16 +42,6 @@ This goes through the review one finding at a time. For each item it tells you:
 - How to see it live in the running app.
 
 It stops after each item and waits for you to say "next".
-
-## Just the screenshots
-
-To only capture screenshots (no review write-up):
-
-```bash
-bun run screenshots
-```
-
-Screenshots are written to `ux-review/screenshots/`.
 
 ## More detail
 

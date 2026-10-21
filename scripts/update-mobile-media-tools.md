@@ -42,11 +42,7 @@ scripts/update-mobile-media-tools.sh --imagemagick-version 7.1.1-45 --build-ios 
 
 ## Verifying
 
-`--verify` runs the mobile-worker unit tests and the Android compile check, and the iOS unit tests when on macOS. The real end-to-end proof is the on-device smoke run, which needs the vendored binaries and an emulator/simulator:
-
-```bash
-bun run test:and   # or: bun run test:ios
-```
+`--verify` runs the mobile-worker unit tests and the Android compile check, and the iOS unit tests when on macOS.
 
 ## Gotcha
 

@@ -113,7 +113,6 @@ Everything below is run from the repo root.
 | `bun run build:ziggy:<platform>` / `bun run run:ziggy:<platform>` | Build, or build and launch, the Photosphere App on `linux`, `windows`, `macos`, `android` or `ios`. See the [Photosphere App README](../apps/photosphere/README.md) for every command and where each runs. |
 | `zig build` / `zig build test` | Build the Zig CLI (`zig-out/bin/psi`), or run every Zig test: the packages in `packages-zig` and the CLI. Both are steps of the one `build.zig` at the root of the repository, which also has `photosphere-backend`, `photosphere-linux` and `photosphere-windows`; `zig build --help` lists them. `bun run test:zig` runs the tests. |
 | `bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios` | Photosphere App smoke tests, on the host operating system, the Android emulator/device or the iOS simulator/device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` runs one scenario. |
-| `bun run dev:web` | Start the dev server and web frontend together, in a browser. |
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
 | `bun run test` | Unit tests. |
 | `bun run test:everything` (or `bun run tev`) | The full set for your platform, all at once: compile, unit, the Zig tests, every CLI suite, and every Photosphere App suite this platform can run. It stops the moment anything fails. This is what the git hooks run. It covers every Release workflow test job for this platform bar three: the stories runs, the packaging builds, and `perf-tests`. Only the scripts whose watched paths changed since they last passed actually run, so a docs-only change runs nothing; add `-- --force` to run everything, `-- --plan` to see the decision. Pass script names to consider only those, still in parallel. Needs the `what-changed` executable on your PATH, from [its releases page](https://github.com/ashleydavis/what-changed/releases). |
@@ -141,7 +140,7 @@ The desktop and mobile apps do the same thing from a toggle in the settings, wat
 
 The [stories browser](../packages/user-interface/src/stories/README.md) mounts every page, modal, dialog, and component in isolation with mock data, so you can look at a UI surface without seeding a real database.
 
-In the **web** build, run `bun run dev:web` and open `http://localhost:8080/#/stories`. Browse from the ☰ menu, or click **▶ Play on automatic** to cycle every story. In the **desktop** app, open it from the Developer menu; on **Android/iOS**, from the Developer screen.
+In the **desktop** app, open it from the Developer menu; on **Android/iOS**, from the Developer screen.
 
 On the Photosphere App, the story player does it from the command line: it cycles the live app through every story in light and dark, captures a screenshot of each, and fails if a story crashes while rendering:
 

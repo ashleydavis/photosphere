@@ -30,7 +30,7 @@
 #       This is the normal way to run it by hand, and it is slow: it needs the emulator pool already
 #       up, and every suite it names takes minutes.
 #
-#   bun run test:parallel -- --scripts "test test:cli"
+#   bun run test:parallel -- --scripts "test test:cli:zig"
 #       Check just those two, which is 3 combinations (2 pairs plus 2 self-pairs). This is how to get
 #       a quick answer without paying for the mobile suites.
 #
@@ -41,7 +41,7 @@
 #   --scripts "A B C"
 #                 check exactly these scripts, space separated, instead of everything this machine can
 #                 run. Any script in the root package.json may be named, including ones outside the
-#                 default set such as compile, test:and:unit and test:ios:unit. Naming scripts turns
+#                 default set such as compile and test:zig. Naming scripts turns
 #                 off the mobile detection below: you get precisely what you asked for.
 #
 #   --command TEMPLATE
@@ -55,7 +55,7 @@
 # The default set is every suite `bun run test:everything` starts in a parallel lane, plus the mobile
 # suites this machine can actually run, and minus `compile` (a build, not a suite). The number of
 # combinations grows with the square of the number of suites: use --scripts to check a few.
-# test:ios is included only on macOS. test:and is included on any platform where the Android
+# test:ziggy:ios is included only on macOS. test:ziggy:and is included on any platform where the Android
 # tooling is installed and `bun run emu:and:status` reports a ready device, and is dropped with a
 # printed reason otherwise, because a suite that cannot run would fail every combination it is in for
 # a reason that is not interference. A dropped suite is reported at the top of the run and again in
@@ -235,7 +235,7 @@ check_devices_healthy() {
 #
 # Prints how many pool emulators are on the LAN bridge, and 0 when none is or the check cannot run.
 #
-# This is the count that matters after a pair including test:and, and it is not the same as the
+# This is the count that matters after a pair including test:ziggy:and, and it is not the same as the
 # attached device count check_devices_healthy uses: an emulator killed for using too much memory
 # disappears from both, but one that is up and off the bridge is still attached and is useless to
 # every mobile test. Read-only, as android-pool-status.sh is.
@@ -249,7 +249,7 @@ pool_bridge_count() {
 }
 
 # How many pool emulators were on the LAN bridge when the sweep started, and whether that reading was
-# taken at all. The sweep pairs test:and against every other suite, which is the deliberate stacking
+# taken at all. The sweep pairs test:ziggy:and against every other suite, which is the deliberate stacking
 # that killed two emulators, so a sweep that has cost the pool an emulator is stopped rather than
 # carried on: every later pair would be measuring a smaller pool, and a pair reported as interfering
 # on those results names the wrong thing.
@@ -264,7 +264,7 @@ POOL_BRIDGE_COUNT_AT_START=0
 # added to the whole set, add it here too.
 #
 # `compile` is run by the hook and deliberately not here, because it is a build rather than a suite.
-DEFAULT_SCRIPTS="test test:cli test:cli:encrypted test:cli:lan-share test:cli:sync test:cli:write-lock test:cli:hash-cache test:electron test:lan-share:cli-desktop test:harness"
+DEFAULT_SCRIPTS="test test:cli:zig test:ziggy"
 
 # The scripts to check, as given by --scripts. Empty until resolved.
 REQUESTED_SCRIPTS=""
@@ -386,7 +386,7 @@ if [ -z "$COMMAND_TEMPLATE" ]; then
     validate_script_names
 fi
 
-# Whether the Android tooling this machine would need to run test:and is installed. Probed rather than
+# Whether the Android tooling this machine would need to run test:ziggy:and is installed. Probed rather than
 # assumed from the platform, so a macOS machine with Android Studio checks both mobile suites.
 android_tooling_present() {
     if command -v adb >/dev/null 2>&1; then
@@ -420,13 +420,13 @@ add_mobile_scripts() {
     local status_command
 
     if [ "$(uname -s)" = "Darwin" ]; then
-        SELECTED+=("test:ios")
+        SELECTED+=("test:ziggy:ios")
     else
-        SKIPPED_REASONS+=("test:ios: not added, this is not macOS")
+        SKIPPED_REASONS+=("test:ziggy:ios: not added, this is not macOS")
     fi
 
     if ! android_tooling_present; then
-        SKIPPED_REASONS+=("test:and: not added, no adb on PATH or under \$ANDROID_HOME/\$ANDROID_SDK_ROOT")
+        SKIPPED_REASONS+=("test:ziggy:and: not added, no adb on PATH or under \$ANDROID_HOME/\$ANDROID_SDK_ROOT")
         return
     fi
 
@@ -437,11 +437,11 @@ add_mobile_scripts() {
     fi
 
     if ! (cd "$ROOT" && bash -c "$status_command" >/dev/null 2>&1); then
-        SKIPPED_REASONS+=("test:and: not added, 'bun run emu:and:status' does not report a ready device (the emulator pool is the human's to bring up)")
+        SKIPPED_REASONS+=("test:ziggy:and: not added, 'bun run emu:and:status' does not report a ready device (the emulator pool is the human's to bring up)")
         return
     fi
 
-    SELECTED+=("test:and")
+    SELECTED+=("test:ziggy:and")
 }
 
 # Naming scripts means exactly those. Otherwise the mobile suites this machine can run are part of the
@@ -773,11 +773,11 @@ run_pair_phase() {
         fi
 
         # After the pair rather than before the next one, so the pair that cost the emulator is the
-        # one named. Only for pairs that included test:and: the desktop suites cannot take an
+        # one named. Only for pairs that included test:ziggy:and: the other suites cannot take an
         # emulator off the bridge, and a pool that lost one while they ran lost it to something else.
         if [ "$POOL_BRIDGE_COUNT_AT_START" -gt 0 ]; then
             case " $script_a $script_b " in
-                *" test:and "*)
+                *" test:ziggy:and "*)
                     pool_bridge_count_now="$(pool_bridge_count)"
                     if [ "$pool_bridge_count_now" -lt "$POOL_BRIDGE_COUNT_AT_START" ]; then
                         echo
@@ -870,7 +870,7 @@ print_summary() {
 # with an emulator up for something else must not stop this run.
 DEVICE_COUNT_AT_START=0
 case " ${SELECTED[*]} " in
-    *" test:and "*)
+    *" test:ziggy:and "*)
         DEVICE_COUNT_AT_START="$(adb devices 2>/dev/null | grep -c "device$")"
         POOL_BRIDGE_COUNT_AT_START="$(pool_bridge_count)"
         ;;
@@ -888,7 +888,7 @@ if [ "${#SKIPPED_REASONS[@]}" -gt 0 ]; then
 fi
 if [ "$DEVICE_COUNT_AT_START" -gt 0 ]; then
     echo "check-parallel-tests: $DEVICE_COUNT_AT_START device(s) attached. The run stops if that changes or one stops answering."
-    echo "check-parallel-tests: $POOL_BRIDGE_COUNT_AT_START pool emulator(s) on the LAN bridge. The run stops if a pair including test:and leaves fewer."
+    echo "check-parallel-tests: $POOL_BRIDGE_COUNT_AT_START pool emulator(s) on the LAN bridge. The run stops if a pair including test:ziggy:and leaves fewer."
 fi
 echo "check-parallel-tests: logs in $SESSION_DIR"
 echo

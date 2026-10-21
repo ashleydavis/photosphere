@@ -16,7 +16,7 @@
 # suite: every run exercises everything.
 #
 # The ladder (--ladder) climbs the suites in turn, cheapest first, requiring the full streak of each
-# one before it starts the next: the unit tests, then the CLI suite, then Electron, then Android. It
+# one before it starts the next: the unit tests, then the CLI suite, then the Photosphere App on the host, then Android. It
 # exists because looping the whole set is the slowest possible way to find a flaky unit test. A unit
 # run takes seconds and an Android run takes minutes, so a hundred green unit runs cost a few minutes
 # and rule out an entire suite before anything expensive starts. A failure on a low rung is also far
@@ -35,8 +35,8 @@
 # in a row. Every crash is still reported in the summary, so they can never pass unnoticed.
 #
 # A sick Android emulator pool is treated the same way, and only when the looped command actually
-# drives the emulators (`test:and` and the whole set do; unit tests, the CLI suite, the Electron
-# suite and the iOS suite do not). The loop pauses instead of failing: it says the pool is sick and
+# drives the emulators (`test:ziggy:and` and the whole set do; unit tests, the CLI suite, the Photosphere App on the
+# host and the iOS suite do not). The loop pauses instead of failing: it says the pool is sick and
 # waits for it to come back, keeping the streak. Restart the emulators and the session carries on by
 # itself, with however many devices come back. It gives up only after DEVICE_WAIT_SECONDS of waiting,
 # or after DEVICE_FAILURE_RETRIES runs in a row have gone red with a sick pool.
@@ -54,17 +54,17 @@
 #       With no arguments and a terminal attached, it asks which suite to loop and how long a streak
 #       to require. This is the normal way to run it by hand.
 #
-#   bun run find-flakey-tests -- --script test:and
+#   bun run find-flakey-tests -- --script test:ziggy:and
 #       Loop one suite instead of the whole set.
 #
 #   bun run find-flakey-tests -- --ladder
 #       Climb every suite in turn, cheapest first, requiring the full streak of each before starting
 #       the next. The first rung to fail stops the session.
 #
-#   bun run find-flakey-tests -- --ladder "test test:cli test:ios"
+#   bun run find-flakey-tests -- --ladder "test test:cli:zig test:ziggy:ios"
 #       Climb the rungs you name instead of the default ones, in the order you name them.
 #
-#   bun run find-flakey-tests -- --script test:and --test 19
+#   bun run find-flakey-tests -- --script test:ziggy:and --test 19
 #       Loop a single test within a suite. The filter is passed straight through to the suite, so
 #       whatever that suite accepts works here: a number, part of a name, or a full directory name.
 #
@@ -91,11 +91,11 @@
 #                 starting the next, and stopping the session at the first rung that fails. With no
 #                 list it climbs every suite the pre-commit hook runs on this platform, cheapest
 #                 first. Give a list (space or comma separated, from the same names as --script) to
-#                 climb your own rungs, which is how to include test:ios on macOS or to climb a
+#                 climb your own rungs, which is how to include test:ziggy:ios on macOS or to climb a
 #                 handful rather than all of them. Cannot be combined with --script, --test or
 #                 --command, since each of those names a single thing to loop.
 #
-#   --test FILTER narrow to one test within the chosen suite, for example `--script test:and --test 19`.
+#   --test FILTER narrow to one test within the chosen suite, for example `--script test:ziggy:and --test 19`.
 #                 Requires --script. Use this once a particular test is known to be the flaky one:
 #                 a single mobile test takes seconds where the whole suite takes minutes.
 #
@@ -158,7 +158,7 @@ COMMAND="bun run test:everything -- --force"
 # suite the pre-commit hook can refuse a commit over is a suite this script can loop and prove sound.
 # `compile` is not here because it is a build rather than a suite, and looping it says nothing about
 # flakiness. When a new suite is added to the whole set, add it here too.
-SCRIPT_CHOICES="everything test test:cli test:cli:encrypted test:cli:lan-share test:cli:sync test:cli:write-lock test:cli:hash-cache test:electron test:lan-share:cli-desktop test:harness test:and test:ios"
+SCRIPT_CHOICES="everything test test:cli:zig test:ziggy test:ziggy:and test:ziggy:ios"
 
 # The suite chosen by --script, and a filter within it from --test. Kept separate from COMMAND
 # because the two are combined only after both have been parsed, so the order of the options on the
@@ -174,15 +174,15 @@ COMMAND_GIVEN=0
 #
 # The default rungs are the suites in increasing cost order, which is also increasing order of how
 # much a failure costs to read: a red unit run names a test in seconds, a red Android run is minutes
-# of emulator output. test:ios is not among them because most of this work happens
+# of emulator output. test:ziggy:ios is not among them because most of this work happens
 # on Linux, where that rung can never pass; name it explicitly on macOS, for example
-# `--ladder "test test:cli test:ios"`.
+# `--ladder "test test:cli:zig test:ziggy:ios"`.
 #
 # Every suite the pre-commit hook runs is a rung, so a green climb covers what a commit is judged
 # against. When a new suite is added to the whole set, add it here too.
 LADDER=0
 LADDER_RUNGS=""
-LADDER_DEFAULT="test:cli:hash-cache test:lan-share:cli-desktop test:harness test:cli:write-lock test test:cli:sync test:cli:encrypted test:cli:lan-share test:cli test:electron test:and"
+LADDER_DEFAULT="test test:cli:zig test:ziggy test:ziggy:and"
 
 # The rung being climbed, named in every run line and in the failure report so a log read afterwards
 # says which suite each run belonged to. Empty when a single command is being looped.
@@ -363,7 +363,7 @@ if [ "$LADDER" -eq 1 ]; then
     LADDER_RUNGS="${LADDER_RUNGS:-$LADDER_DEFAULT}"
 
     # Commas are accepted as well as spaces, because a list of suite names reads naturally either way
-    # and getting it wrong would otherwise fail as an unknown rung called "test,test:cli".
+    # and getting it wrong would otherwise fail as an unknown rung called "test,test:cli:zig".
     LADDER_RUNGS="${LADDER_RUNGS//,/ }"
 
     rung_count=0
@@ -839,8 +839,8 @@ print_estimate() {
 
 #
 # Reports whether a command actually drives Android devices, which decides whether the emulator pool
-# is watched while that command loops. Only the Android smoke suite talks to adb, and only `test:and`
-# and the whole set include it. Everything else (the unit tests, the CLI suite, the Electron suite,
+# is watched while that command loops. Only the Android smoke suite talks to adb, and only `test:ziggy:and`
+# and the whole set include it. Everything else (the unit tests, the CLI suite, the Photosphere App on the host,
 # the iOS suite) touches no Android device, so an emulator going bad on the machine has nothing to do
 # with the run and must not interrupt the streak.
 #
@@ -853,10 +853,10 @@ print_estimate() {
 command_drives_devices() {
     local command="$1"
 
-    # The patterns end at the name so a script whose name only starts with `test:and` is not
-    # mistaken for the device-driving `test:and`.
+    # The patterns end at the name so a script whose name only starts with `test:ziggy:and` is not
+    # mistaken for the device-driving `test:ziggy:and`.
     case "$command" in
-        *test:and|*"test:and "*|*test:everything|*"test:everything "*)
+        *test:ziggy:and|*"test:ziggy:and "*|*test:everything|*"test:everything "*)
             return 0
             ;;
     esac

@@ -1,6 +1,6 @@
 # story-player.sh
 
-Plays the running app through every registered UI story, in light and then dark, and captures a screenshot of each. It is the command-line version of the "Play on automatic" button in the stories browser. The root `package.json` scripts call it: `stories`, `stories:and` and `stories:ios` for the deprecated Electron and Capacitor apps, and `stories:ziggy`, `stories:ziggy:and` and `stories:ziggy:ios` for the Photosphere App. Run those rather than the script. For the stories themselves see `packages/user-interface/src/stories/README.md`.
+Plays the running app through every registered UI story, in light and then dark, and captures a screenshot of each. It is the command-line version of the "Play on automatic" button in the stories browser. The root `package.json` scripts `stories:ziggy`, `stories:ziggy:and` and `stories:ziggy:ios` call it for the Photosphere App. Run those rather than the script. For the stories themselves see `packages/user-interface/src/stories/README.md`.
 
 ## Arguments
 
