@@ -268,7 +268,7 @@
         "task-queue": "workspace:*",
         "user-interface": "workspace:*",
         "uuid": "^9.0.1",
-        "ziggy-ui": "file:../../../ziggy/packages/ziggy/ui",
+        "ziggy-ui": "git+https://github.com/ashleydavis/ziggy.git#v0.0.3",
       },
       "devDependencies": {
         "@fortawesome/fontawesome-free": "^6.2.1",
@@ -2958,6 +2958,8 @@
 
     "ziggy": ["ziggy@workspace:apps/photosphere"],
 
+    "ziggy-ui": ["ziggy@github:ashleydavis/ziggy#9941b59", {}, "ashleydavis-ziggy-9941b59", "sha512-UcWk4qmUOrjv8Uj+WuJINg0qnlAzoucjFHBXppuNHiOR2QaSqH/QyUXsAmpW917EVDqLAur5wSpeflaR7mKEdA=="],
+
     "zip-stream": ["zip-stream@4.1.1", "", { "dependencies": { "archiver-utils": "^3.0.4", "compress-commons": "^4.1.2", "readable-stream": "^3.6.0" } }, "sha512-9qv4rlDiopXg4E69k+vMHjNN63YFMe9sZMrdlvKnCjlCRWeCBswPPMPUfx+ipsAWq1LXHe70RcbaHdJJpS6hyQ=="],
 
     "zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
@@ -3265,8 +3267,6 @@
     "photosphere/express": ["express@5.2.1", "", { "dependencies": { "accepts": "^2.0.0", "body-parser": "^2.2.1", "content-disposition": "^1.0.0", "content-type": "^1.0.5", "cookie": "^0.7.1", "cookie-signature": "^1.2.1", "debug": "^4.4.0", "depd": "^2.0.0", "encodeurl": "^2.0.0", "escape-html": "^1.0.3", "etag": "^1.8.1", "finalhandler": "^2.1.0", "fresh": "^2.0.0", "http-errors": "^2.0.0", "merge-descriptors": "^2.0.0", "mime-types": "^3.0.0", "on-finished": "^2.4.1", "once": "^1.4.0", "parseurl": "^1.3.3", "proxy-addr": "^2.0.7", "qs": "^6.14.0", "range-parser": "^1.2.1", "router": "^2.2.0", "send": "^1.1.0", "serve-static": "^2.2.0", "statuses": "^2.0.1", "type-is": "^2.0.1", "vary": "^1.1.2" } }, "sha512-hIS4idWWai69NezIdRt2xFVofaF4j+6INOpJlVOLDO8zXGpUVEVzIYk12UUi2JzjEzWL3IOAxcTubgz9Po0yXw=="],
 
     "photosphere/serialize-error": ["serialize-error@11.0.3", "", { "dependencies": { "type-fest": "^2.12.2" } }, "sha512-2G2y++21dhj2R7iHAdd0FIzjGwuKZld+7Pl/bTU6YIkrC2ZMbVUjm+luj6A6V34Rv9XfKJDKpTWu9W4Gse1D9g=="],
-
-    "photosphere-ziggy-frontend/ziggy-ui": ["ziggy-ui@file:../ziggy/packages/ziggy/ui", { "devDependencies": { "@types/jest": "^29.4.0", "@types/node": "^22.9.1", "jest": "^29.0.1", "ts-jest": "^29.0.5", "typescript": "^5.6.3" } }],
 
     "pretty-format/ansi-styles": ["ansi-styles@5.2.0", "", {}, "sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA=="],
 
