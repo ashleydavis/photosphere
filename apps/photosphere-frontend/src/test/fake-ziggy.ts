@@ -1,4 +1,4 @@
-import type { IAddTask, ICoreErrorEvent, IJsonValue, IMenuActionEvent, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskMessageEvent, ITestCommandEvent, IZiggyBridge } from "ziggy-ui";
+import type { IAddTask, ICoreErrorEvent, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskMessageEvent, ITestCommandEvent, IZiggyBridge } from "ziggy-ui";
 
 //
 // A message the page sent with send or invoke, or one of Ziggy's own calls that sends a message.
@@ -91,14 +91,6 @@ export class FakeZiggy implements IZiggyBridge {
 
     removeTaskCompletedListener(callback: IMessageCallback<ITaskCompletedEvent>): void {
         this.removeListener("task-completed", callback);
-    }
-
-    onMenuAction(callback: IMessageCallback<IMenuActionEvent>): void {
-        this.addListener("menu-action", callback);
-    }
-
-    removeMenuActionListener(callback: IMessageCallback<IMenuActionEvent>): void {
-        this.removeListener("menu-action", callback);
     }
 
     onCoreError(callback: IMessageCallback<ICoreErrorEvent>): void {

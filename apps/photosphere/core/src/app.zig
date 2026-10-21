@@ -127,7 +127,7 @@ pub const app = ziggy.core.App(.{
             .kind = .keep_alive,
         },
     },
-    .menu_json = core.menu.menu_json,
+    .menu = core.menu.menu,
     .ui_files = &page.files,
     .ui_query = core.page_query.pageQuery,
     .describe_error = core.describe_error.describeError,

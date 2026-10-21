@@ -100,7 +100,7 @@ test "update-available carries the latest version" {
     try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"update-available\",\"data\":{\"latestVersion\":\"1.2.3\"}}}");
 }
 
-test "platform-event carries the dev tools state and the menu action" {
+test "platform-event carries the dev tools state" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -108,8 +108,6 @@ test "platform-event carries the dev tools state and the menu action" {
     defer arena.deinit();
     try events.sendDevToolsState(app.core, arena.allocator(), true);
     try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"platform-event\",\"data\":{\"type\":\"devtools-state\",\"open\":true}}}");
-    try events.sendMenuAction(app.core, arena.allocator(), "new-database");
-    try expectEvent(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"platform-event\",\"data\":{\"type\":\"menu-action\",\"action\":\"new-database\"}}}");
 }
 
 test "theme-changed carries the value written to the setting, whatever it is" {

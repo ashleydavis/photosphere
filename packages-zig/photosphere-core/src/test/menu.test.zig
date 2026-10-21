@@ -4,99 +4,59 @@ const menu = @import("photosphere-core").menu;
 const photosphere_app = @import("photosphere-app");
 
 //
-// The actions every shell performs itself. Every other action in the menu is the page's.
+// The names of the items the page handles, which the core sends it as the app event {"type": "menu", "item": "<name>"}.
 //
-const shell_actions = [_][]const u8{ "quit", "close-window", "reload", "toggle-devtools", "toggle-fullscreen", "zoom-in", "zoom-out", "zoom-reset", "undo", "redo", "cut", "copy", "paste", "select-all" };
+const page_items = [_][]const u8{
+    "new-database",
+    "add-database",
+    "open-database",
+    "import-assets",
+    "close-database",
+    "navigate:/gallery",
+    "navigate:/map",
+    "navigate:/import",
+    "navigate:/database-summary",
+    "navigate:/news",
+    "navigate:/about",
+    "theme:light",
+    "theme:dark",
+    "theme:system",
+    "navigate:/databases",
+    "navigate:/secrets",
+    "open-configuration",
+    "navigate:/stories",
+    "about",
+    "help",
+    "open-log-directory",
+    "report-bug",
+};
 
 //
-// The actions the page handles that are neither a navigation nor a theme.
+// The actions of the items the shell does itself.
 //
-const page_actions = [_][]const u8{ "new-database", "add-database", "open-database", "import-assets", "close-database", "open-configuration", "open-log-directory", "help", "report-bug" };
+const standard_actions = [_][]const u8{ "close-window", "quit", "undo", "redo", "cut", "copy", "paste", "select-all", "zoom-reset", "zoom-in", "zoom-out", "toggle-fullscreen", "reload", "toggle-devtools" };
 
-//
-// The themes the page can be given.
-//
-const themes = [_][]const u8{ "light", "dark", "system" };
-
-fn isShellAction(action: []const u8) bool {
-    for (shell_actions) |shell_action| {
-        if (std.mem.eql(u8, shell_action, action)) {
-            return true;
-        }
+test "every item the page handles is a .ui item of the menu; the menu has no other item the core runs" {
+    const app = photosphere_app.app;
+    for (page_items) |name| {
+        try std.testing.expect(app.menu_targets.get(name).? == .ui);
     }
-    return false;
+    try std.testing.expectEqual(page_items.len, app.menu_targets.keys().len);
 }
 
-fn isPageAction(action: []const u8) bool {
-    for (page_actions) |page_action| {
-        if (std.mem.eql(u8, page_action, action)) {
-            return true;
-        }
-    }
-    if (std.mem.startsWith(u8, action, "navigate:/")) {
-        return action.len > "navigate:/".len;
-    }
-    if (std.mem.startsWith(u8, action, "theme:")) {
-        for (themes) |theme| {
-            if (std.mem.eql(u8, theme, action["theme:".len..])) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-fn checkItems(items: std.json.Value, seen_accelerators: *std.ArrayList([]const u8), seen_actions: *std.ArrayList([]const u8)) !void {
-    for (items.array.items) |item| {
-        if (item.object.get("separator") != null) {
-            continue;
-        }
-        const label = ziggy.json.getString(item, "label") orelse return error.ItemHasNoLabel;
-        try std.testing.expect(label.len > 0);
-        if (item.object.get("items")) |children| {
-            try checkItems(children, seen_accelerators, seen_actions);
-            continue;
-        }
-        const action = ziggy.json.getString(item, "action") orelse return error.ItemHasNoAction;
-        try std.testing.expect(isShellAction(action) or isPageAction(action));
-        try seen_actions.append(std.testing.allocator, action);
-        if (ziggy.json.getString(item, "accelerator")) |text| {
-            _ = try ziggy.accelerator.parse(text);
-            for (seen_accelerators.items) |seen| {
-                try std.testing.expect(!std.mem.eql(u8, seen, text));
-            }
-            try seen_accelerators.append(std.testing.allocator, text);
-        }
-    }
-}
-
-test "the menu is valid JSON of menus with labelled items, each with a known action and a distinct shortcut that parses" {
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, menu.menu_json, .{});
-    defer parsed.deinit();
-    try std.testing.expect(parsed.value == .array);
-    try std.testing.expect(parsed.value.array.items.len > 0);
-    var seen_accelerators: std.ArrayList([]const u8) = .empty;
-    defer seen_accelerators.deinit(std.testing.allocator);
-    var seen_actions: std.ArrayList([]const u8) = .empty;
-    defer seen_actions.deinit(std.testing.allocator);
-    for (parsed.value.array.items) |menu_entry| {
-        try std.testing.expect(ziggy.json.getString(menu_entry, "label") != null);
-        try checkItems(menu_entry.object.get("items").?, &seen_accelerators, &seen_actions);
-    }
-}
-
-test "every action the page handles is in the menu, and so are the developer tools and quit" {
-    for (page_actions ++ [_][]const u8{ "toggle-devtools", "quit", "navigate:/stories", "navigate:/gallery", "theme:light", "theme:dark", "theme:system" }) |action| {
-        const wanted = try std.fmt.allocPrint(std.testing.allocator, "\"action\": \"{s}\"", .{action});
+test "the standard items are in the menu JSON with their actions and the core does not run them" {
+    const app = photosphere_app.app;
+    for (standard_actions) |action| {
+        try std.testing.expect(app.menu_targets.get(action) == null);
+        const wanted = try std.fmt.allocPrint(std.testing.allocator, "\"action\":\"{s}\"", .{action});
         defer std.testing.allocator.free(wanted);
-        try std.testing.expect(std.mem.indexOf(u8, menu.menu_json, wanted) != null);
+        try std.testing.expect(std.mem.indexOf(u8, app.menu_json, wanted) != null);
     }
 }
-
 
 test "the registered app carries the menu, a page query, an error describer, messages and task types" {
     const app = photosphere_app.app;
-    try std.testing.expectEqualStrings(menu.menu_json, app.menu_json);
+    try std.testing.expectEqualStrings(ziggy.menu.menuJson(menu.menu), app.menu_json);
     try std.testing.expect(app.ui_query != null);
     try std.testing.expect(app.describe_error != null);
     try std.testing.expect(app.messages.len > 0);

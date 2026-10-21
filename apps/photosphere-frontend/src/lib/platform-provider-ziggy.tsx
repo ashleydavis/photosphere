@@ -9,7 +9,7 @@ import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { ISaveAssetItem, IConflictResolution } from "api";
 import type { ISecret } from "vault";
-import type { IJsonValue, IPlatformInfo, ITaskCompletedEvent, IZiggyBridge } from "ziggy-ui";
+import type { IJsonValue, IMenuEvent, IPlatformInfo, ITaskCompletedEvent, IZiggyBridge } from "ziggy-ui";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
 import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";
 import { resolveDroppedFilePath, type IDroppedFile } from "./dropped-file-path";
@@ -516,16 +516,21 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         }
     }, [ziggy]);
 
-    // Set up message listener for the menu items the shell leaves to the page.
+    // Set up the listener for the menu items the page runs. The core sends each as the app event {type: "menu", item}, which is not
+    // laid out like Photosphere's own {type, data} events, so it is taken from the bridge here rather than through AppMessages.
+    // Every other app event reaches this listener too and is skipped.
     useEffect(() => {
-        const handleMenuAction = (event: { action: string }) => {
-            void runMenuEffect(interpretMenuAction(event.action));
+        const handleMenuEvent = (event: IMenuEvent) => {
+            if (event.type !== "menu") {
+                return;
+            }
+            void runMenuEffect(interpretMenuAction(event.item));
         };
 
-        ziggy.onMenuAction(handleMenuAction);
+        ziggy.onEvent(handleMenuEvent);
 
         return () => {
-            ziggy.removeMenuActionListener(handleMenuAction);
+            ziggy.removeEventListener(handleMenuEvent);
         };
     }, [ziggy, runMenuEffect]);
 

@@ -130,13 +130,3 @@ pub fn sendDevToolsState(core: *Core, arena: std.mem.Allocator, open: bool) !voi
         .open = open,
     });
 }
-
-//
-// Tells the page a menu action was chosen: a platform-event of type "menu-action".
-//
-pub fn sendMenuAction(core: *Core, arena: std.mem.Allocator, action: []const u8) !void {
-    try sendEvent(core, arena, "platform-event", .{
-        .type = "menu-action",
-        .action = action,
-    });
-}

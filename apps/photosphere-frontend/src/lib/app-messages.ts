@@ -16,8 +16,9 @@ export interface IAppMessage {
 // Photosphere's own messages and events over the bridge the shell injects. Ziggy gives the page one message handler in the core and
 // one event listener in the page. A message is sent with its name and its data, which the core's message handler routes by the
 // name. Photosphere names each event itself: an event's data is { type, data }, which this hands to the callbacks registered for
-// that type. Ziggy's own messages and events (tasks,
-// menus, the test hooks) are not sent through this: they have their own calls on the bridge.
+// that type. Ziggy's own messages and events (tasks, the test hooks) are not sent through this: they have their own calls on the
+// bridge. Ziggy's menu event {type: "menu", item} arrives among the app's events but carries no data, so the platform provider
+// listens for it on the bridge itself.
 //
 export class AppMessages {
     // The bridge the shell injects.
