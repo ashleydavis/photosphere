@@ -7,8 +7,8 @@
 // user is looking at, and gives the page's answer back to the client: the server sends the page an `mcp-tool-request` event and waits
 // for the page to answer on the `mcp-tool-response` channel (see mcp-bridge.zig).
 //
-// The server is a task that runs for the life of the app, queued when the main window is created (see MainState.mainWindowCreated). A
-// phone has no MCP server.
+// The server runs for the life of the app, started when the main window is created and stopped when the app stops (see
+// MainState.mainWindowCreated and MainState.stop). A phone has no MCP server.
 //
 
 const std = @import("std");
@@ -24,7 +24,6 @@ const mcp_bridge = @import("mcp-bridge.zig");
 const test_mode = @import("test-mode.zig");
 
 const Core = ziggy.core.Core;
-const TaskContext = ziggy.task_runner.TaskContext;
 const json_util = ziggy.json_util;
 const protocol = mcp.protocol;
 const McpServer = protocol.McpServer;
@@ -43,11 +42,6 @@ pub const MCP_PORT = 3475;
 // The host the server binds. The server lets a client work on the user's photos, so it must only be reachable from this machine.
 //
 const MCP_HOST = "127.0.0.1";
-
-//
-// How often the task looks at whether it has been told to stop, in milliseconds.
-//
-const CANCEL_POLL_INTERVAL_MS = 250;
 
 //
 // Allocates the server and the threads of its connections, which use it from many threads at once, so it has to be thread safe.
@@ -407,43 +401,55 @@ fn requestedPort() u16 {
 }
 
 //
-// mcp-server: no payload. Runs the MCP server until the task is cancelled or the app stops. The server is not started in test mode on the
-// fixed port, but on a free one, and the port it bound is kept in the bridge.
+// The MCP server while it runs. Its HTTP server answers requests on threads of its own, so the server holds no worker of the task runner.
+// It was a task that slept until it was cancelled, which held a worker for the life of the app: with the asset server holding another,
+// a machine with three cores (the macOS arm64 GitHub runner) had one worker left, the import took it and waited for the work it queued,
+// which had no worker to run on, and every import in the macOS arm64 release workflow's app smoke tests timed out. Owned by the main
+// state, which stops it.
 //
-// A failure to listen (the port is taken, say) ends the task with the reason, and the main process logs that the app carries on without the
-// server (see handleMcpServerEnd).
+pub const RunningMcpServer = struct {
+    // Holds the MCP server's tools and sessions.
+    arena_state: std.heap.ArenaAllocator,
+    // Tells the calls and the streams that are waiting that the server is closing.
+    stopping: std.atomic.Value(bool),
+    // What the HTTP server answers requests with, which points at the MCP server.
+    routes: mcp.streamable_http.StreamableHttpRoutes,
+    // The HTTP server.
+    http_server: *HttpServer,
+
+    //
+    // Closes the server and frees it. The calls and the streams that are waiting are told first, so that closing the server, which waits
+    // for the requests being answered, does not wait for a page that will never answer.
+    //
+    pub fn stop(self: *RunningMcpServer, state: *main_state.MainState) void {
+        self.stopping.store(true, .release);
+        self.http_server.close();
+        state.mcp_bridge.port.store(0, .release);
+        self.arena_state.deinit();
+        server_allocator.destroy(self);
+    }
+};
+
 //
-pub fn mcpServerTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    const state = main_state.fromContext(context);
-    const io = context.io();
-
-    var arena_state = std.heap.ArenaAllocator.init(server_allocator);
-    defer arena_state.deinit();
-    var stopping: std.atomic.Value(bool) = .init(false);
-    const server = try createMcpServer(arena_state.allocator(), state, &stopping);
-
-    var routes: mcp.streamable_http.StreamableHttpRoutes = .{
+// Starts the MCP server and returns it running. The server is not started in test mode on the fixed port, but on a free one, and the
+// port it bound is kept in the bridge. A failure to listen (the port is taken, say) is returned, and the caller carries on without the
+// server.
+//
+pub fn startMcpServer(state: *main_state.MainState, io: std.Io) !*RunningMcpServer {
+    const running = try server_allocator.create(RunningMcpServer);
+    errdefer server_allocator.destroy(running);
+    running.arena_state = std.heap.ArenaAllocator.init(server_allocator);
+    errdefer running.arena_state.deinit();
+    running.stopping = .init(false);
+    const server = try createMcpServer(running.arena_state.allocator(), state, &running.stopping);
+    running.routes = .{
         .server = server,
-        .stopping = &stopping,
+        .stopping = &running.stopping,
     };
-    const requested_port = requestedPort();
-    const http_server = try HttpServer.listen(server_allocator, io, MCP_HOST, requested_port, routes.requestHandler());
-    errdefer {
-        stopping.store(true, .release);
-        http_server.close();
-    }
-    state.mcp_bridge.port.store(http_server.port, .release);
-    log.info(try std.fmt.allocPrint(context.arena, "MCP server initialized on port {d}", .{http_server.port}));
-
-    while (!context.isCancelled() and !state.stopping.load(.acquire)) {
-        try io.sleep(.fromMilliseconds(CANCEL_POLL_INTERVAL_MS), .awake);
-    }
-
-    // The calls and the streams that are waiting are told first, so that closing the server, which waits for the requests being
-    // answered, does not wait for a page that will never answer.
-    stopping.store(true, .release);
-    http_server.close();
-    state.mcp_bridge.port.store(0, .release);
-    return null;
+    running.http_server = try HttpServer.listen(server_allocator, io, MCP_HOST, requestedPort(), running.routes.requestHandler());
+    errdefer running.http_server.close();
+    const initialized = try std.fmt.allocPrint(running.arena_state.allocator(), "MCP server initialized on port {d}", .{running.http_server.port});
+    state.mcp_bridge.port.store(running.http_server.port, .release);
+    log.info(initialized);
+    return running;
 }

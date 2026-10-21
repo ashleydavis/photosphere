@@ -26,6 +26,7 @@ const environment = @import("environment.zig");
 const file_logger = @import("file-logger.zig");
 const background_work = @import("background-work.zig");
 const mcp_bridge = @import("mcp-bridge.zig");
+const mcp_server = @import("mcp-server.zig");
 const single_instance = @import("single-instance.zig");
 const windows_host = @import("windows-host.zig");
 const macos_host = @import("macos-host.zig");
@@ -58,11 +59,6 @@ pub const ASSET_SERVER_START_TIMEOUT_MS = 60_000;
 // The source the asset server task is queued under, so cancelling it stops the server.
 //
 pub const ASSET_SERVER_TASK_SOURCE = "asset-server";
-
-//
-// The source the MCP server task is queued under, so cancelling it stops the server.
-//
-pub const MCP_SERVER_TASK_SOURCE = "mcp-server";
 
 //
 // The source the `check-for-update` task is queued under.
@@ -161,6 +157,8 @@ pub const MainState = struct {
     asset_server_start_timeout_ms: i64,
     // The meeting point of the MCP server and the page, which holds the tool calls waiting for the page and the port the server bound.
     mcp_bridge: mcp_bridge.McpBridge,
+    // The MCP server while it runs, or null before it starts, when it could not start and after the app stops. Owned by the state.
+    mcp_server: ?*mcp_server.RunningMcpServer,
     // The lock this copy holds so that no other copy runs, or null when the rule does not apply to it (a build with no version, a test or a phone).
     single_instance: ?single_instance.SingleInstance,
     // When the signal of a second copy is next looked for, or null when this copy holds no lock.
@@ -249,6 +247,7 @@ pub const MainState = struct {
             .asset_server_error = null,
             .asset_server_start_timeout_ms = ASSET_SERVER_START_TIMEOUT_MS,
             .mcp_bridge = mcp_bridge.McpBridge.init(core.allocator, core.io()),
+            .mcp_server = null,
             .single_instance = null,
             .single_instance_check_at = null,
             .background_passes_on = [_]bool{false} ** background_work.PASS_COUNT,
@@ -276,6 +275,7 @@ pub const MainState = struct {
     pub fn stop(self: *MainState) void {
         // Set first, so that nothing the stopping tasks do restarts the asset server.
         self.stopping.store(true, .release);
+        self.stopMcpServer();
         self.stopPeriodicSync();
         var cancel_auto_import = false;
         {
@@ -448,6 +448,8 @@ pub const MainState = struct {
         self.freeOwned(&self.auto_import_database_path);
         self.freeOwned(&self.auto_import_settings_json);
         self.freeOwned(&self.asset_server_error);
+        // A state that was never stopped still has its server, which uses the bridge, so the server goes first.
+        self.stopMcpServer();
         self.mcp_bridge.deinit();
         self.windows_host.deinit();
         self.macos_host.deinit();
@@ -802,7 +804,7 @@ pub const MainState = struct {
         try self.enqueueEnsureAutoImportTask(false);
         // A phone has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
         if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
-            self.queueMcpServer() catch |err| {
+            self.startMcpServer() catch |err| {
                 utils.log.log.exception("MCP server failed to start, continuing without it", err);
             };
         }
@@ -833,13 +835,36 @@ pub const MainState = struct {
     }
 
     //
-    // Queues the task that is the MCP server.
+    // Starts the MCP server, unless it is already running. It is not a task, so it holds no worker (see RunningMcpServer).
     //
-    pub fn queueMcpServer(self: *MainState) !void {
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
-        defer arena_state.deinit();
-        const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-        try self.core.runner.addTask(task_id, "mcp-server", MCP_SERVER_TASK_SOURCE, "null", .background, null);
+    pub fn startMcpServer(self: *MainState) !void {
+        {
+            self.lock();
+            defer self.unlock();
+            if (self.mcp_server != null) {
+                return;
+            }
+        }
+        const running = try mcp_server.startMcpServer(self, self.io);
+        self.lock();
+        defer self.unlock();
+        self.mcp_server = running;
+    }
+
+    //
+    // Stops the MCP server if it is running.
+    //
+    pub fn stopMcpServer(self: *MainState) void {
+        var running: ?*mcp_server.RunningMcpServer = null;
+        {
+            self.lock();
+            defer self.unlock();
+            running = self.mcp_server;
+            self.mcp_server = null;
+        }
+        if (running) |server| {
+            server.stop(self);
+        }
     }
 
     //

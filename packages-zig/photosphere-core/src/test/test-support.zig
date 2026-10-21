@@ -76,6 +76,21 @@ pub const TestApp = struct {
     // a user who has set it up. The text is written before the core exists, because the core reads the settings when it starts.
     //
     pub fn startWithTasksAndConfigFile(self: *TestApp, extra_tasks: []const ziggy.task_runner.TaskHandlerEntry, config_yaml: ?[]const u8) !void {
+        // More workers than the long-running task of the main process holds (the asset server), or nothing else runs.
+        try self.startWithEverything(extra_tasks, config_yaml, 3);
+    }
+
+    //
+    // Starts the core as start does, with the task runner given this many workers, for a test of what needs a worker.
+    //
+    pub fn startWithWorkers(self: *TestApp, worker_threads: u32) !void {
+        try self.startWithEverything(&[_]ziggy.task_runner.TaskHandlerEntry{}, null, worker_threads);
+    }
+
+    //
+    // Starts the core with the extra task types, config.yaml holding the text when there is one, and this many workers.
+    //
+    fn startWithEverything(self: *TestApp, extra_tasks: []const ziggy.task_runner.TaskHandlerEntry, config_yaml: ?[]const u8, worker_threads: u32) !void {
         const allocator = std.testing.allocator;
         const io = std.testing.io;
         self.shell.init(allocator);
@@ -111,8 +126,7 @@ pub const TestApp = struct {
         defer allocator.free(log_dir);
         try self.environ_map.put("PHOTOSPHERE_LOG_DIR", log_dir);
         process_env.setEnvironMap(&self.environ_map);
-        // One worker more than the long-running tasks of the main process hold (the asset server and the MCP server), or nothing else runs.
-        var config = self.shell.config(3, 2);
+        var config = self.shell.config(worker_threads, 2);
         config.pick_paths = recordingPick;
         config.host_request = recordingHostRequest;
         const data_dir = try allocator.dupeZ(u8, self.tmp_path);

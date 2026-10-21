@@ -117,20 +117,15 @@ const Call = struct {
 };
 
 //
-// Starts the MCP server task on a free port and returns the port it bound.
+// Starts the MCP server on a free port and returns the port it bound.
 //
 fn startServer(app: *TestApp) !u16 {
-    try main_state.fromCore(app.core).queueMcpServer();
-    const bridge = &main_state.fromCore(app.core).mcp_bridge;
-    var waited_ms: u32 = 0;
-    while (bridge.port.load(.acquire) == 0) {
-        if (waited_ms >= 10_000) {
-            return error.ServerDidNotStart;
-        }
-        try io.sleep(.fromMilliseconds(10), .awake);
-        waited_ms += 10;
+    try main_state.fromCore(app.core).startMcpServer();
+    const port = main_state.fromCore(app.core).mcp_bridge.port.load(.acquire);
+    if (port == 0) {
+        return error.ServerDidNotStart;
     }
-    return bridge.port.load(.acquire);
+    return port;
 }
 
 //
@@ -307,23 +302,26 @@ test "an answer from the page to a request nobody is waiting for is ignored" {
     try std.testing.expectEqualStrings("null", reply);
 }
 
-test "cancelling the server's source stops it and closes its port" {
+test "stopping the server closes its port" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
     const port = try startServer(&app);
 
-    app.core.postMessage("{\"channel\":\"cancel-tasks\",\"data\":\"mcp-server\"}");
+    main_state.fromCore(app.core).stopMcpServer();
 
-    var waited_ms: u32 = 0;
-    while (main_state.fromCore(app.core).mcp_bridge.port.load(.acquire) != 0) {
-        if (waited_ms >= 10_000) {
-            return error.ServerDidNotStop;
-        }
-        try io.sleep(.fromMilliseconds(10), .awake);
-        waited_ms += 10;
-    }
+    try std.testing.expectEqual(@as(u16, 0), main_state.fromCore(app.core).mcp_bridge.port.load(.acquire));
     try expectServerStopped(io, port);
+}
+
+test "the MCP server holds no worker of the task runner, so an app with one worker still runs its tasks" {
+    var app: TestApp = undefined;
+    try app.startWithWorkers(1);
+    defer app.stop();
+    _ = try startServer(&app);
+
+    app.core.postMessage("{\"channel\":\"add-task\",\"data\":{\"taskId\":\"after-mcp-1\",\"taskType\":\"get-databases\",\"source\":\"test\",\"data\":null,\"priority\":\"background\"}}");
+    try app.shell.expectMessageContaining("\"taskId\":\"after-mcp-1\",\"result\":{\"taskId\":\"after-mcp-1\",\"status\":\"succeeded\"");
 }
 
 test "the fixed port is the one clients are told to use" {

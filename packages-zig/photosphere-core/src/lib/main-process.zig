@@ -504,29 +504,6 @@ fn handleAssetServerEnd(state: *MainState, arena: std.mem.Allocator, end: ziggy.
 }
 
 //
-// What the main process does when the MCP server task ends. A server that never started (its port is taken, say) is logged and the app carries on
-// without it. One that was running and failed is started again, unless the app is stopping.
-//
-fn handleMcpServerEnd(state: *MainState, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
-    const was_serving = state.mcp_bridge.port.swap(0, .acq_rel) != 0;
-    if (end.status != .failed) {
-        return;
-    }
-    if (!was_serving) {
-        utils.log.log.@"error"(try std.fmt.allocPrint(arena, "MCP server failed to start, continuing without it: {s}", .{errorMessageOrUnknown(end.error_message)}));
-        return;
-    }
-    utils.log.log.@"error"(try std.fmt.allocPrint(arena, "The MCP server stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
-    if (state.stopping.load(.acquire)) {
-        return;
-    }
-    utils.console.log("Restarting MCP worker...");
-    state.queueMcpServer() catch |err| {
-        utils.log.log.exception("Failed to restart MCP worker", err);
-    };
-}
-
-//
 // What the main process does when a task ends.
 //
 fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
@@ -546,9 +523,6 @@ fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd
     }
     if (std.mem.eql(u8, end.task_type, "asset-server")) {
         try handleAssetServerEnd(state, arena, end);
-    }
-    if (std.mem.eql(u8, end.task_type, "mcp-server")) {
-        try handleMcpServerEnd(state, arena, end);
     }
     if (std.mem.eql(u8, end.task_type, "sync-database")) {
         state.syncStopped();
