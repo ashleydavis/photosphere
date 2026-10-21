@@ -21,7 +21,7 @@ const utils = @import("utils-zig");
 const main_state = @import("main-state.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 
 //
 // The gap between automatic import or prefetch passes when no plan has said what it should be, in milliseconds.
@@ -240,7 +240,7 @@ pub fn parsePlan(allocator: std.mem.Allocator, outputs: std.json.Value, fallback
     if (outputs.object.get("steps")) |steps_value| {
         if (steps_value == .array) {
             for (steps_value.array.items) |item| {
-                const step_type = json_util.getString(item, "type") orelse {
+                const step_type = json.getString(item, "type") orelse {
                     return utils.errors.throwError("A step of the plan has no type.", .{});
                 };
                 const data = if (item == .object) item.object.get("data") else null;
@@ -274,8 +274,8 @@ pub fn parsePlan(allocator: std.mem.Allocator, outputs: std.json.Value, fallback
     }
     return .{
         .should_run = should_run,
-        .database_path = json_util.getString(outputs, "databasePath") orelse "",
-        .reason = json_util.getString(outputs, "reason") orelse "",
+        .database_path = json.getString(outputs, "databasePath") orelse "",
+        .reason = json.getString(outputs, "reason") orelse "",
         .pause_ms = pause_ms,
         .steps = steps.items,
     };
@@ -526,12 +526,12 @@ pub fn readPrefetchStepCounts(outputs: ?std.json.Value) IStepResult {
     const value = outputs orelse {
         return result;
     };
-    if (json_util.getInteger(value, "filesFetched")) |fetched| {
+    if (json.getInteger(value, "filesFetched")) |fetched| {
         if (fetched > 0) {
             result.files_fetched = @intCast(fetched);
         }
     }
-    if (json_util.getInteger(value, "filesStillMissing")) |missing| {
+    if (json.getInteger(value, "filesStillMissing")) |missing| {
         if (missing > 0) {
             result.files_still_missing = @intCast(missing);
         }
@@ -609,7 +609,7 @@ const TaskPassHost = struct {
 
     fn holdAwakeErased(ptr: *anyopaque, awake: bool) anyerror!void {
         const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        _ = try askShell(self.context, "holdAwake", try json_util.stringify(self.context.arena, .{
+        _ = try askShell(self.context, "holdAwake", try json.stringify(self.context.arena, .{
             .awake = awake,
         }));
     }
@@ -638,7 +638,7 @@ const TaskPassHost = struct {
     // report vanish, so the message goes to the app's own log with the reason.
     //
     fn tellShell(self: *TaskPassHost, message: []const u8, is_error: bool) void {
-        const request = json_util.stringify(self.context.arena, .{
+        const request = json.stringify(self.context.arena, .{
             .@"error" = is_error,
             .message = message,
         }) catch {

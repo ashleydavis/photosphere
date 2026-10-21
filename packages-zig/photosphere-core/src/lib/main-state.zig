@@ -33,7 +33,7 @@ const macos_host = @import("macos-host.zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 
 //
 // How long the sync debounce waits after the last edit notification, in milliseconds.
@@ -604,7 +604,7 @@ pub const MainState = struct {
         // No cancel source: the page lists this job but must not be able to stop it, because syncing is switched off from Settings and
         // a sync cancelled from a list would start again on the next timer anyway.
         const job_id = try std.mem.concat(arena, u8, &.{ "sync:", database_path });
-        const sync_data = try json_util.stringify(arena, .{
+        const sync_data = try json.stringify(arena, .{
             .databasePath = database_path,
             .job = .{
                 .id = job_id,
@@ -875,7 +875,7 @@ pub const MainState = struct {
         var arena_state = std.heap.ArenaAllocator.init(self.allocator);
         defer arena_state.deinit();
         const arena = arena_state.allocator();
-        const data_json = try json_util.stringify(arena, .{
+        const data_json = try json.stringify(arena, .{
             .port = port,
         });
         const task_id = try self.uuid_generator.generate(arena, self.io);

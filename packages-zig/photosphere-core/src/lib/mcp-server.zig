@@ -24,7 +24,7 @@ const mcp_bridge = @import("mcp-bridge.zig");
 const test_mode = @import("test-mode.zig");
 
 const Core = ziggy.core.Core;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const protocol = mcp.protocol;
 const McpServer = protocol.McpServer;
 const IField = mcp.input_schema.IField;
@@ -380,15 +380,15 @@ fn forwardToPage(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io,
 //
 pub fn mcpToolResponseHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     const state = main_state.fromCore(core);
-    const request_id = json_util.getString(data, "requestId") orelse {
+    const request_id = json.getString(data, "requestId") orelse {
         return utils.errors.throwError("The MCP tool response has no requestId.", .{});
     };
-    const failure = json_util.getString(data, "error") orelse "";
+    const failure = json.getString(data, "error") orelse "";
     if (failure.len > 0) {
         try state.mcp_bridge.respond(request_id, true, failure);
     }
     else {
-        try state.mcp_bridge.respond(request_id, false, json_util.getString(data, "result") orelse "");
+        try state.mcp_bridge.respond(request_id, false, json.getString(data, "result") orelse "");
     }
     return try arena.dupe(u8, "null");
 }

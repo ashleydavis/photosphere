@@ -51,16 +51,16 @@ fn checkItems(items: std.json.Value, seen_accelerators: *std.ArrayList([]const u
         if (item.object.get("separator") != null) {
             continue;
         }
-        const label = ziggy.json_util.getString(item, "label") orelse return error.ItemHasNoLabel;
+        const label = ziggy.json.getString(item, "label") orelse return error.ItemHasNoLabel;
         try std.testing.expect(label.len > 0);
         if (item.object.get("items")) |children| {
             try checkItems(children, seen_accelerators, seen_actions);
             continue;
         }
-        const action = ziggy.json_util.getString(item, "action") orelse return error.ItemHasNoAction;
+        const action = ziggy.json.getString(item, "action") orelse return error.ItemHasNoAction;
         try std.testing.expect(isShellAction(action) or isPageAction(action));
         try seen_actions.append(std.testing.allocator, action);
-        if (ziggy.json_util.getString(item, "accelerator")) |text| {
+        if (ziggy.json.getString(item, "accelerator")) |text| {
             _ = try ziggy.accelerator.parse(text);
             for (seen_accelerators.items) |seen| {
                 try std.testing.expect(!std.mem.eql(u8, seen, text));
@@ -80,7 +80,7 @@ test "the menu is valid JSON of menus with labelled items, each with a known act
     var seen_actions: std.ArrayList([]const u8) = .empty;
     defer seen_actions.deinit(std.testing.allocator);
     for (parsed.value.array.items) |menu_entry| {
-        try std.testing.expect(ziggy.json_util.getString(menu_entry, "label") != null);
+        try std.testing.expect(ziggy.json.getString(menu_entry, "label") != null);
         try checkItems(menu_entry.object.get("items").?, &seen_accelerators, &seen_actions);
     }
 }

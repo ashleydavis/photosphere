@@ -27,7 +27,7 @@ const main_state = @import("main-state.zig");
 const test_mode = @import("test-mode.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const app_state = node_api.app_state;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
@@ -54,7 +54,7 @@ fn pickedPaths(context: *TaskContext, kind: ziggy.types.PickKind, title: ?[]cons
 // A string field of the payload, or null when it is missing or empty: an empty string counts as no value.
 //
 fn nonEmptyString(data: std.json.Value, name: []const u8) ?[]const u8 {
-    const text = json_util.getString(data, name) orelse {
+    const text = json.getString(data, name) orelse {
         return null;
     };
     if (text.len == 0) {
@@ -67,7 +67,7 @@ fn nonEmptyString(data: std.json.Value, name: []const u8) ?[]const u8 {
 // A path as the JSON text of the reply, or "null" for no path (`undefined`).
 //
 fn optionalPathReply(arena: std.mem.Allocator, path: ?[]const u8) ![]const u8 {
-    return try json_util.stringify(arena, path);
+    return try json.stringify(arena, path);
 }
 
 //
@@ -172,7 +172,7 @@ fn pickFilesChannel(context: *TaskContext, data: std.json.Value) anyerror!?[]con
     if (paths.len == 0) {
         return try context.arena.dupe(u8, "null");
     }
-    return try json_util.stringify(context.arena, paths);
+    return try json.stringify(context.arena, paths);
 }
 
 //

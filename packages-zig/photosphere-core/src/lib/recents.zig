@@ -13,7 +13,7 @@ const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const databases_config = node_api.databases_config;
 const log = &utils.log.log;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
@@ -24,7 +24,7 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 fn getRecentDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const recent = try databases_config.getRecentDatabases(context.arena, context.io());
-    return try json_util.stringify(context.arena, recent);
+    return try json.stringify(context.arena, recent);
 }
 
 //
@@ -33,7 +33,7 @@ fn getRecentDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]c
 fn getLastDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const last = try databases_config.getLastDatabase(context.arena, context.io());
-    return try json_util.stringify(context.arena, last);
+    return try json.stringify(context.arena, last);
 }
 
 //

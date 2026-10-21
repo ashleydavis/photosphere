@@ -765,7 +765,7 @@ fn consoleHas(app: *TestApp, text: []const u8) bool {
 // for the operating system's choice, and then runs until it is cancelled.
 //
 fn assetServerTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const asked = ziggy.json_util.getInteger(data, "port") orelse 0;
+    const asked = ziggy.json.getInteger(data, "port") orelse 0;
     const port: i64 = if (asked == 0) 40001 else asked;
     try context.sendMessage(.{
         .type = "asset-server-ready",

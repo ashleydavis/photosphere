@@ -12,7 +12,7 @@ const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const lan_share = api.lan_share;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
@@ -64,7 +64,7 @@ fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]c
     const payload_value = payload orelse {
         return utils.errors.throwError("The request needs the payload that was shared.", .{});
     };
-    const payload_type = json_util.getString(payload_value, "type") orelse {
+    const payload_type = json.getString(payload_value, "type") orelse {
         return utils.errors.throwError("The shared payload does not say whether it is a database or a secret.", .{});
     };
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
@@ -96,7 +96,7 @@ fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]c
         const secret_payload = try std.json.parseFromValueLeaky(lan_share.ISecretSharePayload, arena, payload_value, .{
             .ignore_unknown_fields = true,
         });
-        const save_name = json_util.getString(payload_value, "saveName") orelse {
+        const save_name = json.getString(payload_value, "saveName") orelse {
             return utils.errors.throwError("The shared secret needs a name to be saved under.", .{});
         };
         try api.lan_share_receive.importSecretPayload(arena, context.io(), secret_payload, save_name, host);

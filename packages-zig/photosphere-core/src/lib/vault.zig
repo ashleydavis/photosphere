@@ -15,7 +15,7 @@ const utils = @import("utils-zig");
 const vault_zig = @import("vault-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const ISecret = vault_zig.vault.ISecret;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
@@ -37,20 +37,20 @@ fn vaultGet(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
     const vault = try vault_zig.get_vault.getVaultWithHost(context.arena, vault_zig.get_vault.getDefaultVaultType(), context.hostRequester(&requester_storage));
     const secret = try vault.get(context.arena, context.io(), name);
-    return try json_util.stringify(context.arena, secret);
+    return try json.stringify(context.arena, secret);
 }
 
 //
 // vault-set: the payload is {name, type, value}, all strings. Creates the secret, or overwrites the one of that name.
 //
 fn vaultSet(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const name = json_util.getString(data, "name") orelse {
+    const name = json.getString(data, "name") orelse {
         return utils.errors.throwError("The request needs the name of a secret.", .{});
     };
-    const secret_type = json_util.getString(data, "type") orelse {
+    const secret_type = json.getString(data, "type") orelse {
         return utils.errors.throwError("The secret needs a type.", .{});
     };
-    const value = json_util.getString(data, "value") orelse {
+    const value = json.getString(data, "value") orelse {
         return utils.errors.throwError("The secret needs a value.", .{});
     };
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
@@ -82,7 +82,7 @@ fn vaultList(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
     const vault = try vault_zig.get_vault.getVaultWithHost(context.arena, vault_zig.get_vault.getDefaultVaultType(), context.hostRequester(&requester_storage));
     const secrets = try vault.list(context.arena, context.io());
-    return try json_util.stringify(context.arena, secrets);
+    return try json.stringify(context.arena, secrets);
 }
 
 //

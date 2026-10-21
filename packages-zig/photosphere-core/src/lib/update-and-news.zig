@@ -18,7 +18,7 @@ const main_state = @import("main-state.zig");
 const config = @import("config-zig");
 
 const Core = ziggy.core.Core;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const TaskContext = ziggy.task_runner.TaskContext;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 const log = &utils.log.log;
@@ -49,7 +49,7 @@ fn announceUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_ver
     if (data == .null) {
         return utils.errors.throwError("Cannot read properties of null (reading 'tag_name')", .{});
     }
-    const tag_name = json_util.getString(data, "tag_name") orelse {
+    const tag_name = json.getString(data, "tag_name") orelse {
         return;
     };
     if (tag_name.len == 0) {

@@ -21,7 +21,7 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const databases_config = node_api.databases_config;
 const MainState = main_state.MainState;
 
@@ -50,7 +50,7 @@ fn notifyDatabaseOpened(context: *TaskContext, data: std.json.Value) anyerror!?[
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
     const opened = try databases.openDatabaseStorage(arena, io, all_databases, database_path, context.hostRequester(&requester_storage));
     const database_config = try api_zig.database_config.loadDatabaseConfig(arena, io, opened.rawStorage);
-    const origin: ?[]const u8 = if (database_config) |config| json_util.getString(config, "origin") else null;
+    const origin: ?[]const u8 = if (database_config) |config| json.getString(config, "origin") else null;
     if (opened.entry) |existing| {
         if (!optionalStringsEqual(existing.origin, origin)) {
             var updated_entry = existing;
@@ -147,7 +147,7 @@ pub fn notifyDatabaseEditedHandler(core: *Core, arena: std.mem.Allocator, data: 
 pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.Value) anyerror![]const u8 {
     const command: []const u8 = switch (data) {
         .string => |text| text,
-        else => json_util.getString(data, "command") orelse "undefined",
+        else => json.getString(data, "command") orelse "undefined",
     };
     if (std.mem.eql(u8, command, "toggle-devtools")) {
         const menu_action = core.config.menu_action orelse {
@@ -181,7 +181,7 @@ pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
         // (apps/desktop/src/lib/worker-pool-electron-main.ts cancelTasks, apps/desktop/src/worker.ts "cancel-tasks"). Found by
         // 33-import-cancel in the Release Zig workflow's desktop smoke tests on ubuntu-latest, whose four workers left the cancelled
         // import's children queued, so the import after it timed out waiting for "1 assets imported".
-        const source = json_util.getString(data, "source") orelse {
+        const source = json.getString(data, "source") orelse {
             return utils.errors.throwError("main-command cancel-tasks needs the source of the tasks to cancel.", .{});
         };
         core.queue_backend.cancelTasks(source);
@@ -273,7 +273,7 @@ fn enqueueEvictOriginals(core: *Core, arena: std.mem.Allocator, database_path: [
         }
     }
     const session_id = try state.uuid_generator.generate(arena, core.io());
-    const evict_data = try json_util.stringify(arena, .{
+    const evict_data = try json.stringify(arena, .{
         .databasePath = database_path,
         .sessionId = session_id,
     });
@@ -350,7 +350,7 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
     const config = try node_api.app_config.loadAppConfig(arena, io);
     const plan = try node_api.auto_import_desktop.planDesktopAutoImport(arena, config, try node_utils.photo_folders.getDefaultPhotoFolders(arena, io), std.mem.span(context.config().data_dir));
 
-    const planned_settings_json = try json_util.stringify(arena, try api_zig.auto_import_settings.autoImportSettingsToJson(arena, plan.settings));
+    const planned_settings_json = try json.stringify(arena, try api_zig.auto_import_settings.autoImportSettingsToJson(arena, plan.settings));
 
     if (!plan.shouldRun) {
         if (clearAutoImportState(state)) {
@@ -394,7 +394,7 @@ pub fn ensureAutoImport(context: *TaskContext) !void {
     // ran a loop and started one of these for every handful of photos it released; one task doing both is what removed that cost.
     const session_id = try state.uuid_generator.generate(arena, io);
     const job_id = try std.mem.concat(arena, u8, &.{ "auto-import:", plan.databasePath });
-    const import_data = try json_util.stringify(arena, .{
+    const import_data = try json.stringify(arena, .{
         .paths = [_][]const u8{},
         .storageDescriptor = .{
             .databasePath = plan.databasePath,
@@ -614,7 +614,7 @@ pub fn onTaskMessage(core: *Core, sent: ziggy.types.TaskSentMessage) void {
 
 fn handleTaskMessage(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.TaskSentMessage) !void {
     const message = try std.json.parseFromSliceLeaky(std.json.Value, arena, sent.message_json, .{});
-    const message_type = json_util.getString(message, "type") orelse {
+    const message_type = json.getString(message, "type") orelse {
         return;
     };
     if (std.mem.eql(u8, message_type, "sync-started")) {
@@ -637,7 +637,7 @@ fn handleTaskMessage(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.Ta
     }
     else if (std.mem.eql(u8, message_type, "asset-server-ready")) {
         // The asset server says which port it bound.
-        const port = json_util.getInteger(message, "port") orelse {
+        const port = json.getInteger(message, "port") orelse {
             return utils.errors.throwError("The asset server's ready message has no port.", .{});
         };
         if (port <= 0 or port > std.math.maxInt(u16)) {

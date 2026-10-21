@@ -16,7 +16,7 @@ const file_logger = @import("file-logger.zig");
 
 const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const FileLogger = file_logger.FileLogger;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
@@ -35,13 +35,13 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
     if (data != .object) {
         return utils.errors.throwError("The log message must be an object with a level and a message.", .{});
     }
-    const level_text = json_util.getString(data, "level") orelse {
+    const level_text = json.getString(data, "level") orelse {
         return utils.errors.throwError("The log message needs a level.", .{});
     };
     const level = std.meta.stringToEnum(file_logger.WorkerLogLevel, level_text) orelse {
         return utils.errors.throwError("The log message has the level \"{s}\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", .{level_text});
     };
-    const message = json_util.getString(data, "message") orelse {
+    const message = json.getString(data, "message") orelse {
         return utils.errors.throwError("The log message needs a message.", .{});
     };
     var tool_data: ?utils.log.IToolOutput = null;
@@ -52,8 +52,8 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
                 return utils.errors.throwError("The tool data of a log message must be an object.", .{});
             }
             tool_data = .{
-                .stdout = json_util.getString(tool_data_value, "stdout"),
-                .stderr = json_util.getString(tool_data_value, "stderr"),
+                .stdout = json.getString(tool_data_value, "stdout"),
+                .stderr = json.getString(tool_data_value, "stderr"),
             };
         }
     }
@@ -63,7 +63,7 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, data: std.json.
     try logger.handleWorkerLogMessage(.{
         .level = level,
         .message = message,
-        .@"error" = json_util.getString(data, "error"),
+        .@"error" = json.getString(data, "error"),
         .tool_data = tool_data,
     }, "Renderer");
     return try arena.dupe(u8, "null");

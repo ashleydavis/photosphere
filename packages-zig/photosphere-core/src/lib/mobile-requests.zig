@@ -18,7 +18,7 @@ const utils = @import("utils-zig");
 const background_work = @import("background-work.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 
 //
 // Asks the shell to do what the method names, and returns its answer, which is JSON text. A platform without the callback, a shell that
@@ -36,7 +36,7 @@ fn askShell(context: *TaskContext, method: []const u8, request_json: []const u8)
 // The text of a field the request must have, or an error that says which one is missing.
 //
 fn requiredString(data: std.json.Value, name: []const u8, method: []const u8) ![]const u8 {
-    return json_util.getString(data, name) orelse {
+    return json.getString(data, name) orelse {
         return utils.errors.throwError("{s} needs \"{s}\".", .{ method, name });
     };
 }
@@ -74,12 +74,12 @@ fn optionalTestOutcome(data: std.json.Value, method: []const u8) !?[]const u8 {
 pub fn exportFileHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const path = try requiredString(data, "path", "exportFile");
     if (try optionalTestOutcome(data, "exportFile")) |test_outcome| {
-        return try askShell(context, "exportFile", try json_util.stringify(context.arena, .{
+        return try askShell(context, "exportFile", try json.stringify(context.arena, .{
             .path = path,
             .testOutcome = test_outcome,
         }));
     }
-    return try askShell(context, "exportFile", try json_util.stringify(context.arena, .{
+    return try askShell(context, "exportFile", try json.stringify(context.arena, .{
         .path = path,
     }));
 }
@@ -103,12 +103,12 @@ pub fn exportFilesHandler(context: *TaskContext, data: std.json.Value) anyerror!
         }
     }
     if (try optionalTestOutcome(data, "exportFiles")) |test_outcome| {
-        return try askShell(context, "exportFiles", try json_util.stringify(context.arena, .{
+        return try askShell(context, "exportFiles", try json.stringify(context.arena, .{
             .paths = paths,
             .testOutcome = test_outcome,
         }));
     }
-    return try askShell(context, "exportFiles", try json_util.stringify(context.arena, .{
+    return try askShell(context, "exportFiles", try json.stringify(context.arena, .{
         .paths = paths,
     }));
 }
@@ -119,7 +119,7 @@ pub fn exportFilesHandler(context: *TaskContext, data: std.json.Value) anyerror!
 //
 pub fn exportTempFolderHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const folder = try requiredString(data, "folder", "exportTempFolder");
-    return try askShell(context, "exportTempFolder", try json_util.stringify(context.arena, .{
+    return try askShell(context, "exportTempFolder", try json.stringify(context.arena, .{
         .folder = folder,
     }));
 }
@@ -161,7 +161,7 @@ pub fn stopBackgroundImportHandler(context: *TaskContext, data: std.json.Value) 
 //
 pub fn secureStoreGetHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const key = try requiredString(data, "key", "secureStoreGet");
-    return try askShell(context, "secureStoreGet", try json_util.stringify(context.arena, .{
+    return try askShell(context, "secureStoreGet", try json.stringify(context.arena, .{
         .key = key,
     }));
 }
@@ -172,7 +172,7 @@ pub fn secureStoreGetHandler(context: *TaskContext, data: std.json.Value) anyerr
 pub fn secureStoreSetHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const key = try requiredString(data, "key", "secureStoreSet");
     const value = try requiredString(data, "value", "secureStoreSet");
-    return try askShell(context, "secureStoreSet", try json_util.stringify(context.arena, .{
+    return try askShell(context, "secureStoreSet", try json.stringify(context.arena, .{
         .key = key,
         .value = value,
     }));
@@ -183,7 +183,7 @@ pub fn secureStoreSetHandler(context: *TaskContext, data: std.json.Value) anyerr
 //
 pub fn secureStoreDeleteHandler(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const key = try requiredString(data, "key", "secureStoreDelete");
-    return try askShell(context, "secureStoreDelete", try json_util.stringify(context.arena, .{
+    return try askShell(context, "secureStoreDelete", try json.stringify(context.arena, .{
         .key = key,
     }));
 }

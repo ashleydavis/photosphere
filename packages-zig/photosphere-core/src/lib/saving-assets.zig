@@ -20,7 +20,7 @@ const pickers = @import("pickers.zig");
 const main_state = @import("main-state.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
@@ -88,19 +88,19 @@ fn runChildTask(context: *TaskContext, task_type: []const u8, data: anytype) !zi
 // The five values are read from the payload, because a Ziggy request carries one payload.
 //
 fn saveAsset(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const asset_id = json_util.getString(data, "assetId") orelse {
+    const asset_id = json.getString(data, "assetId") orelse {
         return utils.errors.throwError("The asset to save needs its id.", .{});
     };
-    const asset_type = json_util.getString(data, "assetType") orelse {
+    const asset_type = json.getString(data, "assetType") orelse {
         return utils.errors.throwError("The asset to save needs its type.", .{});
     };
-    const database_path = json_util.getString(data, "databasePath") orelse {
+    const database_path = json.getString(data, "databasePath") orelse {
         return utils.errors.throwError("The asset to save needs the path of its database.", .{});
     };
-    const given_dest_path: ?[]const u8 = if (json_util.getString(data, "destPath")) |dest_path| (if (dest_path.len > 0) dest_path else null) else null;
+    const given_dest_path: ?[]const u8 = if (json.getString(data, "destPath")) |dest_path| (if (dest_path.len > 0) dest_path else null) else null;
     const actual_dest_path: []const u8 = given_dest_path orelse blk: {
         // The file name is only the suggestion in the save dialog, so it is needed only when there is no destination.
-        const filename = json_util.getString(data, "filename") orelse {
+        const filename = json.getString(data, "filename") orelse {
             return utils.errors.throwError("The asset to save needs a file name to suggest in the save dialog.", .{});
         };
         break :blk (try pickers.showSaveDialog(context, filename)) orelse {
@@ -108,7 +108,7 @@ fn saveAsset(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
         };
     };
     const state = main_state.fromContext(context);
-    const save_data = try json_util.stringify(context.arena, .{
+    const save_data = try json.stringify(context.arena, .{
         .assetId = asset_id,
         .assetType = asset_type,
         .destPath = actual_dest_path,
@@ -137,7 +137,7 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
             .ignore_unknown_fields = true,
         });
         const dest_path = (try pickers.pickFile(context, item.filename)) orelse {
-            return try json_util.stringify(arena, ISaveAssetsReply{
+            return try json.stringify(arena, ISaveAssetsReply{
                 .outcome = "cancelled",
                 .savedCount = 0,
                 .failedCount = 0,
@@ -150,14 +150,14 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
             .databasePath = request.databasePath,
         });
         if (completion.status != .succeeded) {
-            return try json_util.stringify(arena, ISaveAssetsReply{
+            return try json.stringify(arena, ISaveAssetsReply{
                 .outcome = "failed",
                 .savedCount = 0,
                 .failedCount = 1,
                 .errorMessage = completion.error_message,
             });
         }
-        return try json_util.stringify(arena, ISaveAssetsReply{
+        return try json.stringify(arena, ISaveAssetsReply{
             .outcome = "saved",
             .savedCount = 1,
             .failedCount = 0,
@@ -166,7 +166,7 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
     }
 
     const folder_path = (try pickers.pickFolder(context, "Choose folder to save assets", "lastDownloadFolder")) orelse {
-        return try json_util.stringify(arena, ISaveAssetsReply{
+        return try json.stringify(arena, ISaveAssetsReply{
             .outcome = "cancelled",
             .savedCount = 0,
             .failedCount = 0,
@@ -178,7 +178,7 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
         .databasePath = request.databasePath,
     });
     if (completion.status != .succeeded) {
-        return try json_util.stringify(arena, ISaveAssetsReply{
+        return try json.stringify(arena, ISaveAssetsReply{
             .outcome = "failed",
             .savedCount = 0,
             .failedCount = request.items.len,
@@ -188,7 +188,7 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
     const outputs = try std.json.parseFromSliceLeaky(IBatchOutputs, arena, completion.result_json orelse "null", .{
         .ignore_unknown_fields = true,
     });
-    return try json_util.stringify(arena, ISaveAssetsReply{
+    return try json.stringify(arena, ISaveAssetsReply{
         .outcome = "saved",
         .savedCount = outputs.succeededFiles.len,
         .failedCount = outputs.failedFiles.len,

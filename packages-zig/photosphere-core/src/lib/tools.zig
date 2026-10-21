@@ -11,7 +11,7 @@ const tools_zig = @import("tools-zig");
 const main_state = @import("main-state.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
@@ -21,7 +21,7 @@ fn checkTools(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
     _ = data;
     // The tools built into the program answer for themselves, and a tool that is not built in is started as a program.
     const status = try tools_zig.verifyTools(context.arena, context.io(), main_state.fromContext(context).media_tools.runner());
-    return try json_util.stringify(context.arena, status);
+    return try json.stringify(context.arena, status);
 }
 
 //

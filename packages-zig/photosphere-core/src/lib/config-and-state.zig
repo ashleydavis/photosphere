@@ -16,7 +16,7 @@ const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const app_state = node_api.app_state;
 const app_config = node_api.app_config;
 const auto_import_settings = @import("api-zig").auto_import_settings;
@@ -34,7 +34,7 @@ fn getState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     }
     const state = try app_state.loadAppState(context.arena, context.io());
     const value = try app_state.getAppStateValue(context.arena, state, data.string);
-    return try json_util.stringify(context.arena, value);
+    return try json.stringify(context.arena, value);
 }
 
 //
@@ -60,7 +60,7 @@ const SetStateMutator = struct {
 // user's, and this file holds nothing anything else has to be told about. The reply is null.
 //
 fn setState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const key = json_util.getString(data, "key") orelse {
+    const key = json.getString(data, "key") orelse {
         return utils.errors.throwError("The state request needs the name of a key.", .{});
     };
     const value: ?std.json.Value = if (data.object.get("value")) |present| (if (present == .null) null else present) else null;
@@ -122,11 +122,11 @@ fn configValueToJson(arena: std.mem.Allocator, value: ?app_config.IAppConfigValu
         return try arena.dupe(u8, "null");
     };
     return switch (present) {
-        .boolean => |boolean| try json_util.stringify(arena, boolean),
-        .number => |number| try json_util.stringify(arena, number),
-        .string => |text| try json_util.stringify(arena, text),
-        .strings => |strings| try json_util.stringify(arena, strings),
-        .sources => |sources| try json_util.stringify(arena, try auto_import_settings.autoImportSourcesToJson(arena, sources)),
+        .boolean => |boolean| try json.stringify(arena, boolean),
+        .number => |number| try json.stringify(arena, number),
+        .string => |text| try json.stringify(arena, text),
+        .strings => |strings| try json.stringify(arena, strings),
+        .sources => |sources| try json.stringify(arena, try auto_import_settings.autoImportSourcesToJson(arena, sources)),
     };
 }
 
@@ -167,7 +167,7 @@ const SetConfigMutator = struct {
 //
 fn setConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const arena = context.arena;
-    const key = json_util.getString(data, "key") orelse {
+    const key = json.getString(data, "key") orelse {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     };
     const json_value: ?std.json.Value = if (data.object.get("value")) |present| (if (present == .null) null else present) else null;
@@ -225,7 +225,7 @@ fn resetAppStorage(context: *TaskContext, data: std.json.Value) anyerror!?[]cons
     _ = data;
     const device_data_dir: ?[]const u8 = if (builtin.os.tag == .ios or builtin.abi.isAndroid()) std.mem.span(context.config().data_dir) else null;
     const result = try node_api.reset_app_storage_worker.resetAppStorage(context.arena, context.io(), device_data_dir);
-    return try json_util.stringify(context.arena, result);
+    return try json.stringify(context.arena, result);
 }
 
 //

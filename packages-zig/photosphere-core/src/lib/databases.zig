@@ -21,7 +21,7 @@ const storage_zig = @import("storage-zig");
 const vault_zig = @import("vault-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 const databases_config = node_api.databases_config;
 const IDatabaseEntry = databases_config.IDatabaseEntry;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
@@ -36,23 +36,23 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 // A missing name, description or path is an error, because IDatabaseEntry cannot hold an absent required field.
 //
 fn entryFromJson(data: std.json.Value) !IDatabaseEntry {
-    const name = json_util.getString(data, "name") orelse {
+    const name = json.getString(data, "name") orelse {
         return utils.errors.throwError("The database needs a name.", .{});
     };
-    const description = json_util.getString(data, "description") orelse {
+    const description = json.getString(data, "description") orelse {
         return utils.errors.throwError("The database needs a description.", .{});
     };
-    const path = json_util.getString(data, "path") orelse {
+    const path = json.getString(data, "path") orelse {
         return utils.errors.throwError("The database needs a path.", .{});
     };
     return .{
         .name = name,
         .description = description,
         .path = path,
-        .origin = json_util.getString(data, "origin"),
-        .s3Key = json_util.getString(data, "s3Key"),
-        .encryptionKey = json_util.getString(data, "encryptionKey"),
-        .geocodingKey = json_util.getString(data, "geocodingKey"),
+        .origin = json.getString(data, "origin"),
+        .s3Key = json.getString(data, "s3Key"),
+        .encryptionKey = json.getString(data, "encryptionKey"),
+        .geocodingKey = json.getString(data, "geocodingKey"),
     };
 }
 
@@ -164,7 +164,7 @@ fn removeDatabaseEntry(context: *TaskContext, data: std.json.Value) anyerror!?[]
 fn findDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const name = try databaseName(data);
     const found = try databases_config.findDatabase(context.arena, context.io(), name);
-    return try json_util.stringify(context.arena, found);
+    return try json.stringify(context.arena, found);
 }
 
 //
@@ -173,7 +173,7 @@ fn findDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u
 fn getDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     const databases = try databases_config.getDatabases(context.arena, context.io());
-    return try json_util.stringify(context.arena, databases);
+    return try json.stringify(context.arena, databases);
 }
 
 //
@@ -186,7 +186,7 @@ fn addDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8
     const entry = try entryFromJson(data);
     try databases_config.addDatabaseEntry(context.arena, context.io(), entry);
     log.event("Database entry added");
-    return try json_util.stringify(context.arena, entry);
+    return try json.stringify(context.arena, entry);
 }
 
 //
@@ -194,7 +194,7 @@ fn addDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8
 // differs.
 //
 fn updateDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const original_name = json_util.getString(data, "originalName") orelse {
+    const original_name = json.getString(data, "originalName") orelse {
         return utils.errors.throwError("The database needs a name.", .{});
     };
     if (data != .object) {
@@ -242,10 +242,10 @@ fn writeDatabaseOrigin(context: *TaskContext, rawStorage: storage_zig.storage.IS
 // .db/config.json, and to the database's entry when it has one with a different origin.
 //
 fn setDatabaseOrigin(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const database_path = json_util.getString(data, "databasePath") orelse {
+    const database_path = json.getString(data, "databasePath") orelse {
         return utils.errors.throwError("The database needs a path.", .{});
     };
-    const origin = json_util.getString(data, "origin");
+    const origin = json.getString(data, "origin");
     const databases = try databases_config.getDatabases(context.arena, context.io());
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
     const opened = try openDatabaseStorage(context.arena, context.io(), databases, database_path, context.hostRequester(&requester_storage));
@@ -276,13 +276,13 @@ fn optionalStringsEqual(left: ?[]const u8, right: ?[]const u8) bool {
 // (at most one page of them), or an empty array when the vault holds no secret of that name.
 //
 fn listS3Dirs(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const s3_key = json_util.getString(data, "s3Key") orelse {
+    const s3_key = json.getString(data, "s3Key") orelse {
         return utils.errors.throwError("The request needs the name of the secret that holds the S3 credentials.", .{});
     };
-    const bucket = json_util.getString(data, "bucket") orelse {
+    const bucket = json.getString(data, "bucket") orelse {
         return utils.errors.throwError("The request needs the name of the S3 bucket.", .{});
     };
-    const prefix = json_util.getString(data, "prefix") orelse {
+    const prefix = json.getString(data, "prefix") orelse {
         return utils.errors.throwError("The request needs the folder to list in the S3 bucket.", .{});
     };
     var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
@@ -295,7 +295,7 @@ fn listS3Dirs(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
     var storage = CloudStorage.init(context.io(), bucket, credentials);
     const path = try storage_zig.storage_factory.pathJoin(context.arena, &.{ bucket, prefix });
     const result = try storage.listDirs(context.arena, context.io(), path, 100, null);
-    return try json_util.stringify(context.arena, result.names);
+    return try json.stringify(context.arena, result.names);
 }
 
 //

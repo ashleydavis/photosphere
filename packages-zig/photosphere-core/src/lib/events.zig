@@ -12,7 +12,7 @@ const std = @import("std");
 const ziggy = @import("ziggy-core");
 
 const Core = ziggy.core.Core;
-const json_util = ziggy.json_util;
+const json = ziggy.json;
 
 //
 // A labelled URL, for a link or an action button of a notification (IShowNotificationLink in the page).
@@ -48,7 +48,7 @@ pub const IShowNotification = struct {
 // Sends an event: a message on the channel with the payload, which is any value std.json can serialise.
 //
 pub fn sendEvent(core: *Core, arena: std.mem.Allocator, channel: []const u8, payload: anytype) !void {
-    const message = try json_util.stringify(arena, .{
+    const message = try json.stringify(arena, .{
         .channel = channel,
         .data = payload,
     });
