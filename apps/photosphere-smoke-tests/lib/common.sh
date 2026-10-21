@@ -343,6 +343,9 @@ wait_for_log() {
     tail -30 "$tmp_dir/app.log" 2>/dev/null | while IFS= read -r line; do
         echo "  $line"
     done
+    # The import scenarios of the macOS arm64 release workflow timed out here with the core's log ending just after the import made
+    # its file scanning directory, no crash report and nothing else to say where the import had stopped. The app's stacks say that.
+    dump_app_stacks "$tmp_dir"
     # Exit the test with non-zero so the runner reports FAIL. Without this the test would keep running on stale state and eventually
     # reach log_success, producing a false pass.
     exit 1
