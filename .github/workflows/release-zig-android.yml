@@ -252,6 +252,21 @@ jobs:
           packages: imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
+      # The runner comes with NDKs the app does not use, and with them, the NDK it does and the system image installed, too little
+      # disk is left for the emulator's userdata partition: it stops at once with "Not enough space to create userdata partition".
+      - name: Uninstall the NDKs the app does not use (Android)
+        run: |
+          unused=()
+          for ndk_dir in "$ANDROID_HOME"/ndk/*; do
+              if [ -d "$ndk_dir" ] && [ "$(basename "$ndk_dir")" != "25.1.8937393" ]; then
+                  unused+=("ndk;$(basename "$ndk_dir")")
+              fi
+          done
+          if [ "${#unused[@]}" -gt 0 ]; then
+              "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --uninstall "${unused[@]}"
+          fi
+          df -h /
+
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
