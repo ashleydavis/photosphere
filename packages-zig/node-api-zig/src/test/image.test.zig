@@ -543,3 +543,34 @@ test "getImageDetails refuses a file whose content type no image tool can read" 
     try std.testing.expectError(error.Thrown, image.getImageDetails(allocator, io, runner, "../test/test.png", tempDir, "application/x-unknown", uuidGenerator.uuidGenerator(), "test.png"));
     try std.testing.expectEqualStrings("Unsupported file type: application/x-unknown", utils.errors.lastErrorMessage());
 }
+
+test "getImageDetails makes the pictures of a HEIC from FFmpeg's decode of it, with the date and place from its EXIF item" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    _ = try test_environment.setupEnvironment(io);
+    const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-heic");
+    defer temp_dirs.removeTempDir(io, tempDir);
+    // The bundled ImageMagick has no HEIC support and a machine's own ffmpeg may be too old to join a HEIC's tiles, so the tools the
+    // app ships are used.
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
+    var generator: CountingUuidGenerator = .{};
+    const heicPath = "../test/heic/tiled.heic";
+    const details = try image.getImageDetails(allocator, io, mediaTools.runner(), heicPath, tempDir, "image/heic", generator.uuidGenerator(), heicPath);
+
+    // The 1000x700 picture is a grid of four 512 pixel tiles: the size is the decoded picture's, not a tile's or the grid's 1024x1024.
+    try std.testing.expectEqual(node_api.media_file_database.IResolution{ .width = 1000, .height = 700 }, details.resolution);
+
+    // The first ID names the decoded JPEG, the next three the display, the thumbnail and the micro image made from it.
+    try std.testing.expectEqualStrings("1000 700", (try describeImage(allocator, mediaTools.runner(), try std.fs.path.join(allocator, &.{ tempDir, "temp_heic_generated-1.jpg" })))[0..8]);
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-2.jpg" }), details.displayPath.?);
+    try std.testing.expectEqualStrings("1428 1000 JPEG 95 exif:[]", try describeImage(allocator, mediaTools.runner(), details.displayPath.?));
+    try std.testing.expectEqualStrings("428 300 JPEG 90 exif:[]", try describeImage(allocator, mediaTools.runner(), details.thumbnailPath));
+    try std.testing.expectEqualStrings("57 40 JPEG 76 exif:[]", try describeImage(allocator, mediaTools.runner(), details.microPath));
+
+    try expectOptionalString("2021-05-06T07:08:09.000Z", details.photoDate);
+    try std.testing.expectApproxEqAbs(@as(f64, -27.4705), details.coordinates.?.lat, 0.00001);
+    try std.testing.expectApproxEqAbs(@as(f64, 153.026), details.coordinates.?.lng, 0.00001);
+}

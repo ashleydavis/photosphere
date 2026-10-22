@@ -3,6 +3,7 @@ pub const image = @import("lib/image.zig");
 pub const Image = image.Image;
 pub const video = @import("lib/video.zig");
 pub const Video = video.Video;
+pub const heic = @import("lib/heic.zig");
 
 // Export unified file info function
 pub const file_info = @import("lib/file-info.zig");

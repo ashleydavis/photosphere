@@ -50,6 +50,22 @@ test "an image the media tools can measure is valid" {
     }));
 }
 
+test "a HEIC the bundled media tools can measure is valid" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const io = std.testing.io;
+    _ = try test_environment.setupEnvironment(io);
+    // ImageMagick has no HEIC support, and a machine's own ffprobe may be too old to read a HEIC's tile grid, so the bundled tools
+    // are used, as the app does.
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
+
+    try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, mediaTools.runner(), "../test/heic/tiled.heic", "image/heic", .{
+        .length = 38956,
+        .lastModified = 0,
+    }));
+}
+
 test "an image the media tools cannot read is not valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

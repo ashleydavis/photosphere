@@ -6,6 +6,7 @@ const serialization_zig = @import("serialization-zig");
 const tools = @import("tools-zig");
 const media_file_database = @import("media-file-database.zig");
 const exif_parser = @import("third-party/exif-parser/parser.zig");
+const heic_exif = @import("heic-exif.zig");
 const BsonValue = serialization_zig.bson.BsonValue;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const js_date = serialization_zig.js_date;
@@ -161,7 +162,17 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
     const imageMetadata = try getImageMetadata(allocator, io, imagePath, contentType);
     const metadataMs = dateNow(io) - metadataStartedAt;
     const tags: ?BsonDocument = if (imageMetadata.metadata) |metadata| metadata.document else null;
-    const imageTransformation = try getImageTransformation(allocator, tags);
+    var imageTransformation = try getImageTransformation(allocator, tags);
+
+    // ImageMagick cannot read a HEIC, so the pictures are made from a JPEG FFmpeg decodes it into, and the size is that JPEG's. FFmpeg
+    // has already turned the picture as the HEIC's own rotation and mirroring say, which is what the HEIF format makes binding (the
+    // EXIF Orientation of a HEIC is only informative), so the EXIF's turn is not applied on top of it.
+    if (tools.heic.isHeicContentType(contentType)) {
+        const decodedPath = try std.fs.path.join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_heic_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
+        try tools.heic.decodeHeic(allocator, io, toolRunner, imagePath, decodedPath);
+        imagePath = decodedPath;
+        imageTransformation = null;
+    }
 
     // The EXIF read above went through the JPEG's markers to find the tags, and the frame header
     // that gives the width and height is one of them, so for a photo that carries EXIF the size is
@@ -175,7 +186,8 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
         resolution = dimensions;
     }
     else {
-        const assetInfo = try getFileInfo(allocator, io, toolRunner, imagePath, contentType) orelse {
+        const probedContentType = if (tools.heic.isHeicContentType(contentType)) "image/jpeg" else contentType;
+        const assetInfo = try getFileInfo(allocator, io, toolRunner, imagePath, probedContentType) orelse {
             return errors.throwError("Unsupported file type: {s}", .{contentType});
         };
         resolution = .{ .width = assetInfo.dimensions.width, .height = assetInfo.dimensions.height };
@@ -296,8 +308,6 @@ fn isTruthy(value: ?BsonValue) bool {
 // The body of the try block of getImageMetadata.
 //
 fn readImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IImageMetadata {
-    var coordinates: ?ILocation = null;
-
     // Only the head of the file, not the whole photo.
     //
     // EXIF lives in the APP1 segment near the start of a JPEG. A photo whose EXIF does not fit in the
@@ -310,6 +320,27 @@ fn readImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const
         fileData = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         exif = try parseExif(allocator, fileData);
     }
+    return metadataFromExif(allocator, exif, filePath);
+}
+
+//
+// The body of the try block of getImageMetadata for a HEIC, whose EXIF is an item of the file rather than a JPEG segment. A HEIC with
+// no EXIF item has no metadata.
+//
+fn readHeicMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IImageMetadata {
+    const fileData = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    const exifJpeg = try heic_exif.exifAsJpeg(allocator, fileData) orelse {
+        return .{};
+    };
+    return metadataFromExif(allocator, try parseExif(allocator, exifJpeg), filePath);
+}
+
+//
+// What a photo's parsed EXIF says: every tag, where it was taken when that is a real position, when it was taken, and its size when
+// the parser found the JPEG frame header that gives it.
+//
+fn metadataFromExif(allocator: std.mem.Allocator, exif: exif_parser.ExifResult, filePath: []const u8) !IImageMetadata {
+    var coordinates: ?ILocation = null;
     if (isTruthy(exif.tags.get("GPSLatitude")) and isTruthy(exif.tags.get("GPSLongitude"))) {
         coordinates = try convertExifCoordinates(exif.tags);
         if (!isLocationInRange(coordinates.?)) {
@@ -359,6 +390,13 @@ fn writeJsonNumber(writer: *std.Io.Writer, number: f64) !void {
 pub fn getImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: []const u8) !IImageMetadata {
     if (std.mem.eql(u8, contentType, "image/jpeg") or std.mem.eql(u8, contentType, "image/jpg")) {
         return readImageMetadata(allocator, io, filePath) catch |err| {
+            log.exception(try std.fmt.allocPrint(allocator, "Failed to get exif data from {s}", .{filePath}), err);
+
+            return .{};
+        };
+    }
+    else if (tools.heic.isHeicContentType(contentType)) {
+        return readHeicMetadata(allocator, io, filePath) catch |err| {
             log.exception(try std.fmt.allocPrint(allocator, "Failed to get exif data from {s}", .{filePath}), err);
 
             return .{};

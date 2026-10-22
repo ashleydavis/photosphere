@@ -4,6 +4,7 @@ pub const asset_server_core = @import("lib/asset-server-core.zig");
 pub const asset_server_routes = @import("lib/asset-server-routes.zig");
 pub const asset_server_worker = @import("lib/asset-server.worker.zig");
 pub const image = @import("lib/image.zig");
+pub const heic_exif = @import("lib/heic-exif.zig");
 pub const video = @import("lib/video.zig");
 pub const validation = @import("lib/validation.zig");
 pub const file_scanner = @import("lib/file-scanner.zig");

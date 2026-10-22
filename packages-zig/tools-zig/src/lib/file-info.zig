@@ -4,6 +4,7 @@ const node_utils = @import("node-utils-zig");
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const Image = @import("image.zig").Image;
 const Video = @import("video.zig").Video;
+const heic = @import("heic.zig");
 const AssetInfo = @import("types.zig").AssetInfo;
 const errors = utils.errors;
 
@@ -15,6 +16,12 @@ const errors = utils.errors;
 // @returns AssetInfo for images/videos, or undefined for other file types
 //
 pub fn getFileInfo(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner, filePath: []const u8, contentType: []const u8) !?AssetInfo {
+    // ImageMagick cannot read a HEIC, so its size comes from ffprobe. Every HEIC in an iPhone's library failed validation without this.
+    if (heic.isHeicContentType(contentType)) {
+        return heic.getHeicInfo(allocator, io, tools, filePath) catch |err| {
+            return errors.throwError("Failed to get image info for {s}: {s}\n{s}", .{ filePath, try utils.errors.errorToString(allocator, err), @errorName(err) });
+        };
+    }
     if (std.mem.startsWith(u8, contentType, "image/")) {
         var image = Image.init(filePath);
         return image.getInfo(allocator, io, tools) catch |err| {
