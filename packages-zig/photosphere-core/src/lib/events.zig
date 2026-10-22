@@ -2,7 +2,7 @@
 // The events Photosphere's core sends to the page (including those of the
 // worker pool it forwards from): database-opened, database-closed, databases-changed, sync-started, sync-completed,
 // theme-changed, navigate, show-notification, update-available and platform-event. The page's side of each is in
-// the platform provider of the page. task-message and task-completed are Ziggy's own events (system events, {"kind":"system","name",...}).
+// the platform provider of the page. task-event and task-completed are Ziggy's own events (system events, {"kind":"system","name",...}).
 //
 // Each function sends one event of the type of that name with the payload the page's handler takes, the payload being null
 // where there is none. An event is an app event to Ziggy ({"kind":"app","data":...}), whose data is {"type", "data"}: the page's onEvent listener

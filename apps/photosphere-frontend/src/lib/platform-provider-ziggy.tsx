@@ -456,19 +456,19 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     // Set up the listener for task-event events (import progress)
     useEffect(() => {
-        const handleTaskEvent = (data: { taskId: string; message: Record<string, unknown> }) => {
+        const handleTaskEvent = (data: { taskId: string; data: Record<string, unknown> }) => {
             // Rendered before the next event is handled. A task the core runs quickly sends its progress and its completion
             // back to back, and React would otherwise fold them into one render, so the job list would go from empty to empty
             // and the job would never be seen to start.
             flushSync(() => {
-                taskEventCallbacksRef.current.forEach(cb => cb(data.taskId, data.message));
+                taskEventCallbacksRef.current.forEach(cb => cb(data.taskId, data.data));
             });
         };
 
-        ziggy.onTaskMessage(handleTaskEvent);
+        ziggy.onTaskEvent(handleTaskEvent);
 
         return () => {
-            ziggy.removeTaskMessageListener(handleTaskEvent);
+            ziggy.removeTaskEventListener(handleTaskEvent);
         };
     }, [ziggy]);
 

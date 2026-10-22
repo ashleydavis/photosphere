@@ -13,12 +13,12 @@ const io = std.testing.io;
 // Reads the port out of the asset-server-ready event the task sent.
 //
 fn readyPort(app: *TestApp, allocator: std.mem.Allocator) !u16 {
-    try app.shell.expectMessageContaining("\"message\":{\"type\":\"asset-server-ready\"");
-    const index = app.shell.indexOfContaining("\"message\":{\"type\":\"asset-server-ready\"").?;
+    try app.shell.expectMessageContaining("\"data\":{\"type\":\"asset-server-ready\"");
+    const index = app.shell.indexOfContaining("\"data\":{\"type\":\"asset-server-ready\"").?;
     const text = try app.shell.messageAt(allocator, index);
     const parsed = try std.json.parseFromSliceLeaky(struct {
         data: struct {
-            message: struct {
+            data: struct {
                 port: u16,
                 host: []const u8,
             },
@@ -26,8 +26,8 @@ fn readyPort(app: *TestApp, allocator: std.mem.Allocator) !u16 {
     }, allocator, text, .{
         .ignore_unknown_fields = true,
     });
-    try std.testing.expectEqualStrings("127.0.0.1", parsed.data.message.host);
-    return parsed.data.message.port;
+    try std.testing.expectEqualStrings("127.0.0.1", parsed.data.data.host);
+    return parsed.data.data.port;
 }
 
 test "the asset-server task serves the asset routes on a loopback port the page is told, and stops when its source is cancelled" {

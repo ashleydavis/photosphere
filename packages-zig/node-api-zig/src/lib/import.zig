@@ -9,7 +9,7 @@ const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
-const ITaskMessageData = task_queue_zig.types.ITaskMessageData;
+const ITaskEventData = task_queue_zig.types.ITaskEventData;
 const IJobTag = task_queue_zig.types.IJobTag;
 const IAddSummary = media_file_database.IAddSummary;
 const IImportOptions = import_assets_worker.IImportOptions;
@@ -48,10 +48,10 @@ const AddPathsState = struct {
     //
     // Counts one task event.
     //
-    fn onAnyTaskMessage(context: ?*anyopaque, data: ITaskMessageData) anyerror!void {
+    fn onAnyTaskEvent(context: ?*anyopaque, data: ITaskEventData) anyerror!void {
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));
         // A message that is not an object has no type.
-        const message: std.json.ObjectMap = if (data.message == .object) data.message.object else .empty;
+        const message: std.json.ObjectMap = if (data.event == .object) data.event.object else .empty;
         const messageTypeValue = message.get("type") orelse std.json.Value.null;
         const messageType: []const u8 = if (messageTypeValue == .string) messageTypeValue.string else "";
 
@@ -143,9 +143,9 @@ pub fn addPaths(
         .queue = queue,
     };
 
-    _ = try queue.onAnyTaskMessage(.{
+    _ = try queue.onAnyTaskEvent(.{
         .context = state,
-        .function = AddPathsState.onAnyTaskMessage,
+        .function = AddPathsState.onAnyTaskEvent,
     });
 
     var taskData: std.json.ObjectMap = .empty;

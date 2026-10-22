@@ -37,7 +37,7 @@ pub const IConsolidateDatabaseData = struct {
 // long upload.
 //
 pub const IConsolidateProgressEvent = struct {
-    // Discriminator matched by onTaskMessage("consolidate-progress").
+    // Discriminator matched by onTaskEvent("consolidate-progress").
     type: []const u8 = "consolidate-progress",
 
     // How many assets have been pushed to the remote so far.
@@ -72,7 +72,7 @@ const ProgressMessageSender = struct {
         const value = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) catch |err| {
             std.debug.panic("The consolidate-progress message could not be read back: {s}", .{@errorName(err)});
         };
-        self.context.sendMessage(value);
+        self.context.sendEvent(value);
     }
 };
 

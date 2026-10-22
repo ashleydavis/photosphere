@@ -147,7 +147,7 @@ pub fn loadAssetsHandler(
             .databasePath = data.databasePath,
             .batch = batch,
         };
-        context.sendMessage(try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, pageMessage, .{}), .{}));
+        context.sendEvent(try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, pageMessage, .{}), .{}));
 
         // The same count as the job the interface lists and can cancel. Indeterminate: the pages are
         // walked one at a time and how many there are is not known until the last one comes back.

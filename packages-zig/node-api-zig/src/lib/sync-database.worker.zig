@@ -114,7 +114,7 @@ const SyncBatcher = struct {
             .updated = updated.items,
             .deletedIds = deletedIds.items,
         };
-        self.context.sendMessage(try messageToJson(self.allocator, batchMessage));
+        self.context.sendEvent(try messageToJson(self.allocator, batchMessage));
 
         self.changesSynced += added.items.len + updated.items.len + deletedIds.items.len;
         try sendJobProgress(self.allocator, self.context, self.job, self.runStartedAt, try std.fmt.allocPrint(self.allocator, "{d} changes synced", .{self.changesSynced}));
@@ -162,7 +162,7 @@ fn syncDatabase(
             .databasePath = data.databasePath,
             .reason = reason,
         };
-        context.sendMessage(try messageToJson(allocator, skippedMessage));
+        context.sendEvent(try messageToJson(allocator, skippedMessage));
         return;
     };
 
@@ -183,13 +183,13 @@ fn syncDatabase(
             .databasePath = data.databasePath,
             .reason = reason,
         };
-        context.sendMessage(try messageToJson(allocator, skippedMessage));
+        context.sendEvent(try messageToJson(allocator, skippedMessage));
         return;
     }
 
     log.info(try std.fmt.allocPrint(allocator, "Sync started for \"{s}\" (origin: {s})", .{ data.databasePath, origin }));
 
-    context.sendMessage(try messageToJson(allocator, .{
+    context.sendEvent(try messageToJson(allocator, .{
         .type = "sync-started",
         .databasePath = data.databasePath,
     }));
@@ -246,7 +246,7 @@ fn syncDatabase(
         .databasePath = data.databasePath,
         .synced = result.synced,
     };
-    context.sendMessage(try messageToJson(allocator, completedMessage));
+    context.sendEvent(try messageToJson(allocator, completedMessage));
 }
 
 //

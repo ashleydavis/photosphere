@@ -51,7 +51,7 @@ const TestContext = struct {
     //
     // Drops a message.
     //
-    fn sendMessage(context: ?*anyopaque, message: std.json.Value) void {
+    fn sendEvent(context: ?*anyopaque, message: std.json.Value) void {
         _ = context;
         _ = message;
     }
@@ -70,7 +70,7 @@ fn makeContext(allocator: std.mem.Allocator, io: std.Io, isCancelled: bool) !*Te
     };
     testContext.context = TaskContext.init(testContext.uuidGenerator.uuidGenerator(), testContext.timestampProvider.timestampProvider(), "session-1", "prefetch-task-id", .{
         .context = null,
-        .function = TestContext.sendMessage,
+        .function = TestContext.sendEvent,
     }, 10);
     if (isCancelled) {
         testContext.context.cancel();

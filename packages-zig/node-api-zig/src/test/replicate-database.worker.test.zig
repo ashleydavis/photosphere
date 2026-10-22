@@ -18,7 +18,7 @@ const IReplicateDatabaseData = @import("api-zig").replicate_database_types.IRepl
 const ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
 //
-// A task context whose sendMessage records the events.
+// A task context whose sendEvent records the events.
 //
 const RecordingContext = struct {
     // Deterministic uuids.
@@ -39,7 +39,7 @@ const RecordingContext = struct {
     //
     // Records a message.
     //
-    fn sendMessage(context: ?*anyopaque, message: std.json.Value) void {
+    fn sendEvent(context: ?*anyopaque, message: std.json.Value) void {
         const self: *RecordingContext = @ptrCast(@alignCast(context.?));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch {
             return;
@@ -61,7 +61,7 @@ fn makeContext(allocator: std.mem.Allocator, io: std.Io) !*RecordingContext {
         .messages = .empty,
         .allocator = allocator,
     };
-    recording.context = TaskContext.init(recording.uuidGenerator.uuidGenerator(), recording.timestampProvider.timestampProvider(), "session-1", "replicate-task-id", .{ .context = recording, .function = RecordingContext.sendMessage }, 10);
+    recording.context = TaskContext.init(recording.uuidGenerator.uuidGenerator(), recording.timestampProvider.timestampProvider(), "session-1", "replicate-task-id", .{ .context = recording, .function = RecordingContext.sendEvent }, 10);
     return recording;
 }
 

@@ -133,5 +133,5 @@ pub const app = ziggy.core.App(.{
     .describe_error = core.describe_error.describeError,
     .state = core.main_state.state_hooks,
     .on_task_end = core.main_process.onTaskEnd,
-    .on_task_message = core.main_process.onTaskEvent,
+    .on_task_event = core.main_process.onTaskEvent,
 });

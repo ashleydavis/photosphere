@@ -31,13 +31,13 @@ const ContextBridge = struct {
     host_requester_storage: ziggy.task_runner.TaskHostRequester,
 
     const vtable: ITaskContext.VTable = .{
-        .sendMessage = sendMessageErased,
+        .sendEvent = sendEventErased,
         .isCancelled = isCancelledErased,
     };
 
-    fn sendMessageErased(ptr: *anyopaque, message: std.json.Value) void {
+    fn sendEventErased(ptr: *anyopaque, event: std.json.Value) void {
         const self: *ContextBridge = @ptrCast(@alignCast(ptr));
-        self.context.sendMessage(message) catch |err| {
+        self.context.sendEvent(event) catch |err| {
             utils.log.log.exception("Error sending a task event", err);
         };
     }

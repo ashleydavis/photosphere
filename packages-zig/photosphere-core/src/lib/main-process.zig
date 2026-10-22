@@ -642,7 +642,7 @@ fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd
 // Told when any task sends an event. Tells the page when a sync starts and
 // when it completes. The page is told of every task event by the core.
 //
-pub fn onTaskEvent(core: *Core, sent: ziggy.types.TaskSentMessage) void {
+pub fn onTaskEvent(core: *Core, sent: ziggy.types.TaskSentEvent) void {
     var arena_state = std.heap.ArenaAllocator.init(core.allocator);
     defer arena_state.deinit();
     handleTaskEvent(core, arena_state.allocator(), sent) catch |err| {
@@ -650,8 +650,8 @@ pub fn onTaskEvent(core: *Core, sent: ziggy.types.TaskSentMessage) void {
     };
 }
 
-fn handleTaskEvent(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.TaskSentMessage) !void {
-    const event = try std.json.parseFromSliceLeaky(std.json.Value, arena, sent.message_json, .{});
+fn handleTaskEvent(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.TaskSentEvent) !void {
+    const event = try std.json.parseFromSliceLeaky(std.json.Value, arena, sent.event_json, .{});
     const event_type = json.getString(event, "type") orelse {
         return;
     };

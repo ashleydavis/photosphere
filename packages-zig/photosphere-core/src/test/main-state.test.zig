@@ -50,7 +50,7 @@ fn stopTimerThread(state: *MainState) void {
 //
 fn spinTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    try context.sendMessage(.{ .spinning = true });
+    try context.sendEvent(.{ .spinning = true });
     while (true) {
         try context.checkCancelled();
         try context.io().sleep(.fromMilliseconds(2), .awake);
@@ -167,7 +167,7 @@ test "resetSyncState to the database that is already open cancels nothing, and t
     state.sync_debounce_at = state.now() + 100_000;
     state.unlock();
     app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"long-1\",\"taskType\":\"spin\",\"source\":\"/the/open/db\",\"data\":null,\"priority\":\"background\"}}");
-    try app.shell.expectMessageContaining("\"kind\":\"system\",\"name\":\"task-message\"");
+    try app.shell.expectMessageContaining("\"kind\":\"system\",\"name\":\"task-event\"");
     try state.resetSyncState("/the/open/db");
     app.shell.sleepMs(100);
     try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"errorMessage\":\"Cancelled\""));

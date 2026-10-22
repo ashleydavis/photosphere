@@ -1,5 +1,5 @@
 import type { ITaskResult, IQueueBackend, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "task-queue";
-import type { IAddTask, IJsonValue, ITaskCompletedEvent, ITaskMessageEvent, IZiggyBridge } from "ziggy";
+import type { IAddTask, IJsonValue, ITaskCompletedEvent, ITaskEvent, IZiggyBridge } from "ziggy";
 
 //
 // Ziggy bridge-based queue backend.
@@ -45,10 +45,10 @@ export class ZiggyQueueBackend implements IQueueBackend {
     };
 
     //
-    // The listener this registers for Ziggy's task-message events, kept so shutdown can remove it.
+    // The listener this registers for Ziggy's task-event events, kept so shutdown can remove it.
     //
-    private readonly taskEventListener = (data: ITaskMessageEvent<IJsonValue>): void => {
-        this.notifyEventCallbacks(data.taskId, data.message);
+    private readonly taskEventListener = (data: ITaskEvent<IJsonValue>): void => {
+        this.notifyEventCallbacks(data.taskId, data.data);
     };
 
     //
@@ -64,7 +64,7 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     private setupMessageHandlers(): void {
         this.ziggy.onTaskCompleted(this.taskCompletedListener);
-        this.ziggy.onTaskMessage<IJsonValue>(this.taskEventListener);
+        this.ziggy.onTaskEvent<IJsonValue>(this.taskEventListener);
     }
 
     //
@@ -249,7 +249,7 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     shutdown(): void {
         this.ziggy.removeTaskCompletedListener(this.taskCompletedListener);
-        this.ziggy.removeTaskMessageListener<IJsonValue>(this.taskEventListener);
+        this.ziggy.removeTaskEventListener<IJsonValue>(this.taskEventListener);
     }
 }
 

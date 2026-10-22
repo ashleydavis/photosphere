@@ -46,7 +46,7 @@ pub const ProductionQueueBackend = struct {
             .observer = .{
                 .user_data = self.backend,
                 .on_task_end = observeTaskEnd,
-                .on_task_message = observeTaskMessage,
+                .on_task_event = observeTaskEvent,
             },
             .fallback_handler = ziggy.queue_backend.fallbackHandler(self.backend),
         }, .{
@@ -82,7 +82,7 @@ pub const ProductionQueueBackend = struct {
 };
 
 //
-// The runner's events for the shell (task-message and task-completed as JSON text). The test program has no shell; the backend
+// The runner's events for the shell (task-event and task-completed as JSON text). The test program has no shell; the backend
 // learns of every task end and event through the observer, as it does in the App.
 //
 fn ignoreShellEvent(user_data: ?*anyopaque, message: []const u8) void {
@@ -101,7 +101,7 @@ fn observeTaskEnd(user_data: ?*anyopaque, end: ziggy.types.TaskEnd) void {
 //
 // Tells the backend a task has sent an event, as Ziggy's core does.
 //
-fn observeTaskMessage(user_data: ?*anyopaque, sent: ziggy.types.TaskSentMessage) void {
+fn observeTaskEvent(user_data: ?*anyopaque, sent: ziggy.types.TaskSentEvent) void {
     const backend: *ZiggyQueueBackend = @ptrCast(@alignCast(user_data.?));
-    backend.messageSent(sent);
+    backend.eventSent(sent);
 }

@@ -63,7 +63,7 @@ test "asking for the query again does not start another asset server" {
     const second = try app.core.uiQuery();
 
     try std.testing.expectEqual(first_port, try portOf(second));
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"message\":{\"type\":\"asset-server-ready\""));
+    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"data\":{\"type\":\"asset-server-ready\""));
 }
 
 test "the query says the saved theme" {

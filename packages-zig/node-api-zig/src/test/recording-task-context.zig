@@ -73,7 +73,7 @@ pub const RecordingTaskContext = struct {
     pub fn messagesOfType(self: *RecordingTaskContext, messageType: []const u8) ![]const std.json.Value {
         var matching: std.ArrayList(std.json.Value) = .empty;
         for (self.messages.items) |message| {
-            if (task_queue_zig.types.messageTypeOf(message)) |foundType| {
+            if (task_queue_zig.types.eventTypeOf(message)) |foundType| {
                 if (std.mem.eql(u8, foundType, messageType)) {
                     try matching.append(self.allocator, message);
                 }
@@ -86,14 +86,14 @@ pub const RecordingTaskContext = struct {
     // The ITaskContext functions of this context.
     //
     const vtable: ITaskContext.VTable = .{
-        .sendMessage = sendMessageErased,
+        .sendEvent = sendEventErased,
         .isCancelled = isCancelledErased,
     };
 
     //
     // Records a message, failing the test run loudly when it cannot be copied.
     //
-    fn sendMessageErased(ptr: *anyopaque, message: std.json.Value) void {
+    fn sendEventErased(ptr: *anyopaque, message: std.json.Value) void {
         const self: *RecordingTaskContext = @ptrCast(@alignCast(ptr));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch @panic("could not copy a task message");
         const copy = std.json.parseFromSliceLeaky(std.json.Value, self.allocator, text, .{}) catch @panic("could not copy a task message");

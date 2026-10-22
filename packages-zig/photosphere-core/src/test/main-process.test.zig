@@ -29,7 +29,7 @@ fn makeDatabase(app: *TestApp, name: []const u8, config_json: []const u8) ![]u8 
 //
 fn spinTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    try context.sendMessage(.{ .spinning = true });
+    try context.sendEvent(.{ .spinning = true });
     while (true) {
         try context.checkCancelled();
         try context.io().sleep(.fromMilliseconds(2), .awake);
@@ -237,7 +237,7 @@ fn awaitChildrenTask(context: *ziggy.task_runner.TaskContext, data: std.json.Val
     while (child_index < 4) : (child_index += 1) {
         _ = try queue.addTask("spin", .null, null, null);
     }
-    try context.sendMessage(.{
+    try context.sendEvent(.{
         .childrenQueued = true,
     });
     try queue.awaitAllTasks();
@@ -333,7 +333,7 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
     });
     defer allocator.free(message);
     app.core.postMessage(message);
-    try waitFor(&app, "\"kind\":\"system\",\"name\":\"task-message\"");
+    try waitFor(&app, "\"kind\":\"system\",\"name\":\"task-event\"");
     allocator.free(try app.requestOk("notify-database-opened", second_json));
     try waitFor(&app, "\"errorMessage\":\"Cancelled\"");
 }
@@ -458,21 +458,21 @@ test "a sync task's started and completed messages are passed to the page as eve
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
-        .message_json = "{\"type\":\"sync-started\"}",
+        .event_json ="{\"type\":\"sync-started\"}",
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-started\",\"data\":null}}");
     main_process.onTaskEvent(app.core, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
-        .message_json = "{\"type\":\"sync-completed\"}",
+        .event_json ="{\"type\":\"sync-completed\"}",
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-completed\",\"data\":null}}");
     main_process.onTaskEvent(app.core, .{
         .task_id = "other",
         .task_type = "other",
         .source = "x",
-        .message_json = "{\"type\":\"progress\"}",
+        .event_json ="{\"type\":\"progress\"}",
     });
     try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("sync-started"));
 }
@@ -501,7 +501,7 @@ test "the periodic sync queues a sync for the open database when syncing is allo
 //
 fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    try context.sendMessage(.{ .createdDefaultDatabase = true });
+    try context.sendEvent(.{ .createdDefaultDatabase = true });
     return try context.arena.dupe(u8, "null");
 }
 
@@ -520,7 +520,7 @@ fn createDefaultDatabaseFailsTask(context: *ziggy.task_runner.TaskContext, data:
 //
 fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    try context.sendMessage(.{ .importing = true });
+    try context.sendEvent(.{ .importing = true });
     while (true) {
         try context.checkCancelled();
         try context.io().sleep(.fromMilliseconds(2), .awake);
@@ -689,7 +689,7 @@ test "an import that failed with an empty error message says the error is unknow
 // A fake of the evict-originals task, which another part of the app provides: it reports what it was asked to do.
 //
 fn evictOriginalsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    try context.sendMessage(.{ .evicting = data });
+    try context.sendEvent(.{ .evicting = data });
     return try context.arena.dupe(u8, "null");
 }
 
@@ -769,7 +769,7 @@ fn consoleHas(app: *TestApp, text: []const u8) bool {
 fn assetServerTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const asked = ziggy.json.getInteger(data, "port") orelse 0;
     const port: i64 = if (asked == 0) 40001 else asked;
-    try context.sendMessage(.{
+    try context.sendEvent(.{
         .type = "asset-server-ready",
         .port = port,
     });

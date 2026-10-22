@@ -120,7 +120,7 @@ test "a sync that moved changes is logged as having synced them" {
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
-        .message_json = "{\"type\":\"sync-completed\",\"databasePath\":\"/db\",\"synced\":true}",
+        .event_json ="{\"type\":\"sync-completed\",\"databasePath\":\"/db\",\"synced\":true}",
     });
 
     const text = try waitForLogLine(std.testing.allocator, &app, "Sync completed: changes synced");
@@ -137,7 +137,7 @@ test "a sync that found both sides identical is logged as having nothing to sync
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
-        .message_json = "{\"type\":\"sync-completed\",\"databasePath\":\"/db\",\"synced\":false}",
+        .event_json ="{\"type\":\"sync-completed\",\"databasePath\":\"/db\",\"synced\":false}",
     });
 
     const text = try waitForLogLine(std.testing.allocator, &app, "Sync completed: nothing to sync");

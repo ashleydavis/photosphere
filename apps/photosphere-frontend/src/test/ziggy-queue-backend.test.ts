@@ -75,7 +75,7 @@ describe('ZiggyQueueBackend', () => {
         expect(results[0]).toEqual(taskResult);
     });
 
-    test('incoming task-message event triggers onTaskMessage and onAnyTaskMessage callbacks', async () => {
+    test('incoming task-event event triggers onTaskMessage and onAnyTaskMessage callbacks', async () => {
         const ziggy = new FakeZiggy();
         const backend = new ZiggyQueueBackend(ziggy);
         const typedMessages: any[] = [];
@@ -83,7 +83,7 @@ describe('ZiggyQueueBackend', () => {
         backend.onTaskMessage('progress', (data) => { typedMessages.push(data); });
         backend.onAnyTaskMessage((data) => { anyMessages.push(data); });
 
-        ziggy.emit('task-message', { taskId: 'task-1', message: { type: 'progress', value: 50 } });
+        ziggy.emit('task-event', { taskId: 'task-1', data:{ type: 'progress', value: 50 } });
 
         await Promise.resolve();
 
@@ -97,10 +97,10 @@ describe('ZiggyQueueBackend', () => {
         const typedMessages: any[] = [];
         backend.onTaskMessage('progress', (data) => { typedMessages.push(data); });
 
-        ziggy.emit('task-message', { taskId: 'task-1', message: { type: 'other' } });
-        ziggy.emit('task-message', { taskId: 'task-1', message: 'text' });
-        ziggy.emit('task-message', { taskId: 'task-1', message: null });
-        ziggy.emit('task-message', { taskId: 'task-1', message: ['progress'] });
+        ziggy.emit('task-event', { taskId: 'task-1', data:{ type: 'other' } });
+        ziggy.emit('task-event', { taskId: 'task-1', data:'text' });
+        ziggy.emit('task-event', { taskId: 'task-1', data:null });
+        ziggy.emit('task-event', { taskId: 'task-1', data:['progress'] });
 
         await Promise.resolve();
 
@@ -184,7 +184,7 @@ describe('ZiggyQueueBackend', () => {
         unsubAdded();
         unsubCancelled();
 
-        ziggy.emit('task-message', { taskId: 'task-1', message: { type: 'progress' } });
+        ziggy.emit('task-event', { taskId: 'task-1', data:{ type: 'progress' } });
         await Promise.resolve();
         await Promise.resolve();
         backend.addTask('my-type', null, 'my-source', 'task-2');
@@ -222,7 +222,7 @@ describe('ZiggyQueueBackend', () => {
                 status: TaskStatus.Succeeded,
             };
             ziggy.emit('task-completed', { taskId: 'task-1', result: taskResult as any });
-            ziggy.emit('task-message', { taskId: 'task-1', message: { type: 'progress' } });
+            ziggy.emit('task-event', { taskId: 'task-1', data:{ type: 'progress' } });
             for (let turn = 0; turn < 10; turn++) {
                 await Promise.resolve();
             }
@@ -245,8 +245,8 @@ describe('ZiggyQueueBackend', () => {
 
         backend.shutdown();
 
-        expect(ziggy.removed).toEqual(['task-completed', 'task-message']);
+        expect(ziggy.removed).toEqual(['task-completed', 'task-event']);
         expect(ziggy.listenerCount('task-completed')).toBe(0);
-        expect(ziggy.listenerCount('task-message')).toBe(0);
+        expect(ziggy.listenerCount('task-event')).toBe(0);
     });
 });

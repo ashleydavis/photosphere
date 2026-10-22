@@ -48,9 +48,9 @@ Within one program, the app, `photosphere-core` and every package in `packages-z
 
 1. Write the handler in Zig. For a port of a TypeScript handler, put it in `packages-zig/node-api-zig/src/lib/<name>.worker.zig`, one file per `.worker.ts`, keeping the function names and control flow.
 2. Register it in `packages-zig/node-api-zig/src/lib/task-handlers.zig` under the same task type string the TypeScript uses.
-3. Report progress with the task context's `sendMessage`. For a job, report `job-progress` events through `sendJobProgress`, with the same fields as `packages/task-queue/src/lib/job-progress.ts`, carrying the `IJobTag` found in the task's input data.
+3. Report progress with the task context's `sendEvent`. For a job, report `job-progress` events through `sendJobProgress`, with the same fields as `packages/task-queue/src/lib/job-progress.ts`, carrying the `IJobTag` found in the task's input data.
 4. Check `isCancelled` at every step of long work and finish as cancelled when it is set.
-5. The queue backend in `apps/photosphere-frontend` forwards `add-task`, `cancel-tasks`, `task-message` and `task-completed`, and the jobs indicator and sidebar list show the job.
+5. The queue backend in `apps/photosphere-frontend` forwards `add-task`, `cancel-tasks`, `task-event` and `task-completed`, and the jobs indicator and sidebar list show the job.
 6. Write the unit test in the package, and a smoke test scenario when the task is reachable from a page.
 
 **Test hooks:** Photosphere's own test mode switch is `PHOTOSPHERE_TEST_MODE=1`, which the smoke tests and the story player set together with Ziggy's `ZIGGY_TEST_MODE`. The shared `packages/user-interface/src/lib/test-driver.ts` performs `click`, `type`, `get-value` and the other DOM actions by `data-id` in the page. `PHOTOSPHERE_TEST_PICK_FILE_PATH` and `PHOTOSPHERE_TEST_DOWNLOAD_FOLDER` answer the file and folder dialogs. In test mode the update check is skipped, and the news check is skipped unless `PHOTOSPHERE_NEWS_URL` names a feed (the page starts both checks, once, by sending `page-loaded` in a `main-command` message when it has loaded), and the MCP server binds a free port.

@@ -5,7 +5,7 @@ The platform layer that runs Photosphere's shared React user interface (`package
 The shared interface is unchanged. This package supplies what it asks of its platform:
 
 - `src/lib/app-messages.ts`: Photosphere's own messages and events over `window.ziggy`. It sends a message with its name and its payload (`invoke(name, data)` or `send(name, data)`), and hands each event, whose data is `{type, data}`, to the listeners for its type.
-- `src/lib/ziggy-queue-backend.ts`: the task queue backend. It queues tasks with `window.ziggy.addTask`, cancels with the `main-command` message `cancel-tasks` and turns Ziggy's `task-message` and `task-completed` events (`onTaskMessage`, `onTaskCompleted`) back into callbacks.
+- `src/lib/ziggy-queue-backend.ts`: the task queue backend. It queues tasks with `window.ziggy.addTask`, cancels with the `main-command` message `cancel-tasks` and turns Ziggy's `task-event` and `task-completed` events (`onTaskEvent`, `onTaskCompleted`) back into callbacks.
 - `src/lib/platform-provider-ziggy.tsx`: the platform context. The core answers the same messages on every platform, so most members are the same on desktop and phone. The few that differ check the `platformKind` and `os` that `window.ziggy.getPlatform()` reports.
 - `src/lib/menu-actions.ts`: what the page does for the menu items the core sends it as the app event `{type: "menu", item}` (`navigate:<route>`, `about`, `theme:<name>`, `open-log-directory`, `help`, `close-database` and every other item, which is passed on as a platform event). The platform provider listens for that event with `window.ziggy.onEvent`.
 - `src/lib/mobile-export.ts`: how a phone saves downloads, by writing them into the app's private storage and handing them out through the share sheet.

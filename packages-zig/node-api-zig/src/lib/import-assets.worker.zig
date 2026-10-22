@@ -525,7 +525,7 @@ const ImportRun = struct {
                 .string = field[1],
             });
         }
-        self.context.sendMessage(.{
+        self.context.sendEvent(.{
             .object = message,
         });
     }
@@ -814,7 +814,7 @@ const ImportRun = struct {
             try arrival.put(allocator, "asset", .{
                 .object = try bson_json.bsonDocumentToJsonObject(allocator, assetRecord),
             });
-            self.context.sendMessage(.{
+            self.context.sendEvent(.{
                 .object = arrival,
             });
         }
@@ -1186,7 +1186,7 @@ const ImportRun = struct {
                 .string = item,
             });
         }
-        self.context.sendMessage(.{
+        self.context.sendEvent(.{
             .object = message,
         });
 
@@ -1260,7 +1260,7 @@ const ImportRun = struct {
             try message.put(allocator, "count", .{
                 .integer = @intCast(newIgnored),
             });
-            self.context.sendMessage(.{
+            self.context.sendEvent(.{
                 .object = message,
             });
         }

@@ -397,7 +397,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     try pendingMessage.put(allocator, "type", .{ .string = "import-pending" });
     try pendingMessage.put(allocator, "assetId", .{ .string = data.assetId });
     try pendingMessage.put(allocator, "logicalPath", .{ .string = data.logicalPath });
-    context.sendMessage(.{ .object = pendingMessage });
+    context.sendEvent(.{ .object = pendingMessage });
 
     // When this task started, so the import can report what the work other than hashing cost.
     const taskStartedAt = dateNow(io);
@@ -471,7 +471,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         try failedMessage.put(allocator, "type", .{ .string = "import-failed" });
         try failedMessage.put(allocator, "assetId", .{ .string = data.assetId });
         try failedMessage.put(allocator, "logicalPath", .{ .string = data.logicalPath });
-        context.sendMessage(.{ .object = failedMessage });
+        context.sendEvent(.{ .object = failedMessage });
 
         // Clean up uploaded files on error, then let exception propagate to task queue
         var deleteAssetOperation: DeleteFileOperation("() => storage.deleteFile(assetPath)") = .{

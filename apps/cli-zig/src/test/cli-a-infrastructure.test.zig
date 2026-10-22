@@ -350,7 +350,7 @@ const PoolCollector = struct {
     //
     // The typed task message callback.
     //
-    fn onTypedMessage(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+    fn onTypedMessage(context: ?*anyopaque, data: types.ITaskEventData) anyerror!void {
         _ = data;
         const self: *PoolCollector = @ptrCast(@alignCast(context.?));
         self.mutex.lockUncancelable(std.testing.io);
@@ -361,13 +361,13 @@ const PoolCollector = struct {
     //
     // The task message callback that records the label of each message.
     //
-    fn onLabelMessage(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+    fn onLabelMessage(context: ?*anyopaque, data: types.ITaskEventData) anyerror!void {
         const self: *PoolCollector = @ptrCast(@alignCast(context.?));
         self.mutex.lockUncancelable(std.testing.io);
         defer self.mutex.unlock(std.testing.io);
         self.anyMessages += 1;
         if (self.labelCount < self.labelText.len) {
-            const label = data.message.object.get("label") orelse return;
+            const label = data.event.object.get("label") orelse return;
             const length = @min(label.string.len, self.labelText[self.labelCount].len);
             @memcpy(self.labelText[self.labelCount][0..length], label.string[0..length]);
             self.labelLengths[self.labelCount] = label.string.len;
@@ -406,7 +406,7 @@ fn failingCompletionCallback(context: ?*anyopaque, result: types.ITaskResult) an
 //
 // A typed task message callback that always fails.
 //
-fn failingMessageCallback(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+fn failingMessageCallback(context: ?*anyopaque, data: types.ITaskEventData) anyerror!void {
     _ = context;
     _ = data;
     return error.CallbackFailed;
@@ -444,7 +444,7 @@ fn testHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, c
         var message: std.json.ObjectMap = .empty;
         try message.put(allocator, "type", .{ .string = "label" });
         try message.put(allocator, "label", .{ .string = text.string });
-        context.sendMessage(.{ .object = message });
+        context.sendEvent(.{ .object = message });
         return .null;
     }
     if (std.mem.eql(u8, kind.string, "block")) {
@@ -540,9 +540,9 @@ test "a task message callback that fails is logged and the other callbacks still
     defer pool.deinit();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
-    _ = try pool.onTaskMessage("label", .{ .context = null, .function = failingMessageCallback });
-    _ = try pool.onTaskMessage("label", .{ .context = &collector, .function = PoolCollector.onTypedMessage });
-    _ = try pool.onAnyTaskMessage(.{ .context = null, .function = failingMessageCallback });
+    _ = try pool.onTaskEvent("label", .{ .context = null, .function = failingMessageCallback });
+    _ = try pool.onTaskEvent("label", .{ .context = &collector, .function = PoolCollector.onTypedMessage });
+    _ = try pool.onAnyTaskEvent(.{ .context = null, .function = failingMessageCallback });
 
     _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "label", "hello"), "source", "task-2", null);
     try collector.waitForCompleted(1);
@@ -601,7 +601,7 @@ const RemovalCounter = struct {
     //
     // The task message callback.
     //
-    fn onMessage(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+    fn onMessage(context: ?*anyopaque, data: types.ITaskEventData) anyerror!void {
         _ = data;
         count(context);
     }
@@ -637,13 +637,13 @@ test "unsubscribing stops a callback of every kind from being called" {
     var kept = RemovalCounter{};
     const addedUnsubscribe = try pool.onTaskAdded("db", .{ .context = &removed, .function = RemovalCounter.onAdded });
     const completeUnsubscribe = try pool.onTaskComplete(.{ .context = &removed, .function = RemovalCounter.onComplete });
-    const messageUnsubscribe = try pool.onTaskMessage("label", .{ .context = &removed, .function = RemovalCounter.onMessage });
-    const anyMessageUnsubscribe = try pool.onAnyTaskMessage(.{ .context = &removed, .function = RemovalCounter.onMessage });
+    const messageUnsubscribe = try pool.onTaskEvent("label", .{ .context = &removed, .function = RemovalCounter.onMessage });
+    const anyMessageUnsubscribe = try pool.onAnyTaskEvent(.{ .context = &removed, .function = RemovalCounter.onMessage });
     const cancelledUnsubscribe = try pool.onTasksCancelled("db", .{ .context = &removed, .function = RemovalCounter.onCancelled });
     _ = try pool.onTaskAdded("db", .{ .context = &kept, .function = RemovalCounter.onAdded });
     _ = try pool.onTaskComplete(.{ .context = &kept, .function = RemovalCounter.onComplete });
-    _ = try pool.onTaskMessage("label", .{ .context = &kept, .function = RemovalCounter.onMessage });
-    _ = try pool.onAnyTaskMessage(.{ .context = &kept, .function = RemovalCounter.onMessage });
+    _ = try pool.onTaskEvent("label", .{ .context = &kept, .function = RemovalCounter.onMessage });
+    _ = try pool.onAnyTaskEvent(.{ .context = &kept, .function = RemovalCounter.onMessage });
     _ = try pool.onTasksCancelled("db", .{ .context = &kept, .function = RemovalCounter.onCancelled });
 
     addedUnsubscribe.call();
@@ -681,7 +681,7 @@ test "a queued interactive task is dispatched before a queued background one" {
     defer pool.deinit();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
-    _ = try pool.onAnyTaskMessage(.{ .context = &collector, .function = PoolCollector.onLabelMessage });
+    _ = try pool.onAnyTaskEvent(.{ .context = &collector, .function = PoolCollector.onLabelMessage });
 
     _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "block", ""), "source", "blocking-task", null);
     try waitForBlockingTask();

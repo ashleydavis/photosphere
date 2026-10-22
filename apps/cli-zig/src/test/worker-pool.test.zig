@@ -86,7 +86,7 @@ pub const Collector = struct {
     //
     // The typed message callback.
     //
-    fn onTypedMessage(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+    fn onTypedMessage(context: ?*anyopaque, data: types.ITaskEventData) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context.?));
         self.mutex.lockUncancelable(std.testing.io);
         defer self.mutex.unlock(std.testing.io);
@@ -97,7 +97,7 @@ pub const Collector = struct {
     //
     // The any-message callback.
     //
-    fn onAnyMessage(context: ?*anyopaque, data: types.ITaskMessageData) anyerror!void {
+    fn onAnyMessage(context: ?*anyopaque, data: types.ITaskEventData) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context.?));
         self.mutex.lockUncancelable(std.testing.io);
         defer self.mutex.unlock(std.testing.io);
@@ -169,10 +169,10 @@ fn messagingHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Val
     _ = data;
     var progress: std.json.ObjectMap = .empty;
     try progress.put(allocator, "type", .{ .string = "progress" });
-    context.sendMessage(.{ .object = progress });
+    context.sendEvent(.{ .object = progress });
     var other: std.json.ObjectMap = .empty;
     try other.put(allocator, "type", .{ .string = "other" });
-    context.sendMessage(.{ .object = other });
+    context.sendEvent(.{ .object = other });
     return .null;
 }
 
@@ -381,8 +381,8 @@ test "forwards task messages to the message callbacks" {
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
-    _ = try pool.onTaskMessage("progress", .{ .context = &collector, .function = Collector.onTypedMessage });
-    const unsubscribe = try pool.onAnyTaskMessage(.{ .context = &collector, .function = Collector.onAnyMessage });
+    _ = try pool.onTaskEvent("progress", .{ .context = &collector, .function = Collector.onTypedMessage });
+    const unsubscribe = try pool.onAnyTaskEvent(.{ .context = &collector, .function = Collector.onAnyMessage });
     _ = try pool.addTask(arena.allocator(), std.testing.io, "message", .null, "source", null, null);
     try collector.waitForCompleted(1);
     try std.testing.expectEqual(@as(usize, 1), collector.typedMessages);

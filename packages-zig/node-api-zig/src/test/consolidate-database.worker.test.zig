@@ -40,7 +40,7 @@ const RecordingContext = struct {
     //
     // Records a message.
     //
-    fn sendMessage(context: ?*anyopaque, message: std.json.Value) void {
+    fn sendEvent(context: ?*anyopaque, message: std.json.Value) void {
         const self: *RecordingContext = @ptrCast(@alignCast(context.?));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch |err| {
             std.debug.panic("The recording context could not write a message: {s}", .{@errorName(err)});
@@ -66,7 +66,7 @@ fn makeContext(allocator: std.mem.Allocator, io: std.Io) !*RecordingContext {
     };
     recording.context = TaskContext.init(recording.uuidGenerator.uuidGenerator(), recording.timestampProvider.timestampProvider(), "session-1", "consolidate-task-id", .{
         .context = recording,
-        .function = RecordingContext.sendMessage,
+        .function = RecordingContext.sendEvent,
     }, 10);
     return recording;
 }

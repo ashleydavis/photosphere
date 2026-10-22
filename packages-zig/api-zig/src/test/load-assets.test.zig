@@ -10,7 +10,7 @@ const types = task_queue_zig.types;
 const TaskPriority = types.TaskPriority;
 const UnsubscribeFn = types.UnsubscribeFn;
 const TaskAddedCallback = types.TaskAddedCallback;
-const TaskMessageCallback = types.TaskMessageCallback;
+const TaskEventCallback = types.TaskEventCallback;
 const TasksCancelledCallback = types.TasksCancelledCallback;
 const WorkerTaskCompletionCallback = types.WorkerTaskCompletionCallback;
 
@@ -61,8 +61,8 @@ const RecordingQueueBackend = struct {
         .addTask = addTaskErased,
         .onTaskAdded = onTaskAddedErased,
         .onTaskComplete = onTaskCompleteErased,
-        .onTaskMessage = onTaskMessageErased,
-        .onAnyTaskMessage = onAnyTaskMessageErased,
+        .onTaskEvent = onTaskEventErased,
+        .onAnyTaskEvent = onAnyTaskEventErased,
         .cancelTasks = cancelTasksErased,
         .onTasksCancelled = onTasksCancelledErased,
         .shutdown = shutdownErased,
@@ -126,9 +126,9 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onTaskMessageErased(ptr: *anyopaque, messageType: []const u8, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
+    fn onTaskEventErased(ptr: *anyopaque, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
-        _ = messageType;
+        _ = eventType;
         _ = callback;
         return noSubscription();
     }
@@ -136,7 +136,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onAnyTaskMessageErased(ptr: *anyopaque, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
+    fn onAnyTaskEventErased(ptr: *anyopaque, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return noSubscription();

@@ -68,7 +68,7 @@ const ProgressMessageSender = struct {
         message.putAssumeCapacity("type", .{ .string = "replicate-progress" });
         message.putAssumeCapacity("databasePath", .{ .string = self.databasePath });
         message.putAssumeCapacity("progress", .{ .string = progress orelse "" });
-        self.context.sendMessage(.{ .object = message });
+        self.context.sendEvent(.{ .object = message });
 
         // The same line again, as the job the interface lists and can cancel, so a replication can
         // be watched after its dialog has been closed. Indeterminate: replicate() reports what it is

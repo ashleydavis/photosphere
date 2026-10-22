@@ -201,7 +201,7 @@ pub fn createDefaultDatabaseHandler(
             .databasePath = data.databasePath,
         };
         const text = try std.json.Stringify.valueAlloc(allocator, openedMessage, .{});
-        context.sendMessage(try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}));
+        context.sendEvent(try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}));
     }
     return .null;
 }

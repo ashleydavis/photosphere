@@ -6,7 +6,7 @@ const UnsubscribeFn = task_queue_zig.types.UnsubscribeFn;
 const TaskAddedCallback = task_queue_zig.types.TaskAddedCallback;
 const TasksCancelledCallback = task_queue_zig.types.TasksCancelledCallback;
 const WorkerTaskCompletionCallback = task_queue_zig.types.WorkerTaskCompletionCallback;
-const TaskMessageCallback = task_queue_zig.types.TaskMessageCallback;
+const TaskEventCallback = task_queue_zig.types.TaskEventCallback;
 
 //
 // What one call to addTask was given, so a test can assert on the priority it asked for.
@@ -70,8 +70,8 @@ pub const RecordingQueueBackend = struct {
         .addTask = addTask,
         .onTaskAdded = onTaskAdded,
         .onTaskComplete = onTaskComplete,
-        .onTaskMessage = onTaskMessage,
-        .onAnyTaskMessage = onAnyTaskMessage,
+        .onTaskEvent = onTaskEvent,
+        .onAnyTaskEvent = onAnyTaskEvent,
         .cancelTasks = cancelTasks,
         .onTasksCancelled = onTasksCancelled,
         .shutdown = shutdown,
@@ -114,9 +114,9 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onTaskMessage(ptr: *anyopaque, messageType: []const u8, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
+    fn onTaskEvent(ptr: *anyopaque, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
-        _ = messageType;
+        _ = eventType;
         _ = callback;
         return nothingSubscribed();
     }
@@ -124,7 +124,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onAnyTaskMessage(ptr: *anyopaque, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
+    fn onAnyTaskEvent(ptr: *anyopaque, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return nothingSubscribed();

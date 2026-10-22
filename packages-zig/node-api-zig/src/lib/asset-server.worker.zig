@@ -18,11 +18,11 @@ pub const IAssetServerTaskData = struct {
 };
 
 //
-// Event streamed back (via context.sendMessage) once the server has bound a port and is ready
+// Event streamed back (via context.sendEvent) once the server has bound a port and is ready
 // to serve. The caller reads `port` to build the restApiUrl (http://<host>:<port>).
 //
 pub const IAssetServerReadyEvent = struct {
-    // Discriminator matched by onTaskMessage("asset-server-ready").
+    // Discriminator matched by onTaskEvent("asset-server-ready").
     type: []const u8,
 
     // The actual bound port (resolved even when port 0 was requested).
@@ -94,7 +94,7 @@ pub fn assetServerHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         .port = boundPort,
         .host = host,
     };
-    context.sendMessage(try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, readyMessage, .{}), .{}));
+    context.sendEvent(try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, readyMessage, .{}), .{}));
 
     // Stay alive until the task is cancelled, then shut the server down.
     while (!context.isCancelled()) {

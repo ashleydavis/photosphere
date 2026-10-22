@@ -44,7 +44,7 @@ const RunningTask = struct {
     // Guards the messages.
     mutex: std.Io.Mutex,
 
-    // Events captured from context.sendMessage, as JSON text.
+    // Events captured from context.sendEvent, as JSON text.
     messages: std.ArrayList([]const u8),
 
     // The thread running the handler.
@@ -60,7 +60,7 @@ const RunningTask = struct {
     //
     // Records an event the handler sends.
     //
-    fn sendMessage(context: ?*anyopaque, message: std.json.Value) void {
+    fn sendEvent(context: ?*anyopaque, message: std.json.Value) void {
         const self: *RunningTask = @ptrCast(@alignCast(context.?));
         const text = std.json.Stringify.valueAlloc(std.heap.smp_allocator, message, .{}) catch @panic("out of memory");
         self.mutex.lockUncancelable(io);
@@ -87,7 +87,7 @@ const RunningTask = struct {
         self.timestampProvider = .{};
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "test-session", "asset-server-task", .{
             .context = self,
-            .function = sendMessage,
+            .function = sendEvent,
         }, 10);
         self.mutex = .init;
         self.messages = .empty;

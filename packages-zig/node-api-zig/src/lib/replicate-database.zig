@@ -7,7 +7,7 @@ const errors = utils.errors;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
 const TaskStatus = task_queue_zig.types.TaskStatus;
-const ITaskMessageData = task_queue_zig.types.ITaskMessageData;
+const ITaskEventData = task_queue_zig.types.ITaskEventData;
 const IReplicationResult = replicate_module.IReplicationResult;
 const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
 const IReplicateProgressEvent = api.replicate_database_types.IReplicateProgressEvent;
@@ -43,9 +43,9 @@ pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicat
 //
 // Forwards replicate-progress task events to the ReplicateProgressCallback.
 //
-fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskMessageData) anyerror!void {
+fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskEventData) anyerror!void {
     const onProgress: *const ReplicateProgressCallback = @ptrCast(@alignCast(context.?));
-    const message = switch (data.message) {
+    const message = switch (data.event) {
         .object => |object| object,
         else => {
             return;
@@ -92,7 +92,7 @@ pub fn replicateDatabase(
     defer queue.deinit();
 
     if (onProgress) |progressCallback| {
-        _ = try queue.onTaskMessage("replicate-progress", .{
+        _ = try queue.onTaskEvent("replicate-progress", .{
             .context = @constCast(progressCallback),
             .function = onReplicateProgressMessage,
         });

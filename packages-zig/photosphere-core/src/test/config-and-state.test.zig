@@ -149,7 +149,7 @@ test "get-config and set-config without a key are error replies" {
 // A fake of the create-default-database task, which another part of the app provides: it ends at once.
 //
 fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    try context.sendMessage(.{ .createdDefaultDatabaseFor = data });
+    try context.sendEvent(.{ .createdDefaultDatabaseFor = data });
     return try context.arena.dupe(u8, "null");
 }
 
@@ -158,7 +158,7 @@ fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.
 // it is cancelled.
 //
 fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    try context.sendMessage(.{ .importing = data });
+    try context.sendEvent(.{ .importing = data });
     while (true) {
         try context.checkCancelled();
         try context.io().sleep(.fromMilliseconds(2), .awake);
