@@ -3,7 +3,7 @@
 //
 // This is what lets the automatic import task run unchanged on a phone: the task only ever talks to IMediaSource, and this is the
 // phone's implementation of it, as FolderMediaSource is the desktop's. The library is reached through the host requests
-// mediaLibraryList, mediaLibraryOpen, mediaLibraryClose and mediaLibraryDelete, which the phone's shell answers.
+// mediaLibraryList, mediaLibraryOpen, mediaLibraryClose and mediaLibraryDelete, which the phone's native app answers.
 //
 
 const std = @import("std");
@@ -21,7 +21,7 @@ const MediaSourceDeleteError = api.media_source.MediaSourceDeleteError;
 const IMediaSourceBuildOptions = node_api.media_source_registry.IMediaSourceBuildOptions;
 
 //
-// One item in the library, as the shell describes it.
+// One item in the library, as the native app describes it.
 //
 const IListedItem = struct {
     // The platform's own identifier for the item.
@@ -44,7 +44,7 @@ const IListedItem = struct {
 };
 
 //
-// One page of the library, as the shell describes it.
+// One page of the library, as the native app describes it.
 //
 const IListedPage = struct {
     // The items in the page.
@@ -55,7 +55,7 @@ const IListedPage = struct {
 };
 
 //
-// What the shell answers mediaLibraryDelete with.
+// What the native app answers mediaLibraryDelete with.
 //
 const IDeleteReply = struct {
     // The items that were deleted.
@@ -72,7 +72,7 @@ pub const DeviceMediaSource = struct {
     // The albums to take items from. Empty means the whole library.
     albumIds: []const []const u8,
 
-    // Asks the phone's shell for the library.
+    // Asks the phone's native app for the library.
     host: IHostRequester,
 
     //

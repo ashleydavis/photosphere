@@ -19,7 +19,7 @@ export interface IAssetServerTaskData {
 // Message streamed back (via context.sendMessage) once the server has bound a port and is ready
 // to serve. The caller reads `port` to build the restApiUrl (http://<host>:<port>).
 //
-export interface IAssetServerReadyMessage {
+export interface IAssetServerReadyEvent {
     //
     // Discriminator matched by onTaskMessage("asset-server-ready").
     //
@@ -117,7 +117,7 @@ export async function assetServerHandler(data: IAssetServerTaskData, context: IT
 
     log.info(`Asset server task listening on http://${host}:${boundPort}`);
 
-    const readyMessage: IAssetServerReadyMessage = { type: "asset-server-ready", port: boundPort, host };
+    const readyMessage: IAssetServerReadyEvent = { type: "asset-server-ready", port: boundPort, host };
     context.sendMessage(readyMessage);
 
     // Stay alive until the task is cancelled, then shut the server down.

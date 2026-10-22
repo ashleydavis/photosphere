@@ -9,7 +9,7 @@ import android.system.Os;
 import android.webkit.WebView;
 import dev.ziggy.nativeapp.ZiggyShell;
 
-// Photosphere's one screen: a web view run by Ziggy's shell. What is Photosphere's own is the name of its core library,
+// Photosphere's one screen: a web view run by Ziggy's native app. What is Photosphere's own is the name of its core library,
 // the mobile limits on the core's threads and the process environment the core reads its settings from.
 public final class MainActivity extends Activity {
     // The prefix of the Intent extras that become environment variables of the process.
@@ -57,13 +57,13 @@ public final class MainActivity extends Activity {
         shell.start();
     }
 
-    // Puts into the process environment what the core reads its settings from, which it does when the shell creates it, so this
-    // runs before the shell starts. A phone passes no environment to an app, so the home directory is the app's files directory
-    // (the settings go in the app's private storage, as the sandbox of the Capacitor app held them) and the temporary directory
-    // is its cache directory. A debuggable build, which is the only one a test can install, also takes every string extra of the
-    // launching Intent whose name starts with PHOTOSPHERE_ as an environment variable of that name, which is how a test starts
-    // the app with its settings, vault and logs where it wants them. A build that is not debuggable ignores the extras, because
-    // an exported activity can be started by any app and the extras include the choice of vault.
+    // Puts into the process environment what the core reads its settings from, which it does when the native app creates it, so
+    // this runs before the native app starts. A phone passes no environment to an app, so the home directory is the app's
+    // files directory (the settings go in the app's private storage, as the sandbox of the Capacitor app held them) and the
+    // temporary directory is its cache directory. A debuggable build, which is the only one a test can install, also takes every
+    // string extra of the launching Intent whose name starts with PHOTOSPHERE_ as an environment variable of that name, which is
+    // how a test starts the app with its settings, vault and logs where it wants them. A build that is not debuggable ignores the
+    // extras, because an exported activity can be started by any app and the extras include the choice of vault.
     private void prepareEnvironment() {
         try {
             Os.setenv("HOME", getFilesDir().getAbsolutePath(), true);

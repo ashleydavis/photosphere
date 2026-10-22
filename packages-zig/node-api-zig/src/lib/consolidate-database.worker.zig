@@ -36,7 +36,7 @@ pub const IConsolidateDatabaseData = struct {
 // Streamed as consolidation pushes assets, so the user interface can show progress on what may be a
 // long upload.
 //
-pub const IConsolidateProgressMessage = struct {
+pub const IConsolidateProgressEvent = struct {
     // Discriminator matched by onTaskMessage("consolidate-progress").
     type: []const u8 = "consolidate-progress",
 
@@ -48,21 +48,21 @@ pub const IConsolidateProgressMessage = struct {
 };
 
 //
-// Sends a consolidate-progress task message, using the task context it holds.
+// Sends a consolidate-progress task event, using the task context it holds.
 //
 const ProgressMessageSender = struct {
-    // The task context used to send the message.
+    // The task context used to send the event.
     context: ITaskContext,
 
     //
-    // Sends one progress message.
+    // Sends one progress event.
     //
     fn send(callbackContext: ?*anyopaque, pushed: u64, total: u64) void {
         const self: *ProgressMessageSender = @ptrCast(@alignCast(callbackContext.?));
         var buffer: [1024]u8 = undefined;
         var bufferAllocator = std.heap.FixedBufferAllocator.init(&buffer);
         const allocator = bufferAllocator.allocator();
-        const message: IConsolidateProgressMessage = .{
+        const message: IConsolidateProgressEvent = .{
             .pushed = pushed,
             .total = total,
         };

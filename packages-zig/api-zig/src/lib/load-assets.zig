@@ -6,7 +6,7 @@ const ILoadAssetsData = load_assets_types.ILoadAssetsData;
 
 //
 // Loads assets from the database using a background task.
-// The task will stream batches of assets to the client via task messages.
+// The task will stream batches of assets to the client via task events.
 //
 // Interactive, because this is what a tap on a database is waiting for: until it has streamed its
 // first page the user is looking at an empty gallery. Queued behind an automatic import's backlog it

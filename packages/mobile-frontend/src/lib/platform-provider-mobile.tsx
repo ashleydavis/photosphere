@@ -11,7 +11,7 @@ import { cancelMobileTasks, subscribeMobileTaskMessage, subscribeMobileTaskCompl
 import { pickMobileFolder, saveMobileDownloadedFile, saveMobileDownloadedFiles, setInjectedExportOutcome, setInjectedPickFolderResult } from "./mobile-export";
 import { setInjectedDeleteOutcome } from "./mobile-media-cleanup";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
-import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
+import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 import type { IAutoImportSource } from "api/src/lib/auto-import-settings";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import { mobileConfigSettingsFile, mobileStateSettingsFile, mobileNewsStateFile, readMobileAutoImportSettings, readMobileSyncSettings, recordMobileSyncDatabase, seedMobileSyncSettings } from "./mobile-config-file";
@@ -1069,7 +1069,7 @@ export function PlatformProviderMobile({ children }: IPlatformProviderMobileProp
             if ((message as Record<string, unknown>).type !== "import-progress") {
                 return;
             }
-            const progress = message as unknown as IImportProgressMessage;
+            const progress = message as unknown as IImportProgressEvent;
             const line = `Import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed, ${progress.skippedBeforeOpening} recognised before opening.`;
 
             // Only when it says something it did not say last time. A pass reports its running totals

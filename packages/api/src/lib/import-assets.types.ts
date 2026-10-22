@@ -123,10 +123,10 @@ export interface IImportSuccessMessage {
 // Streamed as an import works, so the interface can show what is happening without waiting for the
 // run to end.
 //
-// One message covers both kinds of import. There used to be a second one that only an automatic
+// One event covers both kinds of import. There used to be a second one that only an automatic
 // import sent, carrying the same counts plus how far through the photo library it was.
 //
-export interface IImportProgressMessage {
+export interface IImportProgressEvent {
     // Discriminator matched by onTaskMessage("import-progress").
     type: "import-progress";
 

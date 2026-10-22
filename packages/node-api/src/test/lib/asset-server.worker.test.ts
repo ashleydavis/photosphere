@@ -12,7 +12,7 @@ jest.mock("../../lib/asset-server-core", () => ({
 }));
 
 import { createAssetServerCore } from "../../lib/asset-server-core";
-import { assetServerHandler, type IAssetServerReadyMessage } from "../../lib/asset-server.worker";
+import { assetServerHandler, type IAssetServerReadyEvent } from "../../lib/asset-server.worker";
 
 const mockCreateAssetServerCore = createAssetServerCore as jest.MockedFunction<typeof createAssetServerCore>;
 
@@ -64,7 +64,7 @@ function makeTestContext(): ITestContext {
 //
 async function waitForReadyPort(messages: any[]): Promise<number> {
     for (let attempt = 0; attempt < 100; attempt++) {
-        const ready = messages.find(message => message.type === "asset-server-ready") as IAssetServerReadyMessage | undefined;
+        const ready = messages.find(message => message.type === "asset-server-ready") as IAssetServerReadyEvent | undefined;
         if (ready) {
             return ready.port;
         }
@@ -117,7 +117,7 @@ describe("assetServerHandler", () => {
         const handlerPromise = assetServerHandler({ port: 0 }, test.context);
 
         await waitForReadyPort(test.messages);
-        const ready = test.messages.find(message => message.type === "asset-server-ready") as IAssetServerReadyMessage;
+        const ready = test.messages.find(message => message.type === "asset-server-ready") as IAssetServerReadyEvent;
         expect(ready.host).toBe("127.0.0.1");
 
         test.cancel();

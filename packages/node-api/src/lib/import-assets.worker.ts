@@ -21,7 +21,7 @@ import { createAutoImportScanner } from "./create-auto-import-scanner";
 import { IAutoImportScannerProgress } from "./auto-import-scanner";
 import { IHashFileData, IHashFileResult } from "./hash-file.worker";
 import { IUploadAssetData, IUploadAssetResult, IAssetDatabaseData } from "./upload-asset.worker";
-import { IImportAssetsResult, IImportedAsset, IImportProgressMessage, IImportSuccessMessage, ISkippedImport } from "api/src/lib/import-assets.types";
+import { IImportAssetsResult, IImportedAsset, IImportProgressEvent, IImportSuccessMessage, ISkippedImport } from "api/src/lib/import-assets.types";
 import { IImportRecordEntry, ImportSource } from "api/src/lib/import-record";
 import { recordImports } from "./import-record-storage";
 
@@ -881,7 +881,7 @@ export async function importAssetsHandler(data: IImportAssetsData, context: ITas
     // import-success, import-skipped and import-failed per file.
     //
     function sendImportProgress(currentItem: string | undefined): void {
-        const message: IImportProgressMessage = {
+        const message: IImportProgressEvent = {
             type: "import-progress",
             seen: result.imported.length + result.skipped.length + result.failedCount + skippedBeforeOpening,
             imported: result.imported.length,

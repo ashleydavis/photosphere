@@ -435,7 +435,7 @@ jobs:
           platform: windows-x64
           build-args: -Dtarget=x86_64-windows-msvc
 
-      # run-desktop.sh builds the page and the app's shell itself, through sync-windows.sh.
+      # run-desktop.sh builds the page and the native app itself, through sync-windows.sh.
       - name: Run the Photosphere App smoke tests
         timeout-minutes: 60
         shell: bash

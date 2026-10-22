@@ -10,7 +10,7 @@ const TestApp = support.TestApp;
 const io = std.testing.io;
 
 //
-// Reads the port out of the asset-server-ready message the task sent.
+// Reads the port out of the asset-server-ready event the task sent.
 //
 fn readyPort(app: *TestApp, allocator: std.mem.Allocator) !u16 {
     try app.shell.expectMessageContaining("\"message\":{\"type\":\"asset-server-ready\"");

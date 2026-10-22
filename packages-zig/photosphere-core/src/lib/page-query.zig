@@ -18,8 +18,8 @@ const app_config = node_api.app_config;
 // Once the query is built the main window counts as created, which starts the steps taken after the window is created
 // (see MainState.mainWindowCreated).
 //
-// Either the asset server's port or the theme can fail to be found, and the failure reaches the shell, which does not load the page.
-// The shell makes the window, so this function is where the core's side of creating the main window happens.
+// Either the asset server's port or the theme can fail to be found, and the failure reaches the native app, which does not load the
+// page. The native app makes the window, so this function is where the core's side of creating the main window happens.
 //
 pub fn pageQuery(core: *Core, allocator: std.mem.Allocator, test_mode: bool) anyerror![]const u8 {
     const state = main_state.fromCore(core);

@@ -29,7 +29,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 //
 
 //
-// Counts the messages the handler sends.
+// Counts the events the handler sends.
 //
 const MessageCounter = struct {
     // How many messages were sent.
@@ -70,7 +70,7 @@ const HandlerTest = struct {
     // Provides the time.
     timestampProvider: TestTimestampProvider,
 
-    // Counts the messages sent.
+    // Counts the events sent.
     messages: MessageCounter,
 
     // The task context.

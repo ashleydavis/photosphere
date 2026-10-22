@@ -174,11 +174,11 @@ case "$PLATFORM" in
         # without them doing anything.
         #
         # It also fills the Import page's panel, which only shows what it has been told while it is on screen. The panel is the shared
-        # one the desktop uses and it reads task messages, so this is what proves the progress of an import running in the background
+        # one the desktop uses and it reads task events, so this is what proves the progress of an import running in the background
         # still reaches the interface.
         android_seed_media "$REPO_DIR/test/multiple-files/test-2.png" "$SECOND_PHOTO_NAME" "$TEST_ALBUM_DIR" || exit 1
 
-        # The panel appears on the first progress message it is told about, which is the one sent as the batch is handed over, so it is
+        # The panel appears on the first progress event it is told about, which is the one sent as the batch is handed over, so it is
         # waited for before the count that follows it. Waiting the other way round moves the log cursor past this line and then times
         # out on it.
         wait_for_log "$TMP_DIR" "Import progress shown" 180 || exit 1
@@ -218,7 +218,7 @@ case "$PLATFORM" in
         # Matched as one substring of the progress line so the figures have to agree in one pass rather than being read from different
         # ones: two already there, both of them answered without opening a file.
         #
-        # Waited for generously because the relaunched app may already have run a pass before the page subscribed to task messages,
+        # Waited for generously because the relaunched app may already have run a pass before the page subscribed to task events,
         # and the next one is a pause away.
         wait_for_log "$TMP_DIR" "Import: 0 imported, 2 already there, 0 failed, 2 recognised before opening." 180 || exit 1
         log_info "The restarted app recognised both photos without copying or hashing either"

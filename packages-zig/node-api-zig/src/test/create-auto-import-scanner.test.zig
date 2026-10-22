@@ -55,7 +55,7 @@ fn ignoreScanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, stat
 }
 
 //
-// A task context that never cancels, and whose messages go nowhere.
+// A task context that never cancels, and whose events go nowhere.
 //
 fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
     _ = context;

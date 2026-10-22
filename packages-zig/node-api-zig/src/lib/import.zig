@@ -46,7 +46,7 @@ const AddPathsState = struct {
     queue: *TaskQueue,
 
     //
-    // Counts one task message.
+    // Counts one task event.
     //
     fn onAnyTaskMessage(context: ?*anyopaque, data: ITaskMessageData) anyerror!void {
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));

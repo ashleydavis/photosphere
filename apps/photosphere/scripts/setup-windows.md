@@ -1,6 +1,6 @@
 # setup-windows.sh
 
-One time setup for building and packaging the Windows shell. It first runs `fetch-webview2.sh` (see [fetch-webview2.md](fetch-webview2.md) for what that downloads), which needs no administrator approval, then `fetch-wix.sh`, and then installs what is missing.
+One time setup for building and packaging the Windows native app. It first runs `fetch-webview2.sh` (see [fetch-webview2.md](fetch-webview2.md) for what that downloads), which needs no administrator approval, then `fetch-wix.sh`, and then installs what is missing.
 
 It is run on Windows by `bun run --filter=ziggy setup` from the repository root, through [setup.sh](setup.md), and by the root `bun run setup`. It takes no arguments. It needs `curl`, `sha256sum` and `unzip` (or the Windows `tar`), and expects `bun install` and `mise install` to have been done.
 

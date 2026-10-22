@@ -5,11 +5,11 @@
 //
 // What the page sees is JSON: a dialog the user cancelled is a reply of null.
 //
-// What the dialogs Ziggy shows through its shells force:
+// What the dialogs Ziggy shows through its native apps force:
 //  - Ziggy's dialog request carries one string besides the title, the initial name, which is the suggested file name of a save
 //    dialog and, for a dialog that opens a file or a folder, the folder to start in. A save dialog is therefore given the file
 //    name only, without the remembered download folder.
-//  - The "New Folder" button is not requested: the shells' folder dialogs offer it themselves.
+//  - The "New Folder" button is not requested: the native apps' folder dialogs offer it themselves.
 //  - The dialogs do not restore the main window if it is minimised or focus it. Ziggy's dialog request has no such step.
 //
 // In test mode the dialogs for the download folder and for the path to save to are answered by the environment variables

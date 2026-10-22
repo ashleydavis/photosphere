@@ -73,7 +73,7 @@ pub const ICreateDefaultDatabaseData = struct {
 // listen to and neither platform needs an opener of its own.
 // (Zig: the `type` is the string "database-opened".)
 //
-pub const IDatabaseOpenedMessage = struct {
+pub const IDatabaseOpenedEvent = struct {
     // Names this message among all the messages tasks send ("database-opened").
     type: []const u8,
 
@@ -196,7 +196,7 @@ pub fn createDefaultDatabaseHandler(
 
     // Said last, so the interface is told to open a database that is made, recorded and listed.
     if (data.open) {
-        const openedMessage: IDatabaseOpenedMessage = .{
+        const openedMessage: IDatabaseOpenedEvent = .{
             .type = "database-opened",
             .databasePath = data.databasePath,
         };

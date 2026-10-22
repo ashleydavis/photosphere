@@ -1,4 +1,4 @@
 // The icon of the Photosphere executable: the first icon in the file is what Explorer, the taskbar and the shortcut show, and
-// the window class loads it by this number. The number is even because Ziggy's shell turns it into a wide string pointer
+// the window class loads it by this number. The number is even because Ziggy's native app turns it into a wide string pointer
 // (MAKEINTRESOURCE) with @ptrFromInt, whose alignment check panics at startup for an odd address.
 2 ICON "../../icons/photosphere.ico"

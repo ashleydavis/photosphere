@@ -2,14 +2,14 @@
 // The requests only a phone can answer: requestMediaPermission, exportFile, exportFiles, exportTempFolder, startBackgroundImport, stopBackgroundImport,
 // and the secure store's get, set, delete and keys (secureStoreGet, secureStoreSet, secureStoreDelete and secureStoreKeys here).
 //
-// Each is a task type, because the phone's shell shows native interface (a permission prompt, a share sheet) and waits for the user, and
-// the thread that handles the page's messages must not wait for that. Each asks the shell through the core's one host request callback,
-// by the method's name, and passes the shell's answer to the page unchanged. A platform that has no such callback answers with an error
-// that says so, except that on Windows, whose shell has none, the core answers startBackgroundImport's notification permission itself
-// (windows-host.zig).
+// Each is a task type, because the phone's native app shows native interface (a permission prompt, a share sheet) and waits for the
+// user, and the thread that handles the page's messages must not wait for that. Each asks the native app through the core's one host
+// request callback, by the method's name, and passes the native app's answer to the page unchanged. A platform that has no such
+// callback answers with an error that says so, except that on Windows, whose native app has none, the core answers
+// startBackgroundImport's notification permission itself (windows-host.zig).
 //
 // A test can stage the outcome of the share sheet: exportFile and exportFiles pass a "testOutcome" ("shared" or "cancelled") on to the
-// shell, which then skips its sheet and completes the export as that outcome. The request is passed on unchanged apart from that.
+// native app, which then skips its sheet and completes the export as that outcome. The request is passed on unchanged apart from that.
 //
 
 const std = @import("std");
@@ -21,8 +21,8 @@ const TaskContext = ziggy.task_runner.TaskContext;
 const json = ziggy.json;
 
 //
-// Asks the shell to do what the method names, and returns its answer, which is JSON text. A platform without the callback, a shell that
-// cannot do it, and an answer that is not JSON are each an error with a sentence the user can act on.
+// Asks the native app to do what the method names, and returns its answer, which is JSON text. A platform without the callback, a
+// native app that cannot do it, and an answer that is not JSON are each an error with a sentence the user can act on.
 //
 fn askShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
     const answer = try background_work.askShell(context, method, request_json);

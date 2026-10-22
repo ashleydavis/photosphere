@@ -3,7 +3,7 @@ import { sendJobProgress } from "task-queue";
 import { createMediaFileDatabase } from "./media-file-database";
 import { openStorage } from "./open-storage";
 import { replicate, type IReplicationResult } from "./replicate";
-import type { IReplicateDatabaseData, IReplicateProgressMessage } from "api";
+import type { IReplicateDatabaseData, IReplicateProgressEvent } from "api";
 import { log } from "utils";
 
 //
@@ -47,7 +47,7 @@ export async function replicateDatabaseHandler(
     log.info(`Replication started from ${data.sourcePath} to ${data.destPath}`);
 
     const progressCallback = (progress: string | undefined): void => {
-        const message: IReplicateProgressMessage = {
+        const message: IReplicateProgressEvent = {
             type: "replicate-progress",
             databasePath: data.sourcePath,
             progress: progress ?? "",

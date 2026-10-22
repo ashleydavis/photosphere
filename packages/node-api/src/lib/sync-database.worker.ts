@@ -5,7 +5,7 @@ import { openStorage } from "./open-storage";
 import { merkleTreeExists } from "./tree";
 import { loadDatabaseConfig } from "api";
 import { syncDatabases } from "./sync";
-import type { ISyncDatabaseData, ISyncChange, ISyncBatchMessage, ISyncSkippedMessage, ISyncCompletedMessage } from "api";
+import type { ISyncDatabaseData, ISyncChange, ISyncBatchEvent, ISyncSkippedEvent, ISyncCompletedEvent } from "api";
 import type { IAsset } from "api";
 import { log } from "utils";
 
@@ -38,7 +38,7 @@ export async function syncDatabaseHandler(
         if (!config?.origin) {
             const reason = "no origin configured";
             log.info(`Sync skipped for "${data.databasePath}": ${reason}`);
-            const skippedMessage: ISyncSkippedMessage = { type: "sync-skipped", databasePath: data.databasePath, reason };
+            const skippedMessage: ISyncSkippedEvent = { type: "sync-skipped", databasePath: data.databasePath, reason };
             context.sendMessage(skippedMessage);
             return;
         }
@@ -53,7 +53,7 @@ export async function syncDatabaseHandler(
         if (!connected) {
             const reason = `origin not accessible (${config.origin})`;
             log.info(`Sync skipped for "${data.databasePath}": ${reason}`);
-            const skippedMessage: ISyncSkippedMessage = { type: "sync-skipped", databasePath: data.databasePath, reason };
+            const skippedMessage: ISyncSkippedEvent = { type: "sync-skipped", databasePath: data.databasePath, reason };
             context.sendMessage(skippedMessage);
             return;
         }
@@ -99,7 +99,7 @@ export async function syncDatabaseHandler(
                 }
             }
 
-            const batchMessage: ISyncBatchMessage = {
+            const batchMessage: ISyncBatchEvent = {
                 type: "sync-batch",
                 databasePath: data.databasePath,
                 added,
@@ -146,7 +146,7 @@ export async function syncDatabaseHandler(
             log.info(`Sync skipped for "${data.databasePath}": databases already identical`);
         }
 
-        const completedMessage: ISyncCompletedMessage = { type: "sync-completed", databasePath: data.databasePath, synced: result.synced };
+        const completedMessage: ISyncCompletedEvent = { type: "sync-completed", databasePath: data.databasePath, synced: result.synced };
         context.sendMessage(completedMessage);
     }
     catch (error) {

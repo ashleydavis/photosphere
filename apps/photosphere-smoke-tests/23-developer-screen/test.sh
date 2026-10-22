@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Enables developer mode from the About page, opens the developer screen and exercises its tools: the stories browser, the FPS
-# indicator and the developer tools toggle. The toggle asks the shell to open its developer tools, which a phone shows as an in-page
-# console.
+# indicator and the developer tools toggle. The toggle asks the native app to open its developer tools, which a phone shows as an
+# in-page console.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"

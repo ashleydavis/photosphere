@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# One time setup for building and packaging the Windows shell: fetches the WebView2 SDK and the WiX Toolset, and installs
-# Microsoft's C++ toolchain and the Windows SDK when they are missing. See setup-windows.md.
+# One time setup for building and packaging the Windows native app: fetches the WebView2 SDK and the WiX Toolset, and
+# installs Microsoft's C++ toolchain and the Windows SDK when they are missing. See setup-windows.md.
 
 set -euo pipefail
 

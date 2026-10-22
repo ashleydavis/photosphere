@@ -1,7 +1,7 @@
 //
-// The answers the Windows app gives to the host requests the background work makes of the platform. Ziggy's Windows shell has no host
-// request callback, so the core answers these itself on Windows, in place of the shell, with what the Linux shell answers
-// (apps/photosphere/native/linux/src/main.zig):
+// The answers the Windows app gives to the host requests the background work makes of the platform. Ziggy's Windows native app has no
+// host request callback, so the core answers these itself on Windows, in place of the native app, with what the Linux native app
+// answers (apps/photosphere/native/linux/src/main.zig):
 //
 // - requestNotificationPermission: a desktop has no permission to ask for, so it is always granted.
 // - networkConnectionType: a desktop cannot tell Wi-Fi from a wired or a metered connection, so it is "unknown", which is what the page's

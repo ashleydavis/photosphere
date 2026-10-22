@@ -6,7 +6,7 @@ const TaskContext = task_queue_zig.task_context.TaskContext;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 
 //
-// A task context whose messages go nowhere, for the tests of handlers that use only the generators, the session id
+// A task context whose events go nowhere, for the tests of handlers that use only the generators, the session id
 // and the cancel flag of their context.
 // The context must not move while it is used.
 //

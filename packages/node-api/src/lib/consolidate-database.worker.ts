@@ -24,7 +24,7 @@ export interface IConsolidateDatabaseData {
 // Streamed as consolidation pushes assets, so the user interface can show progress on what may be a
 // long upload.
 //
-export interface IConsolidateProgressMessage {
+export interface IConsolidateProgressEvent {
     // Discriminator matched by onTaskMessage("consolidate-progress").
     type: "consolidate-progress";
 
@@ -73,7 +73,7 @@ export async function consolidateDatabaseHandler(data: IConsolidateDatabaseData,
         uuidGenerator,
         timestampProvider,
         (pushed, total) => {
-            const message: IConsolidateProgressMessage = { type: "consolidate-progress", pushed, total };
+            const message: IConsolidateProgressEvent = { type: "consolidate-progress", pushed, total };
             context.sendMessage(message);
         }
     );

@@ -1,8 +1,8 @@
 //
-// Photosphere's desktop menu: the menu bar, written once. Ziggy's shells draw it natively on every desktop platform and never on a
-// phone.
+// Photosphere's desktop menu: the menu bar, written once. Ziggy's native apps draw it natively on every desktop platform and never
+// on a phone.
 //
-// Each item says what it runs. A `.standard` item is an action the shell does itself: quit, close-window, reload, toggle-devtools,
+// Each item says what it runs. A `.standard` item is an action the native app does itself: quit, close-window, reload, toggle-devtools,
 // toggle-fullscreen, zoom-in, zoom-out, zoom-reset, undo, redo, cut, copy, paste and select-all. Every other item is Photosphere's and
 // runs `.ui`: the core sends the page the app event {"type": "menu", "item": "<name>"}. The page reads the item's `.name` like this:
 //
@@ -18,7 +18,7 @@
 //  - The menu is written once, so it is not built again when a database is opened or closed, and Import Assets and Close Database
 //    are always in the File menu. The page does nothing for either item while no database is open.
 //  - The theme items are plain items, not radio buttons that show the saved theme.
-//  - There is no Window menu: Ziggy's shells have no action to minimise or zoom the window. Close Window is in the File menu.
+//  - There is no Window menu: Ziggy's native apps have no action to minimise or zoom the window. Close Window is in the File menu.
 //  - The Edit menu is Ziggy's, because MacOS needs it for the editing shortcuts to reach the page.
 //  - A Developer menu holds the stories browser and the developer tools.
 //

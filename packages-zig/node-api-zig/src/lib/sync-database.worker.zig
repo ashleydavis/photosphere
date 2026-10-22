@@ -20,9 +20,9 @@ const syncDatabases = sync.syncDatabases;
 const SyncChangeCallback = sync.SyncChangeCallback;
 const ISyncDatabaseData = api.sync_database_types.ISyncDatabaseData;
 const ISyncChange = api.sync_database_types.ISyncChange;
-const ISyncBatchMessage = api.sync_database_types.ISyncBatchMessage;
-const ISyncSkippedMessage = api.sync_database_types.ISyncSkippedMessage;
-const ISyncCompletedMessage = api.sync_database_types.ISyncCompletedMessage;
+const ISyncBatchEvent = api.sync_database_types.ISyncBatchEvent;
+const ISyncSkippedEvent = api.sync_database_types.ISyncSkippedEvent;
+const ISyncCompletedEvent = api.sync_database_types.ISyncCompletedEvent;
 
 //
 // Number of changes to accumulate before flushing a sync-batch message.
@@ -52,14 +52,14 @@ fn configOrigin(config: ?std.json.Value) ?[]const u8 {
 }
 
 //
-// Converts a task message to the JSON value that is sent.
+// Converts a task event to the JSON value that is sent.
 //
 fn messageToJson(allocator: std.mem.Allocator, message: anytype) !std.json.Value {
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, message, .{}), .{});
 }
 
 //
-// Accumulates changes and flushes them as sync-batch task messages in groups of SYNC_BATCH_SIZE.
+// Accumulates changes and flushes them as sync-batch task events in groups of SYNC_BATCH_SIZE.
 //
 const SyncBatcher = struct {
     // Allocates the batches and their messages.
@@ -80,7 +80,7 @@ const SyncBatcher = struct {
     // How many records have moved so far, so the job row says more than that a sync is running.
     changesSynced: u64 = 0,
 
-    // Accumulates changes and flushes them as sync-batch task messages in groups of SYNC_BATCH_SIZE.
+    // Accumulates changes and flushes them as sync-batch task events in groups of SYNC_BATCH_SIZE.
     pendingBatch: std.ArrayList(ISyncChange) = .empty,
 
     //
@@ -107,7 +107,7 @@ const SyncBatcher = struct {
             }
         }
 
-        const batchMessage: ISyncBatchMessage = .{
+        const batchMessage: ISyncBatchEvent = .{
             .type = "sync-batch",
             .databasePath = self.databasePath,
             .added = added.items,
@@ -135,7 +135,7 @@ const SyncBatcher = struct {
 };
 
 //
-// Syncs the local database with its origin and sends the messages about it.
+// Syncs the local database with its origin and sends the events about it.
 // (Zig has no try block that can be left with return and still reach a catch, so this is a function of its own.)
 //
 fn syncDatabase(
@@ -157,7 +157,7 @@ fn syncDatabase(
     const origin = configOrigin(config) orelse {
         const reason = "no origin configured";
         log.info(try std.fmt.allocPrint(allocator, "Sync skipped for \"{s}\": {s}", .{ data.databasePath, reason }));
-        const skippedMessage: ISyncSkippedMessage = .{
+        const skippedMessage: ISyncSkippedEvent = .{
             .type = "sync-skipped",
             .databasePath = data.databasePath,
             .reason = reason,
@@ -178,7 +178,7 @@ fn syncDatabase(
     if (!connected) {
         const reason = try std.fmt.allocPrint(allocator, "origin not accessible ({s})", .{origin});
         log.info(try std.fmt.allocPrint(allocator, "Sync skipped for \"{s}\": {s}", .{ data.databasePath, reason }));
-        const skippedMessage: ISyncSkippedMessage = .{
+        const skippedMessage: ISyncSkippedEvent = .{
             .type = "sync-skipped",
             .databasePath = data.databasePath,
             .reason = reason,
@@ -241,7 +241,7 @@ fn syncDatabase(
         log.info(try std.fmt.allocPrint(allocator, "Sync skipped for \"{s}\": databases already identical", .{data.databasePath}));
     }
 
-    const completedMessage: ISyncCompletedMessage = .{
+    const completedMessage: ISyncCompletedEvent = .{
         .type = "sync-completed",
         .databasePath = data.databasePath,
         .synced = result.synced,

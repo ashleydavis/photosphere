@@ -14,7 +14,7 @@ const sync_index = @intFromEnum(background_work.Pass.sync);
 const prefetch_index = @intFromEnum(background_work.Pass.prefetch);
 
 //
-// Waits until the shell has been told as many keep-alive changes as are expected, and checks they are the ones expected.
+// Waits until the native app has been told as many keep-alive changes as are expected, and checks they are the ones expected.
 //
 fn expectKeepAliveCalls(app: *TestApp, expected: []const bool) !void {
     const io = app.shell.threaded.io();
@@ -46,7 +46,7 @@ fn stopTimerThread(state: *MainState) void {
 }
 
 //
-// A task that sends a message and then runs until it is cancelled.
+// A task that sends an event and then runs until it is cancelled.
 //
 fn spinTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;

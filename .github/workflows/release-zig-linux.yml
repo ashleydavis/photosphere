@@ -439,8 +439,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      # The Linux shell links the runtime libraries by file name, so no development packages are needed. WebKitGTK plays video
-      # through GStreamer, so the packaged app depends on those plugins.
+      # The Linux native app links the runtime libraries by file name, so no development packages are needed. WebKitGTK plays
+      # video through GStreamer, so the packaged app depends on those plugins.
       - name: Install the build and packaging tools (Linux)
         uses: ./.github/actions/install-apt-packages
         with:

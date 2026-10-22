@@ -30,7 +30,7 @@ import { PreviewBanner } from "./lib/preview-banner";
 // Props for the App component.
 //
 interface IAppProps {
-    // The bridge the shell injects into the page.
+    // The bridge the native app injects into the page.
     ziggy: IZiggyBridge;
 
     // What the core reported about the device the app runs on.

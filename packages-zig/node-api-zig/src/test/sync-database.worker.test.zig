@@ -152,7 +152,7 @@ const Scenario = struct {
     }
 
     //
-    // The types of the messages sent so far, in order.
+    // The types of the events sent so far, in order.
     //
     fn messageTypes(self: *Scenario, allocator: std.mem.Allocator) ![]const []const u8 {
         var types: std.ArrayList([]const u8) = .empty;

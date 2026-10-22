@@ -182,7 +182,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     // Whether the test hooks (the test control connection) are built into the apps. Never for a release.
     const test_hooks = b.option(bool, "test-hooks", "Build the test hooks (the test control connection) into the app (never for a release)") orelse false;
-    // Whether the Windows shells are compiled without linking WebView2's loader, to check them on a machine that cannot link.
+    // Whether the Windows native apps are compiled without linking WebView2's loader, to check them on a machine that cannot link.
     const compile_only = b.option(bool, "compile-only", "Compile the Windows shell without linking the WebView2 loader, to check it on a machine that cannot link") orelse false;
     // Whether the desktop executables leave out their debug information. Only the release packages do: a dev or test build keeps it, so
     // a panic there prints where it happened.
@@ -911,10 +911,10 @@ fn addCli(
 }
 
 //
-// Builds Photosphere on Ziggy: its core as a library for the target, with its dev mode, and its Linux and Windows shells. The packages
-// Photosphere's core is made of are built for the machine running the build, and cross built for Android, iOS and Windows, so for any
-// other target addPhotosphereUnavailable registers the steps with a message that says so. The app's core, photosphere-core and every
-// package import the same Ziggy, the one the packages were made with.
+// Builds Photosphere on Ziggy: its core as a library for the target, with its dev mode, and its Linux and Windows native apps. The
+// packages Photosphere's core is made of are built for the machine running the build, and cross built for Android, iOS and Windows,
+// so for any other target addPhotosphereUnavailable registers the steps with a message that says so. The app's core,
+// photosphere-core and every package import the same Ziggy, the one the packages were made with.
 //
 fn addPhotosphere(
     b: *std.Build,
@@ -988,10 +988,10 @@ fn addPhotosphere(
     };
     try ziggy_build.addLinuxShell(b, photosphere_app, strip, target, optimize, ziggy, libraries.static_library);
     try ziggy_build.addWindowsShell(b, photosphere_app, compile_only, strip, target, optimize, ziggy, libraries.static_library);
-    // Each shell's executable links the core as a static library, and Zig gives the archives a module links only to the compile that
-    // owns the module, so the third-party libraries the packages link reach the core's static library, which does not hold them, and
-    // not the executable. Without this the Linux shell failed to link with every symbol of the AWS SDK for C, aws-lc, ImageMagick and
-    // FFmpeg undefined. Each shell's executable, which Ziggy makes and installs under the step, links them itself.
+    // Each native app's executable links the core as a static library, and Zig gives the archives a module links only to the compile
+    // that owns the module, so the third-party libraries the packages link reach the core's static library, which does not hold them,
+    // and not the executable. Without this the Linux native app failed to link with every symbol of the AWS SDK for C, aws-lc,
+    // ImageMagick and FFmpeg undefined. Each native app's executable, which Ziggy makes and installs under the step, links them itself.
     for ([_][]const u8{ "photosphere-linux", "photosphere-windows" }) |step_name| {
         const shell_step = &b.top_level_steps.get(step_name).?.step;
         for (shell_step.dependencies.items) |dependency| {
@@ -1006,7 +1006,8 @@ fn addPhotosphere(
 }
 
 //
-// The directory the page of Photosphere's app is built into (`bun run bundle:ui` in apps/photosphere), which the core embeds and serves to every shell.
+// The directory the page of Photosphere's app is built into (`bun run bundle:ui` in apps/photosphere), which the core embeds and
+// serves to every native app.
 //
 const photosphere_page_directory = "apps/photosphere-frontend/dist";
 

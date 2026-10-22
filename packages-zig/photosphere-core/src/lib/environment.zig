@@ -1,7 +1,7 @@
 //
 // The environment variables of the process, for the code Photosphere's core is made of, which reads them with
-// `node_utils.process_env.getEnv`. The CLI's `main` hands its environment to `process_env`, but a core a shell hosts has no `main` of
-// its own, so without this every variable the settings directory, the vault and the log directory are moved with
+// `node_utils.process_env.getEnv`. The CLI's `main` hands its environment to `process_env`, but a core a native app hosts has no
+// `main` of its own, so without this every variable the settings directory, the vault and the log directory are moved with
 // (`PHOTOSPHERE_CONFIG_DIR`, `PHOTOSPHERE_VAULT_DIR`, `PHOTOSPHERE_LOG_DIR`) would be ignored and a test run would work on the real
 // settings of the person running it.
 //

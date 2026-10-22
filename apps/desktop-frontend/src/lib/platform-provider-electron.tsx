@@ -65,7 +65,7 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     const updateAvailableCallbacksRef = useRef<Set<(data: IUpdateAvailableData) => void>>(new Set());
 
     // Store callbacks for task-message events
-    const taskMessageCallbacksRef = useRef<Set<(taskId: string, message: Record<string, unknown>) => void>>(new Set());
+    const taskEventCallbacksRef = useRef<Set<(taskId: string, message: Record<string, unknown>) => void>>(new Set());
 
     // Store callbacks for task-completed events
     const taskCompleteCallbacksRef = useRef<Set<(taskId: string, result: Record<string, unknown>) => void>>(new Set());
@@ -216,11 +216,11 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
 
     // Set up message listener for task-message events (import progress)
     useEffect(() => {
-        const handleTaskMessage = (data: { taskId: string; message: Record<string, unknown> }) => {
-            taskMessageCallbacksRef.current.forEach(cb => cb(data.taskId, data.message));
+        const handleTaskEvent = (data: { taskId: string; message: Record<string, unknown> }) => {
+            taskEventCallbacksRef.current.forEach(cb => cb(data.taskId, data.message));
         };
 
-        electronAPI.onMessage('task-message', handleTaskMessage);
+        electronAPI.onMessage('task-message', handleTaskEvent);
 
         return () => {
             // Note: removeAllListeners is intentionally not called here because
@@ -355,9 +355,9 @@ export function PlatformProviderElectron({ children, electronAPI }: IPlatformPro
     }, [electronAPI]);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
-        taskMessageCallbacksRef.current.add(handler);
+        taskEventCallbacksRef.current.add(handler);
         return () => {
-            taskMessageCallbacksRef.current.delete(handler);
+            taskEventCallbacksRef.current.delete(handler);
         };
     }, []);
 

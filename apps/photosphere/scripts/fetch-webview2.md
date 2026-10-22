@@ -6,7 +6,7 @@ Run it as `bun run --filter=ziggy fetch:webview2`. It takes no arguments and can
 
 What it produces:
 
-- `include/WebView2.h` and `include/WebView2EnvironmentOptions.h`, from the Microsoft.Web.WebView2 NuGet package. The shell translates `WebView2.h` to Zig with `zig translate-c`.
+- `include/WebView2.h` and `include/WebView2EnvironmentOptions.h`, from the Microsoft.Web.WebView2 NuGet package. The native app translates `WebView2.h` to Zig with `zig translate-c`.
 - `include/EventToken.h`. `WebView2.h` includes it, and Zig's bundled mingw headers do not have it. It is the unmodified `eventtoken.h` from the mingw-w64 project at a pinned commit, saved under the name the include expects.
 - `x64/WebView2LoaderStatic.lib` and `arm64/WebView2LoaderStatic.lib`, the SDK's static loader, which the build links into the executable.
 

@@ -19,7 +19,7 @@ const TaskContext = task_queue_zig.task_context.TaskContext;
 const REMOTE_THUMB_PATH = "thumb/476dffbb-af9e-4cda-8006-b02f3851e86c";
 
 //
-// A task context that records the messages sent through it.
+// A task context that records the events sent through it.
 //
 const RecordingContext = struct {
     // Deterministic uuids.
@@ -52,7 +52,7 @@ const RecordingContext = struct {
 };
 
 //
-// A task context that records the messages sent through it.
+// A task context that records the events sent through it.
 //
 fn makeContext(allocator: std.mem.Allocator, io: std.Io) !*RecordingContext {
     _ = try test_environment.setupEnvironment(io);

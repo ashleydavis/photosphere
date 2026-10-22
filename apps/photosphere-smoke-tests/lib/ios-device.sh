@@ -300,7 +300,7 @@ photosphere_platform_start() {
     photosphere_ios_device_lldb "process handle SIGPIPE --notify false --pass true --stop false"
 
     # The process stops at its first instruction, before Foundation is loaded, when lldb could not evaluate a Foundation
-    # call. It is run on to where the shell creates the core, by which point Foundation is loaded, and Foundation's
+    # call. It is run on to where the native app creates the core, by which point Foundation is loaded, and Foundation's
     # declarations are imported there, so the expressions that read files compile with their real method signatures.
     local stops_before
     stops_before="$(photosphere_ios_device_lldb_count "$test_dir" 'stop reason = breakpoint')"

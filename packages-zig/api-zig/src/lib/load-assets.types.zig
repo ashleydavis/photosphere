@@ -35,12 +35,12 @@ pub const ILoadAssetsResult = struct {
 };
 
 //
-// Task message that carries one page of assets to the interface.
-// (Zig: the assets are the JSON values of their records, as task messages are JSON.)
+// Task event that carries one page of assets to the interface.
+// (Zig: the assets are the JSON values of their records, as task events are JSON.)
 //
-pub const IAssetPageMessage = struct {
+pub const IAssetPageEvent = struct {
     //
-    // Message type discriminator ("asset-page").
+    // Event type discriminator ("asset-page").
     //
     type: []const u8,
 

@@ -231,8 +231,8 @@ describe('ZiggyQueueBackend', () => {
             expect(typed).toHaveLength(1);
             expect(any).toHaveLength(1);
             expect(consoleError).toHaveBeenCalledWith("Error in task completion callback:", new Error('completion broke'));
-            expect(consoleError).toHaveBeenCalledWith("Error in task message callback:", new Error('message broke'));
-            expect(consoleError).toHaveBeenCalledWith("Error in any task message callback:", new Error('any broke'));
+            expect(consoleError).toHaveBeenCalledWith("Error in task event callback:", new Error('message broke'));
+            expect(consoleError).toHaveBeenCalledWith("Error in any task event callback:", new Error('any broke'));
         }
         finally {
             consoleError.mockRestore();

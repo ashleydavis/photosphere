@@ -25,7 +25,7 @@ fn makeDatabase(app: *TestApp, name: []const u8, config_json: []const u8) ![]u8 
 }
 
 //
-// A task that sends a message and then runs until it is cancelled.
+// A task that sends an event and then runs until it is cancelled.
 //
 fn spinTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
@@ -454,21 +454,21 @@ test "a sync task's started and completed messages are passed to the page as eve
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskMessage(app.core, .{
+    main_process.onTaskEvent(app.core, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
         .message_json = "{\"type\":\"sync-started\"}",
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-started\",\"data\":null}}");
-    main_process.onTaskMessage(app.core, .{
+    main_process.onTaskEvent(app.core, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
         .message_json = "{\"type\":\"sync-completed\"}",
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-completed\",\"data\":null}}");
-    main_process.onTaskMessage(app.core, .{
+    main_process.onTaskEvent(app.core, .{
         .task_id = "other",
         .task_type = "other",
         .source = "x",
@@ -497,7 +497,7 @@ test "the periodic sync queues a sync for the open database when syncing is allo
 }
 
 //
-// A stand-in for the create-default-database task, which another part of the app provides: it ends at once.
+// A fake of the create-default-database task, which another part of the app provides: it ends at once.
 //
 fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
@@ -506,7 +506,7 @@ fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.
 }
 
 //
-// A stand-in for the create-default-database task that fails, as it does when the database cannot be made.
+// A fake of the create-default-database task that fails, as it does when the database cannot be made.
 //
 fn createDefaultDatabaseFailsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = context;
@@ -515,7 +515,7 @@ fn createDefaultDatabaseFailsTask(context: *ziggy.task_runner.TaskContext, data:
 }
 
 //
-// A stand-in for the import-assets task, which another part of the app provides: it reports that it started and then runs until it is
+// A fake of the import-assets task, which another part of the app provides: it reports that it started and then runs until it is
 // cancelled.
 //
 fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
@@ -528,7 +528,7 @@ fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Valu
 }
 
 //
-// A stand-in for the import-assets task that ends as soon as it starts, as one does when it cannot open its database.
+// A fake of the import-assets task that ends as soon as it starts, as one does when it cannot open its database.
 //
 fn importAssetsEndsAtOnceTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = context;
@@ -686,7 +686,7 @@ test "an import that failed with an empty error message says the error is unknow
 }
 
 //
-// A stand-in for the evict-originals task, which another part of the app provides: it reports what it was asked to do.
+// A fake of the evict-originals task, which another part of the app provides: it reports what it was asked to do.
 //
 fn evictOriginalsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     try context.sendMessage(.{ .evicting = data });
@@ -763,7 +763,7 @@ fn consoleHas(app: *TestApp, text: []const u8) bool {
 }
 
 //
-// A stand-in for the asset server task: it says it is ready on the port it was asked for, or on a port of its own when it was asked
+// A fake of the asset server task: it says it is ready on the port it was asked for, or on a port of its own when it was asked
 // for the operating system's choice, and then runs until it is cancelled.
 //
 fn assetServerTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {

@@ -3,7 +3,7 @@ import { FakeZiggy } from './fake-ziggy';
 import type { ITestCommandPayload } from 'user-interface';
 
 //
-// A command the driver stand-in was given.
+// A command the fake driver was given.
 //
 interface ISeenCommand {
     // The command name.

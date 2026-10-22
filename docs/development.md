@@ -20,8 +20,8 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - dev-server (deprecated) - WebSocket development server
         - ios-frontend (deprecated) - Capacitor iOS app
         - mk-cli (deprecated) - Merkle tree CLI tool (for testing and debugging)
-        - photosphere - Photosphere App: the Ziggy shells for each platform and the scripts that build and run them
-        - photosphere-frontend - The web view UI of the Photosphere App
+        - photosphere - Photosphere App: the Ziggy native apps for each platform and the scripts that build and run them
+        - photosphere-frontend - The frontend of the Photosphere App
         - photosphere-smoke-tests - Smoke tests for the Photosphere App on every platform
         - smoke-tests (deprecated) - Host-driven UI smoke tests for the mobile apps
     - packages/
@@ -65,7 +65,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - tools-zig - Zig port of tools
         - utils-zig - Zig port of utils. The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
         - vault-zig - Zig port of vault
-        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's message handler, task handlers and asset server, built on Ziggy's core (`@import("ziggy")`, from the `ziggy` dependency in `build.zig.zon`)
+        - photosphere-core - The Zig library the Photosphere App's native apps link: Photosphere's message handler, task handlers and asset server, built on Ziggy's core (`@import("ziggy")`, from the `ziggy` dependency in `build.zig.zon`)
     - test - Data for testing.
 
 "(deprecated)" marks an app or package that is going to be superseded by the Zig port (the Zig packages in `packages-zig`, the Zig CLI, and the Photosphere App on Ziggy) and removed once the port fully replaces it.
@@ -160,7 +160,7 @@ Screenshots land in `stories-screenshots/<platform>/` with an `index.html` pairi
 
 ## Platform notes
 
-The shared UI in `packages/user-interface` must stay platform-neutral: no `window.ziggy`, no shell code, no iOS/Android specifics. Keep platform code in the platform layer (`apps/photosphere-frontend`) or the shells, and pass it into the shared UI through props or an existing platform abstraction. See [Photosphere on Ziggy](photosphere-on-ziggy.md).
+The shared UI in `packages/user-interface` must stay platform-neutral: no `window.ziggy`, no native app code, no iOS/Android specifics. Keep platform code in the platform layer (`apps/photosphere-frontend`) or the native apps, and pass it into the shared UI through props or an existing platform abstraction. See [Photosphere on Ziggy](photosphere-on-ziggy.md).
 
 The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why the Photosphere App's iOS project must build with that Xcode. Do not raise those versions.
 

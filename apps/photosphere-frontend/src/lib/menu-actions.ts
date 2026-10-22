@@ -1,8 +1,8 @@
 //
 // How the page interprets the menu items the core hands it. The Photosphere menu is defined in Zig with Ziggy's menu types
-// (packages-zig/photosphere-core/src/lib/menu.zig); the shell does the standard actions itself (quit, close-window, reload,
-// toggle-devtools, toggle-fullscreen, the zoom commands and the editing commands) and the core sends every other item to the
-// page as the app event {type: "menu", item}, where item is the item's name. Each name is a string, called an action here, and
+// (packages-zig/photosphere-core/src/lib/menu.zig); the native app does the standard actions itself (quit, close-window,
+// reload, toggle-devtools, toggle-fullscreen, the zoom commands and the editing commands) and the core sends every other item to
+// the page as the app event {type: "menu", item}, where item is the item's name. Each name is a string, called an action here, and
 // this file says what each one means, as a description of an effect the platform provider then carries out.
 //
 

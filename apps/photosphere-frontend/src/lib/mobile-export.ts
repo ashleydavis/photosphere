@@ -5,14 +5,14 @@ import type { ISaveDownloadResult } from "user-interface";
 //
 // Export helpers for a phone. A phone cannot write to a folder the user chooses (an iOS security-scoped address or an Android
 // content:// tree is not a path the storage layer can write to), so a download is written to a temporary folder in the app's
-// private storage by the save-asset or save-assets-batch task, and the shell's share or save sheet then hands the finished files
-// out, deleting each temporary copy on every exit. The exportFile and exportFiles request channels of the core ask the shell for
-// that sheet.
+// private storage by the save-asset or save-assets-batch task, and the native app's share or save sheet then hands the finished
+// files out, deleting each temporary copy on every exit. The exportFile and exportFiles request channels of the core ask the
+// native app for that sheet.
 //
 
 //
 // The directory, relative to the app's private storage, that a download's finished files are written to before the share sheet
-// hands them out. The shell removes each file after its sheet is dismissed.
+// hands them out. The native app removes each file after its sheet is dismissed.
 //
 export const EXPORT_TEMP_DIR = ".export-tmp";
 
@@ -96,14 +96,14 @@ export interface ISaveAssetsBatchOutputs {
 }
 
 //
-// The answer a test stages for the next export in place of the shell's share or save sheet, which no automated test can answer:
-// "shared" completes as if the user chose a destination and "cancelled" as if they dismissed the sheet. Undefined in production,
-// so the real sheet is shown.
+// The answer a test stages for the next export in place of the native app's share or save sheet, which no automated test can
+// answer: "shared" completes as if the user chose a destination and "cancelled" as if they dismissed the sheet. Undefined in
+// production, so the real sheet is shown.
 //
 export type ExportTestOutcome = "shared" | "cancelled";
 
 //
-// The request sent to the shell for exportFile. A staged test outcome travels in it so the shell skips its sheet.
+// The request sent to the native app for exportFile. A staged test outcome travels in it so the native app skips its sheet.
 //
 export interface IExportFileRequest {
     // The finished file, relative to the app's private storage.
@@ -114,7 +114,7 @@ export interface IExportFileRequest {
 }
 
 //
-// The request sent to the shell for exportFiles. A staged test outcome travels in it so the shell skips its sheet.
+// The request sent to the native app for exportFiles. A staged test outcome travels in it so the native app skips its sheet.
 //
 export interface IExportFilesRequest {
     // The finished files, relative to the app's private storage.
@@ -166,7 +166,7 @@ export interface IExportFileReply {
 // The reply of the exportTempFolder request.
 //
 export interface IExportFolderReply {
-    // The absolute path of the folder the shell made.
+    // The absolute path of the folder the native app made.
     path: string;
 }
 
@@ -185,24 +185,24 @@ export interface IMobileExportDependencies {
     // Makes the unique id that keeps one export's temporary files apart from another's.
     newUuid(): string;
 
-    // Asks the shell to make the folder (relative to the app's private storage) that one export's files are written into, and gives
-    // its absolute path, which is what the save tasks write to.
+    // Asks the native app to make the folder (relative to the app's private storage) that one export's files are written into,
+    // and gives its absolute path, which is what the save tasks write to.
     makeExportFolder(folder: string): Promise<string>;
 
     // Runs a task to its end and gives its result.
     runTask(taskType: string, data: ISaveAssetTaskData | ISaveAssetsBatchTaskData): Promise<ITaskResult>;
 
-    // Asks the shell to hand one finished file out through its share or save sheet.
+    // Asks the native app to hand one finished file out through its share or save sheet.
     exportFile(path: string, testOutcome: ExportTestOutcome | undefined): Promise<IExportFileReply>;
 
-    // Asks the shell to hand several finished files out through one sheet.
+    // Asks the native app to hand several finished files out through one sheet.
     exportFiles(paths: string[], testOutcome: ExportTestOutcome | undefined): Promise<IExportFilesReply>;
 }
 
 //
 // Saves downloaded assets on a phone: writes them to a temporary place with the save-asset task (one file) or the
-// save-assets-batch task (several), then hands them out through the shell's sheet. A task that does not succeed is a failed
-// save, a sheet the user dismissed is a cancelled one, and anything else is saved.
+// save-assets-batch task (several), then hands them out through the native app's sheet. A task that does not succeed is a
+// failed save, a sheet the user dismissed is a cancelled one, and anything else is saved.
 //
 export async function saveDownloadsViaShareSheet(items: ISaveAssetItem[], databasePath: string, testOutcome: ExportTestOutcome | undefined, dependencies: IMobileExportDependencies): Promise<ISaveDownloadResult> {
     if (items.length === 1) {

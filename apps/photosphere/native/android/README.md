@@ -1,6 +1,6 @@
-# Android shell
+# Android native app
 
-The Android shell is a Java activity that hosts a `WebView` and passes messages between the page and the Zig core library. The Java is kept to the bridge only.
+The Android native app is a Java activity that hosts a `WebView` and passes messages between the page and the Zig core library. The Java is kept to the bridge only.
 
 ## What it does
 
@@ -12,7 +12,7 @@ The Android shell is a Java activity that hosts a `WebView` and passes messages 
 
 ## Project and build
 
-A Gradle project. `sync:android` builds the UI, which the core library embeds, and the core as a shared library per ABI (`libphotosphere.so`) into `app/build/ziggy/jniLibs`, then Gradle builds the APK. The application id is `au.com.codecapers.photosphere.ziggy`. `open:android` opens the project in Android Studio. Runs on Linux and MacOS. See [Photosphere App](../../README.md).
+A Gradle project. `sync:android` builds the frontend, which the core library embeds, and the core as a shared library per ABI (`libphotosphere.so`) into `app/build/ziggy/jniLibs`, then Gradle builds the APK. The application id is `au.com.codecapers.photosphere.ziggy`. `open:android` opens the project in Android Studio. Runs on Linux and MacOS. See [Photosphere App](../../README.md).
 
 ## Icon
 

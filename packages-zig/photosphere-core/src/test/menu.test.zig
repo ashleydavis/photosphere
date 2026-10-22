@@ -32,7 +32,7 @@ const page_items = [_][]const u8{
 };
 
 //
-// The actions of the items the shell does itself.
+// The actions of the items the native app does itself.
 //
 const standard_actions = [_][]const u8{ "close-window", "quit", "undo", "redo", "cut", "copy", "paste", "select-all", "zoom-reset", "zoom-in", "zoom-out", "toggle-fullscreen", "reload", "toggle-devtools" };
 

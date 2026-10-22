@@ -60,13 +60,13 @@ pub const ISyncChange = struct {
 };
 
 //
-// Task message sent when a sync returns early without running, so the UI can report why a
+// Task event sent when a sync returns early without running, so the UI can report why a
 // requested sync produced no sync-started / sync-completed pair. Without this a skipped sync is
 // silent on the frontend and indistinguishable from a sync that never started.
 //
-pub const ISyncSkippedMessage = struct {
+pub const ISyncSkippedEvent = struct {
     //
-    // Message type discriminator ("sync-skipped").
+    // Event type discriminator ("sync-skipped").
     //
     type: []const u8,
 
@@ -82,11 +82,11 @@ pub const ISyncSkippedMessage = struct {
 };
 
 //
-// Task message sent when a sync has finished running, so the UI can report the outcome.
+// Task event sent when a sync has finished running, so the UI can report the outcome.
 //
-pub const ISyncCompletedMessage = struct {
+pub const ISyncCompletedEvent = struct {
     //
-    // Message type discriminator ("sync-completed").
+    // Event type discriminator ("sync-completed").
     //
     type: []const u8,
 
@@ -103,12 +103,12 @@ pub const ISyncCompletedMessage = struct {
 };
 
 //
-// Task message sent during a sync to carry a batch of incremental changes to the UI.
-// (Zig: the assets are the JSON values of their records, as task messages are JSON.)
+// Task event sent during a sync to carry a batch of incremental changes to the UI.
+// (Zig: the assets are the JSON values of their records, as task events are JSON.)
 //
-pub const ISyncBatchMessage = struct {
+pub const ISyncBatchEvent = struct {
     //
-    // Message type discriminator ("sync-batch").
+    // Event type discriminator ("sync-batch").
     //
     type: []const u8,
 

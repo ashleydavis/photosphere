@@ -46,7 +46,7 @@ describe('buildExportFolderPath', () => {
 });
 
 //
-// A task the stand-in ran.
+// A task the fake ran.
 //
 interface IRecordedTask {
     // The task type.
@@ -57,7 +57,7 @@ interface IRecordedTask {
 }
 
 //
-// A set of stand-ins for what saving a download needs, which records what it was asked.
+// A set of fakes for what saving a download needs, which records what it was asked.
 //
 interface IRecordedExport {
     // The dependencies to hand to the function under test.
@@ -72,7 +72,7 @@ interface IRecordedExport {
     // The test outcome each sheet was asked with, one entry per sheet.
     outcomes: (ExportTestOutcome | undefined)[];
 
-    // Each export folder the shell was asked to make.
+    // Each export folder the native app was asked to make.
     folders: string[];
 }
 

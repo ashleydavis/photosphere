@@ -10,10 +10,10 @@ const TaskStatus = task_queue_zig.types.TaskStatus;
 const ITaskMessageData = task_queue_zig.types.ITaskMessageData;
 const IReplicationResult = replicate_module.IReplicationResult;
 const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
-const IReplicateProgressMessage = api.replicate_database_types.IReplicateProgressMessage;
+const IReplicateProgressEvent = api.replicate_database_types.IReplicateProgressEvent;
 
 //
-// Progress callback fired for each progress message emitted by the replicate-database worker.
+// Progress callback fired for each progress event emitted by the replicate-database worker.
 // A closure: `function` is called with `context`. The progress string is only valid during the call.
 //
 pub const ReplicateProgressCallback = struct {
@@ -41,7 +41,7 @@ pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicat
 }
 
 //
-// Forwards replicate-progress task messages to the ReplicateProgressCallback.
+// Forwards replicate-progress task events to the ReplicateProgressCallback.
 //
 fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskMessageData) anyerror!void {
     const onProgress: *const ReplicateProgressCallback = @ptrCast(@alignCast(context.?));

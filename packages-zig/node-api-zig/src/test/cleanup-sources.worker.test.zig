@@ -26,7 +26,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 //
 
 //
-// A task context that never cancels, and whose messages go nowhere.
+// A task context that never cancels, and whose events go nowhere.
 //
 fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
     _ = context;

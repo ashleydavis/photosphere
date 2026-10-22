@@ -12,7 +12,7 @@ export interface IRecordedMessage {
 }
 
 //
-// A stand-in for the bridge a shell injects, which records what the page sends and lets a test play the core's events. An
+// A fake of the bridge a native app injects, which records what the page sends and lets a test play the core's events. An
 // invoke is answered with the reply a test set for the message's name, and an invoke of a name with no reply set rejects, as the
 // core does for a name it does not know.
 //

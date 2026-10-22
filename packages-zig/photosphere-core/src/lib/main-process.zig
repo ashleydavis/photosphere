@@ -1,7 +1,7 @@
 //
 // What the main process does about databases being opened and closed, about syncing and about
 // the tasks the worker pool reports on: the `notify-database-opened`, `notify-database-closed` and `notify-database-edited` messages,
-// the `main-command` message, and the functions that hear every task end and every task message from the worker pool.
+// the `main-command` message, and the functions that hear every task end and every task event from the worker pool.
 //
 // The state these use is in main-state.zig.
 //
@@ -173,14 +173,15 @@ pub const MainCommandRequest = std.json.Value;
 // main-command: the payload is the name of a command, or an object with the name in `command` and the command's arguments beside it.
 // A generic message that lets the page trigger named actions in the main process. The commands are:
 //
-//  - toggle-devtools: opens the developer tools, or closes them when they are open, which the shell does as it does for the menu item.
+//  - toggle-devtools: opens the developer tools, or closes them when they are open, which the native app does as it does for the
+//    menu item.
 //  - page-loaded: says the page has loaded and is listening for events, which starts the checks for an update and for news. Only the
 //    first one does anything.
 //  - set-sync-allowed: records whether the page's decision permits syncing automatically (`allowed`), and schedules a sync at once
 //    when it does, to catch up one that was waiting.
 //
-// toggle-devtools needs the shell's help, so it is an error when the shell offers no way to do it. A payload with no command name
-// is an unknown command called "undefined".
+// toggle-devtools needs the native app's help, so it is an error when the native app offers no way to do it. A payload with no
+// command name is an unknown command called "undefined".
 //
 pub fn mainCommandHandler(core: *Core, arena: std.mem.Allocator, request: MainCommandRequest) !void {
     const command: []const u8 = switch (request) {
@@ -515,7 +516,7 @@ fn errorMessageOrUnknown(error_message: ?[]const u8) []const u8 {
 //
 // A task ends with a status and a message, so the failure is logged with its message.
 // A server that ended before it said which port it bound is not started again: the start here is the page's query asking for the
-// port, which reports the same failure to the shell.
+// port, which reports the same failure to the native app.
 //
 fn handleAssetServerEnd(state: *MainState, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
     if (end.status == .failed) {
@@ -638,31 +639,31 @@ fn handleTaskEnd(core: *Core, arena: std.mem.Allocator, end: ziggy.types.TaskEnd
 }
 
 //
-// Told when any task sends a message. Tells the page when a sync starts and
-// when it completes. The page is told of every task message by the core.
+// Told when any task sends an event. Tells the page when a sync starts and
+// when it completes. The page is told of every task event by the core.
 //
-pub fn onTaskMessage(core: *Core, sent: ziggy.types.TaskSentMessage) void {
+pub fn onTaskEvent(core: *Core, sent: ziggy.types.TaskSentMessage) void {
     var arena_state = std.heap.ArenaAllocator.init(core.allocator);
     defer arena_state.deinit();
-    handleTaskMessage(core, arena_state.allocator(), sent) catch |err| {
-        utils.log.log.exception("Error handling a task message", err);
+    handleTaskEvent(core, arena_state.allocator(), sent) catch |err| {
+        utils.log.log.exception("Error handling a task event", err);
     };
 }
 
-fn handleTaskMessage(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.TaskSentMessage) !void {
-    const message = try std.json.parseFromSliceLeaky(std.json.Value, arena, sent.message_json, .{});
-    const message_type = json.getString(message, "type") orelse {
+fn handleTaskEvent(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.TaskSentMessage) !void {
+    const event = try std.json.parseFromSliceLeaky(std.json.Value, arena, sent.message_json, .{});
+    const event_type = json.getString(event, "type") orelse {
         return;
     };
-    if (std.mem.eql(u8, message_type, "sync-started")) {
+    if (std.mem.eql(u8, event_type, "sync-started")) {
         utils.log.log.event("Sync started");
         try events.sendSyncStarted(core, arena);
     }
-    else if (std.mem.eql(u8, message_type, "sync-completed")) {
+    else if (std.mem.eql(u8, event_type, "sync-completed")) {
         // The suffix says whether the sync moved anything, which is the only way to tell a sync that ran and found both sides
         // identical from one that pushed changes. "Sync completed" stays the start of the line, so a wait on that text alone still
         // matches.
-        const synced_field = if (message == .object) message.object.get("synced") else null;
+        const synced_field = if (event == .object) event.object.get("synced") else null;
         const moved_changes = synced_field != null and synced_field.? == .bool and synced_field.?.bool;
         if (moved_changes) {
             utils.log.log.event("Sync completed: changes synced");
@@ -672,13 +673,13 @@ fn handleTaskMessage(core: *Core, arena: std.mem.Allocator, sent: ziggy.types.Ta
         }
         try events.sendSyncCompleted(core, arena);
     }
-    else if (std.mem.eql(u8, message_type, "asset-server-ready")) {
+    else if (std.mem.eql(u8, event_type, "asset-server-ready")) {
         // The asset server says which port it bound.
-        const port = json.getInteger(message, "port") orelse {
-            return utils.errors.throwError("The asset server's ready message has no port.", .{});
+        const port = json.getInteger(event, "port") orelse {
+            return utils.errors.throwError("The asset server's ready event has no port.", .{});
         };
         if (port <= 0 or port > std.math.maxInt(u16)) {
-            return utils.errors.throwError("The asset server's ready message has a port that is not a port: {d}.", .{port});
+            return utils.errors.throwError("The asset server's ready event has a port that is not a port: {d}.", .{port});
         }
         const state = main_state.fromCore(core);
         state.lock();

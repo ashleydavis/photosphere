@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Opens the Windows shell's folder in Visual Studio Code. See open-windows.md.
+# Opens the Windows native app's folder in Visual Studio Code. See open-windows.md.
 
 set -euo pipefail
 

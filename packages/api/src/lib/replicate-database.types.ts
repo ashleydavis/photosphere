@@ -58,9 +58,9 @@ export interface IReplicateDatabaseData {
 //
 // Task message sent during replication to forward progress strings to the UI.
 //
-export interface IReplicateProgressMessage {
+export interface IReplicateProgressEvent {
     //
-    // Message type discriminator.
+    // Event type discriminator.
     //
     type: "replicate-progress";
 

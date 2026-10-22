@@ -10,7 +10,7 @@ const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampPr
 //
 // A task context for the tests of the worker handlers.
 //
-// It records every message the handler sends and reports the task cancelled once isCancelled has been called more than
+// It records every event the handler sends and reports the task cancelled once isCancelled has been called more than
 // cancelAfterCalls times.
 //
 pub const RecordingTaskContext = struct {
@@ -26,7 +26,7 @@ pub const RecordingTaskContext = struct {
     // The clock the context hands to the handler instead of testClock, or null to use testClock.
     clockOverride: ?ITimestampProvider,
 
-    // Every message sent so far, in order, each copied so it stays valid after the call that sent it.
+    // Every event sent so far, in order, each copied so it stays valid after the call that sent it.
     messages: std.ArrayList(std.json.Value),
 
     // How many times isCancelled may be called before it starts to answer true, or null to never cancel.

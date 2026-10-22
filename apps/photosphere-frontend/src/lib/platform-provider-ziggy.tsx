@@ -5,7 +5,7 @@ import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, c
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
-import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
+import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { ISaveAssetItem, IConflictResolution } from "api";
 import type { ISecret } from "vault";
@@ -55,7 +55,7 @@ export interface IPlatformProviderZiggyProps {
     // The app below the provider.
     children: ReactNode | ReactNode[];
 
-    // The bridge the shell injects into the page.
+    // The bridge the native app injects into the page.
     ziggy: IZiggyBridge;
 
     // What the core reported about the device the app runs on.
@@ -100,8 +100,8 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // LAN database-sharing methods, dispatched through the shared task queue.
     const { startShareReceive, waitShareReceive, cancelShareReceive, waitForReceiver, sendToReceiver, cancelShareSend } = useLanShareTasks();
 
-    // In test mode, the outcome a test staged for the next phone export in place of the shell's share or save sheet. Read and
-    // cleared by the export it applies to, so each staged outcome serves exactly one export.
+    // In test mode, the outcome a test staged for the next phone export in place of the native app's share or save sheet. Read
+    // and cleared by the export it applies to, so each staged outcome serves exactly one export.
     const stagedExportOutcomeRef = useRef<ExportTestOutcome | undefined>(undefined);
 
     // Store callbacks for database-opened events
@@ -131,8 +131,8 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // Store callbacks for update-available events
     const updateAvailableCallbacksRef = useRef<Set<(data: IUpdateAvailableData) => void>>(new Set());
 
-    // Store callbacks for task-message events
-    const taskMessageCallbacksRef = useRef<Set<(taskId: string, message: Record<string, unknown>) => void>>(new Set());
+    // Store callbacks for task-event events
+    const taskEventCallbacksRef = useRef<Set<(taskId: string, message: Record<string, unknown>) => void>>(new Set());
 
     // Store callbacks for task-completed events
     const taskCompleteCallbacksRef = useRef<Set<(taskId: string, result: Record<string, unknown>) => void>>(new Set());
@@ -292,7 +292,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             if (message.type !== "import-progress") {
                 return;
             }
-            const progress = message as unknown as IImportProgressMessage;
+            const progress = message as unknown as IImportProgressEvent;
             const line = `Import: ${progress.imported} imported, ${progress.skipped} already there, ${progress.failed} failed, ${progress.skippedBeforeOpening} recognised before opening.`;
 
             // Only when it says something it did not say last time. A pass reports its running totals as it goes and the next pass
@@ -304,10 +304,10 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             lastProgressLine = line;
             log.info(line);
         };
-        taskMessageCallbacksRef.current.add(onProgress);
+        taskEventCallbacksRef.current.add(onProgress);
 
         return () => {
-            taskMessageCallbacksRef.current.delete(onProgress);
+            taskEventCallbacksRef.current.delete(onProgress);
         };
     }, []);
 
@@ -454,25 +454,25 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         };
     }, [ziggy]);
 
-    // Set up message listener for task-message events (import progress)
+    // Set up the listener for task-event events (import progress)
     useEffect(() => {
-        const handleTaskMessage = (data: { taskId: string; message: Record<string, unknown> }) => {
+        const handleTaskEvent = (data: { taskId: string; message: Record<string, unknown> }) => {
             // Rendered before the next event is handled. A task the core runs quickly sends its progress and its completion
             // back to back, and React would otherwise fold them into one render, so the job list would go from empty to empty
             // and the job would never be seen to start.
             flushSync(() => {
-                taskMessageCallbacksRef.current.forEach(cb => cb(data.taskId, data.message));
+                taskEventCallbacksRef.current.forEach(cb => cb(data.taskId, data.message));
             });
         };
 
-        ziggy.onTaskMessage(handleTaskMessage);
+        ziggy.onTaskMessage(handleTaskEvent);
 
         return () => {
-            ziggy.removeTaskMessageListener(handleTaskMessage);
+            ziggy.removeTaskMessageListener(handleTaskEvent);
         };
     }, [ziggy]);
 
-    // Set up message listener for task-completed events (import completion)
+    // Set up the listener for task-completed events (import completion)
     useEffect(() => {
         const handleTaskCompleted = (data: ITaskCompletedEvent) => {
             flushSync(() => {
@@ -488,7 +488,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy]);
 
     //
-    // Carries out what a menu action asks for. Everything the shell does itself never arrives here.
+    // Carries out what a menu action asks for. Everything the native app does itself never arrives here.
     //
     const runMenuEffect = useCallback(async (effect: MenuEffect): Promise<void> => {
         switch (effect.kind) {
@@ -668,9 +668,9 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy, platform.platformKind]);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
-        taskMessageCallbacksRef.current.add(handler);
+        taskEventCallbacksRef.current.add(handler);
         return () => {
-            taskMessageCallbacksRef.current.delete(handler);
+            taskEventCallbacksRef.current.delete(handler);
         };
     }, []);
 
@@ -715,7 +715,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         return found ?? undefined;
     }, [ziggy]);
 
-    // Both platforms show the shell's folder dialog. On Android the dialog answers with a content:// tree address, where
+    // Both platforms show the native app's folder dialog. On Android the dialog answers with a content:// tree address, where
     // the phone's earlier "Browse" prompt asked for a name and answered with a path inside the app's private storage.
     const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
         const picked = await messages.invoke<string | null>('pick-folder', toJsonValue(options ?? null));
@@ -753,7 +753,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         }
 
         // A phone cannot write to a place the user chooses, so the files are written into the app's private storage and the
-        // shell's share sheet hands them out.
+        // native app's share sheet hands them out.
         const testOutcome = stagedExportOutcomeRef.current;
         stagedExportOutcomeRef.current = undefined;
         return await saveDownloadsViaShareSheet(items, databasePath, testOutcome, {
@@ -840,7 +840,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [platform.platformKind]);
 
     //
-    // Toggles the developer tools. A desktop asks the shell to, through the generic main-command channel, so no
+    // Toggles the developer tools. A desktop asks the native app to, through the generic main-command channel, so no
     // developer-tools-specific channel is needed. A phone shows or hides the in-page Eruda console, the only inspector
     // reachable from inside its web view.
     //
@@ -944,7 +944,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     // Tells the interface to reload the open database whenever the app comes back to the screen, on a phone.
     //
-    // Photos reach the gallery as task messages announcing each one, and those are delivered to whatever is listening at the time.
+    // Photos reach the gallery as task events announcing each one, and those are delivered to whatever is listening at the time.
     // While the app is off screen the web view is suspended, so every photo the background import takes in is announced to nobody, and
     // nothing replays them when it wakes. Without this the gallery goes on showing what it held when the user left, however many
     // photos have been backed up since, until they think to open the database again.

@@ -1,9 +1,9 @@
 //
 // Tests for mcp-server.zig and mcp-bridge.zig: the MCP server task, the tools it offers, and the calls it forwards to the page.
 //
-// Each test runs the real core on a stand-in shell with the MCP server task running on a free loopback port (the test sets test mode in the
-// environment the core reads, which is what makes the server not claim its fixed port), and plays the part of the page: it reads the
-// `mcp-tool-request` events the stand-in shell records and answers them with `mcp-tool-response` messages.
+// Each test runs the real core on a fake native app with the MCP server task running on a free loopback port (the test sets test mode
+// in the environment the core reads, which is what makes the server not claim its fixed port), and plays the part of the page: it reads
+// the `mcp-tool-request` events the fake native app records and answers them with `mcp-tool-response` messages.
 //
 
 const std = @import("std");

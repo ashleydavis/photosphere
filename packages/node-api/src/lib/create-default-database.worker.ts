@@ -58,7 +58,7 @@ export interface ICreateDefaultDatabaseData {
 // to the renderer, and the native plugin emits it to the WebView. So the interface has one thing to
 // listen to and neither platform needs an opener of its own.
 //
-export interface IDatabaseOpenedMessage {
+export interface IDatabaseOpenedEvent {
     // Names this message among all the messages tasks send.
     type: "database-opened";
 
@@ -123,7 +123,7 @@ export async function createDefaultDatabaseHandler(data: ICreateDefaultDatabaseD
 
     // Said last, so the interface is told to open a database that is made, recorded and listed.
     if (data.open) {
-        const openedMessage: IDatabaseOpenedMessage = {
+        const openedMessage: IDatabaseOpenedEvent = {
             type: "database-opened",
             databasePath: data.databasePath,
         };

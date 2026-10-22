@@ -1,7 +1,7 @@
 import { TaskQueue, TaskStatus } from "task-queue";
 import type { IUuidGenerator } from "utils";
 import type { IReplicationResult } from "./replicate";
-import type { IReplicateDatabaseData, IReplicateProgressMessage } from "api";
+import type { IReplicateDatabaseData, IReplicateProgressEvent } from "api";
 
 //
 // Progress callback fired for each progress message emitted by the replicate-database worker.
@@ -26,7 +26,7 @@ export async function replicateDatabase(
     const queue = new TaskQueue(uuidGenerator, data.sourcePath);
 
     if (onProgress) {
-        queue.onTaskMessage<IReplicateProgressMessage>("replicate-progress", ({ message }) => {
+        queue.onTaskMessage<IReplicateProgressEvent>("replicate-progress", ({ message }) => {
             onProgress(message.progress);
         });
     }

@@ -398,7 +398,7 @@ jobs:
           platform: macos-x64
           build-args: -Dtarget=x86_64-macos.11.0
 
-      # run-desktop.sh builds the page and the app's shell itself, through build-macos.sh.
+      # run-desktop.sh builds the page and the native app itself, through build-macos.sh.
       - name: Run the Photosphere App smoke tests
         timeout-minutes: 60
         shell: bash

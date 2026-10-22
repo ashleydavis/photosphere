@@ -12,7 +12,7 @@ const ASSET_SERVER_SOURCE = "asset-server";
 // The message the asset-server task streams once it has bound a port. Declared locally so this
 // package does not depend on node-api just for the message shape.
 //
-interface IAssetServerReadyMessage {
+interface IAssetServerReadyEvent {
     //
     // Discriminator matched by onTaskMessage.
     //
@@ -68,7 +68,7 @@ function startAssetServer(): void {
     const queue = new TaskQueue(new RandomUuidGenerator(), ASSET_SERVER_SOURCE);
     assetServerQueue = queue;
 
-    queue.onTaskMessage<IAssetServerReadyMessage>("asset-server-ready", ({ message }) => {
+    queue.onTaskMessage<IAssetServerReadyEvent>("asset-server-ready", ({ message }) => {
         assetServerUrl = `http://localhost:${message.port}`;
         for (const listener of urlListeners) {
             listener(assetServerUrl);

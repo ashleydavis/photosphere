@@ -6,7 +6,7 @@ const support = @import("test-support.zig");
 const TestApp = support.TestApp;
 
 //
-// A stand-in for the save-asset task, which another part of the app provides: it reports what it was asked to write.
+// A fake of the save-asset task, which another part of the app provides: it reports what it was asked to write.
 //
 fn saveAssetTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     try context.sendMessage(.{ .savedAsset = data });
@@ -14,7 +14,7 @@ fn saveAssetTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) 
 }
 
 //
-// A stand-in for the save-assets-batch task: it reports what it was asked to write and says which files it wrote and which it did not.
+// A fake of the save-assets-batch task: it reports what it was asked to write and says which files it wrote and which it did not.
 //
 fn saveAssetsBatchTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     try context.sendMessage(.{ .savedBatch = data });
@@ -22,7 +22,7 @@ fn saveAssetsBatchTask(context: *ziggy.task_runner.TaskContext, data: std.json.V
 }
 
 //
-// A stand-in for a save task that fails, with a message the user can read.
+// A fake save task that fails, with a message the user can read.
 //
 fn failingSaveTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = context;

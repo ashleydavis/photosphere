@@ -348,7 +348,7 @@ photosphere_ios_container() {
 
 #
 # Prints the host path of the app's storage directory, the one the app resolves its storage-relative paths against. It is the data
-# directory the shell gives the core, which is the app's Application Support directory named for its bundle identifier.
+# directory the native app gives the core, which is the app's Application Support directory named for its bundle identifier.
 #
 photosphere_ios_storage_root() {
     local container
@@ -681,8 +681,8 @@ photosphere_ios_background_log_all() {
 
 #
 # Prints the lines the background work has written since the last ios_clear_background_log. The passes report what they are doing
-# through the shell's backgroundLog, which writes them to the system log under the AutoImportService category rather than to the app's
-# log file, as the Android shell writes them to logcat. Usage: ios_background_log
+# through the native app's backgroundLog, which writes them to the system log under the AutoImportService category rather than to the
+# app's log file, as the Android native app writes them to logcat. Usage: ios_background_log
 #
 ios_background_log() {
     local cursor=0

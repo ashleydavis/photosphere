@@ -10,7 +10,7 @@
 // timer goes on starting passes with the app off screen. Each pass is also a task whose type is registered as keep-alive.
 //
 // The decisions of a pass are in the functions that take a PassHost, a plain interface over everything that needs the platform or the
-// core, so they are tested with no core and no phone. The passes report what they are doing to the shell, which writes it to the
+// core, so they are tested with no core and no phone. The passes report what they are doing to the native app, which writes it to the
 // system log: the app's own log file is written through the page, which is suspended exactly when this work matters.
 //
 
@@ -541,7 +541,7 @@ pub fn readPrefetchStepCounts(outputs: ?std.json.Value) IStepResult {
 
 //
 // The host of a pass that runs as a task: its steps are child tasks of the pass's own task, so they take its source and are cancelled
-// with it, and the platform is reached through the shell's host requests.
+// with it, and the platform is reached through the native app's host requests.
 //
 const TaskPassHost = struct {
     // The context of the pass's task.
@@ -634,8 +634,8 @@ const TaskPassHost = struct {
     }
 
     //
-    // Tells the shell what the pass is doing, for the system log. A shell that cannot take it is not allowed to make the pass's
-    // report vanish, so the message goes to the app's own log with the reason.
+    // Tells the native app what the pass is doing, for the system log. A native app that cannot take it is not allowed to make the
+    // pass's report vanish, so the message goes to the app's own log with the reason.
     //
     fn tellShell(self: *TaskPassHost, message: []const u8, is_error: bool) void {
         const request = json.stringify(self.context.arena, .{
@@ -652,8 +652,8 @@ const TaskPassHost = struct {
 };
 
 //
-// Asks the shell to do what the method names, and returns its answer, which is JSON text. A platform without the callback and a shell
-// that cannot do it are each an error with a sentence the user can act on.
+// Asks the native app to do what the method names, and returns its answer, which is JSON text. A platform without the callback and a
+// native app that cannot do it are each an error with a sentence the user can act on.
 //
 pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
     const reply = context.hostRequest(method, request_json) catch |err| {
@@ -669,9 +669,9 @@ pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const
 }
 
 //
-// Answers a host request when the shell has no host request callback. Ziggy's Windows shell and MacOS bridge have none, so on Windows
-// and MacOS the core answers the requests a desktop can itself (windows-host.zig, macos-host.zig). Anywhere else, and for a request only
-// a phone can answer, it is an error that says so.
+// Answers a host request when the native app has no host request callback. Ziggy's Windows native app and MacOS bridge have none, so
+// on Windows and MacOS the core answers the requests a desktop can itself (windows-host.zig, macos-host.zig). Anywhere else, and for a
+// request only a phone can answer, it is an error that says so.
 //
 pub fn answerWithoutShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
     if (builtin.os.tag == .windows) {

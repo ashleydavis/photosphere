@@ -17,7 +17,7 @@ const TaskContext = task_queue_zig.task_context.TaskContext;
 const THUMB_PATH = "thumb/89171cd9-a652-4047-b869-1154bf2c95a1";
 
 //
-// Ignores task messages.
+// Ignores task events.
 //
 fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
     _ = context;

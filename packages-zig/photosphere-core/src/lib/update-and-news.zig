@@ -79,7 +79,7 @@ fn announceUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_ver
 // Skipped for `dev` and `nightly` builds (no real release to compare against) and in test mode unless explicitly opted in
 // (PHOTOSPHERE_FORCE_UPDATE_CHECK). Network and parse failures are logged and skipped so update failures never block app startup.
 //
-// The core has no window to be missing, and an event sent while the page is not there is the shell's to hold or drop. The message
+// The core has no window to be missing, and an event sent while the page is not there is the native app's to hold or drop. The message
 // of a reply that is not JSON is a sentence plus the parser's error name, and the message of a network failure is the Zig error name.
 //
 pub fn checkForUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_version: []const u8) !void {

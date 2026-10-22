@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Imports two fixture images into an empty database and expects the gallery to show them. On a desktop the images are dropped on the
-# import page's drop zone with the control connection's drop command, which records the drop with the core as the shell does for a real
-# one. A phone has no drop, so the drop zone is hidden and a "Select photos" button opens the native picker. The picker cannot be
+# import page's drop zone with the control connection's drop command, which records the drop with the core as the native app does for a
+# real one. A phone has no drop, so the drop zone is hidden and a "Select photos" button opens the native picker. The picker cannot be
 # automated, so the control connection's pick-answer command answers it with the paths of the fixture images, which are seeded into the
 # app's files directory first; clicking import-files-button then imports exactly those paths. On a phone this exercises the full import
 # pipeline: the import-assets orchestrator task spawns hash-file and upload-asset subtasks, and the images are processed with the

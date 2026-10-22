@@ -59,7 +59,7 @@ esac
 log_info "Opening the database..."
 send_command "$APP_PORT" open-database "$(jq -cn --arg path "$DATABASE_PATH" '{path: $path}')" || exit 1
 
-# Assets load incrementally: the streamed asset messages render the gallery and the load-assets task completes in either order, so a
+# Assets load incrementally: the streamed asset events render the gallery and the load-assets task completes in either order, so a
 # sequential wait for one then the other is racy. The gallery rendering the items is what the selection below needs, and the assets
 # having loaded is verified by the download succeeding.
 wait_for_log "$TMP_DIR" "Gallery items rendered"

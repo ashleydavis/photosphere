@@ -33,7 +33,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 //
 
 //
-// Records the messages the handler sends.
+// Records the events the handler sends.
 //
 const MessageRecorder = struct {
     // Allocates the copies.
@@ -94,7 +94,7 @@ const UploadTest = struct {
     // Provides the time.
     timestampProvider: TestTimestampProvider,
 
-    // Records the messages sent.
+    // Records the events sent.
     messages: MessageRecorder,
 
     // The task context.

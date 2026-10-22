@@ -21,7 +21,7 @@ const isDatabasePartial = media_file_database.isDatabasePartial;
 const openStorage = open_storage.openStorage;
 const ILoadAssetsData = api.load_assets_types.ILoadAssetsData;
 const ILoadAssetsResult = api.load_assets_types.ILoadAssetsResult;
-const IAssetPageMessage = api.load_assets_types.IAssetPageMessage;
+const IAssetPageEvent = api.load_assets_types.IAssetPageEvent;
 
 //
 // The fields of a record that are sent for gallery display, in the order they are sent. The `properties` field (EXIF
@@ -142,7 +142,7 @@ pub fn loadAssetsHandler(
         }
 
         // Send page via message
-        const pageMessage: IAssetPageMessage = .{
+        const pageMessage: IAssetPageEvent = .{
             .type = "asset-page",
             .databasePath = data.databasePath,
             .batch = batch,

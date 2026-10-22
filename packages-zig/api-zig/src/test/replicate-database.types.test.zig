@@ -36,10 +36,10 @@ test "IReplicateDatabaseData reads every optional key" {
     try std.testing.expect(data.force);
 }
 
-test "IReplicateProgressMessage serializes like the message" {
+test "IReplicateProgressEvent serializes like the message" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const message: types.IReplicateProgressMessage = .{ .type = "replicate-progress", .databasePath = "/db", .progress = "Copied 1 file" };
+    const message: types.IReplicateProgressEvent = .{ .type = "replicate-progress", .databasePath = "/db", .progress = "Copied 1 file" };
     const json = try std.json.Stringify.valueAlloc(arena.allocator(), message, .{});
     try std.testing.expectEqualStrings("{\"type\":\"replicate-progress\",\"databasePath\":\"/db\",\"progress\":\"Copied 1 file\"}", json);
 }

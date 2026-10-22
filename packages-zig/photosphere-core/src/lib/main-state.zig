@@ -175,7 +175,8 @@ pub const MainState = struct {
     prefetch_replica_state: std.atomic.Value(background_work.ReplicaState),
     // Makes the ids of the tasks the main process queues.
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
-    // What answers the background work's host requests on Windows, whose shell has no host request callback (see windows-host.zig).
+    // What answers the background work's host requests on Windows, whose native app has no host request callback (see
+    // windows-host.zig).
     windows_host: windows_host.WindowsHost,
     // What answers the background work's host requests on MacOS, whose bridge has no host request callback (see macos-host.zig).
     macos_host: macos_host.MacosHost,
@@ -194,8 +195,8 @@ pub const MainState = struct {
     // Makes the state and starts the periodic sync, which runs for the life of the app.
     //
     pub fn create(core: *Core) anyerror!*MainState {
-        // A core a shell hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig). The map
-        // stays for the life of the process, because the tasks still running while the core is destroyed read it too.
+        // A core a native app hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig).
+        // The map stays for the life of the process, because the tasks still running while the core is destroyed read it too.
         _ = try environment.adoptProcessEnvironment(core.allocator);
         // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (through the queue backend) and for the file
         // logger's header, which asks them for their versions.
@@ -210,7 +211,7 @@ pub const MainState = struct {
         errdefer stopFileLogger(logger, previous_log);
         // The task handlers register with Ziggy's task queue, which is where the runner finds them.
         try node_api.task_handlers.initTaskHandlers();
-        // A phone has a photo library to import from, which only its shell can read.
+        // A phone has a photo library to import from, which only its native app can read.
         if (core.config.host_request != null) {
             try mobile_worker.device_media_source.registerDeviceMediaSourceBuilder();
         }
@@ -578,7 +579,7 @@ pub const MainState = struct {
 
     //
     // Queues a sync task if a database is open and no sync is already running. Connectivity checking and the sync-started and
-    // sync-completed messages are the task's responsibility.
+    // sync-completed events are the task's responsibility.
     //
     // When the task cannot be queued the running flag is put back before the error is returned, otherwise the flag would stay
     // set and no sync would ever run again.
@@ -620,8 +621,8 @@ pub const MainState = struct {
     // server has said so. The page needs the address before it can render, so the page's query asks for it. A later call returns the
     // port without starting another server. The port is the OS's choice, because the server is asked for port 0.
     //
-    // The server is a task and the message is its
-    // asset-server-ready message, which onTaskMessage records. A server that ended before it said anything, or that said nothing for
+    // The server is a task and the event is its
+    // asset-server-ready event, which onTaskEvent records. A server that ended before it said anything, or that said nothing for
     // as long as the timeout, is an error the page's query reports.)
     //
     pub fn startAssetServer(self: *MainState) !u16 {
@@ -658,7 +659,8 @@ pub const MainState = struct {
 
     //
     // Takes the lock that keeps a second copy of the packaged app from running, or, when another copy holds it, logs that this one is quitting
-    // and asks the shell to quit. The rule does not apply to a build with no version, a test or a phone, which all log that the lock was acquired.
+    // and asks the native app to quit. The rule does not apply to a build with no version, a test or a phone, which all log that the lock
+    // was acquired.
     //
     pub fn applySingleInstanceRule(self: *MainState) !void {
         try self.enforceSingleInstance(single_instance.ruleApplies());
@@ -697,7 +699,7 @@ pub const MainState = struct {
 
     //
     // Looks for the signal a second copy of the app leaves when it is started and quits, and brings this copy's window to the front when it is
-    // there. The shell does the bringing to the front, as the `focus-window` action.
+    // there. The native app does the bringing to the front, as the `focus-window` action.
     //
     pub fn checkSecondInstance(self: *MainState) !void {
         const instance = if (self.single_instance) |*held| held else {

@@ -15,7 +15,7 @@ export interface ILoadAssetsResult {
     batchesSent: number;
 }
 
-export interface IAssetPageMessage {
+export interface IAssetPageEvent {
     type: "asset-page";
     //
     // The database path this batch belongs to. Used by the frontend to discard messages

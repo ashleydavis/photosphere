@@ -1,6 +1,6 @@
 //
-// Photosphere's Linux shell: what is Photosphere's own (its name, its window and its page) on top of Ziggy's shell.
-// The page is embedded in the executable by build.zig.
+// Photosphere's Linux native app: what is Photosphere's own (its name, its window and its page) on top of Ziggy's
+// native app. The page is embedded in the executable by build.zig.
 //
 
 const std = @import("std");
@@ -53,7 +53,7 @@ fn hostRequest(host: shell.Host, method: []const u8, request_json: []const u8) a
 }
 
 //
-// Runs the shell with Photosphere's name, window size and embedded page, and returns the exit code.
+// Runs the native app with Photosphere's name, window size and embedded page, and returns the exit code.
 //
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());

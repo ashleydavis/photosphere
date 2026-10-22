@@ -8,7 +8,7 @@
 // NWPathMonitor on iOS.
 //
 // (Zig has no process-wide global host, so the host is a value the caller passes in: whoever runs the handler knows how
-// the platform is asked (the phone's shell, through the host request callback of Ziggy's core), and passes it. It cannot
+// the platform is asked (the phone's native app, through the host request callback of Ziggy's core), and passes it. It cannot
 // be missing, so there is no "host not installed" case to report. A host returns an error, and it reaches the caller as one.)
 //
 

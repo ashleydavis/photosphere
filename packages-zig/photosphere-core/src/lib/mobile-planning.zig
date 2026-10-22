@@ -2,7 +2,7 @@
 // The planning tasks the phone's background loop asks of the core: plan-auto-import, plan-sync and plan-prefetch. They work out, from the settings on disk, whether the loop should
 // run, with what, and how long to pause.
 //
-// plan-sync and plan-prefetch ask the platform for the connection type. The shell is asked through the core's host request
+// plan-sync and plan-prefetch ask the platform for the connection type. The native app is asked through the core's host request
 // callback, which only a task in Ziggy's runner can reach, so the three are Ziggy task types registered with the app and not
 // handlers registered with Ziggy's task queue. They ignore their ITaskContext, so the one they are given is the minimum the
 // interface needs.
@@ -38,7 +38,7 @@ const ContextBridge = struct {
     fn sendMessageErased(ptr: *anyopaque, message: std.json.Value) void {
         const self: *ContextBridge = @ptrCast(@alignCast(ptr));
         self.context.sendMessage(message) catch |err| {
-            utils.log.log.exception("Error sending a task message", err);
+            utils.log.log.exception("Error sending a task event", err);
         };
     }
 
@@ -49,9 +49,9 @@ const ContextBridge = struct {
 };
 
 //
-// Asks the shell for the connection type through the host request callback, by the method `networkConnectionType`, and gives its
-// answer, which is a JSON string such as "wifi". On Windows, whose shell has no such callback, the core answers it (windows-host.zig).
-// Another platform with no such callback, and a shell that cannot answer, are errors with a
+// Asks the native app for the connection type through the host request callback, by the method `networkConnectionType`, and gives
+// its answer, which is a JSON string such as "wifi". On Windows, whose native app has no such callback, the core answers it
+// (windows-host.zig). Another platform with no such callback, and a native app that cannot answer, are errors with a
 // sentence the user can act on.
 //
 const ShellNetworkStatus = struct {

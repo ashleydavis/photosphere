@@ -7,7 +7,7 @@ const BsonDocument = bson.BsonDocument;
 const applyToJson = bdb.js_value.applyToJson;
 
 //
-// Converts a BSON value to the JSON value of a task message (Zig task messages are std.json.Value).
+// Converts a BSON value to the JSON value of a task event (Zig task events are std.json.Value).
 //
 // Dates, binaries and ObjectIds become the strings JSON.stringify makes of them. A whole number becomes a JSON integer,
 // where a number with a fraction becomes a float. A field whose value is undefined is left out of a document and

@@ -1,5 +1,5 @@
 import type { ITaskContext } from "task-queue";
-import type { IReplicateDatabaseData, IReplicateProgressMessage } from "api";
+import type { IReplicateDatabaseData, IReplicateProgressEvent } from "api";
 
 // ── module mocks ─────────────────────────────────────────────────────────────
 
@@ -133,14 +133,14 @@ describe("replicateDatabaseHandler", () => {
         const sendMessageMock = context.sendMessage as jest.Mock;
         expect(sendMessageMock).toHaveBeenCalledTimes(2);
 
-        const firstMessage = sendMessageMock.mock.calls[0][0] as IReplicateProgressMessage;
+        const firstMessage = sendMessageMock.mock.calls[0][0] as IReplicateProgressEvent;
         expect(firstMessage).toEqual({
             type: "replicate-progress",
             databasePath: "/fake/source",
             progress: "Copied 10",
         });
 
-        const secondMessage = sendMessageMock.mock.calls[1][0] as IReplicateProgressMessage;
+        const secondMessage = sendMessageMock.mock.calls[1][0] as IReplicateProgressEvent;
         expect(secondMessage.progress).toBe("Copied 20");
     });
 

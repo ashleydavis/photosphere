@@ -13,7 +13,7 @@ const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 
 //
-// A task context whose messages go nowhere (the handler ignores the context entirely).
+// A task context whose events go nowhere (the handler ignores the context entirely).
 //
 fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
     _ = context;

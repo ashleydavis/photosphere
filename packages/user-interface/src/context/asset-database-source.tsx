@@ -8,7 +8,7 @@ import { log, retry } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
-import type { ISyncBatchMessage } from "api/src/lib/sync-database.types";
+import type { ISyncBatchEvent } from "api/src/lib/sync-database.types";
 import { TaskStatus, TaskQueue, TaskPriority, getQueueBackend } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
@@ -896,7 +896,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     useEffect(() => {
         const unsubscribeSyncBatch = queueBackend.onTaskMessage("sync-batch", (data) => {
-            const batch = data.message as ISyncBatchMessage;
+            const batch = data.message as ISyncBatchEvent;
             if (batch.databasePath !== databasePath) {
                 return;
             }

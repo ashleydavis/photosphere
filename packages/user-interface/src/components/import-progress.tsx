@@ -6,7 +6,7 @@ import Typography from "@mui/joy/Typography/Typography";
 import { CloudUpload } from "@mui/icons-material";
 import { log } from "utils";
 import { usePlatform } from "../context/platform-context";
-import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
+import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 
 //
 // Shows what an import is doing, on the Import page.
@@ -16,12 +16,12 @@ import type { IImportProgressMessage } from "api/src/lib/import-assets.types";
 //
 export function ImportProgress() {
     const platform = usePlatform();
-    const [progress, setProgress] = useState<IImportProgressMessage | undefined>(undefined);
+    const [progress, setProgress] = useState<IImportProgressEvent | undefined>(undefined);
 
     useEffect(() => {
         const unsubscribe = platform.onTaskMessage((_taskId, message) => {
             if (message.type === "import-progress") {
-                setProgress(message as unknown as IImportProgressMessage);
+                setProgress(message as unknown as IImportProgressEvent);
             }
         });
 

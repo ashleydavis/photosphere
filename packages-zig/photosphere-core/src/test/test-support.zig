@@ -1,6 +1,6 @@
 //
-// What the tests of Photosphere's handlers share: a core running Photosphere's app, as app.zig registers it, on a stand-in shell,
-// with the settings, the data and the vault pointed at directories that belong to the test.
+// What the tests of Photosphere's handlers share: a core running Photosphere's app, as app.zig registers it, on a fake native
+// app, with the settings, the data and the vault pointed at directories that belong to the test.
 //
 
 const std = @import("std");
@@ -12,8 +12,8 @@ const photosphere_app = @import("photosphere-app");
 const process_env = node_utils.process_env;
 
 //
-// A core running Photosphere's handlers on a stand-in shell. Declare it, then call start on it in place (the core keeps a pointer to
-// the stand-in shell and the environment, so it must not move), and call stop when the test is done.
+// A core running Photosphere's handlers on a fake native app. Declare it, then call start on it in place (the core keeps a pointer
+// to the fake native app and the environment, so it must not move), and call stop when the test is done.
 //
 pub const TestApp = struct {
     // Records every message the core delivers.
@@ -297,7 +297,7 @@ fn recordingPick(user_data: ?*anyopaque, kind: i32, title: ?[*:0]const u8, initi
 }
 
 //
-// Makes the core behave as it does on a platform whose shell has no host request callback, as every desktop does.
+// Makes the core behave as it does on a platform whose native app has no host request callback, as every desktop does.
 //
 pub fn removeHostRequest(app: *TestApp) void {
     app.core.config.host_request = null;

@@ -1,6 +1,6 @@
-# MacOS shell
+# MacOS native app
 
-The MacOS desktop shell is a Swift app that hosts a `WKWebView` and passes messages between the page and the Zig core library. It does nothing else the core can do.
+The MacOS desktop native app is a Swift app that hosts a `WKWebView` and passes messages between the page and the Zig core library. It does nothing else the core can do.
 
 ## What it does
 
@@ -10,8 +10,8 @@ The MacOS desktop shell is a Swift app that hosts a `WKWebView` and passes messa
 
 ## Project and build
 
-An Xcode project. `sync:macos` builds the core as a static library and the UI and copies them into the project, then `xcodebuild` builds the app. `open:macos` opens the project in Xcode. Runs on MacOS only. See [Photosphere App](../../README.md).
+An Xcode project. `sync:macos` builds the core as a static library and the frontend and copies them into the project, then `xcodebuild` builds the app. `open:macos` opens the project in Xcode. Runs on MacOS only. See [Photosphere App](../../README.md).
 
 ## Icon and second copies
 
-The app icon is the `AppIcon` set in `Photosphere/Assets.xcassets`, made from `icons/photosphere-1024.png`. The shell does the `focus-window` action the core asks for when a second copy of the app was started by restoring the window if it is minimised and activating the app.
+The app icon is the `AppIcon` set in `Photosphere/Assets.xcassets`, made from `icons/photosphere-1024.png`. The native app does the `focus-window` action the core asks for when a second copy of the app was started by restoring the window if it is minimised and activating the app.

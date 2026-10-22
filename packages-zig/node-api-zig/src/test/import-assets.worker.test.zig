@@ -338,7 +338,7 @@ const MockBackend = struct {
     }
 
     //
-    // Messages are not sent by the mock's tasks.
+    // Events are not sent by the mock's tasks.
     //
     fn onTaskMessage(ptr: *anyopaque, messageType: []const u8, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
         _ = ptr;
@@ -348,7 +348,7 @@ const MockBackend = struct {
     }
 
     //
-    // Messages are not sent by the mock's tasks.
+    // Events are not sent by the mock's tasks.
     //
     fn onAnyTaskMessage(ptr: *anyopaque, callback: TaskMessageCallback) anyerror!UnsubscribeFn {
         _ = ptr;
@@ -1526,7 +1526,7 @@ test "reports what a manual import is doing, through the very same message" {
 
     _ = try context.run(try context.makeData(false));
 
-    // One kind of progress message, sent by both kinds of import. The panel shows either without
+    // One kind of progress event, sent by both kinds of import. The panel shows either without
     // knowing which it is watching.
     try std.testing.expect((try context.messages.ofType(allocator, "import-progress")).len > 0);
     // It does not badge what the user imported by hand as something that arrived on its own.

@@ -516,7 +516,7 @@ const ImportRun = struct {
     }
 
     //
-    // Sends a task message made of string fields.
+    // Sends a task event made of string fields.
     //
     fn sendStringMessage(self: *ImportRun, fields: []const [2][]const u8) !void {
         var message: std.json.ObjectMap = .empty;

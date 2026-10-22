@@ -19,7 +19,7 @@ DEFAULT_DATABASE_NAME="My Photos"
 # The folder this scenario's photo goes in, which is what automatic import is pointed at. A desktop imports from folders and has none
 # by default, and an Android phone would otherwise watch the whole photo library, so both are given this scenario's own.
 #
-# Not on iOS. The iOS shell lists every library item with no album, so automatic import there cannot be pointed at one and always
+# Not on iOS. The iOS native app lists every library item with no album, so automatic import there cannot be pointed at one and always
 # watches the whole library, and the simulator has no supported way to take a seeded photo back out of its library, so a photo put in
 # here would stay for every run after this one. Nothing is seeded there: the whole library, as the simulator ships it, is watched, and
 # nothing this scenario asserts depends on what the library holds.

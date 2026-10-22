@@ -36,7 +36,7 @@ const SHARD_PATH = ".db/bson/collections/metadata/shards/96.dat";
 const COLLECTION_PATH = ".db/bson/collections/metadata/collection.dat";
 
 //
-// A task context whose messages go nowhere.
+// A task context whose events go nowhere.
 //
 const TestContext = struct {
     // Deterministic uuids.

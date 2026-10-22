@@ -11,7 +11,7 @@ import { createZiggyTestTransport } from "./lib/ziggy-test-transport";
 import { isResizeObserverLoopReport } from "./lib/resize-observer-report";
 
 //
-// The bridge the shell injects into the page before its scripts run.
+// The bridge the native app injects into the page before its scripts run.
 //
 const ziggy: IZiggyBridge | undefined = typeof window !== 'undefined' ? window.ziggy : undefined;
 if (!ziggy) {

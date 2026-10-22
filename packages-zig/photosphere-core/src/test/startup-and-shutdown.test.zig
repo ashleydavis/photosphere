@@ -116,7 +116,7 @@ test "a sync that moved changes is logged as having synced them" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskMessage(app.core, .{
+    main_process.onTaskEvent(app.core, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
@@ -133,7 +133,7 @@ test "a sync that found both sides identical is logged as having nothing to sync
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskMessage(app.core, .{
+    main_process.onTaskEvent(app.core, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",

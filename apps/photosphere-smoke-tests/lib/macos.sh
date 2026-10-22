@@ -488,9 +488,9 @@ macos_seed_library_auto_import_config() {
 
 #
 # Prints the directory of the database of the given name as the app has it: one a scenario seeded into the scenario's files directory,
-# or else the one the app made for itself inside its data directory. Ziggy's MacOS shell puts that directory under Application Support
-# in the home directory, which is the scenario's own home here (CFFIXED_USER_HOME), so the bundle identifier is not named. Never the
-# host's own copy that a scenario seeded from. Prints nothing when there is none. Usage: macos_app_database_dir <database_dir_name>
+# or else the one the app made for itself inside its data directory. Ziggy's MacOS native app puts that directory under Application
+# Support in the home directory, which is the scenario's own home here (CFFIXED_USER_HOME), so the bundle identifier is not named. Never
+# the host's own copy that a scenario seeded from. Prints nothing when there is none. Usage: macos_app_database_dir <database_dir_name>
 #
 macos_app_database_dir() {
     if [ -d "$TMP_DIR/files/$1" ]; then

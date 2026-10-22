@@ -44,9 +44,9 @@ export interface ISyncChange {
 // requested sync produced no sync-started / sync-completed pair. Without this a skipped sync is
 // silent on the frontend and indistinguishable from a sync that never started.
 //
-export interface ISyncSkippedMessage {
+export interface ISyncSkippedEvent {
     //
-    // Message type discriminator.
+    // Event type discriminator.
     //
     type: "sync-skipped";
 
@@ -64,9 +64,9 @@ export interface ISyncSkippedMessage {
 //
 // Task message sent when a sync has finished running, so the UI can report the outcome.
 //
-export interface ISyncCompletedMessage {
+export interface ISyncCompletedEvent {
     //
-    // Message type discriminator.
+    // Event type discriminator.
     //
     type: "sync-completed";
 
@@ -85,9 +85,9 @@ export interface ISyncCompletedMessage {
 //
 // Task message sent during a sync to carry a batch of incremental changes to the UI.
 //
-export interface ISyncBatchMessage {
+export interface ISyncBatchEvent {
     //
-    // Message type discriminator.
+    // Event type discriminator.
     //
     type: "sync-batch";
 

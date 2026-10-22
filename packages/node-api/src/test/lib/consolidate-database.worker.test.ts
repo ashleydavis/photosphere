@@ -24,7 +24,7 @@ import { openStorage } from "../../lib/open-storage";
 import { merkleTreeExists } from "../../lib/tree";
 import { consolidateDatabases } from "../../lib/consolidate";
 import { prefetchDatabaseHandler } from "../../lib/prefetch-database.worker";
-import { consolidateDatabaseHandler, IConsolidateProgressMessage } from "../../lib/consolidate-database.worker";
+import { consolidateDatabaseHandler, IConsolidateProgressEvent } from "../../lib/consolidate-database.worker";
 
 const mockOpenStorage = openStorage as jest.MockedFunction<typeof openStorage>;
 const mockMerkleTreeExists = merkleTreeExists as jest.MockedFunction<typeof merkleTreeExists>;
@@ -126,7 +126,7 @@ describe("consolidateDatabaseHandler", () => {
 
         await consolidateDatabaseHandler(VALID_DATA, makeContext());
 
-        const progress = sentMessages as IConsolidateProgressMessage[];
+        const progress = sentMessages as IConsolidateProgressEvent[];
         expect(progress).toHaveLength(2);
         expect(progress[0]).toEqual({ type: "consolidate-progress", pushed: 1, total: 2 });
         expect(progress[1]).toEqual({ type: "consolidate-progress", pushed: 2, total: 2 });

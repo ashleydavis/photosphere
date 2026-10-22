@@ -146,7 +146,7 @@ test "get-config and set-config without a key are error replies" {
 }
 
 //
-// A stand-in for the create-default-database task, which another part of the app provides: it ends at once.
+// A fake of the create-default-database task, which another part of the app provides: it ends at once.
 //
 fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     try context.sendMessage(.{ .createdDefaultDatabaseFor = data });
@@ -154,7 +154,7 @@ fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.
 }
 
 //
-// A stand-in for the import-assets task, which another part of the app provides: it reports what it was asked to do and then runs until
+// A fake of the import-assets task, which another part of the app provides: it reports what it was asked to do and then runs until
 // it is cancelled.
 //
 fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {

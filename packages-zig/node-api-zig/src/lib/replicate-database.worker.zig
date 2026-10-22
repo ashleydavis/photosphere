@@ -19,13 +19,13 @@ const IsCancelledCallback = replicate_module.IsCancelledCallback;
 const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
 
 //
-// Sends a replicate-progress task message for replicateDatabaseHandler.
+// Sends a replicate-progress task event for replicateDatabaseHandler.
 //
 const ProgressMessageSender = struct {
-    // The task context used to send the message.
+    // The task context used to send the event.
     context: ITaskContext,
 
-    // The source database path put in each message.
+    // The source database path put in each event.
     databasePath: []const u8,
 
     // The job the task belongs to (data.job).
@@ -34,16 +34,16 @@ const ProgressMessageSender = struct {
     // When the handler started (runStartedAt).
     runStartedAt: i64,
 
-    // The error the first failed message ended with, or null when none has failed. (Zig: the progress callback returns
-    // nothing, so a message that fails to send records its error here and the handler throws it once replicate has
+    // The error the first failed event ended with, or null when none has failed. (Zig: the progress callback returns
+    // nothing, so an event that fails to send records its error here and the handler throws it once replicate has
     // returned.)
     failure: ?anyerror = null,
 
-    // The error message the first failed message ended with.
+    // The error message the first failed event ended with.
     errorRecord: errors.ErrorRecord = .{},
 
     //
-    // Sends one progress message.
+    // Sends one progress event.
     //
     fn send(callbackContext: ?*anyopaque, progress: ?[]const u8) void {
         const self: *ProgressMessageSender = @ptrCast(@alignCast(callbackContext.?));
@@ -57,7 +57,7 @@ const ProgressMessageSender = struct {
     }
 
     //
-    // Sends the replicate-progress message and the job progress for one progress line.
+    // Sends the replicate-progress event and the job progress for one progress line.
     //
     fn sendMessages(self: *ProgressMessageSender, progress: ?[]const u8) !void {
         var buffer: [16 * 1024]u8 = undefined;
@@ -96,7 +96,7 @@ pub fn replicationResultToJson(allocator: std.mem.Allocator, result: IReplicatio
 //
 // Background task handler that replicates a source database to a destination path.
 // Wraps the pure replicate() function, opening source and destination storage via the unified
-// openStorage helper. Forwards progress strings via replicate-progress task messages and returns
+// openStorage helper. Forwards progress strings via replicate-progress task events and returns
 // the replication summary as task output.
 // The task data and output are JSON values holding IReplicateDatabaseData and IReplicationResult.
 //

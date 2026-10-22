@@ -18,7 +18,7 @@ const IReplicateDatabaseData = @import("api-zig").replicate_database_types.IRepl
 const ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
 //
-// A task context whose sendMessage records the messages.
+// A task context whose sendMessage records the events.
 //
 const RecordingContext = struct {
     // Deterministic uuids.
@@ -204,7 +204,7 @@ test "emits a replicate-progress task message for each progress callback fired b
 
     _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
-    // (The job-progress messages that follow each one are left out when the task carries no job tag.)
+    // (The job-progress events that follow each one are left out when the task carries no job tag.)
     try std.testing.expectEqual(@as(usize, 4), recording.messages.items.len);
     try std.testing.expectEqualStrings(try utils.json.stringify(allocator, .{
         .type = "replicate-progress",
@@ -219,7 +219,7 @@ test "emits a replicate-progress task message for each progress callback fired b
 }
 
 //
-// The recorded job-progress messages.
+// The recorded job-progress events.
 //
 fn jobMessages(allocator: std.mem.Allocator, recording: *RecordingContext) ![]const std.json.Value {
     var messages: std.ArrayList(std.json.Value) = .empty;

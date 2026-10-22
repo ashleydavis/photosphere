@@ -8,7 +8,7 @@ import type { IAddTask, IJsonValue, ITaskCompletedEvent, ITaskMessageEvent, IZig
 //
 export class ZiggyQueueBackend implements IQueueBackend {
     //
-    // The bridge the shell injects into the page.
+    // The bridge the native app injects into the page.
     //
     private ziggy: IZiggyBridge;
 
@@ -18,12 +18,12 @@ export class ZiggyQueueBackend implements IQueueBackend {
     private completionCallbacks: WorkerTaskCompletionCallback[] = [];
 
     //
-    // Callbacks registered for specific task message types.
+    // Callbacks registered for specific task event types.
     //
     private messageCallbacks: IMessageCallbackEntry[] = [];
 
     //
-    // Callbacks registered for all task messages regardless of type.
+    // Callbacks registered for all task events regardless of type.
     //
     private anyMessageCallbacks: TaskMessageCallback[] = [];
 
@@ -47,8 +47,8 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     // The listener this registers for Ziggy's task-message events, kept so shutdown can remove it.
     //
-    private readonly taskMessageListener = (data: ITaskMessageEvent<IJsonValue>): void => {
-        this.notifyMessageCallbacks(data.taskId, data.message);
+    private readonly taskEventListener = (data: ITaskMessageEvent<IJsonValue>): void => {
+        this.notifyEventCallbacks(data.taskId, data.message);
     };
 
     //
@@ -60,11 +60,11 @@ export class ZiggyQueueBackend implements IQueueBackend {
     }
 
     //
-    // Sets up bridge listeners for task completion and task messages.
+    // Sets up bridge listeners for task completion and task events.
     //
     private setupMessageHandlers(): void {
         this.ziggy.onTaskCompleted(this.taskCompletedListener);
-        this.ziggy.onTaskMessage<IJsonValue>(this.taskMessageListener);
+        this.ziggy.onTaskMessage<IJsonValue>(this.taskEventListener);
     }
 
     //
@@ -81,7 +81,7 @@ export class ZiggyQueueBackend implements IQueueBackend {
     }
 
     //
-    // Registers a callback for task messages of a specific type.
+    // Registers a callback for task events of a specific type.
     //
     onTaskMessage(messageType: string, callback: TaskMessageCallback): UnsubscribeFn {
         const entry = { messageType, callback };
@@ -95,7 +95,7 @@ export class ZiggyQueueBackend implements IQueueBackend {
     }
 
     //
-    // Registers a callback for all task messages regardless of type.
+    // Registers a callback for all task events regardless of type.
     //
     onAnyTaskMessage(callback: TaskMessageCallback): UnsubscribeFn {
         this.anyMessageCallbacks.push(callback);
@@ -216,30 +216,30 @@ export class ZiggyQueueBackend implements IQueueBackend {
     }
 
     //
-    // Invokes message callbacks matching the message type.
+    // Invokes the callbacks matching the task event's type.
     //
-    private async notifyMessageCallbacks(taskId: string, message: IJsonValue): Promise<void> {
-        const messageType = taskMessageType(message);
+    private async notifyEventCallbacks(taskId: string, event: IJsonValue): Promise<void> {
+        const eventType = taskEventType(event);
 
         for (const { messageType: filterType, callback } of this.messageCallbacks) {
-            if (messageType !== filterType) {
+            if (eventType !== filterType) {
                 continue;
             }
 
             try {
-                await callback({ taskId, message });
+                await callback({ taskId, message: event });
             }
             catch (error) {
-                console.error("Error in task message callback:", error);
+                console.error("Error in task event callback:", error);
             }
         }
 
         for (const callback of this.anyMessageCallbacks) {
             try {
-                await callback({ taskId, message });
+                await callback({ taskId, message: event });
             }
             catch (error) {
-                console.error("Error in any task message callback:", error);
+                console.error("Error in any task event callback:", error);
             }
         }
     }
@@ -249,16 +249,16 @@ export class ZiggyQueueBackend implements IQueueBackend {
     //
     shutdown(): void {
         this.ziggy.removeTaskCompletedListener(this.taskCompletedListener);
-        this.ziggy.removeTaskMessageListener<IJsonValue>(this.taskMessageListener);
+        this.ziggy.removeTaskMessageListener<IJsonValue>(this.taskEventListener);
     }
 }
 
 //
-// The type a task message declares in its "type" field, or undefined for a message that is not an object or has no such field.
+// The type a task event declares in its "type" field, or undefined for one that is not an object or has no such field.
 //
-function taskMessageType(message: IJsonValue): IJsonValue | undefined {
-    if (message === null || typeof message !== "object" || Array.isArray(message)) {
+function taskEventType(event: IJsonValue): IJsonValue | undefined {
+    if (event === null || typeof event !== "object" || Array.isArray(event)) {
         return undefined;
     }
-    return message.type;
+    return event.type;
 }

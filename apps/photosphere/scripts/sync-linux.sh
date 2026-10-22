@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Builds Photosphere's page and its Linux shell, which embeds the page in the executable. See sync-linux.md.
+# Builds Photosphere's page and its Linux native app, which embeds the page in the executable. See sync-linux.md.
 
 set -eu
 

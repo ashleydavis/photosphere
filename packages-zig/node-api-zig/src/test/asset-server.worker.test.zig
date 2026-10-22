@@ -26,7 +26,7 @@ const io = std.testing.io;
 const ASSET_BYTES = "hello-asset-bytes";
 
 //
-// A running asset-server task: captures the messages the handler sends and lets the test cancel it.
+// A running asset-server task: captures the events the handler sends and lets the test cancel it.
 //
 const RunningTask = struct {
     // Allocates the messages and the handler's result.
@@ -44,7 +44,7 @@ const RunningTask = struct {
     // Guards the messages.
     mutex: std.Io.Mutex,
 
-    // Messages captured from context.sendMessage, as JSON text.
+    // Events captured from context.sendMessage, as JSON text.
     messages: std.ArrayList([]const u8),
 
     // The thread running the handler.
@@ -58,7 +58,7 @@ const RunningTask = struct {
     stderr: std.Io.Writer.Allocating,
 
     //
-    // Records a message the handler sends.
+    // Records an event the handler sends.
     //
     fn sendMessage(context: ?*anyopaque, message: std.json.Value) void {
         const self: *RunningTask = @ptrCast(@alignCast(context.?));
@@ -108,7 +108,7 @@ const RunningTask = struct {
             for (self.messages.items) |text| {
                 if (std.mem.indexOf(u8, text, "\"type\":\"asset-server-ready\"") != null) {
                     self.mutex.unlock(io);
-                    const parsed = try std.json.parseFromSliceLeaky(asset_server_worker.IAssetServerReadyMessage, self.arena.allocator(), text, .{});
+                    const parsed = try std.json.parseFromSliceLeaky(asset_server_worker.IAssetServerReadyEvent, self.arena.allocator(), text, .{});
                     return parsed.port;
                 }
             }
@@ -224,7 +224,7 @@ test "assetServerHandler binds the loopback interface and reports it in asset-se
     var found = false;
     for (task.messages.items) |text| {
         if (std.mem.indexOf(u8, text, "\"type\":\"asset-server-ready\"") != null) {
-            const ready = try std.json.parseFromSliceLeaky(asset_server_worker.IAssetServerReadyMessage, task.arena.allocator(), text, .{});
+            const ready = try std.json.parseFromSliceLeaky(asset_server_worker.IAssetServerReadyEvent, task.arena.allocator(), text, .{});
             try std.testing.expectEqualStrings("127.0.0.1", ready.host);
             found = true;
         }
@@ -302,7 +302,7 @@ test "assetServerHandler binds the port it is asked for" {
 }
 
 //
-// A task context whose messages go nowhere.
+// A task context whose events go nowhere.
 //
 fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
     _ = context;

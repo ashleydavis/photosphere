@@ -59,11 +59,11 @@ pub const IReplicateDatabaseData = struct {
 };
 
 //
-// Task message sent during replication to forward progress strings to the UI.
+// Task event sent during replication to forward progress strings to the UI.
 //
-pub const IReplicateProgressMessage = struct {
+pub const IReplicateProgressEvent = struct {
     //
-    // Message type discriminator (always "replicate-progress").
+    // Event type discriminator (always "replicate-progress").
     //
     type: []const u8,
 

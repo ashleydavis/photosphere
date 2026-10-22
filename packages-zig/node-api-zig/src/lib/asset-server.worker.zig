@@ -18,10 +18,10 @@ pub const IAssetServerTaskData = struct {
 };
 
 //
-// Message streamed back (via context.sendMessage) once the server has bound a port and is ready
+// Event streamed back (via context.sendMessage) once the server has bound a port and is ready
 // to serve. The caller reads `port` to build the restApiUrl (http://<host>:<port>).
 //
-pub const IAssetServerReadyMessage = struct {
+pub const IAssetServerReadyEvent = struct {
     // Discriminator matched by onTaskMessage("asset-server-ready").
     type: []const u8,
 
@@ -89,7 +89,7 @@ pub fn assetServerHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
 
     log.info(try std.fmt.allocPrint(allocator, "Asset server task listening on http://{s}:{d}", .{ host, boundPort }));
 
-    const readyMessage: IAssetServerReadyMessage = .{
+    const readyMessage: IAssetServerReadyEvent = .{
         .type = "asset-server-ready",
         .port = boundPort,
         .host = host,
