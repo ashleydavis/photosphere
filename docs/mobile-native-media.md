@@ -11,7 +11,7 @@ The Photosphere App (on the desktop and on phones) and the Zig CLI (`psi`) call 
 
 ## Image types the built-in ImageMagick cannot read
 
-ImageMagick is configured with only the JPEG, PNG, WebP and zlib delegates (`third-party/imagemagick/generate-config.sh`); every other delegate is turned off. It reads what its own coders read, such as GIF, BMP, ICO, TGA and PSD, but it cannot read HEIC, HEIF, AVIF, TIFF, JPEG 2000, JPEG XL, OpenEXR, DjVu, FlashPix, WMF, XWD or DNG, each of which needs a delegate it does not have. Importing a file of one of those types fails with ImageMagick's error in the Zig CLI and in the App. An installed ImageMagick could read them through its own delegates, but neither program uses an installed ImageMagick.
+ImageMagick is configured with only the JPEG, PNG, WebP and zlib delegates (`third-party/imagemagick/generate-config.sh`); every other delegate is turned off. It reads what its own coders read, such as GIF, BMP, ICO, TGA and PSD, but it cannot read HEIC, HEIF, AVIF, TIFF, JPEG 2000, JPEG XL, OpenEXR, DjVu, FlashPix, WMF, XWD or DNG, each of which needs a delegate it does not have. HEIC and HEIF are handled without ImageMagick: FFmpeg (built with its `xstack` filter, which joins a phone's tiled HEIC) gives their size and decodes them into a JPEG that ImageMagick makes the smaller pictures from, and their EXIF is read from the file by `packages-zig/node-api-zig/src/lib/heic-exif.zig`. Importing a file of any of the other types fails with ImageMagick's error in the Zig CLI and in the App. An installed ImageMagick could read them through its own delegates, but neither program uses an installed ImageMagick.
 
 ## Security policy
 
