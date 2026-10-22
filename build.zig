@@ -284,7 +284,7 @@ pub fn build(b: *std.Build) !void {
 
 //
 // Creates the module of every package over the Ziggy core given, with the libraries the packages need, and returns them by name, with
-// Ziggy's core as "ziggy-core". Returns null while a lazy dependency is being fetched.
+// Ziggy's core as "ziggy". Returns null while a lazy dependency is being fetched.
 //
 fn addPackageModules(
     b: *std.Build,
@@ -293,7 +293,7 @@ fn addPackageModules(
     ziggy_core: *std.Build.Module,
 ) !?std.StringHashMap(*std.Build.Module) {
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
-    try modules.put("ziggy-core", ziggy_core);
+    try modules.put("ziggy", ziggy_core);
     // The third-party libraries, each built for the target beforehand by its own build under third-party.
     const aws = try findThirdPartyLibraries(b, target, "aws");
     const zlib = try findThirdPartyLibraries(b, target, "zlib-ng");
@@ -311,7 +311,7 @@ fn addPackageModules(
         }
         // Ziggy's core, whose task queue the packages queue and run their tasks with. Every module of a program must import the same
         // one, or a registry in it would be two.
-        module.addImport("ziggy-core", ziggy_core);
+        module.addImport("ziggy", ziggy_core);
         try modules.put(package.name, module);
 
         if (std.mem.eql(u8, package.name, "encryption-zig")) {
@@ -524,16 +524,16 @@ fn addUnitTests(
     // The tests need no page, so it embeds none.
     const no_page = b.addWriteFiles();
     const no_page_module = b.createModule(.{
-        .root_source_file = no_page.add("ui-files.zig", "const ziggy = @import(\"ziggy-core\");\n\npub const files = [_]ziggy.UiFile{};\n"),
+        .root_source_file = no_page.add("ui-files.zig", "const ziggy = @import(\"ziggy\");\n\npub const files = [_]ziggy.UiFile{};\n"),
     });
-    no_page_module.addImport("ziggy-core", modules.get("ziggy-core").?);
+    no_page_module.addImport("ziggy", modules.get("ziggy").?);
     const photosphere_app = b.createModule(.{
         .root_source_file = b.path("apps/photosphere/core/src/app.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
-    photosphere_app.addImport("ziggy-core", modules.get("ziggy-core").?);
+    photosphere_app.addImport("ziggy", modules.get("ziggy").?);
     photosphere_app.addImport("photosphere-core", modules.get("photosphere-core").?);
     photosphere_app.addImport("ui-files", no_page_module);
     test_module.addImport("photosphere-app", photosphere_app);
@@ -805,7 +805,7 @@ const cli_dependency_names = [_][]const u8{
     "storage-zig",
     "vault-zig",
     "fuzzy-match-zig",
-    "ziggy-core",
+    "ziggy",
     "serialization-zig",
     "merkle-tree-zig",
     "bdb-zig",

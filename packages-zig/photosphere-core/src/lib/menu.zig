@@ -23,7 +23,7 @@
 //  - A Developer menu holds the stories browser and the developer tools.
 //
 
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 
 //
 // The menu the Photosphere App passes to ziggy.core.App as `.menu`.

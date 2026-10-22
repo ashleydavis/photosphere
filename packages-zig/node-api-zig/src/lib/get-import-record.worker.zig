@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const import_record_storage = @import("import-record-storage.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;

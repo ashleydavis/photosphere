@@ -1,6 +1,6 @@
 const std = @import("std");
 const node_utils = @import("node-utils-zig");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const utils = @import("utils-zig");
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;

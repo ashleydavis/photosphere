@@ -1,5 +1,5 @@
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const menu = @import("photosphere-core").menu;
 const photosphere_app = @import("photosphere-app");
 

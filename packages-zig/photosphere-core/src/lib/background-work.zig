@@ -16,7 +16,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const main_state = @import("main-state.zig");
 

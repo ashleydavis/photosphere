@@ -65,7 +65,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - tools-zig - Zig port of tools
         - utils-zig - Zig port of utils. The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
         - vault-zig - Zig port of vault
-        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's message handler, task handlers and asset server, built on Ziggy's core (`@import("ziggy-core")`, from the `ziggy` dependency in `build.zig.zon`)
+        - photosphere-core - The Zig library the Photosphere App shells link: Photosphere's message handler, task handlers and asset server, built on Ziggy's core (`@import("ziggy")`, from the `ziggy` dependency in `build.zig.zon`)
     - test - Data for testing.
 
 "(deprecated)" marks an app or package that is going to be superseded by the Zig port (the Zig packages in `packages-zig`, the Zig CLI, and the Photosphere App on Ziggy) and removed once the port fully replaces it.

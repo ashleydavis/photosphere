@@ -10,7 +10,7 @@
 //
 
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 
 const Core = ziggy.core.Core;
 const json = ziggy.json;

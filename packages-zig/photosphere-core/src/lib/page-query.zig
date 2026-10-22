@@ -5,7 +5,7 @@
 //
 
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const node_api = @import("node-api-zig");
 const main_state = @import("main-state.zig");
 

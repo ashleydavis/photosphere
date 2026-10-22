@@ -9,9 +9,9 @@
 //
 
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
 const background_work = @import("background-work.zig");

@@ -6,7 +6,7 @@
 //
 
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const tools_zig = @import("tools-zig");
 const main_state = @import("main-state.zig");
 

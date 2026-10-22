@@ -1,5 +1,5 @@
 const std = @import("std");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const load_assets_types = @import("load-assets.types.zig");
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
 const ILoadAssetsData = load_assets_types.ILoadAssetsData;

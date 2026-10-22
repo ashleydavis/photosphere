@@ -4,8 +4,8 @@ const utils = @import("utils-zig");
 const errors = utils.errors;
 const toml = @import("toml.zig");
 const yaml = @import("yaml.zig");
-const process_env = @import("ziggy-core").task_queue.utils.process_env;
-const path = @import("ziggy-core").task_queue.utils.path;
+const process_env = @import("ziggy").task_queue.utils.process_env;
+const path = @import("ziggy").task_queue.utils.path;
 const node_fs = @import("node-fs.zig");
 
 //

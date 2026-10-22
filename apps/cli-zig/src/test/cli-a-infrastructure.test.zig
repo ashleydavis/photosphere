@@ -10,7 +10,7 @@ const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const task_queue = @import("ziggy-core").task_queue;
+const task_queue = @import("ziggy").task_queue;
 const media_tools = @import("media-tools-zig");
 
 const process_signals = cli.process_signals;

@@ -1,5 +1,5 @@
 import type { ITestCommandPayload, ITestTransport } from "user-interface";
-import type { IJsonObject, IZiggyBridge } from "ziggy-ui";
+import type { IJsonObject, IZiggyBridge } from "ziggy";
 import type { LogLevel } from "./renderer-log";
 import { sendRendererLog } from "./renderer-log";
 

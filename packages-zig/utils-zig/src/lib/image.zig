@@ -1,6 +1,6 @@
 const std = @import("std");
-const errors = @import("ziggy-core").task_queue.utils.errors;
-const js_number = @import("ziggy-core").task_queue.utils.js_number;
+const errors = @import("ziggy").task_queue.utils.errors;
+const js_number = @import("ziggy").task_queue.utils.js_number;
 const js_date = @import("js-date.zig");
 
 //

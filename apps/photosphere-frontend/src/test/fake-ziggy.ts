@@ -1,4 +1,4 @@
-import type { IAddTask, ICoreErrorEvent, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskMessageEvent, ITestCommandEvent, IZiggyBridge } from "ziggy-ui";
+import type { IAddTask, ICoreErrorEvent, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskMessageEvent, ITestCommandEvent, IZiggyBridge } from "ziggy";
 
 //
 // A message the page sent with send or invoke, or one of Ziggy's own calls that sends a message.

@@ -1,6 +1,6 @@
 const std = @import("std");
 const api_zig = @import("api-zig");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const utils = @import("utils-zig");
 const loadAssets = api_zig.load_assets.loadAssets;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;

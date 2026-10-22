@@ -1,4 +1,4 @@
-const errors = @import("ziggy-core").task_queue.utils.errors;
+const errors = @import("ziggy").task_queue.utils.errors;
 
 //
 // A fatal error that should be reported to the user without stack traces or technical details.

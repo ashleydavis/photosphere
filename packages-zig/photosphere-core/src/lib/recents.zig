@@ -8,7 +8,7 @@
 //
 
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 

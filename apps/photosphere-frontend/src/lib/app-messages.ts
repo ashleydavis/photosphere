@@ -1,4 +1,4 @@
-import type { IJsonValue, IMessageCallback, IZiggyBridge } from "ziggy-ui";
+import type { IJsonValue, IMessageCallback, IZiggyBridge } from "ziggy";
 
 //
 // What each of Photosphere's own events holds as its data: the name of the event, and what it carries. The page routes an event by

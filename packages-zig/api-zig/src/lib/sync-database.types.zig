@@ -1,6 +1,6 @@
 const std = @import("std");
 const serialization_zig = @import("serialization-zig");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const bson = serialization_zig.bson;
 const IJobTag = task_queue_zig.types.IJobTag;
 

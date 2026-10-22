@@ -1,5 +1,5 @@
 import type { ILog, ILogDetails } from "utils";
-import type { IJsonObject, IZiggyBridge } from "ziggy-ui";
+import type { IJsonObject, IZiggyBridge } from "ziggy";
 
 //
 // Log levels the core's renderer-log channel accepts.

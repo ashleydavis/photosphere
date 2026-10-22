@@ -1,5 +1,5 @@
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const support = @import("test-support.zig");
 const main_state = @import("photosphere-core").main_state;
 const background_work = @import("photosphere-core").background_work;

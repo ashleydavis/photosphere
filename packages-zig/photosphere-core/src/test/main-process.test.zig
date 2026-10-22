@@ -1,5 +1,5 @@
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const node_api = @import("node-api-zig");
 const utils = @import("utils-zig");
 const support = @import("test-support.zig");

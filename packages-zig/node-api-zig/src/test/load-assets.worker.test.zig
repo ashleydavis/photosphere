@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const task_queue_zig = @import("ziggy-core").task_queue;
+const task_queue_zig = @import("ziggy").task_queue;
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");

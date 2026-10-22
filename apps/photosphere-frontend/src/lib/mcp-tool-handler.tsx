@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
-import type { IZiggyBridge } from "ziggy-ui";
+import type { IZiggyBridge } from "ziggy";
 import { AppMessages } from "./app-messages";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";

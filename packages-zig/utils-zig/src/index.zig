@@ -3,7 +3,7 @@
 // copy of their types and of the state they keep (the log, the last error, the process environment and the console). The files of
 // those helpers here are not used.
 //
-const ziggy_utils = @import("ziggy-core").task_queue.utils;
+const ziggy_utils = @import("ziggy").task_queue.utils;
 
 pub const host_requester = ziggy_utils.host_requester;
 pub const sleep = ziggy_utils.sleep;

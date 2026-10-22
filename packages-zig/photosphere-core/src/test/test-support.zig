@@ -4,7 +4,7 @@
 //
 
 const std = @import("std");
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const photosphere_app = @import("photosphere-app");

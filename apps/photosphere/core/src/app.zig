@@ -4,7 +4,7 @@
 // file per group of messages. Ziggy's build serves the app declared here.
 //
 
-const ziggy = @import("ziggy-core");
+const ziggy = @import("ziggy");
 const core = @import("photosphere-core");
 const page = @import("ui-files");
 
