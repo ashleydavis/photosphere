@@ -131,7 +131,7 @@ pub const app = ziggy.core.App(.{
     .ui_files = &page.files,
     .ui_query = core.page_query.pageQuery,
     .describe_error = core.describe_error.describeError,
-    .state = core.main_state.state_hooks,
+    .on_destroy = core.main_state.onDestroy,
     .on_task_end = core.main_process.onTaskEnd,
     .on_task_event = core.main_process.onTaskEvent,
 });

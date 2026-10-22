@@ -97,6 +97,17 @@ const TIMER_TICK_MS = 20;
 pub const SINGLE_INSTANCE_CHECK_MS = 500;
 
 //
+// Holds the app's state. Null until the first time Ziggy calls into the app, which creates it through fromCore, and null again once
+// onDestroy has destroyed it.
+//
+var main_state: ?*MainState = null;
+
+//
+// Stops two threads creating the app's state at once, and stops onDestroy racing a first creation.
+//
+var main_state_mutex: std.Io.Mutex = .init;
+
+//
 // What the main process remembers.
 //
 pub const MainState = struct {
@@ -901,14 +912,44 @@ fn timerMain(state: *MainState) void {
 // The main process's state, from the core a handler runs in.
 //
 pub fn fromCore(core: *Core) *MainState {
-    return @ptrCast(@alignCast(core.app_state.?));
+    const io = core.io();
+    main_state_mutex.lockUncancelable(io);
+    defer main_state_mutex.unlock(io);
+    if (main_state == null) {
+        main_state = MainState.create(core) catch |err| {
+            std.debug.panic("Could not create the main process's state: {s}", .{@errorName(err)});
+        };
+    }
+    return main_state.?;
 }
 
 //
-// The main process's state, from the context of a task.
+// The main process's state, from the context of a task. The task runner is a field of the core, so the core is the struct around it.
 //
 pub fn fromContext(context: *TaskContext) *MainState {
-    return @ptrCast(@alignCast(context.appState().?));
+    const core: *Core = @fieldParentPtr("runner", context.runner);
+    return fromCore(core);
+}
+
+//
+// Stops the main process's state before the task runner stops, while tasks can still be queued, and destroys it once the runner has
+// stopped and no task can run. Does nothing when the state was never created.
+//
+pub fn onDestroy(core: *Core, phase: ziggy.core.DestroyPhase) void {
+    const io = core.io();
+
+    // The mutex is not held while stopping, because stop waits on tasks that may themselves reach the state through fromContext.
+    main_state_mutex.lockUncancelable(io);
+    const state = main_state;
+    if (phase == .after_tasks_stopped) {
+        main_state = null;
+    }
+    main_state_mutex.unlock(io);
+    const created = state orelse return;
+    switch (phase) {
+        .before_tasks_stop => created.stop(),
+        .after_tasks_stopped => created.destroy(),
+    }
 }
 
 //
@@ -956,28 +997,3 @@ fn stopFileLogger(logger: *file_logger.FileLogger, previous_log: utils.log.ILog)
     utils.log.setLog(previous_log);
     logger.deinit();
 }
-
-fn createForCore(core: *Core) anyerror!*anyopaque {
-    return try MainState.create(core);
-}
-
-fn stopForCore(core: *Core, state: *anyopaque) void {
-    _ = core;
-    const main_state: *MainState = @ptrCast(@alignCast(state));
-    main_state.stop();
-}
-
-fn destroyForCore(core: *Core, state: *anyopaque) void {
-    _ = core;
-    const main_state: *MainState = @ptrCast(@alignCast(state));
-    main_state.destroy();
-}
-
-//
-// How the core makes, stops and destroys the state.
-//
-pub const state_hooks = ziggy.core.AppState{
-    .create = createForCore,
-    .stop = stopForCore,
-    .destroy = destroyForCore,
-};
