@@ -1373,6 +1373,7 @@ libavfilter libavfilter/vf_hflip.c
 libavfilter libavfilter/vf_null.c
 libavfilter libavfilter/vf_rotate.c
 libavfilter libavfilter/vf_scale.c
+libavfilter libavfilter/vf_stack.c
 libavfilter libavfilter/vf_transpose.c
 libavfilter libavfilter/vf_vflip.c
 libavfilter libavfilter/video.c

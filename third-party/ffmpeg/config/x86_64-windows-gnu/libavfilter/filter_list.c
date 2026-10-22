@@ -13,6 +13,7 @@ static const FFFilter * const filter_list[] = {
     &ff_vf_transpose,
     &ff_vf_trim,
     &ff_vf_vflip,
+    &ff_vf_xstack,
     &ff_vsink_nullsink,
     &ff_asrc_abuffer,
     &ff_vsrc_buffer,

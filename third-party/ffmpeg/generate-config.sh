@@ -170,7 +170,9 @@ ln -sfn "$ZLIB_TARGET_DIR/lib" "$ZLIB_DIR/lib"
 
 # What is built is what the app runs: every decoder, demuxer, parser and bitstream filter (the app reads whatever the user's
 # photos and videos are), the file protocol, and for output only what writing one JPEG still takes (the mjpeg encoder, the image2
-# and mjpeg muxers and the filters a conversion to one picture uses). No external library but zlib, no hardware acceleration, no
+# and mjpeg muxers and the filters a conversion to one picture uses). xstack is one of those filters because a phone's HEIC is a
+# grid of tiles, which the ffmpeg program joins with xstack whenever it opens one, and fails to open the file at all without it.
+# ImageMagick is built without HEIC support, so FFmpeg is what turns a HEIC into a picture the app can work with. No external library but zlib, no hardware acceleration, no
 # network and no devices. The result is licensed LGPL version 2.1 or later: configure says so at its end, and none of its
 # --enable-gpl or --enable-nonfree options is given.
 cd "$WORK_DIR/build"
@@ -184,7 +186,7 @@ cd "$WORK_DIR/build"
     --disable-encoders --enable-encoder=mjpeg \
     --disable-muxers --enable-muxer=image2,mjpeg,null \
     --disable-protocols --enable-protocol=file \
-    --disable-filters --enable-filter=buffer,buffersink,scale,format,null,nullsink,transpose,hflip,vflip,rotate,fps,trim,setpts,crop \
+    --disable-filters --enable-filter=buffer,buffersink,scale,format,null,nullsink,transpose,hflip,vflip,rotate,fps,trim,setpts,crop,xstack \
     > configure.log 2>&1 || {
     echo "ERROR: configure failed. See $WORK_DIR/build/configure.log" >&2
     exit 1
