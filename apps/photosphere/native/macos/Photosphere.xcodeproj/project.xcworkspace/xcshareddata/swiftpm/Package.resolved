@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ashleydavis/ziggy",
       "state" : {
-        "revision" : "d518db74c853b73382743646c10fe9496ff0341a",
-        "version" : "0.0.9"
+        "revision" : "e980bc23cb79d9b525f2fb7e596bbf266171724c",
+        "version" : "0.0.10"
       }
     }
   ],

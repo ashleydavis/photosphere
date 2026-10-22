@@ -1,8 +1,8 @@
 //
 // What the main process remembers while the app runs: whether a database is open and which one, whether
-// syncing is allowed, whether a sync is running, the debounce and periodic sync timers, and what automatic import is doing. Zig has
-// no global process state, so these are one value that the core holds for the app (Ziggy's app state), and
-// the handlers reach it through the core or through their task's context.
+// syncing is allowed, whether a sync is running, the debounce and periodic sync timers, and what automatic import is doing. These are
+// one value, made by onCreate when Ziggy creates the core and freed by onDestroy when Ziggy destroys it, and the handlers reach it
+// through the core or through their task's context.
 //
 // The timers (the debounce after an edit, the periodic sync for the life of the app, and the check that automatic import
 // is still running, which also runs once at the start) are one thread, which wakes often,
@@ -97,15 +97,11 @@ const TIMER_TICK_MS = 20;
 pub const SINGLE_INSTANCE_CHECK_MS = 500;
 
 //
-// Holds the app's state. Null until the first time Ziggy calls into the app, which creates it through fromCore, and null again once
-// onDestroy has destroyed it.
+// Holds the app's state. Set by onCreate while Ziggy creates the core, before any message or task can reach the app, and null again
+// once onDestroy has destroyed it, after every task has ended. It is written only at those two points, when nothing else can be
+// reading it, so it needs no lock.
 //
 var main_state: ?*MainState = null;
-
-//
-// Stops two threads creating the app's state at once, and stops onDestroy racing a first creation.
-//
-var main_state_mutex: std.Io.Mutex = .init;
 
 //
 // What the main process remembers.
@@ -203,7 +199,8 @@ pub const MainState = struct {
     previous_log: utils.log.ILog,
 
     //
-    // Makes the state and starts the periodic sync, which runs for the life of the app.
+    // Makes the state and starts the periodic sync, which runs for the life of the app. The timer thread that runs it is started by
+    // onCreate once the state can be reached through fromCore, because the tasks it queues reach the state that way.
     //
     pub fn create(core: *Core) anyerror!*MainState {
         // A core a native app hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig).
@@ -273,9 +270,18 @@ pub const MainState = struct {
             .stopping = .init(false),
             .timer_thread = null,
         };
+        // Undoes what the state now owns, in the order destroy uses, when applying the single instance rule fails. The rule can fail after
+        // taking the lock (logging that it was acquired), so the lock is released too.
+        errdefer {
+            state.mcp_bridge.deinit();
+            state.windows_host.deinit();
+            state.macos_host.deinit();
+            if (state.single_instance) |*instance| {
+                instance.release(state.io);
+            }
+        }
         try state.applySingleInstanceRule();
         state.startPeriodicSync();
-        state.timer_thread = try std.Thread.spawn(.{}, timerMain, .{state});
         return state;
     }
 
@@ -909,18 +915,31 @@ fn timerMain(state: *MainState) void {
 }
 
 //
-// The main process's state, from the core a handler runs in.
+// The main process's state, from the core a handler runs in. Panics when there is none, because onCreate makes it before any
+// handler or task can run and onDestroy frees it only once none can.
 //
 pub fn fromCore(core: *Core) *MainState {
-    const io = core.io();
-    main_state_mutex.lockUncancelable(io);
-    defer main_state_mutex.unlock(io);
-    if (main_state == null) {
-        main_state = MainState.create(core) catch |err| {
-            std.debug.panic("Could not create the main process's state: {s}", .{@errorName(err)});
-        };
+    _ = core;
+    return main_state orelse {
+        std.debug.panic("The main process's state does not exist: it is made by onCreate when the core is created and freed by onDestroy when the core is destroyed", .{});
+    };
+}
+
+//
+// Makes the main process's state when Ziggy creates the core, before any message or task can reach the app. Fails when a state
+// already exists, because the state is one per process and so only one core can run at a time.
+//
+pub fn onCreate(core: *Core) anyerror!void {
+    if (main_state != null) {
+        return error.MainStateAlreadyExists;
     }
-    return main_state.?;
+    const state = try MainState.create(core);
+    main_state = state;
+    errdefer {
+        main_state = null;
+        state.destroy();
+    }
+    state.timer_thread = try std.Thread.spawn(.{}, timerMain, .{state});
 }
 
 //
@@ -933,22 +952,16 @@ pub fn fromContext(context: *TaskContext) *MainState {
 
 //
 // Stops the main process's state before the task runner stops, while tasks can still be queued, and destroys it once the runner has
-// stopped and no task can run. Does nothing when the state was never created.
+// stopped and no task can run. Ziggy destroys only a core it created, so onCreate has made the state.
 //
 pub fn onDestroy(core: *Core, phase: ziggy.core.DestroyPhase) void {
-    const io = core.io();
-
-    // The mutex is not held while stopping, because stop waits on tasks that may themselves reach the state through fromContext.
-    main_state_mutex.lockUncancelable(io);
-    const state = main_state;
-    if (phase == .after_tasks_stopped) {
-        main_state = null;
-    }
-    main_state_mutex.unlock(io);
-    const created = state orelse return;
+    const state = fromCore(core);
     switch (phase) {
-        .before_tasks_stop => created.stop(),
-        .after_tasks_stopped => created.destroy(),
+        .before_tasks_stop => state.stop(),
+        .after_tasks_stopped => {
+            main_state = null;
+            state.destroy();
+        },
     }
 }
 
