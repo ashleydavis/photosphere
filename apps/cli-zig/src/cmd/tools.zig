@@ -7,16 +7,11 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const pc = @import("../lib/picocolors.zig");
-const prompts = @import("../lib/clack/prompts.zig");
-const installation_instructions = @import("../lib/installation-instructions.zig");
 const log = &utils.log.log;
 const verifyTools = tools.verifyTools;
-const Image = tools.Image;
 const ToolStatus = tools.ToolStatus;
 const exit = node_utils.termination.exit;
-const confirm = prompts.confirm;
-const isCancel = prompts.isCancel;
-const showInstallationInstructions = installation_instructions.showInstallationInstructions;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 
 //
 // Options of the tools command.
@@ -52,36 +47,28 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 
 //
 // Command that checks for required media processing tools.
+// toolRunner runs the ImageMagick and FFmpeg built into the program. The tools are built in, so there is nothing to
+// install and nothing to ask, and the options change nothing.
 //
-pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, options: *const IToolsCommandOptions) !void {
-    try listTools(allocator, io, options);
+pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, options: *const IToolsCommandOptions) !void {
+    _ = options;
+    try listTools(allocator, io, toolRunner);
 }
 
 //
-// Prints the status of each tool, then exits: 0 when all are available, otherwise 1 after offering the
-// installation instructions.
+// Prints the status of each tool, then exits: 0 when all are available, otherwise 1 after naming the tools that
+// did not run.
 //
-fn listTools(allocator: std.mem.Allocator, io: std.Io, options: *const IToolsCommandOptions) !void {
+fn listTools(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) !void {
     log.info("");
     log.info(try pc.bold(allocator, "📦 Media Processing Tools Status\n"));
 
-    const toolsStatus = try verifyTools(allocator, io, null);
-
-    // Get ImageMagick type to display the correct command name
-    const imageMagickType = Image.getImageMagickType();
-    var imageMagickName: []const u8 = "ImageMagick";
-
-    if (imageMagickType == .legacy) {
-        imageMagickName = "ImageMagick (convert/identify)";
-    }
-    else if (imageMagickType == .modern) {
-        imageMagickName = "ImageMagick (magick)";
-    }
+    const toolsStatus = try verifyTools(allocator, io, toolRunner);
 
     // Show status of each tool
     const toolEntries = [_]IToolEntry{
         .{
-            .name = imageMagickName,
+            .name = "ImageMagick (magick)",
             .status = toolsStatus.magick,
             .isMagick = true,
             .description = "Image processing - resizing, format conversion, metadata extraction",
@@ -125,6 +112,9 @@ fn listTools(allocator: std.mem.Allocator, io: std.Io, options: *const IToolsCom
 
         log.info(try text(allocator, "{s} {s}: {s}", .{ icon, try pc.bold(allocator, tool.name), statusText }));
         log.info(try text(allocator, "   {s}", .{tool.description}));
+        if (status.@"error") |toolError| {
+            log.info(try text(allocator, "   {s}", .{try pc.red(allocator, toolError)}));
+        }
 
         if (!status.available) {
             allAvailable = false;
@@ -144,32 +134,6 @@ fn listTools(allocator: std.mem.Allocator, io: std.Io, options: *const IToolsCom
     }
     else {
         log.info(try pc.yellow(allocator, try text(allocator, "⚠️ {d} tool(s) missing: {s}", .{ missingTools.items.len, try std.mem.join(allocator, ", ", missingTools.items) })));
-        log.info("");
-
-        // Ask if user wants to see installation instructions (or show them automatically in --yes mode)
-        var showInstructions = true;
-        if (!(options.yes orelse false)) {
-            const userChoice = try confirm(allocator, io, .{
-                .message = "Would you like to see installation instructions?",
-                .initialValue = true,
-            });
-
-            if (isCancel(userChoice)) {
-                log.info("");
-                log.info(try pc.dim(allocator, "Please install the missing tools and try again."));
-                exit(io, 1);
-            }
-            showInstructions = userChoice.value;
-        }
-
-        if (!showInstructions) {
-            log.info("");
-            log.info(try pc.dim(allocator, "Please install the missing tools and try again."));
-            exit(io, 1);
-        }
-
-        try showInstallationInstructions(allocator, missingTools.items);
-
         exit(io, 1);
     }
 }

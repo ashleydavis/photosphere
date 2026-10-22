@@ -1,8 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const file_logger = @import("file-logger.zig");
 const process_argv = @import("process-argv.zig");
 const console_output = @import("console-output.zig");
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const writeOutputLine = console_output.writeOutputLine;
 const writeErrorLine = console_output.writeErrorLine;
 const ILog = utils.log.ILog;
@@ -276,9 +278,10 @@ pub const Log = struct {
 
 //
 // Configure the log based on input.
+// toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions the file log header gives.
 // The loggers are allocated with the allocator and must live until the process exits.
 //
-pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, options: ILogOptions) !void {
+pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, options: ILogOptions) !void {
     const consoleLogger = try allocator.create(Log);
     consoleLogger.* = Log.init(options);
     setLog(consoleLogger.ilog()); // Set the console logger before trying to create the file logger, just in case we need the log!
@@ -287,7 +290,7 @@ pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, options: ILogOptio
         const userArgs = process_argv.userArgs();
         const joined = try std.mem.join(allocator, " ", userArgs);
         const command = if (joined.len > 0) joined else "unknown";
-        const created = try FileLogger.create(allocator, io, consoleLogger.ilog(), command);
+        const created = try FileLogger.create(allocator, io, toolRunner, consoleLogger.ilog(), command);
         fileLogger = created;
         setLog(created.ilog());
     }

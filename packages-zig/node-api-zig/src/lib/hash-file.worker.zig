@@ -105,8 +105,11 @@ fn dateNow(io: std.Io) i64 {
 // The task data and output are JSON values holding IHashFileData and IHashFileResult.
 //
 pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    // An app with ImageMagick and ffmpeg built in runs them in its process through the task's tool runner; with none the programs are started.
-    const toolRunner = context.toolRunner;
+    // ImageMagick and FFmpeg are built into the program and run in its process through the task's tool runner. A task run with
+    // no runner fails here rather than starting an installed program.
+    const toolRunner = context.toolRunner orelse {
+        return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
+    };
     const data = try std.json.parseFromValueLeaky(IHashFileData, allocator, taskData, .{ .ignore_unknown_fields = true });
     const filePath = data.filePath;
     const fileStat = data.fileStat;

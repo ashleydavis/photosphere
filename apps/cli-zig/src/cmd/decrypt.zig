@@ -54,13 +54,12 @@ fn onDecryptProgress(context: ?*anyopaque, message: []const u8) void {
 // Decrypts the database at --db in place (encrypted → plain). Removes .db/encryption.pub.
 //
 pub fn decryptCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDecryptCommandOptions) !void {
-    _ = context;
     const verbose = options.base.verbose;
     const yes = options.base.yes;
     const cwd = options.base.cwd;
     const nonInteractive = yes orelse false;
 
-    try configureLog(allocator, io, .{
+    try configureLog(allocator, io, context.toolRunner, .{
         .verbose = verbose,
     });
 

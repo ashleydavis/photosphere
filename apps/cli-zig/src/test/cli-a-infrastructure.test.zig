@@ -11,6 +11,7 @@ const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue = @import("ziggy-core").task_queue;
+const media_tools = @import("media-tools-zig");
 
 const process_signals = cli.process_signals;
 const worker_log_bun = cli.worker_log_bun;
@@ -498,7 +499,9 @@ test "a completion callback that fails is logged and the task still finishes" {
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
 
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = PoolCollector{};
     // The failing callback is registered first, so its message is logged before the collector reports the
@@ -531,7 +534,9 @@ test "a task message callback that fails is logged and the other callbacks still
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
 
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
@@ -620,7 +625,9 @@ test "unsubscribing stops a callback of every kind from being called" {
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
 
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
@@ -668,7 +675,9 @@ test "a queued interactive task is dispatched before a queued background one" {
     blocking_running.store(0, .release);
     blocking_release.store(false, .release);
     // One worker, so the two tasks queued behind the running one wait for it.
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
@@ -700,7 +709,9 @@ test "a pool that can never create a worker leaves the task pending" {
 
     // A maxWorkers that compares false against the number of workers (NaN) never allows
     // one, so the task waits for a worker that never comes.
-    const pool = try WorkerPoolBun.init(std.testing.io, std.math.nan(f64), 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, std.math.nan(f64), 10000, .{});
     defer pool.deinit();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
@@ -722,7 +733,9 @@ test "shutdown discards the result of a task that is still running" {
 
     blocking_running.store(0, .release);
     blocking_release.store(false, .release);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = PoolCollector.onComplete });
 

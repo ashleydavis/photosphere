@@ -8,7 +8,7 @@
 // The caller passes the directory to log in and the app's version as parameters of init, because this file has no way
 // to find them out itself.
 //
-// How it is created: `const file_logger = try FileLogger.init(allocator, io, logs_dir, app_version);` then
+// How it is created: `const file_logger = try FileLogger.init(allocator, io, tool_runner, logs_dir, app_version);` then
 // `utils.log.setLog(file_logger.ilog());`. At shutdown call `try file_logger.close();` (which writes the footers and waits for the
 // queues to drain) and then `file_logger.deinit();`. The logger must outlive every use of the installed ILog.
 //
@@ -120,9 +120,9 @@ pub const FileLogger = struct {
     // Creates the logs directory if it is not there, and the log file and the error log file in it, with their headers. The names
     // are photosphere-<start time>.log and photosphere-<start time>-errors.log. The headers carry the system information and the
     // versions of the tools the app uses, and the version of Zig this was built with and `app_version`. Nothing is rotated or
-    // cleaned up. `tool_runner` runs ImageMagick, ffmpeg and ffprobe in the app's process when it is not null, and null starts the programs.
+    // cleaned up. `tool_runner` runs the ImageMagick, ffmpeg and ffprobe built into the program, in its own process.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, tool_runner: ?node_utils.in_process_tools.InProcessRunner, logs_dir: []const u8, app_version: []const u8) !*FileLogger {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner, logs_dir: []const u8, app_version: []const u8) !*FileLogger {
         const start_ms = std.Io.Clock.real.now(io).toMilliseconds();
         try node_utils.fs.ensureDir(io, logs_dir);
         const start_iso = try (utils.timestamp_provider.Date{ .epochMilliseconds = start_ms }).toISOString(allocator);
@@ -789,11 +789,11 @@ fn buildSystemInformation(arena: std.mem.Allocator, io: std.Io, app_version: []c
 }
 
 //
-// The "--- Tool Versions ---" lines of a header: ImageMagick, FFmpeg and FFprobe. Where the version or the kind of ImageMagick is
-// not known the line says "unknown". The checks of FFmpeg and FFprobe cannot
-// fail, they report the tool as not available, so the "error checking version" line exists for ImageMagick only.
+// The "--- Tool Versions ---" lines of a header: ImageMagick, FFmpeg and FFprobe. Where the version is not known the line
+// says "unknown". A tool that does not run is reported as not found. The checks of FFmpeg and FFprobe fail only when the
+// message cannot be made, which ends the header, so the "error checking version" line exists for ImageMagick only.
 //
-fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, tool_runner: ?node_utils.in_process_tools.InProcessRunner) ![]const u8 {
+fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const u8 {
     const image_magick_line = blk: {
         const status = tools.Image.verifyImageMagick(arena, io, tool_runner) catch {
             break :blk "ImageMagick: error checking version";
@@ -801,17 +801,14 @@ fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, tool_runner: ?node_ut
         if (!status.available) {
             break :blk "ImageMagick: not found";
         }
-        break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s} ({s})", .{
-            status.version orelse "unknown",
-            if (status.@"type") |image_magick_type| @tagName(image_magick_type) else "unknown",
-        });
+        break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
     };
-    const ffmpeg_status = tools.Video.verifyFfmpeg(arena, io, tool_runner);
+    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, tool_runner);
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = tools.Video.verifyFfprobe(arena, io, tool_runner);
+    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, tool_runner);
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

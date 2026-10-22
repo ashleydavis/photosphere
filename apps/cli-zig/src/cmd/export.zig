@@ -100,7 +100,7 @@ pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     const assetType = if (options.type) |value| (if (value.len > 0) value else "original") else "original";
     const dbPath = if (options.base.db) |db| (if (db.len > 0) db else try std.process.currentPathAlloc(io, allocator)) else try std.process.currentPathAlloc(io, allocator);
 
-    const loaded = try loadDatabase(allocator, io, dbPath, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, dbPath, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const metadataDatabase = loaded.bsonDatabase;
     const localStorage = loaded.assetStorage;
     const rawAssetStorage = loaded.rawAssetStorage;

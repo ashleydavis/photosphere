@@ -183,7 +183,7 @@ pub const MainState = struct {
     stopping: std.atomic.Value(bool),
     // The timer thread.
     timer_thread: ?std.Thread,
-    // The tools built into the program (ImageMagick), started before the file logger and stopped after it. Owned.
+    // The tools built into the program (ImageMagick and FFmpeg), started before the file logger and stopped after it. Owned.
     media_tools: *media_tools.MediaTools,
     // The file logger (`fileLogger`), made first when the state is made and closed last when the core is destroyed. Owned.
     logger: *file_logger.FileLogger,
@@ -197,11 +197,11 @@ pub const MainState = struct {
         // A core a shell hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig). The map
         // stays for the life of the process, because the tasks still running while the core is destroyed read it too.
         _ = try environment.adoptProcessEnvironment(core.allocator);
-        // ImageMagick is built into the program and runs in its process, for the tasks (through the queue backend) and for the file
-        // logger's header, which asks it for its version.
+        // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (through the queue backend) and for the file
+        // logger's header, which asks them for their versions.
         const media = try core.allocator.create(media_tools.MediaTools);
         errdefer core.allocator.destroy(media);
-        media.* = media_tools.MediaTools.init(core.io());
+        media.* = try media_tools.MediaTools.init(core.io());
         errdefer media.deinit();
         core.queue_backend.tool_runner = media.runner();
         // The file logger is made first so everything after it is logged.
@@ -917,7 +917,7 @@ pub fn fromContext(context: *TaskContext) *MainState {
 // The tasks run in this process and write to the log themselves, so the file logger is the log.
 // A build that has been given a version is the packaged one.
 //
-fn startFileLogger(allocator: std.mem.Allocator, io: std.Io, tool_runner: ?node_utils.in_process_tools.InProcessRunner) !*file_logger.FileLogger {
+fn startFileLogger(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) !*file_logger.FileLogger {
     var log_root: []const u8 = "";
     if (node_utils.process_env.getEnv("PHOTOSPHERE_LOG_DIR")) |directory| {
         log_root = directory;

@@ -7,6 +7,8 @@ const node_path = @import("node-utils-zig").path;
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 const cli = @import("cli-zig");
+const tools = @import("tools-zig");
+const media_tools = @import("media-tools-zig");
 
 //
 // The expected output of these tests is written out here: the report text of each command, the "No database found"
@@ -548,6 +550,49 @@ test "info prints the report" {
     const expected = try std.mem.replaceOwned(u8, allocator, info_png_report, "<file>", file);
     const result = try runZig(allocator, environment, &.{ "info", file, try std.fs.path.join(allocator, &.{ root, "missing.jpg" }), "--yes" });
     try expectResult(.{ .stdout = try normalizeModified(allocator, result.stdout), .stderr = result.stderr, .exitCode = result.exitCode }, expected, "", 0);
+}
+
+//
+// The block `psi info` prints for the file, from its "📁 <file>" line up to the empty line that ends it. Fails the test
+// when there is none.
+//
+fn infoBlock(stdout: []const u8, file: []const u8) ![]const u8 {
+    var blocks = std.mem.splitSequence(u8, stdout, "\n\n");
+    while (blocks.next()) |block| {
+        if (std.mem.startsWith(u8, block, "📁 ") and std.mem.eql(u8, std.mem.sliceTo(block["📁 ".len..], '\n'), file)) {
+            return block;
+        }
+    }
+    std.debug.print("psi info printed no block for {s}:\n{s}\n", .{ file, stdout });
+    return error.TestExpectedInfoBlock;
+}
+
+test "info reads the dimensions of a photo and a video with the tools built into psi" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "cmd-info-built-in-tools");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+
+    // No tool on the PATH, so only the tools built into psi can read the files.
+    _ = try usePathOfEmptyDirectory(allocator, environment, root);
+    const photo = try node_path.join(allocator, &.{ root, "test.jpg" });
+    try std.Io.Dir.cwd().copyFile("../../test/test.jpg", std.Io.Dir.cwd(), photo, std.testing.io, .{});
+    const video = try node_path.join(allocator, &.{ root, "test.mp4" });
+    try std.Io.Dir.cwd().copyFile("../../test/multiple-files/test.mp4", std.Io.Dir.cwd(), video, std.testing.io, .{});
+
+    const result = try runZig(allocator, environment, &.{ "info", photo, video, "--yes" });
+    try std.testing.expectEqualStrings("", result.stderr);
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+
+    // The dimensions of the fixtures: test.jpg's as test/dbs/v6 records them, test.mp4's as an installed ffprobe reads them.
+    const photoBlock = try infoBlock(result.stdout, photo);
+    try std.testing.expect(std.mem.indexOf(u8, photoBlock, "\n   Type: image/jpeg\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, photoBlock, "\n   Dimensions: 2560 × 1920"));
+    const videoBlock = try infoBlock(result.stdout, video);
+    try std.testing.expect(std.mem.indexOf(u8, videoBlock, "\n   Type: video/mp4\n") != null);
+    try std.testing.expect(std.mem.endsWith(u8, videoBlock, "\n   Dimensions: 1280 × 720"));
 }
 
 //
@@ -1385,16 +1430,6 @@ fn runZigToFile(allocator: std.mem.Allocator, environment: *const std.process.En
 }
 
 //
-// The name `psi version` gives each dependency line, in the order it prints them;
-// ImageMagick is named for the kind of ImageMagick found.
-//
-const version_dependency_names = [_][]const []const u8{
-    &.{ "ImageMagick", "ImageMagick (convert/identify)", "ImageMagick (magick)" },
-    &.{"ffmpeg"},
-    &.{"ffprobe"},
-};
-
-//
 // Gets the cache directory the CLI uses in the test environment,
 // which sets neither PHOTOSPHERE_CACHE_DIR, XDG_CACHE_HOME nor LOCALAPPDATA.
 //
@@ -1409,12 +1444,24 @@ fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.proces
 }
 
 //
-// Expects the report of `psi version`. The versions of the tools on the machine
-// are not known here, so each dependency line is checked for its name and the closing status for agreeing with
-// which dependencies were found; the rest is exact.
+// The status of the ImageMagick and FFmpeg built into the program, read through a MediaTools of the test's own, which
+// links the same libraries as psi.
+//
+fn builtInToolsStatus(allocator: std.mem.Allocator) !tools.ToolsStatus {
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    return tools.verifyTools(allocator, std.testing.io, mediaTools.runner());
+}
+
+//
+// Expects the report of `psi version`: every dependency available, with the version of the tool built into the
+// program.
 //
 fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, root: []const u8, stdout: []const u8) !void {
-    const header =
+    const toolsStatus = try builtInToolsStatus(allocator);
+    try std.testing.expect(toolsStatus.allAvailable);
+    const tempDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere" });
+    const expected = try std.fmt.allocPrint(allocator,
         \\
         \\📋 Version Information
         \\
@@ -1422,55 +1469,28 @@ fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.pro
         \\Database version: 6
         \\
         \\Dependencies:
+        \\  ImageMagick (magick): {s}
+        \\  ffmpeg: {s}
+        \\  ffprobe: {s}
         \\
-    ;
-    try std.testing.expect(std.mem.startsWith(u8, stdout, header));
-    var lines = std.mem.splitScalar(u8, stdout[header.len..], '\n');
-    var missingTools: std.ArrayList([]const u8) = .empty;
-    var missingImageMagick = false;
-    var missingFfmpeg = false;
-    var missingFfprobe = false;
-    for (version_dependency_names, 0..) |names, dependencyIndex| {
-        const line = lines.next().?;
-        var nameMatched = false;
-        for (names) |name| {
-            if (std.mem.startsWith(u8, line, try std.fmt.allocPrint(allocator, "  {s}: ", .{name}))) {
-                nameMatched = true;
-            }
-        }
-        try std.testing.expect(nameMatched);
-        if (std.mem.endsWith(u8, line, ": Not found")) {
-            switch (dependencyIndex) {
-                0 => missingImageMagick = true,
-                1 => missingFfmpeg = true,
-                else => missingFfprobe = true,
-            }
-        }
-    }
-
-    // The tool verification lists the missing tools in this order.
-    if (missingImageMagick) {
-        try missingTools.append(allocator, "ImageMagick");
-    }
-    if (missingFfprobe) {
-        try missingTools.append(allocator, "ffprobe");
-    }
-    if (missingFfmpeg) {
-        try missingTools.append(allocator, "ffmpeg");
-    }
-    const status = if (missingTools.items.len == 0)
-        "✅ All dependencies are available\n"
-    else
-        try std.fmt.allocPrint(allocator, "⚠️  Some dependencies are missing: {s}\nRun \"psi tools\" for installation instructions\n", .{try std.mem.join(allocator, ", ", missingTools.items)});
-    const tempDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere" });
-    const expectedRest = try std.fmt.allocPrint(allocator, "\nDirectories:\n  Config: {s}\n  Temp: {s}\n  Log files: {s}\n  Cache: {s}\n\n{s}", .{
+        \\Directories:
+        \\  Config: {s}
+        \\  Temp: {s}
+        \\  Log files: {s}
+        \\  Cache: {s}
+        \\
+        \\✅ All dependencies are available
+        \\
+    , .{
+        toolsStatus.magick.version.?,
+        toolsStatus.ffmpeg.version.?,
+        toolsStatus.ffprobe.version.?,
         try std.fs.path.join(allocator, &.{ root, "config" }),
         tempDir,
         try std.fs.path.join(allocator, &.{ tempDir, "logs" }),
         try expectedCacheDir(allocator, environment),
-        status,
     });
-    try std.testing.expectEqualStrings(expectedRest, lines.rest());
+    try std.testing.expectEqualStrings(expected, stdout);
 }
 
 test "version prints the report" {
@@ -2036,84 +2056,6 @@ test "hash reads an encrypted file through its key" {
 const tools_report_header = "\n📦 Media Processing Tools Status\n\nTool Status:\n\n";
 
 //
-// The report of `psi tools` when no tool is found, up to the installation instructions.
-//
-const tools_none_available_report = tools_report_header ++
-    \\❌ ImageMagick: Not found
-    \\   Image processing - resizing, format conversion, metadata extraction
-    \\
-    \\❌ ffmpeg: Not found
-    \\   Video processing - format conversion and thumbnail extraction
-    \\
-    \\❌ ffprobe: Not found
-    \\   Video analysis - metadata extraction, duration, dimensions, codecs
-    \\
-    \\⚠️ 3 tool(s) missing: ImageMagick, ffmpeg, ffprobe
-    \\
-    \\
-;
-
-//
-// The heading the installation instructions start with.
-//
-const tools_instructions_heading = "\nInstallation Instructions:\n\n";
-
-//
-// The line showInstallationInstructions ends with.
-//
-const tools_instructions_ending = "\nAfter installation, run this command again to verify all tools are available.\n";
-
-//
-// Replaces what differs between machines in the report of `psi tools`: the kind of ImageMagick found (in its
-// name) and the version of each tool found.
-//
-fn maskToolVersions(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
-    var masked: std.ArrayList(u8) = .empty;
-    var lines = std.mem.splitScalar(u8, text, '\n');
-    var first = true;
-    while (lines.next()) |line| {
-        if (!first) {
-            try masked.append(allocator, '\n');
-        }
-        first = false;
-        var maskedLine = line;
-        for ([_][]const u8{ "ImageMagick (convert/identify)", "ImageMagick (magick)" }) |imageMagickName| {
-            maskedLine = try std.mem.replaceOwned(u8, allocator, maskedLine, imageMagickName, "ImageMagick (<kind>)");
-        }
-        const versionLabel = ": Available (v";
-        if (std.mem.indexOf(u8, maskedLine, versionLabel)) |position| {
-            if (std.mem.endsWith(u8, maskedLine, ")")) {
-                maskedLine = try std.mem.concat(allocator, u8, &.{ maskedLine[0 .. position + versionLabel.len], "<version>)" });
-            }
-        }
-        try masked.appendSlice(allocator, maskedLine);
-    }
-    return masked.items;
-}
-
-//
-// Copies the executable of a tool found on the PATH of the environment into the directory, failing when it is
-// not on the PATH.
-//
-fn copyToolFromPath(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, toolName: []const u8, destDir: []const u8) !void {
-    const fileName = try std.mem.concat(allocator, u8, &.{ toolName, builtin.os.tag.exeFileExt(builtin.cpu.arch) });
-    var pathDirs = std.mem.splitScalar(u8, environment.get("PATH").?, std.fs.path.delimiter);
-    while (pathDirs.next()) |pathDir| {
-        if (pathDir.len == 0) {
-            continue;
-        }
-        const candidate = try std.fs.path.join(allocator, &.{ pathDir, fileName });
-        std.Io.Dir.cwd().access(std.testing.io, candidate, .{}) catch {
-            continue;
-        };
-        try std.Io.Dir.cwd().copyFile(candidate, std.Io.Dir.cwd(), try std.fs.path.join(allocator, &.{ destDir, fileName }), std.testing.io, .{});
-        return;
-    }
-    std.debug.print("This test needs {s} on the PATH.\n", .{toolName});
-    return error.RequiredToolMissing;
-}
-
-//
 // Runs the Zig CLI with the arguments, writing the keys to its stdin (a pipe) and then closing it. TERM is set to
 // a terminal that the Unicode support check accepts on every platform, so
 // the prompts render the same symbols everywhere.
@@ -2184,123 +2126,31 @@ test "tools reports every tool available" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.cliEnvironment(allocator, root);
 
-    for ([_][]const []const u8{ &.{ "tools", "--yes" }, &.{"tools"}, &.{ "tools", "-y" } }) |args| {
-        const result = try runZig(allocator, environment, args);
-        if (result.exitCode != 0) {
-            std.debug.print("This test needs ImageMagick and ffmpeg installed. psi tools printed:\n{s}\n", .{result.stdout});
-        }
-        const masked: helpers.CliResult = .{
-            .exitCode = result.exitCode,
-            .stdout = try maskToolVersions(allocator, result.stdout),
-            .stderr = result.stderr,
-        };
-
-        // The versions are masked by maskToolVersions.
-        try expectResult(masked, tools_report_header ++
-            \\✅ ImageMagick (<kind>): Available (v<version>)
-            \\   Image processing - resizing, format conversion, metadata extraction
-            \\
-            \\✅ ffmpeg: Available (v<version>)
-            \\   Video processing - format conversion and thumbnail extraction
-            \\
-            \\✅ ffprobe: Available (v<version>)
-            \\   Video analysis - metadata extraction, duration, dimensions, codecs
-            \\
-            \\🎉 All tools are available and ready to use!
-            \\
-        , "", 0);
-    }
-}
-
-test "tools --yes reports the missing tools and shows the installation instructions" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const root = try helpers.makeTempDir(allocator, "cmd-tools-none");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try helpers.cliEnvironment(allocator, root);
+    // No tool on the PATH: the tools psi reports are the ones built into it.
     _ = try usePathOfEmptyDirectory(allocator, environment, root);
-
-    const result = try runZig(allocator, environment, &.{ "tools", "--yes" });
-    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
-    try std.testing.expectEqualStrings("", result.stderr);
-
-    // The installation instructions differ by platform (installation-instructions.test.zig checks them), so
-    // only their heading and ending are checked here.
-    const report = result.stdout[0..@min(tools_none_available_report.len, result.stdout.len)];
-    try std.testing.expectEqualStrings(tools_none_available_report, report);
-    const instructions = result.stdout[report.len..];
-    try std.testing.expect(std.mem.startsWith(u8, instructions, tools_instructions_heading));
-    try std.testing.expect(std.mem.endsWith(u8, instructions, tools_instructions_ending));
-}
-
-test "tools names the one missing tool" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const root = try helpers.makeTempDir(allocator, "cmd-tools-no-imagemagick");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try helpers.cliEnvironment(allocator, root);
-
-    // A PATH with ffmpeg and ffprobe but no ImageMagick.
-    const toolsEnvironment = try allocator.create(std.process.Environ.Map);
-    toolsEnvironment.* = try environment.clone(allocator);
-    const binDir = try usePathOfEmptyDirectory(allocator, toolsEnvironment, root);
-    try copyToolFromPath(allocator, environment, "ffmpeg", binDir);
-    try copyToolFromPath(allocator, environment, "ffprobe", binDir);
-
-    const result = try runZig(allocator, toolsEnvironment, &.{ "tools", "--yes" });
-    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
-    try std.testing.expectEqualStrings("", result.stderr);
-    const expectedReport = tools_report_header ++
-        \\❌ ImageMagick: Not found
+    const toolsStatus = try builtInToolsStatus(allocator);
+    try std.testing.expect(toolsStatus.allAvailable);
+    const expectedReport = try std.fmt.allocPrint(allocator, tools_report_header ++
+        \\✅ ImageMagick (magick): Available (v{s})
         \\   Image processing - resizing, format conversion, metadata extraction
         \\
-        \\✅ ffmpeg: Available (v<version>)
+        \\✅ ffmpeg: Available (v{s})
         \\   Video processing - format conversion and thumbnail extraction
         \\
-        \\✅ ffprobe: Available (v<version>)
+        \\✅ ffprobe: Available (v{s})
         \\   Video analysis - metadata extraction, duration, dimensions, codecs
         \\
-        \\⚠️ 1 tool(s) missing: ImageMagick
+        \\🎉 All tools are available and ready to use!
         \\
-        \\
-    ;
-    const masked = try maskToolVersions(allocator, result.stdout);
-    const report = masked[0..@min(expectedReport.len, masked.len)];
-    try std.testing.expectEqualStrings(expectedReport, report);
-    const instructions = masked[report.len..];
-    try std.testing.expect(std.mem.startsWith(u8, instructions, tools_instructions_heading));
-    try std.testing.expect(std.mem.endsWith(u8, instructions, tools_instructions_ending));
+    , .{
+        toolsStatus.magick.version.?,
+        toolsStatus.ffmpeg.version.?,
+        toolsStatus.ffprobe.version.?,
+    });
 
-    // Only ImageMagick is missing, so the instructions do not mention ffmpeg.
-    try std.testing.expect(std.mem.indexOf(u8, instructions, "ffmpeg") == null);
-}
-
-test "tools asks before showing the installation instructions" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const root = try helpers.makeTempDir(allocator, "cmd-tools-declined");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try helpers.cliEnvironment(allocator, root);
-    _ = try usePathOfEmptyDirectory(allocator, environment, root);
-
-    // The confirm prompt answered with "n", as it renders to an input that is not a TTY in a terminal with Unicode
-    // (runZigWithInput sets TERM for that), then the message printed when the instructions are declined.
-    const declined = try runZigWithInput(allocator, environment, &.{"tools"}, "n");
-    try expectResult(declined, tools_none_available_report ++
-        "\x1b[?25l \n◆  Would you like to see installation instructions?\n   ● Yes / ○ No\n \n\x1b[1A\n" ++
-        "\x1b[?25h\x1b[999D\x1b[4A\x1b[1B\x1b[J◇  Would you like to see installation instructions?\n   No\n\n" ++
-        "Please install the missing tools and try again.\n", "", 1);
-
-    // Answering yes shows the installation instructions after the prompt.
-    const accepted = try runZigWithInput(allocator, environment, &.{"tools"}, "y");
-    try std.testing.expectEqual(@as(u8, 1), accepted.exitCode);
-    try std.testing.expectEqualStrings("", accepted.stderr);
-    try std.testing.expect(std.mem.startsWith(u8, accepted.stdout, tools_none_available_report ++ "\x1b[?25l \n◆  Would you like to see installation instructions?\n"));
-    try std.testing.expect(std.mem.indexOf(u8, accepted.stdout, "◇  Would you like to see installation instructions?\n   Yes\n" ++ tools_instructions_heading) != null);
-    try std.testing.expect(std.mem.endsWith(u8, accepted.stdout, tools_instructions_ending));
+    for ([_][]const []const u8{ &.{ "tools", "--yes" }, &.{"tools"}, &.{ "tools", "-y" } }) |args| {
+        try expectResult(try runZig(allocator, environment, args), expectedReport, "", 0);
+    }
 }
 
 //
@@ -4053,7 +3903,7 @@ const opener_script =
 ;
 
 //
-// Sets up the environment of the bug tests: no tools on the PATH (so every tool version is "Not available"), and
+// Sets up the environment of the bug tests: no tools on the PATH (so the tool versions are those of the tools built into psi), and
 // either no program to open a URL with, or a program that records the arguments it is started with beside itself (see
 // openerPath and expectOpened). Outside Windows it is a shell script the test writes. Windows always has PowerShell (Wine
 // too, which sets SystemRoot itself whatever the environment says), and `psi bug` starts it by full path, which a script
@@ -4137,11 +3987,14 @@ fn bugSummary(allocator: std.mem.Allocator, title: []const u8, logFile: []const 
 }
 
 //
-// The URL bugReportCommand opens for a report without tools, on this system, with the details of the bug.
+// The URL bugReportCommand opens for a report on this system, with the versions of the tools built into psi and the
+// details of the bug.
 //
 fn bugUrl(allocator: std.mem.Allocator, title: []const u8, details: []const u8, logHeader: []const u8, logFile: []const u8) ![]const u8 {
+    const toolsStatus = try builtInToolsStatus(allocator);
+    try std.testing.expect(toolsStatus.allAvailable);
     const body = try std.fmt.allocPrint(allocator, "{s}\n\n## System Information\n- Photosphere Version: dev\n- Platform: {s} {s}\n- OS Release: {s}\n- Node.js Version: {s}\n\n" ++
-        "## Tool Versions\n- ImageMagick: Not available\n- FFmpeg: Not available\n- FFprobe: Not available\n\n" ++
+        "## Tool Versions\n- ImageMagick: ImageMagick v{s}\n- FFmpeg: ffmpeg v{s}\n- FFprobe: ffprobe v{s}\n\n" ++
         "## Log Header\n```\n{s}\n```\n\n## Log File\nPlease attach the full log file located at:\n`{s}`\n\n" ++
         "You can drag and drop the log file into this issue, or copy and paste its contents into a code block.\n\n" ++
         "## Additional Context\n<!-- Add any other context about the problem here -->\n\n", .{
@@ -4150,6 +4003,9 @@ fn bugUrl(allocator: std.mem.Allocator, title: []const u8, details: []const u8, 
         cli.file_logger.osArch(),
         try cli.file_logger.osRelease(allocator),
         cli.file_logger.processVersion(),
+        toolsStatus.magick.version.?,
+        toolsStatus.ffmpeg.version.?,
+        toolsStatus.ffprobe.version.?,
         logHeader,
         logFile,
     });

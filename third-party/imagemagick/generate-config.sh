@@ -149,7 +149,7 @@ sed -e 's/^#undef HAVE_PROTOTYPES/#define HAVE_PROTOTYPES/' \
     -e 's/^#undef HAVE_STDLIB_H/#define HAVE_STDLIB_H/' \
     "$LIBJPEG_DIR/jconfig.cfg" > "$WORK_DIR/jpeg-include/jconfig.h"
 
-# The delegates are the three the mobile builds had: JPEG, PNG and zlib. Everything else ImageMagick can use is off, so
+# The delegates are JPEG, PNG, WebP and zlib. Everything else ImageMagick can use is off, so
 # nothing on the machine running this script changes the result. The libraries themselves are built by build.zig and are
 # not there yet, so the checks that look for them are answered here: PKG_CHECK_MODULES takes the variables as set (it
 # would otherwise ask pkg-config), and the one link check for libjpeg is answered through configure's cache variable.

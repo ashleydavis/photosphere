@@ -54,6 +54,7 @@ fn openDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, 
         toolContext.uuidGenerator,
         toolContext.timestampProvider,
         toolContext.sessionId,
+        toolContext.toolRunner,
         false,
     );
     toolContext.setDatabase(.{

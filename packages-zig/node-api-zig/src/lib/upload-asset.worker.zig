@@ -414,8 +414,11 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     const googleApiKey = data.googleApiKey;
     const dryRun = data.dryRun orelse false;
 
-    // An app with ImageMagick and ffmpeg built in runs them in its process through the task's tool runner; with none the programs are started.
-    const toolRunner = context.toolRunner;
+    // ImageMagick and FFmpeg are built into the program and run in its process through the task's tool runner. A task run with
+    // no runner fails here rather than starting an installed program.
+    const toolRunner = context.toolRunner orelse {
+        return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
+    };
     const uuidGenerator = context.uuidGenerator;
 
     const assetId = data.assetId;
@@ -533,7 +536,7 @@ fn uploadAndDescribe(
     io: std.Io,
     data: IUploadAssetData,
     context: ITaskContext,
-    toolRunner: ?node_utils.in_process_tools.InProcessRunner,
+    toolRunner: node_utils.in_process_tools.InProcessRunner,
     assetDetails: ?IAssetDetails,
     storage: IStorage,
     expectedHashBuffer: []const u8,

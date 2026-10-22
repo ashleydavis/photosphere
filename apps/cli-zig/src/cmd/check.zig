@@ -73,7 +73,7 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
     const sessionTempDir = context.sessionTempDir;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const databaseDir = loaded.databaseDir;
 
     const storageDescriptor: IDatabaseDescriptor = .{

@@ -55,7 +55,7 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
         - lan-share-network-zig - Zig port of the network side of lan-share
         - mcp-zig - The MCP server (JSON-RPC protocol, tool input schemas and the Streamable HTTP transport) that the `psi mcp` command and the desktop app both run
         - mobile-worker-zig - The planning task handlers the phone runs
-        - media-tools-zig - ImageMagick and FFmpeg (with their libjpeg, libpng, libwebp and zlib delegates), built from source and called in process
+        - media-tools-zig - ImageMagick and FFmpeg (with their libjpeg, libpng, libwebp and zlib delegates), built from source and called in process by both the Photosphere App and the Zig CLI
         - merkle-tree-zig - Zig port of merkle-tree
         - node-api-zig - Zig port of node-api
         - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on). The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
@@ -103,6 +103,8 @@ Install the pinned toolchain (`bun`, `node`, `jq`, `what-changed`) with [mise](h
 ```bash
 mise install
 ```
+
+The Photosphere App and the Zig CLI need no ImageMagick or ffmpeg installed, because both are built into them. The tests still do: the smoke test scripts and some unit test helpers run installed `magick`, `ffmpeg` and `ffprobe` to make and check fixtures, so a developer machine that runs the tests needs ImageMagick and FFmpeg installed and on the PATH.
 
 Everything below is run from the repo root.
 

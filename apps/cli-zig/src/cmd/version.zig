@@ -7,12 +7,12 @@ const pc = @import("../lib/picocolors.zig");
 const config = @import("../lib/config.zig");
 const log = &utils.log.log;
 const verifyTools = tools.verifyTools;
-const Image = tools.Image;
 const version = config.version;
 const buildMetadata = config.buildMetadata;
 const getCacheDir = node_utils.fs.getCacheDir;
 const getConfigDir = node_utils.fs.getConfigDir;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const join = node_utils.path.join;
 const CURRENT_DATABASE_VERSION = merkle_tree.merkle_tree.CURRENT_DATABASE_VERSION;
 
@@ -25,8 +25,9 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 
 //
 // Command that displays version information for psi and its dependencies.
+// toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions are shown.
 //
-pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io) !void {
+pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) !void {
 
     log.info("");
     log.info(try pc.bold(allocator, "📋 Version Information\n"));
@@ -49,20 +50,8 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io) !void {
     }
 
     // Get tool versions
-    const toolsStatus = try verifyTools(allocator, io, null);
-
-    // Get ImageMagick type to display the correct name
-    // Initialize ImageMagick first to ensure we have the correct type
-    _ = try Image.verifyImageMagick(allocator, io, null);
-    const imageMagickType = Image.getImageMagickType();
-    var imageMagickName: []const u8 = "ImageMagick";
-
-    if (imageMagickType == .legacy) {
-        imageMagickName = "ImageMagick (convert/identify)";
-    }
-    else if (imageMagickType == .modern) {
-        imageMagickName = "ImageMagick (magick)";
-    }
+    const toolsStatus = try verifyTools(allocator, io, toolRunner);
+    const imageMagickName = "ImageMagick (magick)";
 
     // Display dependency versions
     log.info("");
@@ -111,6 +100,5 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io) !void {
     }
     else {
         log.info(try pc.yellow(allocator, try text(allocator, "⚠️  Some dependencies are missing: {s}", .{try std.mem.join(allocator, ", ", toolsStatus.missingTools)})));
-        log.info(try pc.dim(allocator, "Run \"psi tools\" for installation instructions"));
     }
 }

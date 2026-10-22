@@ -13,7 +13,6 @@ import wrapAnsi from "wrap-ansi";
 import stringWidth from "string-width";
 import { Command } from "commander";
 import { formatBytes } from "../../../../cli/src/lib/format";
-import { showInstallationInstructions } from "../../../../cli/src/lib/installation-instructions";
 import { confirm, select, text, password, multiline, outro } from "../../../../cli/src/lib/clack/prompts";
 
 const fixturesDir = import.meta.dir;
@@ -126,20 +125,6 @@ for (const input of wrapStrings) {
 }
 const widthStrings = ["", "abc", "\x1b[31mred\x1b[39m", "中文", "📁 x", "⚠️ warn", "✓", "●", "▪", "é", "á", "🇺🇸", "👍🏽", "👨‍👩‍👧", "\t", "\x1b]8;;http://x\x07link\x1b]8;;\x07", "…", "█"];
 writeFixture("wrap-ansi.json", { wrapCases, widthCases: widthStrings.map(input => ({ input, width: stringWidth(input) })) });
-
-//
-// installation instructions (Linux).
-//
-const installationCases: any[] = [];
-for (const missingTools of [["ImageMagick"], ["ffmpeg"], ["ffprobe"], ["ImageMagick", "ffprobe", "ffmpeg"], []]) {
-    const lines: string[] = [];
-    const originalLog = console.log;
-    console.log = (message: string) => { lines.push(message); };
-    showInstallationInstructions(missingTools);
-    console.log = originalLog;
-    installationCases.push({ missingTools, output: lines.join("\n") + "\n" });
-}
-writeFixture("installation-instructions.json", installationCases);
 
 //
 // Command line parsing of replicate and verify (the same declarations as apps/cli/index.ts).

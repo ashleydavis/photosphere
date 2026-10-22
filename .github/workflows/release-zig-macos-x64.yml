@@ -583,4 +583,4 @@ jobs:
             - **macOS (Intel)**: `.dmg` disk image or `.zip`
 
             ## Bundled tools and licences
-            The desktop and CLI builds use ImageMagick and ffmpeg installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).
+            ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and FFmpeg (LGPL-2.1+) are built into the desktop and CLI builds, so neither has to be installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).

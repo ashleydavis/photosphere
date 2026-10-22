@@ -76,7 +76,7 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
 
     const nonInteractive = options.base.yes orelse false;
 
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const databaseDir = loaded.databaseDir;
     const localStorage = loaded.assetStorage;
     const localRawStorage = loaded.rawAssetStorage;

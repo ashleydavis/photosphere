@@ -34,7 +34,7 @@ pub fn setOriginCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     try updateDatabaseConfig(allocator, io, loaded.rawAssetStorage, .{ .origin = originPath });
 
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Origin set to: {s}", .{originPath})));

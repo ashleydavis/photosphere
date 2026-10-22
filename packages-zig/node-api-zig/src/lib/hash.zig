@@ -156,7 +156,7 @@ pub fn getHashFromCache(allocator: std.mem.Allocator, filePath: []const u8, file
 pub fn validateAndHash(
     allocator: std.mem.Allocator,
     io: std.Io,
-    toolRunner: ?InProcessRunner,
+    toolRunner: InProcessRunner,
     filePath: []const u8, // Actual file path (always a valid file, already extracted if from zip)
     fileStat: IFileStat,
     contentType: []const u8,

@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const node_utils = @import("node-utils-zig");
+const media_tools = @import("media-tools-zig");
 const helpers = @import("test-helpers.zig");
 const bug = cli.bug;
 
@@ -163,6 +164,28 @@ test "generateBugReportTemplate fills in the details of the bug and the system" 
         \\
         \\
     , template);
+}
+
+test "getToolVersions reports the versions of the ImageMagick and FFmpeg built into the program" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+
+    const versions = try bug.getToolVersions(allocator, std.testing.io, mediaTools.runner());
+
+    // The versions are the ones the built-in libraries report, read here from the libraries themselves.
+    const imageMagickPrefix = "ImageMagick v";
+    try std.testing.expect(std.mem.startsWith(u8, versions.imagemagick, imageMagickPrefix));
+    const magickVersionText = (try mediaTools.image_magick.runMagick(allocator, &.{"-version"})).output;
+    try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{versions.imagemagick[imageMagickPrefix.len..]})) != null);
+    const ffmpegPrefix = "ffmpeg v";
+    try std.testing.expect(std.mem.startsWith(u8, versions.ffmpeg, ffmpegPrefix));
+    try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffmpeg")).output, try std.fmt.allocPrint(allocator, "ffmpeg version {s}\n", .{versions.ffmpeg[ffmpegPrefix.len..]})));
+    const ffprobePrefix = "ffprobe v";
+    try std.testing.expect(std.mem.startsWith(u8, versions.ffprobe, ffprobePrefix));
+    try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffprobe")).output, try std.fmt.allocPrint(allocator, "ffprobe version {s}\n", .{versions.ffprobe[ffprobePrefix.len..]})));
 }
 
 test "getSystemInfo describes this system like Node's os and process" {

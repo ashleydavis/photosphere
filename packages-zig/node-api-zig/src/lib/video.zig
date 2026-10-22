@@ -59,7 +59,7 @@ fn toISOString(allocator: std.mem.Allocator, time: f64, invalidMessage: []const 
 //
 // Gets the details of a video.
 //
-pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     const videoPath = filePath;
@@ -71,7 +71,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?In
     const metadataMs = dateNow(io) - metadataStartedAt;
 
     // Extract screenshot at 1 second or middle of video
-    var video = Video.init(allocator, io, toolRunner, videoPath);
+    var video = Video.init(videoPath);
     const screenshotPath = try path.join(allocator, &.{ tempDir, try std.mem.concat(allocator, u8, &.{ "thumb_", try uuidGenerator.generate(allocator, io), ".jpg" }) });
     const duration = assetInfo.duration;
     const screenshotTime = @min(if (duration != null and isTruthy(duration.?)) duration.? / 2 else 1, 300); // Max 5 minutes

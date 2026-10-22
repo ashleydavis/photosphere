@@ -182,7 +182,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const bsonDatabase = loaded.bsonDatabase;
 
@@ -500,7 +500,7 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
     const dbDir = try resolveDbDir(allocator, io, &options.base);
 
     // Load the database
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const dbDirResolved = loaded.databaseDir;
 
@@ -669,7 +669,7 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, cont
     // Load the database first to get the directory for default paths
     const dbDir = try resolveDbDir(allocator, io, &options.base);
 
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const dbDirResolved = loaded.databaseDir;
 
     // Get input file path (default to collisions.json in database directory)
@@ -790,7 +790,7 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
     // Load the database first to get the directory for default paths
     const dbDir = try resolveDbDir(allocator, io, &options.base);
 
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const dbDirResolved = loaded.databaseDir;
 
     // Get input file path (default to duplicates.json in database directory)
@@ -880,7 +880,7 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.db, options, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const metadataCollection = loaded.metadataCollection;
     const databaseDir = loaded.databaseDir;
 
@@ -966,7 +966,7 @@ pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, cont
 
     const dbDir = try resolveDbDir(allocator, io, options);
 
-    const loaded = try loadDatabase(allocator, io, dbDir, options, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, dbDir, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const dbDirResolved = loaded.databaseDir;
 
     log.info("");

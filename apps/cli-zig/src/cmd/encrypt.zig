@@ -68,13 +68,12 @@ fn onEncryptProgress(context: ?*anyopaque, message: []const u8) void {
 // Encrypts the database at --db in place (plain → encrypted, re-encrypt, or old → new format).
 //
 pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IEncryptCommandOptions) !void {
-    _ = context;
     const verbose = options.base.verbose;
     const yes = options.base.yes;
     const cwd = options.base.cwd;
     const nonInteractive = yes orelse false;
 
-    try configureLog(allocator, io, .{
+    try configureLog(allocator, io, context.toolRunner, .{
         .verbose = verbose,
     });
 

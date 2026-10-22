@@ -1,13 +1,33 @@
 # Bundled ImageMagick and FFmpeg
 
-The Photosphere App calls ImageMagick and FFmpeg inside its own process on every platform. Nothing is installed on the machine and the app starts no program. The Zig core links both libraries statically (`packages-zig/media-tools-zig`) and runs the same argument lists the TypeScript and Zig code have always built for `magick`, `ffmpeg` and `ffprobe`.
+The Photosphere App (on the desktop and on phones) and the Zig CLI (`psi`) call ImageMagick and FFmpeg inside their own process on every platform, through the same `MediaTools`. Nothing is installed on the machine and neither starts a program for them. The Zig core links both libraries statically (`packages-zig/media-tools-zig`) and runs the same argument lists the TypeScript and Zig code have always built for `magick`, `ffmpeg` and `ffprobe`.
 
 ## How it fits together
 
-- `MediaTools` (`packages-zig/media-tools-zig/src/lib/media-tools.zig`) owns ImageMagick and FFmpeg and gives out an `InProcessRunner`. The core makes one at startup and hands it to the task queue, so every task context carries it as `toolRunner`. Code that runs a tool with a runner runs it in process; with none (the CLI) it starts the installed program.
+- `MediaTools` (`packages-zig/media-tools-zig/src/lib/media-tools.zig`) owns ImageMagick and FFmpeg and gives out an `InProcessRunner`. The App's core makes one at startup and hands it to the task queue, so every task context carries it as `toolRunner`. The CLI's `main` makes one for the whole run and passes it down to each command and to its worker pool, which puts its runner into the context of every task it runs. Photosphere's code that runs `magick`, `ffmpeg` or `ffprobe` takes the runner as a required argument, so it has no path that starts an installed program. A task handler that reads the runner from its context (`check`, `hash-file` and `upload-asset`) fails when the context has none, with an error saying ImageMagick and FFmpeg are built into the program and the task was run with no runner for them.
 - ImageMagick runs through its own command dispatcher. What a command prints is collected without touching standard output: `identify` hands its text back, `-version` writes to a file, and a command ending in `info:` is pointed at a temporary file. It is thread safe.
-- FFmpeg runs through the `main` functions of `ffmpeg` and `ffprobe` (renamed by compiler flags). They keep state for the whole program, so one command runs at a time, and the counts they leave behind are reset after each run. `ffprobe` writes its report to a temporary file. What FFmpeg logs goes to standard error.
+- FFmpeg runs through the `main` functions of `ffmpeg` and `ffprobe` (renamed by compiler flags). They keep state for the whole program, so one command runs at a time, and the counts they leave behind are reset after each run. `ffprobe` writes its report to a temporary file. What FFmpeg logs goes to the program's log (see below).
 - Delegates and zlib: libjpeg, libpng and libwebp (single pictures; the animated-picture parts are not built) are built beside ImageMagick, over the same zlib-ng the rest of the core uses. WebP is read and written the same way on every platform, so a WebP picture imports on a phone as it does on a desktop.
+
+## Image types the built-in ImageMagick cannot read
+
+ImageMagick is configured with only the JPEG, PNG, WebP and zlib delegates (`third-party/imagemagick/generate-config.sh`); every other delegate is turned off. It reads what its own coders read, such as GIF, BMP, ICO, TGA and PSD, but it cannot read HEIC, HEIF, AVIF, TIFF, JPEG 2000, JPEG XL, OpenEXR, DjVu, FlashPix, WMF, XWD or DNG, each of which needs a delegate it does not have. Importing a file of one of those types fails with ImageMagick's error in the Zig CLI and in the App. An installed ImageMagick could read them through its own delegates, but neither program uses an installed ImageMagick.
+
+## Security policy
+
+The built-in ImageMagick is built with zero configuration, so it reads no `policy.xml`. Instead `ImageMagick.init` (`packages-zig/media-tools-zig/src/lib/image-magick.zig`) sets a policy with `SetMagickSecurityPolicy` straight after `MagickWandGenesis`. It denies:
+
+- The coders that reach outside the file being read or run a script: `URL`, `HTTP`, `HTTPS`, `FTP`, `MSL`, `MVG`, `MSVG`, `TEXT`, `TXT`, `EPHEMERAL`, `SHOW`, `WIN` and `X`. Every other coder stays allowed, because the import reads whatever image type the user has. An allow-list would refuse types it accepts.
+- Every delegate, since none is meant to run.
+- Indirect reads, the paths starting with `@` that name a file holding a list of files to read.
+
+If the policy cannot be set, `init` stops ImageMagick and returns an error carrying ImageMagick's reason, so `MediaTools.init` fails and the program does not run without it.
+
+## Stopping a timed-out ffmpeg
+
+FFmpeg's `ffmpeg` keeps state for the whole process and one run holds `Ffmpeg.mutex`, so a run that never ends would block every later `ffmpeg` and `ffprobe` in the process. `ffmpeg_main` reads no task's cancel flag, so cancelling the task alone does not end it. `third-party/ffmpeg/ffmpeg-main.c` (Photosphere's wrapper around `fftools/ffmpeg.c`, which is not edited) adds two functions. `ffmpeg_request_stop` sets the flags FFmpeg's own SIGTERM handler sets, so the run ends the way it does on Ctrl+C. `ffmpeg_reset_stop` clears them after every run. `Ffmpeg` (`packages-zig/media-tools-zig/src/lib/ffmpeg.zig`) records the thread a run is on. `stopIfRunningOn(thread_id)` asks for the stop only when the current run is on that thread. The record, the request and the reset are all done under `stop_mutex`, so a stop can never land after its run has ended and stop the next one.
+
+The CLI's worker pool calls `stopIfRunningOn` with the worker's thread when a task times out, beside the task's cancel. The App runs tasks on Ziggy's queue, which has no task timeout and abandons no thread, so it never needs the stop. `ffprobe` has no stop flag and cannot be stopped once started; it reads only a file's header, so a run that never ends is less likely there, but one would still hold the mutex.
 
 ## Source, builds and scripts
 
@@ -21,7 +41,10 @@ Targets with generated files and a build that has been run here: Linux (x86_64, 
 
 ## Messages from the libraries
 
-What ImageMagick and FFmpeg say about a failure goes to standard error and not into the result of the command. Both libraries report it through one callback for the whole process (`SetErrorHandler` and `SetWarningHandler` for ImageMagick, `av_log_set_callback` for FFmpeg) that carries no pointer to the call it belongs to, and ImageMagick clears the exception it keeps for a call before the command returns. Giving the text to the right call would take a variable for the whole process, which the repository does not allow without being asked.
+Neither library prints to the process's standard error. What they say goes back the way the standard error of an installed program did: into the error of a command that failed, and to the log as the tool's standard error (`log.tool`) for a command that worked.
+
+- ImageMagick leaves a command's messages in the exception the command is given. A command that fails hands them back as its output, so the "Command failed" error carries them, and the warnings of a command that worked go to `log.tool`. The process-wide warning and error handlers, which a few parts of ImageMagick still call, are set when `MediaTools` starts to send to `log.tool` and the log's errors, and put back when it stops.
+- FFmpeg reports everything through one log callback for the whole process (`av_log_set_callback`), which is given no pointer to the run it belongs to, so the text cannot be tied to a run without a variable for the whole process, which the repository does not allow. The callback sends FFmpeg's errors to the log's errors and everything else at the run's `-loglevel` to `log.tool`. `ffprobe` is also run with `-show_error`, so a failed probe hands back its error in its report, and that is its output. A failed `ffmpeg` hands back no text: its errors are in the log.
 
 ## iOS
 

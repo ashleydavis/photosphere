@@ -12,7 +12,7 @@ const IFileStat = file_scanner.IFileStat;
 // Validates that a file is good before allowing it to be added to the merkle tree.
 // filePath must be a path to a locally extracted file (not a zip file path).
 //
-pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, contentType: []const u8, fileStat: IFileStat) !bool {
+pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileStat: IFileStat) !bool {
     // Check that it's not a zero-byte file.
     if (fileStat.length == 0) {
         log.@"error"(try std.fmt.allocPrint(allocator, "Invalid file {s} - zero-byte file", .{filePath}));
@@ -38,7 +38,7 @@ pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InPro
 // Validates an image file by checking if it has valid dimensions
 // filePath must be a path to a locally extracted file.
 //
-fn validateImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
+fn validateImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
     const fileInfo = getFileInfo(allocator, io, toolRunner, filePath, contentType) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Invalid image {s} - analysis failed", .{filePath}), err);
         return false;
@@ -61,7 +61,7 @@ fn validateImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProces
 // Validates a video file by checking if it has valid dimensions
 // filePath must be a path to a locally extracted file.
 //
-fn validateVideo(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
+fn validateVideo(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
     const fileInfo = getFileInfo(allocator, io, toolRunner, filePath, contentType) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Invalid video {s} - analysis failed", .{filePath}), err);
         return false;

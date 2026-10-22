@@ -28,7 +28,7 @@ pub fn summaryCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const databaseDir = loaded.databaseDir;
 

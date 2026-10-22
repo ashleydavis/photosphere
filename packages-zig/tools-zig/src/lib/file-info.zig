@@ -9,12 +9,12 @@ const errors = utils.errors;
 
 //
 // Gets file information for an image or video file based on content type
-// @param tools The runner that runs ImageMagick, ffmpeg and ffprobe in the app's process, or null to start them as programs
+// @param tools The runner that runs the ImageMagick, ffmpeg and ffprobe built into the program, in its process
 // @param filePath Path to the file to analyze
 // @param contentType MIME type of the file (e.g., 'image/jpeg', 'video/mp4')
 // @returns AssetInfo for images/videos, or undefined for other file types
 //
-pub fn getFileInfo(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, filePath: []const u8, contentType: []const u8) !?AssetInfo {
+pub fn getFileInfo(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner, filePath: []const u8, contentType: []const u8) !?AssetInfo {
     if (std.mem.startsWith(u8, contentType, "image/")) {
         var image = Image.init(filePath);
         return image.getInfo(allocator, io, tools) catch |err| {
@@ -24,7 +24,7 @@ pub fn getFileInfo(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRu
         };
     }
     else if (std.mem.startsWith(u8, contentType, "video/")) {
-        var video = Video.init(allocator, io, tools, filePath);
+        var video = Video.init(filePath);
         return video.getInfo(allocator, io, tools) catch |err| {
             return errors.throwError("Failed to get video info for {s}: {s}\n{s}", .{ filePath, try utils.errors.errorToString(allocator, err), @errorName(err) });
         };

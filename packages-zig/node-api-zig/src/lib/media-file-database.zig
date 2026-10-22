@@ -36,7 +36,7 @@ const ILocation = utils.reverse_geocode.ILocation;
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
 //
-pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, inputPath: []const u8) !?[3]f64 {
+pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, inputPath: []const u8) !?[3]f64 {
     var image = Image.init(inputPath);
     return try image.getDominantColor(allocator, io, toolRunner);
 }

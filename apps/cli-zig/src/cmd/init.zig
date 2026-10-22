@@ -33,7 +33,7 @@ pub fn initCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
 
     try intro(io, try pc.blue(allocator, "Creating a new media file database..."), .{});
 
-    const databaseDir = (try createDatabase(allocator, io, options.base.db, options, uuidGenerator, timestampProvider, sessionId)).databaseDir;
+    const databaseDir = (try createDatabase(allocator, io, options.base.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner)).databaseDir;
 
     const isCurrentDir = std.mem.eql(u8, databaseDir, ".") or std.mem.eql(u8, databaseDir, "./");
     const displayPath = if (isCurrentDir) "the current directory" else databaseDir;

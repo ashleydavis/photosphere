@@ -3,6 +3,7 @@ const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
+const media_tools = @import("media-tools-zig");
 const task_queue = @import("ziggy-core").task_queue;
 const helpers = @import("test-helpers.zig");
 const init_cmd = cli.init_cmd;
@@ -47,19 +48,20 @@ const IToolsTestEnvironment = struct {
     // The server the tools are called through.
     server: *McpServer,
 
+    // The ImageMagick and FFmpeg built into the program, which the tools run. The environment does not move once made,
+    // so their runner stays valid.
+    mediaTools: media_tools.MediaTools,
+
     //
     // Sets up the environment, the command context and the server.
     //
     fn init(self: *IToolsTestEnvironment, name: []const u8) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
-        // The detection is forgotten first, because Image looks its commands up on PATH once and remembers the
-        // answer for the rest of the process, so a test that ran before this one and replaced the environment can
-        // leave it believing no ImageMagick is installed when one is.
-        tools.Image.resetInitialization();
-        const status = try tools.verifyTools(allocator, io, null);
+        self.mediaTools = try media_tools.MediaTools.init(io);
+        const status = try tools.verifyTools(allocator, io, self.mediaTools.runner());
         if (!status.allAvailable) {
-            std.debug.print("This test needs ImageMagick and ffmpeg installed. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
+            std.debug.print("The built-in media tools did not run. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
             return error.RequiredToolsMissing;
         }
         self.root = try helpers.makeTempDir(allocator, name);
@@ -70,7 +72,7 @@ const IToolsTestEnvironment = struct {
         try std.Io.Dir.cwd().createDirPath(io, tmpDir);
 
         self.environ_map = std.process.Environ.Map.init(allocator);
-        // The tools (ImageMagick, ffmpeg) are found through the PATH of the process running the tests.
+        // The PATH of the process running the tests is kept.
         const parent = try std.testing.environ.createMap(allocator);
         if (parent.get("PATH")) |searchPath| {
             try self.environ_map.put("PATH", searchPath);
@@ -88,11 +90,12 @@ const IToolsTestEnvironment = struct {
         utils.console.setCapture(&self.stdout_capture.writer, &self.stdout_capture.writer);
         self.previous_log = utils.log.log;
 
-        const context = try init_cmd.initContext(allocator, io, .{ .yes = true, .workers = "2" });
+        const context = try init_cmd.initContext(allocator, io, &self.mediaTools, .{ .yes = true, .workers = "2" });
         self.toolContext = try allocator.create(IMcpToolContext);
         self.toolContext.* = .{
             .uuidGenerator = context.uuidGenerator,
             .timestampProvider = context.timestampProvider,
+            .toolRunner = context.toolRunner,
             .sessionId = context.sessionId,
             .options = .{ .yes = true },
             .allocator = allocator,
@@ -113,6 +116,7 @@ const IToolsTestEnvironment = struct {
         utils.console.setCapture(null, null);
         node_utils.process_env.setEnvironMap(null);
         std.Io.Dir.cwd().deleteTree(io, self.root) catch {};
+        self.mediaTools.deinit();
         self.arena.deinit();
     }
 

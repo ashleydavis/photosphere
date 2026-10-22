@@ -20,6 +20,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue = @import("ziggy-core").task_queue;
 const node_api = @import("node-api-zig");
+const media_tools = @import("media-tools-zig");
 const worker_log_bun = @import("worker-log-bun.zig");
 const initTaskHandlers = node_api.task_handlers.initTaskHandlers;
 const types = task_queue.types;
@@ -41,6 +42,7 @@ const TaskAddedCallback = types.TaskAddedCallback;
 const TasksCancelledCallback = types.TasksCancelledCallback;
 const IQueueBackend = task_queue.queue_backend.IQueueBackend;
 const TaskContext = task_queue.task_context.TaskContext;
+const ITaskContext = types.ITaskContext;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
 const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
@@ -156,6 +158,10 @@ const IWorkerState = struct {
     // The task the worker thread is running.
     currentTask: ?*IPoolTask,
 
+    // The id of the thread running currentTask, recorded when the thread starts the task, so a timeout can stop an
+    // `ffmpeg` that thread is running.
+    currentTaskThread: ?std.Thread.Id,
+
     // Set when the worker is terminated; the thread exits when it sees it.
     terminated: bool,
 
@@ -199,6 +205,9 @@ const setTimeoutDelay = utils.sleep.setTimeoutDelay;
 pub const WorkerPoolBun = struct {
     // Io for locking, waiting and running handlers.
     io: std.Io,
+
+    // The ImageMagick and FFmpeg built into the program, whose runner every task is handed. Owned by the CLI's main.
+    mediaTools: *media_tools.MediaTools,
 
     // All currently allocated workers.
     workers: std.ArrayList(*IWorkerState),
@@ -262,12 +271,14 @@ pub const WorkerPoolBun = struct {
     // Tasks will execute in separate worker threads for true parallelism.
     // taskTimeout: Timeout in milliseconds for tasks.
     // workerOptions: Options to pass to workers for logging and context initialization.
+    // mediaTools: The ImageMagick and FFmpeg built into the program, which must outlive the pool.
     // The pool is allocated with a thread-safe allocator; deinit frees it (the CLI keeps it until exit).
     //
-    pub fn init(io: std.Io, maxWorkers: f64, taskTimeout: f64, workerOptions: IWorkerPoolOptions) !*WorkerPoolBun {
+    pub fn init(io: std.Io, mediaTools: *media_tools.MediaTools, maxWorkers: f64, taskTimeout: f64, workerOptions: IWorkerPoolOptions) !*WorkerPoolBun {
         const self = try pool_allocator.create(WorkerPoolBun);
         self.* = .{
             .io = io,
+            .mediaTools = mediaTools,
             .workers = .empty,
             .retiredWorkers = .empty,
             .maxWorkers = maxWorkers,
@@ -564,6 +575,7 @@ pub const WorkerPoolBun = struct {
             .taskStartTime = null,
             .assignedTask = null,
             .currentTask = null,
+            .currentTaskThread = null,
             .terminated = false,
             .options = .{
                 .workerId = workerId,
@@ -712,7 +724,8 @@ pub const WorkerPoolBun = struct {
             const poolTask = workerState.assignedTask orelse return;
             workerState.assignedTask = null;
             workerState.currentTask = poolTask;
-            poolTask.context = TaskContext.init(uuidGenerator, timestampProvider, sessionId, poolTask.task.id, .{ .context = poolTask, .function = sendMessageFn }, MAX_CONCURRENT_CHILD_TASKS);
+            workerState.currentTaskThread = std.Thread.getCurrentId();
+            poolTask.context =TaskContext.init(uuidGenerator, timestampProvider, sessionId, poolTask.task.id, .{ .context = poolTask, .function = sendMessageFn }, MAX_CONCURRENT_CHILD_TASKS);
             self.unlock();
 
             const outcome = self.executeTask(poolTask);
@@ -759,8 +772,11 @@ pub const WorkerPoolBun = struct {
         worker_log_bun.setWorkerTaskId(task.id);
         defer worker_log_bun.setWorkerTaskId(null);
 
-        // Execute the handler with task-specific context
-        if (worker.executeTaskHandler(poolTask.arena.allocator(), self.io, task.type, task.data, poolTask.context.taskContext())) |outputs| {
+        // Execute the handler with task-specific context. Ziggy's taskContext leaves the tool runner empty, so the copy
+        // the handler gets is given the runner of the tools built into the program.
+        var taskContext: ITaskContext = poolTask.context.taskContext();
+        taskContext.toolRunner = self.mediaTools.runner();
+        if (worker.executeTaskHandler(poolTask.arena.allocator(), self.io, task.type, task.data, taskContext)) |outputs| {
             return .{ .succeeded = outputs };
         }
         else |err| {
@@ -908,6 +924,11 @@ pub const WorkerPoolBun = struct {
         poolTask.abandoned = true;
         if (workerState.currentTask == poolTask) {
             poolTask.context.cancel();
+
+            // The cancel only sets a flag the handler reads between its own steps, which an `ffmpeg` run in the process never
+            // reads, and that run holds the FFmpeg lock every later `ffmpeg` and `ffprobe` waits on. So an `ffmpeg` the thread is
+            // running is told to stop as well.
+            self.mediaTools.ffmpeg.stopIfRunningOn(workerState.currentTaskThread.?);
         }
         if (workerState.assignedTask == poolTask) {
             // The thread has not picked the task up yet: it is freed here.

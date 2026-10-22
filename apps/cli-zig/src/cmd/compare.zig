@@ -127,7 +127,7 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
         srcDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
     }
 
-    const src = try loadDatabase(allocator, io, srcDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const src = try loadDatabase(allocator, io, srcDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const srcAssetStorage = src.assetStorage;
     const srcRawAssetStorage = src.rawAssetStorage;
     const srcDirResolved = src.databaseDir;
@@ -145,7 +145,7 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     var destOptions = options.base;
     destOptions.db = destDir;
     destOptions.key = options.destKey;
-    const dest = try loadDatabase(allocator, io, destDir, &destOptions, uuidGenerator, timestampProvider, sessionId, false);
+    const dest = try loadDatabase(allocator, io, destDir, &destOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const destAssetStorage = dest.assetStorage;
     const destDirResolved = dest.databaseDir;
 

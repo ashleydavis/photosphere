@@ -202,6 +202,7 @@ test "the tools of psi mcp are listed with the input schemas the SDK reports for
     var toolContext: cli.mcp_types.IMcpToolContext = .{
         .uuidGenerator = undefined,
         .timestampProvider = undefined,
+        .toolRunner = undefined,
         .sessionId = "session",
         .options = .{},
         .allocator = allocator,

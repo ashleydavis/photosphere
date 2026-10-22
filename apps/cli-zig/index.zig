@@ -6,6 +6,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const media_tools = @import("media-tools-zig");
 
 pub const picocolors = @import("src/lib/picocolors.zig");
 pub const format = @import("src/lib/format.zig");
@@ -25,7 +26,6 @@ pub const readline = @import("src/lib/clack/third-party/readline.zig");
 pub const sisteransi = @import("src/lib/clack/third-party/sisteransi.zig");
 pub const clack_core = @import("src/lib/clack/core/index.zig");
 pub const ensure_tools = @import("src/lib/ensure-tools.zig");
-pub const installation_instructions = @import("src/lib/installation-instructions.zig");
 pub const directory_picker = @import("src/lib/directory-picker.zig");
 pub const storage_helper = @import("src/lib/storage-helper.zig");
 pub const init_cmd = @import("src/lib/init-cmd.zig");
@@ -2532,8 +2532,9 @@ fn isQuietCommanderError(code: []const u8) bool {
 
 //
 // Runs the command line: parses it, then runs the command. Commands exit the process themselves.
+// mediaTools is the ImageMagick and FFmpeg built into the program, which every command that runs them uses.
 //
-fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !u8 {
+fn run(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaTools, userArgs: []const []const u8) !u8 {
     var state: IProgramState = .{
         .allocator = allocator,
     };
@@ -2562,7 +2563,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try addCommand(allocator, io, context, parsed.paths, &options);
         },
         .check => |parsed| {
@@ -2570,7 +2571,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try checkCommand(allocator, io, context, parsed.paths, &options);
         },
         .repair => |parsed| {
@@ -2578,7 +2579,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try repairCommand(allocator, io, context, &options);
         },
         .findOrphans => |parsed| {
@@ -2586,7 +2587,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try findOrphansCommand(allocator, io, context, &options);
         },
         .sync => |parsed| {
@@ -2594,7 +2595,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try syncCommand(allocator, io, context, &options);
         },
         .consolidate => |parsed| {
@@ -2602,7 +2603,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try consolidateCommand(allocator, io, context, parsed.remote, &options);
         },
         .encrypt => |parsed| {
@@ -2610,13 +2611,13 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try encryptCommand(allocator, io, context, &options);
         },
         .bug => |parsed| {
             // The preAction hook skips the notifications for bug.
             const options = parsed;
-            try bugReportCommand(allocator, io, &options);
+            try bugReportCommand(allocator, io, mediaTools.runner(), &options);
         },
         .news => {
             // The preAction hook skips the notifications for news.
@@ -2627,7 +2628,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try decryptCommand(allocator, io, context, &options);
         },
         .debugMerkleTree => |parsed| {
@@ -2635,7 +2636,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try debugMerkleTreeCommand(allocator, io, context, &options);
         },
         .debugFindCollisions => |parsed| {
@@ -2643,7 +2644,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try debugFindCollisionsCommand(allocator, io, context, &options);
         },
         .debugFindDuplicates => |parsed| {
@@ -2651,7 +2652,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try debugFindDuplicatesCommand(allocator, io, context, &options);
         },
         .debugRemoveDuplicates => |parsed| {
@@ -2659,7 +2660,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try debugRemoveDuplicatesCommand(allocator, io, context, &options);
         },
         .debugBuildSortIndex => |parsed| {
@@ -2667,7 +2668,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options);
+            const context = try initContext(allocator, io, mediaTools, options);
             try debugBuildSortIndexCommand(allocator, io, context, &options);
         },
         .debugBuildFilesTree => |parsed| {
@@ -2675,7 +2676,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options);
+            const context = try initContext(allocator, io, mediaTools, options);
             try debugBuildFilesTreeCommand(allocator, io, context, &options);
         },
         .hash => |parsed| {
@@ -2688,14 +2689,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            try toolsCommand(allocator, io, &parsed);
+            try toolsCommand(allocator, io, mediaTools.runner(), &parsed);
         },
         .hashCacheShow => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try hashCacheCommand(allocator, io, context, &options);
         },
         .hashCacheClear => |parsed| {
@@ -2703,7 +2704,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try clearCacheCommand(allocator, io, context, &options);
         },
         .hashCacheHashFile => |file| {
@@ -2771,7 +2772,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try upgradeCommand(allocator, io, context, &options);
         },
         .removeOrphans => |parsed| {
@@ -2779,7 +2780,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try removeOrphansCommand(allocator, io, context, &options);
         },
         .remove => |parsed| {
@@ -2787,7 +2788,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try removeCommand(allocator, io, context, parsed.assetId, &options);
         },
         .compare => |parsed| {
@@ -2795,7 +2796,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try compareCommand(allocator, io, context, &options);
         },
         .@"export" => |parsed| {
@@ -2803,7 +2804,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try exportCommand(allocator, io, context, parsed.assetId, parsed.outputPath, &options);
         },
         .info => |parsed| {
@@ -2811,7 +2812,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try infoCommand(allocator, io, context, parsed.inputs, &options);
         },
         .replicate => |parsed| {
@@ -2819,7 +2820,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try replicateCommand(allocator, io, context, &options);
         },
         .list => |parsed| {
@@ -2827,7 +2828,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try listCommand(allocator, io, context, &options);
         },
         .origin => |parsed| {
@@ -2835,7 +2836,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try originCommand(allocator, io, context, &options);
         },
         .setOrigin => |parsed| {
@@ -2843,7 +2844,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try setOriginCommand(allocator, io, context, &options, parsed.path);
         },
         .rootHash => |parsed| {
@@ -2851,7 +2852,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try rootHashCommand(allocator, io, context, &options);
         },
         .databaseId => |parsed| {
@@ -2859,7 +2860,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try databaseIdCommand(allocator, io, context, &options);
         },
         .summary => |parsed| {
@@ -2867,7 +2868,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try summaryCommand(allocator, io, context, &options);
         },
         .verify => |parsed| {
@@ -2875,7 +2876,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try verifyCommand(allocator, io, context, &options);
         },
         .init => |parsed| {
@@ -2883,14 +2884,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try initCommand(allocator, io, context, &options);
         },
         .version => {
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            try versionCommand(allocator, io);
+            try versionCommand(allocator, io, mediaTools.runner());
         },
         .versionOption => {
             console.log(config.version);
@@ -3036,7 +3037,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, userArgs: []const []const u8) !
             if (state.notificationsQuiet) |quiet| {
                 try print_notifications.printNotifications(allocator, io, quiet);
             }
-            const context = try initContext(allocator, io, options.base);
+            const context = try initContext(allocator, io, mediaTools, options.base);
             try mcpCommand(allocator, io, context, &options);
         },
         .processExit => |exitCode| {
@@ -3085,7 +3086,12 @@ pub fn main(init: std.process.Init) !void {
     }
     process_argv.setArgv(argv);
 
-    const exitCode = run(allocator, io, process_argv.userArgs()) catch |err| {
+    // The ImageMagick and FFmpeg built into the program. They live in this frame for the whole process and must not move, because
+    // the runner handed to the commands points at them.
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
+
+    const exitCode = run(allocator, io, &mediaTools, process_argv.userArgs()) catch |err| {
         handleError(allocator, err, null);
         exit(io, 1);
     };

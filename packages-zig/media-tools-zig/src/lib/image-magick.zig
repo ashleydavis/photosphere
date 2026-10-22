@@ -8,7 +8,8 @@ const in_process_tools = node_utils.in_process_tools;
 
 //
 // ImageMagick, built into the program and run in its process: the same thing the `magick` program does with its command line, which
-// is to hand the arguments to ImageMagick's command dispatcher (MagickCommandGenesis), without starting a program.
+// is to hand the arguments to the command they name (MagickImageCommand, or IdentifyImageCommand for `identify`), without starting a
+// program.
 //
 // The text a command prints is collected without touching the process's standard output, which other threads share and which a
 // redirect would take from them:
@@ -20,6 +21,13 @@ const in_process_tools = node_utils.in_process_tools;
 //
 // Everything else a command prints goes to the process's standard output as it would from `magick`.
 //
+// ImageMagick's warnings and errors are never printed to the process's standard error. They are handed back the way the standard
+// error of a `magick` program was:
+//
+//   * A command that fails hands back its messages as its output, which exec puts in the error it fails with.
+//   * The warnings of a command that works go to the log as the tool's standard error (`log.tool`), where execLogged puts the
+//     standard error of a program that worked.
+//
 
 //
 // A running ImageMagick. ImageMagick keeps one set of state for the whole program, so a program holds one of these at a time, and may
@@ -29,14 +37,50 @@ pub const ImageMagick = struct {
     // Reads the files the commands write their text to.
     io: std.Io,
 
+    // ImageMagick's warning handler before init set its own, put back by deinit.
+    previous_warning_handler: c.WarningHandler,
+
+    // ImageMagick's error handler before init set its own, put back by deinit.
+    previous_error_handler: c.ErrorHandler,
+
     //
-    // Starts ImageMagick. ImageMagick prints its own error and warning messages to the standard error, as `magick` does: handing them
-    // to the caller would take a handler with no way to tell which call a message belongs to, which is a variable for the whole program.
+    // Starts ImageMagick.
     //
-    pub fn init(io: std.Io) ImageMagick {
+    // A command leaves its messages in the exception it is given, and runMagick hands them back. The `magick` command also hands the
+    // warnings it meets to ImageMagick's warning handler as it goes, and clears them (CLICatchException in MagickWand/wandcli.c), and a
+    // few parts of the library do the same with errors they carry on from. Those handlers are set for the whole of ImageMagick and
+    // are given no pointer of the caller's, so they cannot tell which call a message belongs to. In place of the handlers that print to
+    // the standard error, this sets ones that send a warning to the log as the tool's standard error and an error to the log's errors.
+    //
+    // The library is built with zero configuration, so it reads no policy.xml and applies no security policy of its own. This sets
+    // one, and fails with ImageMagick's error when it cannot be set. The policy denies:
+    //
+    //   * The coders that reach outside the file being read or run a script: the URL coders (HTTP, HTTPS, FTP), MSL, MVG, MSVG, TEXT
+    //     and TXT (which read a text description as an image), EPHEMERAL (which deletes the file it reads), and the display coders
+    //     SHOW, WIN and X. Every other coder stays allowed, because the import reads whatever image type the user has.
+    //   * Every delegate, since none is meant to run a program.
+    //   * Indirect reads, `@file`, which read a list of other paths from a file.
+    //
+    pub fn init(io: std.Io) !ImageMagick {
         c.MagickWandGenesis();
+        const exception = c.AcquireExceptionInfo();
+        defer _ = c.DestroyExceptionInfo(exception);
+        if (c.SetMagickSecurityPolicy(
+            \\<policymap>
+            \\  <policy domain="coder" rights="none" pattern="{URL,HTTP,HTTPS,FTP,MSL,MVG,MSVG,TEXT,TXT,EPHEMERAL,SHOW,WIN,X}"/>
+            \\  <policy domain="delegate" rights="none" pattern="*"/>
+            \\  <policy domain="path" rights="none" pattern="@*"/>
+            \\</policymap>
+        , exception) != c.MagickTrue) {
+            const reason: []const u8 = if (exception.*.reason != null) std.mem.span(exception.*.reason) else "no reason given";
+            const description: []const u8 = if (exception.*.description != null) std.mem.span(exception.*.description) else "";
+            c.MagickWandTerminus();
+            return utils.errors.throwError("The ImageMagick security policy could not be set: {s} {s}", .{ reason, description });
+        }
         return .{
             .io = io,
+            .previous_warning_handler = c.SetWarningHandler(logWarning),
+            .previous_error_handler = c.SetErrorHandler(logError),
         };
     }
 
@@ -44,12 +88,14 @@ pub const ImageMagick = struct {
     // Stops ImageMagick and frees what it holds.
     //
     pub fn deinit(self: *ImageMagick) void {
-        _ = self;
+        _ = c.SetWarningHandler(self.previous_warning_handler);
+        _ = c.SetErrorHandler(self.previous_error_handler);
         c.MagickWandTerminus();
     }
 
     //
     // Runs `magick` with the arguments and returns the exit code (0 when the command worked, 1 when it failed) and what it printed.
+    // A command that fails hands back ImageMagick's messages instead of what it printed.
     //
     pub fn runMagick(self: *ImageMagick, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
@@ -87,21 +133,41 @@ pub const ImageMagick = struct {
         defer _ = c.DestroyImageInfo(image_info);
         const exception = c.AcquireExceptionInfo();
         defer _ = c.DestroyExceptionInfo(exception);
-        // Only `identify` hands its text back. The text any other command hands back is a summary of the image ("columns,rows,format")
-        // that `magick` does not print, so it is not asked for.
+        // The command is called as MagickCommandGenesis (MagickWand/magick-cli.c), which `magick` runs, calls it for a single run,
+        // without MagickCommandGenesis itself: it hands the messages the command left in the exception to ImageMagick's handlers
+        // (CatchException), which clears them, and so they could not be handed back. Its other work is left out too: the options it
+        // reads (-bench, -concurrent, -debug, -distribute-cache, -duration, -regard-warnings) are not ones the program passes, and
+        // setting the process's locale and ImageMagick's client name changes state the whole program shares.
         var metadata: [*c]u8 = null;
-        const succeeded = c.MagickCommandGenesis(
-            image_info,
-            if (is_identify) c.IdentifyImageCommand else c.MagickImageCommand,
-            @intCast(command_arguments.items.len),
-            argv.ptr,
-            if (is_identify) &metadata else null,
-            exception,
-        );
-        var output: std.ArrayList(u8) = .empty;
-        if (metadata != null) {
-            try output.appendSlice(allocator, std.mem.span(metadata));
+        defer if (metadata != null) {
             _ = c.DestroyString(metadata);
+        };
+        const command: c.MagickCommand = if (is_identify) &c.IdentifyImageCommand else &c.MagickImageCommand;
+        var succeeded = command.?(image_info, @intCast(command_arguments.items.len), argv.ptr, &metadata, exception) == c.MagickTrue;
+        // As MagickCommandGenesis does without -regard-warnings: an error worse than ErrorException fails the command.
+        if (exception.*.severity > c.ErrorException) {
+            succeeded = false;
+        }
+        const client = if (is_identify) "identify" else "magick";
+        const messages = try exceptionMessages(allocator, client, exception);
+        if (!succeeded) {
+            return .{
+                .exit_code = 1,
+                .output = messages,
+            };
+        }
+        if (messages.len > 0) {
+            utils.log.log.tool("magick", .{
+                .stdout = null,
+                .stderr = messages,
+            });
+        }
+
+        // Only `identify` hands its text back. The text any other command hands back is a summary of the image ("columns,rows,format")
+        // that `magick` does not print.
+        var output: std.ArrayList(u8) = .empty;
+        if (is_identify and metadata != null) {
+            try output.appendSlice(allocator, std.mem.span(metadata));
         }
         if (text_path) |path| {
             const text = std.Io.Dir.cwd().readFileAlloc(self.io, path, allocator, .unlimited) catch |err| {
@@ -109,14 +175,8 @@ pub const ImageMagick = struct {
             };
             try output.appendSlice(allocator, text);
         }
-        if (succeeded == c.MagickTrue) {
-            return .{
-                .exit_code = 0,
-                .output = output.items,
-            };
-        }
         return .{
-            .exit_code = 1,
+            .exit_code = 0,
             .output = output.items,
         };
     }
@@ -155,4 +215,67 @@ fn acquireTemporaryPath(buffer: *[c.MagickPathExtent]u8) ![:0]const u8 {
     }
     const length = std.mem.indexOfScalar(u8, buffer, 0).?;
     return buffer[0..length :0];
+}
+
+//
+// ImageMagick's messages in the exception, each on a line of its own written as ImageMagick's own handlers print one (MagickCore/
+// exception.c): the client's name, the reason and, in brackets, the description. Empty when there are none.
+//
+fn exceptionMessages(allocator: std.mem.Allocator, client: []const u8, exception: [*c]c.ExceptionInfo) ![]const u8 {
+    var messages: std.ArrayList(u8) = .empty;
+    const list: ?*c.LinkedListInfo = @ptrCast(exception.*.exceptions);
+    if (list == null) {
+        return "";
+    }
+    c.ResetLinkedListIterator(list);
+    while (c.GetNextValueInLinkedList(list)) |value| {
+        const entry: *const c.ExceptionInfo = @ptrCast(@alignCast(value));
+        try appendMessage(allocator, &messages, client, entry.reason, entry.description);
+    }
+    return messages.items;
+}
+
+//
+// Adds one message, as ImageMagick's own handlers print it, to the messages. A message with no reason is left out, as those handlers
+// leave it out.
+//
+fn appendMessage(allocator: std.mem.Allocator, messages: *std.ArrayList(u8), client: []const u8, reason: [*c]const u8, description: [*c]const u8) !void {
+    if (reason == null) {
+        return;
+    }
+    try messages.print(allocator, "{s}: {s}", .{ client, std.mem.span(reason) });
+    if (description != null) {
+        try messages.print(allocator, " ({s})", .{std.mem.span(description)});
+    }
+    try messages.appendSlice(allocator, ".\n");
+}
+
+//
+// ImageMagick's warning handler while the program runs it: sends the warning to the log as the standard error of `magick`.
+//
+fn logWarning(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
+    _ = severity;
+    var message: std.ArrayList(u8) = .empty;
+    defer message.deinit(std.heap.smp_allocator);
+    appendMessage(std.heap.smp_allocator, &message, "magick", reason, description) catch @panic("out of memory logging a warning of ImageMagick");
+    if (message.items.len > 0) {
+        utils.log.log.tool("magick", .{
+            .stdout = null,
+            .stderr = message.items,
+        });
+    }
+}
+
+//
+// ImageMagick's error handler while the program runs it: sends the error to the log's errors. ImageMagick hands an error to it only
+// where it reports the error and carries on.
+//
+fn logError(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
+    _ = severity;
+    var message: std.ArrayList(u8) = .empty;
+    defer message.deinit(std.heap.smp_allocator);
+    appendMessage(std.heap.smp_allocator, &message, "magick", reason, description) catch @panic("out of memory logging an error of ImageMagick");
+    if (message.items.len > 0) {
+        utils.log.log.@"error"(message.items[0 .. message.items.len - 1]);
+    }
 }

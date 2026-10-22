@@ -152,7 +152,7 @@ fn dateNow(io: std.Io) f64 {
 //
 // Gets the details of an image.
 //
-pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     var imagePath = filePath;
@@ -379,7 +379,7 @@ fn jsRound(value: f64) f64 {
 //
 // Resize an image.
 //
-pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
+pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
 
     var width: f64 = undefined;
     var height: f64 = undefined;
@@ -400,7 +400,7 @@ pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProc
 //
 // Transforms an image.
 //
-pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: ?InProcessRunner, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
+pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
     var image = Image.init(inputPath);
     return image.transform(allocator, io, toolRunner, options, tempDir, uuidGenerator);
 }

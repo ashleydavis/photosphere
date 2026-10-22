@@ -41,11 +41,11 @@ pub const ToolsStatus = struct {
 //
 // Check the availability of all required tools
 //
-pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !ToolsStatus {
+pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !ToolsStatus {
     // Serialize tool verification to avoid race conditions
     const magickStatus = try Image.verifyImageMagick(allocator, io, tools);
-    const ffprobeStatus = Video.verifyFfprobe(allocator, io, tools);
-    const ffmpegStatus = Video.verifyFfmpeg(allocator, io, tools);
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, tools);
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, tools);
 
     var missingTools: std.ArrayList([]const u8) = .empty;
 

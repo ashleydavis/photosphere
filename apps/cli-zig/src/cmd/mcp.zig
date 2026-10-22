@@ -80,6 +80,7 @@ pub fn mcpCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         .currentDatabase = null,
         .uuidGenerator = context.uuidGenerator,
         .timestampProvider = context.timestampProvider,
+        .toolRunner = context.toolRunner,
         .sessionId = context.sessionId,
         .options = options.base,
         .allocator = allocator,

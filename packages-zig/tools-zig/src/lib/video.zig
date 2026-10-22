@@ -36,73 +36,27 @@ pub const VideoToolStatus = struct {
 // Wraps ffprobe and ffmpeg.
 //
 pub const Video = struct {
-    // The command used to probe videos.
-    var ffprobeCommand: []const u8 = "ffprobe";
-
-    // The command used to process videos.
-    var ffmpegCommand: []const u8 = "ffmpeg";
-
     // The file the video is read from.
     filePath: []const u8,
 
     // The information read from the file, once it has been read.
     _info: ?AssetInfo = null,
 
-    // True once initializeCommands has run.
-    var isInitialized: bool = false;
-
     //
     // Creates a video for a file.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, filePath: []const u8) Video {
-        // Initialize ffmpeg/ffprobe commands on first use
-        if (!isInitialized) {
-            initializeCommands(allocator, io, tools);
-        }
+    pub fn init(filePath: []const u8) Video {
         return .{ .filePath = filePath };
     }
 
     //
-    // Initialize ffmpeg/ffprobe commands by checking system PATH (nothing waits for it; it only logs,
-    // because the commands it sets are the defaults they already have).
+    // Verify that ffprobe is available. It runs `ffprobe -version` through the runner on every call.
     //
-    fn initializeCommands(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) void {
-        if (isInitialized) {
-            return;
-        }
-
-        // Test if ffprobe command is available in system PATH
-        const result = exec(allocator, io, tools, "ffprobe -version") catch {
-            // ffprobe not found in PATH
-            isInitialized = true;
-            return;
-        };
-
-        // If we get here, ffprobe works (and ffmpeg should too)
-        ffprobeCommand = "ffprobe";
-        ffmpegCommand = "ffmpeg";
-        isInitialized = true;
-
-        // Get version info
-        const version = version_match.matchAfter(result.stdout, "ffprobe version ", version_match.isVersionNumberCharacter) orelse "unknown";
-
-        utils.log.log.verbose("Using system ffprobe: ffprobe");
-        // Nothing waits for this function, so a failure to make the message is logged rather than returned.
-        const message = std.fmt.allocPrint(allocator, "ffprobe version: {s}", .{version}) catch |err| {
-            utils.log.log.exception("Could not make the message naming the ffprobe version", err);
-            return;
-        };
-        utils.log.log.verbose(message);
-    }
-
-    //
-    // Verify that ffprobe is available
-    //
-    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) VideoToolStatus {
-        const result = exec(allocator, io, tools, "ffprobe -version") catch {
+    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !VideoToolStatus {
+        const result = exec(allocator, io, tools, "ffprobe -version") catch |err| {
             return .{
                 .available = false,
-                .@"error" = "ffprobe not found. Make sure ffmpeg is installed.",
+                .@"error" = try std.fmt.allocPrint(allocator, "The ffprobe built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
             };
         };
 
@@ -114,13 +68,13 @@ pub const Video = struct {
     }
 
     //
-    // Verify that ffmpeg is available
+    // Verify that ffmpeg is available. It runs `ffmpeg -version` through the runner on every call.
     //
-    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) VideoToolStatus {
-        const result = exec(allocator, io, tools, "ffmpeg -version") catch {
+    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !VideoToolStatus {
+        const result = exec(allocator, io, tools, "ffmpeg -version") catch |err| {
             return .{
                 .available = false,
-                .@"error" = "ffmpeg not found. Make sure ffmpeg is installed.",
+                .@"error" = try std.fmt.allocPrint(allocator, "The ffmpeg built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
             };
         };
 
@@ -134,7 +88,7 @@ pub const Video = struct {
     //
     // Reads the information about the video with ffprobe.
     //
-    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
+    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !AssetInfo {
         if (self._info) |info| {
             return info;
         }
@@ -152,10 +106,10 @@ pub const Video = struct {
     //
     // The body of the try block of getVideoInfo.
     //
-    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
+    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !AssetInfo {
 
         // Run ffprobe to get video information in JSON format
-        const command = try std.fmt.allocPrint(allocator, "{s} -v quiet -print_format json -show_format -show_streams \"{s}\"", .{ ffprobeCommand, self.filePath });
+        const command = try std.fmt.allocPrint(allocator, "ffprobe -v quiet -print_format json -show_format -show_streams \"{s}\"", .{self.filePath});
         const result = try exec(allocator, io, tools, command);
 
         const probeData = switch (try jsonParse(allocator, result.stdout)) {
@@ -231,14 +185,14 @@ pub const Video = struct {
     //
     // Gets the information about the video.
     //
-    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !AssetInfo {
+    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !AssetInfo {
         return self.getVideoInfo(allocator, io, tools);
     }
 
     //
     // Gets the width and height of the video.
     //
-    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner) !Dimensions {
+    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !Dimensions {
         const info = try self.getVideoInfo(allocator, io, tools);
         return info.dimensions;
     }
@@ -247,7 +201,7 @@ pub const Video = struct {
     // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are used (no
     // scaling, quality 85), which is how getVideoDetails calls it.
     //
-    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
+    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
@@ -255,7 +209,7 @@ pub const Video = struct {
         const quality: f64 = 85;
 
         var command: std.Io.Writer.Allocating = .init(allocator);
-        try command.writer.print("{s} -i \"{s}\" -ss ", .{ ffmpegCommand, self.filePath });
+        try command.writer.print("ffmpeg -i \"{s}\" -ss ", .{self.filePath});
         try utils.js_number.writeNumber(&command.writer, timeInSeconds);
         try command.writer.writeAll(" -vframes 1");
 

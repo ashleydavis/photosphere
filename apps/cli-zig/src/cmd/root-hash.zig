@@ -26,7 +26,7 @@ pub fn rootHashCommand(allocator: std.mem.Allocator, io: std.Io, context: IComma
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
 
     const summary = try getDatabaseSummary(allocator, io, assetStorage);

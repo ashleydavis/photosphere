@@ -19,11 +19,11 @@ pub const MediaTools = struct {
     ffmpeg: ffmpeg.Ffmpeg,
 
     //
-    // Starts the tools.
+    // Starts the tools. Fails when ImageMagick cannot set its security policy.
     //
-    pub fn init(io: std.Io) MediaTools {
+    pub fn init(io: std.Io) !MediaTools {
         return .{
-            .image_magick = image_magick.ImageMagick.init(io),
+            .image_magick = try image_magick.ImageMagick.init(io),
             .ffmpeg = ffmpeg.Ffmpeg.init(io),
         };
     }
@@ -32,6 +32,7 @@ pub const MediaTools = struct {
     // Stops the tools.
     //
     pub fn deinit(self: *MediaTools) void {
+        self.ffmpeg.deinit();
         self.image_magick.deinit();
     }
 

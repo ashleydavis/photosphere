@@ -112,7 +112,7 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const target = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const target = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const targetDir = target.databaseDir;
 
     var sourcePath = options.source;
@@ -132,7 +132,7 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
         .verbose = options.base.verbose,
         .yes = options.base.yes,
     };
-    const source = try loadDatabase(allocator, io, options.source, &sourceOptions, uuidGenerator, timestampProvider, sessionId, false);
+    const source = try loadDatabase(allocator, io, options.source, &sourceOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const sourceDir = source.databaseDir;
 
     log.info("");

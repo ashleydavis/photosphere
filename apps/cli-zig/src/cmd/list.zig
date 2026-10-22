@@ -46,7 +46,7 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const bsonDatabase = loaded.bsonDatabase;
     const rawAssetStorage = loaded.rawAssetStorage;
     const pageSizeText = if (options.pageSize) |pageSize| (if (pageSize.len > 0) pageSize else "20") else "20";

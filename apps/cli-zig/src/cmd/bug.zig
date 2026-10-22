@@ -20,6 +20,7 @@ const outro = prompts.outro;
 const ValidateFn = prompts.ValidateFn;
 const Image = tools.Image;
 const Video = tools.Video;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const version = config.version;
 const open = open_module.open;
 const jsLength = commander.jsLength;
@@ -172,10 +173,11 @@ fn cancelled(io: std.Io) noreturn {
 
 //
 // Command that generates a bug report for GitHub
+// toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions the report gives.
 //
-pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, options: *const IBugReportCommandOptions) !void {
+pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, options: *const IBugReportCommandOptions) !void {
 
-    try configureLog(allocator, io, .{
+    try configureLog(allocator, io, toolRunner, .{
         .verbose = options.verbose,
         .tools = options.tools,
         .disableFileLogging = true,
@@ -185,7 +187,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, options: *cons
 
     // Get system information
     const systemInfo = try getSystemInfo(allocator, io);
-    const toolVersions = try getToolVersions(allocator, io);
+    const toolVersions = try getToolVersions(allocator, io, toolRunner);
 
     // Get latest log file and header
     const latestLogFile = getLatestLogFile(allocator, io);
@@ -348,31 +350,27 @@ pub fn getSystemInfo(allocator: std.mem.Allocator, io: std.Io) !ISystemInfo {
 }
 
 //
-// Gets the versions of the media tools ("Not available" for a tool that cannot be run).
+// Gets the versions of the ImageMagick and FFmpeg built into the program, run through toolRunner ("Not available"
+// for a tool that cannot be run).
 //
-pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io) !IToolVersions {
+pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) !IToolVersions {
     var versions: IToolVersions = .{
         .imagemagick = "Not available",
         .ffmpeg = "Not available",
         .ffprobe = "Not available",
     };
 
-    if (Image.verifyImageMagick(allocator, io, null)) |imageMagickStatus| {
-        if (imageMagickStatus.available and imageMagickStatus.version != null) {
-            const kind = if (imageMagickStatus.type) |imageMagickType| @tagName(imageMagickType) else "unknown";
-            versions.imagemagick = try std.fmt.allocPrint(allocator, "ImageMagick v{s} ({s})", .{ imageMagickStatus.version.?, kind });
-        }
-    }
-    else |_| {
-        // ImageMagick not available
+    const imageMagickStatus = try Image.verifyImageMagick(allocator, io, toolRunner);
+    if (imageMagickStatus.available and imageMagickStatus.version != null) {
+        versions.imagemagick = try std.fmt.allocPrint(allocator, "ImageMagick v{s}", .{imageMagickStatus.version.?});
     }
 
-    const ffmpegStatus = Video.verifyFfmpeg(allocator, io, null);
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, toolRunner);
     if (ffmpegStatus.available and ffmpegStatus.version != null) {
         versions.ffmpeg = try std.fmt.allocPrint(allocator, "ffmpeg v{s}", .{ffmpegStatus.version.?});
     }
 
-    const ffprobeStatus = Video.verifyFfprobe(allocator, io, null);
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, toolRunner);
     if (ffprobeStatus.available and ffprobeStatus.version != null) {
         versions.ffprobe = try std.fmt.allocPrint(allocator, "ffprobe v{s}", .{ffprobeStatus.version.?});
     }

@@ -1,107 +1,58 @@
 const std = @import("std");
-const utils = @import("utils-zig");
-const builtin = @import("builtin");
 const tools = @import("tools-zig");
-const node_utils = @import("node-utils-zig");
-
-//
-// A fake tool: a shell script (a .cmd script on Windows) with the given name that prints the given output.
-//
-const FakeTool = struct {
-    // The command name.
-    name: []const u8,
-
-    // What the command prints to stdout.
-    output: []const u8,
-};
-
-//
-// A directory of fake tools that is the only entry of PATH while the test runs.
-//
-const FakeToolsDirectory = struct {
-    // Path of the directory holding the fake tools.
-    path: []const u8,
-
-    // The environment passed to the tools (PATH points at `path`).
-    environMap: std.process.Environ.Map,
-
-    //
-    // Creates the directory, writes the fake tools and makes PATH point at it.
-    //
-    fn create(self: *FakeToolsDirectory, allocator: std.mem.Allocator, io: std.Io, fakeTools: []const FakeTool) !void {
-        var random_bytes: [8]u8 = undefined;
-        io.random(&random_bytes);
-        self.path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/fake-tools-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
-        const cwd = std.Io.Dir.cwd();
-        try cwd.createDirPath(io, self.path);
-        for (fakeTools) |fakeTool| {
-            // cmd.exe finds `<name>.cmd` on PATH, and needs no executable bit.
-            if (builtin.os.tag == .windows) {
-                const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}.cmd", .{ self.path, fakeTool.name });
-                const script = try std.fmt.allocPrint(allocator, "@echo {s}\r\n", .{fakeTool.output});
-                try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = script });
-            }
-            else {
-                const scriptPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.path, fakeTool.name });
-                const script = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' '{s}'\n", .{fakeTool.output});
-                try cwd.writeFile(io, .{ .sub_path = scriptPath, .data = script });
-                _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x {s}", .{scriptPath}));
-            }
-        }
-        const absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
-        self.environMap = std.process.Environ.Map.init(allocator);
-        try self.environMap.put("PATH", absolutePath);
-        node_utils.process_env.setEnvironMap(&self.environMap);
-        tools.Image.resetInitialization();
-    }
-
-    //
-    // Restores the environment and deletes the directory.
-    //
-    fn destroy(self: *FakeToolsDirectory, io: std.Io) void {
-        node_utils.process_env.setEnvironMap(null);
-        tools.Image.resetInitialization();
-        std.Io.Dir.cwd().deleteTree(io, self.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ self.path, @errorName(err) });
-    }
-};
+const media_tools = @import("media-tools-zig");
+const fake_tool_runner = @import("fake-tool-runner.zig");
+const MediaTools = media_tools.MediaTools;
+const FakeToolRunner = fake_tool_runner.FakeToolRunner;
 
 test "verifyFfprobe and verifyFfmpeg report unknown when their output has no version in it" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "ffprobe", .output = "Something else" },
-        .{ .name = "ffmpeg", .output = "Something else" },
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "ffprobe",
+            .output = "Something else",
+        },
+        .{
+            .name = "ffmpeg",
+            .output = "Something else",
+        },
     });
-    defer directory.destroy(io);
 
-    const ffprobeStatus = tools.Video.verifyFfprobe(allocator, io, null);
+    const ffprobeStatus = try tools.Video.verifyFfprobe(allocator, io, fakeTools.runner());
     try std.testing.expect(ffprobeStatus.available);
     try std.testing.expectEqualStrings("unknown", ffprobeStatus.version.?);
     try std.testing.expect(ffprobeStatus.@"error" == null);
 
-    const ffmpegStatus = tools.Video.verifyFfmpeg(allocator, io, null);
+    const ffmpegStatus = try tools.Video.verifyFfmpeg(allocator, io, fakeTools.runner());
     try std.testing.expect(ffmpegStatus.available);
     try std.testing.expectEqualStrings("unknown", ffmpegStatus.version.?);
     try std.testing.expect(ffmpegStatus.@"error" == null);
 }
 
-test "verifyTools reports every tool with its version when modern ImageMagick, ffprobe and ffmpeg are installed" {
+test "verifyTools reports every tool with its version when ImageMagick, ffprobe and ffmpeg run" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "magick", .output = "Version: ImageMagick 7.1.1-29 Q16-HDRI x86_64 https://imagemagick.org" },
-        .{ .name = "ffprobe", .output = "ffprobe version 6.1.1-3ubuntu5 Copyright (c) 2007-2023 the FFmpeg developers" },
-        .{ .name = "ffmpeg", .output = "ffmpeg version n7.0 Copyright (c) 2000-2024 the FFmpeg developers" },
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "Version: ImageMagick 7.1.1-29 Q16-HDRI x86_64 https://imagemagick.org",
+        },
+        .{
+            .name = "ffprobe",
+            .output = "ffprobe version 6.1.1-3ubuntu5 Copyright (c) 2007-2023 the FFmpeg developers",
+        },
+        .{
+            .name = "ffmpeg",
+            .output = "ffmpeg version n7.0 Copyright (c) 2000-2024 the FFmpeg developers",
+        },
     });
-    defer directory.destroy(io);
 
-    const status = try tools.verifyTools(allocator, io, null);
+    const status = try tools.verifyTools(allocator, io, fakeTools.runner());
 
     try std.testing.expect(status.allAvailable);
     try std.testing.expectEqual(@as(usize, 0), status.missingTools.len);
@@ -110,79 +61,46 @@ test "verifyTools reports every tool with its version when modern ImageMagick, f
     try std.testing.expectEqualStrings("n7.0", status.ffmpeg.version.?);
 }
 
-test "verifyImageMagick falls back to legacy convert/identify" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "convert", .output = "Version: ImageMagick 6.9.11-60 Q16 x86_64 2021-01-25" },
-        .{ .name = "identify", .output = "Version: ImageMagick 6.9.11-60 Q16 x86_64 2021-01-25" },
-    });
-    defer directory.destroy(io);
-
-    const status = try tools.Image.verifyImageMagick(allocator, io, null);
-
-    try std.testing.expect(status.available);
-    try std.testing.expectEqualStrings("6.9.11-60", status.version.?);
-    try std.testing.expectEqual(tools.image.ImageMagickType.legacy, status.@"type".?);
-}
-
 test "verifyImageMagick reports unknown when the version cannot be found" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "magick", .output = "Something else" },
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "Something else",
+        },
     });
-    defer directory.destroy(io);
 
-    const status = try tools.Image.verifyImageMagick(allocator, io, null);
+    const status = try tools.Image.verifyImageMagick(allocator, io, fakeTools.runner());
 
     try std.testing.expect(status.available);
     try std.testing.expectEqualStrings("unknown", status.version.?);
-    try std.testing.expectEqual(tools.image.ImageMagickType.modern, status.@"type".?);
 }
 
-test "verifyImageMagick needs both convert and identify for a legacy installation" {
+test "verifyTools lists every missing tool when no tool runs" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "convert", .output = "Version: ImageMagick 6.9.11-60" },
-    });
-    defer directory.destroy(io);
+    var fakeTools = FakeToolRunner.init(allocator, &.{});
 
-    const status = try tools.Image.verifyImageMagick(allocator, io, null);
-
-    try std.testing.expect(!status.available);
-    try std.testing.expectEqualStrings("ImageMagick not found. Please install ImageMagick and ensure either 'magick' or 'convert'/'identify' commands are available.", status.@"error".?);
-}
-
-test "verifyTools lists every missing tool when nothing is installed" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{});
-    defer directory.destroy(io);
-
-    const status = try tools.verifyTools(allocator, io, null);
+    const status = try tools.verifyTools(allocator, io, fakeTools.runner());
 
     try std.testing.expect(!status.allAvailable);
     try std.testing.expectEqual(@as(usize, 3), status.missingTools.len);
     try std.testing.expectEqualStrings("ImageMagick", status.missingTools[0]);
     try std.testing.expectEqualStrings("ffprobe", status.missingTools[1]);
     try std.testing.expectEqualStrings("ffmpeg", status.missingTools[2]);
-    try std.testing.expectEqualStrings("ImageMagick not found. Please install ImageMagick and ensure either 'magick' or 'convert'/'identify' commands are available.", status.magick.@"error".?);
-    try std.testing.expectEqualStrings("ffprobe not found. Make sure ffmpeg is installed.", status.ffprobe.@"error".?);
-    try std.testing.expectEqualStrings("ffmpeg not found. Make sure ffmpeg is installed.", status.ffmpeg.@"error".?);
+
+    // Each error says the built-in tool did not run, followed by the error of the command, and gives no install advice.
+    try std.testing.expect(std.mem.startsWith(u8, status.magick.@"error".?, "The ImageMagick built into the program did not run: "));
+    try std.testing.expect(std.mem.startsWith(u8, status.ffprobe.@"error".?, "The ffprobe built into the program did not run: "));
+    try std.testing.expect(std.mem.startsWith(u8, status.ffmpeg.@"error".?, "The ffmpeg built into the program did not run: "));
+    for ([_][]const u8{ status.magick.@"error".?, status.ffprobe.@"error".?, status.ffmpeg.@"error".? }) |message| {
+        try std.testing.expect(std.mem.indexOf(u8, message, "install") == null);
+    }
 }
 
 test "verifyTools lists only the missing tools" {
@@ -190,14 +108,18 @@ test "verifyTools lists only the missing tools" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "magick", .output = "Version: ImageMagick 7.1.1-29" },
-        .{ .name = "ffmpeg", .output = "ffmpeg version 7.0" },
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "Version: ImageMagick 7.1.1-29",
+        },
+        .{
+            .name = "ffmpeg",
+            .output = "ffmpeg version 7.0",
+        },
     });
-    defer directory.destroy(io);
 
-    const status = try tools.verifyTools(allocator, io, null);
+    const status = try tools.verifyTools(allocator, io, fakeTools.runner());
 
     try std.testing.expect(!status.allAvailable);
     try std.testing.expectEqual(@as(usize, 1), status.missingTools.len);
@@ -206,49 +128,25 @@ test "verifyTools lists only the missing tools" {
     try std.testing.expect(status.ffmpeg.available);
 }
 
-test "getImageMagickType is modern after verifyImageMagick finds magick" {
+test "verifyTools reports every tool built into the program available" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "magick", .output = "Version: ImageMagick 7.1.1-29" },
-    });
-    defer directory.destroy(io);
+    var mediaTools = try MediaTools.init(io);
+    defer mediaTools.deinit();
 
-    _ = try tools.Image.verifyImageMagick(allocator, io, null);
+    const status = try tools.verifyTools(allocator, io, mediaTools.runner());
 
-    try std.testing.expectEqual(tools.image.ImageMagickType.modern, tools.Image.getImageMagickType());
-}
+    try std.testing.expect(status.allAvailable);
+    try std.testing.expectEqual(@as(usize, 0), status.missingTools.len);
+    try std.testing.expect(std.mem.startsWith(u8, status.magick.version.?, "7."));
+    try std.testing.expect(status.magick.@"error" == null);
 
-test "getImageMagickType is legacy after verifyImageMagick finds convert and identify" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{
-        .{ .name = "convert", .output = "Version: ImageMagick 6.9.11-60" },
-        .{ .name = "identify", .output = "Version: ImageMagick 6.9.11-60" },
-    });
-    defer directory.destroy(io);
-
-    _ = try tools.Image.verifyImageMagick(allocator, io, null);
-
-    try std.testing.expectEqual(tools.image.ImageMagickType.legacy, tools.Image.getImageMagickType());
-}
-
-test "getImageMagickType is none when ImageMagick is not installed" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    var directory: FakeToolsDirectory = undefined;
-    try directory.create(allocator, io, &.{});
-    defer directory.destroy(io);
-
-    _ = try tools.Image.verifyImageMagick(allocator, io, null);
-
-    try std.testing.expectEqual(tools.image.ImageMagickType.none, tools.Image.getImageMagickType());
+    // The versions of ffprobe and ffmpeg are read after "ffprobe version " and "ffmpeg version " in their `-version` output,
+    // and are "unknown" when that text is not there.
+    try std.testing.expect(!std.mem.eql(u8, status.ffprobe.version.?, "unknown"));
+    try std.testing.expect(status.ffprobe.@"error" == null);
+    try std.testing.expect(!std.mem.eql(u8, status.ffmpeg.version.?, "unknown"));
+    try std.testing.expect(status.ffmpeg.@"error" == null);
 }

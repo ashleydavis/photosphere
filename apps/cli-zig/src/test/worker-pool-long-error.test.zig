@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const task_queue = @import("ziggy-core").task_queue;
+const media_tools = @import("media-tools-zig");
 const worker_pool_test = @import("worker-pool.test.zig");
 const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
 const Collector = worker_pool_test.Collector;
@@ -38,7 +39,9 @@ test "an error message longer than the collector's buffer is recorded whole" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });

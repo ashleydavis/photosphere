@@ -12,6 +12,7 @@ const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
 const log = &utils.log.log;
 const exit = node_utils.termination.exit;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
@@ -137,6 +138,9 @@ const ScanState = struct {
     // The io of the command.
     io: std.Io,
 
+    // Runs the ImageMagick and FFmpeg built into the program, which read the media information.
+    toolRunner: InProcessRunner,
+
     // The results collected so far.
     results: *std.ArrayList(FileAnalysis),
 
@@ -149,7 +153,7 @@ const ScanState = struct {
 //
 fn visitScannedFile(context: ?*anyopaque, fileResult: FileScannedResult) anyerror!void {
     const state: *ScanState = @ptrCast(@alignCast(context.?));
-    const analysis = analyzeFile(state.allocator, state.io, fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath) catch |err| {
+    const analysis = analyzeFile(state.allocator, state.io, state.toolRunner, fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath) catch |err| {
         try state.results.append(state.allocator, .{
             .path = fileResult.filePath,
             .fileStat = fileResult.fileStat,
@@ -195,7 +199,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     const sessionTempDir = context.sessionTempDir;
     const sessionId = context.sessionId;
 
-    try ensureMediaProcessingTools(allocator, io, options.base.yes orelse false);
+    try ensureMediaProcessingTools(allocator, io, context.toolRunner);
 
     var pathInputs: std.ArrayList([]const u8) = .empty;
     var dbInputs: std.ArrayList([]const u8) = .empty;
@@ -210,7 +214,13 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
 
     if (pathInputs.items.len > 0) {
         writeProgress("Searching for files...");
-        var state: ScanState = .{ .allocator = allocator, .io = io, .results = &results, .fileCount = 0 };
+        var state: ScanState = .{
+            .allocator = allocator,
+            .io = io,
+            .toolRunner = context.toolRunner,
+            .results = &results,
+            .fileCount = 0,
+        };
         try scanPaths(
             allocator,
             io,
@@ -225,7 +235,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     }
 
     if (dbInputs.items.len > 0) {
-        const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
+        const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
         const metadataCollection = try loaded.bsonDatabase.collection("metadata");
         for (dbInputs.items) |input| {
             const kind = classifyInput(input);
@@ -316,9 +326,9 @@ fn assetToFileAnalysis(allocator: std.mem.Allocator, asset: IAsset, logicalPath:
 }
 
 //
-// Hashes a file and reads its media information.
+// Hashes a file and reads its media information with the tools toolRunner runs.
 //
-fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: []const u8, fileInfo: IFileStat, logicalPath: []const u8) !FileAnalysis {
+fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileInfo: IFileStat, logicalPath: []const u8) !FileAnalysis {
     // filePath is either the temporary unpacked file path or the original source file path
     var fileAnalysis: FileAnalysis = .{
         .path = filePath,
@@ -336,7 +346,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, c
 
     // Analyze file content using the unified getFileInfo function
     // Files are already unpacked, so we can use the file path directly
-    if (getFileInfo(allocator, io, null, filePath, contentType)) |maybeAssetInfo| {
+    if (getFileInfo(allocator, io, toolRunner, filePath, contentType)) |maybeAssetInfo| {
         if (maybeAssetInfo) |assetInfo| {
             fileAnalysis.assetInfo = assetInfo;
         }

@@ -800,6 +800,7 @@ const cli_dependency_names = [_][]const u8{
     "utils-zig",
     "node-utils-zig",
     "tools-zig",
+    "media-tools-zig",
     "encryption-zig",
     "storage-zig",
     "vault-zig",

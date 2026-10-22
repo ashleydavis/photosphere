@@ -3,7 +3,9 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy-core").task_queue;
 const node_api = @import("node-api-zig");
+const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
+const marking_tool_programs = @import("marking-tool-programs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const mock_log = @import("mock-log.zig");
@@ -14,6 +16,9 @@ const IHashFileResult = hash_file_worker.IHashFileResult;
 const HashCache = node_api.hash_cache.HashCache;
 const forgetSharedHashCaches = node_api.hash_cache.forgetSharedHashCaches;
 const TaskContext = task_queue_zig.task_context.TaskContext;
+const MediaTools = media_tools.MediaTools;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
+const MarkingToolPrograms = marking_tool_programs.MarkingToolPrograms;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 const errors = utils.errors;
@@ -71,6 +76,13 @@ const HandlerTest = struct {
     // The task context.
     context: TaskContext,
 
+    // The tools built into the program, whose runner the handler is given.
+    mediaTools: MediaTools,
+
+    // The runner the handler is given in its task context: the runner of mediaTools, or null for a test of a task run with
+    // none.
+    toolRunner: ?InProcessRunner,
+
     //
     // Copies the test photo into a directory of the test's own.
     //
@@ -92,6 +104,8 @@ const HandlerTest = struct {
             .context = &self.messages,
             .function = MessageCounter.send,
         }, 10);
+        self.mediaTools = try MediaTools.init(io);
+        self.toolRunner = self.mediaTools.runner();
     }
 
     //
@@ -100,6 +114,7 @@ const HandlerTest = struct {
     fn deinit(self: *HandlerTest) void {
         forgetSharedHashCaches();
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
+        self.mediaTools.deinit();
         self.arena.deinit();
     }
 
@@ -148,7 +163,9 @@ const HandlerTest = struct {
         const allocator = self.arena.allocator();
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
-        const output = try hashFileHandler(allocator, std.testing.io, taskData, self.context.taskContext());
+        var taskContext = self.context.taskContext();
+        taskContext.toolRunner = self.toolRunner;
+        const output = try hashFileHandler(allocator, std.testing.io, taskData, taskContext);
         return std.json.parseFromValueLeaky(IHashFileResult, allocator, output, .{});
     }
 
@@ -293,4 +310,19 @@ test "does not send any messages" {
     _ = try context.run(data);
 
     try std.testing.expectEqual(@as(usize, 0), context.messages.count);
+}
+
+test "fails without starting a program when the task was run with no runner" {
+    var context: HandlerTest = undefined;
+    try context.init();
+    defer context.deinit();
+    var programs: MarkingToolPrograms = undefined;
+    try programs.create(context.arena.allocator(), std.testing.io, context.tempDir);
+    defer programs.destroy();
+    context.toolRunner = null;
+
+    try std.testing.expectError(error.Thrown, context.run(context.makeData()));
+
+    try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", errors.lastErrorMessage());
+    try std.testing.expect(!programs.anyStarted(std.testing.io));
 }

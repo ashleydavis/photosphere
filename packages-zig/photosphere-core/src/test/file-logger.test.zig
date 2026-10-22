@@ -1,16 +1,20 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const file_logger = @import("photosphere-core").file_logger;
+const media_tools = @import("media-tools-zig");
 
 const FileLogger = file_logger.FileLogger;
 
 //
-// What every test of the file logger needs: a directory the test owns to log in, and the console output kept in memory (the
-// test program's own standard output is how the build system talks to it, so nothing under test may write there).
+// What every test of the file logger needs: a directory the test owns to log in, the console output kept in memory (the
+// test program's own standard output is how the build system talks to it, so nothing under test may write there), and the
+// tools built into the program, whose versions the logger writes in its header.
 //
 const Fixture = struct {
     // The directory the test owns.
     tmp: std.testing.TmpDir,
+    // The ImageMagick and FFmpeg built into the program, which the logger is given the runner of.
+    tools: media_tools.MediaTools,
     // The absolute path of the directory to log in, a folder of the one the test owns.
     logs_dir: []u8,
     // What the code under test wrote to standard output through the console.
@@ -26,6 +30,7 @@ const Fixture = struct {
         self.console_out = std.Io.Writer.Allocating.init(allocator);
         self.console_err = std.Io.Writer.Allocating.init(allocator);
         utils.console.setCapture(&self.console_out.writer, &self.console_err.writer);
+        self.tools = try media_tools.MediaTools.init(std.testing.io);
         self.tmp = std.testing.tmpDir(.{});
         const current_path = try std.process.currentPathAlloc(std.testing.io, allocator);
         defer allocator.free(current_path);
@@ -41,13 +46,14 @@ const Fixture = struct {
         self.console_err.deinit();
         std.testing.allocator.free(self.logs_dir);
         self.tmp.cleanup();
+        self.tools.deinit();
     }
 
     //
-    // Makes a logger that logs in the directory.
+    // Makes a logger that logs in the directory and runs the tools built into the program.
     //
     fn createLogger(self: *Fixture) !*FileLogger {
-        return FileLogger.init(std.testing.allocator, std.testing.io, null, self.logs_dir, "9.8.7");
+        return FileLogger.init(std.testing.allocator, std.testing.io, self.tools.runner(), self.logs_dir, "9.8.7");
     }
 };
 
@@ -103,6 +109,40 @@ test "init makes the logs directory and a log file and an error log file named f
     try std.testing.expect(std.mem.startsWith(u8, error_text, "=" ** 80 ++ "\nPhotosphere Desktop Error Log\nStarted: 20"));
     try std.testing.expect(std.mem.indexOf(u8, error_text, "\nPhotosphere Version: 9.8.7\n") != null);
     try std.testing.expect(std.mem.endsWith(u8, error_text, "\nIf this file contains nothing below, it means there were no errors.\n\n--- Error Log Start ---\n"));
+}
+
+//
+// The text of `output` after `prefix` up to the end of its word. Fails the test when `prefix` is not in `output`.
+//
+fn wordAfter(output: []const u8, prefix: []const u8) ![]const u8 {
+    const start = (std.mem.indexOf(u8, output, prefix) orelse return error.TestUnexpectedResult) + prefix.len;
+    const end = std.mem.indexOfAnyPos(u8, output, start, " \r\n") orelse output.len;
+    return output[start..end];
+}
+
+test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built into the program" {
+    var fixture: Fixture = undefined;
+    try fixture.start();
+    defer fixture.stop();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const runner = fixture.tools.runner();
+    const magick = try runner.run(runner.context, arena.allocator(), "magick", &.{"-version"});
+    const ffmpeg = try runner.run(runner.context, arena.allocator(), "ffmpeg", &.{"-version"});
+    const ffprobe = try runner.run(runner.context, arena.allocator(), "ffprobe", &.{"-version"});
+    const expected = try std.fmt.allocPrint(arena.allocator(), "\n--- Tool Versions ---\nImageMagick: {s}\nFFmpeg: {s}\nFFprobe: {s}\n", .{
+        try wordAfter(magick.output, "Version: ImageMagick "),
+        try wordAfter(ffmpeg.output, "ffmpeg version "),
+        try wordAfter(ffprobe.output, "ffprobe version "),
+    });
+    const logger = try fixture.createLogger();
+    defer logger.deinit();
+    const log_text = try readFile(logger.getLogFilePath());
+    defer std.testing.allocator.free(log_text);
+    if (std.mem.indexOf(u8, log_text, expected) == null) {
+        std.debug.print("expected the header to hold:{s}\nthe log is:\n{s}\n", .{ expected, log_text });
+        return error.TestUnexpectedResult;
+    }
 }
 
 test "init fails with a message when the logs directory cannot be made" {

@@ -203,6 +203,8 @@ bun run perf
 
 `bun run test:zig` runs the unit tests of the Zig CLI and of every Zig package, and `bun run test:cli:zig` runs the Zig counterparts of the TypeScript CLI smoke suites, one directory per test under `apps/cli/smoke-tests-zig/`. The encrypted database, LAN share, parallel sync, parallel write lock and hash cache concurrency tests are part of `test:cli:zig`, and any one test runs on its own with `bun run test:cli:zig -- <number or name>`. [Zig test coverage](../zig-test-coverage.md) says how coverage is measured and where it stands.
 
+The Zig CLI runs ImageMagick and FFmpeg from the libraries built into it and never starts an installed copy. The tests still need them installed: the smoke test scripts and some unit test helpers run installed `magick`, `ffmpeg` and `ffprobe` to make and check fixtures, so ImageMagick and FFmpeg must be on the PATH of any machine that runs the tests.
+
 ## UI stories
 
 The stories browser mounts every page, modal, dialog, and component in isolation with mock data, so each UI surface can be checked without seeding a real database. It is the main tool for reviewing how the UI looks, including how it fits on a small screen.

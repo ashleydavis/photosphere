@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const media_tools = @import("media-tools-zig");
 const helpers = @import("test-helpers.zig");
 const FileLogger = cli.file_logger.FileLogger;
 
@@ -37,8 +38,10 @@ test "the file logger writes the headers, entries and footers" {
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
-    const logger = try FileLogger.create(allocator, io, consoleLog.ilog(), "verify --db x");
+    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify --db x");
     defer node_utils.termination.clearTerminationCallbacks();
 
     const logFile = logger.getLogFilePath();
@@ -111,8 +114,10 @@ test "the error log footer is only written when errors were logged" {
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{ .verbose = true });
-    const logger = try FileLogger.create(allocator, io, consoleLog.ilog(), "unknown");
+    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "unknown");
     defer node_utils.termination.clearTerminationCallbacks();
     try std.testing.expect(logger.verboseEnabled());
     logger.close();
@@ -140,8 +145,10 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
-    const logger = try FileLogger.create(allocator, io, consoleLog.ilog(), "verify");
+    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     defer logger.close();
 
@@ -169,8 +176,10 @@ test "the log directory is joined as path.join joins it, and a long exception is
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
-    const logger = try FileLogger.create(allocator, io, consoleLog.ilog(), "verify");
+    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     try std.testing.expect(std.mem.startsWith(u8, logger.getLogFilePath(), try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "logs", "psi-" })));
 
@@ -180,6 +189,56 @@ test "the log directory is joined as path.join joins it, and a long exception is
     logger.close();
     const errorContent = try std.Io.Dir.cwd().readFileAlloc(io, logger.getErrorLogFilePath(), allocator, .unlimited);
     try std.testing.expect(std.mem.indexOf(u8, errorContent, try std.mem.concat(allocator, u8, &.{ longMessage, "\nStack trace: " })) != null);
+}
+
+//
+// The rest of the header line that starts with the prefix, up to the end of the line. Fails the test when there is no
+// such line.
+//
+fn headerLineValue(content: []const u8, prefix: []const u8) ![]const u8 {
+    const start = (std.mem.indexOf(u8, content, prefix) orelse {
+        std.debug.print("The log header has no line starting \"{s}\":\n{s}\n", .{ prefix[1..], content });
+        return error.TestExpectedHeaderLine;
+    }) + prefix.len;
+    const end = std.mem.indexOfScalarPos(u8, content, start, '\n') orelse content.len;
+    return content[start..end];
+}
+
+test "the log header names the versions of the ImageMagick and FFmpeg built into the program" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try helpers.makeTempDir(allocator, "file-logger-tool-versions");
+    defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
+    var environ_map = std.process.Environ.Map.init(allocator);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
+    try environ_map.put("TMPDIR", tmpDir);
+    try environ_map.put("TEMP", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    cli.process_argv.setArgv(&.{ "psi", "verify" });
+
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
+    var consoleLog = cli.log.Log.init(.{});
+    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
+    defer node_utils.termination.clearTerminationCallbacks();
+    logger.close();
+    const logContent = try std.Io.Dir.cwd().readFileAlloc(io, logger.getLogFilePath(), allocator, .unlimited);
+
+    // The versions are the ones the built-in libraries report, read here from the libraries themselves.
+    const imageMagickVersion = try headerLineValue(logContent, "\nImageMagick: ");
+    const magickVersionText = (try mediaTools.image_magick.runMagick(allocator, &.{"-version"})).output;
+    try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{imageMagickVersion})) != null);
+    const ffmpegVersion = try headerLineValue(logContent, "\nFFmpeg: ");
+    try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffmpeg")).output, try std.fmt.allocPrint(allocator, "ffmpeg version {s}\n", .{ffmpegVersion})));
+    const ffprobeVersion = try headerLineValue(logContent, "\nFFprobe: ");
+    try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffprobe")).output, try std.fmt.allocPrint(allocator, "ffprobe version {s}\n", .{ffprobeVersion})));
 }
 
 test "toFixed2 writes a negative duration as toFixed(2) does" {

@@ -4,7 +4,9 @@ const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy-core").task_queue;
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
+const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
+const marking_tool_programs = @import("marking-tool-programs.zig");
 const test_files = @import("test-files.zig");
 const console_capture = @import("console-capture.zig");
 const test_environment = @import("test-environment.zig");
@@ -16,6 +18,9 @@ const IUploadAssetData = upload_asset_worker.IUploadAssetData;
 const IUploadAssetResult = upload_asset_worker.IUploadAssetResult;
 const decodeAssetRecord = upload_asset_worker.decodeAssetRecord;
 const TaskContext = task_queue_zig.task_context.TaskContext;
+const MediaTools = media_tools.MediaTools;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
+const MarkingToolPrograms = marking_tool_programs.MarkingToolPrograms;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
@@ -95,6 +100,13 @@ const UploadTest = struct {
     // The task context.
     context: TaskContext,
 
+    // The tools built into the program, whose runner the handler is given.
+    mediaTools: MediaTools,
+
+    // The runner the handler is given in its task context: the runner of mediaTools, or null for a test of a task run with
+    // none.
+    toolRunner: ?InProcessRunner,
+
     //
     // Copies the test photo into a directory of the test's own.
     //
@@ -118,6 +130,8 @@ const UploadTest = struct {
             .context = &self.messages,
             .function = MessageRecorder.send,
         }, 10);
+        self.mediaTools = try MediaTools.init(io);
+        self.toolRunner = self.mediaTools.runner();
     }
 
     //
@@ -125,6 +139,7 @@ const UploadTest = struct {
     //
     fn deinit(self: *UploadTest) void {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
+        self.mediaTools.deinit();
         self.arena.deinit();
     }
 
@@ -161,7 +176,9 @@ const UploadTest = struct {
         var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
         virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
         defer virtual_time.deinit();
-        return uploadAssetHandler(allocator, virtual_time.io(), taskData, self.context.taskContext());
+        var taskContext = self.context.taskContext();
+        taskContext.toolRunner = self.toolRunner;
+        return uploadAssetHandler(allocator, virtual_time.io(), taskData, taskContext);
     }
 
     //
@@ -533,4 +550,60 @@ test "the upload date is read once the files are uploaded" {
     _ = try context.run(context.makeUploadAssetData());
 
     try std.testing.expectEqual(@as(?bool, true), witness.displayExisted);
+}
+
+//
+// Reads the width, height and format of a file the upload wrote to the database, with the ImageMagick built into the program, as
+// "<w> <h> <format>".
+//
+fn describeStoredImage(context: *UploadTest, relativePath: []const u8) ![]const u8 {
+    const allocator = context.arena.allocator();
+    const runner = context.mediaTools.runner();
+    const filePath = try std.fs.path.join(allocator, &.{ context.databaseDir, relativePath });
+    const result = try runner.run(runner.context, allocator, "magick", &.{ "identify", "-format", "%w %h %m", filePath });
+    if (result.exit_code != 0) {
+        std.debug.print("ImageMagick could not read {s}: exit code {d}\n{s}\n", .{ filePath, result.exit_code, result.output });
+        return error.TestUnexpectedResult;
+    }
+    return result.output;
+}
+
+test "makes the thumbnail of a photo and of a video with the tools built into the program" {
+    // The 2560x1920 photo's thumbnail is 300 on its short side.
+    var photo: UploadTest = undefined;
+    try photo.init();
+    defer photo.deinit();
+    const photoResult = try photo.run(photo.makeUploadAssetData());
+    try std.testing.expect(photoResult.assetData.thumbPath != null);
+    try std.testing.expectEqualStrings("400 300 JPEG", try describeStoredImage(&photo, "thumb/asset-1"));
+
+    // The 1280x720 video's thumbnail is a frame of it, 300 on its short side.
+    var video: UploadTest = undefined;
+    try video.init();
+    defer video.deinit();
+    var data = video.makeUploadAssetData();
+    data.contentType = "video/mp4";
+    const videoContents = try test_files.readFile(video.arena.allocator(), std.testing.io, "../test/multiple-files/test.mp4");
+    try test_files.writeFile(std.testing.io, video.filePath, videoContents);
+    data.fileStat.length = videoContents.len;
+    const videoResult = try video.run(data);
+    try std.testing.expect(videoResult.isVideo);
+    try std.testing.expect(videoResult.assetData.thumbPath != null);
+    try std.testing.expectEqualStrings("533 300 JPEG", try describeStoredImage(&video, "thumb/asset-1"));
+}
+
+test "fails without starting a program when the task was run with no runner" {
+    var context: UploadTest = undefined;
+    try context.init();
+    defer context.deinit();
+    var programs: MarkingToolPrograms = undefined;
+    try programs.create(context.arena.allocator(), std.testing.io, context.tempDir);
+    defer programs.destroy();
+    context.toolRunner = null;
+
+    try std.testing.expectError(error.Thrown, context.run(context.makeUploadAssetData()));
+
+    try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", errors.lastErrorMessage());
+    try std.testing.expect(!programs.anyStarted(std.testing.io));
+    try std.testing.expect(!context.databaseHas("asset/asset-1"));
 }

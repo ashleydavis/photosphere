@@ -4,6 +4,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const helpers = @import("test-helpers.zig");
 const task_queue = @import("ziggy-core").task_queue;
+const media_tools = @import("media-tools-zig");
 const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
 const types = task_queue.types;
 
@@ -217,6 +218,44 @@ fn slowHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, c
 }
 
 //
+// Runs `magick -version` through the tool runner of the task's context and returns what it printed. Fails when the
+// context has no runner, rather than starting an installed program.
+//
+fn magickVersionHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = data;
+    const toolRunner = context.toolRunner orelse return utils.errors.throwError("The task was given no tool runner.", .{});
+    const result = try node_utils.exec.exec(allocator, io, toolRunner, "magick -version");
+    return .{ .string = result.stdout };
+}
+
+//
+// The video the `ffmpeg` handlers read, relative to apps/cli-zig, where the tests run.
+//
+const test_video = "../../test/multiple-files/test.mp4";
+
+//
+// Runs an `ffmpeg` that never ends on its own through the tool runner of the task's context: the video is read over and over
+// and encoded to the `null` muxer, with `mjpeg` (the one encoder the built-in FFmpeg has) and the audio dropped. Only a stop
+// ends it.
+//
+fn endlessFfmpegHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = data;
+    const toolRunner = context.toolRunner orelse return utils.errors.throwError("The task was given no tool runner.", .{});
+    _ = try node_utils.exec.exec(allocator, io, toolRunner, "ffmpeg -stream_loop -1 -i \"" ++ test_video ++ "\" -an -c:v mjpeg -f null -");
+    return .null;
+}
+
+//
+// Writes the first frame of the video as a JPEG to the path in the task data, through the tool runner of the task's context.
+//
+fn oneFrameFfmpegHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    const toolRunner = context.toolRunner orelse return utils.errors.throwError("The task was given no tool runner.", .{});
+    const command = try std.fmt.allocPrint(allocator, "ffmpeg -i \"" ++ test_video ++ "\" -frames:v 1 -y \"{s}\"", .{data.string});
+    _ = try node_utils.exec.exec(allocator, io, toolRunner, command);
+    return .{ .string = "frame written" };
+}
+
+//
 // Registers the handlers of the tests.
 //
 fn registerHandlers() !void {
@@ -225,6 +264,9 @@ fn registerHandlers() !void {
     try task_queue.worker.registerHandler("message", messagingHandler);
     try task_queue.worker.registerHandler("block", blockingHandler);
     try task_queue.worker.registerHandler("slow", slowHandler);
+    try task_queue.worker.registerHandler("magick-version", magickVersionHandler);
+    try task_queue.worker.registerHandler("endless-ffmpeg", endlessFfmpegHandler);
+    try task_queue.worker.registerHandler("one-frame-ffmpeg", oneFrameFfmpegHandler);
 }
 
 test "runs a task on a worker and reports its outputs" {
@@ -234,7 +276,9 @@ test "runs a task on a worker and reports its outputs" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{ .sessionId = "session" });
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 2, 10000, .{ .sessionId = "session" });
     defer pool.deinit();
     const backend = pool.queueBackend();
     var collector = Collector.init(arena.allocator());
@@ -272,7 +316,9 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.addTask(allocator, std.testing.io, "echo", .{ .string = "x" }, "source", null, null);
@@ -290,7 +336,9 @@ test "generates a task ID when none is given" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -306,7 +354,9 @@ test "reports a failed task with the error name and message" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -325,7 +375,9 @@ test "forwards task messages to the message callbacks" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -353,7 +405,9 @@ test "creates workers lazily up to maxWorkers" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 2, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -387,7 +441,9 @@ test "times out a task, reports it failed and replaces the worker" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 50, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 50, .{});
     defer pool.deinit();
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -415,7 +471,9 @@ test "the timeout message writes the timeout as a template string writes a numbe
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
     // `--timeout 0.0000001`: the timer waits 1 ms, and the message writes the timeout as 1e-7.
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 1e-7, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 1e-7, .{});
     defer pool.deinit();
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -434,7 +492,9 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 1, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -464,7 +524,9 @@ test "shutdown terminates the workers" {
     // The pool installs the worker log routing in place of the global log; put the global log back after.
     const previousLog = utils.log.log;
     defer utils.log.setLog(previousLog);
-    const pool = try WorkerPoolBun.init(std.testing.io, 2, 10000, .{});
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 2, 10000, .{});
     defer pool.deinit();
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
@@ -472,4 +534,111 @@ test "shutdown terminates the workers" {
     try collector.waitForCompleted(1);
     pool.queueBackend().shutdown();
     try std.testing.expectEqual(@as(usize, 0), pool.workers.items.len);
+}
+
+test "a task is handed the runner of the tools built into the program" {
+    try registerHandlers();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
+    defer pool.deinit();
+    var collector = Collector.init(arena.allocator());
+    _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
+    _ = try pool.addTask(arena.allocator(), std.testing.io, "magick-version", .null, "source", null, null);
+    try collector.waitForCompleted(1);
+    try std.testing.expectEqualStrings("", collector.lastErrorMessage);
+    try std.testing.expectEqual(@as(usize, 0), collector.failed);
+
+    // What the task printed is the version of the ImageMagick built into the program, read here from the library itself.
+    const builtInVersion = (try mediaTools.image_magick.runMagick(arena.allocator(), &.{"-version"})).output;
+    try std.testing.expect(std.mem.indexOf(u8, builtInVersion, "Version: ImageMagick ") != null);
+    try std.testing.expectEqualStrings(builtInVersion, collector.lastOutput);
+}
+
+//
+// Ends the whole test program with a message. A stop that does not work leaves the endless `ffmpeg` running on its abandoned
+// thread, holding the FFmpeg lock and FFmpeg's process-wide state, so the test cannot just fail: every later `ffmpeg` in this
+// program would hang behind it, and the pool's deinit would wait for that thread for ever.
+//
+fn endTestProgram(message: []const u8) noreturn {
+    std.debug.print("{s}\n", .{message});
+    std.process.exit(1);
+}
+
+//
+// Waits up to the number of seconds until the collector has seen the number of completed tasks, and says whether it did.
+//
+fn waitForCompletedWithin(collector: *Collector, count: usize, seconds: i64) bool {
+    const io = std.testing.io;
+    const deadline = std.Io.Clock.Timestamp.fromNow(io, .{
+        .raw = std.Io.Duration.fromSeconds(seconds),
+        .clock = .awake,
+    });
+    while (deadline.durationFromNow(io).raw.nanoseconds > 0) {
+        collector.mutex.lockUncancelable(io);
+        const completed = collector.completed;
+        collector.mutex.unlock(io);
+        if (completed >= count) {
+            return true;
+        }
+        io.sleep(.fromMilliseconds(10), .awake) catch {};
+    }
+    return false;
+}
+
+test "a timed out task's ffmpeg is stopped, so a later ffmpeg through the pool runs" {
+    try registerHandlers();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "worker-pool-ffmpeg-stop");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+    // The pool installs the worker log routing in place of the global log; put the global log back after.
+    const previousLog = utils.log.log;
+    defer utils.log.setLog(previousLog);
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 3000, .{});
+    defer pool.deinit();
+    var collector = Collector.init(allocator);
+    _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
+
+    // The endless ffmpeg runs until the pool's timeout, which reports the task failed.
+    _ = try pool.addTask(allocator, std.testing.io, "endless-ffmpeg", .null, "source", null, null);
+    if (!waitForCompletedWithin(&collector, 1, 60)) {
+        endTestProgram("The endless ffmpeg task was not reported within 60 seconds.");
+    }
+    try std.testing.expectEqual(@as(usize, 1), collector.failed);
+    try std.testing.expectEqualStrings("Task timeout", collector.lastErrorMessage);
+
+    // A later ffmpeg runs only when the timed out one was stopped: otherwise it waits on the FFmpeg lock for ever.
+    const framePath = try std.fs.path.join(allocator, &.{ root, "frame.jpg" });
+    _ = try pool.addTask(allocator, std.testing.io, "one-frame-ffmpeg", .{ .string = framePath }, "source", null, null);
+    if (!waitForCompletedWithin(&collector, 2, 60)) {
+        endTestProgram("The one frame ffmpeg task after the timed out one did not end within 60 seconds.");
+    }
+
+    // The pool's own timeout also ends a follow-up that waited on the FFmpeg lock. Either way, an ffmpeg still running here is
+    // the timed out one, which was not stopped, and the pool's deinit would wait for its thread for ever.
+    const stillRunning = running: {
+        mediaTools.ffmpeg.stop_mutex.lockUncancelable(std.testing.io);
+        defer mediaTools.ffmpeg.stop_mutex.unlock(std.testing.io);
+        break :running mediaTools.ffmpeg.running_thread != null;
+    };
+    if (stillRunning) {
+        endTestProgram(try std.fmt.allocPrint(allocator, "The timed out task's ffmpeg was not stopped: it still holds the FFmpeg lock, and the one frame ffmpeg task after it ended with \"{s}\".", .{collector.lastErrorMessage}));
+    }
+    try std.testing.expectEqual(@as(usize, 1), collector.failed);
+    try std.testing.expectEqualStrings("frame written", collector.lastOutput);
+    const frame = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, framePath, allocator, .unlimited);
+    try std.testing.expect(std.mem.startsWith(u8, frame, "\xFF\xD8\xFF"));
 }

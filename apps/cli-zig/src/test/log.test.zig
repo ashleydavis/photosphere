@@ -2,6 +2,7 @@ const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const media_tools = @import("media-tools-zig");
 const helpers = @import("test-helpers.zig");
 const Log = cli.log.Log;
 
@@ -93,11 +94,13 @@ test "configureLog installs the file logger unless file logging is disabled" {
     defer utils.console.setCapture(null, null);
 
     cli.process_argv.setArgv(&.{"psi"});
-    try cli.log.configureLog(allocator, io, .{ .disableFileLogging = true });
+    var mediaTools = try media_tools.MediaTools.init(io);
+    defer mediaTools.deinit();
+    try cli.log.configureLog(allocator, io, mediaTools.runner(), .{ .disableFileLogging = true });
     const details = try utils.log.log.getLogDetails(allocator, io);
     try std.testing.expect(details.logFilePath == null);
 
-    try cli.log.configureLog(allocator, io, .{ .verbose = true });
+    try cli.log.configureLog(allocator, io, mediaTools.runner(), .{ .verbose = true });
     const fileLogger = cli.log.getFileLogger().?;
     utils.log.log.info("to both");
     try std.testing.expect(utils.log.log.verboseEnabled());

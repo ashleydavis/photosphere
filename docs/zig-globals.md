@@ -2,7 +2,7 @@
 
 Every global listed here must be considered for removal. None of them is approved to stay. Each one is to be reviewed on its own, and the value passed down from whoever owns it instead.
 
-Top-level variables come from running the plan's audit command against the `zig-2` branch, before any change (`git grep -nE '^(pub )?(threadlocal )?var '` over `apps/cli-zig` and `packages-zig`, excluding tests, `aws` and `zlib-ng`). Line numbers are those of `zig-2`. The struct-level variables at the end are from the plan, because that part of the audit is a manual read.
+Top-level variables come from running the plan's audit command against the `zig-2` branch, before any change (`git grep -nE '^(pub )?(threadlocal )?var '` over `apps/cli-zig` and `packages-zig`, excluding tests, `aws` and `zlib-ng`). Line numbers are those of `zig-2`.
 
 ## Top-level variables
 
@@ -55,8 +55,3 @@ Top-level variables come from running the plan's audit command against the `zig-
 - `src/lib/keychain-types.zig`: `spawn_function` (78)
 - `src/lib/linux-keychain-vault.zig`: `toolChecked` (26)
 - `src/lib/windows-keychain-vault.zig`: `toolChecked` (22)
-
-## Struct-level variables, from the plan
-
-- `packages-zig/tools-zig/src/lib/video.zig`: `ffprobeCommand`, `ffmpegCommand`, `isInitialized`
-- `packages-zig/tools-zig/src/lib/image.zig`: `convertCommand`, `identifyCommand`, `isInitialized`, `imageMagickType`

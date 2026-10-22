@@ -1,92 +1,22 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
-const node_utils = @import("node-utils-zig");
+const fake_tool_runner = @import("fake-tool-runner.zig");
 const Video = tools.Video;
-
-//
-// A directory holding a fake ffprobe, which prints a JSON file whatever it is asked, and a fake ffmpeg, which writes
-// its arguments to a file. It is the only entry of PATH while the test runs.
-//
-const FakeFfmpegDirectory = struct {
-    // Path of the directory, relative to the current directory.
-    path: []const u8,
-
-    // Absolute path of the directory.
-    absolutePath: []const u8,
-
-    // The environment passed to the tools (PATH points at the directory).
-    environMap: std.process.Environ.Map,
-
-    //
-    // Creates the directory with the fake tools, ffprobe printing the given JSON, and makes PATH point at it.
-    //
-    fn create(self: *FakeFfmpegDirectory, allocator: std.mem.Allocator, io: std.Io, probeJson: []const u8) !void {
-        var random_bytes: [8]u8 = undefined;
-        io.random(&random_bytes);
-        self.path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/fake-ffmpeg-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
-        const cwd = std.Io.Dir.cwd();
-        try cwd.createDirPath(io, self.path);
-        self.absolutePath = try cwd.realPathFileAlloc(io, self.path, allocator);
-        try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, "probe.json" }), .data = probeJson });
-
-        // cmd.exe's `type` opens the name it is given itself, and it does not take a `/` as the separator before the
-        // file name: `type "C:\dir/file"` fails with "The system cannot find the file specified." where a redirection
-        // (`> "C:\dir/file"`) and the win32 API open the same file. The fake ffprobe is a .cmd that types the file, so
-        // its path is joined with the separator of the platform it runs on.
-        const probePath = try std.fs.path.join(allocator, &.{ self.absolutePath, "probe.json" });
-        const argumentsPath = try std.fs.path.join(allocator, &.{ self.absolutePath, "arguments.txt" });
-        if (builtin.os.tag == .windows) {
-            try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, "ffprobe.cmd" }), .data = try std.fmt.allocPrint(allocator, "@type \"{s}\"\r\n", .{probePath}) });
-            try cwd.writeFile(io, .{ .sub_path = try std.fs.path.join(allocator, &.{ self.path, "ffmpeg.cmd" }), .data = try std.fmt.allocPrint(allocator, "@echo %*> \"{s}\"\r\n", .{argumentsPath}) });
-        }
-        else {
-            const ffprobePath = try std.fs.path.join(allocator, &.{ self.path, "ffprobe" });
-            const ffmpegPath = try std.fs.path.join(allocator, &.{ self.path, "ffmpeg" });
-            try cwd.writeFile(io, .{ .sub_path = ffprobePath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s' '{s}'\n", .{probeJson}) });
-            try cwd.writeFile(io, .{ .sub_path = ffmpegPath, .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\nprintf '%s\\n' \"$*\" > '{s}'\n", .{argumentsPath}) });
-            _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x {s} {s}", .{ ffprobePath, ffmpegPath }));
-        }
-        self.environMap = std.process.Environ.Map.init(allocator);
-        try self.environMap.put("PATH", self.absolutePath);
-        node_utils.process_env.setEnvironMap(&self.environMap);
-
-        // Image detects its installation once and remembers the commands it found, so the state of the real PATH
-        // (or of an earlier fake one) must not decide what a later call in this directory finds. This is what
-        // FakeImageMagickDirectory in image.command.test.zig and FakeToolsDirectory in
-        // tool-verification.test.zig do.
-        tools.Image.resetInitialization();
-    }
-
-    //
-    // Reads the arguments the fake ffmpeg was run with.
-    //
-    fn ffmpegArguments(self: *FakeFfmpegDirectory, allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-        const text = try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ self.path, "arguments.txt" }), allocator, .unlimited);
-        return std.mem.trimEnd(u8, text, " \r\n");
-    }
-
-    //
-    // Restores the environment and deletes the directory.
-    //
-    fn destroy(self: *FakeFfmpegDirectory, io: std.Io) void {
-        node_utils.process_env.setEnvironMap(null);
-        tools.Image.resetInitialization();
-        std.Io.Dir.cwd().deleteTree(io, self.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ self.path, @errorName(err) });
-    }
-};
+const FakeToolRunner = fake_tool_runner.FakeToolRunner;
 
 //
 // Reads the information of a video that exists (the checked in test.mp4), with ffprobe printing the given JSON.
 //
 fn probe(allocator: std.mem.Allocator, probeJson: []const u8) !tools.types.AssetInfo {
-    const io = std.testing.io;
-    var directory: FakeFfmpegDirectory = undefined;
-    try directory.create(allocator, io, probeJson);
-    defer directory.destroy(io);
-    var video = Video.init(allocator, io, null, "../test/multiple-files/test.mp4");
-    return video.getInfo(allocator, io, null);
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "ffprobe",
+            .output = probeJson,
+        },
+    });
+    var video = Video.init("../test/multiple-files/test.mp4");
+    return video.getInfo(allocator, std.testing.io, fakeTools.runner());
 }
 
 //
@@ -223,50 +153,43 @@ test "ffprobe values that are booleans, arrays with a null and strings with char
     try std.testing.expectEqualStrings("videoCodec", fields[4].key);
 }
 
-test "the fake tools directory does not leave the detected ImageMagick installation behind" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-
-    // The real PATH, which every later test runs against.
-    if (!(try tools.Image.verifyImageMagick(allocator, io, null)).available) {
-        std.debug.print("This test needs ImageMagick installed.\n", .{});
-        return error.RequiredToolsMissing;
-    }
-
-    // A PATH with no ImageMagick in it, so a detection run now finds nothing.
-    var directory: FakeFfmpegDirectory = undefined;
-    try directory.create(allocator, io, "{}");
-    defer directory.destroy(io);
-    try std.testing.expect(!(try tools.Image.verifyImageMagick(allocator, io, null)).available);
-    try std.testing.expectEqual(tools.image.ImageMagickType.none, tools.Image.getImageMagickType());
-    directory.destroy(io);
-
-    // The fake PATH is gone, so the installation is detected again, against the real one.
-    try std.testing.expect((try tools.Image.verifyImageMagick(allocator, io, null)).available);
-    try std.testing.expect(tools.Image.getImageMagickType() != .none);
-}
-
 test "extractScreenshot writes the time the way JavaScript writes a number" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var directory: FakeFfmpegDirectory = undefined;
-    try directory.create(allocator, io, "{}");
-    defer directory.destroy(io);
-    var video = Video.init(allocator, io, null, "../test/multiple-files/test.mp4");
-    _ = try video.extractScreenshot(allocator, io, null, "out.jpg", 1e-7);
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "ffmpeg",
+            .output = "",
+        },
+    });
+    var video = Video.init("../test/multiple-files/test.mp4");
+    _ = try video.extractScreenshot(allocator, io, fakeTools.runner(), "out.jpg", 1e-7);
 
-    // The command quotes both paths (`ffmpeg -i "<file>" ... -y "<output>"`). /bin/sh takes
-    // the quotes apart before the fake command sees the arguments, and cmd.exe hands the command line to the fake
-    // .cmd exactly as it is, so on Windows the quotes are recorded too.
-    const ffmpegArguments = if (builtin.os.tag == .windows)
-        "-i \"../test/multiple-files/test.mp4\" -ss 1e-7 -vframes 1 -q:v 2 -y \"out.jpg\""
-    else
-        "-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg";
-    try std.testing.expectEqualStrings(ffmpegArguments, try directory.ffmpegArguments(allocator, io));
+    // The command quotes both paths (`ffmpeg -i "<file>" ... -y "<output>"`), and the runner gets the words with the
+    // quotes taken off.
+    try std.testing.expectEqualStrings("-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg", try fakeTools.argumentsOf("ffmpeg"));
+}
+
+test "verifyFfprobe and verifyFfmpeg report the built-in tool failing with no install advice" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // A runner whose ffprobe and ffmpeg both fail.
+    var fakeTools = FakeToolRunner.init(allocator, &.{});
+
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, fakeTools.runner());
+    try std.testing.expect(!ffprobeStatus.available);
+    try std.testing.expect(ffprobeStatus.version == null);
+    try std.testing.expectEqualStrings("The ffprobe built into the program did not run: Error: Command failed: ffprobe -version\n", ffprobeStatus.@"error".?);
+
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, fakeTools.runner());
+    try std.testing.expect(!ffmpegStatus.available);
+    try std.testing.expect(ffmpegStatus.version == null);
+    try std.testing.expectEqualStrings("The ffmpeg built into the program did not run: Error: Command failed: ffmpeg -version\n", ffmpegStatus.@"error".?);
 }
 
 // String() of an array joins its elements with commas, so parseFloat and parseInt read up to the first comma; and a string spreads

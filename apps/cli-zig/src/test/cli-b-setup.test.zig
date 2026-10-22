@@ -10,6 +10,7 @@ const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const serialization_zig = @import("serialization-zig");
+const media_tools = @import("media-tools-zig");
 const helpers = @import("test-helpers.zig");
 const console_output = cli.console_output;
 const FileLogger = cli.file_logger.FileLogger;
@@ -77,6 +78,10 @@ const ILogEnvironment = struct {
     // The logger under test.
     logger: *FileLogger,
 
+    // The ImageMagick and FFmpeg built into the program, whose versions the logger's headers give. The environment does
+    // not move once made, so their runner stays valid.
+    mediaTools: media_tools.MediaTools,
+
     //
     // Creates the environment and its logger.
     //
@@ -93,7 +98,8 @@ const ILogEnvironment = struct {
         startCapture(&self.capture, allocator);
         cli.process_argv.setArgv(&.{ "psi", "verify", "--db", "x" });
         var console_log = cli.log.Log.init(.{});
-        self.logger = try FileLogger.create(allocator, io, console_log.ilog(), "verify --db x");
+        self.mediaTools = try media_tools.MediaTools.init(io);
+        self.logger = try FileLogger.create(allocator, io, self.mediaTools.runner(), console_log.ilog(), "verify --db x");
     }
 
     //
@@ -104,6 +110,7 @@ const ILogEnvironment = struct {
         stopCapture();
         node_utils.process_env.setEnvironMap(null);
         std.Io.Dir.cwd().deleteTree(io, self.tmp_dir) catch {};
+        self.mediaTools.deinit();
         self.arena.deinit();
     }
 
@@ -790,6 +797,7 @@ test "requireDatabase answers with the no-database result when nothing is open" 
     var tool_context: mcp_types.IMcpToolContext = .{
         .uuidGenerator = undefined,
         .timestampProvider = undefined,
+        .toolRunner = undefined,
         .sessionId = "session",
         .options = .{},
         .allocator = allocator,

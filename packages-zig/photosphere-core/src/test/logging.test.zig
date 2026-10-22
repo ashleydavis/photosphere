@@ -1,6 +1,7 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const file_logger = @import("photosphere-core").file_logger;
+const main_state = @import("photosphere-core").main_state;
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
@@ -23,7 +24,8 @@ const InstalledLogger = struct {
     fn start(self: *InstalledLogger, app: *TestApp) !void {
         const allocator = std.testing.allocator;
         self.logs_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "logs" });
-        self.logger = try FileLogger.init(allocator, std.testing.io, null, self.logs_dir, "1.2.3");
+        // ImageMagick keeps one set of state for the whole program, so the logger runs the tools the app already holds.
+        self.logger = try FileLogger.init(allocator, std.testing.io, main_state.fromCore(app.core).media_tools.runner(), self.logs_dir, "1.2.3");
         self.previous = utils.log.log;
         utils.log.setLog(self.logger.ilog());
     }

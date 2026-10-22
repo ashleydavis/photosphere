@@ -101,8 +101,11 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
 
-    // An app with ImageMagick and ffmpeg built in runs them in its process through the task's tool runner; with none the programs are started.
-    const toolRunner = context.toolRunner;
+    // ImageMagick and FFmpeg are built into the program and run in its process through the task's tool runner. A task run with
+    // no runner fails here rather than starting an installed program.
+    const toolRunner = context.toolRunner orelse {
+        return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
+    };
 
     // Load hash cache (read-only)
     var localHashCache = try HashCache.init(hashCacheDir, true); // readonly = true

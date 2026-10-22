@@ -1,5 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
 const bdb = @import("bdb-zig");
 const init_cmd = @import("../init-cmd.zig");
@@ -8,6 +9,7 @@ const IBsonCollection = bdb.collection.IBsonCollection;
 const IBsonDatabase = bdb.database.BsonDatabase;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 
 //
@@ -63,6 +65,11 @@ pub const IMcpToolContext = struct {
     // Timestamp provider for database operations.
     //
     timestampProvider: ITimestampProvider,
+
+    //
+    // Runs the ImageMagick and FFmpeg built into the program, for open_database's check of them.
+    //
+    toolRunner: InProcessRunner,
 
     //
     // Session identifier used for write lock tracking.

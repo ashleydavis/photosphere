@@ -157,7 +157,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         .verbose = options.base.verbose,
         .yes = options.base.yes,
     };
-    const source = try loadDatabase(allocator, io, options.base.db, &sourceOptions, uuidGenerator, timestampProvider, sessionId, false);
+    const source = try loadDatabase(allocator, io, options.base.db, &sourceOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
 
     var destPathOption = options.dest;
     if (destPathOption == null) {
@@ -239,7 +239,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     var targetOptions: IBaseCommandOptions = options.base;
     targetOptions.db = destPath;
     targetOptions.key = options.destKey; // Use destKey for target database
-    const target = try loadDatabase(allocator, io, targetOptions.db, &targetOptions, uuidGenerator, timestampProvider, sessionId, false);
+    const target = try loadDatabase(allocator, io, targetOptions.db, &targetOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
 
     if (options.watch orelse false) {
         // Run the same sync over and over as the database changes, rather than once. Paired with

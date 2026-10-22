@@ -1,44 +1,51 @@
 const std = @import("std");
 const cli = @import("cli-zig");
-const tools = @import("tools-zig");
-const helpers = @import("test-helpers.zig");
+const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const media_tools = @import("media-tools-zig");
+const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
+const ToolOutput = node_utils.in_process_tools.ToolOutput;
 
-test "ensureMediaProcessingTools returns when every tool is available" {
+test "ensureMediaProcessingTools returns when the built-in tools run" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const allocator = arena.allocator();
+    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    defer mediaTools.deinit();
 
-    // Without the tools ensureMediaProcessingTools exits the process: fail instead, saying what is missing.
-    // The detection is forgotten first, because Image looks its commands up on PATH once and remembers the
-    // answer for the rest of the process, so a test that ran before this one and replaced the environment can
-    // leave it believing no ImageMagick is installed when one is.
-    tools.Image.resetInitialization();
-    const status = try tools.verifyTools(allocator, std.testing.io, null);
-    if (!status.allAvailable) {
-        std.debug.print("This test needs ImageMagick and ffmpeg installed. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
-        return error.RequiredToolsMissing;
-    }
-    try cli.ensure_tools.ensureMediaProcessingTools(allocator, std.testing.io, true);
+    try cli.ensure_tools.ensureMediaProcessingTools(arena.allocator(), std.testing.io, mediaTools.runner());
 }
 
-test "ensureMediaProcessingTools reports the missing tools and exits when none are on the PATH" {
+//
+// A runner that takes every tool and fails every command, as a built-in ImageMagick that does not run would.
+//
+fn failingRun(context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!ToolOutput {
+    _ = context;
+    _ = allocator;
+    _ = arguments;
+    return utils.errors.throwError("{s} is broken in this test", .{tool});
+}
+
+//
+// Says the failing runner takes the tool, so no command is started as a program.
+//
+fn handlesEveryTool(context: ?*anyopaque, tool: []const u8) bool {
+    _ = context;
+    _ = tool;
+    return true;
+}
+
+test "ensureMediaProcessingTools throws with the tool's error when the built-in ImageMagick does not run" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const allocator = arena.allocator();
-    const root = try helpers.makeTempDir(allocator, "ensure-tools-missing");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
-    const environment = try helpers.cliEnvironment(allocator, root);
+    const failingRunner: InProcessRunner = .{
+        .context = null,
+        .handles = handlesEveryTool,
+        .run = failingRun,
+    };
 
-    // A PATH holding only an empty directory: psi finds none of the tools.
-    const emptyBinDir = try std.fs.path.join(allocator, &.{ root, "empty-bin" });
-    try std.Io.Dir.cwd().createDirPath(std.testing.io, emptyBinDir);
-    try environment.put("PATH", emptyBinDir);
-
-    // verify checks the tools (non-interactively, with --yes) before it looks at the database.
-    const psiPath = try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, helpers.psi_path, allocator);
-    const result = try helpers.runCli(allocator, &.{ psiPath, "verify", "--db", root, "--yes" }, environment);
-
-    try std.testing.expectEqual(@as(u8, 1), result.exitCode);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "Required media processing tools are not available.") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Missing tools: ImageMagick, ffprobe, ffmpeg") != null);
+    const result = cli.ensure_tools.ensureMediaProcessingTools(arena.allocator(), std.testing.io, failingRunner);
+    try std.testing.expectError(error.Thrown, result);
+    const message = utils.errors.errorMessage(error.Thrown);
+    try std.testing.expect(std.mem.indexOf(u8, message, "The ImageMagick built into the program did not run") != null);
+    try std.testing.expect(std.mem.indexOf(u8, message, "magick is broken in this test") != null);
 }
