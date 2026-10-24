@@ -11,9 +11,11 @@
 // it reads into memory of its own, makes its own state (the owner's `ConnectionState`), and they talk only by message. Each writes its log lines to the
 // console itself.
 //
-// The server thread waits for a connection about a second at a time and reads its messages each time the wait ends, so it sees
-// `stop`. Each connection thread has a queue of its own that the server thread posts to, and reads it with the same timeout. A handler
-// that holds its connection open (an event stream) reads that queue too (`Request.waitForMessage`), so it sees `stop` and ends.
+// An accepting thread blocks in accept and posts each connection to the server thread, which blocks on its queue and hands the
+// connection to a connection thread. On stop the server thread wakes the accepting thread with a connection of its own, and ends each
+// connection thread's read of its connection. Each connection thread has a queue of its own that the server thread posts to. A
+// handler that holds its connection open (an event stream) reads that queue too (`Request.waitForMessage`), so it sees `stop` and
+// ends.
 //
 // A connection serves one request and is closed (every response says `connection: close`). Node keeps a connection alive for
 // further requests; the page never depends on that.
@@ -28,18 +30,11 @@ const process_env = ziggy.task_queue.utils.process_env;
 const MessageQueue = ziggy.message_queue.MessageQueue;
 const Message = ziggy.message_queue.Message;
 const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
-const socket_wait = ziggy.socket_wait;
 const json = ziggy.json;
 const log = &utils.log.log;
 
 //
-// How long the server thread waits for a connection, and a connection thread for its next one, before reading its messages, in
-// milliseconds.
-//
-pub const WAIT_MS = 1000;
-
-//
-// How long a connection may wait without sending a request before its connection thread gives it up, in milliseconds.
+// How long a connection may wait without sending a request before the server thread gives it up, in milliseconds.
 //
 pub const IDLE_LIMIT_MS = 10_000;
 
@@ -422,15 +417,30 @@ const ConnectionThread = struct {
     thread: std.Thread,
     // Its queue, which the server thread posts to.
     queue: *MessageQueue,
-    // Whether it is serving a connection.
-    busy: bool,
+    // The connection it is serving, or null when it is serving none. The server thread closes it once the connection thread reports it
+    // free; the connection thread reads and writes it and never closes it.
+    stream: ?std.Io.net.Stream,
+    // Whether the connection was closed already, to end the connection thread's read on Windows (wakeConnection).
+    closed: bool,
+    // Whether the connection thread has read a request on the connection.
+    requested: bool,
+    // When the connection was handed over, in milliseconds on the awake clock, for the idle limit.
+    handedAtMs: i64,
     // The keys it holds for the request it is serving (see Request.hold), owned.
     holds: std.ArrayList([]u8),
 };
 
 //
-// The server thread: accepts connections and hands each to a free connection thread, until it is told to stop. It owns what it was
-// given: its configuration and environment, the listening socket and its own allocator and Io.
+// The number the accepting thread's messages reach the server thread's queue under.
+//
+const from_accepting = std.math.maxInt(u32);
+
+//
+// The server thread: hands each connection the accepting thread accepts to a free connection thread, and passes messages between the
+// owner and the connection threads, until it is told to stop. It blocks on its queue, waiting no longer than until a connection that
+// has sent no request reaches the idle limit. It owns what it was given: its configuration and environment and its own allocator and
+// Io. The listening socket goes to the accepting thread (acceptMain), which blocks in accept, and which the server thread wakes to stop
+// with a connection of its own.
 //
 fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *MessageQueue) void {
     var thread_allocator: ThreadAllocator = .init;
@@ -448,54 +458,67 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
     var environment = readEnvironment(first_arena_state.allocator(), environment_text);
     process_env.setEnvironMap(if (environment) |*map| map else null);
     defer process_env.setEnvironMap(null);
-    var listener = listener_given;
-    defer listener.deinit(io);
+    const listening_port = listener_given.socket.address.getPort();
+    var accept_queue = MessageQueue.init();
+    defer accept_queue.deinit();
+    const accepting = std.Thread.spawn(.{}, acceptMain, .{ listener_given, &accept_queue, queue }) catch |err| {
+        log.exception("The HTTP server could not start accepting connections", err);
+        var unused = listener_given;
+        unused.deinit(io);
+        return;
+    };
+    // Connections accepted while every connection thread was busy, oldest first.
+    var waiting: std.ArrayList(std.Io.net.Stream) = .empty;
     var connections: std.ArrayList(ConnectionThread) = .empty;
     defer {
-        for (connections.items) |connection| {
-            connection.queue.post(io, 0, "{\"type\":\"stop\"}") catch @panic("out of memory stopping an HTTP server");
+        stopAccepting(io, &accept_queue, accepting, listening_port);
+        for (waiting.items) |stream| {
+            stream.close(io);
         }
-        for (connections.items) |connection| {
+        waiting.deinit(allocator);
+        for (connections.items) |*connection| {
+            connection.queue.post(io, 0, "{\"type\":\"stop\"}") catch @panic("out of memory stopping an HTTP server");
+            if (connection.stream != null) {
+                wakeConnection(io, connection);
+            }
+        }
+        for (connections.items) |*connection| {
             connection.thread.join();
+            closeConnection(io, connection);
             connection.queue.deinit();
             allocator.destroy(connection.queue);
             for (connection.holds.items) |key| {
                 allocator.free(key);
             }
-            var holds = connection.holds;
-            holds.deinit(allocator);
+            connection.holds.deinit(allocator);
         }
         connections.deinit(allocator);
+        // What the accepting thread and the connection threads sent after the last message read: connections nobody will serve.
+        while (queue.tryTake(io, allocator)) |message| {
+            if (message.from == from_accepting) {
+                streamOf(message.text).close(io);
+            }
+            allocator.free(message.text);
+        }
     }
     // One connection thread is started up front.
     startConnectionThread(io, allocator, &start, config, environment_text, &connections, queue) catch |err| {
         log.exception("The HTTP server could not start a connection thread", err);
     };
     while (true) {
-        const free = freeConnection(connections.items);
-        if (free == null and connections.items.len >= start.maxConnectionThreads) {
-            // Every connection thread is busy and there may be no more: the next connection waits in the listener until one is free.
-            const message = queue.take(io, allocator, .{
-                .duration = .{
-                    .raw = .fromMilliseconds(WAIT_MS),
-                    .clock = .awake,
-                },
-            }) orelse continue;
-            if (!handleServerMessage(io, allocator, connections.items, message)) {
-                return;
-            }
+        const message = queue.take(io, allocator, idleTimeout(io, connections.items)) orelse {
+            wakeIdleConnections(io, connections.items);
             continue;
-        }
-        const readable = socket_wait.waitReadable(listener.socket.handle, WAIT_MS) catch |err| {
-            log.exception("The HTTP server could not wait for a connection", err);
-            return;
         };
-        if (readable) {
-            const stream = listener.accept(io) catch |err| {
-                log.exception("The HTTP server could not accept a connection", err);
-                continue;
-            };
-            const index = free orelse blk: {
+        if (message.from == from_accepting) {
+            const stream = streamOf(message.text);
+            allocator.free(message.text);
+            const index = freeConnection(connections.items) orelse blk: {
+                if (connections.items.len >= start.maxConnectionThreads) {
+                    // Every connection thread is busy and there may be no more: the connection waits until one is free.
+                    waiting.append(allocator, stream) catch @panic("out of memory keeping a connection");
+                    continue;
+                }
                 startConnectionThread(io, allocator, &start, config, environment_text, &connections, queue) catch |err| {
                     log.exception("The HTTP server could not start a connection thread", err);
                     stream.close(io);
@@ -503,37 +526,167 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
                 };
                 break :blk connections.items.len - 1;
             };
-            handOver(io, allocator, &connections.items[index], stream) catch |err| {
-                log.exception("The HTTP server could not hand a connection to a connection thread", err);
-                stream.close(io);
-            };
+            handOver(io, allocator, &connections.items[index], stream);
+            continue;
         }
-        while (queue.tryTake(io, allocator)) |message| {
-            if (!handleServerMessage(io, allocator, connections.items, message)) {
-                return;
+        if (message.from != from_owner and isType(message.text, "free")) {
+            allocator.free(message.text);
+            const connection = &connections.items[message.from - 1];
+            closeConnection(io, connection);
+            for (connection.holds.items) |key| {
+                allocator.free(key);
             }
+            connection.holds.clearRetainingCapacity();
+            if (waiting.items.len > 0) {
+                handOver(io, allocator, connection, waiting.orderedRemove(0));
+            }
+            continue;
+        }
+        if (message.from != from_owner and isType(message.text, "request")) {
+            allocator.free(message.text);
+            connections.items[message.from - 1].requested = true;
+            continue;
+        }
+        if (!handleServerMessage(io, allocator, connections.items, message)) {
+            return;
         }
     }
 }
 
 //
-// Handles one message to the server thread: "stop" from the owner, "hold" and "free" from a connection thread, or a message from the
-// owner for the connection thread that holds its key, which it passes on. Frees the message's text. Returns false when the server is
-// to stop.
+// The accepting thread: accepts connections on the listening socket, which it owns and closes, and posts each to the server thread,
+// until it is sent "stop" on its own queue. It blocks in accept and reads its queue after each connection it accepts, so the server
+// thread wakes it with a connection of its own after sending "stop" (stopAccepting).
+//
+fn acceptMain(listener_given: std.Io.net.Server, queue: *MessageQueue, server_queue: *MessageQueue) void {
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    const allocator = thread_allocator.allocator();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = allocator;
+    defer threaded.deinit();
+    const io = threaded.io();
+    var listener = listener_given;
+    defer listener.deinit(io);
+    while (true) {
+        const stream = listener.accept(io) catch |err| {
+            log.exception("The HTTP server could not accept a connection", err);
+            continue;
+        };
+        if (queue.tryTake(io, allocator)) |message| {
+            allocator.free(message.text);
+            stream.close(io);
+            return;
+        }
+        const text = connectionMessage(allocator, stream) catch @panic("out of memory passing on a connection");
+        defer allocator.free(text);
+        server_queue.post(io, from_accepting, text) catch @panic("out of memory passing on a connection");
+    }
+}
+
+//
+// Sends the accepting thread "stop", wakes it from accept with a connection to the server's own port and waits for it to end.
+//
+fn stopAccepting(io: std.Io, accept_queue: *MessageQueue, accepting: std.Thread, port: u16) void {
+    accept_queue.post(io, 0, "{\"type\":\"stop\"}") catch @panic("out of memory stopping an HTTP server");
+    const address = std.Io.net.IpAddress.parseIp4("127.0.0.1", port) catch unreachable;
+    if (address.connect(io, .{ .mode = .stream })) |stream| {
+        stream.close(io);
+    }
+    else |_| {}
+    accepting.join();
+}
+
+//
+// How long the server thread may wait for its next message: until the first connection that has sent no request reaches the idle
+// limit, or for as long as it takes when there is none.
+//
+fn idleTimeout(io: std.Io, connections: []const ConnectionThread) std.Io.Timeout {
+    const now = std.Io.Clock.awake.now(io).toMilliseconds();
+    var soonest: ?i64 = null;
+    for (connections) |connection| {
+        if (connection.stream == null or connection.requested or connection.closed) {
+            continue;
+        }
+        const left = @max(0, connection.handedAtMs + IDLE_LIMIT_MS - now);
+        if (soonest == null or left < soonest.?) {
+            soonest = left;
+        }
+    }
+    const milliseconds = soonest orelse {
+        return .none;
+    };
+    return .{
+        .duration = .{
+            .raw = .fromMilliseconds(milliseconds),
+            .clock = .awake,
+        },
+    };
+}
+
+//
+// Gives up each connection that has sent no request within the idle limit, by ending its connection thread's read. A browser opens
+// connections it never sends a request on, and each would otherwise hold a connection thread for as long as the browser keeps it.
+//
+fn wakeIdleConnections(io: std.Io, connections: []ConnectionThread) void {
+    const now = std.Io.Clock.awake.now(io).toMilliseconds();
+    for (connections) |*connection| {
+        if (connection.stream == null or connection.requested or connection.closed) {
+            continue;
+        }
+        if (connection.handedAtMs + IDLE_LIMIT_MS <= now) {
+            wakeConnection(io, connection);
+        }
+    }
+}
+
+//
+// Ends a connection thread's read of its connection, so it reads its messages, stop among them. Shutting the receiving side down
+// wakes the read on Linux, macOS and Android. On Windows it does not, and closing the socket does, so there the socket is closed here
+// and not again when the thread reports it free.
+//
+fn wakeConnection(io: std.Io, connection: *ConnectionThread) void {
+    const stream = connection.stream orelse {
+        return;
+    };
+    if (connection.closed) {
+        return;
+    }
+    if (builtin.os.tag == .windows) {
+        stream.close(io);
+        connection.closed = true;
+        return;
+    }
+    stream.shutdown(io, .recv) catch |err| switch (err) {
+        error.ConnectionAborted, error.ConnectionResetByPeer, error.SocketUnconnected => {},
+        else => @panic("the HTTP server could not shut a connection down"),
+    };
+    // Counted as answered, so the idle limit does not shut it down again.
+    connection.requested = true;
+}
+
+//
+// Closes the connection a connection thread was serving, unless it was closed already, and marks the thread free.
+//
+fn closeConnection(io: std.Io, connection: *ConnectionThread) void {
+    if (connection.stream) |stream| {
+        if (!connection.closed) {
+            stream.close(io);
+        }
+    }
+    connection.stream = null;
+    connection.closed = false;
+    connection.requested = false;
+}
+
+//
+// Handles one message to the server thread: "stop" from the owner, "hold" from a connection thread, or a message from the owner for the
+// connection thread that holds its key, which it passes on. Frees the message's text. Returns false when the server is to stop.
 //
 fn handleServerMessage(io: std.Io, allocator: std.mem.Allocator, connections: []ConnectionThread, message: Message) bool {
     defer allocator.free(message.text);
     if (message.from == from_owner and isType(message.text, "stop")) {
         return false;
-    }
-    if (message.from != from_owner and isType(message.text, "free")) {
-        const connection = &connections[message.from - 1];
-        connection.busy = false;
-        for (connection.holds.items) |key| {
-            allocator.free(key);
-        }
-        connection.holds.clearRetainingCapacity();
-        return true;
     }
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
@@ -568,7 +721,7 @@ fn handleServerMessage(io: std.Io, allocator: std.mem.Allocator, connections: []
 //
 fn freeConnection(connections: []const ConnectionThread) ?usize {
     for (connections, 0..) |connection, index| {
-        if (!connection.busy) {
+        if (connection.stream == null) {
             return index;
         }
     }
@@ -591,19 +744,34 @@ fn startConnectionThread(io: std.Io, allocator: std.mem.Allocator, start: *const
     connections.appendAssumeCapacity(.{
         .thread = thread,
         .queue = queue,
-        .busy = false,
+        .stream = null,
+        .closed = false,
+        .requested = false,
+        .handedAtMs = 0,
         .holds = .empty,
     });
 }
 
 //
-// Hands a connection to a connection thread by its socket, which the thread owns from then on.
+// The message that hands a connection over by its socket: from the accepting thread to the server thread, and from the server thread
+// to a connection thread. Allocated with the allocator.
 //
-fn handOver(io: std.Io, allocator: std.mem.Allocator, connection: *ConnectionThread, stream: std.Io.net.Stream) !void {
-    const text = try std.fmt.allocPrint(allocator, "{{\"type\":\"connection\",\"socket\":{d}}}", .{handleNumber(stream.socket.handle)});
+fn connectionMessage(allocator: std.mem.Allocator, stream: std.Io.net.Stream) ![]u8 {
+    return std.fmt.allocPrint(allocator, "{{\"type\":\"connection\",\"socket\":{d}}}", .{handleNumber(stream.socket.handle)});
+}
+
+//
+// Hands a connection to a free connection thread by its socket. The connection thread reads and writes it, and the server thread
+// closes it once the connection thread reports it free.
+//
+fn handOver(io: std.Io, allocator: std.mem.Allocator, connection: *ConnectionThread, stream: std.Io.net.Stream) void {
+    const text = connectionMessage(allocator, stream) catch @panic("out of memory handing a connection over");
     defer allocator.free(text);
-    try connection.queue.post(io, 0, text);
-    connection.busy = true;
+    connection.queue.post(io, 0, text) catch @panic("out of memory handing a connection over");
+    connection.stream = stream;
+    connection.closed = false;
+    connection.requested = false;
+    connection.handedAtMs = std.Io.Clock.awake.now(io).toMilliseconds();
 }
 
 //
@@ -634,12 +802,9 @@ fn connectionMain(start: ThreadStart, number: u32, queue: *MessageQueue, server_
     } else null;
     defer if (start.connectionState) |maker| maker.destroy(state.?, allocator);
     while (true) {
-        const message = queue.take(io, allocator, .{
-            .duration = .{
-                .raw = .fromMilliseconds(WAIT_MS),
-                .clock = .awake,
-            },
-        }) orelse continue;
+        const message = queue.take(io, allocator, .none) orelse {
+            @panic("an HTTP connection thread's queue closed");
+        };
         if (isType(message.text, "stop")) {
             allocator.free(message.text);
             return;
@@ -660,8 +825,8 @@ fn connectionMain(start: ThreadStart, number: u32, queue: *MessageQueue, server_
 }
 
 //
-// Reads one request on the connection, has the router serve it and closes the connection. Returns true when the thread was told to
-// stop while it served it.
+// Reads one request on the connection and has the router serve it. The server thread closes the connection once this thread reports
+// it free. Returns true when the thread was told to stop while it served it.
 //
 fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, socket: std.Io.net.Socket.Handle, state: ?*anyopaque, queue: *MessageQueue, server_queue: *MessageQueue, number: u32, router: Router) bool {
     const stream: std.Io.net.Stream = .{
@@ -670,34 +835,12 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.m
             .address = std.Io.net.IpAddress.parseIp4("127.0.0.1", 0) catch unreachable,
         },
     };
-    defer stream.close(io);
-    // A browser opens connections it never sends a request on, so the thread waits for the request a slice at a time, reading its
-    // messages between the slices, and gives the connection up once it has been idle for IDLE_LIMIT_MS.
-    var idle_ms: u64 = 0;
-    while (true) {
-        const readable = socket_wait.waitReadable(socket, WAIT_MS) catch {
-            return false;
-        };
-        if (readable) {
-            break;
-        }
-        while (queue.tryTake(io, allocator)) |message| {
-            const stop = isType(message.text, "stop");
-            allocator.free(message.text);
-            if (stop) {
-                return true;
-            }
-        }
-        idle_ms += WAIT_MS;
-        if (idle_ms >= IDLE_LIMIT_MS) {
-            return false;
-        }
-    }
     var read_buffer: [16 * 1024]u8 = undefined;
     var write_buffer: [16 * 1024]u8 = undefined;
     var reader = stream.reader(io, &read_buffer);
     var writer = stream.writer(io, &write_buffer);
     var server = std.http.Server.init(&reader.interface, &writer.interface);
+    // Blocks until the request comes. The server thread ends the read when the connection has been idle for IDLE_LIMIT_MS, or on stop.
     var http_request = server.receiveHead() catch |err| {
         // The client closed a connection it never sent a request on, or sent something that is not a request, which Node responds to
         // with a 400 (or a 431 when the head is too big).
@@ -712,8 +855,9 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.m
                 letClientReadRefusal(stream, io, &reader.interface);
             },
         }
-        return false;
+        return stopRequested(io, allocator, queue);
     };
+    server_queue.post(io, number, "{\"type\":\"request\"}") catch @panic("out of memory reporting a request");
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -738,7 +882,34 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.m
     router.handle(&request, io, arena, thread_arena) catch |err| {
         log.exception("The HTTP server could not respond to a request", err);
     };
-    return request.stopped;
+    return request.stopped or stopRequested(io, allocator, queue);
+}
+
+//
+// Whether the connection thread has been sent "stop", read from the messages already on its queue. Other messages there are for a
+// request that has ended and are dropped.
+//
+fn stopRequested(io: std.Io, allocator: std.mem.Allocator, queue: *MessageQueue) bool {
+    var stop = false;
+    while (queue.tryTake(io, allocator)) |message| {
+        if (isType(message.text, "stop")) {
+            stop = true;
+        }
+        allocator.free(message.text);
+    }
+    return stop;
+}
+
+//
+// The connection of a "connection" message, as a stream to close or hand over.
+//
+fn streamOf(text: []const u8) std.Io.net.Stream {
+    return .{
+        .socket = .{
+            .handle = socketOf(text),
+            .address = std.Io.net.IpAddress.parseIp4("127.0.0.1", 0) catch unreachable,
+        },
+    };
 }
 
 //

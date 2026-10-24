@@ -521,7 +521,7 @@ test "stop does not wait for a connection that never sent a request, and that co
 
     const started = std.Io.Clock.Timestamp.now(io, .awake);
     stopServer(server);
-    // A connection thread sees its stop within one wait of WAIT_MS, well before the idle limit.
+    // Stopping ends the connection thread's read of the idle connection, well before the idle limit.
     try std.testing.expect(started.untilNow(io).raw.toMilliseconds() < http_server.IDLE_LIMIT_MS);
 
     // The server is stopped, so a request sent on the idle connection now is not answered.

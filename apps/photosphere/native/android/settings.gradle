@@ -1,9 +1,12 @@
-// Photosphere's Android project: the app, which takes Ziggy's Android native app from the checkout of Ziggy's repository beside this
-// one. Gradle builds the native app from that checkout in place of the dependency `dev.ziggy:ziggy-native-android` that
-// app/build.gradle names.
+// Photosphere's Android project: the app, which takes Ziggy's Android native app from Ziggy's repository on GitHub. Gradle checks
+// the repository out at the version tag that the dependency `dev.ziggy:ziggy-native-android` in app/build.gradle names, and
+// builds the native app from it.
 rootProject.name = 'photosphere-android'
 
 include ':app'
-includeBuild('../../../../../ziggy/packages/ziggy/native/android') {
-    name = 'ziggy-native-android'
+sourceControl {
+    gitRepository(uri('https://github.com/ashleydavis/ziggy.git')) {
+        producesModule('dev.ziggy:ziggy-native-android')
+        rootDir = 'packages/ziggy/native/android'
+    }
 }

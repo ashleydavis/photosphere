@@ -110,7 +110,7 @@
 			);
 			mainGroup = A40000000000000000000001;
 			packageReferences = (
-				AB0000000000000000000001 /* XCLocalSwiftPackageReference "ziggy" */,
+				AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */,
 			);
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -266,17 +266,21 @@
 /* End XCConfigurationList section */
 
 
-/* Begin XCLocalSwiftPackageReference section */
-		AB0000000000000000000001 /* XCLocalSwiftPackageReference "ziggy" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../../../../ziggy;
+/* Begin XCRemoteSwiftPackageReference section */
+		AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ashleydavis/ziggy";
+			requirement = {
+				kind = exactVersion;
+				version = 0.0.11;
+			};
 		};
-/* End XCLocalSwiftPackageReference section */
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		A60000000000000000000001 /* ZiggyNativeMacOS */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AB0000000000000000000001 /* XCLocalSwiftPackageReference "ziggy" */;
+			package = AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */;
 			productName = ZiggyNativeMacOS;
 		};
 /* End XCSwiftPackageProductDependency section */
