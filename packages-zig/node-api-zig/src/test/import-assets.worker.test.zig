@@ -530,6 +530,28 @@ fn sameNewHashUploadFails(backend: *MockBackend, allocator: std.mem.Allocator, t
 }
 
 //
+// Every hash-file task reports the same new hash, and uploads end as the pool ends a task it dropped on a cancel: failed with
+// "Cancelled".
+//
+fn sameNewHashUploadCancelled(backend: *MockBackend, allocator: std.mem.Allocator, taskType: []const u8, data: std.json.Value) anyerror!?IMockResult {
+    _ = backend;
+    _ = data;
+    if (std.mem.eql(u8, taskType, "hash-file")) {
+        return .{
+            .status = .Succeeded,
+            .outputs = try hashOutputs(allocator, NEW_HASH),
+        };
+    }
+    if (std.mem.eql(u8, taskType, "upload-asset")) {
+        return .{
+            .status = .Failed,
+            .errorMessage = "Cancelled",
+        };
+    }
+    return null;
+}
+
+//
 // Records the messages the import sends.
 //
 const MessageRecorder = struct {
@@ -990,6 +1012,33 @@ test "sends import-success when hash-file reports a new file and upload-asset su
     _ = try context.run(try context.makeData(true));
 
     try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(context.arena.allocator(), "import-success")).len);
+}
+
+test "a child that ended cancelled is not counted as a failed file, and an ordinary failure is" {
+    {
+        var context: ImportTest = undefined;
+        try context.init(sameNewHashUploadCancelled);
+        defer context.deinit();
+        _ = try context.writePhoto("img1.jpg");
+
+        _ = try context.run(try context.makeData(true));
+
+        try std.testing.expectEqual(@as(usize, 0), (try context.messages.ofType(context.arena.allocator(), "import-failed")).len);
+    }
+    {
+        var context: ImportTest = undefined;
+        try context.init(sameNewHashUploadFails);
+        defer context.deinit();
+        // The failed upload is logged; a passing test must write nothing to stderr, so the log is muted.
+        var mutedLog: mock_log.MutedLog = .{};
+        mutedLog.install();
+        defer mutedLog.uninstall();
+        _ = try context.writePhoto("img1.jpg");
+
+        _ = try context.run(try context.makeData(true));
+
+        try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(context.arena.allocator(), "import-failed")).len);
+    }
 }
 
 test "queues a hash-file task for each file found by scanPaths" {

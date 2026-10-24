@@ -926,6 +926,13 @@ const ImportRun = struct {
             return;
         }
 
+        // A child the pool dropped because the import's source was cancelled ends failed with "Cancelled", and that can arrive
+        // before the import reads its own cancel. It is the cancel, not a failure: counted as one, scenario 33-import-cancel failed
+        // on Windows and macOS with "Failed to upload file ...: Cancelled" and "Failed to hash file ...: Cancelled" in app.log.
+        if (taskResult.status == TaskStatus.Failed and std.mem.eql(u8, taskResult.errorMessage orelse "", "Cancelled")) {
+            return;
+        }
+
         if (std.mem.eql(u8, taskResult.type, "hash-file")) {
             const hashFileData = try std.json.parseFromValueLeaky(IHashFileData, allocator, taskResult.inputs, .{
                 .ignore_unknown_fields = true,
