@@ -13,7 +13,7 @@
   "dependencies": {
     "task-queue": "workspace:*",
     "user-interface": "workspace:*",
-    "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.11",
+    "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.12",
     "eruda": "^3.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
