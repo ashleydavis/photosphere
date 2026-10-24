@@ -32,9 +32,10 @@ ANDROID_PORT_FILE_DEVICE_PATH="/data/data/$ANDROID_APP_ID/files/ziggy-control-po
 # Seconds a scenario waits for a free device before giving up. The mobile suite's own variable and default.
 ANDROID_DEVICE_CLAIM_TIMEOUT="${PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT:-1800}"
 
-# The claimed device's serial and the file descriptor holding its lock, set by photosphere_android_claim_device.
+# The claimed device's serial and the file descriptors holding its locks, Photosphere's and Ziggy's, set by photosphere_android_claim_device.
 ANDROID_SERIAL_CLAIMED=""
 ANDROID_LOCK_FD=""
+ANDROID_ZIGGY_LOCK_FD=""
 
 # Set to 1 once this scenario has installed the app on the claimed device, so the APK is installed once and not on every helper.
 ANDROID_APK_INSTALLED=""
@@ -52,11 +53,11 @@ ANDROID_CONFIG_DIR_RELATIVE="files/config"
 ANDROID_HOST_ADDRESS_WAIT_SECONDS=30
 
 #
-# Runs adb against the claimed device, with the lock's descriptor closed for the command, so nothing adb starts can keep the device
+# Runs adb against the claimed device, with the locks' descriptors closed for the command, so nothing adb starts can keep the device
 # locked after the scenario has let it go.
 #
 photosphere_adb() {
-    "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" "$@" {ANDROID_LOCK_FD}>&-
+    "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" "$@" {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&-
 }
 
 #
@@ -190,7 +191,7 @@ photosphere_android_claim_device() {
         return 0
     fi
     local waited=0
-    local candidates serial fd
+    local candidates serial fd ziggy_fd
     while true; do
         candidates="$(photosphere_android_candidate_devices)"
         if [ -z "$candidates" ]; then
@@ -200,12 +201,20 @@ photosphere_android_claim_device() {
         for serial in $candidates; do
             exec {fd}<>"$(android_device_lock_path "$serial")"
             if flock -n "$fd"; then
-                # A device that cannot reach this host would fail every scenario given to it, so it is let go and passed over.
-                if photosphere_android_can_reach_host "$serial"; then
-                    ANDROID_SERIAL_CLAIMED="$serial"
-                    ANDROID_LOCK_FD="$fd"
-                    return 0
+                # Ziggy's own Android suites use every attached emulator under a lock of their own, so a device is also claimed under
+                # Ziggy's lock, or a Ziggy run's test app takes the foreground and this app's web view stops drawing: scenario
+                # 19-download-single-asset timed out waiting for "Gallery items rendered" while Ziggy's test:smoke:android ran beside it.
+                exec {ziggy_fd}<>"${TMPDIR:-/tmp}/ziggy-android-device-$serial.lock"
+                if flock -n "$ziggy_fd"; then
+                    # A device that cannot reach this host would fail every scenario given to it, so it is let go and passed over.
+                    if photosphere_android_can_reach_host "$serial"; then
+                        ANDROID_SERIAL_CLAIMED="$serial"
+                        ANDROID_LOCK_FD="$fd"
+                        ANDROID_ZIGGY_LOCK_FD="$ziggy_fd"
+                        return 0
+                    fi
                 fi
+                exec {ziggy_fd}>&-
             fi
             exec {fd}>&-
         done
