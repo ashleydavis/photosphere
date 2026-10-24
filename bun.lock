@@ -268,7 +268,7 @@
         "task-queue": "workspace:*",
         "user-interface": "workspace:*",
         "uuid": "^9.0.1",
-        "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.12",
+        "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.13",
       },
       "devDependencies": {
         "@fortawesome/fontawesome-free": "^6.2.1",
@@ -3266,7 +3266,7 @@
 
     "photosphere/serialize-error": ["serialize-error@11.0.3", "", { "dependencies": { "type-fest": "^2.12.2" } }, "sha512-2G2y++21dhj2R7iHAdd0FIzjGwuKZld+7Pl/bTU6YIkrC2ZMbVUjm+luj6A6V34Rv9XfKJDKpTWu9W4Gse1D9g=="],
 
-    "photosphere-ziggy-frontend/ziggy": ["ziggy-monorepo@github:ashleydavis/ziggy#a89d83b", {}, "ashleydavis-ziggy-a89d83b", "sha512-p6IoBTZMCWpZL1ck6x68QcdHCYwj6jxfkg6lXONTETBGqiZ3xpZD1+32O1CN/jsZ3g6rGTq1Gb0B7uVlBO+iEQ=="],
+    "photosphere-ziggy-frontend/ziggy": ["ziggy-monorepo@github:ashleydavis/ziggy#ea05468", {}, "ashleydavis-ziggy-ea05468", "sha512-86xOmQ70wkGf1YC4Y21wt0cOj75E7AA8Lt35FZW3R7z0TPZ6ScQQ4OhwokzD94WzxgklQKojXXNwCCXCWKN+jA=="],
 
     "pretty-format/ansi-styles": ["ansi-styles@5.2.0", "", {}, "sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA=="],
 
