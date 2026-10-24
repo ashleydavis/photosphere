@@ -6,16 +6,19 @@
 // `func` invocations and a `flush` method to immediately invoke them.
 //
 // The timers lodash starts with setTimeout fire on JavaScript's one thread, between whatever else that thread is
-// doing. Zig has no such thread, so the caller hands in the lock that stands in for it: the code that calls the
-// debounced function holds it while it runs, and a timer fires on a thread of the debounced function's own, holding
-// the same lock, so `func` never runs at the same time as the caller's other code. The debounced function's methods
-// must be called with the lock held.
+// doing. Here they are the timers of the thread that uses the debounced function, which each method that sets or clears one
+// is given (Timers), and which fire while that thread waits for a message. So `func` runs on the same thread as the
+// caller's other code, never at the same time as it, and the debounced function is used only on that thread.
 //
 // The throttled function in Photosphere takes no arguments and returns nothing, and `wait` and `maxWait` are whole
 // milliseconds.
 //
 
 const std = @import("std");
+const ziggy = @import("ziggy");
+
+const TimerId = ziggy.timers.TimerId;
+const Timers = ziggy.timers.Timers;
 
 //
 // The function a debounced function invokes (TypeScript: `func`, called with the last arguments; here there are none).
@@ -46,9 +49,6 @@ pub const IDebounceOptions = struct {
 // A debounced function (TypeScript: the `debounced` function debounce returns, with its `cancel` and `flush`).
 //
 pub const Debounced = struct {
-    // Io for the clock, the lock and the timer.
-    io: std.Io,
-
     // The function to debounce.
     func: DebouncedFunction,
 
@@ -77,34 +77,14 @@ pub const Debounced = struct {
     // When func was last invoked.
     lastInvokeTime: i64,
 
-    // Whether a timer is set (TypeScript: timerId !== undefined).
-    timerId: bool,
-
-    // The lock that stands in for JavaScript's single thread (see the top of this file).
-    loopLock: *std.Io.Mutex,
-
-    // When the timer fires (milliseconds on the real clock, the clock Date.now reads).
-    timerDeadline: i64,
-
-    // Whether the timer is waiting to fire (a set timer that has fired is still `timerId` until trailingEdge clears it).
-    timerArmed: bool,
-
-    // Bumped whenever the timer is set, cleared or stopped, which is what wakes the timer thread.
-    timerGeneration: std.atomic.Value(u32),
-
-    // Set when the timer thread has to exit.
-    stopping: bool,
-
-    // The thread the timers fire on (TypeScript: the event loop's timers).
-    timerThread: ?std.Thread,
+    // The timer that is set, or null (TypeScript: timerId, undefined when none is set).
+    timerId: ?TimerId,
 
     //
-    // Creates a debounced function (TypeScript: `debounce(func, wait, options)`).
-    // `start` has to be called once the debounced function is at its final address.
+    // Creates a debounced function (TypeScript: `debounce(func, wait, options)`). It must not move once it has been called.
     //
-    pub fn init(io: std.Io, func: DebouncedFunction, wait: i64, options: IDebounceOptions, loopLock: *std.Io.Mutex) Debounced {
+    pub fn init(func: DebouncedFunction, wait: i64, options: IDebounceOptions) Debounced {
         return .{
-            .io = io,
             .func = func,
             .wait = wait,
             .maxWait = if (options.maxWait) |maxWait| @max(maxWait, wait) else 0,
@@ -114,103 +94,55 @@ pub const Debounced = struct {
             .lastArgs = false,
             .lastCallTime = null,
             .lastInvokeTime = 0,
-            .timerId = false,
-            .loopLock = loopLock,
-            .timerDeadline = 0,
-            .timerArmed = false,
-            .timerGeneration = std.atomic.Value(u32).init(0),
-            .stopping = false,
-            .timerThread = null,
+            .timerId = null,
         };
     }
 
     //
-    // Starts the thread the timers fire on. (No TypeScript counterpart: JavaScript's timers need no thread.)
+    // Clears the timer that is set, if any. (No TypeScript counterpart: a JavaScript function is garbage collected, and its timer
+    // holds it; here the timer holds a pointer to it, so it is cleared before it goes.)
     //
-    pub fn start(self: *Debounced) !void {
-        self.timerThread = try std.Thread.spawn(.{}, timerThreadMain, .{self});
-    }
-
-    //
-    // Stops the timer thread and waits for it to exit. Must be called without the loop lock held.
-    // (No TypeScript counterpart: a JavaScript function is garbage collected.)
-    //
-    pub fn deinit(self: *Debounced) void {
-        self.loopLock.lockUncancelable(self.io);
-        self.stopping = true;
-        self.bumpTimerGeneration();
-        self.loopLock.unlock(self.io);
-        if (self.timerThread) |thread| {
-            thread.join();
+    pub fn deinit(self: *Debounced, timers: Timers) void {
+        if (self.timerId) |id| {
+            timers.clearTimeout(id);
+            self.timerId = null;
         }
-        self.timerThread = null;
     }
 
     //
     // The current time (TypeScript: `now()`, which is Date.now).
     //
-    fn now(self: *Debounced) i64 {
-        return std.Io.Clock.real.now(self.io).toMilliseconds();
+    fn now(io: std.Io) i64 {
+        return std.Io.Clock.real.now(io).toMilliseconds();
     }
 
     //
-    // Wakes the timer thread so it reads the timer again.
+    // setTimeout(timerExpired, delay): timerExpired runs on this thread once delay has passed.
     //
-    fn bumpTimerGeneration(self: *Debounced) void {
-        _ = self.timerGeneration.fetchAdd(1, .release);
-        self.io.futexWake(u32, &self.timerGeneration.raw, 1);
-    }
-
-    //
-    // setTimeout(timerExpired, delay): timerExpired runs on the timer thread once delay has passed.
-    //
-    fn setTimeout(self: *Debounced, delay: i64) void {
-        self.timerId = true;
-        self.timerDeadline = self.now() + delay;
-        self.timerArmed = true;
-        self.bumpTimerGeneration();
+    fn setTimeout(self: *Debounced, io: std.Io, timers: Timers, delay: i64) void {
+        self.timerId = timers.setTimeout(io, .{
+            .context = self,
+            .function = timerFired,
+        }, @intCast(@max(delay, 0))) catch |err| {
+            std.debug.panic("A debounced function could not set its timer: {s}", .{@errorName(err)});
+        };
     }
 
     //
     // clearTimeout(timerId).
     //
-    fn clearTimeout(self: *Debounced) void {
-        self.timerArmed = false;
-        self.bumpTimerGeneration();
+    fn clearTimeout(self: *Debounced, timers: Timers) void {
+        if (self.timerId) |id| {
+            timers.clearTimeout(id);
+        }
     }
 
     //
-    // The body of the timer thread: waits for the timer, then runs timerExpired holding the loop lock.
+    // The timer's callback, which runs timerExpired.
     //
-    fn timerThreadMain(self: *Debounced) void {
-        while (true) {
-            self.loopLock.lockUncancelable(self.io);
-            if (self.stopping) {
-                self.loopLock.unlock(self.io);
-                return;
-            }
-            const generation = self.timerGeneration.load(.acquire);
-            var timeout: std.Io.Timeout = .none;
-            if (self.timerArmed) {
-                const remaining = self.timerDeadline - self.now();
-                if (remaining <= 0) {
-                    self.timerArmed = false;
-                    self.timerExpired();
-                    self.loopLock.unlock(self.io);
-                    continue;
-                }
-                timeout = .{ .duration = .{
-                    .raw = .fromMilliseconds(remaining),
-                    .clock = .real,
-                } };
-            }
-            self.loopLock.unlock(self.io);
-            // The timer thread is not a task of the Io, so nothing can cancel its wait. Should one be cancelled all the same,
-            // the timer would spin without waiting, so that is a crash rather than a quiet busy loop.
-            self.io.futexWaitTimeout(u32, &self.timerGeneration.raw, generation, timeout) catch |err| {
-                std.debug.panic("The timer thread of a throttled function could not wait: {s}", .{@errorName(err)});
-            };
-        }
+    fn timerFired(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, timers: Timers, _: ?*const anyopaque) void {
+        const self: *Debounced = @ptrCast(@alignCast(context.?));
+        self.timerExpired(io, timers);
     }
 
     //
@@ -225,11 +157,11 @@ pub const Debounced = struct {
     //
     // The first call of a wait.
     //
-    fn leadingEdge(self: *Debounced, time: i64) void {
+    fn leadingEdge(self: *Debounced, io: std.Io, timers: Timers, time: i64) void {
         // Reset any `maxWait` timer.
         self.lastInvokeTime = time;
         // Start the timer for the trailing edge.
-        self.setTimeout(self.wait);
+        self.setTimeout(io, timers, self.wait);
         // Invoke the leading edge.
         if (self.leading) {
             self.invokeFunc(time);
@@ -269,21 +201,21 @@ pub const Debounced = struct {
     //
     // The timer callback.
     //
-    fn timerExpired(self: *Debounced) void {
-        const time = self.now();
+    fn timerExpired(self: *Debounced, io: std.Io, timers: Timers) void {
+        const time = now(io);
         if (self.shouldInvoke(time)) {
             self.trailingEdge(time);
             return;
         }
         // Restart the timer.
-        self.setTimeout(self.remainingWait(time));
+        self.setTimeout(io, timers, self.remainingWait(time));
     }
 
     //
     // The end of a wait.
     //
     fn trailingEdge(self: *Debounced, time: i64) void {
-        self.timerId = false;
+        self.timerId = null;
 
         // Only invoke if we have `lastArgs` which means `func` has been
         // debounced at least once.
@@ -297,50 +229,53 @@ pub const Debounced = struct {
     //
     // Cancels delayed invocations.
     //
-    pub fn cancel(self: *Debounced) void {
-        if (self.timerId) {
-            self.clearTimeout();
+    pub fn cancel(self: *Debounced, timers: Timers) void {
+        if (self.timerId != null) {
+            self.clearTimeout(timers);
         }
         self.lastInvokeTime = 0;
         self.lastArgs = false;
         self.lastCallTime = null;
-        self.timerId = false;
+        self.timerId = null;
     }
 
     //
     // Immediately invokes a delayed invocation.
     //
-    pub fn flush(self: *Debounced) void {
-        if (self.timerId) {
-            self.trailingEdge(self.now());
+    pub fn flush(self: *Debounced, io: std.Io, timers: Timers) void {
+        if (self.timerId) |id| {
+            self.trailingEdge(now(io));
+            // lodash leaves the timer set, to find nothing to invoke when it fires. Here the timer holds a pointer to the debounced
+            // function, and trailingEdge has forgotten its id, so deinit could not clear it: it is cleared now.
+            timers.clearTimeout(id);
         }
     }
 
     //
     // The debounced function.
     //
-    pub fn call(self: *Debounced) void {
-        const time = self.now();
+    pub fn call(self: *Debounced, io: std.Io, timers: Timers) void {
+        const time = now(io);
         const isInvoking = self.shouldInvoke(time);
 
         self.lastArgs = true;
         self.lastCallTime = time;
 
         if (isInvoking) {
-            if (!self.timerId) {
-                self.leadingEdge(time);
+            if (self.timerId == null) {
+                self.leadingEdge(io, timers, time);
                 return;
             }
             if (self.maxing) {
                 // Handle invocations in a tight loop.
-                self.clearTimeout();
-                self.setTimeout(self.wait);
+                self.clearTimeout(timers);
+                self.setTimeout(io, timers, self.wait);
                 self.invokeFunc(time);
                 return;
             }
         }
-        if (!self.timerId) {
-            self.setTimeout(self.wait);
+        if (self.timerId == null) {
+            self.setTimeout(io, timers, self.wait);
         }
     }
 };

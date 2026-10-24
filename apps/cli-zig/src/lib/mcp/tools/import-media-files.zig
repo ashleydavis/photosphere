@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
 const api = @import("api-zig");
@@ -11,7 +12,7 @@ const BsonDocument = serialization_zig.bson.BsonDocument;
 const McpServer = protocol.McpServer;
 const CallToolResult = protocol.ICallToolResult;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
-const addPaths = node_api.import_module.addPaths;
+const addPaths = node_api.import.addPaths;
 const jsonStringifyIndented = bdb.js_value.jsonStringifyIndented;
 const requireDatabase = result.requireDatabase;
 const textResult = result.textResult;
@@ -22,8 +23,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `import_media_files` tool: imports photos and videos from files or
 // directories into the open database. dryRun previews without writing.
 //
-pub fn registerImportMediaFilesTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerImportMediaFilesTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "import_media_files",
         .{
             .description = "Import photos and videos from files or directories into the open Photosphere database. Set dryRun to preview without writing.",
@@ -68,9 +70,11 @@ fn importMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.
     for (pathValues, 0..) |pathValue, pathIndex| {
         paths[pathIndex] = try toolContext.allocator.dupe(u8, pathValue.string);
     }
+    var timer_list = TimerList.init();
     const summary = try addPaths(
         toolContext.allocator,
         io,
+        timer_list.interface(),
         toolContext.uuidGenerator,
         storageDescriptor,
         paths,

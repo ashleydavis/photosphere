@@ -1,16 +1,16 @@
 //
-// Reading the JSON text a host request carries and writing the JSON text it answers with.
+// Reading the JSON text a native call carries and writing the JSON text of its result.
 //
 
 import Foundation
 import ZiggyNativeIOS
 
-// Helpers for the JSON of host requests.
-enum HostJson {
+// Functions for the JSON of native calls.
+enum NativeCallJson {
     // Reads the request's argument, which must be a JSON object.
     static func object(from json: String, method: String) throws -> [String: Any] {
         guard let parsed = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {
-            throw ZiggyHostRequestError("The request \(method) was not understood: its argument is not a JSON object.")
+            throw ZiggyNativeCallError("The request \(method) was not understood: its argument is not a JSON object.")
         }
         return parsed
     }
@@ -18,7 +18,7 @@ enum HostJson {
     // Reads a field of the request that must be text.
     static func string(_ request: [String: Any], _ name: String, method: String) throws -> String {
         guard let value = request[name] as? String else {
-            throw ZiggyHostRequestError("The request \(method) was not understood: \"\(name)\" is missing or is not text.")
+            throw ZiggyNativeCallError("The request \(method) was not understood: \"\(name)\" is missing or is not text.")
         }
         return value
     }
@@ -26,7 +26,7 @@ enum HostJson {
     // Reads a field of the request that must be a list of text.
     static func strings(_ request: [String: Any], _ name: String, method: String) throws -> [String] {
         guard let value = request[name] as? [String] else {
-            throw ZiggyHostRequestError("The request \(method) was not understood: \"\(name)\" is missing or is not a list of text.")
+            throw ZiggyNativeCallError("The request \(method) was not understood: \"\(name)\" is missing or is not a list of text.")
         }
         return value
     }
@@ -34,13 +34,13 @@ enum HostJson {
     // Writes a JSON array or object.
     static func text(from value: Any, method: String) throws -> String {
         guard JSONSerialization.isValidJSONObject(value) else {
-            throw ZiggyHostRequestError("The answer to \(method) could not be written as JSON.")
+            throw ZiggyNativeCallError("The result of \(method) could not be written as JSON.")
         }
         do {
             return String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self)
         }
         catch {
-            throw ZiggyHostRequestError("The answer to \(method) could not be written as JSON: \(error)")
+            throw ZiggyNativeCallError("The result of \(method) could not be written as JSON: \(error)")
         }
     }
 
@@ -50,7 +50,7 @@ enum HostJson {
             return String(decoding: try JSONEncoder().encode(text), as: UTF8.self)
         }
         catch {
-            throw ZiggyHostRequestError("The answer to \(method) could not be written as JSON: \(error)")
+            throw ZiggyNativeCallError("The result of \(method) could not be written as JSON: \(error)")
         }
     }
 }

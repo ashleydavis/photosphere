@@ -3,14 +3,13 @@ const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
-const log_module = @import("../lib/log.zig");
+const log = @import("../lib/log.zig");
 const file_logger = @import("../lib/file-logger.zig");
 const pc = @import("../lib/picocolors.zig");
 const prompts = @import("../lib/clack/prompts.zig");
 const commander = @import("../lib/commander.zig");
 const config = @import("../lib/config.zig");
-const open_module = @import("../lib/third-party/open.zig");
-const configureLog = log_module.configureLog;
+const configureLog = log.configureLog;
 const exit = node_utils.termination.exit;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
 const text = prompts.text;
@@ -22,7 +21,7 @@ const Image = tools.Image;
 const Video = tools.Video;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const version = config.version;
-const open = open_module.open;
+const open = @import("../lib/third-party/open.zig").open;
 const jsLength = commander.jsLength;
 
 //

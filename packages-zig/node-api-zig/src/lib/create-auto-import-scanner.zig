@@ -61,7 +61,7 @@ pub fn buildFolderMediaSource(allocator: std.mem.Allocator, sources: []const IAu
 // Folders are the source kind node-api can serve, so it registers the builder for them. The mobile
 // worker registers its own builder for the device photo library, and the scanner knows about
 // neither.
-// Called from initTaskHandlers.
+// Called from registerMediaSourceBuilders.
 //
 pub fn registerFolderMediaSourceBuilder() !void {
     try registerMediaSourceBuilder("folder", buildFolderMediaSource);
@@ -185,9 +185,9 @@ const AutoImportScannerCallbacks = struct {
     //
     // Answers whether the task this scanner runs inside has been cancelled.
     //
-    fn isCancelled(context: ?*anyopaque) bool {
+    fn isCancelled(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator) bool {
         const self: *AutoImportScannerCallbacks = @ptrCast(@alignCast(context.?));
-        return self.options.context.isCancelled();
+        return self.options.context.isCancelled(io, allocator);
     }
 
     //
@@ -240,7 +240,7 @@ pub fn createAutoImportScanner(allocator: std.mem.Allocator, options: ICreateAut
     const source = try buildMediaSource(allocator, settings.sources, .{
         .sessionTempDir = options.sessionTempDir,
         .uuidGenerator = options.context.uuidGenerator,
-        .hostRequester = options.context.hostRequester,
+        .nativeCaller = options.context.nativeCaller,
     });
 
     const callbacks = try allocator.create(AutoImportScannerCallbacks);

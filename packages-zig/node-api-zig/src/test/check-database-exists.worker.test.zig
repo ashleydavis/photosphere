@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -15,7 +16,7 @@ const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampPr
 //
 // A task context whose events go nowhere (the handler ignores the context entirely).
 //
-fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
     _ = context;
     _ = message;
 }
@@ -54,7 +55,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestContext, data
     try object.put(allocator, "databasePath", .{
         .string = databasePath,
     });
-    const output = try checkDatabaseExistsHandler(allocator, io, .{
+    const output = try checkDatabaseExistsHandler(allocator, io, test_timers.timers(), .{
         .object = object,
     }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(ICheckDatabaseExistsResult, allocator, output, .{});
@@ -65,7 +66,8 @@ test "reports exists=true when the database's merkle tree file is present" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
@@ -81,7 +83,8 @@ test "reports exists=false when the directory exists but holds no database" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "check-db-exists-empty");
@@ -97,7 +100,8 @@ test "reports exists=false when the path does not exist at all" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-db-exists-missing");
@@ -113,7 +117,8 @@ test "throws when no database path is supplied" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
 
@@ -126,11 +131,12 @@ test "throws when the task data has no database path" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
 
-    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, .{
+    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, test_timers.timers(), .{
         .object = .empty,
     }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
@@ -141,7 +147,8 @@ test "throws a descriptive error when the database path is not a string" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     var object: std.json.ObjectMap = .empty;
@@ -149,7 +156,7 @@ test "throws a descriptive error when the database path is not a string" {
         .integer = 5,
     });
 
-    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, .{
+    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, test_timers.timers(), .{
         .object = object,
     }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The check-database-exists task data is not valid: databasePath must be a string", errors.lastErrorMessage());

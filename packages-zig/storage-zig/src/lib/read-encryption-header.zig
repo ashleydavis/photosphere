@@ -6,9 +6,8 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
-const storage_module = @import("storage.zig");
 
-const IStorage = storage_module.IStorage;
+const IStorage = @import("storage.zig").IStorage;
 const ENCRYPTION_TAG = encryption.encryption_constants.ENCRYPTION_TAG;
 const NEW_FORMAT_HEADER_LENGTH = encryption.encryption_constants.NEW_FORMAT_HEADER_LENGTH;
 const PUBLIC_KEY_HASH_LENGTH = encryption.encryption_constants.PUBLIC_KEY_HASH_LENGTH;

@@ -1,5 +1,7 @@
 const std = @import("std");
+const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
 const api = @import("api-zig");
@@ -26,7 +28,7 @@ pub const IAssetServerCoreOptions = struct {
     sessionId: []const u8,
 
     // Reaches the phone's keychain for the credentials of a database, or null where there is no phone shell.
-    hostRequester: ?utils.host_requester.IHostRequester,
+    nativeCaller: ?utils.native_caller.INativeCaller,
 };
 
 //
@@ -48,7 +50,7 @@ pub const IAssetServerCore = struct {
     //
     pub const VTable = struct {
         // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream.
-        serveAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream,
+        serveAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream,
 
         // Writes raw bytes for one asset variant into a database directory from a byte stream.
         writeAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void,
@@ -61,8 +63,8 @@ pub const IAssetServerCore = struct {
     // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream (to be destroyed
     // with IReadStream.destroy).
     //
-    pub fn serveAsset(self: IAssetServerCore, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
-        return self.vtable.serveAsset(self.ptr, allocator, io, assetId, assetType, databasePath);
+    pub fn serveAsset(self: IAssetServerCore, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
+        return self.vtable.serveAsset(self.ptr, allocator, thread_arena, io, assetId, assetType, databasePath);
     }
 
     //
@@ -83,19 +85,12 @@ pub const IAssetServerCore = struct {
 //
 // The core that createAssetServerCore makes. It owns a cache of lazy database storage instances keyed by database path, so repeated
 // reads avoid re-reading the config / merkle-tree files.
-// (Zig: the cache lives in an arena of its own, because the storages in it outlive the request that made them, and a lock guards it,
-// because requests are served on many threads.)
+// (Zig: the cache and the storages in it are allocated with the arena serveAsset is given for them, which lives as long as the thread
+// that owns the core, because the storages outlive the request that made them. A core is used by one thread: the asset server gives
+// each of its connection threads a core of its own. The core is allocated with that thread's allocator, which init and deinit are
+// given.)
 //
 pub const AssetServerCore = struct {
-    // Allocates the cache. It must be safe to use from many threads.
-    allocator: std.mem.Allocator,
-
-    // Allocates what the cached storages are made of.
-    cache_arena: std.heap.ArenaAllocator,
-
-    // The Io the cached storages were made with.
-    io: std.Io,
-
     // UUID generator used when applying database ops.
     uuidGenerator: IUuidGenerator,
 
@@ -106,42 +101,39 @@ pub const AssetServerCore = struct {
     sessionId: []const u8,
 
     // Reaches the phone's keychain for the credentials of a database, or null where there is no phone shell.
-    hostRequester: ?utils.host_requester.IHostRequester,
+    nativeCaller: ?utils.native_caller.INativeCaller,
 
     // Cache of lazy database storage instances keyed by database path.
     storageCache: std.StringHashMapUnmanaged(IStorage),
 
-    // Guards the cache.
-    mutex: std.Io.Mutex,
+    // The generators of a core made with createOwnAssetServerCore, which its uuidGenerator and timestampProvider point at, or null.
+    ownGenerators: ?*OwnGenerators,
 
     //
-    // Creates the core. The allocator must be safe to use from many threads, and the options' generators must stay valid for the life
-    // of the core.
+    // Creates the core, allocated with the owning thread's allocator. The options' generators must stay valid for the life of the
+    // core.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, options: IAssetServerCoreOptions) !*AssetServerCore {
+    pub fn init(allocator: std.mem.Allocator, options: IAssetServerCoreOptions) !*AssetServerCore {
         const self = try allocator.create(AssetServerCore);
         self.* = .{
-            .allocator = allocator,
-            .cache_arena = std.heap.ArenaAllocator.init(allocator),
-            .io = io,
             .uuidGenerator = options.uuidGenerator,
             .timestampProvider = options.timestampProvider,
             .sessionId = try allocator.dupe(u8, options.sessionId),
-            .hostRequester = options.hostRequester,
+            .nativeCaller = options.nativeCaller,
             .storageCache = .empty,
-            .mutex = .init,
+            .ownGenerators = null,
         };
         return self;
     }
 
     //
-    // Frees the core and the storages it cached.
+    // Frees the core, with the allocator init was given. The storages it cached are freed with the arena they were made with.
     //
-    pub fn deinit(self: *AssetServerCore) void {
-        const allocator = self.allocator;
-        self.storageCache.deinit(allocator);
-        self.cache_arena.deinit();
+    pub fn deinit(self: *AssetServerCore, allocator: std.mem.Allocator) void {
         allocator.free(self.sessionId);
+        if (self.ownGenerators) |generators| {
+            allocator.destroy(generators);
+        }
         allocator.destroy(self);
     }
 
@@ -165,27 +157,25 @@ pub const AssetServerCore = struct {
     };
 
     //
-    // Returns a cached lazy storage instance for the given database path, creating one if needed.
+    // Returns a cached lazy storage instance for the given database path, creating one if needed with the arena of the thread that
+    // owns the core.
     //
-    fn getAssetStorage(self: *AssetServerCore, io: std.Io, databasePath: []const u8) !IStorage {
-        self.mutex.lockUncancelable(io);
-        defer self.mutex.unlock(io);
+    fn getAssetStorage(self: *AssetServerCore, thread_arena: std.mem.Allocator, io: std.Io, databasePath: []const u8) !IStorage {
         if (self.storageCache.get(databasePath)) |cached| {
             return cached;
         }
-        const arena = self.cache_arena.allocator();
-        const credentials = try resolve_storage_credentials.resolveStorageCredentials(arena, io, databasePath, null, null, self.hostRequester);
-        const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(arena, credentials.encryptionKeyPems);
-        const storage = try media_file_database.createLazyDatabaseStorage(arena, io, databasePath, credentials.s3Config, loadedKeys.options, self.hostRequester);
-        try self.storageCache.put(self.allocator, try arena.dupe(u8, databasePath), storage);
+        const credentials = try resolve_storage_credentials.resolveStorageCredentials(thread_arena, io, databasePath, null, null, self.nativeCaller);
+        const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(thread_arena, credentials.encryptionKeyPems);
+        const storage = try media_file_database.createLazyDatabaseStorage(thread_arena, io, databasePath, credentials.s3Config, loadedKeys.options, self.nativeCaller);
+        try self.storageCache.put(thread_arena, try thread_arena.dupe(u8, databasePath), storage);
         return storage;
     }
 
     //
     // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream.
     //
-    pub fn serveAsset(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) !IReadStream {
-        const assetStorage = try self.getAssetStorage(io, databasePath);
+    pub fn serveAsset(self: *AssetServerCore, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) !IReadStream {
+        const assetStorage = try self.getAssetStorage(thread_arena, io, databasePath);
         return try media_file_database.streamAsset(allocator, io, assetStorage, assetId, assetType);
     }
 
@@ -201,15 +191,15 @@ pub const AssetServerCore = struct {
     // Applies metadata operations to one or more on-disk databases.
     //
     pub fn applyDatabaseOps(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) !void {
-        try apply_database_ops.applyDatabaseOps(allocator, io, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.hostRequester);
+        try apply_database_ops.applyDatabaseOps(allocator, io, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.nativeCaller);
     }
 
     //
     // The IAssetServerCore.VTable.serveAsset of this core.
     //
-    fn serveAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
+    fn serveAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
-        return self.serveAsset(allocator, io, assetId, assetType, databasePath);
+        return self.serveAsset(allocator, thread_arena, io, assetId, assetType, databasePath);
     }
 
     //
@@ -236,6 +226,45 @@ pub const AssetServerCore = struct {
 // how the request arrived.
 // (Zig: free it with `deinit`.)
 //
-pub fn createAssetServerCore(allocator: std.mem.Allocator, io: std.Io, options: IAssetServerCoreOptions) !*AssetServerCore {
-    return AssetServerCore.init(allocator, io, options);
+pub fn createAssetServerCore(allocator: std.mem.Allocator, options: IAssetServerCoreOptions) !*AssetServerCore {
+    return AssetServerCore.init(allocator, options);
+}
+
+//
+// What a core made with createOwnAssetServerCore keeps for itself: its generators, the test ones when NODE_ENV is "testing", as a
+// worker's are, and otherwise the random and real ones.
+//
+pub const OwnGenerators = struct {
+    // Makes random ids.
+    randomUuids: utils.random_uuid_generator.RandomUuidGenerator = .{},
+    // Makes the ids of a test run, or null outside one.
+    testUuids: ?node_utils.test_uuid_generator.TestUuidGenerator = null,
+    // Gives the time.
+    timestamps: utils.timestamp_provider.TimestampProvider = .{},
+    // Gives the time of a test run.
+    testTimestamps: node_utils.test_timestamp_provider.TestTimestampProvider = .{},
+};
+
+//
+// Creates a core with generators of its own, for one thread of a server that gives each of its threads a core (see asset-server.zig).
+// The core reaches the keychain through the native app's callbacks the thread was given, the thread calling the native app itself, when
+// it was given them and the native app has a host request callback. They must outlive the core.
+//
+pub fn createOwnAssetServerCore(allocator: std.mem.Allocator, sessionId: []const u8, nativeCallbacks: ?*const ziggy.core.NativeCallbacks) !*AssetServerCore {
+    const generators = try allocator.create(OwnGenerators);
+    errdefer allocator.destroy(generators);
+    generators.* = .{};
+    const nativeCaller: ?utils.native_caller.INativeCaller = if (nativeCallbacks) |callbacks| callbacks.nativeCaller() else null;
+    const testing = std.mem.eql(u8, node_utils.process_env.getEnv("NODE_ENV") orelse "", "testing");
+    if (testing) {
+        generators.testUuids = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
+    }
+    const core = try AssetServerCore.init(allocator, .{
+        .uuidGenerator = if (generators.testUuids) |*test_uuids| test_uuids.uuidGenerator() else generators.randomUuids.uuidGenerator(),
+        .timestampProvider = if (testing) generators.testTimestamps.timestampProvider() else generators.timestamps.timestampProvider(),
+        .sessionId = sessionId,
+        .nativeCaller = nativeCaller,
+    });
+    core.ownGenerators = generators;
+    return core;
 }

@@ -5,13 +5,12 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
-const storage_module = storage_zig.storage;
 const merkle_tree = merkle_tree_zig.merkle_tree;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
+const IStorage = storage_zig.storage.IStorage;
+const IReadStream = storage_zig.storage.IReadStream;
+const IFileInfo = storage_zig.storage.IFileInfo;
+const IListResult = storage_zig.storage.IListResult;
+const IWriteLockInfo = storage_zig.storage.IWriteLockInfo;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const BsonValue = serialization_zig.bson.BsonValue;
 const BsonDatabase = bdb.database.BsonDatabase;
@@ -153,7 +152,7 @@ pub const ThrowingStorage = struct {
     // Gets the IStorage interface.
     //
     pub fn storage(self: *ThrowingStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(ThrowingStorage), .location = "throwing:" };
+        return .{ .ptr = self, .vtable = storage_zig.storage.implement(ThrowingStorage), .location = "throwing:" };
     }
 
     //
@@ -451,7 +450,7 @@ pub const SpyStorage = struct {
     // Gets the IStorage interface.
     //
     pub fn storage(self: *SpyStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(SpyStorage), .location = self.inner.location };
+        return .{ .ptr = self, .vtable = storage_zig.storage.implement(SpyStorage), .location = self.inner.location };
     }
 
     //

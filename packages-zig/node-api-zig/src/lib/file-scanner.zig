@@ -2,7 +2,6 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
-const mime_module = @import("third-party/mime/index.zig");
 const jszip = @import("third-party/jszip/index.zig");
 const errors = utils.errors;
 const log = &utils.log.log;
@@ -165,7 +164,7 @@ fn shouldIncludeFile(contentType: []const u8) bool {
 // Gets the MIME type of a path.
 //
 fn getMimeType(allocator: std.mem.Allocator, filePath: []const u8) !?[]const u8 {
-    const mime = try mime_module.mime();
+    const mime = try @import("third-party/mime/index.zig").mime();
     return mime.getType(allocator, filePath);
 }
 

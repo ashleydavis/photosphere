@@ -2,13 +2,14 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
-const replicate_module = @import("replicate.zig");
+const replicate = @import("replicate.zig");
 const errors = utils.errors;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
+const Timers = @import("ziggy").timers.Timers;
 const TaskStatus = task_queue_zig.types.TaskStatus;
 const ITaskEventData = task_queue_zig.types.ITaskEventData;
-const IReplicationResult = replicate_module.IReplicationResult;
+const IReplicationResult = replicate.IReplicationResult;
 const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
 const IReplicateProgressEvent = api.replicate_database_types.IReplicateProgressEvent;
 
@@ -21,13 +22,13 @@ pub const ReplicateProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, progress: []const u8) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, progress: []const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: ReplicateProgressCallback, progress: []const u8) void {
-        self.function(self.context, progress);
+    pub fn call(self: ReplicateProgressCallback, io: std.Io, progress: []const u8) void {
+        self.function(self.context, io, progress);
     }
 };
 
@@ -43,7 +44,7 @@ pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicat
 //
 // Forwards replicate-progress task events to the ReplicateProgressCallback.
 //
-fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskEventData) anyerror!void {
+fn onReplicateProgressMessage(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, data: ITaskEventData) anyerror!void {
     const onProgress: *const ReplicateProgressCallback = @ptrCast(@alignCast(context.?));
     const message = switch (data.event) {
         .object => |object| object,
@@ -55,7 +56,7 @@ fn onReplicateProgressMessage(context: ?*anyopaque, data: ITaskEventData) anyerr
         return;
     };
     switch (progress) {
-        .string => |text| onProgress.call(text),
+        .string => |text| onProgress.call(io, text),
         else => {},
     }
 }
@@ -84,15 +85,16 @@ fn lastPathPart(path: []const u8) ?[]const u8 {
 pub fn replicateDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    timers: Timers,
     uuidGenerator: IUuidGenerator,
     data: IReplicateDatabaseData,
     onProgress: ?*const ReplicateProgressCallback,
 ) !IReplicationResult {
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator, data.sourcePath);
-    defer queue.deinit();
+    const queue = try TaskQueue.init(allocator, uuidGenerator, data.sourcePath);
+    defer queue.deinit(io, allocator);
 
     if (onProgress) |progressCallback| {
-        _ = try queue.onTaskEvent("replicate-progress", .{
+        _ = try queue.onTaskEvent(allocator, "replicate-progress", .{
             .context = @constCast(progressCallback),
             .function = onReplicateProgressMessage,
         });
@@ -107,9 +109,9 @@ pub fn replicateDatabase(
         .name = try std.fmt.allocPrint(allocator, "Replicating to {s}", .{destName}),
         .cancelSource = data.sourcePath,
     };
-    const taskId = try queue.addTask("replicate-database", try replicateDatabaseDataToJson(allocator, taggedData), null, null);
-    const result = try queue.awaitTask(taskId);
-    queue.shutdown();
+    const taskId = try queue.addTask(io, allocator, "replicate-database", try replicateDatabaseDataToJson(allocator, taggedData), null, null);
+    const result = try queue.awaitTask(io, allocator, timers, taskId);
+    queue.shutdown(io, allocator);
 
     const taskResult = result orelse {
         return errors.throwError("Replication was cancelled before completion", .{});

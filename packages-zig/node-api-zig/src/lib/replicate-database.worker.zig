@@ -1,10 +1,10 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
-const replicate_module = @import("replicate.zig");
 const errors = utils.errors;
 const log = &utils.log.log;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -13,9 +13,9 @@ const sendJobProgress = task_queue_zig.job_progress.sendJobProgress;
 const createMediaFileDatabase = media_file_database.createMediaFileDatabase;
 const ProgressCallback = media_file_database.ProgressCallback;
 const openStorage = open_storage.openStorage;
-const replicate = replicate_module.replicate;
-const IReplicationResult = replicate_module.IReplicationResult;
-const IsCancelledCallback = replicate_module.IsCancelledCallback;
+const replicate = @import("replicate.zig").replicate;
+const IReplicationResult = @import("replicate.zig").IReplicationResult;
+const IsCancelledCallback = @import("replicate.zig").IsCancelledCallback;
 const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
 
 //
@@ -45,12 +45,12 @@ const ProgressMessageSender = struct {
     //
     // Sends one progress event.
     //
-    fn send(callbackContext: ?*anyopaque, progress: ?[]const u8) void {
+    fn send(callbackContext: ?*anyopaque, io: std.Io, progress: ?[]const u8) void {
         const self: *ProgressMessageSender = @ptrCast(@alignCast(callbackContext.?));
         if (self.failure != null) {
             return;
         }
-        self.sendMessages(progress) catch |err| {
+        self.sendMessages(io, progress) catch |err| {
             self.failure = err;
             errors.captureError(&self.errorRecord);
         };
@@ -59,7 +59,7 @@ const ProgressMessageSender = struct {
     //
     // Sends the replicate-progress event and the job progress for one progress line.
     //
-    fn sendMessages(self: *ProgressMessageSender, progress: ?[]const u8) !void {
+    fn sendMessages(self: *ProgressMessageSender, io: std.Io, progress: ?[]const u8) !void {
         var buffer: [16 * 1024]u8 = undefined;
         var bufferAllocator = std.heap.FixedBufferAllocator.init(&buffer);
         const allocator = bufferAllocator.allocator();
@@ -68,21 +68,21 @@ const ProgressMessageSender = struct {
         message.putAssumeCapacity("type", .{ .string = "replicate-progress" });
         message.putAssumeCapacity("databasePath", .{ .string = self.databasePath });
         message.putAssumeCapacity("progress", .{ .string = progress orelse "" });
-        self.context.sendEvent(.{ .object = message });
+        self.context.sendEvent(io, allocator, .{ .object = message });
 
         // The same line again, as the job the interface lists and can cancel, so a replication can
         // be watched after its dialog has been closed. Indeterminate: replicate() reports what it is
         // copying, not how much is left.
-        try sendJobProgress(allocator, self.context, self.job, self.runStartedAt, progress);
+        try sendJobProgress(allocator, io, self.context, self.job, self.runStartedAt, progress);
     }
 };
 
 //
 // Answers whether the task has been cancelled.
 //
-fn isTaskCancelled(callbackContext: ?*anyopaque) bool {
+fn isTaskCancelled(callbackContext: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator) bool {
     const context: *const ITaskContext = @ptrCast(@alignCast(callbackContext.?));
-    return context.isCancelled();
+    return context.isCancelled(io, allocator);
 }
 
 //
@@ -103,6 +103,7 @@ pub fn replicationResultToJson(allocator: std.mem.Allocator, result: IReplicatio
 pub fn replicateDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -123,7 +124,7 @@ pub fn replicateDatabaseHandler(
     // Open source storage. When the source is registered in databases.json its credentials come
     // from there; otherwise data.sourceEncryptionKey (file path or vault name) supplies the key.
     //
-    const source = try openStorage(allocator, io, data.sourcePath, data.sourceEncryptionKey, null, context.hostRequester);
+    const source = try openStorage(allocator, io, data.sourcePath, data.sourceEncryptionKey, null, context.nativeCaller);
     const sourceStorage = source.storage;
     const sourceDb = try createMediaFileDatabase(allocator, sourceStorage, uuidGenerator, timestampProvider);
 
@@ -137,7 +138,7 @@ pub fn replicateDatabaseHandler(
         data.destPath,
         data.destEncryptionKey,
         data.destS3Key,
-        context.hostRequester,
+        context.nativeCaller,
     );
     const destStorage = dest.storage;
     const destRawStorage = dest.rawStorage;

@@ -9,7 +9,6 @@ const ziggy = @import("ziggy");
 const node_api = @import("node-api-zig");
 const main_state = @import("main-state.zig");
 
-const Core = ziggy.core.Core;
 const app_config = node_api.app_config;
 
 //
@@ -21,19 +20,26 @@ const app_config = node_api.app_config;
 // Either the asset server's port or the theme can fail to be found, and the failure reaches the native app, which does not load the
 // page. The native app makes the window, so this function is where the core's side of creating the main window happens.
 //
-pub fn pageQuery(core: *Core, allocator: std.mem.Allocator, test_mode: bool) anyerror![]const u8 {
-    const state = main_state.fromCore(core);
-    const port = try state.startAssetServer();
-    const theme = try app_config.getTheme(allocator, core.io());
+pub fn pageQuery(services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, test_mode: bool) anyerror![]const u8 {
+    const state = main_state.current();
+    const port = try state.startAssetServer(services, io, main_state.stateAllocator());
+    const theme = try app_config.getTheme(allocator, io);
+    const query = try buildQuery(allocator, port, @tagName(theme), test_mode);
+    try state.mainWindowCreated(services, timers, io, main_state.stateAllocator());
+    return query;
+}
+
+//
+// Writes the query for the asset server's port and the theme, with `testMode=1` in test mode.
+//
+pub fn buildQuery(allocator: std.mem.Allocator, port: u16, theme: []const u8, test_mode: bool) ![]const u8 {
     const rest_api_url = try std.fmt.allocPrint(allocator, "http://localhost:{d}", .{port});
     const test_mode_parameter: []const u8 = if (test_mode) "&testMode=1" else "";
-    const query = try std.fmt.allocPrint(allocator, "restApiUrl={s}&theme={s}{s}", .{
+    return std.fmt.allocPrint(allocator, "restApiUrl={s}&theme={s}{s}", .{
         try encodeUriComponent(allocator, rest_api_url),
-        try encodeUriComponent(allocator, @tagName(theme)),
+        try encodeUriComponent(allocator, theme),
         test_mode_parameter,
     });
-    try state.mainWindowCreated();
-    return query;
 }
 
 //

@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const test_environment = @import("test-environment.zig");
@@ -140,7 +141,8 @@ test "testJobHandler stops early when cancelled, and says so" {
     virtualTime.init(std.testing.allocator);
     defer virtualTime.deinit();
     const io = virtualTime.io();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
@@ -148,7 +150,7 @@ test "testJobHandler stops early when cancelled, and says so" {
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, 0, clock.timestampProvider());
 
-    const output = try testJobHandler(allocator, io, try makeData(allocator, 60_000, "job-1"), context.taskContext());
+    const output = try testJobHandler(allocator, io, test_timers.timers(), try makeData(allocator, 60_000, "job-1"), context.taskContext());
 
     const result = try std.json.parseFromValueLeaky(ITestJobResult, allocator, output, .{});
     try std.testing.expect(result.cancelled);
@@ -163,7 +165,8 @@ test "testJobHandler reports its job as it runs" {
     virtualTime.init(std.testing.allocator);
     defer virtualTime.deinit();
     const io = virtualTime.io();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
@@ -171,7 +174,7 @@ test "testJobHandler reports its job as it runs" {
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, 100, clock.timestampProvider());
 
-    const output = try testJobHandler(allocator, io, try makeData(allocator, 300, "job-1"), context.taskContext());
+    const output = try testJobHandler(allocator, io, test_timers.timers(), try makeData(allocator, 300, "job-1"), context.taskContext());
 
     const jobMessages = try context.messagesOfType("job-progress");
     try std.testing.expect(jobMessages.len > 0);
@@ -198,7 +201,8 @@ test "testJobHandler reports no job when queued without a tag" {
     virtualTime.init(std.testing.allocator);
     defer virtualTime.deinit();
     const io = virtualTime.io();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
@@ -206,7 +210,7 @@ test "testJobHandler reports no job when queued without a tag" {
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, 100, clock.timestampProvider());
 
-    _ = try testJobHandler(allocator, io, try makeData(allocator, 300, null), context.taskContext());
+    _ = try testJobHandler(allocator, io, test_timers.timers(), try makeData(allocator, 300, null), context.taskContext());
 
     const jobMessages = try context.messagesOfType("job-progress");
     try std.testing.expectEqual(@as(usize, 0), jobMessages.len);
@@ -220,7 +224,8 @@ test "testJobHandler finishes at once when the duration is zero" {
     virtualTime.init(std.testing.allocator);
     defer virtualTime.deinit();
     const io = virtualTime.io();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
@@ -228,7 +233,7 @@ test "testJobHandler finishes at once when the duration is zero" {
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, clock.timestampProvider());
 
-    const output = try testJobHandler(allocator, io, try makeData(allocator, 0, "job-1"), context.taskContext());
+    const output = try testJobHandler(allocator, io, test_timers.timers(), try makeData(allocator, 0, "job-1"), context.taskContext());
 
     const result = try std.json.parseFromValueLeaky(ITestJobResult, allocator, output, .{});
     try std.testing.expect(!result.cancelled);
@@ -240,12 +245,13 @@ test "testJobHandler throws a descriptive error when the task data is not valid"
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "durationMs", .{ .string = "soon" });
 
-    try std.testing.expectError(error.Thrown, testJobHandler(allocator, std.testing.io, .{ .object = object }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, testJobHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = object }, context.taskContext()));
     try std.testing.expectEqualStrings("The test-job task data is not valid: durationMs and itemCount must be whole numbers, stages must be an array of strings and job must be an object", errors.lastErrorMessage());
 }

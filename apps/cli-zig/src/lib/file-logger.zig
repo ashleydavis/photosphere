@@ -146,9 +146,6 @@ pub const FileLogger = struct {
     // The console log that every message is also written to.
     consoleLogger: ILog,
 
-    // Serializes file writes (Zig only: messages can come from several threads).
-    mutex: std.Io.Mutex,
-
     //
     // Creates the logger and registers its termination callback.
     //
@@ -165,7 +162,6 @@ pub const FileLogger = struct {
             .hasErrors = false,
             .errorFileHeaderWritten = false,
             .consoleLogger = consoleLogger,
-            .mutex = .init,
         };
 
         // Register termination callback to flush logs
@@ -338,8 +334,6 @@ pub const FileLogger = struct {
     // (The entries are appended directly, not queued.)
     //
     fn writeToFile(self: *FileLogger, level: []const u8, message: []const u8) void {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
         if (self.isClosed) {
             return;
         }
@@ -356,8 +350,6 @@ pub const FileLogger = struct {
     // Appends a message to the error log file. Write errors are ignored: logging must not break the app.
     //
     fn writeToErrorFile(self: *FileLogger, level: []const u8, message: []const u8) void {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
         if (self.isClosed) {
             return;
         }
@@ -528,9 +520,7 @@ pub const FileLogger = struct {
     // Write final log footer when command completes and flush all pending writes
     //
     pub fn close(self: *FileLogger) void {
-        self.mutex.lockUncancelable(self.io);
         if (self.isClosed) {
-            self.mutex.unlock(self.io);
             return;
         }
 
@@ -558,7 +548,6 @@ pub const FileLogger = struct {
                 // Silently ignore file write errors during close
             };
         }
-        self.mutex.unlock(self.io);
 
         // Show error file location if errors were logged
         if (hasErrors) {

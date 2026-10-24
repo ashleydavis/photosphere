@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -105,7 +106,8 @@ fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []con
 //
 // Writes each replication progress message.
 //
-fn onProgress(context: ?*anyopaque, progress: []const u8) void {
+fn onProgress(context: ?*anyopaque, io: std.Io, progress: []const u8) void {
+    _ = io;
     _ = context;
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
@@ -340,7 +342,8 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
     // credentials, runs replicate(), writes the destination public key (when encrypted) and updates
     // the destination's database config - the CLI no longer does any of those itself.
     const progressCallback: ReplicateProgressCallback = .{ .context = null, .function = onProgress };
-    const result = try replicateDatabase(allocator, io, uuidGenerator, .{
+    var timer_list = TimerList.init();
+    const result = try replicateDatabase(allocator, io, timer_list.interface(), uuidGenerator, .{
         .sourcePath = srcDir,
         .destPath = destDir,
         .sourceEncryptionKey = options.base.key,

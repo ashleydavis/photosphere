@@ -21,6 +21,7 @@ const ScannerState = file_scanner.ScannerState;
 const IAddSummary = media_file_database.IAddSummary;
 const TaskStatus = task_queue_zig.types.TaskStatus;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
+const Timers = @import("ziggy").timers.Timers;
 const ITaskResult = task_queue_zig.types.ITaskResult;
 const ICheckFileData = check_worker.ICheckFileData;
 const ICheckFileResult = check_worker.ICheckFileResult;
@@ -74,7 +75,7 @@ const CheckPathsState = struct {
     //
     // Registers a callback to integrate results as tasks complete.
     //
-    fn onTaskComplete(context: ?*anyopaque, result: ITaskResult) anyerror!void {
+    fn onTaskComplete(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, result: ITaskResult) anyerror!void {
         const self: *CheckPathsState = @ptrCast(@alignCast(context.?));
         const allocator = self.allocator;
         const inputs = try std.json.parseFromValueLeaky(ICheckFileData, allocator, result.inputs, .{
@@ -169,7 +170,7 @@ const CheckPathsState = struct {
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{
             .emit_null_optional_fields = false,
         });
-        _ = try self.queue.addTask("check-file", try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}), null, null);
+        _ = try self.queue.addTask(self.io, allocator, "check-file", try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}), null, null);
     }
 
     //
@@ -190,6 +191,7 @@ const CheckPathsState = struct {
 pub fn checkPaths(
     allocator: std.mem.Allocator,
     io: std.Io,
+    timers: Timers,
     storageDescriptor: IDatabaseDescriptor,
     paths: []const []const u8,
     progressCallback: ?CheckPathsProgressCallback,
@@ -202,9 +204,9 @@ pub fn checkPaths(
     defer localHashCache.deinit();
     _ = try localHashCache.load(io);
 
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator, storageDescriptor.databasePath);
-    defer queue.deinit();
-    defer queue.shutdown();
+    const queue = try TaskQueue.init(allocator, uuidGenerator, storageDescriptor.databasePath);
+    defer queue.deinit(io, allocator);
+    defer queue.shutdown(io, allocator);
 
     var state: CheckPathsState = .{
         .allocator = allocator,
@@ -229,7 +231,7 @@ pub fn checkPaths(
     //
     // Registers a callback to integrate results as tasks complete.
     //
-    _ = try queue.onTaskComplete(.{
+    _ = try queue.onTaskComplete(allocator, .{
         .context = &state,
         .function = CheckPathsState.onTaskComplete,
     });
@@ -251,7 +253,7 @@ pub fn checkPaths(
     //
     // Wait for all tasks to complete.
     //
-    try queue.awaitAllTasks();
+    try queue.awaitAllTasks(io, allocator, timers);
 
     // Final save of hash cache
     var saveOperation: SaveHashCacheOperation = .{

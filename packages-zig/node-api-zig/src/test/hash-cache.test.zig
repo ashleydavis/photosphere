@@ -2,6 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
+const ziggy = @import("ziggy");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
@@ -674,10 +675,50 @@ test "applies removals to the on-disk cache instead of resurrecting them" {
 }
 
 //
-// One of the overlapping savers of the test below.
+// What one overlapping saver of the test below is started with, copied onto its thread, so it shares nothing with the test thread.
 //
-fn saveOverlapping(cache: *HashCache) void {
-    cache.save(std.testing.io) catch |err| {
+const ISaverStart = struct {
+    // The cache directory, in the first cacheDirLength bytes.
+    cacheDir: [512]u8,
+
+    // How many bytes of cacheDir hold the directory.
+    cacheDirLength: usize,
+
+    // Which saver this is, which names the entry it adds.
+    writerIndex: usize,
+};
+
+//
+// One of the overlapping savers of the test below. It makes its own allocator and Io, and its own cache, which it loads, adds its
+// entry to and saves.
+//
+fn saveOverlapping(start: ISaverStart) void {
+    var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
+    var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var cache = HashCache.init(start.cacheDir[0..start.cacheDirLength], false) catch |err| {
+        std.debug.panic("init failed: {s}", .{@errorName(err)});
+    };
+    defer cache.deinit();
+    _ = cache.load(io) catch |err| {
+        std.debug.panic("load failed: {s}", .{@errorName(err)});
+    };
+    const key = std.fmt.allocPrint(allocator, "overlap{d}/file.txt", .{start.writerIndex}) catch |err| {
+        std.debug.panic("naming the entry failed: {s}", .{@errorName(err)});
+    };
+    const entry = makeEntry(allocator, key) catch |err| {
+        std.debug.panic("making the entry failed: {s}", .{@errorName(err)});
+    };
+    addEntry(&cache, entry) catch |err| {
+        std.debug.panic("adding the entry failed: {s}", .{@errorName(err)});
+    };
+    cache.save(io) catch |err| {
         std.debug.panic("save failed: {s}", .{@errorName(err)});
     };
 }
@@ -692,21 +733,15 @@ test "never publishes a corrupt file when saves overlap" {
     // Overlapping saves used to share one temp file path and interleave their bytes into it,
     // so the published file failed its checksum and the whole cache was discarded on load.
     const writerCount = 8;
-    var caches: [writerCount]HashCache = undefined;
-    for (&caches, 0..) |*cache, writerIndex| {
-        cache.* = try HashCache.init(cacheDir, false);
-        _ = try cache.load(io);
-        try addEntry(cache, try makeEntry(allocator, try std.fmt.allocPrint(allocator, "overlap{d}/file.txt", .{writerIndex})));
-    }
-    defer {
-        for (&caches) |*cache| {
-            cache.deinit();
-        }
-    }
-
     var threads: [writerCount]std.Thread = undefined;
-    for (&threads, &caches) |*thread, *cache| {
-        thread.* = try std.Thread.spawn(.{}, saveOverlapping, .{cache});
+    for (&threads, 0..) |*thread, writerIndex| {
+        var start: ISaverStart = .{
+            .cacheDir = undefined,
+            .cacheDirLength = cacheDir.len,
+            .writerIndex = writerIndex,
+        };
+        @memcpy(start.cacheDir[0..cacheDir.len], cacheDir);
+        thread.* = try std.Thread.spawn(.{}, saveOverlapping, .{start});
     }
     for (threads) |thread| {
         thread.join();
@@ -806,7 +841,8 @@ test "sits under the platform cache directory, not the process temp directory" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     // Everything the cache knows can be recomputed, but recomputing it for a photo library means
     // copying and hashing every photo already imported. Under the process temp directory that
     // happened at every reboot on Linux, and after a few untouched days on macOS, with nothing
@@ -840,7 +876,8 @@ test "is still found once the process temp directory has been taken away" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     // This is the restart, as far as a test can stage one: the scratch directory is gone and the
     // cache is read back anyway. Every platform gets this, because every platform's temp
     // directory is swept by something the app never hears about.

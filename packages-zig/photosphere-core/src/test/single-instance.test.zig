@@ -6,6 +6,7 @@
 //
 
 const std = @import("std");
+const ziggy = @import("ziggy");
 const support = @import("test-support.zig");
 const main_state = @import("photosphere-core").main_state;
 const single_instance = @import("photosphere-core").single_instance;
@@ -99,9 +100,9 @@ test "a core logs that it has the lock when the rule does not apply to it" {
     try app.start();
     defer app.stop();
 
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.written(), "Single instance lock acquired (pid=") != null);
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.written(), "packaged=false)") != null);
-    try std.testing.expect(!app.shell.quit_called.load(.acquire));
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Single instance lock acquired (pid=") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "packaged=false)") != null);
+    try std.testing.expect(!app.native_app.quitCalled(std.testing.io, std.testing.allocator));
 }
 
 test "a copy that cannot take the lock logs it and asks the shell to quit" {
@@ -114,22 +115,29 @@ test "a copy that cannot take the lock logs it and asks the shell to quit" {
     };
     defer holder.release(io);
 
-    try main_state.fromCore(app.core).enforceSingleInstance(true);
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            try state.enforceSingleInstance(services, timers, main_io, main_state.stateAllocator(), true);
+            try std.testing.expect(state.single_instance == null);
+        }
+    }.check);
 
-    try std.testing.expect(app.shell.quit_called.load(.acquire));
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.written(), "Single instance lock denied (pid=") != null);
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.written(), "); quitting") != null);
-    try std.testing.expect(main_state.fromCore(app.core).single_instance == null);
+    try std.testing.expect(app.native_app.quitCalled(std.testing.io, std.testing.allocator));
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Single instance lock denied (pid=") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "); quitting") != null);
 }
 
 test "a copy that takes the lock keeps it until the core is destroyed" {
     var app: TestApp = undefined;
     try app.start();
-    const state = main_state.fromCore(app.core);
 
-    try state.enforceSingleInstance(true);
-    try std.testing.expect(state.single_instance != null);
-    try std.testing.expect(!app.shell.quit_called.load(.acquire));
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            try state.enforceSingleInstance(services, timers, main_io, main_state.stateAllocator(), true);
+            try std.testing.expect(state.single_instance != null);
+        }
+    }.check);
+    try std.testing.expect(!app.native_app.quitCalled(std.testing.io, std.testing.allocator));
     const second = try single_instance.acquire(std.testing.allocator, io, app.tmp_path);
     try std.testing.expect(second == .denied);
     app.stopCore();
@@ -146,21 +154,34 @@ test "the first copy brings its window to the front when a second copy was start
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    try state.enforceSingleInstance(true);
-    // The timer would look for the signal too, and this test looks for it itself.
-    state.lock();
-    state.single_instance_check_at = null;
-    state.unlock();
+    const CheckForSecond = struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            try state.checkSecondInstance(services, main_io, main_state.stateAllocator());
+        }
+    };
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            try state.enforceSingleInstance(services, timers, main_io, main_state.stateAllocator(), true);
+            // The timer would look for the signal too, and this test looks for it itself.
+            if (state.single_instance_timer) |timer| {
+                timers.clearInterval(timer);
+                state.single_instance_timer = null;
+            }
+        }
+    }.check);
 
-    try state.checkSecondInstance();
-    try std.testing.expectEqual(@as(usize, 0), app.shell.chosen_actions.items.len);
+    try app.onState(@as(u8, 0), CheckForSecond.check);
+    const actions_before = try app.native_app.chosenActions(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(actions_before);
+    try std.testing.expectEqual(@as(usize, 0), actions_before.len);
     const second = try single_instance.acquire(std.testing.allocator, io, app.tmp_path);
     try std.testing.expect(second == .denied);
-    try state.checkSecondInstance();
+    try app.onState(@as(u8, 0), CheckForSecond.check);
 
-    try std.testing.expectEqualStrings("focus-window\n", app.shell.chosen_actions.items);
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.written(), "Second-instance signal received by pid=") != null);
+    const actions = try app.native_app.chosenActions(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(actions);
+    try std.testing.expectEqualStrings("focus-window\n", actions);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Second-instance signal received by pid=") != null);
 }
 
 test "a copy that holds no lock has no second copy to look for" {
@@ -168,7 +189,13 @@ test "a copy that holds no lock has no second copy to look for" {
     try app.start();
     defer app.stop();
 
-    try main_state.fromCore(app.core).checkSecondInstance();
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            try state.checkSecondInstance(services, main_io, main_state.stateAllocator());
+        }
+    }.check);
 
-    try std.testing.expectEqual(@as(usize, 0), app.shell.chosen_actions.items.len);
+    const actions_before = try app.native_app.chosenActions(std.testing.io, std.testing.allocator);
+    defer std.testing.allocator.free(actions_before);
+    try std.testing.expectEqual(@as(usize, 0), actions_before.len);
 }

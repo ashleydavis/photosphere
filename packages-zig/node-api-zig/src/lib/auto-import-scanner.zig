@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const file_scanner = @import("file-scanner.zig");
@@ -70,7 +71,7 @@ pub const IsCancelledFn = struct {
     context: ?*anyopaque,
 
     // The function.
-    function: *const fn (context: ?*anyopaque) bool,
+    function: *const fn (context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator) bool,
 };
 
 //
@@ -116,7 +117,7 @@ pub const OnAutoImportProgressFn = struct {
     context: ?*anyopaque,
 
     // The function.
-    function: *const fn (context: ?*anyopaque, progress: IAutoImportScannerProgress) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, timers: Timers, progress: IAutoImportScannerProgress) void,
 };
 
 //
@@ -346,9 +347,9 @@ pub const AutoImportScanner = struct {
     //
     // IImportScanner.scan for this implementation.
     //
-    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
+    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
         const self: *AutoImportScanner = @ptrCast(@alignCast(ptr));
-        return self.scan(allocator, io, visitFile, onProgress);
+        return self.scan(allocator, io, timers, visitFile, onProgress);
     }
 
     //
@@ -362,8 +363,8 @@ pub const AutoImportScanner = struct {
     //
     // `deps.isCancelled()`.
     //
-    fn isCancelled(self: *AutoImportScanner) bool {
-        return self.deps.isCancelled.function(self.deps.isCancelled.context);
+    fn isCancelled(self: *AutoImportScanner, io: std.Io, allocator: std.mem.Allocator) bool {
+        return self.deps.isCancelled.function(self.deps.isCancelled.context, io, allocator);
     }
 
     //
@@ -373,10 +374,10 @@ pub const AutoImportScanner = struct {
     // next run, which the app starts a short while after this one ends. Nothing here watches the
     // filesystem or holds a timer: re-reading the source from the start is what finds new photos.
     //
-    pub fn scan(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
+    pub fn scan(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
         const deps = self.deps;
 
-        while (!self.isCancelled() and !self.hasNothingLeftToPush()) {
+        while (!self.isCancelled(io, allocator) and !self.hasNothingLeftToPush()) {
             if (self.queueNeedsAPage()) {
                 try self.fetchAPage(allocator, io);
             }
@@ -388,9 +389,9 @@ pub const AutoImportScanner = struct {
 
             // Reported on every tick, not only when something was released. It is what the panel
             // shows, and the import writes out what it has learnt on the back of it.
-            deps.onProgress.function(deps.onProgress.context, self.progress());
+            deps.onProgress.function(deps.onProgress.context, io, timers, self.progress());
 
-            if (self.isCancelled()) {
+            if (self.isCancelled(io, allocator)) {
                 break;
             }
 
@@ -403,7 +404,7 @@ pub const AutoImportScanner = struct {
 
         // Said once more on the way out, because the loop stops the moment there is nothing left and
         // the import has to hear that it is caught up before the run ends.
-        deps.onProgress.function(deps.onProgress.context, self.progress());
+        deps.onProgress.function(deps.onProgress.context, io, timers, self.progress());
     }
 
     //

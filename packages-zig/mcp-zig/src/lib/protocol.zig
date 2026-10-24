@@ -157,12 +157,10 @@ const IRequestOutcome = union(enum) {
 };
 
 //
-// An MCP server with tools (the SDK's McpServer).
+// An MCP server with tools (the SDK's McpServer). It is used only on the thread that made it, and the allocator that holds its tools is
+// given to each function that needs it.
 //
 pub const McpServer = struct {
-    // Allocates the registered tools.
-    allocator: std.mem.Allocator,
-
     // The name and version reported to the client.
     serverInfo: IServerInfo,
 
@@ -175,22 +173,29 @@ pub const McpServer = struct {
     //
     // Creates a server with no tools.
     //
-    pub fn init(allocator: std.mem.Allocator, serverInfo: IServerInfo, options: IServerOptions) McpServer {
+    pub fn init(serverInfo: IServerInfo, options: IServerOptions) McpServer {
         return .{
-            .allocator = allocator,
             .serverInfo = serverInfo,
             .options = options,
         };
     }
 
     //
-    // Registers a tool. Fails when a tool with the name is already registered, like the SDK.
+    // Frees the list of tools, with the allocator they were registered with.
     //
-    pub fn registerTool(self: *McpServer, name: []const u8, config: IToolConfig, context: ?*anyopaque, handler: IToolHandler) !void {
+    pub fn deinit(self: *McpServer, allocator: std.mem.Allocator) void {
+        self.tools.deinit(allocator);
+    }
+
+    //
+    // Registers a tool, with the allocator that holds the server's tools. Fails when a tool with the name is already registered, like the
+    // SDK.
+    //
+    pub fn registerTool(self: *McpServer, allocator: std.mem.Allocator, name: []const u8, config: IToolConfig, context: ?*anyopaque, handler: IToolHandler) !void {
         if (self.findTool(name) != null) {
             return utils.errors.throwError("Tool {s} is already registered", .{name});
         }
-        try self.tools.append(self.allocator, .{
+        try self.tools.append(allocator, .{
             .name = name,
             .config = config,
             .context = context,

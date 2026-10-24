@@ -7,6 +7,7 @@ const TaskAddedCallback = task_queue_zig.types.TaskAddedCallback;
 const TasksCancelledCallback = task_queue_zig.types.TasksCancelledCallback;
 const WorkerTaskCompletionCallback = task_queue_zig.types.WorkerTaskCompletionCallback;
 const TaskEventCallback = task_queue_zig.types.TaskEventCallback;
+const Timers = @import("ziggy").timers.Timers;
 
 //
 // What one call to addTask was given, so a test can assert on the priority it asked for.
@@ -75,7 +76,16 @@ pub const RecordingQueueBackend = struct {
         .cancelTasks = cancelTasks,
         .onTasksCancelled = onTasksCancelled,
         .shutdown = shutdown,
+        .waitForMessage = waitForMessage,
     };
+
+    //
+    // Nothing is ever completed here, so a wait would never end.
+    //
+    fn waitForMessage(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers) void {
+        _ = ptr;
+        @panic("A handler waited for a message, which a backend that only records tasks never sends");
+    }
 
     //
     // Records the task.
@@ -95,7 +105,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onTaskAdded(ptr: *anyopaque, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
+    fn onTaskAdded(ptr: *anyopaque, _: std.mem.Allocator, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = source;
         _ = callback;
@@ -105,7 +115,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onTaskComplete(ptr: *anyopaque, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
+    fn onTaskComplete(ptr: *anyopaque, _: std.mem.Allocator, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return nothingSubscribed();
@@ -114,7 +124,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onTaskEvent(ptr: *anyopaque, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onTaskEvent(ptr: *anyopaque, _: std.mem.Allocator, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = eventType;
         _ = callback;
@@ -124,7 +134,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onAnyTaskEvent(ptr: *anyopaque, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onAnyTaskEvent(ptr: *anyopaque, _: std.mem.Allocator, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return nothingSubscribed();
@@ -133,7 +143,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing to cancel, because nothing runs.
     //
-    fn cancelTasks(ptr: *anyopaque, source: []const u8) void {
+    fn cancelTasks(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, source: []const u8) void {
         _ = ptr;
         _ = source;
     }
@@ -141,7 +151,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is subscribed.
     //
-    fn onTasksCancelled(ptr: *anyopaque, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
+    fn onTasksCancelled(ptr: *anyopaque, _: std.mem.Allocator, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = source;
         _ = callback;
@@ -151,7 +161,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing to shut down.
     //
-    fn shutdown(ptr: *anyopaque) void {
+    fn shutdown(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) void {
         _ = ptr;
     }
 
@@ -169,7 +179,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Does nothing, because nothing was subscribed.
     //
-    fn ignoreUnsubscribe(context: ?*anyopaque, key: usize) void {
+    fn ignoreUnsubscribe(context: ?*anyopaque, _: std.mem.Allocator, key: usize) void {
         _ = context;
         _ = key;
     }

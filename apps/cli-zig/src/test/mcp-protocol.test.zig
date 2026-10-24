@@ -92,10 +92,10 @@ fn fail(context: ?*anyopaque, allocator: std.mem.Allocator, toolIo: std.Io, argu
 // Creates a server with the echo tool, a tool without input and the failing tool.
 //
 fn testServer(allocator: std.mem.Allocator) !McpServer {
-    var server = McpServer.init(allocator, .{ .name = "test-server", .version = "1.2.3" }, .{ .instructions = "Use the tools." });
-    try server.registerTool("echo", .{ .description = "Echoes its arguments.", .inputSchema = &echo_input }, null, echo);
-    try server.registerTool("nothing", .{ .description = "Takes nothing.", .inputSchema = &.{} }, null, echo);
-    try server.registerTool("fail", .{ .description = "Always fails.", .inputSchema = &.{} }, null, fail);
+    var server = McpServer.init(.{ .name = "test-server", .version = "1.2.3" }, .{ .instructions = "Use the tools." });
+    try server.registerTool(allocator, "echo", .{ .description = "Echoes its arguments.", .inputSchema = &echo_input }, null, echo);
+    try server.registerTool(allocator, "nothing", .{ .description = "Takes nothing.", .inputSchema = &.{} }, null, echo);
+    try server.registerTool(allocator, "fail", .{ .description = "Always fails.", .inputSchema = &.{} }, null, fail);
     return server;
 }
 
@@ -373,7 +373,7 @@ test "registering a tool twice fails like the SDK" {
     const allocator = arena.allocator();
     var server = try testServer(allocator);
 
-    try std.testing.expectError(error.Thrown, server.registerTool("echo", .{ .description = "Again.", .inputSchema = &.{} }, null, echo));
+    try std.testing.expectError(error.Thrown, server.registerTool(allocator, "echo", .{ .description = "Again.", .inputSchema = &.{} }, null, echo));
     try std.testing.expectEqualStrings("Tool echo is already registered", utils.errors.lastErrorMessage());
 }
 

@@ -84,13 +84,13 @@ pub const IsCancelledCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque) bool,
+    function: *const fn (context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator) bool,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: IsCancelledCallback) bool {
-        return self.function(self.context);
+    pub fn call(self: IsCancelledCallback, io: std.Io, allocator: std.mem.Allocator) bool {
+        return self.function(self.context, io, allocator);
     }
 };
 
@@ -125,13 +125,13 @@ pub const IReplicateOptions = struct {
 //
 // Formats a progress message into a buffer (the messages are only valid during the progress callback).
 //
-fn reportProgress(progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
+fn reportProgress(io: std.Io, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
     const callback = progressCallback orelse {
         return;
     };
     var buffer: [256]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, format, args) catch buffer[0..];
-    callback.call(message);
+    callback.call(io, message);
 }
 
 //
@@ -141,8 +141,8 @@ fn reportProgress(progressCallback: ?ProgressCallback, comptime format: []const 
 // leave each loop to notice separately and hand back a half-copied database described by a result
 // that says it finished.
 //
-fn throwIfCancelled(isCancelled: ?IsCancelledCallback) !void {
-    if (isCancelled != null and isCancelled.?.call()) {
+fn throwIfCancelled(io: std.Io, allocator: std.mem.Allocator, isCancelled: ?IsCancelledCallback) !void {
+    if (isCancelled != null and isCancelled.?.call(io, allocator)) {
         return errors.throwError("Replication was cancelled.", .{});
     }
 }
@@ -205,7 +205,7 @@ const ReplicateFilesState = struct {
 
             // File already exists with correct hash, skip copying.
             // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
-            reportProgress(self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
+            reportProgress(self.io, self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
             return;
         }
 
@@ -282,14 +282,14 @@ const ReplicateFilesState = struct {
 
         log.verbose(try std.fmt.allocPrint(allocator, "Added file to destination merkle tree: {s}", .{fileName}));
 
-        reportProgress(self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
+        reportProgress(self.io, self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
     }
 
     //
     // Copies one of the files the comparison named.
     //
     fn processFile(self: *ReplicateFilesState, fileName: []const u8) !void {
-        try throwIfCancelled(if (self.options) |options| options.isCancelled else null);
+        try throwIfCancelled(self.io, self.allocator, if (self.options) |options| options.isCancelled else null);
 
         // Skip files that don't match the path filter
         if (self.options != null and self.options.?.pathFilter != null and self.options.?.pathFilter.?.len > 0) {
@@ -937,7 +937,7 @@ fn replicateBsonDatabase(
         const toDelete = toDeleteByCollection.get(collectionName) orelse RecordIdSet.empty;
 
         for (toCopy.keys()) |recordId| {
-            try throwIfCancelled(isCancelled);
+            try throwIfCancelled(io, allocator, isCancelled);
             const shardId = try sourceColl.getShardId(recordId);
             const sourceShard = try sourceColl.shard(shardId);
             const sourceRecord = try sourceShard.record(io, recordId) orelse {
@@ -949,13 +949,13 @@ fn replicateBsonDatabase(
         }
 
         for (toDelete.keys()) |recordId| {
-            try throwIfCancelled(isCancelled);
+            try throwIfCancelled(io, allocator, isCancelled);
             var deleteOperation: DeleteOneOperation = .{ .collection = destColl, .recordId = recordId };
             _ = try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
             result.copiedRecords += 1;
         }
 
-        reportProgress(progressCallback, "Copied {d} files, {d} records", .{ result.copiedFiles, result.copiedRecords });
+        reportProgress(io, progressCallback, "Copied {d} files, {d} records", .{ result.copiedFiles, result.copiedRecords });
     }
 
     try destBsonDatabase.commit(io);

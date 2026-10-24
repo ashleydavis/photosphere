@@ -18,6 +18,7 @@
 //
 
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -136,7 +137,7 @@ const Sandbox = struct {
         try object.put(self.arenaAllocator(), "configPath", .{
             .string = configPath,
         });
-        return readConfigHandler(self.arenaAllocator(), self.io, .{
+        return readConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), .{
             .object = object,
         }, self.taskContext.context.taskContext());
     }
@@ -145,7 +146,7 @@ const Sandbox = struct {
     // Runs the write-config handler with the JSON text as its data.
     //
     fn writeConfig(self: *Sandbox, dataJson: []const u8) !void {
-        const result = try writeConfigHandler(self.arenaAllocator(), self.io, try self.json(dataJson), self.taskContext.context.taskContext());
+        const result = try writeConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), try self.json(dataJson), self.taskContext.context.taskContext());
         try std.testing.expect(result == .null);
     }
 };
@@ -625,7 +626,7 @@ test "bad input to the handlers: a write with no config path fails rather than w
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("configPath is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("configPath is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":300000}}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -645,7 +646,7 @@ test "bad input to the handlers: a write with nothing to write fails rather than
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml"}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -655,7 +656,7 @@ test "bad input to the handlers: a setting with no key fails rather than being w
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("write-config was given a setting with no key.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("write-config was given a setting with no key.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"","value":true}]}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -665,10 +666,10 @@ test "bad input to the handlers: a write of a section with no settings fails rat
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("autoImport.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("autoImport.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","autoImport":{"pauseBetweenRunsMs":5000}}
     ), sandbox.taskContext.context.taskContext()));
-    try expectThrown("sync.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("sync.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","sync":{"pauseBetweenRunsMs":5000}}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -678,10 +679,10 @@ test "bad input to the handlers: a config path that is not a string fails with a
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The read-config task data is not valid: configPath must be a string", readConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("The read-config task data is not valid: configPath must be a string", readConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":5}
     ), sandbox.taskContext.context.taskContext()));
-    try expectThrown("The write-config task data is not valid: configPath must be a string, and autoImport, sync and entries must hold their parts", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("The write-config task data is not valid: configPath must be a string, and autoImport, sync and entries must hold their parts", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":5}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -810,7 +811,7 @@ test "bad input to the handlers: a place to watch that is neither a folder nor a
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"autoImportSources\" was given a place to watch that is not a folder or a device album.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("The config setting \"autoImportSources\" was given a place to watch that is not a folder or a device album.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"cloud"}]}]}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -820,7 +821,7 @@ test "bad input to the handlers: a list holding something other than text fails 
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"savedSearches\" was given a list that holds something other than text.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("The config setting \"savedSearches\" was given a list that holds something other than text.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"savedSearches","value":["beach",3]}]}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -830,7 +831,7 @@ test "bad input to the handlers: a value no setting can hold fails rather than b
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":{"name":"dark"}}]}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -840,7 +841,7 @@ test "bad input to the handlers: a number for a switch fails rather than being s
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"developerMode\" cannot hold a value of that type.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("The config setting \"developerMode\" cannot hold a value of that type.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":1}]}
     ), sandbox.taskContext.context.taskContext()));
 }

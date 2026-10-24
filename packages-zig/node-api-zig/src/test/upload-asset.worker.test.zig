@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -45,7 +46,7 @@ const MessageRecorder = struct {
     //
     // Records one message.
     //
-    fn send(context: ?*anyopaque, message: std.json.Value) void {
+    fn send(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         const self: *MessageRecorder = @ptrCast(@alignCast(context.?));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch {
             return;
@@ -73,6 +74,9 @@ const MessageRecorder = struct {
 // The state each test starts from.
 //
 const UploadTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -103,7 +107,7 @@ const UploadTest = struct {
     // The tools built into the program, whose runner the handler is given.
     mediaTools: MediaTools,
 
-    // The runner the handler is given in its task context: the runner of mediaTools, or null for a test of a task run with
+    // The runner the handler is given: the runner of mediaTools, or null for a test of a task run with
     // none.
     toolRunner: ?InProcessRunner,
 
@@ -114,7 +118,7 @@ const UploadTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "upload-asset-worker");
         self.databaseDir = try std.fs.path.join(allocator, &.{ self.tempDir, "db" });
         try std.Io.Dir.cwd().createDirPath(io, self.databaseDir);
@@ -130,7 +134,7 @@ const UploadTest = struct {
             .context = &self.messages,
             .function = MessageRecorder.send,
         }, 10);
-        self.mediaTools = try MediaTools.init(io);
+        self.mediaTools = try MediaTools.init();
         self.toolRunner = self.mediaTools.runner();
     }
 
@@ -141,6 +145,7 @@ const UploadTest = struct {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.mediaTools.deinit();
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //
@@ -176,9 +181,8 @@ const UploadTest = struct {
         var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
         virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
         defer virtual_time.deinit();
-        var taskContext = self.context.taskContext();
-        taskContext.toolRunner = self.toolRunner;
-        return uploadAssetHandler(allocator, virtual_time.io(), taskData, taskContext);
+        const taskContext = self.context.taskContext();
+        return uploadAssetHandler(allocator, virtual_time.io(), test_timers.timers(), taskData, taskContext, self.toolRunner);
     }
 
     //
@@ -560,7 +564,7 @@ fn describeStoredImage(context: *UploadTest, relativePath: []const u8) ![]const 
     const allocator = context.arena.allocator();
     const runner = context.mediaTools.runner();
     const filePath = try std.fs.path.join(allocator, &.{ context.databaseDir, relativePath });
-    const result = try runner.run(runner.context, allocator, "magick", &.{ "identify", "-format", "%w %h %m", filePath });
+    const result = try runner.run(runner.context, std.testing.io, allocator, "magick", &.{ "identify", "-format", "%w %h %m", filePath });
     if (result.exit_code != 0) {
         std.debug.print("ImageMagick could not read {s}: exit code {d}\n{s}\n", .{ filePath, result.exit_code, result.output });
         return error.TestUnexpectedResult;

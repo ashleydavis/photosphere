@@ -2,7 +2,7 @@ const std = @import("std");
 const node_utils = @import("node-utils-zig");
 const protocol = @import("protocol.zig");
 const McpServer = protocol.McpServer;
-const RequestHandler = node_utils.http_server.RequestHandler;
+const http_server = node_utils.http_server;
 
 //
 // The Streamable HTTP transport of an MCP server: `POST /mcp` carries JSON-RPC messages to the server and answers with a
@@ -11,8 +11,8 @@ const RequestHandler = node_utils.http_server.RequestHandler;
 // `POST /mcp` and `GET /mcp` exist, and any other request is answered with the 404 page Express sends.
 //
 // The transport is stateless: no session is made and no request depends on an earlier one, so every request is answered by the
-// one server whose tools are registered. A request is answered on the thread of its connection, so a tool may wait as long as it needs
-// to without holding up the others.
+// MCP server its connection thread made for itself, with the same tools as every other. A request is answered on the thread of its
+// connection, so a tool may wait as long as it needs to without holding up the others.
 //
 // The media types and headers follow the SDK: a POST must accept both application/json and text/event-stream and must send
 // application/json, a GET must accept text/event-stream, and a protocol version that the server does not support is refused.
@@ -24,85 +24,115 @@ const RequestHandler = node_utils.http_server.RequestHandler;
 pub const JSON_BODY_LIMIT = 100 * 1024;
 
 //
-// How long a GET stream waits between looking at whether the server is stopping, in milliseconds.
+// How long a GET stream waits for a message to its connection thread at a time, in milliseconds. Each wait that ends with none
+// writes a comment, to find out whether the client has gone.
 //
-const STREAM_POLL_INTERVAL_MS = 250;
+const STREAM_KEEP_ALIVE_MS = 10_000;
 
 //
-// How many polls of a GET stream pass between the comments that are written to find out whether the client has gone, which is 10
-// seconds.
-//
-const STREAM_KEEP_ALIVE_POLLS = 40;
-
-//
-// The routes of the transport. They must stay where they are while the HTTP server runs.
+// The routes of the transport, for the HTTP framework (node_utils.http_server). They hold nothing: each connection thread makes an MCP
+// server of its own (its connection state, see http_server.ConnectionState, is an McpServer), and a request is given to the server of
+// the thread it arrives on.
 //
 pub const StreamableHttpRoutes = struct {
-    // The server the messages are given to.
-    server: *McpServer,
-
-    // Set by the owner before it closes the HTTP server, so that the streams of GET requests end.
-    // (Zig: a thread blocked on a connection cannot be woken, so a stream that is held open looks at this to know when to end.)
-    stopping: *std.atomic.Value(bool),
+    //
+    // The routes, for the HTTP framework.
+    //
+    pub const router: http_server.Router = .{
+        .context = null,
+        .routes = &route_table,
+        .notFound = notFound,
+    };
 
     //
-    // Gets the handler an HTTP server (node_utils.http_server) calls with each request.
+    // `POST /mcp` and `GET /mcp`, and the answers Express gives to `HEAD /mcp` and `OPTIONS /mcp`.
     //
-    pub fn requestHandler(self: *StreamableHttpRoutes) RequestHandler {
-        return .{
-            .context = self,
-            .handle = handleErased,
+    const route_table = [_]http_server.Route{
+        .{
+            .method = .POST,
+            .path = "/mcp",
+            .handle = postRoute,
+        },
+        .{
+            .method = .GET,
+            .path = "/mcp",
+            .handle = getRoute,
+        },
+        .{
+            .method = .HEAD,
+            .path = "/mcp",
+            .handle = headRoute,
+        },
+        .{
+            .method = .OPTIONS,
+            .path = "/mcp",
+            .handle = optionsRoute,
+        },
+    };
+
+    //
+    // The MCP server of the connection thread a request arrived on. A server whose connection threads keep no state is a mistake of its
+    // owner's.
+    //
+    fn serverFor(request: *http_server.Request) *McpServer {
+        const state = request.state orelse {
+            @panic("the Streamable HTTP routes were served by a connection thread with no MCP server of its own");
         };
+        return @ptrCast(@alignCast(state));
     }
 
     //
-    // The function the HTTP server calls, which gives the request to the routes it was made from.
+    // POST /mcp.
     //
-    fn handleErased(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request) anyerror!void {
-        const self: *StreamableHttpRoutes = @ptrCast(@alignCast(context.?));
-        return self.handleRequest(allocator, io, request);
+    fn postRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        _ = context;
+        const headers = try readHeaders(allocator, request.http);
+        return postMcp(serverFor(request), allocator, io, request.http, headers);
     }
 
     //
-    // Answers one request: the route that matches, and the 404 Express sends when none does.
+    // GET /mcp.
     //
-    pub fn handleRequest(self: *StreamableHttpRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request) !void {
-        const method = request.head.method;
-        // The target and the headers point into the request's head, which reading the body invalidates.
-        const target = try allocator.dupe(u8, request.head.target);
-        const query_start = std.mem.indexOfScalar(u8, target, '?');
-        const path = target[0 .. query_start orelse target.len];
-        const headers = try readHeaders(allocator, request);
+    fn getRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        _ = context;
+        const headers = try readHeaders(allocator, request.http);
+        return getMcp(request, io, allocator, headers);
+    }
 
-        if (pathIsMcp(path)) {
-            if (method == .POST) {
-                return self.postMcp(allocator, io, request, headers);
-            }
-            if (method == .GET) {
-                return self.getMcp(io, request, headers);
-            }
-            if (method == .HEAD) {
-                // Express gives a HEAD to the GET route, and the SDK's transport answers a method it does not handle with a 405.
-                return sendJsonErrorWithHeaders(allocator, request, .method_not_allowed, -32000, "Method not allowed.", &.{
-                    .{
-                        .name = "Allow",
-                        .value = "GET, POST, DELETE",
-                    },
-                });
-            }
-            if (method == .OPTIONS) {
-                return sendAllowed(request, "GET,HEAD,POST");
-            }
-        }
+    //
+    // HEAD /mcp, which the SDK refuses.
+    //
+    fn headRoute(context: ?*anyopaque, request: *http_server.Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        _ = context;
+        return sendJsonErrorWithHeaders(allocator, request.http, .method_not_allowed, -32000, "Method not allowed.", &.{
+            .{
+                .name = "Allow",
+                .value = "GET, POST, DELETE",
+            },
+        });
+    }
 
-        const message = try std.fmt.allocPrint(allocator, "Cannot {s} {s}", .{ @tagName(method), try escapeHtml(allocator, path) });
-        return sendErrorPage(allocator, request, .not_found, message);
+    //
+    // OPTIONS /mcp, which Express answers with the methods the routes have.
+    //
+    fn optionsRoute(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        _ = context;
+        return sendAllowed(request.http, "GET,HEAD,POST");
+    }
+
+    //
+    // The 404 Express sends for anything else.
+    //
+    fn notFound(context: ?*anyopaque, request: *http_server.Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        _ = context;
+        const message = try std.fmt.allocPrint(allocator, "Cannot {s} {s}", .{ @tagName(request.method), try escapeHtml(allocator, request.path) });
+        return sendErrorPage(allocator, request.http, .not_found, message);
     }
 
     //
     // POST /mcp: reads the body the way `express.json()` does, and gives the messages to the server.
     //
-    fn postMcp(self: *StreamableHttpRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, headers: IHeaders) !void {
+    fn postMcp(server: *McpServer, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, headers: IHeaders) !void {
         // Reads a JSON body of at most 100kb, and leaves the body unset for a request that does not say it holds JSON or that has
         // no body, as `express.json()` does.
         const has_body = request.head.method.requestHasBody() and (request.head.content_length != null or request.head.transfer_encoding != .none);
@@ -202,7 +232,7 @@ pub const StreamableHttpRoutes = struct {
                 continue;
             }
             const line = try std.json.Stringify.valueAlloc(allocator, message, .{});
-            const answer = try self.server.handleMessage(allocator, io, line) orelse {
+            const answer = try server.handleMessage(allocator, io, line) orelse {
                 continue;
             };
             try stream.writer.print("event: message\ndata: {s}\n\n", .{answer});
@@ -215,8 +245,9 @@ pub const StreamableHttpRoutes = struct {
     // GET /mcp: opens the stream the server starts messages on. This server starts none, so the stream stays open until the server
     // stops or the client goes away.
     //
-    fn getMcp(self: *StreamableHttpRoutes, io: std.Io, request: *std.http.Server.Request, headers: IHeaders) !void {
-        var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    fn getMcp(connection: *http_server.Request, io: std.Io, given_allocator: std.mem.Allocator, headers: IHeaders) !void {
+        const request = connection.http;
+        var arena_state = std.heap.ArenaAllocator.init(given_allocator);
         defer arena_state.deinit();
         const allocator = arena_state.allocator();
 
@@ -248,17 +279,21 @@ pub const StreamableHttpRoutes = struct {
         try stream.writer.flush();
         try stream.flush();
 
-        var polls: usize = 0;
-        while (!self.stopping.load(.acquire)) {
-            try io.sleep(.fromMilliseconds(STREAM_POLL_INTERVAL_MS), .awake);
-            polls += 1;
-            if (polls % STREAM_KEEP_ALIVE_POLLS == 0) {
-                // (Zig: nothing wakes a thread that waits on a client that has gone, so a comment is written now and then, and
-                // writing to a client that has gone fails and ends the stream.)
-                try stream.writer.writeAll(": keep-alive\n\n");
-                try stream.writer.flush();
-                try stream.flush();
+        // The stream stays open until the connection thread is told to stop. Its messages are read as it waits, and none is for the
+        // stream, since the server starts no messages.
+        while (!connection.stopped) {
+            if (connection.waitForMessage(io, given_allocator, STREAM_KEEP_ALIVE_MS)) |message| {
+                given_allocator.free(message.text);
+                continue;
             }
+            if (connection.stopped) {
+                break;
+            }
+            // (Zig: nothing wakes a thread that waits on a client that has gone, so a comment is written now and then, and writing to a
+            // client that has gone fails and ends the stream.)
+            try stream.writer.writeAll(": keep-alive\n\n");
+            try stream.writer.flush();
+            try stream.flush();
         }
         try stream.end();
     }

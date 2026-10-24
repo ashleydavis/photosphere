@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const log_module = utils.log;
+const log = utils.log;
 
 //
 // A log that counts and records the calls to exception. Every other method does nothing.
@@ -16,14 +16,14 @@ pub const ExceptionLog = struct {
     lastError: ?anyerror = null,
 
     // The log that was active before this one was installed.
-    previousLog: ?log_module.ILog = null,
+    previousLog: ?log.ILog = null,
 
     //
     // Makes this the global log.
     //
     pub fn install(self: *ExceptionLog) void {
-        self.previousLog = log_module.log;
-        log_module.setLog(self.ilog());
+        self.previousLog = log.currentLog();
+        log.setLog(self.ilog());
     }
 
     //
@@ -31,21 +31,21 @@ pub const ExceptionLog = struct {
     //
     pub fn uninstall(self: *ExceptionLog) void {
         if (self.previousLog) |previous| {
-            log_module.setLog(previous);
+            log.setLog(previous);
         }
     }
 
     //
     // Gets the ILog interface for this log.
     //
-    pub fn ilog(self: *ExceptionLog) log_module.ILog {
+    pub fn ilog(self: *ExceptionLog) log.ILog {
         return .{ .ptr = self, .vtable = &vtable };
     }
 
     //
     // The ILog functions of this log.
     //
-    const vtable: log_module.ILog.VTable = .{
+    const vtable: log.ILog.VTable = .{
         .info = ignoreMessage,
         .verbose = ignoreMessage,
         .@"error" = ignoreMessage,
@@ -79,7 +79,7 @@ pub const ExceptionLog = struct {
     //
     // Does nothing with tool output.
     //
-    fn tool(ptr: *anyopaque, toolName: []const u8, data: log_module.IToolOutput) void {
+    fn tool(ptr: *anyopaque, toolName: []const u8, data: log.IToolOutput) void {
         _ = ptr;
         _ = toolName;
         _ = data;
@@ -96,10 +96,10 @@ pub const ExceptionLog = struct {
     //
     // Returns the placeholder log details.
     //
-    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!log_module.ILogDetails {
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!log.ILogDetails {
         _ = ptr;
         _ = allocator;
         _ = io;
-        return log_module.noLogDetails;
+        return log.noLogDetails;
     }
 };

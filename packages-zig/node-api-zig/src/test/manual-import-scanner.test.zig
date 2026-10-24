@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -53,7 +54,7 @@ fn scanFiles(allocator: std.mem.Allocator, paths: []const []const u8, sessionTem
     var pushed: Pushed = .{
         .allocator = allocator,
     };
-    try scanner.importScanner().scan(allocator, std.testing.io, .{
+    try scanner.importScanner().scan(allocator, std.testing.io, test_timers.timers(), .{
         .context = &pushed,
         .function = Pushed.visit,
     }, .{

@@ -170,7 +170,7 @@ test "getToolVersions reports the versions of the ImageMagick and FFmpeg built i
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
     const versions = try bug.getToolVersions(allocator, std.testing.io, mediaTools.runner());
@@ -178,7 +178,7 @@ test "getToolVersions reports the versions of the ImageMagick and FFmpeg built i
     // The versions are the ones the built-in libraries report, read here from the libraries themselves.
     const imageMagickPrefix = "ImageMagick v";
     try std.testing.expect(std.mem.startsWith(u8, versions.imagemagick, imageMagickPrefix));
-    const magickVersionText = (try mediaTools.image_magick.runMagick(allocator, &.{"-version"})).output;
+    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, allocator, &.{"-version"})).output;
     try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{versions.imagemagick[imageMagickPrefix.len..]})) != null);
     const ffmpegPrefix = "ffmpeg v";
     try std.testing.expect(std.mem.startsWith(u8, versions.ffmpeg, ffmpegPrefix));

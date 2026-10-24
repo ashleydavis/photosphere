@@ -337,7 +337,7 @@ fn addPackageModules(
             module.addImport("openssl", try translateHeader(b, target, aws.include_directory, encryption_openssl_header));
         }
         if (std.mem.eql(u8, package.name, "photosphere-core") and target.result.os.tag == .macos) {
-            // IOKit, whose power assertion macos-host.zig takes to hold the computer awake, which a static library does not record.
+            // IOKit, whose power assertion macos-native-calls.zig takes to hold the computer awake, which a static library does not record.
             module.linkFramework("IOKit", .{});
         }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
@@ -510,7 +510,7 @@ fn addUnitTests(
     }
     try test_root_source.appendSlice(b.allocator, "}\n");
 
-    const test_module = b.createModule(.{
+    const tests = b.createModule(.{
         .root_source_file = test_files.add("all-tests.zig", test_root_source.items),
         .target = target,
         .optimize = optimize,
@@ -518,15 +518,15 @@ fn addUnitTests(
     });
     var module_iterator = modules.iterator();
     while (module_iterator.next()) |entry| {
-        test_module.addImport(entry.key_ptr.*, entry.value_ptr.*);
+        tests.addImport(entry.key_ptr.*, entry.value_ptr.*);
     }
     // The whole Photosphere App, as its backend source file declares it, for the tests of photosphere-core that run the app's core.
     // The tests need no page, so it embeds none.
-    const no_page = b.addWriteFiles();
-    const no_page_module = b.createModule(.{
-        .root_source_file = no_page.add("ui-files.zig", "const ziggy = @import(\"ziggy\");\n\npub const files = [_]ziggy.UiFile{};\n"),
+    const no_page_files = b.addWriteFiles();
+    const no_page = b.createModule(.{
+        .root_source_file = no_page_files.add("ui-files.zig", "const ziggy = @import(\"ziggy\");\n\npub const files = [_]ziggy.UiFile{};\n"),
     });
-    no_page_module.addImport("ziggy", modules.get("ziggy").?);
+    no_page.addImport("ziggy", modules.get("ziggy").?);
     const photosphere_app = b.createModule(.{
         .root_source_file = b.path("apps/photosphere/core/src/app.zig"),
         .target = target,
@@ -535,20 +535,20 @@ fn addUnitTests(
     });
     photosphere_app.addImport("ziggy", modules.get("ziggy").?);
     photosphere_app.addImport("photosphere-core", modules.get("photosphere-core").?);
-    photosphere_app.addImport("ui-files", no_page_module);
-    test_module.addImport("photosphere-app", photosphere_app);
+    photosphere_app.addImport("ui-files", no_page);
+    tests.addImport("photosphere-app", photosphere_app);
     // The modules the tests of encryption-zig and storage-zig import that are not packages: the C headers each of them translates.
     const encryption = modules.get("encryption-zig").?;
-    test_module.addImport("openssl", encryption.import_table.get("openssl").?);
+    tests.addImport("openssl", encryption.import_table.get("openssl").?);
     const storage = modules.get("storage-zig").?;
-    test_module.addImport("aws-c", storage.import_table.get("aws-c").?);
+    tests.addImport("aws-c", storage.import_table.get("aws-c").?);
 
     // The directory to write a kcov line-coverage report of the unit tests to (see docs/zig-test-coverage.md). The tests are then
     // compiled with the LLVM backend, whose debug info kcov reads, and run under kcov.
     const coverage_dir = b.option([]const u8, "coverage", "Write a kcov line-coverage report of the unit tests of the packages to this directory");
     const unit_test = b.addTest(.{
         .name = "unit-tests",
-        .root_module = test_module,
+        .root_module = tests,
         .use_llvm = if (coverage_dir != null) true else null,
     });
     const run_test = if (coverage_dir) |directory| try addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
@@ -581,46 +581,46 @@ fn addOwnProcessTests(
     stand_ins: IStandIns,
 ) !void {
     // The termination tests: they start a child process, whose path is handed to them as an option, and send it signals.
-    const termination_child_module = b.createModule(.{
+    const termination_child = b.createModule(.{
         .root_source_file = b.path("packages-zig/node-utils-zig/src/test/fixtures/termination-child.zig"),
         .target = target,
         .optimize = optimize,
     });
-    termination_child_module.addImport("node-utils-zig", modules.get("node-utils-zig").?);
-    termination_child_module.addImport("utils-zig", modules.get("utils-zig").?);
-    const termination_child = b.addExecutable(.{
-        .name = "termination-child",
-        .root_module = termination_child_module,
-    });
+    termination_child.addImport("node-utils-zig", modules.get("node-utils-zig").?);
+    termination_child.addImport("utils-zig", modules.get("utils-zig").?);
+    termination_child.addImport("ziggy", modules.get("ziggy").?);
     const termination_options = b.addOptions();
-    termination_options.addOptionPath("termination_child_path", termination_child.getEmittedBin());
-    const termination_module = b.createModule(.{
+    termination_options.addOptionPath("termination_child_path", b.addExecutable(.{
+        .name = "termination-child",
+        .root_module = termination_child,
+    }).getEmittedBin());
+    const termination = b.createModule(.{
         .root_source_file = b.path("packages-zig/node-utils-zig/src/test/termination.test.zig"),
         .target = target,
         .optimize = optimize,
     });
-    termination_module.addImport("node-utils-zig", modules.get("node-utils-zig").?);
-    termination_module.addImport("utils-zig", modules.get("utils-zig").?);
-    termination_module.addOptions("test-options", termination_options);
+    termination.addImport("node-utils-zig", modules.get("node-utils-zig").?);
+    termination.addImport("utils-zig", modules.get("utils-zig").?);
+    termination.addImport("ziggy", modules.get("ziggy").?);
+    termination.addOptions("test-options", termination_options);
     const termination_test = b.addTest(.{
         .name = "termination-test",
-        .root_module = termination_module,
+        .root_module = termination,
     });
     test_step.dependOn(&b.addRunArtifact(termination_test).step);
 
     // The console writing to the real stdout, which a unit test cannot see: a program writes through it and the build checks what it
     // printed.
-    const console_stdout_module = b.createModule(.{
+    const console_stdout = b.createModule(.{
         .root_source_file = b.path("packages-zig/utils-zig/src/test/fixtures/console-stdout.zig"),
         .target = target,
         .optimize = optimize,
     });
-    console_stdout_module.addImport("utils-zig", modules.get("utils-zig").?);
-    const console_stdout = b.addExecutable(.{
+    console_stdout.addImport("utils-zig", modules.get("utils-zig").?);
+    const run_console_stdout = b.addRunArtifact(b.addExecutable(.{
         .name = "console-stdout",
-        .root_module = console_stdout_module,
-    });
-    const run_console_stdout = b.addRunArtifact(console_stdout);
+        .root_module = console_stdout,
+    }));
     run_console_stdout.expectStdOutEqual("logged to stdout\ndebugged to stdout\n");
     test_step.dependOn(&run_console_stdout.step);
 
@@ -635,16 +635,16 @@ fn addOwnProcessTests(
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".own-process.test.zig")) {
             continue;
         }
-        const own_process_module = b.createModule(.{
+        const own_process = b.createModule(.{
             .root_source_file = b.path(b.fmt("packages-zig/vault-zig/src/test/{s}", .{entry.path})),
             .target = target,
             .optimize = optimize,
         });
-        own_process_module.addImport("vault-zig", modules.get("vault-zig").?);
-        own_process_module.addImport("utils-zig", modules.get("utils-zig").?);
-        own_process_module.addImport("node-utils-zig", modules.get("node-utils-zig").?);
+        own_process.addImport("vault-zig", modules.get("vault-zig").?);
+        own_process.addImport("utils-zig", modules.get("utils-zig").?);
+        own_process.addImport("node-utils-zig", modules.get("node-utils-zig").?);
         const own_process_test = b.addTest(.{
-            .root_module = own_process_module,
+            .root_module = own_process,
         });
         const run_own_process_test = b.addRunArtifact(own_process_test);
         run_own_process_test.setCwd(b.path("packages-zig"));
@@ -664,17 +664,18 @@ fn addStorageIntegrationTests(
     optimize: std.builtin.OptimizeMode,
 ) !void {
     const integration_test_step = b.step("test-integration", "Run the storage integration tests against the S3 server the environment names");
-    const integration_test_module = b.createModule(.{
+    const integration_tests = b.createModule(.{
         .root_source_file = b.path("packages-zig/storage-zig/integration-tests/cloud-storage.test.zig"),
         .target = target,
         .optimize = optimize,
     });
-    for ([_][]const u8{ "storage-zig", "utils-zig", "node-utils-zig", "encryption-zig" }) |module_name| {
-        integration_test_module.addImport(module_name, modules.get(module_name).?);
+    // Ziggy for the message queues and thread allocators of the threads the tests start.
+    for ([_][]const u8{ "storage-zig", "utils-zig", "node-utils-zig", "encryption-zig", "ziggy" }) |module_name| {
+        integration_tests.addImport(module_name, modules.get(module_name).?);
     }
     const integration_test = b.addTest(.{
         .name = "integration-test",
-        .root_module = integration_test_module,
+        .root_module = integration_tests,
     });
     const run_integration_test = b.addRunArtifact(integration_test);
     run_integration_test.has_side_effects = true;
@@ -828,17 +829,17 @@ fn addCli(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) !void {
-    const cli_module = b.addModule("cli-zig", .{
+    const cli = b.addModule("cli-zig", .{
         .root_source_file = b.path("apps/cli-zig/index.zig"),
         .target = target,
         .optimize = optimize,
     });
     for (cli_dependency_names) |dependency_name| {
-        cli_module.addImport(dependency_name, modules.get(dependency_name).?);
+        cli.addImport(dependency_name, modules.get(dependency_name).?);
     }
     const psi = b.addExecutable(.{
         .name = "psi",
-        .root_module = cli_module,
+        .root_module = cli,
     });
     b.installArtifact(psi);
 
@@ -870,18 +871,18 @@ fn addCli(
         try test_root_source.appendSlice(b.allocator, b.fmt("    _ = @import(\"{s}\");\n", .{entry.path}));
     }
     try test_root_source.appendSlice(b.allocator, "}\n");
-    const test_module = b.createModule(.{
+    const tests = b.createModule(.{
         .root_source_file = test_files.add("all-tests.zig", test_root_source.items),
         .target = target,
         .optimize = optimize,
     });
-    test_module.addImport("cli-zig", cli_module);
+    tests.addImport("cli-zig", cli);
     for (cli_dependency_names) |dependency_name| {
-        test_module.addImport(dependency_name, modules.get(dependency_name).?);
+        tests.addImport(dependency_name, modules.get(dependency_name).?);
     }
     const unit_test = b.addTest(.{
         .name = "cli-tests",
-        .root_module = test_module,
+        .root_module = tests,
     });
     const run_test = b.addRunArtifact(unit_test);
     run_test.setCwd(b.path("apps/cli-zig"));
@@ -906,7 +907,7 @@ fn addCli(
     cli_test_options.addOption([]const u8, "build_cwd", b.graph.cache.cwd);
     cli_test_options.addOptionPath("psi_path", psi.getEmittedBin());
     cli_test_options.addOptionPath("opener_recorder_path", opener_recorder.getEmittedBin());
-    test_module.addOptions("cli-test-options", cli_test_options);
+    tests.addOptions("cli-test-options", cli_test_options);
     test_step.dependOn(&run_test.step);
 }
 
@@ -979,22 +980,22 @@ fn addPhotosphere(
         shared_library.use_lld = true;
     }
 
-    const photosphere_app: ziggy_build.IShellApp = .{
+    const photosphere_app: ziggy_build.INativeApp = .{
         .name = "photosphere",
         .title = "Photosphere",
         .directory = "apps/photosphere",
         .linux_icon = "apps/photosphere/icons/photosphere-512.png",
         .windows_resource = "apps/photosphere/native/windows/photosphere.rc",
     };
-    try ziggy_build.addLinuxShell(b, photosphere_app, strip, target, optimize, ziggy, libraries.static_library);
-    try ziggy_build.addWindowsShell(b, photosphere_app, compile_only, strip, target, optimize, ziggy, libraries.static_library);
+    try ziggy_build.addLinuxNativeApp(b, photosphere_app, strip, target, optimize, ziggy, libraries.static_library);
+    try ziggy_build.addWindowsNativeApp(b, photosphere_app, compile_only, strip, target, optimize, ziggy, libraries.static_library);
     // Each native app's executable links the core as a static library, and Zig gives the archives a module links only to the compile
     // that owns the module, so the third-party libraries the packages link reach the core's static library, which does not hold them,
     // and not the executable. Without this the Linux native app failed to link with every symbol of the AWS SDK for C, aws-lc,
     // ImageMagick and FFmpeg undefined. Each native app's executable, which Ziggy makes and installs under the step, links them itself.
     for ([_][]const u8{ "photosphere-linux", "photosphere-windows" }) |step_name| {
-        const shell_step = &b.top_level_steps.get(step_name).?.step;
-        for (shell_step.dependencies.items) |dependency| {
+        const native_app_step = &b.top_level_steps.get(step_name).?.step;
+        for (native_app_step.dependencies.items) |dependency| {
             const install = dependency.cast(std.Build.Step.InstallArtifact) orelse continue;
             for ([_][]const u8{ "aws", "zlib-ng", "imagemagick", "ffmpeg" }) |name| {
                 for ((try findThirdPartyLibraries(b, target, name)).archives) |archive| {

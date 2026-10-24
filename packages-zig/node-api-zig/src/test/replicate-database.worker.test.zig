@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -39,7 +40,7 @@ const RecordingContext = struct {
     //
     // Records a message.
     //
-    fn sendEvent(context: ?*anyopaque, message: std.json.Value) void {
+    fn sendEvent(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         const self: *RecordingContext = @ptrCast(@alignCast(context.?));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch {
             return;
@@ -51,8 +52,7 @@ const RecordingContext = struct {
 //
 // Builds a minimal ITaskContext for testing.
 //
-fn makeContext(allocator: std.mem.Allocator, io: std.Io) !*RecordingContext {
-    _ = try test_environment.setupEnvironment(io);
+fn makeContext(allocator: std.mem.Allocator) !*RecordingContext {
     const recording = try allocator.create(RecordingContext);
     recording.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -103,19 +103,21 @@ fn readFileIn(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, name: [
 }
 
 test "opens source storage via openStorage with sourcePath and sourceEncryptionKey" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
     const keyFile = fixture_dirs.KEYS_DIR ++ "/ts-private.pem";
 
     // Make an encrypted copy, then replicate the encrypted copy back to a plain database with the source key.
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
     const plainDir = try std.fs.path.join(allocator, &.{ dirs.root, "plain" });
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.dest, .destPath = plainDir, .sourceEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.dest, .destPath = plainDir, .sourceEncryptionKey = keyFile, .partial = false, .force = false }), recording.context.taskContext());
 
     const assetPath = "asset/" ++ ASSET_ID;
     try std.testing.expectEqualStrings(try readFileIn(allocator, io, dirs.source, assetPath), try readFileIn(allocator, io, plainDir, assetPath));
@@ -123,17 +125,19 @@ test "opens source storage via openStorage with sourcePath and sourceEncryptionK
 }
 
 test "opens destination storage via openStorage with destPath, destEncryptionKey and destS3Key" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
     const keyFile = fixture_dirs.KEYS_DIR ++ "/ts2-private.pem";
 
     // destS3Key is only used for s3: destinations (see resolve-storage-credentials tests); here it is ignored.
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .destS3Key = "dest-s3", .partial = false, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = keyFile, .destS3Key = "dest-s3", .partial = false, .force = false }), recording.context.taskContext());
 
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, keyFile, null, null);
     const assetPath = "asset/" ++ ASSET_ID;
@@ -141,15 +145,17 @@ test "opens destination storage via openStorage with destPath, destEncryptionKey
 }
 
 test "forwards partial flag to replicate() when partial is true" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
 
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
@@ -160,15 +166,17 @@ test "forwards partial flag to replicate() when partial is true" {
 }
 
 test "forwards partial flag to replicate() when partial is false" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
     const dest = try node_api.open_storage.openStorage(allocator, io, dirs.dest, null, null, null);
     const destTree = (try node_api.tree.loadMerkleTree(allocator, io, dest.storage)).?;
@@ -178,15 +186,17 @@ test "forwards partial flag to replicate() when partial is false" {
 }
 
 test "forwards pathFilter to replicate() options" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    const output = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false, .pathFilter = "display/" ++ ASSET_ID }), recording.context.taskContext());
+    const output = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false, .pathFilter = "display/" ++ ASSET_ID }), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 1), output.object.get("copiedFiles").?.integer);
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, "display", ASSET_ID })));
@@ -194,15 +204,17 @@ test "forwards pathFilter to replicate() options" {
 }
 
 test "emits a replicate-progress task message for each progress callback fired by replicate()" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
     // (The job-progress events that follow each one are left out when the task carries no job tag.)
     try std.testing.expectEqual(@as(usize, 4), recording.messages.items.len);
@@ -233,15 +245,17 @@ fn jobMessages(allocator: std.mem.Allocator, recording: *RecordingContext) ![]co
 }
 
 test "reports its job alongside each progress string, carrying the tag it was queued with" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{
         .sourcePath = dirs.source,
         .destPath = dirs.dest,
         .partial = false,
@@ -265,25 +279,29 @@ test "reports its job alongside each progress string, carrying the tag it was qu
 }
 
 test "reports no job when the replication was queued without a tag" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(usize, 0), (try jobMessages(allocator, recording)).len);
 }
 
 test "hands replicate() a way to ask whether the task has been cancelled" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
@@ -291,20 +309,22 @@ test "hands replicate() a way to ask whether the task has been cancelled" {
     // mid-copy is noticed.
     recording.context.cancel();
 
-    try std.testing.expectError(error.Thrown, replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext()));
+    try std.testing.expectError(error.Thrown, replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext()));
     try std.testing.expectEqualStrings("Replication was cancelled.", errors.lastErrorMessage());
 }
 
 test "writes encryption.pub to dest raw storage when destination is encrypted" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = fixture_dirs.KEYS_DIR ++ "/ts-private.pem", .partial = true, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .destEncryptionKey = fixture_dirs.KEYS_DIR ++ "/ts-private.pem", .partial = true, .force = false }), recording.context.taskContext());
 
     try std.testing.expectEqualStrings(
         try test_files.readFile(allocator, io, fixture_dirs.KEYS_DIR ++ "/ts-public.pem"),
@@ -313,49 +333,57 @@ test "writes encryption.pub to dest raw storage when destination is encrypted" {
 }
 
 test "does not write encryption.pub when destination is not encrypted" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    _ = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = true, .force = false }), recording.context.taskContext());
 
     try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dirs.dest, ".db", "encryption.pub" })));
 }
 
 test "returns the IReplicationResult from replicate()" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     const dirs = try makeDirectories(allocator, io);
     defer temp_dirs.removeTempDir(io, dirs.root);
 
-    const output = try replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
+    const output = try replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = dirs.source, .destPath = dirs.dest, .partial = false, .force = false }), recording.context.taskContext());
 
     try std.testing.expectEqualStrings("{\"filesImported\":1,\"copiedFiles\":3,\"copiedRecords\":1,\"prunedFiles\":[],\"missingFromSource\":[]}", try std.json.Stringify.valueAlloc(allocator, output, .{}));
 }
 
 test "throws when sourcePath is empty" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
-    try std.testing.expectError(error.Thrown, replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = "", .destPath = "/fake/dest", .partial = true, .force = false }), recording.context.taskContext()));
+    const recording = try makeContext(allocator);
+    try std.testing.expectError(error.Thrown, replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = "", .destPath = "/fake/dest", .partial = true, .force = false }), recording.context.taskContext()));
     try std.testing.expectEqualStrings("sourcePath is required", errors.lastErrorMessage());
 }
 
 test "throws when destPath is empty" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const recording = try makeContext(allocator, io);
-    try std.testing.expectError(error.Thrown, replicateDatabaseHandler(allocator, io, try makeData(allocator, .{ .sourcePath = "/fake/source", .destPath = "", .partial = true, .force = false }), recording.context.taskContext()));
+    const recording = try makeContext(allocator);
+    try std.testing.expectError(error.Thrown, replicateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, .{ .sourcePath = "/fake/source", .destPath = "", .partial = true, .force = false }), recording.context.taskContext()));
     try std.testing.expectEqualStrings("destPath is required", errors.lastErrorMessage());
 }

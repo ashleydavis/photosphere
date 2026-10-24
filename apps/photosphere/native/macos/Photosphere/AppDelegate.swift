@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let text = argument.dropFirst("-geometry=".count)
             let parts = text.split(separator: "x", maxSplits: 1)
             guard parts.count == 2, let width = Double(parts[0]), let height = Double(parts[1].prefix(while: { $0.isNumber })) else {
-                FileHandle.standardError.write(Data("ziggy shell: invalid -geometry argument: \(argument)\n".utf8))
+                FileHandle.standardError.write(Data("ziggy native app: invalid -geometry argument: \(argument)\n".utf8))
                 exit(1)
             }
             return CGSize(width: width, height: height)

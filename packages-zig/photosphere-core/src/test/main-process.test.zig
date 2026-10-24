@@ -27,17 +27,19 @@ fn makeDatabase(app: *TestApp, name: []const u8, config_json: []const u8) ![]u8 
 //
 // A task that sends an event and then runs until it is cancelled.
 //
-fn spinTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn spinTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
     _ = data;
-    try context.sendEvent(.{ .spinning = true });
+    try services.sendEvent(io, allocator, .{ .spinning = true });
     while (true) {
-        try context.checkCancelled();
-        try context.io().sleep(.fromMilliseconds(2), .awake);
+        try services.checkCancelled(io, allocator);
+        try io.sleep(.fromMilliseconds(2), .awake);
     }
 }
 
 fn waitFor(app: *TestApp, text: []const u8) !void {
-    try app.shell.expectMessageContaining(text);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, text);
 }
 
 //
@@ -46,9 +48,13 @@ fn waitFor(app: *TestApp, text: []const u8) !void {
 // import by hand is not undone by it.
 //
 fn waitForStartupCheck(app: *TestApp) !void {
-    _ = try app.core.uiQuery();
-    try app.shell.expectMessageContaining("\"status\":\"succeeded\",\"outputs\":null,\"type\":\"ensure-auto-import\"");
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
+    // The check reports what it found automatic import should do, which the main thread then does.
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"status\":\"succeeded\",\"outputs\":{\"action\":\"");
 }
+
+const endTask = support.endTask;
+const sendTaskEvent = support.sendTaskEvent;
 
 test "notify-database-opened adds an entry for a database that has none, with the origin from its config.json" {
     var app: TestApp = undefined;
@@ -71,11 +77,12 @@ test "notify-database-opened adds an entry for a database that has none, with th
     try std.testing.expectEqualStrings(database_path, last);
     const recents = try node_api.databases_config.getRecentDatabases(arena.allocator(), std.testing.io);
     try std.testing.expectEqual(@as(usize, 1), recents.len);
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(state.is_database_open);
-    try std.testing.expectEqualStrings(database_path, state.current_database_path.?);
+    try app.onState(@as([]const u8, database_path), struct {
+        fn check(path: []const u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(state.is_database_open);
+            try std.testing.expectEqualStrings(path, state.current_database_path.?);
+        }
+    }.check);
 }
 
 test "notify-database-opened refreshes the origin of a database that is already listed" {
@@ -130,24 +137,44 @@ test "notify-database-closed forgets the database to reopen and the open databas
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     try std.testing.expect((try node_api.databases_config.getLastDatabase(arena.allocator(), std.testing.io)) == null);
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.is_database_open);
-    try std.testing.expect(state.current_database_path == null);
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(!state.is_database_open);
+            try std.testing.expect(state.current_database_path == null);
+        }
+    }.check);
+}
+
+//
+// Whether the state records a sync as running.
+//
+fn isSyncRunning(app: *TestApp) !bool {
+    return try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!bool {
+            return state.is_sync_running;
+        }
+    }.check);
+}
+
+//
+// Sets how long the debounce of a sync waits, on the main thread.
+//
+fn setSyncDebounceMs(app: *TestApp, milliseconds: u64) !void {
+    try app.onState(milliseconds, struct {
+        fn check(given: u64, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.sync_debounce_ms = given;
+        }
+    }.check);
 }
 
 //
 // Waits until the state says no sync is running, which the main process says when it hears that the sync task ended, a moment after the
 // page is told.
 //
-fn waitForSyncToStop(state: *main_state.MainState) !void {
+fn waitForSyncToStop(app: *TestApp) !void {
     var waited_ms: i64 = 0;
     while (true) {
-        state.lock();
-        const running = state.is_sync_running;
-        state.unlock();
-        if (!running) {
+        if (!try isSyncRunning(app)) {
             return;
         }
         if (waited_ms >= 5000) {
@@ -163,8 +190,7 @@ test "main-command set-sync-allowed records the decision, and an edit then queue
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    const state = main_state.fromCore(app.core);
-    state.sync_debounce_ms = 30;
+    try setSyncDebounceMs(&app, 30);
     const database_path = try makeDatabase(&app, "sync-me", "{}");
     defer allocator.free(database_path);
     const path_json = try utils.json.stringify(allocator, database_path);
@@ -172,17 +198,19 @@ test "main-command set-sync-allowed records the decision, and an edit then queue
     allocator.free(try app.requestOk("notify-database-opened", path_json));
     // Syncing is not allowed yet, so an edit queues nothing.
     allocator.free(try app.requestOk("notify-database-edited", "null"));
-    app.shell.sleepMs(200);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("sync-database"));
+    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "sync-database"));
     allocator.free(try app.requestOk("main-command", "{\"command\":\"set-sync-allowed\",\"allowed\":true}"));
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Sync gate set to true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Sync gate set to true") != null);
     // The sync-database task runs against a database with no origin and ends, which is how the end of a sync is seen: the page is
     // told the task completed and the running flag is reset.
     try waitFor(&app, "\"type\":\"sync-database\"");
-    try waitForSyncToStop(state);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(state.sync_allowed);
+    try waitForSyncToStop(&app);
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(state.sync_allowed);
+        }
+    }.check);
 }
 
 test "main-command set-sync-allowed with allowed false schedules nothing" {
@@ -190,14 +218,15 @@ test "main-command set-sync-allowed with allowed false schedules nothing" {
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    const state = main_state.fromCore(app.core);
-    state.sync_debounce_ms = 30;
+    try setSyncDebounceMs(&app, 30);
     allocator.free(try app.requestOk("main-command", "{\"command\":\"set-sync-allowed\",\"allowed\":false}"));
-    app.shell.sleepMs(200);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.sync_allowed);
-    try std.testing.expect(state.sync_debounce_at == null);
+    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(!state.sync_allowed);
+            try std.testing.expect(state.sync_debounce_timer == null);
+        }
+    }.check);
 }
 
 test "main-command toggle-devtools asks the shell to toggle the developer tools" {
@@ -206,7 +235,9 @@ test "main-command toggle-devtools asks the shell to toggle the developer tools"
     defer app.stop();
     const allocator = std.testing.allocator;
     allocator.free(try app.requestOk("main-command", "\"toggle-devtools\""));
-    try std.testing.expectEqualStrings("toggle-devtools\n", app.shell.chosen_actions.items);
+    const actions = try app.native_app.chosenActions(std.testing.io, allocator);
+    defer allocator.free(actions);
+    try std.testing.expectEqualStrings("toggle-devtools\n", actions);
 }
 
 test "main-command with an unknown command writes it to the console and replies nothing" {
@@ -216,7 +247,7 @@ test "main-command with an unknown command writes it to the console and replies 
     const reply = try app.requestOk("main-command", "\"fly-to-the-moon\"");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("null", reply);
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.writer.buffered(), "Unknown main-command: fly-to-the-moon") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Unknown main-command: fly-to-the-moon") != null);
 }
 
 //
@@ -228,20 +259,21 @@ const AWAIT_CHILDREN_SOURCE = "await-children-session";
 // A task that does what import-assets does with its children: queues them under its own source through a task queue and waits for
 // them all. More are queued than the test app has workers, so at least one is still waiting for a worker when the source is cancelled.
 //
-fn awaitChildrenTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn awaitChildrenTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
     _ = data;
     var uuid_generator: ziggy.task_queue.utils.random_uuid_generator.RandomUuidGenerator = .{};
-    const queue = try ziggy.task_queue.task_queue.TaskQueue.init(context.arena, context.io(), uuid_generator.uuidGenerator(), AWAIT_CHILDREN_SOURCE);
-    defer queue.deinit();
+    const queue = try ziggy.task_queue.task_queue.TaskQueue.init(allocator, uuid_generator.uuidGenerator(), AWAIT_CHILDREN_SOURCE);
+    defer queue.deinit(io, allocator);
     var child_index: usize = 0;
     while (child_index < 4) : (child_index += 1) {
-        _ = try queue.addTask("spin", .null, null, null);
+        _ = try queue.addTask(io, allocator, "spin", .null, null, null);
     }
-    try context.sendEvent(.{
+    try services.sendEvent(io, allocator, .{
         .childrenQueued = true,
     });
-    try queue.awaitAllTasks();
-    return try context.arena.dupe(u8, "null");
+    try queue.awaitAllTasks(io, allocator, timers);
+    return try allocator.dupe(u8, "null");
 }
 
 test "main-command cancel-tasks lets a task waiting on its children end when some of them never started" {
@@ -262,7 +294,11 @@ test "main-command cancel-tasks lets a task waiting on its children end when som
     });
     defer app.stop();
     // Lets the waiting task go when the cancel below did not, so a failure is reported rather than hanging the stop.
-    errdefer app.core.queue_backend.cancelTasks(AWAIT_CHILDREN_SOURCE);
+    errdefer app.onState(@as(u8, 0), struct {
+        fn check(_: u8, _: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            services.cancelTasks(main_io, main_state.stateAllocator(), AWAIT_CHILDREN_SOURCE);
+        }
+    }.check) catch {};
     const allocator = std.testing.allocator;
     const message = try utils.json.stringify(allocator, .{
         .kind = "system",
@@ -276,7 +312,7 @@ test "main-command cancel-tasks lets a task waiting on its children end when som
         },
     });
     defer allocator.free(message);
-    app.core.postMessage(message);
+    app.native_app.sendMessage(std.testing.allocator, message);
     try waitFor(&app, "childrenQueued");
     const cancel_json = try utils.json.stringify(allocator, .{
         .command = "cancel-tasks",
@@ -303,7 +339,7 @@ test "main-command without a command is an unknown command called undefined" {
     const reply = try app.requestOk("main-command", "{\"allowed\":true}");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("null", reply);
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.writer.buffered(), "Unknown main-command: undefined") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Unknown main-command: undefined") != null);
 }
 
 test "resetSyncState cancels the tasks of the database that was open when another one is opened" {
@@ -332,7 +368,7 @@ test "resetSyncState cancels the tasks of the database that was open when anothe
         },
     });
     defer allocator.free(message);
-    app.core.postMessage(message);
+    app.native_app.sendMessage(std.testing.allocator, message);
     try waitFor(&app, "\"kind\":\"system\",\"name\":\"task-event\"");
     allocator.free(try app.requestOk("notify-database-opened", second_json));
     try waitFor(&app, "\"errorMessage\":\"Cancelled\"");
@@ -342,7 +378,7 @@ test "a failed import tells the user, and an automatic import that stops clears 
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEnd(app.core, .{
+    try endTask(&app, .{
         .task_id = "import-1",
         .task_type = "import-assets",
         .source = "manual",
@@ -354,13 +390,14 @@ test "a failed import tells the user, and an automatic import that stops clears 
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"show-notification\",\"data\":{\"message\":\"Import failed: disk on fire\",\"color\":\"danger\",\"duration\":8000}}}");
     try waitForStartupCheck(&app);
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.auto_import_running = true;
-    try state.setOwned(&state.auto_import_task_id, "auto-1");
-    try state.setOwned(&state.auto_import_database_path, "/auto/db");
-    state.unlock();
-    main_process.onTaskEnd(app.core, .{
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.auto_import_running = true;
+            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_task_id, "auto-1");
+            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_database_path, "/auto/db");
+        }
+    }.check);
+    try endTask(&app, .{
         .task_id = "auto-1",
         .task_type = "import-assets",
         .source = "auto-import",
@@ -370,12 +407,14 @@ test "a failed import tells the user, and an automatic import that stops clears 
         .result_json = null,
         .started = true,
     });
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.auto_import_running);
-    try std.testing.expect(state.auto_import_task_id == null);
-    try std.testing.expect(state.auto_import_database_path == null);
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("Import failed"));
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(!state.auto_import_running);
+            try std.testing.expect(state.auto_import_task_id == null);
+            try std.testing.expect(state.auto_import_database_path == null);
+        }
+    }.check);
+    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "Import failed"));
 }
 
 test "a replication that worked registers its destination and tells the user, and one that failed only tells the user" {
@@ -383,7 +422,7 @@ test "a replication that worked registers its destination and tells the user, an
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    main_process.onTaskEnd(app.core, .{
+    try endTask(&app, .{
         .task_id = "rep-1",
         .task_type = "replicate-database",
         .source = "src",
@@ -401,7 +440,7 @@ test "a replication that worked registers its destination and tells the user, an
     try std.testing.expectEqualStrings("/replicas/copy", entry.path);
     try std.testing.expectEqualStrings("/photos", entry.origin.?);
     try std.testing.expectEqualStrings("key-1", entry.encryptionKey.?);
-    main_process.onTaskEnd(app.core, .{
+    try endTask(&app, .{
         .task_id = "rep-2",
         .task_type = "replicate-database",
         .source = "src",
@@ -419,11 +458,12 @@ test "a sync that fails tells the page it completed, and one that succeeds does 
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.is_sync_running = true;
-    state.unlock();
-    main_process.onTaskEnd(app.core, .{
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.is_sync_running = true;
+        }
+    }.check);
+    try endTask(&app, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
@@ -433,11 +473,9 @@ test "a sync that fails tells the page it completed, and one that succeeds does 
         .result_json = null,
         .started = true,
     });
-    state.lock();
-    try std.testing.expect(!state.is_sync_running);
-    state.unlock();
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("sync-completed"));
-    main_process.onTaskEnd(app.core, .{
+    try std.testing.expect(!try isSyncRunning(&app));
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "sync-completed"));
+    try endTask(&app, .{
         .task_id = "sync-2",
         .task_type = "sync-database",
         .source = "/db",
@@ -454,27 +492,50 @@ test "a sync task's started and completed messages are passed to the page as eve
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEvent(app.core, .{
+    try sendTaskEvent(&app, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
         .event_json ="{\"type\":\"sync-started\"}",
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-started\",\"data\":null}}");
-    main_process.onTaskEvent(app.core, .{
+    try sendTaskEvent(&app, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
         .event_json ="{\"type\":\"sync-completed\"}",
     });
     try waitFor(&app, "{\"kind\":\"app\",\"data\":{\"type\":\"sync-completed\",\"data\":null}}");
-    main_process.onTaskEvent(app.core, .{
+    try sendTaskEvent(&app, .{
         .task_id = "other",
         .task_type = "other",
         .source = "x",
         .event_json ="{\"type\":\"progress\"}",
     });
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("sync-started"));
+    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "sync-started"));
+}
+
+test "a background pass's hold-awake event reaches the main thread's hold on the computer staying awake, and one without its request is an error" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try sendTaskEvent(&app, .{
+        .task_id = "pass-1",
+        .task_type = "background-pass",
+        .source = "background",
+        .event_json = "{\"type\":\"hold-awake\",\"request\":{\"awake\":true}}",
+    });
+    // Windows and MacOS take the hold; this test runs on Linux, where the main state refuses it, which shows the request reached it.
+    if (@import("builtin").os.tag == .linux) {
+        try std.testing.expect(std.mem.indexOf(u8, try app.consoleErr(), "The computer is held awake on Windows and MacOS only, and this is linux.") != null);
+    }
+    try sendTaskEvent(&app, .{
+        .task_id = "pass-1",
+        .task_type = "background-pass",
+        .source = "background",
+        .event_json = "{\"type\":\"hold-awake\"}",
+    });
+    try std.testing.expect(std.mem.indexOf(u8, try app.consoleErr(), "A request to hold the computer awake has no request.") != null);
 }
 
 test "the periodic sync queues a sync for the open database when syncing is allowed" {
@@ -487,28 +548,37 @@ test "the periodic sync queues a sync for the open database when syncing is allo
     const path_json = try utils.json.stringify(allocator, database_path);
     defer allocator.free(path_json);
     allocator.free(try app.requestOk("notify-database-opened", path_json));
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.sync_allowed = true;
-    state.sync_periodic_ms = 40;
-    state.sync_periodic_at = state.now() + 40;
-    state.unlock();
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            state.sync_allowed = true;
+            // The periodic sync is started again, every 40 milliseconds.
+            state.stopPeriodicSync(timers);
+            state.sync_periodic_ms = 40;
+            try state.startPeriodicSync(timers, main_io);
+        }
+    }.check);
     try waitFor(&app, "\"type\":\"sync-database\"");
 }
 
 //
 // A fake of the create-default-database task, which another part of the app provides: it ends at once.
 //
-fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn createDefaultDatabaseTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
     _ = data;
-    try context.sendEvent(.{ .createdDefaultDatabase = true });
-    return try context.arena.dupe(u8, "null");
+    try services.sendEvent(io, allocator, .{ .createdDefaultDatabase = true });
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // A fake of the create-default-database task that fails, as it does when the database cannot be made.
 //
-fn createDefaultDatabaseFailsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn createDefaultDatabaseFailsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = io;
+    _ = allocator;
     _ = context;
     _ = data;
     return utils.errors.throwError("the default database could not be made", .{});
@@ -518,19 +588,25 @@ fn createDefaultDatabaseFailsTask(context: *ziggy.task_runner.TaskContext, data:
 // A fake of the import-assets task, which another part of the app provides: it reports that it started and then runs until it is
 // cancelled.
 //
-fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn importAssetsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
     _ = data;
-    try context.sendEvent(.{ .importing = true });
+    try services.sendEvent(io, allocator, .{ .importing = true });
     while (true) {
-        try context.checkCancelled();
-        try context.io().sleep(.fromMilliseconds(2), .awake);
+        try services.checkCancelled(io, allocator);
+        try io.sleep(.fromMilliseconds(2), .awake);
     }
 }
 
 //
 // A fake of the import-assets task that ends as soon as it starts, as one does when it cannot open its database.
 //
-fn importAssetsEndsAtOnceTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn importAssetsEndsAtOnceTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = io;
+    _ = allocator;
     _ = context;
     _ = data;
     return utils.errors.throwError("the database could not be opened", .{});
@@ -553,11 +629,11 @@ fn autoImportConfigYaml(allocator: std.mem.Allocator, database_path: []const u8)
 //
 fn waitForCount(app: *TestApp, text: []const u8, wanted: usize) !void {
     var waited_ms: i64 = 0;
-    while (app.shell.countContaining(text) < wanted) {
+    while (app.native_app.countContaining(std.testing.io, std.testing.allocator, text) < wanted) {
         if (waited_ms >= 5000) {
             return error.MessageNeverArrived;
         }
-        app.shell.sleepMs(10);
+        ziggy.fake_native_app.sleepMs(std.testing.io, 10);
         waited_ms += 10;
     }
 }
@@ -571,13 +647,25 @@ test "automatic import that was switched on before the app started is started by
     defer allocator.free(config_yaml);
     try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
     defer app.stop();
-    _ = try app.core.uiQuery();
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
     try waitFor(&app, "\"importing\":true");
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(state.auto_import_running);
-    try std.testing.expectEqualStrings(database_path, state.auto_import_database_path.?);
+    try app.onState(@as([]const u8, database_path), struct {
+        fn check(path: []const u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(state.auto_import_running);
+            try std.testing.expectEqualStrings(path, state.auto_import_database_path.?);
+        }
+    }.check);
+}
+
+//
+// Sets how often automatic import is checked, before the main window is created, which starts the check.
+//
+fn setAutoImportCheckMs(app: *TestApp, milliseconds: u64) !void {
+    try app.onState(milliseconds, struct {
+        fn check(given: u64, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.auto_import_check_ms = given;
+        }
+    }.check);
 }
 
 test "automatic import is started again by the periodic check after its task died" {
@@ -589,14 +677,14 @@ test "automatic import is started again by the periodic check after its task die
     defer allocator.free(config_yaml);
     try app.startWithTasksAndConfigFile(&auto_import_tasks, config_yaml);
     defer app.stop();
-    _ = try app.core.uiQuery();
+    try setAutoImportCheckMs(&app, 40);
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
     try waitForCount(&app, "\"importing\":true", 1);
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.auto_import_check_ms = 40;
-    state.auto_import_check_at = state.now() + 40;
-    state.unlock();
-    app.core.runner.cancelSource("auto-import");
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, _: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            services.cancelTasks(main_io, main_state.stateAllocator(), "auto-import");
+        }
+    }.check);
     try waitForCount(&app, "\"importing\":true", 2);
 }
 
@@ -612,15 +700,15 @@ test "a failure to start automatic import at startup is logged, not lost" {
         .{ .name = "create-default-database", .handler = createDefaultDatabaseFailsTask },
     }, config_yaml);
     defer app.stop();
-    _ = try app.core.uiQuery();
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
     var waited_ms: i64 = 0;
-    while (std.mem.indexOf(u8, app.console_out.writer.buffered(), "Error starting automatic import") == null and
-        std.mem.indexOf(u8, app.console_err.writer.buffered(), "Error starting automatic import") == null)
+    while (std.mem.indexOf(u8, (try app.consoleOut()), "Error starting automatic import") == null and
+        std.mem.indexOf(u8, (try app.consoleErr()), "Error starting automatic import") == null)
     {
         if (waited_ms >= 5000) {
             return error.MessageNeverArrived;
         }
-        app.shell.sleepMs(10);
+        ziggy.fake_native_app.sleepMs(std.testing.io, 10);
         waited_ms += 10;
     }
 }
@@ -637,14 +725,11 @@ test "an automatic import that ends the moment it starts is not remembered as ru
         .{ .name = "import-assets", .handler = importAssetsEndsAtOnceTask },
     }, config_yaml);
     defer app.stop();
-    const state = main_state.fromCore(app.core);
     // The check runs every few milliseconds, so every start that loses the race to its own end would leave the state saying that the
     // import is running while no task is, and the next check would then see nothing to do. Count the starts: every end must be followed
     // by another start, because the state must say it is not running.
-    state.lock();
-    state.auto_import_check_ms = 20;
-    state.auto_import_check_at = state.now();
-    state.unlock();
+    try setAutoImportCheckMs(&app, 20);
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
     try waitForCount(&app, "the database could not be opened", 8);
 }
 
@@ -652,7 +737,7 @@ test "a sync that succeeded with an input that is not JSON is reported, not igno
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEnd(app.core, .{
+    try endTask(&app, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
@@ -662,8 +747,8 @@ test "a sync that succeeded with an input that is not JSON is reported, not igno
         .result_json = null,
         .started = true,
     });
-    const logged = app.console_out.writer.buffered();
-    const logged_errors = app.console_err.writer.buffered();
+    const logged = (try app.consoleOut());
+    const logged_errors = (try app.consoleErr());
     try std.testing.expect(std.mem.indexOf(u8, logged, "Error handling the end of a task") != null or
         std.mem.indexOf(u8, logged_errors, "Error handling the end of a task") != null);
 }
@@ -672,7 +757,7 @@ test "an import that failed with an empty error message says the error is unknow
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEnd(app.core, .{
+    try endTask(&app, .{
         .task_id = "import-2",
         .task_type = "import-assets",
         .source = "manual",
@@ -688,9 +773,11 @@ test "an import that failed with an empty error message says the error is unknow
 //
 // A fake of the evict-originals task, which another part of the app provides: it reports what it was asked to do.
 //
-fn evictOriginalsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    try context.sendEvent(.{ .evicting = data });
-    return try context.arena.dupe(u8, "null");
+fn evictOriginalsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
+    try services.sendEvent(io, allocator, .{ .evicting = data });
+    return try allocator.dupe(u8, "null");
 }
 
 test "a sync that succeeded queues the eviction of originals only for the database automatic import fills" {
@@ -698,12 +785,13 @@ test "a sync that succeeded queues the eviction of originals only for the databa
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "evict-originals", .handler = evictOriginalsTask }});
     defer app.stop();
     try waitForStartupCheck(&app);
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.auto_import_running = true;
-    try state.setOwned(&state.auto_import_database_path, "/the/default/db");
-    state.unlock();
-    main_process.onTaskEnd(app.core, .{
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.auto_import_running = true;
+            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_database_path, "/the/default/db");
+        }
+    }.check);
+    try endTask(&app, .{
         .task_id = "sync-other",
         .task_type = "sync-database",
         .source = "/another/db",
@@ -713,9 +801,9 @@ test "a sync that succeeded queues the eviction of originals only for the databa
         .result_json = null,
         .started = true,
     });
-    app.shell.sleepMs(100);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"evicting\""));
-    main_process.onTaskEnd(app.core, .{
+    ziggy.fake_native_app.sleepMs(std.testing.io, 100);
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"evicting\""));
+    try endTask(&app, .{
         .task_id = "sync-default",
         .task_type = "sync-database",
         .source = "/the/default/db",
@@ -743,11 +831,11 @@ test "a replication of a database that is already listed does not list it again 
         .result_json = null,
         .started = true,
     };
-    main_process.onTaskEnd(app.core, end);
+    try endTask(&app, end);
     try waitFor(&app, "Replication completed for");
-    main_process.onTaskEnd(app.core, end);
+    try endTask(&app, end);
     try waitForCount(&app, "Replication completed for", 2);
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"type\":\"databases-changed\""));
+    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"type\":\"databases-changed\""));
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const databases = try node_api.databases_config.getDatabases(arena.allocator(), std.testing.io);
@@ -757,153 +845,65 @@ test "a replication of a database that is already listed does not list it again 
 //
 // Whether the console, standard output or standard error, holds the text.
 //
-fn consoleHas(app: *TestApp, text: []const u8) bool {
-    return std.mem.indexOf(u8, app.console_out.writer.buffered(), text) != null or
-        std.mem.indexOf(u8, app.console_err.writer.buffered(), text) != null;
-}
-
-//
-// A fake of the asset server task: it says it is ready on the port it was asked for, or on a port of its own when it was asked
-// for the operating system's choice, and then runs until it is cancelled.
-//
-fn assetServerTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const asked = ziggy.json.getInteger(data, "port") orelse 0;
-    const port: i64 = if (asked == 0) 40001 else asked;
-    try context.sendEvent(.{
-        .type = "asset-server-ready",
-        .port = port,
-    });
-    while (true) {
-        try context.checkCancelled();
-        try context.io().sleep(.fromMilliseconds(2), .awake);
-    }
-}
-
-//
-// Tells the main process that the asset server task failed with the message.
-//
-fn failAssetServer(app: *TestApp, message: ?[]const u8) void {
-    main_process.onTaskEnd(app.core, .{
-        .task_id = "asset-server-1",
-        .task_type = "asset-server",
-        .source = "asset-server",
-        .input_json = "{\"port\":0}",
-        .status = .failed,
-        .error_message = message,
-        .result_json = null,
-        .started = true,
-    });
-}
-
-test "an asset server that stops while the app runs is started again on the port it had" {
-    var app: TestApp = undefined;
-    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "asset-server", .handler = assetServerTask }});
-    defer app.stop();
-    _ = try app.core.uiQuery();
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"port\":40001"));
-    failAssetServer(&app, "crashed");
-    try waitForCount(&app, "\"port\":40001", 2);
-    try std.testing.expect(consoleHas(&app, "Restarting REST API worker..."));
-    try std.testing.expect(consoleHas(&app, "The asset server stopped: crashed"));
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.asset_server_ended);
-}
-
-test "an asset server that stops while the app is shutting down is not started again" {
-    var app: TestApp = undefined;
-    try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "asset-server", .handler = assetServerTask }});
-    defer app.stop();
-    _ = try app.core.uiQuery();
-    const state = main_state.fromCore(app.core);
-    state.stopping.store(true, .release);
-    failAssetServer(&app, "crashed");
-    app.shell.sleepMs(200);
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"port\":40001"));
-    try std.testing.expect(!consoleHas(&app, "Restarting REST API worker..."));
-}
-
-test "an asset server that stops before it says which port it bound fails the start with its reason" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.asset_server_requested = true;
-    state.unlock();
-    failAssetServer(&app, "address in use");
-    try std.testing.expectError(error.Thrown, app.core.uiQuery());
-    try std.testing.expectEqualStrings("REST API failed to start: address in use", utils.errors.errorMessage(error.Thrown));
-    try std.testing.expect(!consoleHas(&app, "Restarting REST API worker..."));
-}
-
-test "an asset server that says nothing within the time allowed fails the start with the timeout message" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.asset_server_requested = true;
-    state.asset_server_start_timeout_ms = 50;
-    state.unlock();
-    try std.testing.expectError(error.Thrown, app.core.uiQuery());
-    try std.testing.expectEqualStrings("REST API failed to start within timeout", utils.errors.errorMessage(error.Thrown));
+fn consoleHas(app: *TestApp, text: []const u8) !bool {
+    return std.mem.indexOf(u8, (try app.consoleOut()), text) != null or
+        std.mem.indexOf(u8, (try app.consoleErr()), text) != null;
 }
 
 test "automatic import is not checked until the main window is created, and creating the window again changes nothing" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    app.shell.sleepMs(200);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"type\":\"ensure-auto-import\""));
-    try std.testing.expect(!consoleHas(&app, "Main window created"));
+    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"type\":\"ensure-auto-import\""));
+    try std.testing.expect(!try consoleHas(&app, "Main window created"));
     try waitForStartupCheck(&app);
-    try std.testing.expect(consoleHas(&app, "Main window created"));
-    _ = try app.core.uiQuery();
-    app.shell.sleepMs(200);
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"type\":\"ensure-auto-import\""));
-    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, app.console_out.writer.buffered(), "Main window created"));
+    try std.testing.expect(try consoleHas(&app, "Main window created"));
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
+    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
+    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"type\":\"ensure-auto-import\""));
+    try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, (try app.consoleOut()), "Main window created"));
 }
 
 test "a failed check of automatic import says whether it was the start or a later check" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEnd(app.core, .{
+    try endTask(&app, .{
         .task_id = "ensure-1",
         .task_type = "ensure-auto-import",
         .source = "ensure-auto-import",
-        .input_json = main_state.ENSURE_AUTO_IMPORT_STARTING_INPUT,
+        .input_json = "{\"restarting\":false}",
         .status = .failed,
         .error_message = "no folders",
         .result_json = null,
         .started = true,
     });
-    try std.testing.expect(consoleHas(&app, "Error starting automatic import: no folders"));
-    main_process.onTaskEnd(app.core, .{
+    try std.testing.expect(try consoleHas(&app, "Error starting automatic import: no folders"));
+    try endTask(&app, .{
         .task_id = "ensure-2",
         .task_type = "ensure-auto-import",
         .source = "ensure-auto-import",
-        .input_json = main_state.ENSURE_AUTO_IMPORT_RESTARTING_INPUT,
+        .input_json = "{\"restarting\":true}",
         .status = .failed,
         .error_message = "no folders",
         .result_json = null,
         .started = true,
     });
-    try std.testing.expect(consoleHas(&app, "Error restarting automatic import: no folders"));
+    try std.testing.expect(try consoleHas(&app, "Error restarting automatic import: no folders"));
 }
 
 test "an automatic import that stops with no error message says the error is unknown" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.auto_import_running = true;
-    try state.setOwned(&state.auto_import_task_id, "auto-2");
-    state.unlock();
-    main_process.onTaskEnd(app.core, .{
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.auto_import_running = true;
+            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_task_id, "auto-2");
+        }
+    }.check);
+    try endTask(&app, .{
         .task_id = "auto-2",
         .task_type = "import-assets",
         .source = "auto-import",
@@ -913,21 +913,22 @@ test "an automatic import that stops with no error message says the error is unk
         .result_json = null,
         .started = true,
     });
-    try std.testing.expect(consoleHas(&app, "Automatic import stopped: Unknown error"));
+    try std.testing.expect(try consoleHas(&app, "Automatic import stopped: Unknown error"));
 }
 
 test "a sync of a database with an empty path queues no eviction, and an empty open path queues no sync" {
     var app: TestApp = undefined;
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "evict-originals", .handler = evictOriginalsTask }});
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.auto_import_running = true;
-    try state.setOwned(&state.auto_import_database_path, "");
-    state.sync_allowed = true;
-    try state.setOwned(&state.current_database_path, "");
-    state.unlock();
-    main_process.onTaskEnd(app.core, .{
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            state.auto_import_running = true;
+            try main_state.setOwned(main_state.stateAllocator(), &state.auto_import_database_path, "");
+            state.sync_allowed = true;
+            try main_state.setOwned(main_state.stateAllocator(), &state.current_database_path, "");
+        }
+    }.check);
+    try endTask(&app, .{
         .task_id = "sync-empty",
         .task_type = "sync-database",
         .source = "",
@@ -937,13 +938,15 @@ test "a sync of a database with an empty path queues no eviction, and an empty o
         .result_json = null,
         .started = true,
     });
-    try state.enqueueSyncTask();
-    app.shell.sleepMs(200);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"evicting\""));
-    try std.testing.expect(!consoleHas(&app, "Queuing sync task"));
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.is_sync_running);
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            try state.enqueueSyncTask(services, main_io, main_state.stateAllocator());
+        }
+    }.check);
+    ziggy.fake_native_app.sleepMs(std.testing.io, 200);
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"evicting\""));
+    try std.testing.expect(!try consoleHas(&app, "Queuing sync task"));
+    try std.testing.expect(!try isSyncRunning(&app));
 }
 
 test "main-command set-sync-allowed false logs the decision as false" {
@@ -951,5 +954,5 @@ test "main-command set-sync-allowed false logs the decision as false" {
     try app.start();
     defer app.stop();
     std.testing.allocator.free(try app.requestOk("main-command", "{\"command\":\"set-sync-allowed\",\"allowed\":false}"));
-    try std.testing.expect(consoleHas(&app, "Sync gate set to false"));
+    try std.testing.expect(try consoleHas(&app, "Sync gate set to false"));
 }

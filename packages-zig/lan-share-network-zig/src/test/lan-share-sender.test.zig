@@ -2,10 +2,13 @@ const std = @import("std");
 const lan_share = @import("lan-share-network-zig");
 const pairing_code = @import("pairing-code.zig");
 const utils = @import("utils-zig");
+const ziggy = @import("ziggy");
+const MessageQueue = ziggy.message_queue.MessageQueue;
 
 const LanShareSender = lan_share.lan_share_sender.LanShareSender;
 const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
 const IReceiverEndpoint = lan_share.lan_share_types.IReceiverEndpoint;
+const ReceiveThread = @import("receive-thread.zig").ReceiveThread;
 
 //
 // Makes the `{ data: "test" }` payload (or another one-field object).
@@ -156,6 +159,9 @@ test "full send-receive round trip" {
     try std.testing.expectEqualStrings(code, sender.pairingCode);
 
     const endpoint = try startAndDiscover(&receiver, &sender, code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
     try std.testing.expect(endpoint.port > 0);
     try std.testing.expectEqual(@as(usize, 64), endpoint.certFingerprint.len);
     for (endpoint.certFingerprint) |character| {
@@ -165,7 +171,7 @@ test "full send-receive round trip" {
     const success = try sender.send(endpoint);
     try std.testing.expect(success);
 
-    const received = (try receiver.receive()).?;
+    const received = (try receiving.finish()).?;
     try std.testing.expectEqual(@as(usize, 2), received.object.count());
     try std.testing.expectEqualStrings("hello from sender", received.object.get("message").?.string);
     try std.testing.expectEqual(@as(i64, 42), received.object.get("count").?.integer);
@@ -238,13 +244,15 @@ test "send returns false when the receiver it is given has a different pairing c
 
     var matchingSender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, code);
     const endpoint = try startAndDiscover(&receiver, &matchingSender, code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     var mismatchedSender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, try pairing_code.otherPairingCode(code));
     const success = try mismatchedSender.send(endpoint);
     try std.testing.expect(!success);
 
-    receiver.cancel();
-    _ = try receiver.receive();
+    _ = try receiving.cancelAndFinish();
 }
 
 test "the pairing code hash response is read as JSON" {
@@ -298,8 +306,13 @@ fn sendAndReceive(discoveryPort: u16, allocator: std.mem.Allocator, payload: std
     defer receiver.deinit();
     var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, payload, code);
     const endpoint = try startAndDiscover(&receiver, &sender, code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
     try std.testing.expect(try sender.send(endpoint));
-    return receiver.receive();
+    // The payload belongs to the receiver, which is freed on the way out, so the caller is given a copy in its allocator.
+    const received = (try receiving.finish()) orelse return null;
+    return try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, received, .{}), .{});
 }
 
 test "a falsy payload is received as no payload, as the callers' `if (!rawPayload)` reads it" {
@@ -429,6 +442,9 @@ test "send refuses a receiver whose certificate is not the one announced" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
     const endpoint = try discoverReceiver(discoveryPort, allocator, &receiver, code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .{ .string = "x" }, code);
     var forged = endpoint;
@@ -436,8 +452,7 @@ test "send refuses a receiver whose certificate is not the one announced" {
     try std.testing.expectError(error.Thrown, sender.send(forged));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Certificate fingerprint mismatch - possible MITM attack. Expected 00, got "));
 
-    receiver.cancel();
-    _ = try receiver.receive();
+    _ = try receiving.cancelAndFinish();
 }
 
 test "send gives up when the receiver refuses its first request, and fails on a status it does not expect" {
@@ -451,76 +466,105 @@ test "send gives up when the receiver refuses its first request, and fails on a 
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer receiver.deinit();
     const endpoint = try discoverReceiver(discoveryPort, allocator, &receiver, code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
     try spendRequests(allocator, endpoint, 5);
     var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .{ .string = "x" }, code);
     try std.testing.expect(!try sender.send(endpoint));
-    try std.testing.expect((try receiver.receive()) == null);
+    try std.testing.expect((try receiving.finish()) == null);
 
     // All but one request spent: the check passes and the payload is refused with 429.
     const otherCode = try pairing_code.otherPairingCode(code);
     var otherReceiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
     defer otherReceiver.deinit();
     const otherEndpoint = try discoverReceiver(discoveryPort, allocator, &otherReceiver, otherCode);
+    var otherReceiving: ReceiveThread = .{ .receiver = &otherReceiver };
+    try otherReceiving.start();
+    defer otherReceiving.stop();
     try spendRequests(allocator, otherEndpoint, 4);
     var otherSender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .{ .string = "x" }, otherCode);
     try std.testing.expectError(error.Thrown, otherSender.send(otherEndpoint));
     try std.testing.expectEqualStrings("Unexpected status code: 429", utils.errors.lastErrorMessage());
-    try std.testing.expect((try otherReceiver.receive()) == null);
+    try std.testing.expect((try otherReceiving.finish()) == null);
 }
 
 //
-// A receiver that answers the check of the pairing code with the hash the sender expects and then refuses the payload
+// What a receiver is started with that answers the check of the pairing code with the hash the sender expects and then refuses the payload
 // with 403, as the real receiver does for a payload whose code hash is not its own. The real receiver cannot be made to
 // do this to a sender that passed its check, because both requests carry the sender's own code hash, so this is a
 // server of the same protocol made from the package's own TLS server and std.http.
 //
-const IRefusingReceiver = struct {
-    // The TLS settings of the server.
-    context: *const lan_share.https.ServerContext,
+const IRefusingReceiverStart = struct {
+    // The PEM-encoded certificate of the server.
+    cert: []const u8,
 
-    // The listening socket.
-    listener: lan_share.socket.Handle,
+    // The PEM-encoded private key of the server.
+    key: []const u8,
 
     // The hash of the pairing code that GET /pairing-code-hash answers with.
     codeHash: []const u8,
-
-    // The error that stopped the server, if any.
-    failure: ?anyerror,
 };
 
 //
-// Serves the two requests of a send with an IRefusingReceiver and records the error that stopped it.
+// What the server thread reports when it has finished, as the JSON text it posts back.
 //
-fn serveRefusing(server: *IRefusingReceiver) void {
-    serveRefusingOrFail(server) catch |err| {
-        server.failure = err;
+const IRefusingReceiverOutcome = struct {
+    // The name of the error that stopped the server, or null.
+    failure: ?[]const u8,
+};
+
+//
+// The thread of an IRefusingReceiver: makes its own allocator and Io, reads its certificate, key and code hash from the message the
+// test posted to `starts`, makes its own TLS settings, serves the two requests of a send on the listening socket and posts the outcome
+// to `outcomes`.
+//
+fn serveRefusing(listener: lan_share.socket.Handle, starts: *MessageQueue, outcomes: *MessageQueue) void {
+    var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
+    var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const message = starts.take(io, allocator, .none).?;
+    const start = std.json.parseFromSliceLeaky(IRefusingReceiverStart, allocator, message.text, .{}) catch @panic("The server could not read its start message.");
+    var outcome: IRefusingReceiverOutcome = .{
+        .failure = null,
     };
+    serveRefusingOrFail(allocator, start, listener) catch |err| {
+        outcome.failure = @errorName(err);
+    };
+    const text = std.json.Stringify.valueAlloc(allocator, outcome, .{}) catch @panic("out of memory reporting the outcome");
+    outcomes.post(io, 0, text) catch @panic("out of memory reporting the outcome");
 }
 
 //
 // The body of serveRefusing: one connection for the check of the code and one for the payload, as the sender makes one
 // connection for each request.
 //
-fn serveRefusingOrFail(server: *IRefusingReceiver) !void {
+fn serveRefusingOrFail(allocator: std.mem.Allocator, start: IRefusingReceiverStart, listener: lan_share.socket.Handle) !void {
+    var context = try lan_share.https.ServerContext.init(start.cert, start.key);
+    defer context.deinit();
     for (0..2) |_| {
-        if (!try lan_share.socket.waitReadable(server.listener, 10_000)) {
+        if (!try lan_share.socket.waitReadable(listener, 10_000)) {
             return error.TimedOutWaitingForTheSender;
         }
-        const accepted = try lan_share.socket.accept(server.listener);
-        const connection = try lan_share.https.Connection.accept(std.heap.smp_allocator, server.context, accepted);
+        const accepted = try lan_share.socket.accept(listener);
+        const connection = try lan_share.https.Connection.accept(allocator, &context, accepted);
         defer connection.close();
         var httpServer = std.http.Server.init(&connection.reader, &connection.writer);
         var request = try httpServer.receiveHead();
         if (request.head.method == .GET) {
-            const body = try std.fmt.allocPrint(std.heap.smp_allocator, "{{\"codeHash\":\"{s}\"}}", .{server.codeHash});
-            defer std.heap.smp_allocator.free(body);
+            const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\"}}", .{start.codeHash});
             try request.respond(body, .{ .status = .ok });
             continue;
         }
         var readBuffer: [4096]u8 = undefined;
         const bodyReader = try request.readerExpectContinue(&readBuffer);
-        const rawBody = try bodyReader.allocRemaining(std.heap.smp_allocator, .unlimited);
-        defer std.heap.smp_allocator.free(rawBody);
+        _ = try bodyReader.allocRemaining(allocator, .unlimited);
         try request.respond("{\"error\":\"Invalid pairing code\"}", .{ .status = .forbidden });
     }
 }
@@ -531,20 +575,21 @@ test "send returns false when the receiver refuses the payload with 403" {
     const allocator = arena.allocator();
     const code = try pairing_code.pairingCode();
     const selfSigned = try lan_share.lan_share_receiver.generateSelfSignedCert(allocator, std.testing.io);
-    var context = try lan_share.https.ServerContext.init(selfSigned.cert, selfSigned.key);
-    defer context.deinit();
     const listener = try lan_share.socket.createTcp();
     defer lan_share.socket.close(listener);
     try lan_share.socket.bind(listener, try lan_share.socket.parseAddress("127.0.0.1", 0));
     try lan_share.socket.listen(listener);
     const codeHash = lan_share.lan_share_sender.sha256Hex(code);
-    var server: IRefusingReceiver = .{
-        .context = &context,
-        .listener = listener,
+    var starts = MessageQueue.init();
+    defer starts.deinit();
+    var outcomes = MessageQueue.init();
+    defer outcomes.deinit();
+    try starts.post(std.testing.io, 0, try std.json.Stringify.valueAlloc(allocator, IRefusingReceiverStart{
+        .cert = selfSigned.cert,
+        .key = selfSigned.key,
         .codeHash = &codeHash,
-        .failure = null,
-    };
-    const thread = try std.Thread.spawn(.{}, serveRefusing, .{&server});
+    }, .{}));
+    const thread = try std.Thread.spawn(.{}, serveRefusing, .{ listener, &starts, &outcomes });
 
     var sender = try LanShareSender.init(try lan_share.socket.freeUdpPort(), allocator, std.testing.io, .{ .string = "x" }, code);
     const success = try sender.send(.{
@@ -553,7 +598,8 @@ test "send returns false when the receiver refuses the payload with 403" {
         .certFingerprint = selfSigned.fingerprint,
     });
     thread.join();
-    try std.testing.expect(server.failure == null);
+    const outcome = try std.json.parseFromSliceLeaky(IRefusingReceiverOutcome, allocator, outcomes.tryTake(std.testing.io, allocator).?.text, .{});
+    try std.testing.expect(outcome.failure == null);
     try std.testing.expect(!success);
 }
 
@@ -562,4 +608,29 @@ test "pairingCodeHashMatches fails for a response that is not JSON" {
     defer arena.deinit();
     try std.testing.expectError(error.Thrown, lan_share.lan_share_sender.pairingCodeHashMatches(arena.allocator(), "not json", "hash"));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "JSON Parse error: "));
+}
+
+test "a sender finds the receiver while the receiver serves a connection" {
+    const discoveryPort = try lan_share.socket.freeUdpPort();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const code = try pairing_code.pairingCode();
+    var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 15000);
+    defer receiver.deinit();
+    try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
+
+    // A connection that sends nothing: the receiver serves it, waiting for its first request, until it has sat idle for five
+    // seconds. The connection is made once the receiver has taken it, so the receiver is serving it from here on.
+    const connection = try lan_share.https.Connection.connect(allocator, .{ .address = .{ 127, 0, 0, 1 }, .port = receiver.httpsPort });
+    defer connection.close();
+
+    // The announcement the receiver made as it started has gone, so the sender can hear only one the receiver makes while it serves
+    // the connection. It listens for less than the five seconds the receiver would hold the connection.
+    var sender = try LanShareSender.init(discoveryPort, allocator, std.testing.io, .null, code);
+    const endpoint = (try sender.waitForReceiver(std.testing.io, 3000)) orelse return error.ReceiverNotFound;
+    try std.testing.expectEqual(receiver.httpsPort, endpoint.port);
 }

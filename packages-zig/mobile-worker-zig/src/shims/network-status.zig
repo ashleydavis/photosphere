@@ -32,14 +32,14 @@ pub const INetworkStatusHost = struct {
     //
     pub const VTable = struct {
         // Returns the current connection type as one of "wifi", "cellular", "none" or "unknown", allocated with `allocator`.
-        networkConnectionType: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator) anyerror![]const u8,
+        networkConnectionType: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) anyerror![]const u8,
     };
 
     //
     // Returns the current connection type as the platform reported it.
     //
-    pub fn networkConnectionType(self: INetworkStatusHost, allocator: std.mem.Allocator) anyerror![]const u8 {
-        return self.vtable.networkConnectionType(self.ptr, allocator);
+    pub fn networkConnectionType(self: INetworkStatusHost, io: std.Io, allocator: std.mem.Allocator) anyerror![]const u8 {
+        return self.vtable.networkConnectionType(self.ptr, io, allocator);
     }
 };
 
@@ -70,7 +70,7 @@ pub fn toNetworkConnectionType(reported: []const u8) NetworkConnectionType {
 //
 // Reads the current connection type from the platform.
 //
-pub fn readNetworkConnectionType(allocator: std.mem.Allocator, host: INetworkStatusHost) !NetworkConnectionType {
-    const reported = try host.networkConnectionType(allocator);
+pub fn readNetworkConnectionType(io: std.Io, allocator: std.mem.Allocator, host: INetworkStatusHost) !NetworkConnectionType {
+    const reported = try host.networkConnectionType(io, allocator);
     return toNetworkConnectionType(reported);
 }

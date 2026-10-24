@@ -1,7 +1,7 @@
 //
 // Check-database-exists worker handler.
 //
-// Runs on both platforms via the shared task queue: desktop registers it through initTaskHandlers and
+// Runs on both platforms via the shared task queue: desktop registers it through task-handlers.zig and
 // mobile through mobile-worker-entry, so "the database exists" means the same thing everywhere. The
 // handler reuses checkDatabaseExists, which builds storage for the path (FileStorage over the native
 // host.fs* functions on device, real fs on desktop/worker threads) and asks whether the database's
@@ -10,6 +10,7 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const media_file_database = @import("media-file-database.zig");
@@ -43,6 +44,7 @@ pub const ICheckDatabaseExistsResult = struct {
 pub fn checkDatabaseExistsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -57,7 +59,7 @@ pub fn checkDatabaseExistsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const exists = try checkDatabaseExists(allocator, io, data.databasePath, context.hostRequester);
+    const exists = try checkDatabaseExists(allocator, io, data.databasePath, context.nativeCaller);
     const result: ICheckDatabaseExistsResult = .{
         .exists = exists,
     };

@@ -4,7 +4,7 @@
 // the database.
 //
 // Kept free of Photos framework types so it can be tested without a photo library. The PHAsset fetch, the resource export and the
-// deletion are in MediaLibraryHostRequests, which needs the framework.
+// deletion are in MediaLibraryNativeCalls, which needs the framework.
 //
 
 import Foundation

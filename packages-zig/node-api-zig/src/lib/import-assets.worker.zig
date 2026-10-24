@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -20,8 +21,7 @@ const bson_json = @import("bson-json.zig");
 const import_record_storage = @import("import-record-storage.zig");
 const file_scanner = @import("file-scanner.zig");
 const retry_operations = @import("retry-operations.zig");
-const throttle_module = @import("third-party/lodash/throttle.zig");
-const debounce_module = @import("third-party/lodash/debounce.zig");
+const debounce = @import("third-party/lodash/debounce.zig");
 const errors = utils.errors;
 const log = &utils.log.log;
 const retry = utils.retry.retry;
@@ -79,8 +79,8 @@ const recordImports = import_record_storage.recordImports;
 const ScannerState = file_scanner.ScannerState;
 const LoadMerkleTreeOperation = retry_operations.LoadMerkleTreeOperation;
 const SaveMerkleTreeOperation = retry_operations.SaveMerkleTreeOperation;
-const throttle = throttle_module.throttle;
-const Debounced = debounce_module.Debounced;
+const throttle = @import("third-party/lodash/throttle.zig").throttle;
+const Debounced = debounce.Debounced;
 
 //
 // How many import record entries pile up before they are written out.
@@ -354,13 +354,12 @@ const RemoveSessionTempDirOperation = struct {
 //
 // Everything importAssetsHandler's inner functions share.
 //
-// The throttled writer's timer fires on a thread of its own (see lodash/debounce.zig), and the queue runs its
-// callbacks on the thread that waits for it. `loopLock` is held by whatever runs the
-// import's code, and the import lets go of it only while it waits (for the queue, or in a sleep), which is
-// where a timer or a callback is allowed to run.
+// Everything runs on the task's worker thread. The throttled writer's timer (see lodash/debounce.zig) and the queue's callbacks run
+// while the import waits for a message (for the queue, or in waitAWhile), which is where a timer or a callback is allowed to run,
+// as in JavaScript.
 //
 const ImportRun = struct {
-    // Allocates everything the run keeps (the task's arena; only used while holding loopLock).
+    // Allocates everything the run keeps (the task's arena).
     allocator: std.mem.Allocator,
 
     // Io for files, the clock and the lock.
@@ -371,9 +370,6 @@ const ImportRun = struct {
 
     // The task's context.
     context: ITaskContext,
-
-    // Held by whatever runs the import's code (see above).
-    loopLock: std.Io.Mutex,
 
     // The same outcome the messages report, gathered so a caller that cannot see the messages
     // (an orchestrator task running in a worker) can still read what happened.
@@ -486,26 +482,28 @@ const ImportRun = struct {
     prevIgnoredCount: u64,
 
     //
-    // Takes the loop lock.
+    // Waits for the given milliseconds, reading the worker's messages meanwhile, so the callbacks of the child tasks and the timers
+    // run, as an `await` on a timer lets them run in JavaScript.
     //
-    fn lock(self: *ImportRun) void {
-        self.loopLock.lockUncancelable(self.io);
+    fn waitAWhile(self: *ImportRun, timers: Timers, milliseconds: u64) !void {
+        const backend = try task_queue_zig.queue_backend.getQueueBackend();
+        var passed = false;
+        const timer = try timers.setTimeout(self.io, .{
+            .context = &passed,
+            .function = setFlag,
+        }, milliseconds);
+        defer if (!passed) timers.clearTimeout(timer);
+        while (!passed) {
+            backend.waitForMessage(self.io, self.allocator, timers);
+        }
     }
 
     //
-    // Lets go of the loop lock.
+    // Sets the flag a timer points at.
     //
-    fn unlock(self: *ImportRun) void {
-        self.loopLock.unlock(self.io);
-    }
-
-    //
-    // Sleeps for the given milliseconds, letting go of the loop lock while it waits so that other work can run.
-    //
-    fn sleepUnlocked(self: *ImportRun, milliseconds: u64) !void {
-        self.unlock();
-        defer self.lock();
-        try sleep(self.io, milliseconds);
+    fn setFlag(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, _: ?*const anyopaque) void {
+        const flag: *bool = @ptrCast(@alignCast(context.?));
+        flag.* = true;
     }
 
     //
@@ -525,7 +523,7 @@ const ImportRun = struct {
                 .string = field[1],
             });
         }
-        self.context.sendEvent(.{
+        self.context.sendEvent(self.io, self.allocator, .{
             .object = message,
         });
     }
@@ -640,7 +638,7 @@ const ImportRun = struct {
     // database sooner. Called once per completion, so a slot is refilled the moment one frees.
     //
     fn dispatchChildTasks(self: *ImportRun) !void {
-        if (self.context.isCancelled()) {
+        if (self.context.isCancelled(self.io, self.allocator)) {
             // Nothing more goes to the queue once the import has been cancelled. What is already
             // waiting is abandoned, and awaitAllTasks below stops as soon as the running ones settle.
             return;
@@ -651,7 +649,7 @@ const ImportRun = struct {
                 const uploadData = self.assetsAwaitingUpload.items[self.assetsAwaitingUploadHead];
                 self.assetsAwaitingUploadHead += 1;
                 self.childTasksInFlight += 1;
-                _ = try self.queue.addTask("upload-asset", try toJsonValue(self.allocator, uploadData), null, null);
+                _ = try self.queue.addTask(self.io, self.allocator, "upload-asset", try toJsonValue(self.allocator, uploadData), null, null);
                 continue;
             }
 
@@ -662,7 +660,7 @@ const ImportRun = struct {
             self.filesAwaitingHashHead += 1;
 
             self.childTasksInFlight += 1;
-            _ = try self.queue.addTask("hash-file", try toJsonValue(self.allocator, hashData), null, null);
+            _ = try self.queue.addTask(self.io, self.allocator, "hash-file", try toJsonValue(self.allocator, hashData), null, null);
         }
     }
 
@@ -814,7 +812,7 @@ const ImportRun = struct {
             try arrival.put(allocator, "asset", .{
                 .object = try bson_json.bsonDocumentToJsonObject(allocator, assetRecord),
             });
-            self.context.sendEvent(.{
+            self.context.sendEvent(self.io, self.allocator, .{
                 .object = arrival,
             });
         }
@@ -890,7 +888,7 @@ const ImportRun = struct {
 
     //
     // The throttled function, with its catch.
-    // Runs holding the loop lock: on the timer thread, or from flush.
+    // Runs on the task's thread: when its timer comes due, or from flush.
     //
     fn processQueueThrottled(context: *anyopaque) void {
         const self: *ImportRun = @ptrCast(@alignCast(context));
@@ -903,14 +901,11 @@ const ImportRun = struct {
     // Subscribe to task completions for hash-file and upload-asset tasks that belong
     // to this import session. The source filter prevents concurrent imports from
     // processing each other's completions.
-    // Runs on the thread waiting in awaitAllTasks, holding the loop lock.
+    // Runs on the task's thread while it waits in awaitAllTasks.
     //
-    fn onTaskComplete(context: ?*anyopaque, taskResult: ITaskResult) anyerror!void {
+    fn onTaskComplete(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, timers: Timers, taskResult: ITaskResult) anyerror!void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
-        self.lock();
-        defer self.unlock();
-
-        const outcome = self.recordChildTaskOutcome(taskResult);
+        const outcome = self.recordChildTaskOutcome(timers, taskResult);
 
         // In a finally so a slot is released even when handling the outcome threw. A slot leaked
         // here would be leaked for the life of the import, and enough of them would stop the
@@ -924,10 +919,10 @@ const ImportRun = struct {
     // Records what one finished child task did: caches the hash, queues the upload of a file that is
     // new, or counts the failure.
     //
-    fn recordChildTaskOutcome(self: *ImportRun, taskResult: ITaskResult) !void {
+    fn recordChildTaskOutcome(self: *ImportRun, timers: Timers, taskResult: ITaskResult) !void {
         const allocator = self.allocator;
 
-        if (self.context.isCancelled()) {
+        if (self.context.isCancelled(self.io, self.allocator)) {
             return;
         }
 
@@ -1076,7 +1071,7 @@ const ImportRun = struct {
                 // Queued and scheduled with nothing awaited in between, so the update is on the list
                 // before this callback yields. An await here would let the end of the run look at an
                 // empty list and finish without writing this asset to the database at all.
-                self.throttledProcessQueue.call();
+                self.throttledProcessQueue.call(self.io, timers);
 
                 // The upload has read the file and written what it needs into storage, and the
                 // database write works from what it returned, so the local copy is finished with
@@ -1105,9 +1100,9 @@ const ImportRun = struct {
 
     //
     // Saves what has been learnt when the scanner says it is caught up, and reports progress.
-    // (Runs holding the loop lock, on the thread running the scan.)
+    // (Runs on the task's thread, which runs the scan.)
     //
-    fn onScannerProgress(context: ?*anyopaque, scannerProgress: IAutoImportScannerProgress) void {
+    fn onScannerProgress(context: ?*anyopaque, io: std.Io, timers: Timers, scannerProgress: IAutoImportScannerProgress) void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
         self.skippedBeforeOpening = scannerProgress.skippedAsAlreadyImported;
 
@@ -1132,7 +1127,7 @@ const ImportRun = struct {
             // queue whether it should write. Without this an automatic import that brought in a
             // handful of photos and then went quiet would leave them in a part-filled batch, unwritten
             // until something else happened to arrive.
-            self.throttledProcessQueue.call();
+            self.throttledProcessQueue.call(io, timers);
         }
 
         if (scannerProgress.caughtUp and !self.flushing) {
@@ -1186,23 +1181,23 @@ const ImportRun = struct {
                 .string = item,
             });
         }
-        self.context.sendEvent(.{
+        self.context.sendEvent(self.io, self.allocator, .{
             .object = message,
         });
 
         // The same counters again, as the job the interface lists and can cancel. Indeterminate,
         // because the scanner streams: how many files there are to import is not known until the
         // run that imports them has finished.
-        try sendJobProgress(allocator, self.context, self.data.job, self.runStartedAt, try describeImportProgress(allocator, importedCount, skippedCount + self.skippedBeforeOpening, self.failedCount));
+        try sendJobProgress(allocator, self.io, self.context, self.data.job, self.runStartedAt, try describeImportProgress(allocator, importedCount, skippedCount + self.skippedBeforeOpening, self.failedCount));
     }
 
     //
-    // Queues one file the scanner found. Runs holding the loop lock.
+    // Queues one file the scanner found. Runs on the task's thread.
     //
     fn visitFile(context: ?*anyopaque, result: IScannedImportFile) anyerror!void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
         const allocator = self.allocator;
-        if (self.context.isCancelled()) {
+        if (self.context.isCancelled(self.io, self.allocator)) {
             return;
         }
 
@@ -1236,7 +1231,7 @@ const ImportRun = struct {
     }
 
     //
-    // Reports the scan's progress. Runs holding the loop lock.
+    // Reports the scan's progress. Runs on the task's thread.
     //
     fn onScanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
         const self: *ImportRun = @ptrCast(@alignCast(context.?));
@@ -1260,7 +1255,7 @@ const ImportRun = struct {
             try message.put(allocator, "count", .{
                 .integer = @intCast(newIgnored),
             });
-            self.context.sendEvent(.{
+            self.context.sendEvent(self.io, self.allocator, .{
                 .object = message,
             });
         }
@@ -1355,7 +1350,7 @@ fn recordMicro(assetRecord: BsonDocument) ?[]const u8 {
 // that are new, and batches all database writes under a single throttled write lock per batch.
 // (Zig: the task data and output are JSON values holding IImportAssetsData and IImportAssetsResult.)
 //
-pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     const data = try std.json.parseFromValueLeaky(IImportAssetsData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -1370,7 +1365,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
 
     const hashCacheDir = try getHashCacheDir(allocator, data.storageDescriptor.databasePath);
 
-    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.hostRequester);
+    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
 
@@ -1383,7 +1378,6 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
         .io = io,
         .data = data,
         .context = context,
-        .loopLock = .init,
         .imported = .empty,
         .skipped = .empty,
         .failedCount = 0,
@@ -1436,28 +1430,24 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
 
     // Trailing-edge throttled so that multiple completions that arrive close together
     // are coalesced into a single write-lock acquisition.
-    run.throttledProcessQueue = throttle(io, .{
+    run.throttledProcessQueue = throttle(.{
         .context = run,
         .function = ImportRun.processQueueThrottled,
     }, 1000, .{
         .leading = false,
         .trailing = true,
-    }, &run.loopLock);
-    try run.throttledProcessQueue.start();
-    defer run.throttledProcessQueue.deinit();
+    });
+    defer run.throttledProcessQueue.deinit(timers);
 
-    run.lock();
-    defer run.unlock();
-
-    run.queue = try TaskQueue.init(allocator, io, context.uuidGenerator, data.sessionId);
-    defer run.queue.deinit();
+    run.queue = try TaskQueue.init(allocator, context.uuidGenerator, data.sessionId);
+    defer run.queue.deinit(io, allocator);
 
     //
     // Subscribe to task completions for hash-file and upload-asset tasks that belong
     // to this import session. The source filter prevents concurrent imports from
     // processing each other's completions.
     //
-    _ = try run.queue.onTaskComplete(.{
+    _ = try run.queue.onTaskComplete(allocator, .{
         .context = run,
         .function = ImportRun.onTaskComplete,
     });
@@ -1493,7 +1483,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
     }
 
     defer {
-        run.queue.shutdown();
+        run.queue.shutdown(io, allocator);
         var removeOperation: RemoveSessionTempDirOperation = .{
             .dirPath = sessionTempDir,
         };
@@ -1508,7 +1498,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
         _ = swallowError(io, &flushOperation);
     }
 
-    try run.scanner.scan(allocator, io, .{
+    try run.scanner.scan(allocator, io, timers, .{
         .context = run,
         .function = ImportRun.visitFile,
     }, .{
@@ -1521,11 +1511,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
     // If the task is cancelled, childQueue.shutdown() in the finally block
     // will resolve this immediately rather than waiting for the backlog.
     //
-    {
-        run.unlock();
-        defer run.lock();
-        try run.queue.awaitAllTasks();
-    }
+    try run.queue.awaitAllTasks(io, allocator, timers);
 
     // The queue says its tasks are finished, which is not the same as this import having finished
     // with them: a completion callback may still be recording what one of them did, and a hash
@@ -1533,22 +1519,22 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
     // an uploaded asset with its database write never queued, so the file was uploaded and then
     // not in the database.
     while (run.childTasksInFlight > 0 or run.filesAwaitingHashCount() > 0 or run.assetsAwaitingUploadCount() > 0) {
-        if (context.isCancelled()) {
+        if (context.isCancelled(io, allocator)) {
             break;
         }
-        try run.sleepUnlocked(50);
+        try run.waitAWhile(timers, 50);
     }
 
-    if (context.isCancelled()) {
+    if (context.isCancelled(io, allocator)) {
         return importAssetsResultToJson(allocator, runResult(run));
     }
 
     // Flush the throttled queue and wait for any in-progress batch to finish.
-    run.throttledProcessQueue.flush();
-    run.throttledProcessQueue.cancel();
+    run.throttledProcessQueue.flush(io, timers);
+    run.throttledProcessQueue.cancel(timers);
 
     while (run.isProcessingQueue) {
-        try run.sleepUnlocked(100);
+        try run.waitAWhile(timers, 100);
     }
 
     // Process any remaining items, retrying until the write lock is acquired.
@@ -1556,7 +1542,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, taskData: s
         const processed = try run.processPendingDatabaseUpdates(run.pendingDatabaseUpdates.items);
         if (!processed) {
             log.@"error"(try std.fmt.allocPrint(allocator, "Failed to acquire write lock for final {d} pending database updates; retrying.", .{run.pendingDatabaseUpdates.items.len}));
-            try run.sleepUnlocked(1000);
+            try run.waitAWhile(timers, 1000);
         }
         else {
             for (run.pendingDatabaseUpdates.items) |item| {

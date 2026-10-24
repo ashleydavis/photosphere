@@ -8,7 +8,7 @@ test "verifyFfprobe and verifyFfmpeg find the ffprobe and ffmpeg built into the 
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mediaTools = try MediaTools.init(io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const ffprobeStatus = try tools.Video.verifyFfprobe(allocator, io, mediaTools.runner());
     const ffmpegStatus = try tools.Video.verifyFfmpeg(allocator, io, mediaTools.runner());

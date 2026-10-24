@@ -1,12 +1,11 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const storage_module = @import("storage.zig");
 const storage_factory = @import("storage-factory.zig");
 
 const log = utils.log;
 const retry = utils.retry.retry;
-const IStorage = storage_module.IStorage;
-const IListResult = storage_module.IListResult;
+const IStorage = @import("storage.zig").IStorage;
+const IListResult = @import("storage.zig").IListResult;
 const pathJoin = storage_factory.pathJoin;
 
 //

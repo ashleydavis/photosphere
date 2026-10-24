@@ -209,7 +209,7 @@ fn buildOptions() IMediaSourceBuildOptions {
     return .{
         .sessionTempDir = "/tmp/session",
         .uuidGenerator = buildGenerator.uuidGenerator(),
-        .hostRequester = null,
+        .nativeCaller = null,
     };
 }
 

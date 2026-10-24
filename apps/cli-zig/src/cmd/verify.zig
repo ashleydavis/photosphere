@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -72,7 +73,8 @@ fn isSet(value: ?[]const u8) bool {
 //
 // Writes each verification progress message.
 //
-fn onProgress(context: ?*anyopaque, progress: ?[]const u8) void {
+fn onProgress(context: ?*anyopaque, io: std.Io, progress: ?[]const u8) void {
+    _ = io;
     _ = context;
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
@@ -120,7 +122,8 @@ pub fn verifyCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     //
     writeProgress("Verifying assets...");
 
-    const result = try verify(allocator, io, storageDescriptor, assetStorage, context.uuidGenerator, metadataCollection, .{
+    var timer_list = TimerList.init();
+    const result = try verify(allocator, io, timer_list.interface(), storageDescriptor, assetStorage, context.uuidGenerator, metadataCollection, .{
         .full = options.full,
         .pathFilter = options.path,
     }, progressCallback);

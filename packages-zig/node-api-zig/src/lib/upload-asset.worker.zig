@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -11,7 +12,6 @@ const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const open_storage = @import("open-storage.zig");
-const hash_module = @import("hash.zig");
 const file_scanner = @import("file-scanner.zig");
 const media_file_database = @import("media-file-database.zig");
 const video = @import("video.zig");
@@ -41,8 +41,8 @@ const jsonParse = serialization_zig.json_parse.jsonParse;
 const js_date = serialization_zig.js_date;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const openStorage = open_storage.openStorage;
-const computeFileHash = hash_module.computeFileHash;
-const getNativeFileHasher = hash_module.getNativeFileHasher;
+const computeFileHash = @import("hash.zig").computeFileHash;
+const getNativeFileHasher = @import("hash.zig").getNativeFileHasher;
 const IFileStat = file_scanner.IFileStat;
 const IAssetDetails = media_file_database.IAssetDetails;
 const extractDominantColorFromThumbnail = media_file_database.extractDominantColorFromThumbnail;
@@ -386,8 +386,8 @@ fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) ![]Bso
 // The task data and output are JSON values holding IUploadAssetData and IUploadAssetResult; undefined is
 // JSON null.
 //
-pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    if (context.isCancelled()) {
+pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
+    if (context.isCancelled(io, allocator)) {
         return .null;
     }
 
@@ -397,7 +397,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     try pendingMessage.put(allocator, "type", .{ .string = "import-pending" });
     try pendingMessage.put(allocator, "assetId", .{ .string = data.assetId });
     try pendingMessage.put(allocator, "logicalPath", .{ .string = data.logicalPath });
-    context.sendEvent(.{ .object = pendingMessage });
+    context.sendEvent(io, allocator, .{ .object = pendingMessage });
 
     // When this task started, so the import can report what the work other than hashing cost.
     const taskStartedAt = dateNow(io);
@@ -414,9 +414,9 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     const googleApiKey = data.googleApiKey;
     const dryRun = data.dryRun orelse false;
 
-    // ImageMagick and FFmpeg are built into the program and run in its process through the task's tool runner. A task run with
+    // ImageMagick and FFmpeg are built into the program and run in its process through `tools`, made on the task's thread. A task run with
     // no runner fails here rather than starting an installed program.
-    const toolRunner = context.toolRunner orelse {
+    const toolRunner = tools orelse {
         return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
     };
     const uuidGenerator = context.uuidGenerator;
@@ -428,7 +428,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
     _ = try std.fmt.hexToBytes(expectedHashBuffer, data.expectedHash);
 
     const openStorageStartedAt = dateNow(io);
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const storage = opened.storage;
     const openStorageMs = dateNow(io) - openStorageStartedAt;
 
@@ -471,7 +471,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, taskData: st
         try failedMessage.put(allocator, "type", .{ .string = "import-failed" });
         try failedMessage.put(allocator, "assetId", .{ .string = data.assetId });
         try failedMessage.put(allocator, "logicalPath", .{ .string = data.logicalPath });
-        context.sendEvent(.{ .object = failedMessage });
+        context.sendEvent(io, allocator, .{ .object = failedMessage });
 
         // Clean up uploaded files on error, then let exception propagate to task queue
         var deleteAssetOperation: DeleteFileOperation("() => storage.deleteFile(assetPath)") = .{
@@ -609,7 +609,7 @@ fn uploadAndDescribe(
         hashedAssetLastModified = assetInfo.lastModified;
     }
 
-    if (context.isCancelled()) {
+    if (context.isCancelled(io, allocator)) {
         return null;
     }
 
@@ -657,7 +657,7 @@ fn uploadAndDescribe(
         }
     }
 
-    if (context.isCancelled()) {
+    if (context.isCancelled(io, allocator)) {
         return null;
     }
 
@@ -711,7 +711,7 @@ fn uploadAndDescribe(
         try properties.put(allocator, "metadata", assetDetails.?.metadata.?);
     }
 
-    if (context.isCancelled()) {
+    if (context.isCancelled(io, allocator)) {
         return null;
     }
 
@@ -750,7 +750,7 @@ fn uploadAndDescribe(
     const fileDir = path.dirname(filePath);
     const labels = try buildLabels(allocator, data.labels, fileDir);
 
-    if (context.isCancelled()) {
+    if (context.isCancelled(io, allocator)) {
         return null;
     }
 

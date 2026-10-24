@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -79,7 +80,7 @@ fn writeTestFile(allocator: std.mem.Allocator, io: std.Io, directoryPath: []cons
 // Runs the handler and reads its result.
 //
 fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestTaskContext) !IResetAppStorageResult {
-    const output = try resetAppStorageHandler(allocator, io, .{ .object = .empty }, testContext.context.taskContext());
+    const output = try resetAppStorageHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(IResetAppStorageResult, allocator, output, .{});
 }
 
@@ -88,7 +89,8 @@ test "empties the config and cache directories and leaves the directories in pla
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -118,7 +120,8 @@ test "removes nested directory trees" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -143,7 +146,8 @@ test "leaves everything outside the two directories alone" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -169,7 +173,8 @@ test "empties one directory once when the config and the cache are the same plac
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -197,7 +202,8 @@ test "succeeds when the directories do not exist yet" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -220,7 +226,8 @@ test "empties a phone's data directory as well, where the databases are, when it
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "reset-app-storage-worker");
@@ -248,7 +255,8 @@ test "empties a phone's data directory once when the cache directory is the same
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "reset-app-storage-worker");

@@ -1,6 +1,9 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const errors = utils.errors;
+const thread_messages = @import("thread-messages.zig");
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
 
 //
 // Helper that throws a plain error.
@@ -88,21 +91,57 @@ test "lastErrorCauseChain is empty when there is no cause" {
 }
 
 //
-// Throws an error on another thread and captures it.
+// A captured error as it crosses from one thread to another: the parts of an ErrorRecord, as JSON.
 //
-fn throwOnThread(record: *errors.ErrorRecord) void {
+const CapturedError = struct {
+    message: []const u8,
+    causes: []const u8,
+    name: []const u8,
+    cause_names: []const []const u8,
+};
+
+//
+// Throws an error on a thread of its own, captures it with its own allocator and Io and posts it to the test as a CapturedError.
+//
+fn throwOnThread(captured: *MessageQueue) void {
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
     failWithValue(99) catch {};
-    errors.captureError(record);
+    var record: errors.ErrorRecord = .{};
+    errors.captureError(&record);
+    thread_messages.post(captured, threaded.io(), thread_allocator.allocator(), CapturedError{
+        .message = record.message_buffer[0..record.message_length],
+        .causes = record.cause_buffer[0..record.cause_length],
+        .name = record.name,
+        .cause_names = record.cause_names[0..record.cause_name_count],
+    }) catch @panic("out of memory posting the captured error");
 }
 
 test "captureError and restoreError move an error between threads" {
     errors.clearError();
-    const record = try std.testing.allocator.create(errors.ErrorRecord);
-    defer std.testing.allocator.destroy(record);
-    const thread = try std.Thread.spawn(.{}, throwOnThread, .{record});
+    // The restored error's names are in this arena, so the error is cleared before it is freed.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    defer errors.clearError();
+    var captured = MessageQueue.init();
+    defer captured.deinit();
+    const thread = try std.Thread.spawn(.{}, throwOnThread, .{&captured});
     thread.join();
+    const parts = try thread_messages.take(CapturedError, &captured, std.testing.io, arena.allocator());
+    var record: errors.ErrorRecord = .{
+        .message_length = parts.message.len,
+        .cause_length = parts.causes.len,
+        .name = parts.name,
+        .cause_name_count = parts.cause_names.len,
+    };
+    @memcpy(record.message_buffer[0..parts.message.len], parts.message);
+    @memcpy(record.cause_buffer[0..parts.causes.len], parts.causes);
+    @memcpy(record.cause_names[0..parts.cause_names.len], parts.cause_names);
     try std.testing.expectEqualStrings("", errors.lastErrorMessage());
-    errors.restoreError(record);
+    errors.restoreError(&record);
     try std.testing.expectEqualStrings("Failed with value 99", errors.lastErrorMessage());
 }
 

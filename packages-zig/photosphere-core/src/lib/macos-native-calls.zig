@@ -1,19 +1,19 @@
 //
-// The answers the MacOS app gives to the host requests the background work makes of the platform. Ziggy's MacOS bridge has no host
-// request callback, so the core answers these itself on MacOS, in place of the native app, with what the Linux native app answers
+// The results the MacOS app gives to the native calls the background work makes of the platform. Ziggy's MacOS bridge has no native
+// call callback, so the core makes these calls itself on MacOS, in place of the native app, with the results the Linux native app gives
 // (apps/photosphere/native/linux/src/main.zig). Without it every one of them failed with "... is only available in the Photosphere app
 // on a phone", which failed the app smoke tests of the MacOS release workflow: opening a database logged the error from
 // requestNotificationPermission, and the background import and sync never ran.
 //
-// - requestNotificationPermission: a desktop has no permission to ask for, so it is always granted.
+// - requestNotificationPermission: a desktop has no permission to request, so it is always granted.
 // - networkConnectionType: a desktop cannot tell Wi-Fi from a wired or a metered connection, so it is "unknown", which is what the page's
-//   own network status says too.
+//   own network status gives too.
 // - holdAwake: holds the computer from going to sleep while a pass runs, or lets it go. Holds nest, and the computer may sleep again once
 //   every hold has been let go. It is an IOKit power assertion (PreventUserIdleSystemSleep), which belongs to the process and not to a
 //   thread, so a hold taken on one worker thread and let go on another is still the same hold.
 // - backgroundLog: the message goes to standard error, which is the app's log.
 //
-// Any other method is not something a desktop can do, and the caller says so.
+// Any other method is not something a desktop can do, and the caller reports that.
 //
 
 const std = @import("std");
@@ -54,25 +54,19 @@ extern "c" fn IOPMAssertionCreateWithName(assertion_type: *anyopaque, level: u32
 extern "c" fn IOPMAssertionRelease(assertion_id: u32) i32;
 
 //
-// The MacOS app's answers to host requests, and the holds it has on the computer staying awake. The main process state owns one.
+// The MacOS app's results for native calls, and the holds it has on the computer staying awake. The main process state owns one, and only the main thread uses it.
 //
-pub const MacosHost = struct {
-    // For the mutex.
-    io: std.Io,
-    // Guards everything below.
-    mutex: std.Io.Mutex,
+pub const MacosNativeCalls = struct {
     // How many holds on the computer staying awake have been taken and not let go.
     awake_holds: u32,
     // The power assertion that keeps the computer awake while there is a hold, or null when there is none.
     assertion_id: ?u32,
 
     //
-    // A host with no holds.
+    // Native calls with no holds.
     //
-    pub fn init(io: std.Io) MacosHost {
+    pub fn init() MacosNativeCalls {
         return .{
-            .io = io,
-            .mutex = .init,
             .awake_holds = 0,
             .assertion_id = null,
         };
@@ -81,7 +75,7 @@ pub const MacosHost = struct {
     //
     // Releases the power assertion, which lets go of any hold still taken.
     //
-    pub fn deinit(self: *MacosHost) void {
+    pub fn deinit(self: *MacosNativeCalls) void {
         if (builtin.os.tag == .macos) {
             if (self.assertion_id) |assertion_id| {
                 _ = IOPMAssertionRelease(assertion_id);
@@ -91,10 +85,10 @@ pub const MacosHost = struct {
     }
 
     //
-    // Answers a host request with the JSON text of its result, allocated with the allocator, or null when the method is not one a
-    // desktop can do. A request that cannot be read, and a hold that MacOS refuses, are errors that say so.
+    // Makes a native call and returns the JSON text of its result, allocated with the allocator, or null when the method is not one a
+    // desktop can do. A request that cannot be read, and a hold that MacOS refuses, are errors that report it.
     //
-    pub fn answer(self: *MacosHost, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) !?[]const u8 {
+    pub fn call(self: *MacosNativeCalls, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) !?[]const u8 {
         if (std.mem.eql(u8, method, "requestNotificationPermission")) {
             return "{\"granted\":true}";
         }
@@ -122,12 +116,10 @@ pub const MacosHost = struct {
     // Takes one hold on the computer staying awake, or lets one go. The first hold creates the power assertion, and letting go of the
     // last one releases it. Letting go of a hold that was never taken is an error, as it is on Linux.
     //
-    fn holdAwake(self: *MacosHost, awake: bool) !void {
+    fn holdAwake(self: *MacosNativeCalls, awake: bool) !void {
         if (builtin.os.tag != .macos) {
-            return utils.errors.throwError("The MacOS host cannot hold the computer awake on {s}.", .{@tagName(builtin.os.tag)});
+            return utils.errors.throwError("MacosNativeCalls cannot hold the computer awake on {s}.", .{@tagName(builtin.os.tag)});
         }
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
         if (awake) {
             if (self.awake_holds == 0) {
                 self.assertion_id = try createAssertion();

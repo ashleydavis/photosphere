@@ -12,7 +12,7 @@ pub const environment = @import("lib/environment.zig");
 pub const events = @import("lib/events.zig");
 pub const file_logger = @import("lib/file-logger.zig");
 pub const logging = @import("lib/logging.zig");
-pub const macos_host = @import("lib/macos-host.zig");
+pub const macos_native_calls = @import("lib/macos-native-calls.zig");
 pub const main_process = @import("lib/main-process.zig");
 pub const main_state = @import("lib/main-state.zig");
 pub const mcp_server = @import("lib/mcp-server.zig");
@@ -28,4 +28,11 @@ pub const single_instance = @import("lib/single-instance.zig");
 pub const tools = @import("lib/tools.zig");
 pub const update_and_news = @import("lib/update-and-news.zig");
 pub const vault = @import("lib/vault.zig");
-pub const windows_host = @import("lib/windows-host.zig");
+pub const windows_native_calls = @import("lib/windows-native-calls.zig");
+
+//
+// The task handlers of the node-api package, in the form Ziggy's workers take them, which the app adds to the task types it declares.
+// Each task that runs ImageMagick or FFmpeg makes the tools built into the program on its own thread, and each registers the media
+// sources the platform serves on its thread first.
+//
+pub const node_api_task_entries = @import("node-api-zig").task_handlers.taskEntries(@import("media-tools-zig").ThreadTools, main_state.registerMediaSources);

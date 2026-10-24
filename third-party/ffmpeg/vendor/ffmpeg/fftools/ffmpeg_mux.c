@@ -175,12 +175,12 @@ static int mux_fixup_ts(Muxer *mux, MuxStream *ms, AVPacket *pkt)
             int64_t max = ms->last_mux_dts + !(mux->fc->oformat->flags & AVFMT_TS_NONSTRICT);
             if (pkt->dts < max) {
                 int loglevel = max - pkt->dts > 2 || ost->type == AVMEDIA_TYPE_VIDEO ? AV_LOG_WARNING : AV_LOG_DEBUG;
-                if (exit_on_error)
+                if (FFMPEG_STATE(exit_on_error))
                     loglevel = AV_LOG_ERROR;
                 av_log(ost, loglevel, "Non-monotonic DTS; "
                        "previous: %"PRId64", current: %"PRId64"; ",
                        ms->last_mux_dts, pkt->dts);
-                if (exit_on_error) {
+                if (FFMPEG_STATE(exit_on_error)) {
                     return AVERROR(EINVAL);
                 }
 
@@ -195,7 +195,7 @@ static int mux_fixup_ts(Muxer *mux, MuxStream *ms, AVPacket *pkt)
     }
     ms->last_mux_dts = pkt->dts;
 
-    if (debug_ts)
+    if (FFMPEG_STATE(debug_ts))
         mux_log_debug_ts(ost, pkt);
 
     return 0;
@@ -334,7 +334,7 @@ static int mux_packet_filter(Muxer *mux, MuxThreadContext *mt,
                 av_log(ost, AV_LOG_ERROR,
                        "Error applying bitstream filters to a packet: %s",
                        av_err2str(ret));
-                if (exit_on_error)
+                if (FFMPEG_STATE(exit_on_error))
                     return ret;
                 continue;
             }
@@ -506,11 +506,11 @@ int print_sdp(const char *filename)
     AVIOContext *sdp_pb;
     AVFormatContext **avc;
 
-    avc = av_malloc_array(nb_output_files, sizeof(*avc));
+    avc = av_malloc_array(FFMPEG_STATE(nb_output_files), sizeof(*avc));
     if (!avc)
         return AVERROR(ENOMEM);
-    for (int i = 0; i < nb_output_files; i++) {
-        Muxer *mux = mux_from_of(output_files[i]);
+    for (int i = 0; i < FFMPEG_STATE(nb_output_files); i++) {
+        Muxer *mux = mux_from_of(FFMPEG_STATE(output_files)[i]);
 
         if (!strcmp(mux->fc->oformat->name, "rtp")) {
             avc[j] = mux->fc;
@@ -532,7 +532,7 @@ int print_sdp(const char *filename)
         printf("SDP:\n%s\n", sdp);
         fflush(stdout);
     } else {
-        ret = avio_open2(&sdp_pb, filename, AVIO_FLAG_WRITE, &int_cb, NULL);
+        ret = avio_open2(&sdp_pb, filename, AVIO_FLAG_WRITE, &FFMPEG_STATE(int_cb), NULL);
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR, "Failed to open sdp file '%s'\n", filename);
             goto fail;
@@ -564,7 +564,7 @@ int mux_check_init(void *arg)
     mux->header_written = 1;
 
     av_dump_format(fc, of->index, fc->url, 1);
-    atomic_fetch_add(&nb_output_dumped, 1);
+    atomic_fetch_add(&FFMPEG_STATE(nb_output_dumped), 1);
 
     return 0;
 }
@@ -662,7 +662,7 @@ static int check_written(OutputFile *of)
             pass1_used = 0;
 
         if (!packets_written &&
-            (abort_on_flags & ABORT_ON_FLAG_EMPTY_OUTPUT_STREAM)) {
+            (FFMPEG_STATE(abort_on_flags) & ABORT_ON_FLAG_EMPTY_OUTPUT_STREAM)) {
             av_log(ost, AV_LOG_FATAL, "Empty output stream\n");
             ret = err_merge(ret, AVERROR(EINVAL));
         }
@@ -671,7 +671,7 @@ static int check_written(OutputFile *of)
     if (!total_packets_written) {
         int level = AV_LOG_WARNING;
 
-        if (abort_on_flags & ABORT_ON_FLAG_EMPTY_OUTPUT) {
+        if (FFMPEG_STATE(abort_on_flags) & ABORT_ON_FLAG_EMPTY_OUTPUT) {
             ret = err_merge(ret, AVERROR(EINVAL));
             level = AV_LOG_FATAL;
         }

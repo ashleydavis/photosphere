@@ -40,7 +40,7 @@ case "$PLATFORM" in
         # Directly confirm the asset server serves real thumbnail bytes on the device (the same request the web view makes): read the
         # bound port from the app's log, forward it to the host, and assert a JPEG body.
         ASSET_ID="$(ls "$FIXTURE_DB/thumb" | head -1)"
-        SERVER_PORT="$(grep -oE 'Asset server task listening on http://127.0.0.1:[0-9]+' "$TMP_DIR/app.log" | tail -1 | grep -oE '[0-9]+$')"
+        SERVER_PORT="$(grep -oE 'Asset server listening on http://127.0.0.1:[0-9]+' "$TMP_DIR/app.log" | tail -1 | grep -oE '[0-9]+$')"
         if [ -z "$SERVER_PORT" ]; then
             log_error "Asset server did not report a bound port"
             exit 1

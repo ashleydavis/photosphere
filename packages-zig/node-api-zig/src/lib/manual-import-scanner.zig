@@ -5,6 +5,7 @@ const import_scanner = @import("import-scanner.zig");
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ScannerOptions = file_scanner.ScannerOptions;
 const ScanProgressCallback = file_scanner.ScanProgressCallback;
+const Timers = @import("ziggy").timers.Timers;
 const FileScannedResult = file_scanner.FileScannedResult;
 const scanPaths = file_scanner.scanPaths;
 const IImportScanner = import_scanner.IImportScanner;
@@ -72,7 +73,7 @@ pub const ManualImportScanner = struct {
     //
     // IImportScanner.scan for this implementation.
     //
-    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
+    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, _: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
         const self: *ManualImportScanner = @ptrCast(@alignCast(ptr));
         return self.scan(allocator, io, visitFile, onProgress);
     }

@@ -22,11 +22,12 @@
 // the data directory a phone's core passes in from its own configuration.
 //
 // Runs on every platform via the shared task queue: the app's core and the CLI register it through
-// initTaskHandlers. On a phone the deletes go straight to the filesystem, so the directories named
+// task-handlers.zig. On a phone the deletes go straight to the filesystem, so the directories named
 // here are the only boundary.
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -121,6 +122,7 @@ pub fn resetAppStorage(allocator: std.mem.Allocator, io: std.Io, deviceDataDir: 
 pub fn resetAppStorageHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {

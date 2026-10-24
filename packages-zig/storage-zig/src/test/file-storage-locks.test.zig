@@ -13,6 +13,9 @@ const FileStorage = storage_zig.file_storage.FileStorage;
 const LockFileContent = storage_zig.storage.LockFileContent;
 const parseISOString = storage_zig.storage.parseISOString;
 const pathExists = node_utils.fs.pathExists;
+const thread_messages = @import("../../../utils-zig/src/test/thread-messages.zig");
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
 
 //
 // The fixture every test works on: a file storage and a directory of the test's own.
@@ -156,12 +159,10 @@ test "should create lock file in nested directories" {
 }
 
 //
-// One attempt of a race: acquires the lock with its own storage instance and records whether it won.
+// One attempt of a race, as the test keeps it: the attempt runs on a thread of its own with its own storage instance (see
+// runAttempts), and the test records here whether it won.
 //
 const LockAttempt = struct {
-    // The storage instance of this attempt.
-    storage: FileStorage,
-
     // The lock owner of this attempt.
     owner: []const u8,
 
@@ -172,17 +173,99 @@ const LockAttempt = struct {
     delayMicroseconds: u64 = 0,
 
     //
-    // Runs the attempt.
+    // What an attempt's thread is given.
     //
-    fn run(self: *LockAttempt, lockFilePath: []const u8) void {
-        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        defer arena.deinit();
-        if (self.delayMicroseconds > 0) {
-            std.testing.io.sleep(.fromNanoseconds(@intCast(self.delayMicroseconds * std.time.ns_per_us)), .awake) catch |err| @panic(@errorName(err));
+    const Order = struct {
+        // The attempt's place in the test's list.
+        index: usize,
+
+        // The directory of the storage.
+        root: []const u8,
+
+        // The lock file.
+        lockFilePath: []const u8,
+
+        // The lock owner.
+        owner: []const u8,
+
+        // How long the attempt waits before it starts, in microseconds.
+        delayMicroseconds: u64,
+    };
+
+    //
+    // What an attempt's thread tells the test.
+    //
+    const Outcome = struct {
+        // The attempt's place in the test's list.
+        index: usize,
+
+        // Whether the attempt acquired the lock.
+        success: bool,
+    };
+
+    //
+    // An attempt's thread: makes its own allocator, Io and storage instance, takes its order, acquires the lock and tells the test
+    // whether it won.
+    //
+    fn run(orders: *MessageQueue, outcomes: *MessageQueue) void {
+        var thread_allocator: ThreadAllocator = .init;
+        defer thread_allocator.deinit();
+        var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        var threaded: std.Io.Threaded = .init_single_threaded;
+        threaded.allocator = thread_allocator.allocator();
+        defer threaded.deinit();
+        const io = threaded.io();
+        const order = thread_messages.take(Order, orders, io, arena) catch |err| @panic(@errorName(err));
+        if (order.delayMicroseconds > 0) {
+            io.sleep(.fromNanoseconds(@intCast(order.delayMicroseconds * std.time.ns_per_us)), .awake) catch |err| @panic(@errorName(err));
         }
-        self.success = self.storage.acquireWriteLock(arena.allocator(), std.testing.io, lockFilePath, self.owner) catch false;
+        var storage = FileStorage.init(order.root);
+        const success = storage.acquireWriteLock(arena, io, order.lockFilePath, order.owner) catch false;
+        thread_messages.post(outcomes, io, arena, Outcome{
+            .index = order.index,
+            .success = success,
+        }) catch |err| @panic(@errorName(err));
     }
 };
+
+//
+// Runs every attempt at once, each on a thread of its own with its own storage instance of the directory, and records whether each
+// won.
+//
+fn runAttempts(allocator: std.mem.Allocator, root: []const u8, lockFilePath: []const u8, attempts: []LockAttempt) !void {
+    const io = std.testing.io;
+    const orders = try allocator.alloc(MessageQueue, attempts.len);
+    for (orders) |*queue| {
+        queue.* = MessageQueue.init();
+    }
+    defer {
+        for (orders) |*queue| {
+            queue.deinit();
+        }
+    }
+    var outcomes = MessageQueue.init();
+    defer outcomes.deinit();
+    const threads = try allocator.alloc(std.Thread, attempts.len);
+    for (attempts, orders, threads, 0..) |attempt, *queue, *thread, index| {
+        try thread_messages.post(queue, io, allocator, LockAttempt.Order{
+            .index = index,
+            .root = root,
+            .lockFilePath = lockFilePath,
+            .owner = attempt.owner,
+            .delayMicroseconds = attempt.delayMicroseconds,
+        });
+        thread.* = try std.Thread.spawn(.{}, LockAttempt.run, .{ queue, &outcomes });
+    }
+    for (threads) |thread| {
+        thread.join();
+    }
+    for (attempts) |_| {
+        const outcome = try thread_messages.take(LockAttempt.Outcome, &outcomes, io, allocator);
+        attempts[outcome.index].success = outcome.success;
+    }
+}
 
 test "should handle race conditions properly" {
     var fixture: Fixture = undefined;
@@ -194,24 +277,17 @@ test "should handle race conditions properly" {
     // Create multiple storage instances to simulate different processes
     var attempts = [_]LockAttempt{
         .{
-            .storage = FileStorage.init(fixture.tempDir),
             .owner = "user1",
         },
         .{
-            .storage = FileStorage.init(fixture.tempDir),
             .owner = "user2",
         },
         .{
-            .storage = FileStorage.init(fixture.tempDir),
             .owner = "user3",
         },
     };
 
-    var group: std.Io.Group = .init;
-    for (&attempts) |*attempt| {
-        group.async(std.testing.io, LockAttempt.run, .{ attempt, lockFilePath });
-    }
-    try group.await(std.testing.io);
+    try runAttempts(allocator, fixture.tempDir, lockFilePath, &attempts);
 
     // Only one should succeed
     var successCount: u32 = 0;
@@ -249,16 +325,11 @@ test "should handle aggressive race conditions with many concurrent attempts" {
     const attempts = try allocator.alloc(LockAttempt, numAttempts);
     for (attempts, 0..) |*attempt, index| {
         attempt.* = .{
-            .storage = FileStorage.init(fixture.tempDir),
             .owner = try std.fmt.allocPrint(allocator, "user-{d}", .{index}),
         };
     }
 
-    var group: std.Io.Group = .init;
-    for (attempts) |*attempt| {
-        group.async(std.testing.io, LockAttempt.run, .{ attempt, lockFilePath });
-    }
-    try group.await(std.testing.io);
+    try runAttempts(allocator, fixture.tempDir, lockFilePath, attempts);
 
     // Exactly one should succeed
     var successCount: usize = 0;
@@ -302,17 +373,12 @@ test "should handle race conditions with realistic timing delays" {
             var randomBytes: [2]u8 = undefined;
             std.testing.io.random(&randomBytes);
             attempt.* = .{
-                .storage = FileStorage.init(fixture.tempDir),
                 .owner = try std.fmt.allocPrint(allocator, "test{d}-user{d}", .{ testRun, index }),
                 .delayMicroseconds = @as(u64, std.mem.readInt(u16, &randomBytes, .little)) % 2000,
             };
         }
 
-        var group: std.Io.Group = .init;
-        for (attempts) |*attempt| {
-            group.async(std.testing.io, LockAttempt.run, .{ attempt, lockFilePath });
-        }
-        try group.await(std.testing.io);
+        try runAttempts(allocator, fixture.tempDir, lockFilePath, attempts);
 
         // Exactly one should succeed in each test run
         var successCount: usize = 0;
@@ -645,7 +711,7 @@ test "every step of taking a lock is written to the verbose log, and a lock that
 
     // A log that asks for the [LOCK] lines and writes nothing.
     var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(verboseLog.ilog());
     defer utils.log.setLog(previousLog);
 
@@ -779,7 +845,7 @@ test "a refused lock is logged with the age and the owner of the lock in the way
         .messages = std.Io.Writer.Allocating.init(allocator),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
 
@@ -884,7 +950,7 @@ test "refreshWriteLock logs the attempt, the success and the failure" {
         .messages = std.Io.Writer.Allocating.init(allocator),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
 

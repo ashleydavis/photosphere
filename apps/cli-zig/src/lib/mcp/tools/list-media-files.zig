@@ -21,8 +21,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `list_media_files` tool: returns a page of media files from the open
 // database, sorted by the date the photo or video was taken (newest first).
 //
-pub fn registerListMediaFilesTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerListMediaFilesTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "list_media_files",
         .{
             .description = "List a page of media files (photos and videos) in the open Photosphere database, sorted by the date the photo or video was taken (newest first).",

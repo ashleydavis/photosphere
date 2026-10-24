@@ -74,7 +74,7 @@ pub const FakeToolRunner = struct {
     //
     // Records the arguments and prints the tool's output, or fails for a tool the runner was not given.
     //
-    fn run(context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
+    fn run(context: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
         _ = allocator;
         const self: *FakeToolRunner = @ptrCast(@alignCast(context.?));
         try self.lastArguments.put(self.allocator, try self.allocator.dupe(u8, tool), try std.mem.join(self.allocator, " ", arguments));

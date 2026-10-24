@@ -47,7 +47,7 @@ fn runImageMagick(allocator: std.mem.Allocator, runner: InProcessRunner, tool: [
         try magickArguments.append(allocator, "identify");
     }
     try magickArguments.appendSlice(allocator, arguments);
-    const result = try runner.run(runner.context, allocator, "magick", magickArguments.items);
+    const result = try runner.run(runner.context, std.testing.io, allocator, "magick", magickArguments.items);
     if (result.exit_code != 0) {
         std.debug.print("ImageMagick failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
         return error.TestUnexpectedResult;
@@ -111,7 +111,7 @@ const IExpectedImageInfo = struct {
 test "getInfo reads the dimensions and the date of an image" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -165,7 +165,7 @@ test "getInfo reads the dimensions and the date of an image" {
 test "resize refuses when the second output path is already taken" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -186,7 +186,7 @@ test "resize refuses when the second output path is already taken" {
 test "getExifData reads the tags of a real image" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -211,7 +211,7 @@ test "getExifData reads the tags of a real image" {
 test "getInfo fails for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     var image = Image.init("../test/no-such-file.jpg");
@@ -222,7 +222,7 @@ test "getInfo fails for a file that does not exist" {
 test "resize writes the image the resize command writes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -256,7 +256,7 @@ test "resize writes the image the resize command writes" {
 test "transform writes the image the transform command writes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -286,7 +286,7 @@ test "transform writes the image the transform command writes" {
 test "getDominantColor gives the color the command prints" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -316,7 +316,7 @@ test "getDominantColor gives the color the command prints" {
 test "every operation fails for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -340,7 +340,7 @@ test "every operation fails for a file that does not exist" {
 test "resize to only a width or only a height keeps the aspect ratio" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -368,7 +368,7 @@ test "resize to only a width or only a height keeps the aspect ratio" {
 test "resize refuses a quality outside 0 to 100" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -386,7 +386,7 @@ test "resize refuses a quality outside 0 to 100" {
 test "resize of an animation returns the first frame ImageMagick writes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -411,7 +411,7 @@ test "resize of an animation returns the first frame ImageMagick writes" {
 test "resize fails loudly when ImageMagick writes nothing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -437,7 +437,7 @@ test "resize fails loudly when ImageMagick writes nothing" {
 test "getDominantColor fails for a file ImageMagick cannot read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -458,7 +458,7 @@ test "getDominantColor fails for a file ImageMagick cannot read" {
 test "getExifData fails for a file ImageMagick cannot read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -479,7 +479,7 @@ test "getExifData fails for a file ImageMagick cannot read" {
 test "transform fails loudly when ImageMagick writes nothing" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();

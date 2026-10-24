@@ -5,6 +5,7 @@ const IFileCacheIdentity = api.import_assets_types.IFileCacheIdentity;
 const FileScannedResult = file_scanner.FileScannedResult;
 const IFileStat = file_scanner.IFileStat;
 const ScanProgressCallback = file_scanner.ScanProgressCallback;
+const Timers = @import("ziggy").timers.Timers;
 
 //
 // One file a scanner is offering to the import.
@@ -94,7 +95,7 @@ pub const IImportScanner = struct {
     //
     pub const VTable = struct {
         // Pushes every file this scanner has, one at a time, and returns when there are no more.
-        scan: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void,
+        scan: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void,
 
         // Releases whatever the scanner materialised for one file, once the import has finished with it.
         release: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void,
@@ -106,8 +107,8 @@ pub const IImportScanner = struct {
     // A scanner that watches somewhere for new files does not return until the import is cancelled,
     // which is the one genuine difference between the two kinds.
     //
-    pub fn scan(self: IImportScanner, allocator: std.mem.Allocator, io: std.Io, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
-        return self.vtable.scan(self.ptr, allocator, io, visitFile, onProgress);
+    pub fn scan(self: IImportScanner, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
+        return self.vtable.scan(self.ptr, allocator, io, timers, visitFile, onProgress);
     }
 
     //

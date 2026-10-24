@@ -4,47 +4,58 @@ const node_api = @import("node-api-zig");
 const utils = @import("utils-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
+const thread_messages = @import("../../../utils-zig/src/test/thread-messages.zig");
 const fetchNews = node_api.news_fetcher.fetchNews;
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
 
 //
 // A local HTTP server that answers every request with one status and body (stands in for the mocked fetch).
 //
+//
+// The server runs on a thread of its own, which makes its own Io and allocator. It shares nothing with the test: it is given the
+// status and body as JSON on its queue of orders, and it posts the port it listens on to the test's queue of events.
+//
 const FeedServer = struct {
-    // The io the server runs on.
-    io: std.Io,
+    // The thread the server runs on.
+    thread: std.Thread,
 
-    // The listening socket.
-    server: std.Io.net.Server,
+    // The server's orders, which the test posts and the server's thread takes.
+    orders: MessageQueue,
 
-    // The port.
+    // What the server's thread tells the test, which the test takes.
+    events: MessageQueue,
+
+    // The port, as the server's thread told the test.
     port: u16,
 
-    // Runs the one connection the server answers.
-    group: std.Io.Group,
-
-    // The status of every response.
-    status: std.http.Status,
-
-    // The body of every response.
-    body: []const u8,
+    //
+    // What the server's thread is given: the status and body of every response.
+    //
+    const Order = struct {
+        status: u16,
+        body: []const u8,
+    };
 
     //
-    // Starts the server.
+    // What the server's thread tells the test once it listens.
     //
-    fn start(self: *FeedServer, io: std.Io, status: std.http.Status, body: []const u8) !void {
-        const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
-        self.* = .{
-            .io = io,
-            .server = try address.listen(io, .{
-                .reuse_address = true,
-            }),
-            .port = 0,
-            .group = .init,
-            .status = status,
+    const Listening = struct {
+        port: u16,
+    };
+
+    //
+    // Starts the server on its thread and waits for the port it listens on.
+    //
+    fn start(self: *FeedServer, io: std.Io, allocator: std.mem.Allocator, status: std.http.Status, body: []const u8) !void {
+        self.orders = MessageQueue.init();
+        self.events = MessageQueue.init();
+        try thread_messages.post(&self.orders, io, allocator, Order{
+            .status = @intFromEnum(status),
             .body = body,
-        };
-        self.port = self.server.socket.address.getPort();
-        try self.group.concurrent(io, serveOne, .{self});
+        });
+        self.thread = try std.Thread.spawn(.{}, serveOne, .{ &self.orders, &self.events });
+        self.port = (try thread_messages.take(Listening, &self.events, io, allocator)).port;
     }
 
     //
@@ -53,28 +64,54 @@ const FeedServer = struct {
     // cancel and never return.
     //
     fn stop(self: *FeedServer) void {
-        self.group.await(self.io) catch {};
-        self.server.deinit(self.io);
+        self.thread.join();
+        self.orders.deinit();
+        self.events.deinit();
     }
 
     //
-    // Accepts one connection and answers its request.
+    // The server's thread: takes its order, listens on a free port of 127.0.0.1, tells the test the port, then accepts one
+    // connection and answers its request.
     //
-    fn serveOne(self: *FeedServer) void {
-        const stream = self.server.accept(self.io) catch {
+    fn serveOne(orders: *MessageQueue, events: *MessageQueue) void {
+        var thread_allocator: ThreadAllocator = .init;
+        defer thread_allocator.deinit();
+        var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        var threaded: std.Io.Threaded = .init_single_threaded;
+        threaded.allocator = thread_allocator.allocator();
+        defer threaded.deinit();
+        const io = threaded.io();
+        const order = thread_messages.take(Order, orders, io, arena) catch |err| {
+            std.debug.panic("The feed server got no order: {s}", .{@errorName(err)});
+        };
+        const address = std.Io.net.IpAddress.parse("127.0.0.1", 0) catch unreachable;
+        var server = address.listen(io, .{
+            .reuse_address = true,
+        }) catch |err| {
+            std.debug.panic("The feed server could not listen: {s}", .{@errorName(err)});
+        };
+        defer server.deinit(io);
+        thread_messages.post(events, io, arena, Listening{
+            .port = server.socket.address.getPort(),
+        }) catch |err| {
+            std.debug.panic("The feed server could not tell the test its port: {s}", .{@errorName(err)});
+        };
+        const stream = server.accept(io) catch {
             return;
         };
-        defer stream.close(self.io);
+        defer stream.close(io);
         var receiveBuffer: [4096]u8 = undefined;
         var sendBuffer: [4096]u8 = undefined;
-        var connectionReader = stream.reader(self.io, &receiveBuffer);
-        var connectionWriter = stream.writer(self.io, &sendBuffer);
+        var connectionReader = stream.reader(io, &receiveBuffer);
+        var connectionWriter = stream.writer(io, &sendBuffer);
         var httpServer = std.http.Server.init(&connectionReader.interface, &connectionWriter.interface);
         var request = httpServer.receiveHead() catch {
             return;
         };
-        request.respond(self.body, .{
-            .status = self.status,
+        request.respond(order.body, .{
+            .status = @enumFromInt(order.status),
             .keep_alive = false,
         }) catch |err| {
             std.debug.panic("The feed server could not answer the request: {s}", .{@errorName(err)});
@@ -94,7 +131,7 @@ const FeedServer = struct {
 //
 fn fetchServed(allocator: std.mem.Allocator, status: std.http.Status, body: []const u8) ![]const node_api.news_fetcher.INewsItem {
     var server: FeedServer = undefined;
-    try server.start(std.testing.io, status, body);
+    try server.start(std.testing.io, allocator, status, body);
     defer server.stop();
     return fetchNews(allocator, std.testing.io, try server.url(allocator));
 }

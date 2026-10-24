@@ -17,23 +17,29 @@
 //
 
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const serialization_zig = @import("serialization-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
-const sandbox_module = @import("sandbox.zig");
+const expectBool = @import("sandbox.zig").expectBool;
+const expectContains = @import("sandbox.zig").expectContains;
+const expectEmptyArray = @import("sandbox.zig").expectEmptyArray;
+const expectInteger = @import("sandbox.zig").expectInteger;
+const expectKeyStrings = @import("sandbox.zig").expectKeyStrings;
+const expectString = @import("sandbox.zig").expectString;
 const test_hosts = @import("test-hosts.zig");
 const test_environment = @import("../../../node-api-zig/src/test/test-environment.zig");
 const fixture_dirs = @import("../../../node-api-zig/src/test/fixture-dirs.zig");
-const Sandbox = sandbox_module.Sandbox;
+const Sandbox = @import("sandbox.zig").Sandbox;
 const ReportingHost = test_hosts.ReportingHost;
 const planPrefetchHandler = mobile_worker.plan_prefetch_worker.planPrefetchHandler;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
 const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
 const BsonDocument = serialization_zig.bson.BsonDocument;
-const at = sandbox_module.at;
+const at = @import("sandbox.zig").at;
 
 //
 // The database the tests use, which stands in for the replica a phone holds.
@@ -161,7 +167,7 @@ fn plan(sandbox: *Sandbox, connectionType: []const u8) !std.json.Value {
     var host: ReportingHost = .{
         .reported = connectionType,
     };
-    return planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, .{
+    return planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), .{
         .object = .empty,
     }, sandbox.context(), host.networkStatusHost());
 }
@@ -176,8 +182,8 @@ test "plan-prefetch says not to run when there is no settings file at all" {
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
 }
 
 // The master switch, and the first thing checked. The prefetch has none of its own on purpose: a user who switches syncing off
@@ -191,9 +197,9 @@ test "plan-prefetch says not to run when syncing is switched off" {
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("switched off", result, "reason");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("switched off", result, "reason");
+    try expectEmptyArray(result, "steps");
 }
 
 // A replica of a real library is thousands of thumbnails. Getting this wrong spends somebody's mobile data without asking.
@@ -206,9 +212,9 @@ test "plan-prefetch says not to run on a cellular connection when the Wi-Fi-only
 
     const result = try plan(&sandbox, "cellular");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("cellular", result, "reason");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("cellular", result, "reason");
+    try expectEmptyArray(result, "steps");
 }
 
 test "plan-prefetch runs on Wi-Fi when the Wi-Fi-only restriction is on" {
@@ -220,7 +226,7 @@ test "plan-prefetch runs on Wi-Fi when the Wi-Fi-only restriction is on" {
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 test "plan-prefetch says not to run when no database has been opened" {
@@ -232,10 +238,10 @@ test "plan-prefetch says not to run when no database has been opened" {
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("no database", result, "reason");
-    try sandbox_module.expectString("no database has been opened to fill in", result, "reason");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("no database", result, "reason");
+    try expectString("no database has been opened to fill in", result, "reason");
+    try expectEmptyArray(result, "steps");
 }
 
 test "plan-prefetch says not to run when the database has no origin to fill in from" {
@@ -249,10 +255,10 @@ test "plan-prefetch says not to run when the database has no origin to fill in f
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("no origin", result, "reason");
-    try sandbox_module.expectString("\"photosphere-default\" has no origin to fill in from", result, "reason");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("no origin", result, "reason");
+    try expectString("\"photosphere-default\" has no origin to fill in from", result, "reason");
+    try expectEmptyArray(result, "steps");
 }
 
 // A full database has nothing missing. The prefetch task checks this too and returns, but it would pay for an engine slot and a
@@ -268,10 +274,10 @@ test "plan-prefetch says not to run when the database is not a partial replica" 
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("not a partial replica", result, "reason");
-    try sandbox_module.expectString("\"photosphere-default\" is not a partial replica, so there is nothing to fill in", result, "reason");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("not a partial replica", result, "reason");
+    try expectString("\"photosphere-default\" is not a partial replica, so there is nothing to fill in", result, "reason");
+    try expectEmptyArray(result, "steps");
 }
 
 // The database on a real phone is encrypted, and the merkle tree this reads to find out whether the replica is partial is one of
@@ -295,9 +301,9 @@ test "plan-prefetch runs against an encrypted replica, whose merkle tree has to 
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
-    try sandbox_module.expectString(DATABASE_PATH, result, "databasePath");
-    try sandbox_module.expectKeyStrings(&.{"prefetch-database"}, "type", result, "steps");
+    try expectBool(true, result, "shouldRun");
+    try expectString(DATABASE_PATH, result, "databasePath");
+    try expectKeyStrings(&.{"prefetch-database"}, "type", result, "steps");
 }
 
 // The other half of the encrypted case: the flag is read correctly rather than the read merely not throwing.
@@ -314,8 +320,8 @@ test "plan-prefetch says not to run when an encrypted database is not a partial 
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("not a partial replica", result, "reason");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("not a partial replica", result, "reason");
 }
 
 // Native code runs this step unchanged and builds no payload of its own, so getting it wrong here is getting the background
@@ -329,18 +335,18 @@ test "plan-prefetch hands back a prefetch-database step for the database when a 
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
-    try sandbox_module.expectString(DATABASE_PATH, result, "databasePath");
-    try sandbox_module.expectKeyStrings(&.{"prefetch-database"}, "type", result, "steps");
+    try expectBool(true, result, "shouldRun");
+    try expectString(DATABASE_PATH, result, "databasePath");
+    try expectKeyStrings(&.{"prefetch-database"}, "type", result, "steps");
     const stepData = result.object.get("steps").?.array.items[0].object.get("data").?;
     try std.testing.expectEqual(@as(usize, 2), stepData.object.count());
-    try sandbox_module.expectString(DATABASE_PATH, stepData, "databasePath");
+    try expectString(DATABASE_PATH, stepData, "databasePath");
 
     // No cancel source: the pass is queued by the native driver under a source the WebView never learns, so the row must not
     // offer a Cancel button it cannot honour.
     try std.testing.expectEqual(@as(usize, 2), at(stepData, "job").?.object.count());
-    try sandbox_module.expectString("prefetch:" ++ DATABASE_PATH, stepData, "job.id");
-    try sandbox_module.expectString("Filling in this database", stepData, "job.name");
+    try expectString("prefetch:" ++ DATABASE_PATH, stepData, "job.id");
+    try expectString("Filling in this database", stepData, "job.name");
 }
 
 // The same gap the sync uses, so no new configuration key exists to be kept in step.
@@ -353,7 +359,7 @@ test "plan-prefetch carries the pause through so the loop waits what the sync se
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectInteger(90000, result, "pauseBetweenRunsMs");
+    try expectInteger(90000, result, "pauseBetweenRunsMs");
 }
 
 test "plan-prefetch's refusal still carries the pause, so the loop does not spin asking again" {
@@ -365,8 +371,8 @@ test "plan-prefetch's refusal still carries the pause, so the loop does not spin
 
     const result = try plan(&sandbox, "wifi");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectInteger(DEFAULT_SYNC_PAUSE_MS, result, "pauseBetweenRunsMs");
+    try expectBool(false, result, "shouldRun");
+    try expectInteger(DEFAULT_SYNC_PAUSE_MS, result, "pauseBetweenRunsMs");
 }
 
 // The native side cannot tell what connection it has. Treated as unknown it would permit a pass on a connection nobody could
@@ -382,7 +388,7 @@ test "plan-prefetch fails when the host cannot report the connection type" {
         .failure = error.NoConnectivityManager,
     };
 
-    try std.testing.expectError(error.NoConnectivityManager, planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, .{
+    try std.testing.expectError(error.NoConnectivityManager, planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), .{
         .object = .empty,
     }, sandbox.context(), host.networkStatusHost()));
 }

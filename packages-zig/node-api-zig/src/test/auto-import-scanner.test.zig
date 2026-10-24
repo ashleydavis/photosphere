@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -175,7 +176,7 @@ const Hooks = struct {
     //
     // Never cancelled.
     //
-    fn isCancelled(context: ?*anyopaque) bool {
+    fn isCancelled(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator) bool {
         _ = context;
         return false;
     }
@@ -221,7 +222,7 @@ const Hooks = struct {
     //
     // Records the progress.
     //
-    fn onProgress(context: ?*anyopaque, progress: IAutoImportScannerProgress) void {
+    fn onProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").timers.Timers, progress: IAutoImportScannerProgress) void {
         const self: *Hooks = @ptrCast(@alignCast(context.?));
         self.progressReports.append(self.allocator, progress.skippedAsAlreadyImported) catch |err| {
             std.debug.panic("The progress report could not be kept: {s}", .{@errorName(err)});
@@ -372,7 +373,7 @@ fn runScan(allocator: std.mem.Allocator, scanner: *AutoImportScanner) ![]IScanne
     var pushed: Pushed = .{
         .allocator = allocator,
     };
-    try scanner.scan(allocator, std.testing.io, .{
+    try scanner.scan(allocator, std.testing.io, test_timers.timers(), .{
         .context = &pushed,
         .function = Pushed.visit,
     }, .{

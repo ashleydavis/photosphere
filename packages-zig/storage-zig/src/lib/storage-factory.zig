@@ -1,14 +1,13 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
-const storage_module = @import("storage.zig");
 const file_storage = @import("file-storage.zig");
 const cloud_storage = @import("cloud-storage.zig");
 const encrypted_storage = @import("encrypted-storage.zig");
 const storage_prefix_wrapper = @import("storage-prefix-wrapper.zig");
 
 const errors = utils.errors;
-const IStorage = storage_module.IStorage;
+const IStorage = @import("storage.zig").IStorage;
 const FileStorage = file_storage.FileStorage;
 const CloudStorage = cloud_storage.CloudStorage;
 const IS3Credentials = cloud_storage.IS3Credentials;
@@ -111,7 +110,7 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, rootPath: []const
         // For S3, we keep the bucket:key format that CloudStorage expects
         const s3Path = rootPath["s3:".len..];
         const cloudStorage = try allocator.create(CloudStorage);
-        cloudStorage.* = CloudStorage.init(io, "s3:", s3Config);
+        cloudStorage.* = CloudStorage.init("s3:", s3Config);
         storage = cloudStorage.storage();
         normalizedPath = s3Path;
         storageType = "s3";

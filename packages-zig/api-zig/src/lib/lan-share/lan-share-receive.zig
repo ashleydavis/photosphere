@@ -7,7 +7,7 @@ const index = @import("index.zig");
 // Names used from other files.
 //
 const getVaultWithHost = vault_zig.get_vault.getVaultWithHost;
-const IHostRequester = @import("utils-zig").host_requester.IHostRequester;
+const INativeCaller = @import("utils-zig").native_caller.INativeCaller;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
 const importShareSecrets = lan_share_core.importShareSecrets;
 const IShareSecretStore = lan_share_core.IShareSecretStore;
@@ -24,7 +24,7 @@ const IVaultSecretStoreContext = struct {
     io: std.Io,
 
     // Reaches the phone's keychain when the phone vault is the default, or null where there is no phone shell.
-    host: ?IHostRequester,
+    host: ?INativeCaller,
 };
 
 //
@@ -53,7 +53,7 @@ fn vaultWrite(context: ?*anyopaque, allocator: std.mem.Allocator, name: []const 
 // Adapts the OS vault to the IShareSecretStore the shared importer writes through. `has` reports
 // whether a secret exists (to detect a conflict); `write` creates or overwrites one.
 //
-fn vaultSecretStore(allocator: std.mem.Allocator, io: std.Io, host: ?IHostRequester) !IShareSecretStore {
+fn vaultSecretStore(allocator: std.mem.Allocator, io: std.Io, host: ?INativeCaller) !IShareSecretStore {
     const storeContext = try allocator.create(IVaultSecretStoreContext);
     storeContext.* = .{
         .io = io,
@@ -74,7 +74,7 @@ fn vaultSecretStore(allocator: std.mem.Allocator, io: std.Io, host: ?IHostReques
 // the vault, allowing the caller to choose how to resolve it. The per-secret
 // resolve-and-write loop is shared with mobile via lan-share-core.
 //
-pub fn importDatabasePayload(allocator: std.mem.Allocator, io: std.Io, payload: IDatabaseSharePayload, onConflict: ConflictResolver, host: ?IHostRequester) !IShareDatabaseConfig {
+pub fn importDatabasePayload(allocator: std.mem.Allocator, io: std.Io, payload: IDatabaseSharePayload, onConflict: ConflictResolver, host: ?INativeCaller) !IShareDatabaseConfig {
     const resolvedKeys = try importShareSecrets(allocator, payload, try vaultSecretStore(allocator, io, host), onConflict);
     return .{
         .name = payload.name,
@@ -90,7 +90,7 @@ pub fn importDatabasePayload(allocator: std.mem.Allocator, io: std.Io, payload: 
 //
 // Imports a secret share payload by creating a vault entry with the given name.
 //
-pub fn importSecretPayload(allocator: std.mem.Allocator, io: std.Io, payload: ISecretSharePayload, secretName: []const u8, host: ?IHostRequester) !void {
+pub fn importSecretPayload(allocator: std.mem.Allocator, io: std.Io, payload: ISecretSharePayload, secretName: []const u8, host: ?INativeCaller) !void {
     const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
     try vault.set(allocator, io, .{
         .name = secretName,

@@ -3,11 +3,12 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const task_queue_zig = @import("ziggy").task_queue;
-const hash_module = @import("hash.zig");
+const hash = @import("hash.zig");
 const hash_cache = @import("hash-cache.zig");
 const file_scanner = @import("file-scanner.zig");
 const media_file_database = @import("media-file-database.zig");
@@ -17,8 +18,8 @@ const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const IFileStat = file_scanner.IFileStat;
 const HashCache = hash_cache.HashCache;
 const Date = utils.timestamp_provider.Date;
-const validateAndHash = hash_module.validateAndHash;
-const getHashFromCache = hash_module.getHashFromCache;
+const validateAndHash = hash.validateAndHash;
+const getHashFromCache = hash.getHashFromCache;
 const createMediaFileDatabase = media_file_database.createMediaFileDatabase;
 const openStorage = open_storage.openStorage;
 
@@ -89,7 +90,7 @@ fn resultToJson(allocator: std.mem.Allocator, result: ICheckFileResult) !std.jso
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 // (Zig: the task data and output are JSON values holding ICheckFileData and ICheckFileResult.)
 //
-pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
     const data = try std.json.parseFromValueLeaky(ICheckFileData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -101,9 +102,9 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
 
-    // ImageMagick and FFmpeg are built into the program and run in its process through the task's tool runner. A task run with
+    // ImageMagick and FFmpeg are built into the program and run in its process through `tools`, made on the task's thread. A task run with
     // no runner fails here rather than starting an installed program.
-    const toolRunner = context.toolRunner orelse {
+    const toolRunner = tools orelse {
         return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
     };
 
@@ -131,7 +132,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.
     }
 
     // Recreate storage and metadata collection in the worker
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const database = try createMediaFileDatabase(allocator, opened.storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 

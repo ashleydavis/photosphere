@@ -69,10 +69,11 @@ pub const ISpawnResult = struct {
 pub const SpawnFunction = *const fn (allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!ISpawnResult;
 
 //
-// The function used by spawn in a test program (replaced by the macOS vault tests through setSpawnFunction).
+// The function used by spawn in a test program on the calling thread (replaced by the macOS vault tests, on their thread, through
+// setSpawnFunction).
 // Outside a test program spawn always runs spawnChildProcess.
 //
-var spawn_function: SpawnFunction = spawnChildProcess;
+threadlocal var spawn_function: SpawnFunction = spawnChildProcess;
 
 //
 // TEST-ONLY HOOK, pending the user's approval under CLAUDE.md (which bans test-only scaffolding in app code without

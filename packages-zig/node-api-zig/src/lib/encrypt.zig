@@ -65,8 +65,6 @@ pub const IEncryptResult = struct {
 //
 //
 // Returns true if the file was encrypted, false if it was skipped (already encrypted with the given key).
-// treeMutex, when given, is held while the merkle tree is read and updated, because the files of a batch
-// are encrypted on separate threads.
 //
 pub fn encryptFile(
     allocator: std.mem.Allocator,
@@ -77,7 +75,6 @@ pub fn encryptFile(
     rawReadStorage: IStorage,
     publicKeyHash: []const u8,
     merkleTree: *IMerkleTree,
-    treeMutex: ?*std.Io.Mutex,
 ) !bool {
     var srcInfoOperation: retry_operations.InfoOperation("() => readStorage.info(fileName)") = .{
         .allocator = allocator,
@@ -103,12 +100,6 @@ pub fn encryptFile(
         try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
 
         if (!std.mem.startsWith(u8, fileName, ".db/")) {
-            if (treeMutex) |mutex| {
-                mutex.lockUncancelable(io);
-            }
-            defer if (treeMutex) |mutex| {
-                mutex.unlock(io);
-            };
             const existing = try getItemInfo(merkleTree, fileName);
             if (existing) |existingInfo| {
                 var updatedInfoOperation: retry_operations.InfoOperation("() => writeStorage.info(fileName)") = .{
@@ -171,58 +162,6 @@ pub fn encryptableFiles(allocator: std.mem.Allocator, io: std.Io, readStorage: I
 }
 
 //
-// Encrypts one file of a batch.
-// Runs concurrently with the rest of its batch, with its own allocator because the caller's is not shared between
-// threads.
-//
-const EncryptFileTask = struct {
-    // The storage the file is read from.
-    readStorage: IStorage,
-
-    // The storage the encrypted file is written to.
-    writeStorage: IStorage,
-
-    // The raw storage used to peek the encryption header.
-    rawReadStorage: IStorage,
-
-    // The hash of the public key the file is encrypted with.
-    publicKeyHash: []const u8,
-
-    // The files tree whose entry for the file is updated.
-    merkleTree: *IMerkleTree,
-
-    // Held while the files tree is read and updated.
-    treeMutex: *std.Io.Mutex,
-
-    // The file to encrypt.
-    fileName: []const u8,
-
-    // True when the file was encrypted, false when it was skipped.
-    wasEncrypted: bool = false,
-
-    // The error the task failed with, or null when it succeeded.
-    failure: ?anyerror = null,
-
-    // The message of the error the task failed with, captured on the thread that ran it.
-    errorRecord: errors.ErrorRecord = .{},
-
-    //
-    // Encrypts the file, recording the error when it fails.
-    //
-    fn run(self: *EncryptFileTask, io: std.Io) void {
-        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        defer arena.deinit();
-        if (encryptFile(arena.allocator(), io, self.fileName, self.readStorage, self.writeStorage, self.rawReadStorage, self.publicKeyHash, self.merkleTree, self.treeMutex)) |wasEncrypted| {
-            self.wasEncrypted = wasEncrypted;
-        }
-        else |err| {
-            self.failure = err;
-            errors.captureError(&self.errorRecord);
-        }
-    }
-};
-
-//
 // Encrypts the database in place: reads each file from readStorage, writes it encrypted
 // to writeStorage (same path). Can be run on an already encrypted database to re-encrypt
 // with a new key. Use readStorage = plain, writeStorage = encrypted for plain→encrypted;
@@ -254,37 +193,14 @@ pub fn encrypt(
     var skipped: u64 = 0;
     const BATCH_SIZE = 10;
 
-    var treeMutex: std.Io.Mutex = .init;
     var files = try encryptableFiles(allocator, io, readStorage);
     var batches = batchGenerator([]const u8, allocator, &files, BATCH_SIZE);
     while (try batches.next()) |batch| {
-        const tasks = try allocator.alloc(EncryptFileTask, batch.len);
-        for (batch, tasks) |fileName, *task| {
-            task.* = .{
-                .readStorage = readStorage,
-                .writeStorage = writeStorage,
-                .rawReadStorage = rawReadStorage,
-                .publicKeyHash = &publicKeyHash,
-                .merkleTree = &merkleTree,
-                .treeMutex = &treeMutex,
-                .fileName = fileName,
-            };
-        }
-
-        var group: std.Io.Group = .init;
-        for (tasks) |*task| {
-            group.async(io, EncryptFileTask.run, .{ task, io });
-        }
-        try group.await(io);
-
-        for (tasks) |*task| {
-            if (task.failure) |failure| {
-                errors.restoreError(&task.errorRecord);
-                return failure;
-            }
-        }
-        for (tasks) |*task| {
-            if (task.wasEncrypted) {
+        // The files of a batch are encrypted one after another, on the task's own thread.
+        for (batch) |fileName| {
+            var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+            defer arena.deinit();
+            if (try encryptFile(arena.allocator(), io, fileName, readStorage, writeStorage, rawReadStorage, &publicKeyHash, &merkleTree)) {
                 encrypted += 1;
             }
             else {

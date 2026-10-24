@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
@@ -132,7 +133,7 @@ const Scenario = struct {
         try replicateData.put(allocator, "destPath", .{ .string = self.localPath });
         try replicateData.put(allocator, "partial", .{ .bool = false });
         try replicateData.put(allocator, "force", .{ .bool = false });
-        _ = try replicateDatabaseHandler(allocator, io, .{ .object = replicateData }, self.context.taskContext());
+        _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), .{ .object = replicateData }, self.context.taskContext());
         self.context.messages.clearRetainingCapacity();
     }
 
@@ -148,7 +149,7 @@ const Scenario = struct {
     // Runs the handler on the local database.
     //
     fn run(self: *Scenario, allocator: std.mem.Allocator, io: std.Io, includeJob: bool) !std.json.Value {
-        return syncDatabaseHandler(allocator, io, try makeData(allocator, self.localPath, includeJob), self.context.taskContext());
+        return syncDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, self.localPath, includeJob), self.context.taskContext());
     }
 
     //
@@ -182,7 +183,8 @@ test "syncs the local database against its origin" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-both", null);
     defer scenario.deinit(io);
@@ -204,7 +206,8 @@ test "skips sync when the origin storage has no merkle tree" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-no-tree", null);
     defer scenario.deinit(io);
@@ -226,7 +229,8 @@ test "reports a sync-skipped message when the origin storage has no merkle tree"
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-skipped", null);
     defer scenario.deinit(io);
@@ -249,7 +253,8 @@ test "reports a sync-skipped message when the database has no origin configured"
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-no-origin", null);
     defer scenario.deinit(io);
@@ -276,7 +281,8 @@ test "sends sync-started and sync-completed around a sync that runs" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-started", null);
     defer scenario.deinit(io);
@@ -297,7 +303,8 @@ test "the sync-completed message reports synced true when records were transferr
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-synced", null);
     defer scenario.deinit(io);
@@ -319,7 +326,8 @@ test "the sync-completed message reports synced false when both sides were alrea
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-identical", null);
     defer scenario.deinit(io);
@@ -338,7 +346,8 @@ test "reports its job once the sync actually starts, carrying the tag it was que
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-job", null);
     defer scenario.deinit(io);
@@ -367,7 +376,8 @@ test "reports no job when the sync returns early without an origin" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-early-job", null);
     defer scenario.deinit(io);
@@ -387,7 +397,8 @@ test "reports no job when the sync was queued without a tag" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-no-tag", null);
     defer scenario.deinit(io);
@@ -403,11 +414,12 @@ test "throws when databasePath is empty" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    try std.testing.expectError(error.Thrown, syncDatabaseHandler(allocator, io, try makeData(allocator, "", false), context.taskContext()));
+    try std.testing.expectError(error.Thrown, syncDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, "", false), context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(usize, 0), context.messages.items.len);
 }
@@ -420,7 +432,8 @@ test "sends the assets pulled from the origin as sync-batch messages of at most 
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-batches", null);
     defer scenario.deinit(io);
@@ -480,7 +493,8 @@ test "sends the id of an asset the local database deleted, that the origin still
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-deleted", null);
     defer scenario.deinit(io);
@@ -509,7 +523,8 @@ test "throws the error of a sync that fails, after sending sync-started" {
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
@@ -533,7 +548,8 @@ test "sends an asset the origin changed, that the local database also holds, as 
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, "sync-database-updated", null);
     defer scenario.deinit(io);

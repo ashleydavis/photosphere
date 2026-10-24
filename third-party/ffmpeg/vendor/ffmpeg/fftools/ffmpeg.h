@@ -25,6 +25,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <signal.h>
+#if HAVE_TERMIOS_H
+#include <termios.h>
+#endif
 
 #include "cmdutils.h"
 #include "ffmpeg_sched.h"
@@ -712,65 +715,115 @@ typedef struct FrameData {
     int                 nb_side_data;
 } FrameData;
 
-extern InputFile   **input_files;
-extern int        nb_input_files;
+typedef struct BenchmarkTimeStamps {
+    int64_t real_usec;
+    int64_t user_usec;
+    int64_t sys_usec;
+} BenchmarkTimeStamps;
 
-extern OutputFile   **output_files;
-extern int         nb_output_files;
+/* Patched (fftools-per-run-state.patch): everything ffmpeg kept in variables of the whole process, as the state of one run, so
+ * that runs on several threads at once share nothing. A run's threads reach it through the run (see fftools_state.h), and the
+ * libraries' callbacks through their context. */
+typedef struct FFmpegState {
+    InputFile   **input_files;
+    int        nb_input_files;
 
-// complex filtergraphs
-extern FilterGraph **filtergraphs;
-extern int        nb_filtergraphs;
+    OutputFile   **output_files;
+    int         nb_output_files;
 
-// standalone decoders (not tied to demuxed streams)
-extern Decoder     **decoders;
-extern int        nb_decoders;
+    // complex filtergraphs
+    FilterGraph **filtergraphs;
+    int        nb_filtergraphs;
 
-extern char *vstats_filename;
+    // standalone decoders (not tied to demuxed streams)
+    Decoder     **decoders;
+    int        nb_decoders;
 
-extern float dts_delta_threshold;
-extern float dts_error_threshold;
+    char *vstats_filename;
+
+    float dts_delta_threshold;
+    float dts_error_threshold;
+
+    float frame_drop_threshold;
+    int do_benchmark;
+    int do_benchmark_all;
+    int do_hex_dump;
+    int do_pkt_dump;
+    int copy_ts;
+    int start_at_zero;
+    int copy_tb;
+    int debug_ts;
+    int exit_on_error;
+    int abort_on_flags;
+    int print_stats;
+    int64_t stats_period;
+    int stdin_interaction;
+    AVIOContext *progress_avio;
+    float max_error_rate;
+
+    char *filter_nbthreads;
+    int filter_complex_nbthreads;
+    int filter_buffered_frames;
+    int vstats_version;
+    int print_graphs;
+    char *print_graphs_file;
+    char *print_graphs_format;
+    int auto_conversion_filters;
+
+    AVIOInterruptCB int_cb;
+
+    HWDevice *filter_hw_device;
+
+    atomic_uint nb_output_dumped;
+
+    int ignore_unknown_streams;
+    int copy_unknown_streams;
+
+    int recast_media;
+
+    FILE *vstats_file;
+
+    int file_overwrite;
+    int no_file_overwrite;
+
+    // ffmpeg_hw.c
+    int nb_hw_devices;
+    HWDevice **hw_devices;
+
+    // ffmpeg_mux_init.c
+    struct EncStatsFile *enc_stats_files;
+    int nb_enc_stats_files;
+
+    // ffmpeg.c
+    BenchmarkTimeStamps current_time;
+#if HAVE_TERMIOS_H
+    struct termios oldtty;
+#endif
+    int restore_tty;
+    volatile int received_sigterm;
+    volatile int received_nb_signals;
+    atomic_int transcode_init_done;
+    volatile int ffmpeg_exited;
+    int64_t copy_ts_first_pts;
+    // what were static variables of print_report, check_keyboard_interaction and read_key
+    int64_t report_last_time;
+    int first_report;
+    int64_t keyboard_last_time;
+    int read_key_is_pipe;
+    void *read_key_input_handle;
+} FFmpegState;
+
+extern const FFmpegState ffmpeg_defaults;
+
+/* The calling thread's run's state of ffmpeg. */
+#define FFMPEG_STATE(name) (((FFmpegState *)fftools_run()->program)->name)
+
+/* Sets up what of the run's state cannot be copied from ffmpeg_defaults. */
+void ffmpeg_state_init(FFToolsRun *run);
 
 extern enum VideoSyncMethod video_sync_method;
-extern float frame_drop_threshold;
-extern int do_benchmark;
-extern int do_benchmark_all;
-extern int do_hex_dump;
-extern int do_pkt_dump;
-extern int copy_ts;
-extern int start_at_zero;
-extern int copy_tb;
-extern int debug_ts;
-extern int exit_on_error;
-extern int abort_on_flags;
-extern int print_stats;
-extern int64_t stats_period;
-extern int stdin_interaction;
-extern AVIOContext *progress_avio;
-extern float max_error_rate;
-
-extern char *filter_nbthreads;
-extern int filter_complex_nbthreads;
-extern int filter_buffered_frames;
-extern int vstats_version;
-extern int print_graphs;
-extern char *print_graphs_file;
-extern char *print_graphs_format;
-extern int auto_conversion_filters;
-
-extern const AVIOInterruptCB int_cb;
 
 extern const OptionDef options[];
-extern HWDevice *filter_hw_device;
-
-extern atomic_uint nb_output_dumped;
-
-extern int ignore_unknown_streams;
-extern int copy_unknown_streams;
-
-extern int recast_media;
-
-extern FILE *vstats_file;
 
 void term_init(void);
 void term_exit(void);

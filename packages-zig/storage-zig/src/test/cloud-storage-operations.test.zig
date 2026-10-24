@@ -101,7 +101,7 @@ const Fixture = struct {
             .handler = handler,
         };
         const storage = try allocator.create(CloudStorage);
-        storage.* = CloudStorage.init(std.testing.io, "s3:", null);
+        storage.* = CloudStorage.init("s3:", null);
         storage.s3.send = .{ .context = client, .function = FakeClient.send };
         fixture.client = client;
         fixture.storage = storage;

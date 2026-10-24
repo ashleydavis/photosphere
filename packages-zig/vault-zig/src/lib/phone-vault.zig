@@ -1,10 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const vault_module = @import("vault.zig");
-const ISecret = vault_module.ISecret;
-const IVault = vault_module.IVault;
-const IPrereqCheckResult = vault_module.IPrereqCheckResult;
-const IHostRequester = utils.host_requester.IHostRequester;
+const vault = @import("vault.zig");
+const ISecret = vault.ISecret;
+const IVault = vault.IVault;
+const IPrereqCheckResult = vault.IPrereqCheckResult;
+const INativeCaller = utils.native_caller.INativeCaller;
 const errors = utils.errors;
 
 //
@@ -25,12 +25,12 @@ pub const SECRET_TYPE_KEY_PREFIX = "photosphere.secret-type.";
 //
 pub const PhoneVault = struct {
     // Asks the phone's shell for the keychain.
-    host: IHostRequester,
+    host: INativeCaller,
 
     //
     // Makes a vault that asks the given requester.
     //
-    pub fn init(host: IHostRequester) PhoneVault {
+    pub fn init(host: INativeCaller) PhoneVault {
         return .{
             .host = host,
         };
@@ -60,11 +60,11 @@ pub const PhoneVault = struct {
     //
     // Reads one keychain item, or null when there is none.
     //
-    fn readItem(self: *PhoneVault, allocator: std.mem.Allocator, key: []const u8) !?[]const u8 {
+    fn readItem(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, key: []const u8) !?[]const u8 {
         const request = try std.json.Stringify.valueAlloc(allocator, .{
             .key = key,
         }, .{});
-        const answer = try self.host.call(allocator, "secureStoreGet", request);
+        const answer = try self.host.call(io, allocator, "secureStoreGet", request);
         const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{}) catch {
             return errors.throwError("The phone's answer to secureStoreGet could not be read.", .{});
         };
@@ -82,29 +82,29 @@ pub const PhoneVault = struct {
     //
     // Writes one keychain item.
     //
-    fn writeItem(self: *PhoneVault, allocator: std.mem.Allocator, key: []const u8, value: []const u8) !void {
+    fn writeItem(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, key: []const u8, value: []const u8) !void {
         const request = try std.json.Stringify.valueAlloc(allocator, .{
             .key = key,
             .value = value,
         }, .{});
-        _ = try self.host.call(allocator, "secureStoreSet", request);
+        _ = try self.host.call(io, allocator, "secureStoreSet", request);
     }
 
     //
     // Deletes one keychain item. A missing item is not an error.
     //
-    fn deleteItem(self: *PhoneVault, allocator: std.mem.Allocator, key: []const u8) !void {
+    fn deleteItem(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, key: []const u8) !void {
         const request = try std.json.Stringify.valueAlloc(allocator, .{
             .key = key,
         }, .{});
-        _ = try self.host.call(allocator, "secureStoreDelete", request);
+        _ = try self.host.call(io, allocator, "secureStoreDelete", request);
     }
 
     //
     // The name of every keychain item.
     //
-    fn readKeys(self: *PhoneVault, allocator: std.mem.Allocator) ![]const []const u8 {
-        const answer = try self.host.call(allocator, "secureStoreKeys", "null");
+    fn readKeys(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io) ![]const []const u8 {
+        const answer = try self.host.call(io, allocator, "secureStoreKeys", "null");
         const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{}) catch {
             return errors.throwError("The phone's answer to secureStoreKeys could not be read.", .{});
         };
@@ -128,11 +128,10 @@ pub const PhoneVault = struct {
     // with no type throws rather than return a secret with a made-up type.
     //
     pub fn get(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !?ISecret {
-        _ = io;
-        const value = try self.readItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name })) orelse {
+        const value = try self.readItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name })) orelse {
             return null;
         };
-        const secret_type = try self.readItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_TYPE_KEY_PREFIX, name })) orelse {
+        const secret_type = try self.readItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_TYPE_KEY_PREFIX, name })) orelse {
             return errors.throwError("The phone's keychain holds a value for the secret \"{s}\" but no type.", .{name});
         };
         return .{
@@ -147,9 +146,8 @@ pub const PhoneVault = struct {
     // rather than a listed secret with no value.
     //
     pub fn set(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, secret: ISecret) !void {
-        _ = io;
-        try self.writeItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, secret.name }), secret.value);
-        try self.writeItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_TYPE_KEY_PREFIX, secret.name }), secret.type);
+        try self.writeItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, secret.name }), secret.value);
+        try self.writeItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_TYPE_KEY_PREFIX, secret.name }), secret.type);
     }
 
     //
@@ -159,17 +157,16 @@ pub const PhoneVault = struct {
     // IVault.list returns whole secrets.
     //
     pub fn list(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io) ![]ISecret {
-        _ = io;
         var secrets: std.ArrayList(ISecret) = .empty;
-        for (try self.readKeys(allocator)) |key| {
+        for (try self.readKeys(allocator, io)) |key| {
             if (!std.mem.startsWith(u8, key, SECRET_TYPE_KEY_PREFIX)) {
                 continue;
             }
             const name = key[SECRET_TYPE_KEY_PREFIX.len..];
-            const secret_type = try self.readItem(allocator, key) orelse {
+            const secret_type = try self.readItem(allocator, io, key) orelse {
                 continue;
             };
-            const value = try self.readItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name })) orelse {
+            const value = try self.readItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name })) orelse {
                 continue;
             };
             try secrets.append(allocator, .{
@@ -185,9 +182,8 @@ pub const PhoneVault = struct {
     // Deletes a secret by name. The type goes first, so the secret leaves the list before its value goes.
     //
     pub fn delete(self: *PhoneVault, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-        _ = io;
-        try self.deleteItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_TYPE_KEY_PREFIX, name }));
-        try self.deleteItem(allocator, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name }));
+        try self.deleteItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_TYPE_KEY_PREFIX, name }));
+        try self.deleteItem(allocator, io, try std.mem.concat(allocator, u8, &.{ SECRET_VALUE_KEY_PREFIX, name }));
     }
 
     //

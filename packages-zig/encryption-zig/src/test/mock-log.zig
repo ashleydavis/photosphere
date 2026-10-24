@@ -18,7 +18,7 @@ pub const MockLog = struct {
     // Makes this the global log.
     //
     pub fn install(self: *MockLog) void {
-        self.previousLog = utils.log.log;
+        self.previousLog = utils.log.currentLog();
         utils.log.setLog(self.ilog());
     }
 

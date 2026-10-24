@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -7,7 +8,6 @@ const task_queue_zig = @import("ziggy").task_queue;
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
-const log_module = @import("../lib/log.zig");
 const format = @import("../lib/format.zig");
 const log = &utils.log.log;
 const sleep = utils.sleep.sleep;
@@ -21,7 +21,7 @@ const loadDatabase = init_cmd.loadDatabase;
 const resolveGeocodingApiKey = init_cmd.resolveGeocodingApiKey;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
-const getFileLogger = log_module.getFileLogger;
+const getFileLogger = @import("../lib/log.zig").getFileLogger;
 const formatBytes = format.formatBytes;
 const defaultFormatBytesOptions = format.defaultFormatBytesOptions;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
@@ -29,8 +29,8 @@ const IAutoImportSettings = api.auto_import_settings.IAutoImportSettings;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
 const DEFAULT_AUTO_IMPORT_SETTINGS = api.auto_import_settings.DEFAULT_AUTO_IMPORT_SETTINGS;
 const autoImportSettingsToJson = api.auto_import_settings.autoImportSettingsToJson;
-const addPaths = node_api.import_module.addPaths;
-const AddPathsProgressCallback = node_api.import_module.AddPathsProgressCallback;
+const addPaths = node_api.import.addPaths;
+const AddPathsProgressCallback = node_api.import.AddPathsProgressCallback;
 const IAddSummary = node_api.media_file_database.IAddSummary;
 const IImportOptions = node_api.import_assets_worker.IImportOptions;
 const ICleanupSourcesResult = node_api.cleanup_sources_worker.ICleanupSourcesResult;
@@ -187,9 +187,11 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
     var addSummary: IAddSummary = undefined;
     while (true) {
         // Runs the import once over the paths, reporting progress as it goes.
+        var timer_list = TimerList.init();
         addSummary = try addPaths(
             allocator,
             io,
+            timer_list.interface(),
             uuidGenerator,
             storageDescriptor,
             paths,
@@ -305,9 +307,10 @@ fn cleanUpImportedSources(
     settings: IAutoImportSettings,
     sessionId: []const u8,
 ) !usize {
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "cleanup-", sessionId }));
-    defer queue.deinit();
-    defer queue.shutdown();
+    const queue = try TaskQueue.init(allocator, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "cleanup-", sessionId }));
+    var timer_list = TimerList.init();
+    defer queue.deinit(io, allocator);
+    defer queue.shutdown(io, allocator);
 
     var taskData: std.json.ObjectMap = .empty;
     var descriptor: std.json.ObjectMap = .empty;
@@ -318,8 +321,8 @@ fn cleanUpImportedSources(
     try taskData.put(allocator, "storageDescriptor", .{ .object = descriptor });
     try taskData.put(allocator, "settings", try autoImportSettingsToJson(allocator, settings));
     try taskData.put(allocator, "dryRun", .{ .bool = false });
-    const taskId = try queue.addTask("cleanup-sources", .{ .object = taskData }, null, null);
-    const taskResult = try queue.awaitTask(taskId);
+    const taskId = try queue.addTask(io, allocator, "cleanup-sources", .{ .object = taskData }, null, null);
+    const taskResult = try queue.awaitTask(io, allocator, timer_list.interface(), taskId);
     const outputs = if (taskResult) |result| result.outputs orelse std.json.Value.null else std.json.Value.null;
     if (outputs == .null) {
         return 0;

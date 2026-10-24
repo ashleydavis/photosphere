@@ -38,7 +38,7 @@ test "the file logger writes the headers, entries and footers" {
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify --db x");
@@ -114,7 +114,7 @@ test "the error log footer is only written when errors were logged" {
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{ .verbose = true });
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "unknown");
@@ -145,7 +145,7 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
@@ -176,7 +176,7 @@ test "the log directory is joined as path.join joins it, and a long exception is
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
@@ -223,7 +223,7 @@ test "the log header names the versions of the ImageMagick and FFmpeg built into
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     var consoleLog = cli.log.Log.init(.{});
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
@@ -233,7 +233,7 @@ test "the log header names the versions of the ImageMagick and FFmpeg built into
 
     // The versions are the ones the built-in libraries report, read here from the libraries themselves.
     const imageMagickVersion = try headerLineValue(logContent, "\nImageMagick: ");
-    const magickVersionText = (try mediaTools.image_magick.runMagick(allocator, &.{"-version"})).output;
+    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, allocator, &.{"-version"})).output;
     try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{imageMagickVersion})) != null);
     const ffmpegVersion = try headerLineValue(logContent, "\nFFmpeg: ");
     try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffmpeg")).output, try std.fmt.allocPrint(allocator, "ffmpeg version {s}\n", .{ffmpegVersion})));

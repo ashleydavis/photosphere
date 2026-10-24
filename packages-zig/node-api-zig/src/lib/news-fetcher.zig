@@ -4,9 +4,8 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const yaml = node_utils.yaml;
 const serialization_zig = @import("serialization-zig");
-const fetch_module = @import("fetch.zig");
 const errors = utils.errors;
-const fetch = fetch_module.fetch;
+const fetch = @import("fetch.zig").fetch;
 
 //
 // A labelled URL used as either an inline link or CTA action in a news item.

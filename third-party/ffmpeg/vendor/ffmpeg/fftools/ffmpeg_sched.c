@@ -69,6 +69,9 @@ typedef struct SchTask {
 
     pthread_t           thread;
     int                 thread_running;
+
+    // Patched (fftools-per-run-state.patch): the run that started the task, which its thread is given
+    FFToolsRun         *run;
 } SchTask;
 
 typedef struct SchDecOutput {
@@ -412,6 +415,7 @@ static int task_start(SchTask *task)
 
     av_assert0(!task->thread_running);
 
+    task->run = fftools_run();
     ret = pthread_create(&task->thread, NULL, task_wrapper, task);
     if (ret) {
         av_log(task->func_arg, AV_LOG_ERROR, "pthread_create() failed: %s\n",
@@ -2719,6 +2723,8 @@ static void *task_wrapper(void *arg)
     Scheduler *sch = task->parent;
     int ret;
     int err = 0;
+
+    fftools_set_current_run(task->run);
 
     ret = task->func(task->func_arg);
     if (ret < 0)

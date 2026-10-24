@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const import_record_storage = @import("import-record-storage.zig");
@@ -36,6 +37,7 @@ pub const IGetImportRecordData = struct {
 pub fn getImportRecordHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {

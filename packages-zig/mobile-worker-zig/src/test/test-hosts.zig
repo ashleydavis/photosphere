@@ -37,7 +37,7 @@ pub const ReportingHost = struct {
     //
     // Reports the connection type.
     //
-    fn networkConnectionType(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror![]const u8 {
+    fn networkConnectionType(ptr: *anyopaque, _: std.Io, allocator: std.mem.Allocator) anyerror![]const u8 {
         const self: *ReportingHost = @ptrCast(@alignCast(ptr));
         if (self.failure) |failure| {
             return failure;

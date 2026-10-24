@@ -155,7 +155,7 @@ pub const LanShareSender = struct {
                 return null;
             }
 
-            const readable = try socket.waitReadable(udpSocket, @intCast(@min(remaining, POLL_INTERVAL_MS)));
+            const readable = try socket.waitReadableOn(io, udpSocket, @intCast(@min(remaining, POLL_INTERVAL_MS)));
             if (!readable) {
                 continue;
             }

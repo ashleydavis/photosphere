@@ -5,8 +5,9 @@ const host_libc = @import("support/host-libc.zig");
 const apple_sdk = @import("support/apple-sdk.zig");
 
 //
-// Builds FFmpeg from the unmodified source in vendor/ffmpeg as one static library: libavutil, libavcodec, libavformat, libavfilter,
-// libswscale and libswresample, and the sources of the `ffmpeg` and `ffprobe` command line programs, whose `main` functions are
+// Builds FFmpeg from the source in vendor/ffmpeg (upstream's, with fftools-per-run-state.patch applied to its command line programs, see
+// update-ffmpeg.md) as one static library: libavutil, libavcodec, libavformat, libavfilter, libswscale and libswresample, and the
+// sources of the `ffmpeg` and `ffprobe` command line programs, whose `main` functions are
 // renamed by compiler flags (`ffmpeg_main` and `ffprobe_main`) so the program can call them. The source files and the flags are the
 // ones FFmpeg's own configure and make use for the target, kept in ffmpeg/config/<target>/ by ffmpeg/generate-config.sh together
 // with the headers and component lists configure writes. A target without a directory there fails the build with the command that

@@ -11,7 +11,6 @@ const std_json = std.json;
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
 //
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
@@ -39,6 +38,8 @@ fn desktopJson(allocator: std.mem.Allocator, state: state_format.IStateFile) ![]
 // section's own defaults, so an install that has never run the app reads as empty rather than throwing.
 //
 test "loadStateFile returns the defaults when the state file does not exist" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -60,6 +61,8 @@ test "loadStateFile returns the defaults when the state file does not exist" {
 // its own defaults rather than taking the rest of the document down with it.
 //
 test "loadStateFile reads the sections of the file and keeps a malformed section out of the way" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -91,6 +94,8 @@ test "loadStateFile reads the sections of the file and keeps a malformed section
 // empty array is one, because every element of it is a string.
 //
 test "isUiStateValue takes booleans, numbers, strings and arrays of strings, and nothing else" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -147,6 +152,8 @@ test "isUiStateValue takes booleans, numbers, strings and arrays of strings, and
 // a list of numbers left in the file by an older build does not reach the interface.
 //
 test "yamlToStateFile keeps the interface keys it can hold and drops the ones it cannot" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

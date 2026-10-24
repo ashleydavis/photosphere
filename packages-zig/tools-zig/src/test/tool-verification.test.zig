@@ -133,7 +133,7 @@ test "verifyTools reports every tool built into the program available" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mediaTools = try MediaTools.init(io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
 
     const status = try tools.verifyTools(allocator, io, mediaTools.runner());

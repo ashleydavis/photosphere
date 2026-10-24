@@ -5,7 +5,7 @@
 //
 const ziggy_utils = @import("ziggy").task_queue.utils;
 
-pub const host_requester = ziggy_utils.host_requester;
+pub const native_caller = ziggy_utils.native_caller;
 pub const sleep = ziggy_utils.sleep;
 pub const retry = @import("lib/retry.zig");
 pub const uuid_generator = ziggy_utils.uuid_generator;

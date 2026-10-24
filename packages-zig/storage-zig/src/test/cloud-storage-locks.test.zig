@@ -102,7 +102,7 @@ fn createStorage(allocator: std.mem.Allocator, sender: *Sender, handler: Handler
         .handler = handler,
         .puts = 0,
     };
-    var storage = CloudStorage.init(std.testing.io, "s3:", null);
+    var storage = CloudStorage.init("s3:", null);
     storage.s3.send = .{ .context = sender, .function = Sender.send };
     return storage;
 }
@@ -283,7 +283,7 @@ test "still breaks a lock that has aged past the timeout and takes it" {
 // What readableLength says of an S3 object is pinned here.
 //
 test "readableLength is the length in the info, because an object hands out what it holds" {
-    var storage = CloudStorage.init(std.testing.io, "s3:", null);
+    var storage = CloudStorage.init("s3:", null);
     defer storage.s3.deinit();
 
     try std.testing.expectEqual(@as(?u64, 1234), storage.storage().readableLength(.{
@@ -308,7 +308,7 @@ test "a lock taken after breaking a stale one is logged as taken after the timeo
         .messages = std.Io.Writer.Allocating.init(arena.allocator()),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
 
@@ -331,7 +331,7 @@ test "a lock refused while a live one is held is logged with its age and owner" 
         .messages = std.Io.Writer.Allocating.init(arena.allocator()),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
 
@@ -413,7 +413,7 @@ test "refreshWriteLock logs the attempt, the success and the failure" {
         .messages = std.Io.Writer.Allocating.init(arena.allocator()),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
 

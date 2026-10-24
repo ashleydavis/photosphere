@@ -58,8 +58,6 @@ pub const IDecryptResult = struct {
 // Decrypts a single file from readStorage and writes it plain to writeStorage.
 // Skips files that are not encrypted. Updates the merkle tree entry for non-.db/ files.
 // Returns true if the file was decrypted, false if it was skipped (already plain).
-// treeMutex, when given, is held while the merkle tree is read and updated, because the files of a batch
-// are decrypted on separate threads.
 //
 pub fn decryptFile(
     allocator: std.mem.Allocator,
@@ -69,7 +67,6 @@ pub fn decryptFile(
     writeStorage: IStorage,
     rawReadStorage: IStorage,
     merkleTree: *IMerkleTree,
-    treeMutex: ?*std.Io.Mutex,
 ) !bool {
     var srcInfoOperation: retry_operations.InfoOperation("() => readStorage.info(fileName)") = .{
         .allocator = allocator,
@@ -99,12 +96,6 @@ pub fn decryptFile(
         try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
 
         if (!std.mem.startsWith(u8, fileName, ".db/")) {
-            if (treeMutex) |mutex| {
-                mutex.lockUncancelable(io);
-            }
-            defer if (treeMutex) |mutex| {
-                mutex.unlock(io);
-            };
             const existing = try getItemInfo(merkleTree, fileName);
             if (existing) |existingInfo| {
                 var updatedInfoOperation: retry_operations.InfoOperation("() => writeStorage.info(fileName)") = .{
@@ -166,55 +157,6 @@ pub fn decryptableFiles(allocator: std.mem.Allocator, io: std.Io, readStorage: I
 }
 
 //
-// Decrypts one file of a batch.
-// Runs concurrently with the rest of its batch, with its own allocator because the caller's is not shared between
-// threads.
-//
-const DecryptFileTask = struct {
-    // The storage the file is read from.
-    readStorage: IStorage,
-
-    // The storage the plain file is written to.
-    writeStorage: IStorage,
-
-    // The raw storage used to peek the encryption header.
-    rawReadStorage: IStorage,
-
-    // The files tree whose entry for the file is updated.
-    merkleTree: *IMerkleTree,
-
-    // Held while the files tree is read and updated.
-    treeMutex: *std.Io.Mutex,
-
-    // The file to decrypt.
-    fileName: []const u8,
-
-    // True when the file was decrypted, false when it was skipped.
-    wasDecrypted: bool = false,
-
-    // The error the task failed with, or null when it succeeded.
-    failure: ?anyerror = null,
-
-    // The message of the error the task failed with, captured on the thread that ran it.
-    errorRecord: errors.ErrorRecord = .{},
-
-    //
-    // Decrypts the file, recording the error when it fails.
-    //
-    fn run(self: *DecryptFileTask, io: std.Io) void {
-        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        defer arena.deinit();
-        if (decryptFile(arena.allocator(), io, self.fileName, self.readStorage, self.writeStorage, self.rawReadStorage, self.merkleTree, self.treeMutex)) |wasDecrypted| {
-            self.wasDecrypted = wasDecrypted;
-        }
-        else |err| {
-            self.failure = err;
-            errors.captureError(&self.errorRecord);
-        }
-    }
-};
-
-//
 // Decrypts the database in place: reads each file from readStorage (encrypted),
 // writes it plain to writeStorage (same path).
 // rawReadStorage is the raw storage (no decryption layer) used to peek encryption headers.
@@ -239,36 +181,14 @@ pub fn decrypt(
     var skipped: u64 = 0;
     const BATCH_SIZE = 10;
 
-    var treeMutex: std.Io.Mutex = .init;
     var files = try decryptableFiles(allocator, io, readStorage);
     var batches = batchGenerator([]const u8, allocator, &files, BATCH_SIZE);
     while (try batches.next()) |batch| {
-        const tasks = try allocator.alloc(DecryptFileTask, batch.len);
-        for (batch, tasks) |fileName, *task| {
-            task.* = .{
-                .readStorage = readStorage,
-                .writeStorage = writeStorage,
-                .rawReadStorage = rawReadStorage,
-                .merkleTree = &merkleTree,
-                .treeMutex = &treeMutex,
-                .fileName = fileName,
-            };
-        }
-
-        var group: std.Io.Group = .init;
-        for (tasks) |*task| {
-            group.async(io, DecryptFileTask.run, .{ task, io });
-        }
-        try group.await(io);
-
-        for (tasks) |*task| {
-            if (task.failure) |failure| {
-                errors.restoreError(&task.errorRecord);
-                return failure;
-            }
-        }
-        for (tasks) |*task| {
-            if (task.wasDecrypted) {
+        // The files of a batch are decrypted one after another, on the task's own thread.
+        for (batch) |fileName| {
+            var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+            defer arena.deinit();
+            if (try decryptFile(arena.allocator(), io, fileName, readStorage, writeStorage, rawReadStorage, &merkleTree)) {
                 decrypted += 1;
             }
             else {

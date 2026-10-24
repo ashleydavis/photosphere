@@ -11,6 +11,7 @@
 //
 
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const api = @import("api-zig");
@@ -37,6 +38,9 @@ const RecordingTaskContext = recording_task_context.RecordingTaskContext;
 // writes is the one the tests read and add to with the databases-config functions.
 //
 const Sandbox = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Allocates everything the test makes.
     arena: std.heap.ArenaAllocator,
 
@@ -62,7 +66,7 @@ const Sandbox = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "create-default-database");
         try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", self.tempDir);
         self.databasePath = try std.fs.path.join(allocator, &.{ self.tempDir, "photosphere-default" });
@@ -77,6 +81,7 @@ const Sandbox = struct {
     fn deinit(self: *Sandbox) void {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //
@@ -97,7 +102,7 @@ const Sandbox = struct {
         try object.put(allocator, "open", .{
             .bool = open,
         });
-        return createDefaultDatabaseHandler(allocator, std.testing.io, .{
+        return createDefaultDatabaseHandler(allocator, std.testing.io, test_timers.timers(), .{
             .object = object,
         }, self.context.taskContext());
     }
@@ -111,7 +116,7 @@ const Sandbox = struct {
         try object.put(allocator, "configPath", .{
             .string = self.configPath,
         });
-        return (try readConfigHandler(allocator, std.testing.io, .{
+        return (try readConfigHandler(allocator, std.testing.io, test_timers.timers(), .{
             .object = object,
         }, self.context.taskContext())).object;
     }
@@ -125,7 +130,7 @@ const Sandbox = struct {
         try object.put(allocator, "configPath", .{
             .string = self.databasesConfigPath,
         });
-        return (try readDatabasesConfigHandler(allocator, std.testing.io, .{
+        return (try readDatabasesConfigHandler(allocator, std.testing.io, test_timers.timers(), .{
             .object = object,
         }, self.context.taskContext())).object;
     }
@@ -415,7 +420,7 @@ test "throws a descriptive error when the task data is not valid" {
         .integer = 5,
     });
 
-    try std.testing.expectError(error.Thrown, createDefaultDatabaseHandler(allocator, std.testing.io, .{
+    try std.testing.expectError(error.Thrown, createDefaultDatabaseHandler(allocator, std.testing.io, test_timers.timers(), .{
         .object = object,
     }, sandbox.context.taskContext()));
     try std.testing.expectEqualStrings("The create-default-database task data is not valid: databasePath, configPath and databasesConfigPath must be strings and open must be a boolean", errors.lastErrorMessage());

@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -34,7 +35,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 //
 // A task context whose events go nowhere.
 //
-fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
     _ = context;
     _ = message;
 }
@@ -48,6 +49,9 @@ const LAST_MODIFIED: i64 = 1672531200000;
 // The state each test starts from.
 //
 const CheckTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -81,7 +85,7 @@ const CheckTest = struct {
     // The tools built into the program, whose runner the handler is given.
     mediaTools: MediaTools,
 
-    // The runner the handler is given in its task context: the runner of mediaTools, or null for a test of a task run with
+    // The runner the handler is given: the runner of mediaTools, or null for a test of a task run with
     // none.
     toolRunner: ?InProcessRunner,
 
@@ -92,7 +96,7 @@ const CheckTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "check-worker");
         self.contents = try test_files.readFile(allocator, io, "../test/test.png");
         self.filePath = try path.join(allocator, &.{ self.tempDir, "photos", "asset.png" });
@@ -108,7 +112,7 @@ const CheckTest = struct {
             .context = null,
             .function = ignoreMessage,
         }, 10);
-        self.mediaTools = try MediaTools.init(io);
+        self.mediaTools = try MediaTools.init();
         self.toolRunner = self.mediaTools.runner();
     }
 
@@ -119,6 +123,7 @@ const CheckTest = struct {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.mediaTools.deinit();
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //
@@ -187,9 +192,8 @@ const CheckTest = struct {
             .emit_null_optional_fields = false,
         });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
-        var taskContext = self.context.taskContext();
-        taskContext.toolRunner = self.toolRunner;
-        const output = try checkFileHandler(allocator, std.testing.io, taskData, taskContext);
+        const taskContext = self.context.taskContext();
+        const output = try checkFileHandler(allocator, std.testing.io, test_timers.timers(), taskData, taskContext, self.toolRunner);
         return std.json.parseFromValueLeaky(ICheckFileResult, allocator, output, .{});
     }
 

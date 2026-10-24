@@ -1,35 +1,36 @@
 //
-// The worker pool of the CLI. Each worker is a std.Thread of the CLI process: a dispatched task is handed to
-// the worker thread, which runs the handler registered with Ziggy's task queue (task_queue.worker.registerHandler) with an
-// arena allocator owned by the task, and reports the completion itself (under the pool lock).
+// The worker pool of the CLI, a port of WorkerPoolBun (apps/cli/src/lib/worker-pool-bun.ts). The CLI's main thread owns the pool and
+// everything in it. Each worker is one of Ziggy's workers: a thread that runs one task at a time and talks to the main thread only by
+// message, as a Bun worker does. The main thread reads the workers' messages while its own code waits for a task (the IQueueBackend's
+// waitForMessage), and fails the tasks that have run past their timeout while it waits, so the pool needs no lock.
 //
-// Consequences of running workers as threads:
-// - A timed-out task's thread cannot be killed: the task is marked abandoned, the thread is detached and its
-//   result discarded (it frees the task when the handler returns), and a replacement worker is created.
-// - A handler error is a task failure. A panic ends the process; the worker's "error" event
-//   (handleWorkerError, then handleWorkerCrash) is used when a worker thread cannot be started, when its start-up
-//   fails (the test UUID generator or the session ID) and when a task's failure cannot be reported.
-// - Workers share the main thread's queue backend, so a handler that queues child tasks adds them to this pool
-//   directly.
-// - Callbacks are invoked on the thread that completes the task (a worker thread or the timeout monitor)
-//   while the pool lock is held (see the threading contract in queue-backend.zig of Ziggy's task queue).
+// The pool keeps no Io, allocator or timers: each function is given the main thread's, and the allocator must be the same one on every
+// call, because what the pool keeps is allocated with it. A task's timeout is the time it started plus the pool's timeout, which each
+// wait looks at, rather than a timer of the pool's own.
+//
+// What a thread cannot do that a Bun worker can:
+// - A thread cannot be stopped from outside it. A task that times out is failed and its worker is abandoned (left running, with what
+//   it still sends ignored) and replaced, where TypeScript terminates the worker and replaces it.
+// - A worker that cannot be started is a crashed worker: its task fails and it is replaced, as TypeScript does for a worker's "error"
+//   event.
 //
 
 const std = @import("std");
+const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const task_queue = @import("ziggy").task_queue;
 const node_api = @import("node-api-zig");
 const media_tools = @import("media-tools-zig");
-const worker_log_bun = @import("worker-log-bun.zig");
-const initTaskHandlers = node_api.task_handlers.initTaskHandlers;
+const console_output = @import("console-output.zig");
+const task_queue = ziggy.task_queue;
 const types = task_queue.types;
-const json_value = task_queue.json_value;
-const worker = task_queue.worker;
-const ITask = types.ITask;
+const json = ziggy.json;
+const worker_messages = ziggy.worker_messages;
+const MessageQueue = ziggy.message_queue.MessageQueue;
+const Message = ziggy.message_queue.Message;
+const Worker = ziggy.worker.Worker;
+const Timers = ziggy.timers.Timers;
 const ITaskResult = types.ITaskResult;
-const ITaskError = types.ITaskError;
-const ITaskEventData = types.ITaskEventData;
 const TaskStatus = types.TaskStatus;
 const TaskPriority = types.TaskPriority;
 const insertTaskByPriority = task_queue.pending_task_queue.insertTaskByPriority;
@@ -41,15 +42,8 @@ const UnsubscribeFn = types.UnsubscribeFn;
 const TaskAddedCallback = types.TaskAddedCallback;
 const TasksCancelledCallback = types.TasksCancelledCallback;
 const IQueueBackend = task_queue.queue_backend.IQueueBackend;
-const TaskContext = task_queue.task_context.TaskContext;
-const ITaskContext = types.ITaskContext;
-const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
-const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
-const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
-const TimestampProvider = utils.timestamp_provider.TimestampProvider;
-const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
-const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
-const errors = utils.errors;
+const writeOutputLine = console_output.writeOutputLine;
+const writeErrorLine = console_output.writeErrorLine;
 const log = &utils.log.log;
 
 //
@@ -62,9 +56,19 @@ const log = &utils.log.log;
 const MAX_CONCURRENT_CHILD_TASKS = 10;
 
 //
-// Thread-safe allocator for the pool's state and the tasks.
+// The task types the workers run: every task handler of the application. Each task that runs ImageMagick or FFmpeg makes the tools
+// built into the program on its own thread.
 //
-const pool_allocator = std.heap.smp_allocator;
+const task_types = node_api.task_handlers.taskEntries(media_tools.ThreadTools, registerMediaSources);
+
+//
+// Registers, on a task's thread before the task runs, the builders of the media sources an import reads (initTaskHandlers in
+// TypeScript).
+//
+fn registerMediaSources(context: task_queue.types.ITaskContext) anyerror!void {
+    _ = context;
+    try node_api.task_handlers.registerMediaSourceBuilders();
+}
 
 //
 // Options passed to workers for context initialization
@@ -95,52 +99,56 @@ pub const IWorkerPoolOptions = struct {
 
     // Session identifier forwarded to workers for context initialization.
     sessionId: ?[]const u8 = null,
+
+    // The task types the workers run, or null for every task handler of the application. It stands for the worker script TypeScript
+    // starts each worker from, and must outlive the pool.
+    tasks: ?[]const ziggy.task_runner.TaskHandlerEntry = null,
 };
 
 //
-// A task owned by the pool, with the state of its execution.
+// A task the pool knows of, from when it is added until it ends. Its strings are allocated with the pool's allocator.
 //
 const IPoolTask = struct {
-    // Owns everything the task allocates, including the handler's allocations.
-    arena: std.heap.ArenaAllocator,
+    // The task's id.
+    id: []const u8,
 
-    // The task (its strings and data are allocated in the arena).
-    task: ITask,
+    // The task's type.
+    taskType: []const u8,
 
-    // When the task times out (milliseconds on the awake clock), or null while it is not running.
-    deadline: ?i64,
+    // The source the task is cancelled by.
+    source: []const u8,
 
-    // Set when the task timed out or its worker was terminated: the worker thread discards the result
-    // and frees the task.
-    abandoned: bool,
+    // The task's data as JSON text, as it is sent to a worker.
+    dataJson: []const u8,
 
-    // The context of the running task.
-    context: TaskContext,
-
-    // The pool that runs the task.
-    pool: *WorkerPoolBun,
+    // The task's priority.
+    priority: TaskPriority,
 };
 
 //
 // Worker state interface
 //
 const IWorkerState = struct {
-    // The thread of the worker, null until it has been started.
-    thread: ?std.Thread,
+    // The underlying worker thread.
+    worker: *Worker,
+
+    // The number the worker's messages reach the main thread's queue under. A replacement gets a new one, so what an abandoned worker
+    // still sends is never taken for its replacement's.
+    senderId: u32,
 
     // Unique numeric identifier assigned to this worker for logging and options.
     workerId: u32,
 
-    // Worker has started and can process tasks.
+    // Worker has sent "ready" message and can process tasks.
     isReady: bool,
 
     // Worker is ready and not currently processing a task.
     isIdle: bool,
 
-    // ID of the task currently being processed, or null if idle.
+    // ID of the task currently being processed, or null if idle. Owned by the task.
     currentTaskId: ?[]const u8,
 
-    // Type of the task currently being processed, or null if idle.
+    // Type of the task currently being processed, or null if idle. Owned by the task.
     currentTaskType: ?[]const u8,
 
     // Elapsed milliseconds for the current task, updated on status polls, or null if idle.
@@ -149,24 +157,9 @@ const IWorkerState = struct {
     // Number of tasks this worker has completed (successful or failed).
     tasksProcessed: u64,
 
-    // Timestamp (milliseconds) when the current task started, or null if idle.
+    // Timestamp (milliseconds on the awake clock) when the current task started, or null if idle. The task times out the pool's
+    // timeout after it.
     taskStartTime: ?i64,
-
-    // The task handed to the worker thread and not yet picked up.
-    assignedTask: ?*IPoolTask,
-
-    // The task the worker thread is running.
-    currentTask: ?*IPoolTask,
-
-    // The id of the thread running currentTask, recorded when the thread starts the task, so a timeout can stop an
-    // `ffmpeg` that thread is running.
-    currentTaskThread: ?std.Thread.Id,
-
-    // Set when the worker is terminated; the thread exits when it sees it.
-    terminated: bool,
-
-    // The options of the worker.
-    options: IWorkerOptions,
 };
 
 //
@@ -177,12 +170,37 @@ fn Registration(comptime CallbackT: type) type {
         // Identifies the registration.
         key: usize,
 
-        // The source filter (empty when the callback is not per source).
-        source: []const u8,
+        // The source filter (empty when the callback is not per source). Owned.
+        source: []u8,
 
         // The callback.
         callback: CallbackT,
     };
+}
+
+//
+// The keys of the registrations of a list, copied with the allocator, which the caller frees them with. A callback may register or
+// unregister callbacks while the callbacks of a list are called, so they are called by these keys rather than by their places in the
+// list.
+//
+fn callbackKeys(allocator: std.mem.Allocator, list: anytype) []usize {
+    const keys = allocator.alloc(usize, list.items.len) catch @panic("out of memory calling callbacks");
+    for (list.items, keys) |registration, *key| {
+        key.* = registration.key;
+    }
+    return keys;
+}
+
+//
+// The registration of a list with the key, or null when it has been unregistered.
+//
+fn registered(list: anytype, key: usize) ?@TypeOf(list.items[0]) {
+    for (list.items) |registration| {
+        if (registration.key == key) {
+            return registration;
+        }
+    }
+    return null;
 }
 
 //
@@ -203,38 +221,46 @@ const setTimeoutDelay = utils.sleep.setTimeoutDelay;
 // Manages workers.
 //
 pub const WorkerPoolBun = struct {
-    // Io for locking, waiting and running handlers.
-    io: std.Io,
-
-    // The ImageMagick and FFmpeg built into the program, whose runner every task is handed. Owned by the CLI's main.
+    // The tools built into the program, which every worker's tasks run.
     mediaTools: *media_tools.MediaTools,
 
-    // All currently allocated workers.
+    // The pool's queue, which the workers send their messages to and the main thread reads. When the pool has abandoned a worker,
+    // freeing the pool closes the queue and keeps it, so a late message from that worker is dropped.
+    mainQueue: *MessageQueue,
+
+    // Whether a worker has been abandoned (left running, see handleTaskTimeout).
+    abandonedWorkers: bool,
+
+    // The number the next worker's messages reach mainQueue under. A late message from a worker an earlier pool abandoned goes to
+    // that pool's queue, so the numbers need only differ within this pool.
+    nextSenderId: u32,
+
+    // All currently allocated worker threads.
     workers: std.ArrayList(*IWorkerState),
 
-    // Workers that have been removed from the pool but may still have a running thread (Zig only).
-    retiredWorkers: std.ArrayList(*IWorkerState),
-
-    // Maximum number of worker threads allowed (a float: NaN never allows a worker).
+    // Maximum number of worker threads allowed.
     maxWorkers: f64,
 
-    // Options forwarded to each worker for logging and session initialization.
+    // Options forwarded to each worker thread for logging and session initialization.
     workerOptions: IWorkerPoolOptions,
 
-    // Milliseconds before a running task is considered timed out (as given; see setTimeoutDelay).
+    // Milliseconds before a running task is considered timed out.
     taskTimeout: f64,
 
     // Callbacks notified when any task completes (success or failure).
     completionCallbacks: std.ArrayList(Registration(WorkerTaskCompletionCallback)),
 
     // Callbacks notified for task messages of a specific type.
-    eventCallbacks: std.ArrayList(Registration(IEventCallbackEntry)),
+    messageCallbacks: std.ArrayList(Registration(IEventCallbackEntry)),
 
     // Callbacks notified for every task message regardless of type.
-    anyEventCallbacks: std.ArrayList(Registration(TaskEventCallback)),
+    anyMessageCallbacks: std.ArrayList(Registration(TaskEventCallback)),
 
     // Tasks waiting to be dispatched to a worker.
     pendingTasks: std.ArrayList(*IPoolTask),
+
+    // Maps task ID to task for result construction.
+    taskMap: std.StringHashMapUnmanaged(*IPoolTask),
 
     // Callbacks registered per source via onTaskAdded.
     taskAddedCallbacks: std.ArrayList(Registration(TaskAddedCallback)),
@@ -242,104 +268,85 @@ pub const WorkerPoolBun = struct {
     // Callbacks registered per source via onTasksCancelled.
     tasksCancelledCallbacks: std.ArrayList(Registration(TasksCancelledCallback)),
 
-    // Guards every field (Zig only).
-    mutex: std.Io.Mutex,
-
-    // Signalled when a task is assigned to a worker or a worker is terminated (Zig only).
-    workCondition: std.Io.Condition,
-
-    // Signalled when a task starts running or the pool shuts down, to wake the timeout monitor (Zig only).
-    monitorCondition: std.Io.Condition,
-
-    // The thread that enforces the task timeouts, started with the first worker.
-    monitorThread: ?std.Thread,
-
-    // Set by deinit to stop the timeout monitor (Zig only).
-    stopping: bool,
-
-    // Number of worker threads that are still running (Zig only; deinit waits for them).
-    runningThreads: usize,
-
-    // The key of the next registration (Zig only).
+    // The key of the next registration.
     nextKey: usize,
 
-    // Generates task IDs.
-    randomUuidGenerator: RandomUuidGenerator,
+    // Makes the ids of tasks added without one.
+    randomUuidGenerator: utils.random_uuid_generator.RandomUuidGenerator,
+
+    // Set once shutdown has begun.
+    isShuttingDown: bool,
+
+    // The results of the tasks whose worker could not be given them, as the JSON text of each ITaskResult, owned: the callbacks are
+    // called with them at the next wait, which has the main thread's timers they are given (see handleWorkerCrash).
+    crashedResults: std.ArrayList([]u8),
 
     //
-    // Creates a new task queue with the specified number of workers.
+    // Creates a new task queue with the specified number of workers, allocated with the main thread's allocator.
     // Tasks will execute in separate worker threads for true parallelism.
     // taskTimeout: Timeout in milliseconds for tasks.
     // workerOptions: Options to pass to workers for logging and context initialization.
     // mediaTools: The ImageMagick and FFmpeg built into the program, which must outlive the pool.
-    // The pool is allocated with a thread-safe allocator; deinit frees it (the CLI keeps it until exit).
+    // The thread that calls it is the pool's main thread, which alone uses the pool.
     //
-    pub fn init(io: std.Io, mediaTools: *media_tools.MediaTools, maxWorkers: f64, taskTimeout: f64, workerOptions: IWorkerPoolOptions) !*WorkerPoolBun {
-        const self = try pool_allocator.create(WorkerPoolBun);
+    pub fn init(allocator: std.mem.Allocator, mediaTools: *media_tools.MediaTools, maxWorkers: f64, taskTimeout: f64, workerOptions: IWorkerPoolOptions) !*WorkerPoolBun {
+        const self = try allocator.create(WorkerPoolBun);
+        errdefer allocator.destroy(self);
+        const queue = try allocator.create(MessageQueue);
+        queue.* = MessageQueue.init();
         self.* = .{
-            .io = io,
             .mediaTools = mediaTools,
+            .mainQueue = queue,
+            .abandonedWorkers = false,
+            .nextSenderId = 1,
             .workers = .empty,
-            .retiredWorkers = .empty,
             .maxWorkers = maxWorkers,
             .workerOptions = workerOptions,
             .taskTimeout = taskTimeout,
             .completionCallbacks = .empty,
-            .eventCallbacks = .empty,
-            .anyEventCallbacks = .empty,
+            .messageCallbacks = .empty,
+            .anyMessageCallbacks = .empty,
             .pendingTasks = .empty,
+            .taskMap = .empty,
             .taskAddedCallbacks = .empty,
             .tasksCancelledCallbacks = .empty,
-            .mutex = .init,
-            .workCondition = .init,
-            .monitorCondition = .init,
-            .monitorThread = null,
-            .stopping = false,
-            .runningThreads = 0,
             .nextKey = 0,
             .randomUuidGenerator = .{},
+            .isShuttingDown = false,
+            .crashedResults = .empty,
         };
-        try initTaskHandlers();
-        worker_log_bun.installWorkerLogRouting();
         return self;
     }
 
     //
-    // Shuts the pool down, waits for every worker thread (including abandoned ones) to end and frees the
-    // pool (Zig only; used by tests).
+    // Shuts the pool down and frees it, with the main thread's Io and allocator.
     //
-    pub fn deinit(self: *WorkerPoolBun) void {
-        self.shutdown();
-
-        self.lock();
-        self.stopping = true;
-        self.monitorCondition.broadcast(self.io);
-        self.workCondition.broadcast(self.io);
-        const monitor = self.monitorThread;
-        self.monitorThread = null;
-        self.unlock();
-        if (monitor) |thread| {
-            thread.join();
+    pub fn deinit(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator) void {
+        self.shutdown(io, allocator);
+        if (self.abandonedWorkers) {
+            self.mainQueue.close(io);
         }
-
-        self.lock();
-        while (self.runningThreads > 0) {
-            self.workCondition.waitUncancelable(self.io, &self.mutex);
+        else {
+            self.mainQueue.deinit();
+            allocator.destroy(self.mainQueue);
         }
-        self.unlock();
-
-        for (self.retiredWorkers.items) |workerState| {
-            pool_allocator.destroy(workerState);
+        var tasks = self.taskMap.valueIterator();
+        while (tasks.next()) |poolTask| {
+            freeTask(allocator, poolTask.*);
         }
-        self.retiredWorkers.deinit(pool_allocator);
-        self.workers.deinit(pool_allocator);
-        self.completionCallbacks.deinit(pool_allocator);
-        self.eventCallbacks.deinit(pool_allocator);
-        self.anyEventCallbacks.deinit(pool_allocator);
-        self.pendingTasks.deinit(pool_allocator);
-        self.taskAddedCallbacks.deinit(pool_allocator);
-        self.tasksCancelledCallbacks.deinit(pool_allocator);
-        pool_allocator.destroy(self);
+        self.taskMap.deinit(allocator);
+        freeList(allocator, &self.completionCallbacks);
+        freeList(allocator, &self.messageCallbacks);
+        freeList(allocator, &self.anyMessageCallbacks);
+        freeList(allocator, &self.taskAddedCallbacks);
+        freeList(allocator, &self.tasksCancelledCallbacks);
+        self.pendingTasks.deinit(allocator);
+        self.workers.deinit(allocator);
+        for (self.crashedResults.items) |text| {
+            allocator.free(text);
+        }
+        self.crashedResults.deinit(allocator);
+        allocator.destroy(self);
     }
 
     //
@@ -361,92 +368,90 @@ pub const WorkerPoolBun = struct {
         .cancelTasks = cancelTasksErased,
         .onTasksCancelled = onTasksCancelledErased,
         .shutdown = shutdownErased,
+        .waitForMessage = waitForMessageErased,
     };
 
     //
-    // Locks the pool.
+    // The current time on the monotonic clock in milliseconds.
     //
-    fn lock(self: *WorkerPoolBun) void {
-        self.mutex.lockUncancelable(self.io);
+    fn nowMs(io: std.Io) i64 {
+        return std.Io.Clock.awake.now(io).toMilliseconds();
     }
 
     //
-    // Unlocks the pool.
-    //
-    fn unlock(self: *WorkerPoolBun) void {
-        self.mutex.unlock(self.io);
-    }
-
-    //
-    // The current time on the monotonic clock in milliseconds (Zig only: task deadlines).
-    //
-    fn nowMs(self: *WorkerPoolBun) i64 {
-        return std.Io.Clock.awake.now(self.io).toMilliseconds();
-    }
-
-    //
-    // Adds a task to the pending queue and attempts to dispatch it immediately.
+    // Adds a task to the pending queue and attempts to dispatch it immediately. Returns the task's id, allocated with the allocator.
     //
     // An interactive task goes in ahead of every background task already waiting, because the user
     // is sitting there looking at it.
     //
     pub fn addTask(self: *WorkerPoolBun, allocator: std.mem.Allocator, io: std.Io, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) ![]const u8 {
-        return self.addTaskWithParent(allocator, io, @"type", data, source, taskId, priority, null);
+        const id = if (taskId) |given| try allocator.dupe(u8, given) else try self.randomUuidGenerator.uuidGenerator().generate(allocator, io);
+        errdefer allocator.free(id);
+        const dataJson = try json.stringify(allocator, data);
+        defer allocator.free(dataJson);
+        try self.addTaskWithParent(io, allocator, @"type", dataJson, source, id, priority, null);
+        return id;
     }
 
     //
     // Adds a task that a running task asked for, so it runs at that task's priority unless it asked
     // for one of its own. This is what stops an import's hash and upload children overtaking a tap.
-    // (Zig: workers share this pool as their queue backend, so a task queued from a worker thread arrives
-    // through addTask, and no handler on the psi replicate or psi verify path queues child tasks.)
     //
-    fn addTaskWithParent(self: *WorkerPoolBun, allocator: std.mem.Allocator, io: std.Io, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority, parentPriority: ?TaskPriority) ![]const u8 {
-        const id = taskId orelse try self.randomUuidGenerator.generate(allocator, io);
-
-        const poolTask = try pool_allocator.create(IPoolTask);
-        poolTask.arena = std.heap.ArenaAllocator.init(pool_allocator);
-        const task_allocator = poolTask.arena.allocator();
-        poolTask.task = .{
-            .id = try task_allocator.dupe(u8, id),
-            .type = try task_allocator.dupe(u8, @"type"),
-            .status = .Pending,
-            .data = try json_value.cloneJsonValue(task_allocator, data),
-            .source = try task_allocator.dupe(u8, source),
+    fn addTaskWithParent(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, @"type": []const u8, dataJson: []const u8, source: []const u8, taskId: []const u8, priority: ?TaskPriority, parentPriority: ?TaskPriority) !void {
+        const poolTask = try allocator.create(IPoolTask);
+        errdefer allocator.destroy(poolTask);
+        poolTask.* = .{
+            .id = try allocator.dupe(u8, taskId),
+            .taskType = try allocator.dupe(u8, @"type"),
+            .source = try allocator.dupe(u8, source),
+            .dataJson = try allocator.dupe(u8, dataJson),
             .priority = resolveTaskPriority(priority, parentPriority),
-            .createdAt = std.Io.Clock.real.now(io).toMilliseconds(),
         };
-        poolTask.deadline = null;
-        poolTask.abandoned = false;
-        poolTask.pool = self;
+        try insertTaskByPriority(allocator, &self.pendingTasks, poolTask);
+        try self.taskMap.put(allocator, poolTask.id, poolTask);
 
-        self.lock();
-        defer self.unlock();
-        try insertTaskByPriority(pool_allocator, &self.pendingTasks, poolTask);
-
-        for (self.taskAddedCallbacks.items) |registration| {
+        const keys = callbackKeys(allocator, &self.taskAddedCallbacks);
+        defer allocator.free(keys);
+        for (keys) |key| {
+            const registration = registered(&self.taskAddedCallbacks, key) orelse {
+                continue;
+            };
             if (std.mem.eql(u8, registration.source, source)) {
-                registration.callback.call(id);
+                registration.callback.call(allocator, poolTask.id);
             }
         }
 
-        self.tryDispatchPending();
-        return id;
+        self.tryDispatchPending(io, allocator);
     }
 
     //
     // Registers a callback that fires when a task with the given source is added.
     //
-    pub fn onTaskAdded(self: *WorkerPoolBun, source: []const u8, callback: TaskAddedCallback) !UnsubscribeFn {
-        return self.register(TaskAddedCallback, &self.taskAddedCallbacks, source, callback);
+    pub fn onTaskAdded(self: *WorkerPoolBun, allocator: std.mem.Allocator, source: []const u8, callback: TaskAddedCallback) !UnsubscribeFn {
+        return self.register(allocator, TaskAddedCallback, &self.taskAddedCallbacks, source, callback);
     }
 
     //
-    // Tries to dispatch all pending tasks to available workers (the lock must be held).
+    // The priority of the task the given worker is running, so a child it queues inherits it.
+    // Null when the worker is between tasks, which a child task cannot be spawned from.
     //
-    fn tryDispatchPending(self: *WorkerPoolBun) void {
+    fn priorityOfRunningTask(self: *WorkerPoolBun, workerState: *IWorkerState) ?TaskPriority {
+        const taskId = workerState.currentTaskId orelse {
+            return null;
+        };
+        const poolTask = self.taskMap.get(taskId) orelse {
+            return null;
+        };
+        return poolTask.priority;
+    }
+
+    //
+    // Tries to dispatch all pending tasks to available workers.
+    //
+    fn tryDispatchPending(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator) void {
         while (self.pendingTasks.items.len > 0) {
             const poolTask = self.pendingTasks.items[0];
-            if (!self.dispatchTask(poolTask)) {
+            if (!self.dispatchTask(io, allocator, poolTask)) {
                 break;
             }
             _ = self.pendingTasks.orderedRemove(0);
@@ -457,70 +462,40 @@ pub const WorkerPoolBun = struct {
     // Registers a callback that will be invoked whenever any task completes (success or failure).
     // Multiple callbacks can be registered and will all be called.
     //
-    pub fn onTaskComplete(self: *WorkerPoolBun, callback: WorkerTaskCompletionCallback) !UnsubscribeFn {
-        return self.register(WorkerTaskCompletionCallback, &self.completionCallbacks, "", callback);
+    pub fn onTaskComplete(self: *WorkerPoolBun, allocator: std.mem.Allocator, callback: WorkerTaskCompletionCallback) !UnsubscribeFn {
+        return self.register(allocator, WorkerTaskCompletionCallback, &self.completionCallbacks, "", callback);
     }
 
     //
     // Registers a callback that will be called when a task sends messages to the client.
-    // If messageType is provided, only messages with that type will be passed to the callback.
+    // Only messages with the given type are passed to the callback.
     //
-    pub fn onTaskEvent(self: *WorkerPoolBun, eventType: []const u8, callback: TaskEventCallback) !UnsubscribeFn {
-        return self.register(IEventCallbackEntry, &self.eventCallbacks, "", .{ .eventType = eventType, .callback = callback });
+    pub fn onTaskEvent(self: *WorkerPoolBun, allocator: std.mem.Allocator, messageType: []const u8, callback: TaskEventCallback) !UnsubscribeFn {
+        return self.register(allocator, IEventCallbackEntry, &self.messageCallbacks, "", .{
+            .eventType = try allocator.dupe(u8, messageType),
+            .callback = callback,
+        });
     }
 
     //
     // Registers a callback that will be called for any task message, regardless of type.
     //
-    pub fn onAnyTaskEvent(self: *WorkerPoolBun, callback: TaskEventCallback) !UnsubscribeFn {
-        return self.register(TaskEventCallback, &self.anyEventCallbacks, "", callback);
+    pub fn onAnyTaskEvent(self: *WorkerPoolBun, allocator: std.mem.Allocator, callback: TaskEventCallback) !UnsubscribeFn {
+        return self.register(allocator, TaskEventCallback, &self.anyMessageCallbacks, "", callback);
     }
 
     //
-    // Adds a registration to a callback list and returns the function that removes it.
-    //
-    fn register(self: *WorkerPoolBun, comptime CallbackT: type, list: *std.ArrayList(Registration(CallbackT)), source: []const u8, callback: CallbackT) !UnsubscribeFn {
-        self.lock();
-        defer self.unlock();
-        const key = self.nextKey;
-        self.nextKey += 1;
-        try list.append(pool_allocator, .{ .key = key, .source = source, .callback = callback });
-        return .{ .context = self, .key = key, .function = unregister };
-    }
-
-    //
-    // Removes the registration with the given key from whichever callback list holds it.
-    //
-    fn unregister(context: ?*anyopaque, key: usize) void {
-        const self: *WorkerPoolBun = @ptrCast(@alignCast(context.?));
-        self.lock();
-        defer self.unlock();
-        removeKey(TaskAddedCallback, &self.taskAddedCallbacks, key);
-        removeKey(WorkerTaskCompletionCallback, &self.completionCallbacks, key);
-        removeKey(IEventCallbackEntry, &self.eventCallbacks, key);
-        removeKey(TaskEventCallback, &self.anyEventCallbacks, key);
-        removeKey(TasksCancelledCallback, &self.tasksCancelledCallbacks, key);
-    }
-
-    //
-    // Removes the registration with the given key from a callback list, if it is there.
-    //
-    fn removeKey(comptime CallbackT: type, list: *std.ArrayList(Registration(CallbackT)), key: usize) void {
-        for (list.items, 0..) |registration, index| {
-            if (registration.key == key) {
-                _ = list.orderedRemove(index);
-                return;
-            }
-        }
-    }
-
-    //
-    // Invokes all registered completion callbacks with the task result (the lock must be held).
+    // Invokes all registered completion callbacks with the task result, with the main thread's Io, allocator and timers.
     // Callback errors are caught and logged to prevent breaking the queue.
     //
-    fn notifyCompletionCallbacks(self: *WorkerPoolBun, result: ITaskResult) void {
-        for (self.completionCallbacks.items) |registration| {
-            registration.callback.call(result) catch |err| {
+    fn notifyCompletionCallbacks(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers, result: ITaskResult) void {
+        const keys = callbackKeys(allocator, &self.completionCallbacks);
+        defer allocator.free(keys);
+        for (keys) |key| {
+            const registration = registered(&self.completionCallbacks, key) orelse {
+                continue;
+            };
+            registration.callback.call(io, allocator, timers, result) catch |err| {
                 // Don't let callback errors break the task queue
                 log.exception("Error in task completion callback", err);
             };
@@ -528,29 +503,44 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // Invokes all registered message callbacks with the task message (the lock must be held).
+    // Invokes all registered message callbacks with the task message, with the main thread's Io, allocator and timers.
     // Only callbacks that match the message type (if specified) will be invoked.
     // Callback errors are caught and logged to prevent breaking the queue.
     //
-    fn notifyEventCallbacks(self: *WorkerPoolBun, taskId: []const u8, message: std.json.Value) void {
-        const eventType = types.eventTypeOf(message);
-        const data: ITaskEventData = .{ .taskId = taskId, .event = message };
+    fn notifyMessageCallbacks(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers, taskId: []const u8, message: std.json.Value) void {
+        const messageType = types.eventTypeOf(message);
+        const data: types.ITaskEventData = .{
+            .taskId = taskId,
+            .event = message,
+        };
 
         // Notify callbacks registered for specific message types
-        for (self.eventCallbacks.items) |registration| {
-            if (eventType == null or !std.mem.eql(u8, eventType.?, registration.callback.eventType)) {
+        const typed_keys = callbackKeys(allocator, &self.messageCallbacks);
+        defer allocator.free(typed_keys);
+        for (typed_keys) |key| {
+            const registration = registered(&self.messageCallbacks, key) orelse {
+                continue;
+            };
+            const wanted = messageType orelse {
+                continue;
+            };
+            if (!std.mem.eql(u8, wanted, registration.callback.eventType)) {
                 continue;
             }
-
-            registration.callback.callback.call(data) catch |err| {
+            registration.callback.callback.call(io, allocator, timers, data) catch |err| {
                 // Don't let callback errors break the task queue
                 log.exception("Error in task message callback", err);
             };
         }
 
         // Notify callbacks registered for any message type
-        for (self.anyEventCallbacks.items) |registration| {
-            registration.callback.call(data) catch |err| {
+        const any_keys = callbackKeys(allocator, &self.anyMessageCallbacks);
+        defer allocator.free(any_keys);
+        for (any_keys) |key| {
+            const registration = registered(&self.anyMessageCallbacks, key) orelse {
+                continue;
+            };
+            registration.callback.call(io, allocator, timers, data) catch |err| {
                 // Don't let callback errors break the task queue
                 log.exception("Error in any task message callback", err);
             };
@@ -558,62 +548,63 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // Creates a worker state and starts its thread (the lock must be held).
-    // A worker that cannot be started is handled like a crashed worker.
+    // Starts a worker thread whose messages reach the main thread's queue under a number of its own.
     //
-    fn startWorker(self: *WorkerPoolBun, workerId: u32, tasksProcessed: u64) *IWorkerState {
-        const workerState = pool_allocator.create(IWorkerState) catch @panic("out of memory");
-        workerState.* = .{
-            .thread = null,
+    fn startWorker(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, workerId: u32) !*IWorkerState {
+        const senderId = self.nextSenderId;
+        self.nextSenderId += 1;
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        // The worker gets a copy of this thread's environment as its own, as a Bun worker is given process.env.
+        const environment: ?std.json.Value = if (ziggy.task_queue.utils.process_env.getEnvironMap()) |map| try ziggy.worker.environmentJson(arena, map) else null;
+        const options: ziggy.worker.IWorkerOptions = .{
             .workerId = workerId,
-            .isReady = false, // Will be set to true when the worker thread starts
+            .verbose = self.workerOptions.verbose orelse false,
+            .tools = self.workerOptions.tools orelse false,
+            .sessionId = self.workerOptions.sessionId orelse "",
+            .maxConcurrentChildTasks = MAX_CONCURRENT_CHILD_TASKS,
+            .environment = environment,
+        };
+        const worker = try Worker.start(allocator, io, senderId, self.mainQueue, .{
+            .options_json = try json.stringify(arena, options),
+            .tasks = self.workerOptions.tasks orelse &task_types,
+            .describe_error = describeError,
+        });
+        const workerState = try allocator.create(IWorkerState);
+        workerState.* = .{
+            .worker = worker,
+            .senderId = senderId,
+            .workerId = workerId,
+            .isReady = false, // Will be set to true when worker sends "ready" message
             .isIdle = false, // Will be set to true when worker is ready and idle
             .currentTaskId = null,
             .currentTaskType = null,
             .currentTaskRunningTimeMs = null,
-            .tasksProcessed = tasksProcessed,
+            .tasksProcessed = 0,
             .taskStartTime = null,
-            .assignedTask = null,
-            .currentTask = null,
-            .currentTaskThread = null,
-            .terminated = false,
-            .options = .{
-                .workerId = workerId,
-                .verbose = self.workerOptions.verbose,
-                .tools = self.workerOptions.tools,
-                .sessionId = self.workerOptions.sessionId,
-            },
         };
-        self.workers.append(pool_allocator, workerState) catch @panic("out of memory");
-
-        // Every worker has a slot reserved in retiredWorkers, so retiring it cannot fail.
-        self.retiredWorkers.ensureTotalCapacity(pool_allocator, self.retiredWorkers.items.len + self.workers.items.len) catch @panic("out of memory");
-        self.ensureMonitor();
-
-        const thread = std.Thread.spawn(.{}, workerMain, .{ self, workerState }) catch |err| {
-            var message_buffer: [64]u8 = undefined;
-            log.exception(std.fmt.bufPrint(&message_buffer, "Error from worker {d}", .{workerId}) catch "Error from worker", err);
-            workerState.terminated = true;
-            return workerState;
-        };
-        workerState.thread = thread;
-        self.runningThreads += 1;
         return workerState;
     }
 
     //
-    // Creates a single worker and adds it to the pool (the lock must be held).
-    // Returns the worker state.
+    // Creates a single worker and adds it to the pool.
+    // A worker that cannot be started is handled as a crashed one.
     //
-    fn createWorker(self: *WorkerPoolBun) *IWorkerState {
+    fn createWorker(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator) void {
         const workerId: u32 = @intCast(self.workers.items.len + 1);
-        return self.startWorker(workerId, 0);
+        const workerState = self.startWorker(io, allocator, workerId) catch |err| {
+            var message_buffer: [64]u8 = undefined;
+            log.exception(std.fmt.bufPrint(&message_buffer, "Error from worker {d}", .{workerId}) catch "Error from worker", err);
+            return;
+        };
+        self.workers.append(allocator, workerState) catch @panic("out of memory adding a worker");
     }
 
     //
-    // Replaces a worker with a new one (the lock must be held).
+    // Replaces a worker with a new one.
     //
-    fn replaceWorker(self: *WorkerPoolBun, oldWorkerState: *IWorkerState) void {
+    fn replaceWorker(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, oldWorkerState: *IWorkerState) void {
         // Remove from workers array
         for (self.workers.items, 0..) |workerState, index| {
             if (workerState == oldWorkerState) {
@@ -621,390 +612,406 @@ pub const WorkerPoolBun = struct {
                 break;
             }
         }
-        self.retireWorker(oldWorkerState);
 
-        // Preserve task count when replacing worker
-        _ = self.startWorker(oldWorkerState.workerId, oldWorkerState.tasksProcessed);
-    }
-
-    //
-    // Terminates a worker: its thread exits when idle, or discards its running task's result (Zig only).
-    // The state is kept until deinit because the thread may still use it.
-    //
-    fn retireWorker(self: *WorkerPoolBun, workerState: *IWorkerState) void {
-        workerState.terminated = true;
-        if (workerState.thread) |thread| {
-            thread.detach();
-            workerState.thread = null;
-        }
-        self.retiredWorkers.appendAssumeCapacity(workerState);
-        self.workCondition.broadcast(self.io);
-    }
-
-    //
-    // Starts the timeout monitor thread if it is not running (the lock must be held).
-    //
-    fn ensureMonitor(self: *WorkerPoolBun) void {
-        if (self.monitorThread != null) {
-            return;
-        }
-        self.monitorThread = std.Thread.spawn(.{}, monitorMain, .{self}) catch |err| {
-            log.exception("Error starting the task timeout monitor", err);
+        const workerId = oldWorkerState.workerId;
+        const tasksProcessed = oldWorkerState.tasksProcessed; // Preserve task count when replacing worker
+        allocator.destroy(oldWorkerState);
+        const newWorkerState = self.startWorker(io, allocator, workerId) catch |err| {
+            var message_buffer: [64]u8 = undefined;
+            log.exception(std.fmt.bufPrint(&message_buffer, "Error from worker {d}", .{workerId}) catch "Error from worker", err);
             return;
         };
+        newWorkerState.tasksProcessed = tasksProcessed;
+        self.workers.append(allocator, newWorkerState) catch @panic("out of memory replacing a worker");
     }
 
     //
-    // The body of a worker thread.
+    // Handles every message waiting in the main thread's queue without waiting, then fails the tasks that have timed out and runs the
+    // main thread's timers that are due.
     //
-    fn workerMain(self: *WorkerPoolBun, workerState: *IWorkerState) void {
-        var workerLog = worker_log_bun.WorkerLogBun.init(workerState.workerId, workerState.options.verbose orelse false, workerState.options.tools orelse false);
-        worker_log_bun.createWorkerLog(&workerLog);
-        defer worker_log_bun.clearWorkerLog();
-
-        var context_arena = std.heap.ArenaAllocator.init(pool_allocator);
-        defer context_arena.deinit();
-        const context_allocator = context_arena.allocator();
-
-        // Test providers are automatically configured when NODE_ENV === "testing"
-        const isTesting = std.mem.eql(u8, node_utils.process_env.getEnv("NODE_ENV") orelse "", "testing");
-        // An error raised while the worker starts.
-        var startError: ?anyerror = null;
-        var testUuidGenerator: ?TestUuidGenerator = null;
-        if (isTesting) {
-            if (TestUuidGenerator.init(context_allocator)) |generator| {
-                testUuidGenerator = generator;
-            }
-            else |err| {
-                startError = err;
-            }
+    pub fn handleQueuedMessages(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+        _ = self.reportCrashedTasks(io, allocator, timers);
+        while (self.mainQueue.tryTake(io, allocator)) |message| {
+            defer allocator.free(message.text);
+            self.receive(io, allocator, timers, message);
         }
-        var randomUuidGenerator = RandomUuidGenerator{};
-        var testTimestampProvider = TestTimestampProvider{};
-        var timestampProviderImpl = TimestampProvider{};
-        const uuidGenerator: IUuidGenerator = if (testUuidGenerator) |*generator| generator.uuidGenerator() else randomUuidGenerator.uuidGenerator();
-        const timestampProvider: ITimestampProvider = if (isTesting) testTimestampProvider.timestampProvider() else timestampProviderImpl.timestampProvider();
-        var sessionId: []const u8 = undefined;
-        if (startError == null) {
-            if (workerState.options.sessionId) |configuredSessionId| {
-                sessionId = configuredSessionId;
-            }
-            else if (uuidGenerator.generate(context_allocator, self.io)) |generatedSessionId| {
-                sessionId = generatedSessionId;
-            }
-            else |err| {
-                startError = err;
-            }
-        }
+        self.failTimedOutTasks(io, allocator, timers);
+        timers.runDue(io, allocator, null);
+    }
 
-        self.lock();
-        defer {
-            self.runningThreads -= 1;
-            self.workCondition.broadcast(self.io);
-            self.unlock();
-        }
-
-        if (workerState.terminated) {
+    //
+    // Reads the main thread's next message, waiting no longer than until the next task timeout or the next of the main thread's timers
+    // is due, handles it, then fails the tasks that have timed out and runs the timers that are due. The main thread's own code waits
+    // for its tasks with it, through the IQueueBackend.
+    //
+    pub fn waitForMessage(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+        // A task whose worker could not be given it has ended, which a wait reports as it would a message.
+        if (self.reportCrashedTasks(io, allocator, timers)) {
             return;
         }
-        if (startError) |err| {
-            self.handleWorkerError(workerState, err);
-            return;
+        if (self.mainQueue.take(io, allocator, earlierTimeout(timers.nextTimeout(), self.nextTaskTimeout()))) |message| {
+            defer allocator.free(message.text);
+            self.receive(io, allocator, timers, message);
         }
-
-        // The worker is ready.
-        workerState.isReady = true;
-        workerState.isIdle = true;
-        self.tryDispatchPending();
-
-        while (true) {
-            while (workerState.assignedTask == null and !workerState.terminated) {
-                self.workCondition.waitUncancelable(self.io, &self.mutex);
-            }
-            const poolTask = workerState.assignedTask orelse return;
-            workerState.assignedTask = null;
-            workerState.currentTask = poolTask;
-            workerState.currentTaskThread = std.Thread.getCurrentId();
-            poolTask.context =TaskContext.init(uuidGenerator, timestampProvider, sessionId, poolTask.task.id, .{ .context = poolTask, .function = sendEventFn }, MAX_CONCURRENT_CHILD_TASKS);
-            self.unlock();
-
-            const outcome = self.executeTask(poolTask);
-
-            self.lock();
-            if (poolTask.abandoned or workerState.terminated) {
-                // The task timed out or the worker was terminated: the result is discarded.
-                workerState.currentTask = null;
-                freeTask(poolTask);
-                return;
-            }
-            if (outcome) |outputs| {
-                workerState.currentTask = null;
-                self.handleTaskCompleted(workerState, poolTask, outputs);
-            }
-            else |err| {
-                // Reporting the task failed.
-                self.handleWorkerError(workerState, err);
-                workerState.currentTask = null;
-                freeTask(poolTask);
-                return;
-            }
-        }
+        self.failTimedOutTasks(io, allocator, timers);
+        timers.runDue(io, allocator, null);
     }
 
     //
-    // Handles an error thrown by a worker thread outside of a task handler:
-    // the error is logged and the worker is replaced, failing its task (the lock must be held).
+    // Calls the completion callbacks with the results of the tasks whose worker could not be given them, and says whether there were
+    // any.
     //
-    fn handleWorkerError(self: *WorkerPoolBun, workerState: *IWorkerState, err: anyerror) void {
-        var message_buffer: [64]u8 = undefined;
-        log.exception(std.fmt.bufPrint(&message_buffer, "Error from worker {d}", .{workerState.workerId}) catch "Error from worker", err);
-        self.handleWorkerCrash(workerState);
+    fn reportCrashedTasks(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers) bool {
+        if (self.crashedResults.items.len == 0) {
+            return false;
+        }
+        const results = self.crashedResults.toOwnedSlice(allocator) catch @panic("out of memory reporting a crashed task");
+        defer allocator.free(results);
+        for (results) |text| {
+            defer allocator.free(text);
+            var arena_state = std.heap.ArenaAllocator.init(allocator);
+            defer arena_state.deinit();
+            const result = std.json.parseFromSliceLeaky(ITaskResult, arena_state.allocator(), text, .{}) catch @panic("out of memory reporting a crashed task");
+            self.notifyCompletionCallbacks(io, allocator, timers, result);
+        }
+        return true;
     }
 
     //
-    // Executes a task handler on the worker thread.
-    // Returns the handler outputs, or the failure; an error is returned when the failure cannot be reported.
+    // When the first running task times out, or none when no task is running.
     //
-    fn executeTask(self: *WorkerPoolBun, poolTask: *IPoolTask) !TaskOutcome {
-        const task = poolTask.task;
-
-        // Set task ID for logging prefix and progress messages
-        worker_log_bun.setWorkerTaskId(task.id);
-        defer worker_log_bun.setWorkerTaskId(null);
-
-        // Execute the handler with task-specific context. Ziggy's taskContext leaves the tool runner empty, so the copy
-        // the handler gets is given the runner of the tools built into the program.
-        var taskContext: ITaskContext = poolTask.context.taskContext();
-        taskContext.toolRunner = self.mediaTools.runner();
-        if (worker.executeTaskHandler(poolTask.arena.allocator(), self.io, task.type, task.data, taskContext)) |outputs| {
-            return .{ .succeeded = outputs };
-        }
-        else |err| {
-            const is_thrown = err == error.Thrown or err == error.FatalError;
-            const message = try poolTask.arena.allocator().dupe(u8, errors.errorMessage(err));
-            const name = try poolTask.arena.allocator().dupe(u8, if (is_thrown) errors.lastErrorName() else "Error");
-            if (log.verboseEnabled()) {
-                const detail = try std.fmt.allocPrint(poolTask.arena.allocator(), "Task {s} failed with error {{\n  \"name\": \"{s}\",\n  \"message\": \"{s}\"\n}}", .{ task.id, name, message });
-                log.verbose(detail);
+    fn nextTaskTimeout(self: *WorkerPoolBun) std.Io.Timeout {
+        var earliest: ?i64 = null;
+        for (self.workers.items) |workerState| {
+            const deadline = self.taskDeadline(workerState) orelse {
+                continue;
+            };
+            if (earliest == null or deadline < earliest.?) {
+                earliest = deadline;
             }
-            return .{ .failed = .{ .name = name, .message = message } };
         }
-    }
-
-    //
-    // The outcome of running a task handler (Zig only).
-    //
-    const TaskOutcome = union(enum) {
-        // The handler returned these outputs.
-        succeeded: std.json.Value,
-
-        // The handler failed with this error.
-        failed: ITaskError,
-    };
-
-    //
-    // Handles the completion of a task (the lock must be held).
-    //
-    fn handleTaskCompleted(self: *WorkerPoolBun, workerState: *IWorkerState, poolTask: *IPoolTask, outcome: TaskOutcome) void {
-        // Clear timeout since task completed
-        poolTask.deadline = null;
-
-        const task = poolTask.task;
-
-        // Build result object
-        const fullResult: ITaskResult = switch (outcome) {
-            .succeeded => |outputs| .{
-                .taskId = task.id,
-                .status = .Succeeded,
-                .@"error" = null,
-                .errorMessage = "Unknown error",
-                .outputs = outputs,
-                .type = task.type,
-                .inputs = task.data,
-            },
-            .failed => |failure| .{
-                .taskId = task.id,
-                .status = .Failed,
-                .@"error" = failure,
-                .errorMessage = if (failure.message.len > 0) failure.message else "Unknown error",
-                .outputs = null,
-                .type = task.type,
-                .inputs = task.data,
+        const deadline = earliest orelse {
+            return .none;
+        };
+        return .{
+            .deadline = .{
+                .raw = .fromNanoseconds(@as(i96, deadline) * std.time.ns_per_ms),
+                .clock = .awake,
             },
         };
-
-        // Update worker state
-        workerState.isIdle = true;
-        workerState.currentTaskId = null;
-        workerState.currentTaskType = null;
-        workerState.currentTaskRunningTimeMs = null;
-        workerState.taskStartTime = null;
-        workerState.tasksProcessed += 1;
-
-        self.notifyCompletionCallbacks(fullResult);
-        freeTask(poolTask);
-
-        self.tryDispatchPending();
     }
 
     //
-    // Sends a message from the current task back to the caller.
+    // When the task the worker is running times out, in milliseconds on the awake clock, or null when it runs none.
     //
-    fn sendEventFn(context: ?*anyopaque, message: std.json.Value) void {
-        const poolTask: *IPoolTask = @ptrCast(@alignCast(context.?));
-        const self = poolTask.pool;
-        self.lock();
-        defer self.unlock();
-        if (poolTask.abandoned) {
-            return;
+    fn taskDeadline(self: *WorkerPoolBun, workerState: *const IWorkerState) ?i64 {
+        if (workerState.currentTaskId == null) {
+            return null;
         }
-        self.notifyEventCallbacks(poolTask.task.id, message);
+        const started = workerState.taskStartTime orelse {
+            return null;
+        };
+        return started + @as(i64, @intCast(setTimeoutDelay(self.taskTimeout)));
     }
 
     //
-    // The body of the timeout monitor thread.
+    // Fails every task that has run past its timeout (see handleTaskTimeout).
     //
-    fn monitorMain(self: *WorkerPoolBun) void {
-        // The monitor is a thread of its own, not an Io task, so nothing can cancel it.
-        _ = self.io.swapCancelProtection(.blocked);
-        self.lock();
-        defer self.unlock();
-        while (!self.stopping) {
-            var earliest: ?i64 = null;
-            for (self.workers.items) |workerState| {
-                const poolTask = workerState.currentTask orelse workerState.assignedTask orelse continue;
-                const deadline = poolTask.deadline orelse continue;
-                if (earliest == null or deadline < earliest.?) {
-                    earliest = deadline;
-                }
-            }
-            if (earliest == null) {
-                self.monitorCondition.waitUncancelable(self.io, &self.mutex);
+    fn failTimedOutTasks(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+        var index: usize = 0;
+        while (index < self.workers.items.len) {
+            const workerState = self.workers.items[index];
+            const deadline = self.taskDeadline(workerState) orelse {
+                index += 1;
+                continue;
+            };
+            if (nowMs(io) < deadline) {
+                index += 1;
                 continue;
             }
-            const now = self.nowMs();
-            if (earliest.? > now) {
-                const wait_ms = @min(earliest.? - now, 50);
-                self.unlock();
-                self.io.sleep(.fromMilliseconds(wait_ms), .awake) catch |err| switch (err) {
-                    error.Canceled => unreachable,
-                };
-                self.lock();
-                continue;
-            }
+            // The worker is replaced, so the same place is looked at again.
+            self.handleTaskTimeout(io, allocator, timers, workerState) catch |err| {
+                log.exception("Error handling task timeout", err);
+                index += 1;
+            };
+        }
+    }
 
-            // Find a timed out task and handle it.
-            for (self.workers.items) |workerState| {
-                const poolTask = workerState.currentTask orelse workerState.assignedTask orelse continue;
-                const deadline = poolTask.deadline orelse continue;
-                if (deadline <= now) {
-                    self.handleTaskTimeout(poolTask, workerState) catch |err| {
-                        log.exception("Error handling task timeout", err);
-                    };
-                    break;
-                }
+    //
+    // Hands a message from the main thread's queue to the worker state of the worker that sent it. A message from a worker the pool
+    // no longer has (an abandoned one) is ignored.
+    //
+    fn receive(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: Message) void {
+        for (self.workers.items) |workerState| {
+            if (workerState.senderId == message.from) {
+                self.handleWorkerMessage(io, allocator, timers, workerState, message.text);
+                return;
             }
         }
     }
 
     //
-    // Handles task timeout by terminating the worker and marking the task as failed (the lock must be held).
+    // Handles messages from worker threads.
+    // Processes task results and errors.
     //
-    fn handleTaskTimeout(self: *WorkerPoolBun, poolTask: *IPoolTask, workerState: *IWorkerState) !void {
-        // Clear the timeout (should already be cleared, but be safe)
-        poolTask.deadline = null;
-
-        const timeoutText = try formatNumber(pool_allocator, self.taskTimeout);
-        defer pool_allocator.free(timeoutText);
-        const message = try std.fmt.allocPrint(pool_allocator, "[Task Queue] Task {s} timed out after {s}ms", .{ poolTask.task.id, timeoutText });
-        defer pool_allocator.free(message);
-        log.@"error"(message);
-
-        // Terminate the worker: the thread cannot be killed, so its task is abandoned and the thread detached.
-        poolTask.abandoned = true;
-        if (workerState.currentTask == poolTask) {
-            poolTask.context.cancel();
-
-            // The cancel only sets a flag the handler reads between its own steps, which an `ffmpeg` run in the process never
-            // reads, and that run holds the FFmpeg lock every later `ffmpeg` and `ffprobe` waits on. So an `ffmpeg` the thread is
-            // running is told to stop as well.
-            self.mediaTools.ffmpeg.stopIfRunningOn(workerState.currentTaskThread.?);
-        }
-        if (workerState.assignedTask == poolTask) {
-            // The thread has not picked the task up yet: it is freed here.
-            workerState.assignedTask = null;
-        }
-
-        const task = poolTask.task;
-        const result: ITaskResult = .{
-            .taskId = task.id,
-            .status = .Failed,
-            .@"error" = .{ .name = "Error", .message = "Task timeout" },
-            .errorMessage = "Task timeout",
-            .outputs = null,
-            .type = task.type,
-            .inputs = task.data,
+    fn handleWorkerMessage(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers, workerState: *IWorkerState, text: []const u8) void {
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena, text, .{}) catch {
+            std.debug.panic("a worker sent a message that is not JSON: {s}", .{text});
+        };
+        const messageType = worker_messages.typeOf(parsed) orelse {
+            std.debug.panic("a worker sent a message with no type: {s}", .{text});
         };
 
-        workerState.isIdle = true;
-        workerState.currentTaskId = null;
-        workerState.currentTaskType = null;
-        workerState.currentTaskRunningTimeMs = null;
-        workerState.taskStartTime = null;
-
-        self.notifyCompletionCallbacks(result);
-        if (workerState.currentTask != poolTask) {
-            freeTask(poolTask);
+        // A worker that could not start (TypeScript: the worker's "error" event). Its thread has ended, so it is released, and it had
+        // no task yet, so replacing it is all that handleWorkerCrash has left to do.
+        if (std.mem.eql(u8, messageType, "worker-error")) {
+            const failure = worker_messages.decodeValue(worker_messages.IWorkerErrorMessage, arena, parsed) catch |err| {
+                std.debug.panic("could not read a worker's worker-error message ({s}): {s}", .{ @errorName(err), text });
+            };
+            var message_buffer: [64]u8 = undefined;
+            log.exception(std.fmt.bufPrint(&message_buffer, "Error from worker {d}", .{workerState.workerId}) catch "Error from worker", utils.errors.throwError("{s}", .{failure.message}));
+            workerState.worker.destroy(allocator);
+            self.replaceWorker(io, allocator, workerState);
+            return;
         }
 
-        // Replace the worker
-        self.replaceWorker(workerState);
-        self.tryDispatchPending();
-    }
+        // Handle worker ready message
+        if (std.mem.eql(u8, messageType, "worker-ready")) {
+            workerState.isReady = true;
+            workerState.isIdle = true;
+            self.tryDispatchPending(io, allocator);
+            return;
+        }
 
-    //
-    // Handles worker crashes by terminating the worker and creating a replacement (the lock must be held).
-    // If the worker had a task, it is reported as failed.
-    //
-    fn handleWorkerCrash(self: *WorkerPoolBun, workerState: *IWorkerState) void {
-        const crashedTask = workerState.currentTask orelse workerState.assignedTask;
+        // Handle task result (both success and failure)
+        if (std.mem.eql(u8, messageType, "task-completed")) {
+            const data = worker_messages.decodeValue(worker_messages.IWorkerTaskCompletedMessage, arena, parsed) catch |err| {
+                std.debug.panic("could not read a worker's task-completed message ({s}): {s}", .{ @errorName(err), text });
+            };
+            const taskId = data.taskId;
+            const result = data.result;
 
-        // If worker had a task, clear its timeout and mark as failed
-        if (crashedTask) |poolTask| {
-            poolTask.deadline = null;
-            poolTask.abandoned = true;
-            const task = poolTask.task;
-            const result: ITaskResult = .{
-                .taskId = task.id,
-                .status = .Failed,
-                .@"error" = .{ .name = "Error", .message = "Worker crashed" },
-                .errorMessage = "Worker crashed",
-                .outputs = null,
-                .type = task.type,
-                .inputs = task.data,
+            const poolTask = self.taskMap.get(taskId);
+            _ = self.taskMap.remove(taskId);
+            defer if (poolTask) |task| freeTask(allocator, task);
+
+            if (result.status == .Failed and log.verboseEnabled()) {
+                const detail = std.fmt.allocPrint(arena, "Task {s} failed with error {{\n  \"name\": \"{s}\",\n  \"message\": \"{s}\"\n}}", .{ taskId, if (result.@"error") |failure| failure.name else "Error", result.errorMessage orelse "" }) catch @panic("out of memory logging a failed task");
+                writeOutputLine(prefixMessage(arena, workerState.workerId, workerState.currentTaskId, detail));
+            }
+
+            // Build result object
+            const fullResult: ITaskResult = .{
+                .taskId = taskId,
+                .status = result.status,
+                .@"error" = result.@"error",
+                .errorMessage = if (result.@"error") |failure| failure.message else "Unknown error",
+                .outputs = result.outputs,
+                .type = if (poolTask) |task| task.taskType else "",
+                .inputs = inputsOf(arena, poolTask),
             };
 
+            // Update worker state
+            workerState.isIdle = true;
             workerState.currentTaskId = null;
             workerState.currentTaskType = null;
             workerState.currentTaskRunningTimeMs = null;
             workerState.taskStartTime = null;
-            self.notifyCompletionCallbacks(result);
-            if (workerState.assignedTask == poolTask) {
-                workerState.assignedTask = null;
-                freeTask(poolTask);
+            workerState.tasksProcessed += 1;
+
+            self.notifyCompletionCallbacks(io, allocator, timers, fullResult);
+
+            // Broadcast completion to all workers so worker-side TaskQueue instances
+            // (e.g. in orchestrator tasks) can react to child task completions.
+            const completed = json.stringify(arena, .{
+                .type = "task-completed",
+                .taskId = taskId,
+                .result = fullResult,
+            }) catch @panic("out of memory telling the workers a task ended");
+            for (self.workers.items) |each| {
+                each.worker.postMessage(io, completed) catch @panic("out of memory telling the workers a task ended");
             }
+
+            self.tryDispatchPending(io, allocator);
+            return;
         }
 
-        // Replace the worker
-        self.replaceWorker(workerState);
+        // Handle task message
+        if (std.mem.eql(u8, messageType, "task-message")) {
+            const taskId = json.getString(parsed, "taskId") orelse {
+                std.debug.panic("a worker sent a task-message with no task id: {s}", .{text});
+            };
+            self.notifyMessageCallbacks(io, allocator, timers, taskId, parsed.object.get("message") orelse .null);
+            return;
+        }
+
+        // Handle queue-task request from worker
+        if (std.mem.eql(u8, messageType, "queue-task")) {
+            const msg = worker_messages.decodeValue(worker_messages.IWorkerQueueTaskMessage, arena, parsed) catch |err| {
+                std.debug.panic("could not read a worker's queue-task message ({s}): {s}", .{ @errorName(err), text });
+            };
+            const requested: ?TaskPriority = if (msg.priority) |given| switch (given) {
+                .Interactive => .Interactive,
+                .Background => .Background,
+            } else null;
+            const dataJson = json.stringify(arena, msg.data) catch @panic("out of memory queueing a child task");
+            self.addTaskWithParent(io, allocator, msg.taskType, dataJson, msg.source, msg.taskId, requested, self.priorityOfRunningTask(workerState)) catch @panic("out of memory queueing a child task");
+            return;
+        }
+
+        // A worker's log line: only the main thread writes the output, prefixed with the worker and its task as WorkerLogBun does.
+        if (std.mem.eql(u8, messageType, "log")) {
+            writeWorkerLog(arena, workerState.workerId, workerState.currentTaskId, text);
+            return;
+        }
+
+        // A line a worker wrote to its console, which reaches the output as it is.
+        if (std.mem.eql(u8, messageType, "console")) {
+            const line = worker_messages.decode(worker_messages.IWorkerConsoleMessage, arena, text) catch |err| {
+                std.debug.panic("could not read a worker's console message ({s}): {s}", .{ @errorName(err), text });
+            };
+            if (std.mem.eql(u8, line.stream, "stderr")) {
+                writeErrorLine(line.line);
+            }
+            else {
+                writeOutputLine(line.line);
+            }
+            return;
+        }
+
+        // The CLI has no native app: a task's request to one fails.
+        if (std.mem.eql(u8, messageType, "native-app-request")) {
+            const reply = json.stringify(arena, .{
+                .type = "native-app-response",
+                .requestId = json.getInteger(parsed, "requestId") orelse 0,
+                .@"error" = "NativeCallMissing",
+            }) catch @panic("out of memory answering a native app request");
+            workerState.worker.postMessage(io, reply) catch @panic("out of memory answering a native app request");
+            return;
+        }
     }
 
     //
-    // Dispatches a single task to an available worker (the lock must be held).
+    // Writes a worker's log line to the output, prefixed with the worker and the task it is running, as WorkerLogBun writes it. The
+    // worker leaves out the verbose and tool lines its options turn off. The text is the worker's log message (IWorkerLogMessage), and
+    // the task id is that of the task the worker is running, or null when it is between tasks.
+    //
+    pub fn writeWorkerLog(arena: std.mem.Allocator, workerId: u32, taskId: ?[]const u8, text: []const u8) void {
+        const message = worker_messages.decode(worker_messages.IWorkerLogMessage, arena, text) catch |err| {
+            std.debug.panic("could not read a worker's log message ({s}): {s}", .{ @errorName(err), text });
+        };
+        switch (message.level) {
+            .verbose, .info => writeOutputLine(prefixMessage(arena, workerId, taskId, message.message)),
+            .@"error", .warn => writeErrorLine(prefixMessage(arena, workerId, taskId, message.message)),
+            .exception => {
+                writeErrorLine(prefixMessage(arena, workerId, taskId, message.message));
+                if (message.@"error") |chain| {
+                    writeErrorLine(chain);
+                }
+            },
+            .debug => {},
+            .tool => {
+                const data = message.toolData orelse return;
+                // An empty output is not written (TypeScript: `if (data.stdout)`, which an empty string fails).
+                if (data.stdout) |stdout| if (stdout.len > 0) {
+                    writeOutputLine(prefixMessage(arena, workerId, taskId, std.fmt.allocPrint(arena, "== {s} stdout ==\n{s}", .{ message.message, stdout }) catch @panic("out of memory writing a log line")));
+                };
+                if (data.stderr) |stderr| if (stderr.len > 0) {
+                    writeOutputLine(prefixMessage(arena, workerId, taskId, std.fmt.allocPrint(arena, "== {s} stderr ==\n{s}", .{ message.message, stderr }) catch @panic("out of memory writing a log line")));
+                };
+            },
+            .event => writeOutputLine(prefixMessage(arena, workerId, taskId, std.fmt.allocPrint(arena, "[EVENT] {s}", .{message.message}) catch @panic("out of memory writing a log line"))),
+        }
+    }
+
+    //
+    // Handles task timeout by abandoning the worker and marking the task as failed.
+    //
+    fn handleTaskTimeout(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, timers: Timers, workerState: *IWorkerState) !void {
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        const taskId = try arena.dupe(u8, workerState.currentTaskId.?);
+
+        const timeoutText = try formatNumber(arena, self.taskTimeout);
+        log.@"error"(try std.fmt.allocPrint(arena, "[Task Queue] Task {s} timed out after {s}ms", .{ taskId, timeoutText }));
+
+        // Abandon the worker: a thread cannot be stopped, so it is left to finish on its own.
+        workerState.worker.abandon();
+        self.abandonedWorkers = true;
+
+        const poolTask = self.taskMap.get(taskId);
+        _ = self.taskMap.remove(taskId);
+        defer if (poolTask) |task| freeTask(allocator, task);
+        const result: ITaskResult = .{
+            .taskId = taskId,
+            .status = .Failed,
+            .@"error" = .{ .name = "Error", .message = "Task timeout" },
+            .errorMessage = "Task timeout",
+            .type = if (poolTask) |task| task.taskType else "",
+            .inputs = inputsOf(arena, poolTask),
+        };
+
+        workerState.isIdle = true;
+        workerState.currentTaskId = null;
+        workerState.currentTaskType = null;
+        workerState.currentTaskRunningTimeMs = null;
+        workerState.taskStartTime = null;
+
+        self.notifyCompletionCallbacks(io, allocator, timers, result);
+
+        // Replace the worker
+        self.replaceWorker(io, allocator, workerState);
+        self.tryDispatchPending(io, allocator);
+    }
+
+    //
+    // Handles a worker that could not be given its task: fails the task and replaces the worker. The completion callbacks are called
+    // with the task's result at the next wait (see reportCrashedTasks), because a task can be dispatched where the pool is given no
+    // timers (addTask).
+    //
+    fn handleWorkerCrash(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, workerState: *IWorkerState) void {
+        // If worker had a task, mark it as failed
+        if (workerState.currentTaskId) |crashedTaskId| {
+            var arena_state = std.heap.ArenaAllocator.init(allocator);
+            defer arena_state.deinit();
+            const arena = arena_state.allocator();
+            const poolTask = self.taskMap.get(crashedTaskId);
+            const taskId = if (poolTask) |task| task.id else crashedTaskId;
+            const result: ITaskResult = .{
+                .taskId = taskId,
+                .status = .Failed,
+                .@"error" = .{ .name = "Error", .message = "Worker crashed" },
+                .errorMessage = "Worker crashed",
+                .type = if (poolTask) |task| task.taskType else "",
+                .inputs = inputsOf(arena, poolTask),
+            };
+            const text = json.stringify(allocator, result) catch @panic("out of memory failing a crashed task");
+            self.crashedResults.append(allocator, text) catch @panic("out of memory failing a crashed task");
+            workerState.currentTaskId = null;
+            workerState.currentTaskType = null;
+            workerState.currentTaskRunningTimeMs = null;
+            workerState.taskStartTime = null;
+            if (poolTask) |task| {
+                _ = self.taskMap.remove(task.id);
+                freeTask(allocator, task);
+            }
+        }
+
+        // Abandon the worker and replace it
+        workerState.worker.abandon();
+        self.abandonedWorkers = true;
+        self.replaceWorker(io, allocator, workerState);
+    }
+
+    //
+    // Dispatches a single task to an available worker.
     // Returns true if the task was dispatched, false if no worker was available.
     //
-    fn dispatchTask(self: *WorkerPoolBun, poolTask: *IPoolTask) bool {
-
+    fn dispatchTask(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, poolTask: *IPoolTask) bool {
         //
         // Find an available idle worker that has processed the least tasks
         //
@@ -1019,74 +1026,82 @@ pub const WorkerPoolBun = struct {
         }
 
         //
-        // If no idle worker available and we haven't reached maxWorkers, create workers for pending tasks
+        // If no idle worker available and we haven't reached maxWorkers, create a worker. It is not idle until it sends its "ready"
+        // message, so return for now.
         //
-        if (availableWorker == null and @as(f64, @floatFromInt(self.workers.items.len)) < self.maxWorkers) {
-            // Create one worker, up to the maxWorkers limit
-            const workerState = self.createWorker();
-            if (workerState.terminated) {
-                self.handleWorkerCrash(workerState);
+        const workerState = availableWorker orelse {
+            if (@as(f64, @floatFromInt(self.workers.items.len)) < self.maxWorkers) {
+                self.createWorker(io, allocator);
             }
+            return false; // All workers busy or not ready yet
+        };
 
-            // Workers won't be idle until their threads start, so return for now
-            return false;
-        }
-
-        const selectedWorker = availableWorker orelse return false; // All workers busy or not ready yet
-
-        selectedWorker.isIdle = false;
-        selectedWorker.currentTaskId = poolTask.task.id;
-        selectedWorker.currentTaskType = poolTask.task.type;
-        selectedWorker.taskStartTime = std.Io.Clock.real.now(self.io).toMilliseconds();
-
-        // Set up timeout for this task
-        poolTask.deadline = self.nowMs() + @as(i64, @intCast(setTimeoutDelay(self.taskTimeout)));
-        self.monitorCondition.broadcast(self.io);
+        workerState.isIdle = false;
+        workerState.currentTaskId = poolTask.id;
+        workerState.currentTaskType = poolTask.taskType;
+        // The task times out the pool's timeout after this, which the waits look at (see nextTaskTimeout).
+        workerState.taskStartTime = nowMs(io);
 
         // Send task to worker
-        selectedWorker.assignedTask = poolTask;
-        self.workCondition.broadcast(self.io);
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const executeMsg = json.stringify(arena_state.allocator(), .{
+            .type = "execute",
+            .taskId = poolTask.id,
+            .taskType = poolTask.taskType,
+            .data = json.Raw{
+                .text = poolTask.dataJson,
+            },
+            .source = poolTask.source,
+        }) catch |err| {
+            var message_buffer: [64]u8 = undefined;
+            log.exception(std.fmt.bufPrint(&message_buffer, "Error sending task to worker {d}", .{workerState.workerId}) catch "Error sending task to worker", err);
+            self.handleWorkerCrash(io, allocator, workerState);
+            return true;
+        };
+        workerState.worker.postMessage(io, executeMsg) catch |err| {
+            var message_buffer: [64]u8 = undefined;
+            log.exception(std.fmt.bufPrint(&message_buffer, "Error sending task to worker {d}", .{workerState.workerId}) catch "Error sending task to worker", err);
+            self.handleWorkerCrash(io, allocator, workerState);
+        };
 
         return true;
     }
 
     //
-    // Frees a task and everything it allocated.
-    //
-    fn freeTask(poolTask: *IPoolTask) void {
-        poolTask.arena.deinit();
-        pool_allocator.destroy(poolTask);
-    }
-
-    //
     // Drops pending tasks with the given source and signals running tasks to cancel.
     //
-    pub fn cancelTasks(self: *WorkerPoolBun, source: []const u8) void {
-        self.lock();
-        defer self.unlock();
+    pub fn cancelTasks(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator, source: []const u8) void {
         var index: usize = 0;
         while (index < self.pendingTasks.items.len) {
             const poolTask = self.pendingTasks.items[index];
-            if (std.mem.eql(u8, poolTask.task.source, source)) {
-                _ = self.pendingTasks.orderedRemove(index);
-                freeTask(poolTask);
+            if (!std.mem.eql(u8, poolTask.source, source)) {
+                index += 1;
                 continue;
             }
-            index += 1;
+            _ = self.pendingTasks.orderedRemove(index);
+            _ = self.taskMap.remove(poolTask.id);
+            freeTask(allocator, poolTask);
         }
 
-        // Signal running tasks with the source to cancel.
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const cancelMsg = json.stringify(arena_state.allocator(), .{
+            .type = "cancel-tasks",
+            .source = source,
+        }) catch @panic("out of memory cancelling tasks");
         for (self.workers.items) |workerState| {
-            if (workerState.currentTask) |poolTask| {
-                if (std.mem.eql(u8, poolTask.task.source, source)) {
-                    poolTask.context.cancel();
-                }
-            }
+            workerState.worker.postMessage(io, cancelMsg) catch @panic("out of memory cancelling tasks");
         }
 
-        for (self.tasksCancelledCallbacks.items) |registration| {
+        const keys = callbackKeys(allocator, &self.tasksCancelledCallbacks);
+        defer allocator.free(keys);
+        for (keys) |key| {
+            const registration = registered(&self.tasksCancelledCallbacks, key) orelse {
+                continue;
+            };
             if (std.mem.eql(u8, registration.source, source)) {
-                registration.callback.call();
+                registration.callback.call(io, allocator);
             }
         }
     }
@@ -1094,36 +1109,154 @@ pub const WorkerPoolBun = struct {
     //
     // Registers a callback that fires when cancelTasks is called for the given source.
     //
-    pub fn onTasksCancelled(self: *WorkerPoolBun, source: []const u8, callback: TasksCancelledCallback) !UnsubscribeFn {
-        return self.register(TasksCancelledCallback, &self.tasksCancelledCallbacks, source, callback);
+    pub fn onTasksCancelled(self: *WorkerPoolBun, allocator: std.mem.Allocator, source: []const u8, callback: TasksCancelledCallback) !UnsubscribeFn {
+        return self.register(allocator, TasksCancelledCallback, &self.tasksCancelledCallbacks, source, callback);
     }
 
     //
-    // Shuts down all the workers.
+    // Shuts down all the workers and returns once every worker thread this pool started, apart from the abandoned ones, has ended.
     //
-    pub fn shutdown(self: *WorkerPoolBun) void {
-        self.lock();
-        defer self.unlock();
+    // TypeScript terminates the workers, which ends the tasks they are running. A thread cannot be stopped from outside it, so the
+    // task each worker is running is cancelled instead, and each worker is asked to end its own thread once that task returns. What
+    // the tasks report is not read: a message from a worker that has started is dropped, so no callback is called and no timer is
+    // needed.
+    //
+    pub fn shutdown(self: *WorkerPoolBun, io: std.Io, allocator: std.mem.Allocator) void {
+        self.isShuttingDown = true;
 
-        // Clear all timeouts first to prevent any timeout callbacks from running
-        for (self.workers.items) |workerState| {
-            if (workerState.currentTask) |poolTask| {
-                poolTask.deadline = null;
-            }
-            if (workerState.assignedTask) |poolTask| {
-                workerState.assignedTask = null;
-                freeTask(poolTask);
-            }
+        // A worker that has not sent "worker-ready" has not read anything yet, so it is waited for before it is told to end.
+        while (self.anyStarting()) {
+            const message = self.mainQueue.take(io, allocator, .none) orelse {
+                break;
+            };
+            defer allocator.free(message.text);
+            self.receiveWhileStopping(allocator, message);
         }
-
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
         for (self.workers.items) |workerState| {
-            self.retireWorker(workerState);
+            const taskId = workerState.currentTaskId orelse continue;
+            const poolTask = self.taskMap.get(taskId) orelse continue;
+            const cancelMsg = json.stringify(arena_state.allocator(), .{
+                .type = "cancel-tasks",
+                .source = poolTask.source,
+            }) catch @panic("out of memory cancelling tasks");
+            workerState.worker.postMessage(io, cancelMsg) catch @panic("out of memory cancelling tasks");
+        }
+        for (self.workers.items) |workerState| {
+            workerState.worker.postMessage(io, "{\"type\":\"shutdown\"}") catch @panic("out of memory stopping a worker");
+        }
+        for (self.workers.items) |workerState| {
+            workerState.worker.destroy(allocator);
+            allocator.destroy(workerState);
         }
         self.workers.clearRetainingCapacity();
     }
 
     //
-    // IQueueBackend.addTask for this implementation.
+    // Stops the workers as the process ends, and returns once every worker thread this pool started, apart from the abandoned ones,
+    // has ended: the task each worker is running is cancelled, so it can clean up after itself, and each worker is asked to end its
+    // own thread once that task returns. Nothing is freed, because the process ends next, so no allocator is needed.
+    //
+    pub fn stopWorkers(self: *WorkerPoolBun, io: std.Io) void {
+        self.isShuttingDown = true;
+        var buffer: [4096]u8 = undefined;
+        for (self.workers.items) |workerState| {
+            const taskId = workerState.currentTaskId orelse continue;
+            const poolTask = self.taskMap.get(taskId) orelse continue;
+            var fixed = std.heap.FixedBufferAllocator.init(&buffer);
+            const cancelMsg = json.stringify(fixed.allocator(), .{
+                .type = "cancel-tasks",
+                .source = poolTask.source,
+            }) catch @panic("a task's source is too long to cancel it");
+            workerState.worker.postMessage(io, cancelMsg) catch @panic("out of memory cancelling tasks");
+        }
+        for (self.workers.items) |workerState| {
+            workerState.worker.postMessage(io, "{\"type\":\"shutdown\"}") catch @panic("out of memory stopping a worker");
+        }
+        for (self.workers.items) |workerState| {
+            workerState.worker.thread.join();
+        }
+        self.workers.clearRetainingCapacity();
+    }
+
+    //
+    // Reads a message while the pool shuts down: a worker that is starting reports that it is ready, or that it could not start, and
+    // anything else is dropped.
+    //
+    fn receiveWhileStopping(self: *WorkerPoolBun, allocator: std.mem.Allocator, message: Message) void {
+        for (self.workers.items, 0..) |workerState, index| {
+            if (workerState.senderId != message.from) {
+                continue;
+            }
+            var arena_state = std.heap.ArenaAllocator.init(allocator);
+            defer arena_state.deinit();
+            const parsed = std.json.parseFromSliceLeaky(std.json.Value, arena_state.allocator(), message.text, .{}) catch {
+                std.debug.panic("a worker sent a message that is not JSON: {s}", .{message.text});
+            };
+            const messageType = worker_messages.typeOf(parsed) orelse {
+                return;
+            };
+            if (std.mem.eql(u8, messageType, "worker-ready")) {
+                workerState.isReady = true;
+                workerState.isIdle = true;
+            }
+            else if (std.mem.eql(u8, messageType, "worker-error")) {
+                // The worker's thread has ended, so it is released, and a worker is not started in its place.
+                workerState.worker.destroy(allocator);
+                _ = self.workers.orderedRemove(index);
+                allocator.destroy(workerState);
+            }
+            return;
+        }
+    }
+
+    //
+    // Whether a worker has been started and has not sent "worker-ready" yet.
+    //
+    fn anyStarting(self: *WorkerPoolBun) bool {
+        for (self.workers.items) |workerState| {
+            if (!workerState.isReady) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //
+    // Adds a registration to a callback list and returns the function that removes it.
+    //
+    fn register(self: *WorkerPoolBun, allocator: std.mem.Allocator, comptime CallbackT: type, list: *std.ArrayList(Registration(CallbackT)), source: []const u8, callback: CallbackT) !UnsubscribeFn {
+        const sourceCopy = try allocator.dupe(u8, source);
+        errdefer allocator.free(sourceCopy);
+        const key = self.nextKey;
+        self.nextKey += 1;
+        try list.append(allocator, .{
+            .key = key,
+            .source = sourceCopy,
+            .callback = callback,
+        });
+        return .{
+            .context = self,
+            .key = key,
+            .function = unregister,
+        };
+    }
+
+    //
+    // Removes the registration with the given key from whichever list holds it, with the allocator it was made with.
+    //
+    fn unregister(context: ?*anyopaque, allocator: std.mem.Allocator, key: usize) void {
+        const self: *WorkerPoolBun = @ptrCast(@alignCast(context.?));
+        removeKey(allocator, TaskAddedCallback, &self.taskAddedCallbacks, key);
+        removeKey(allocator, WorkerTaskCompletionCallback, &self.completionCallbacks, key);
+        removeKey(allocator, IEventCallbackEntry, &self.messageCallbacks, key);
+        removeKey(allocator, TaskEventCallback, &self.anyMessageCallbacks, key);
+        removeKey(allocator, TasksCancelledCallback, &self.tasksCancelledCallbacks, key);
+    }
+
+    //
+    // The IQueueBackend addTask of this pool.
     //
     fn addTaskErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
@@ -1131,58 +1264,152 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // IQueueBackend.onTaskAdded for this implementation.
+    // The IQueueBackend onTaskAdded of this pool.
     //
-    fn onTaskAddedErased(ptr: *anyopaque, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
+    fn onTaskAddedErased(ptr: *anyopaque, allocator: std.mem.Allocator, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        return self.onTaskAdded(source, callback);
+        return self.onTaskAdded(allocator, source, callback);
     }
 
     //
-    // IQueueBackend.onTaskComplete for this implementation.
+    // The IQueueBackend onTaskComplete of this pool.
     //
-    fn onTaskCompleteErased(ptr: *anyopaque, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
+    fn onTaskCompleteErased(ptr: *anyopaque, allocator: std.mem.Allocator, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        return self.onTaskComplete(callback);
+        return self.onTaskComplete(allocator, callback);
     }
 
     //
-    // IQueueBackend.onTaskEvent for this implementation.
+    // The IQueueBackend onTaskEvent of this pool.
     //
-    fn onTaskEventErased(ptr: *anyopaque, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onTaskEventErased(ptr: *anyopaque, allocator: std.mem.Allocator, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        return self.onTaskEvent(eventType, callback);
+        return self.onTaskEvent(allocator, eventType, callback);
     }
 
     //
-    // IQueueBackend.onAnyTaskEvent for this implementation.
+    // The IQueueBackend onAnyTaskEvent of this pool.
     //
-    fn onAnyTaskEventErased(ptr: *anyopaque, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onAnyTaskEventErased(ptr: *anyopaque, allocator: std.mem.Allocator, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        return self.onAnyTaskEvent(callback);
+        return self.onAnyTaskEvent(allocator, callback);
     }
 
     //
-    // IQueueBackend.cancelTasks for this implementation.
+    // The IQueueBackend cancelTasks of this pool.
     //
-    fn cancelTasksErased(ptr: *anyopaque, source: []const u8) void {
+    fn cancelTasksErased(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, source: []const u8) void {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        self.cancelTasks(source);
+        self.cancelTasks(io, allocator, source);
     }
 
     //
-    // IQueueBackend.onTasksCancelled for this implementation.
+    // The IQueueBackend onTasksCancelled of this pool.
     //
-    fn onTasksCancelledErased(ptr: *anyopaque, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
+    fn onTasksCancelledErased(ptr: *anyopaque, allocator: std.mem.Allocator, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        return self.onTasksCancelled(source, callback);
+        return self.onTasksCancelled(allocator, source, callback);
     }
 
     //
-    // IQueueBackend.shutdown for this implementation.
+    // The IQueueBackend shutdown of this pool.
     //
-    fn shutdownErased(ptr: *anyopaque) void {
+    fn shutdownErased(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) void {
         const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
-        self.shutdown();
+        self.shutdown(io, allocator);
+    }
+
+    //
+    // The IQueueBackend waitForMessage of this pool.
+    //
+    fn waitForMessageErased(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+        const self: *WorkerPoolBun = @ptrCast(@alignCast(ptr));
+        self.waitForMessage(io, allocator, timers);
     }
 };
+
+//
+// The earlier of two timeouts, where none is later than any deadline. Both deadlines are on the awake clock.
+//
+fn earlierTimeout(first: std.Io.Timeout, second: std.Io.Timeout) std.Io.Timeout {
+    const first_deadline = switch (first) {
+        .deadline => |deadline| deadline,
+        else => return second,
+    };
+    const second_deadline = switch (second) {
+        .deadline => |deadline| deadline,
+        else => return first,
+    };
+    return if (first_deadline.compare(.lte, second_deadline)) first else second;
+}
+
+//
+// The input of a task, read back from its JSON text into the arena, or null when the pool no longer knows the task.
+//
+fn inputsOf(arena: std.mem.Allocator, poolTask: ?*IPoolTask) std.json.Value {
+    const task = poolTask orelse {
+        return .null;
+    };
+    return std.json.parseFromSliceLeaky(std.json.Value, arena, task.dataJson, .{}) catch @panic("out of memory reading a task's input");
+}
+
+//
+// Prefixes a worker's log line with the worker and the task it is running, as WorkerLogBun's prefixMessage does.
+//
+fn prefixMessage(arena: std.mem.Allocator, workerId: u32, taskId: ?[]const u8, message: []const u8) []const u8 {
+    if (taskId) |id| {
+        return std.fmt.allocPrint(arena, "[W{d}:{s}] {s}", .{ workerId, id, message }) catch @panic("out of memory writing a log line");
+    }
+    return std.fmt.allocPrint(arena, "[W{d}] {s}", .{ workerId, message }) catch @panic("out of memory writing a log line");
+}
+
+//
+// Gives the text of a failed task's error: the message the handler recorded (the task queue's throwError), or the error's name.
+//
+fn describeError(err: anyerror) ?[]const u8 {
+    return utils.errors.errorMessage(err);
+}
+
+//
+// Frees a task, with the allocator it was made with.
+//
+fn freeTask(allocator: std.mem.Allocator, poolTask: *IPoolTask) void {
+    allocator.free(poolTask.id);
+    allocator.free(poolTask.taskType);
+    allocator.free(poolTask.source);
+    allocator.free(poolTask.dataJson);
+    allocator.destroy(poolTask);
+}
+
+//
+// Frees the sources a list of registrations owns, and the list.
+//
+fn freeList(allocator: std.mem.Allocator, list: anytype) void {
+    for (list.items) |registration| {
+        freeRegistration(allocator, registration);
+    }
+    list.deinit(allocator);
+}
+
+//
+// Frees what a registration owns: its source, and the event type of a typed event registration.
+//
+fn freeRegistration(allocator: std.mem.Allocator, registration: anytype) void {
+    allocator.free(registration.source);
+    if (@TypeOf(registration.callback) == IEventCallbackEntry) {
+        allocator.free(registration.callback.eventType);
+    }
+}
+
+//
+// Removes the registration with the given key from a list, if it is there.
+//
+fn removeKey(allocator: std.mem.Allocator, comptime CallbackT: type, list: *std.ArrayList(Registration(CallbackT)), key: usize) void {
+    for (list.items, 0..) |registration, index| {
+        if (registration.key == key) {
+            freeRegistration(allocator, registration);
+            _ = list.orderedRemove(index);
+            return;
+        }
+    }
+}

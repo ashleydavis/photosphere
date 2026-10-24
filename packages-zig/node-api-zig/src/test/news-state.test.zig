@@ -12,7 +12,6 @@ const state_file = node_api.state_file;
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
 //
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
@@ -44,6 +43,8 @@ fn stateJson(allocator: std.mem.Allocator, state: news_state.INewsState) ![]cons
 }
 
 test "is the state file, not a news.yaml of its own" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -55,6 +56,8 @@ test "is the state file, not a news.yaml of its own" {
 }
 
 test "returns empty state when the file does not exist" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -65,6 +68,8 @@ test "returns empty state when the file does not exist" {
 }
 
 test "returns empty state when the state file has no news section" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -76,6 +81,8 @@ test "returns empty state when the state file has no news section" {
 }
 
 test "returns empty state when the news section is malformed" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -87,6 +94,8 @@ test "returns empty state when the news section is malformed" {
 }
 
 test "parses shown_news_ids from the news section" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -99,6 +108,8 @@ test "parses shown_news_ids from the news section" {
 }
 
 test "parses last_shown_update_version from the news section" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -110,6 +121,8 @@ test "parses last_shown_update_version from the news section" {
 }
 
 test "omits last_shown_update_version when empty string" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -121,6 +134,8 @@ test "omits last_shown_update_version when empty string" {
 }
 
 test "returns empty state when the state file cannot be read at all" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -138,6 +153,8 @@ test "returns empty state when the state file cannot be read at all" {
 }
 
 test "writes shown_news_ids in snake_case under the news section" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -151,6 +168,8 @@ test "writes shown_news_ids in snake_case under the news section" {
 }
 
 test "writes last_shown_update_version when set" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -165,6 +184,8 @@ test "writes last_shown_update_version when set" {
 }
 
 test "leaves every other section of the state file alone" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -182,6 +203,8 @@ test "leaves every other section of the state file alone" {
 }
 
 test "is a no-op for empty input" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -192,6 +215,8 @@ test "is a no-op for empty input" {
 }
 
 test "appends new ids to the existing list" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -203,6 +228,8 @@ test "appends new ids to the existing list" {
 }
 
 test "dedupes ids preserving first-seen order" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -214,6 +241,8 @@ test "dedupes ids preserving first-seen order" {
 }
 
 test "preserves last_shown_update_version when only news ids are added" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -225,6 +254,8 @@ test "preserves last_shown_update_version when only news ids are added" {
 }
 
 test "getLastShownUpdateVersion returns undefined when unset" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -235,6 +266,8 @@ test "getLastShownUpdateVersion returns undefined when unset" {
 }
 
 test "getLastShownUpdateVersion returns the stored version" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -245,6 +278,8 @@ test "getLastShownUpdateVersion returns the stored version" {
 }
 
 test "setLastShownUpdateVersion overwrites the previous value" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -256,6 +291,8 @@ test "setLastShownUpdateVersion overwrites the previous value" {
 }
 
 test "setLastShownUpdateVersion preserves existing shown news ids" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -267,6 +304,8 @@ test "setLastShownUpdateVersion preserves existing shown news ids" {
 }
 
 test "returns the stored list" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -280,6 +319,8 @@ test "returns the stored list" {
 }
 
 test "returns [] when the file does not exist" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -289,6 +330,8 @@ test "returns [] when the file does not exist" {
 }
 
 test "news changes keep every other section of a state file the desktop app wrote" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

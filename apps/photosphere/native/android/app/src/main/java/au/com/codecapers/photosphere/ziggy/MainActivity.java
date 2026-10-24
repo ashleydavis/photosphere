@@ -7,7 +7,7 @@ import android.os.Bundle;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.webkit.WebView;
-import dev.ziggy.nativeapp.ZiggyShell;
+import dev.ziggy.nativeapp.ZiggyNativeApp;
 
 // Photosphere's one screen: a web view run by Ziggy's native app. What is Photosphere's own is the name of its core library,
 // the mobile limits on the core's threads and the process environment the core reads its settings from.
@@ -15,16 +15,16 @@ public final class MainActivity extends Activity {
     // The prefix of the Intent extras that become environment variables of the process.
     private static final String ENVIRONMENT_EXTRA_PREFIX = "PHOTOSPHERE_";
 
-    private ZiggyShell shell;
+    private ZiggyNativeApp nativeApp;
 
     // The web view the page runs in, kept so the back button can step back through the page's history.
     private WebView webView;
 
-    // Asks the user for permissions on behalf of the core.
+    // Requests permissions from the user on behalf of the core.
     private PermissionRequester permissionRequester;
 
-    // Answers the core's host requests.
-    private PhotosphereHostRequests hostRequests;
+    // Handles the core's native calls.
+    private PhotosphereNativeCalls nativeCalls;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,27 +34,27 @@ public final class MainActivity extends Activity {
         setContentView(webView);
         // Eight worker threads: each of the three background loops (import, sync, prefetch) holds one for as long as it runs, and the
         // page's own requests and the tasks the loops start need the rest.
-        shell = new ZiggyShell(this, webView, "photosphere", 8, 2);
+        nativeApp = new ZiggyNativeApp(this, webView, "photosphere", 8, 2);
         permissionRequester = new PermissionRequester(this);
-        hostRequests = new PhotosphereHostRequests(this, permissionRequester);
-        ExportHostRequests exportRequests = new ExportHostRequests(this, shell);
+        nativeCalls = new PhotosphereNativeCalls(this, permissionRequester);
+        ExportNativeCalls exportRequests = new ExportNativeCalls(this, nativeApp);
         exportRequests.sweep();
-        hostRequests.register("exportFile", exportRequests);
-        hostRequests.register("exportFiles", exportRequests);
-        hostRequests.register("exportTempFolder", exportRequests);
-        MediaLibraryHostRequests mediaLibraryRequests = new MediaLibraryHostRequests(this, shell);
+        nativeCalls.register("exportFile", exportRequests);
+        nativeCalls.register("exportFiles", exportRequests);
+        nativeCalls.register("exportTempFolder", exportRequests);
+        MediaLibraryNativeCalls mediaLibraryRequests = new MediaLibraryNativeCalls(this, nativeApp);
         for (String method : new String[] { "mediaLibraryList", "mediaLibraryAlbums", "mediaLibraryOpen", "mediaLibraryClose", "mediaLibraryDelete" }) {
-            hostRequests.register(method, mediaLibraryRequests);
+            nativeCalls.register(method, mediaLibraryRequests);
         }
-        shell.setHostRequestHandler(hostRequests);
+        nativeApp.setNativeCallHandler(nativeCalls);
         // The wording covers every background loop (import, sync and prefetch), because any one of them can be the reason the service is
         // up and the user switches them on separately.
-        shell.setKeepAliveNotification(
+        nativeApp.setKeepAliveNotification(
             "Automatic photo import",
             "Shown while your photos are being backed up in the background.",
             "Backing up your photos",
             "Photosphere is backing up your photos in the background.");
-        shell.start();
+        nativeApp.start();
     }
 
     // Puts into the process environment what the core reads its settings from, which it does when the native app creates it, so
@@ -87,7 +87,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (!shell.onActivityResult(requestCode, resultCode, data)) {
+        if (!nativeApp.onActivityResult(requestCode, resultCode, data)) {
             super.onActivityResult(requestCode, resultCode, data);
         }
     }
@@ -114,15 +114,15 @@ public final class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        shell.onResume();
+        nativeApp.onResume();
     }
 
     @Override
     protected void onDestroy() {
         // A worker waiting for a permission prompt is let go first, so destroying the core does not wait for it for ever.
         permissionRequester.cancelPending();
-        shell.destroy();
-        hostRequests.release();
+        nativeApp.destroy();
+        nativeCalls.release();
         super.onDestroy();
     }
 }

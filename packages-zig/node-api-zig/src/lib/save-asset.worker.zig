@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -14,7 +15,7 @@ const streamAsset = media_file_database.streamAsset;
 // (A cache of these would need a global variable, which this repository avoids, and a task handler is a plain function with
 // no state of its own to keep a cache in. A new storage is made for every call.)
 //
-fn getAssetStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.host_requester.IHostRequester) !IStorage {
+fn getAssetStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !IStorage {
     return createLazyDatabaseStorage(allocator, io, databasePath, null, null, host);
 }
 
@@ -52,6 +53,7 @@ pub const ISaveAssetData = struct {
 pub fn saveAssetHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -61,7 +63,7 @@ pub fn saveAssetHandler(
         return errors.throwError("The save-asset task data is not valid: assetId, assetType, destPath and databasePath must be strings", .{});
     };
 
-    const storage = try getAssetStorage(allocator, io, data.databasePath, context.hostRequester);
+    const storage = try getAssetStorage(allocator, io, data.databasePath, context.nativeCaller);
     const assetStream = try streamAsset(allocator, io, storage, data.assetId, data.assetType);
     defer assetStream.destroy(io);
     const outputFile = try std.Io.Dir.cwd().createFile(io, data.destPath, .{});

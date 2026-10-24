@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -89,6 +90,7 @@ pub const IDatabaseOpenedEvent = struct {
 pub fn createDefaultDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    timers: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -112,12 +114,12 @@ pub fn createDefaultDatabaseHandler(
     // Only made when it is not there. A pass that was killed between making the database and
     // recording it leaves one behind, and create-database refuses a directory that already holds a
     // database, so without this the next pass would fail on it and every pass after that.
-    if (!try checkDatabaseExists(allocator, io, data.databasePath, context.hostRequester)) {
+    if (!try checkDatabaseExists(allocator, io, data.databasePath, context.nativeCaller)) {
         var createData: std.json.ObjectMap = .empty;
         try createData.put(allocator, "databasePath", .{
             .string = data.databasePath,
         });
-        _ = try createDatabaseHandler(allocator, io, .{
+        _ = try createDatabaseHandler(allocator, io, timers, .{
             .object = createData,
         }, context);
     }
@@ -139,7 +141,7 @@ pub fn createDefaultDatabaseHandler(
     try writeConfigData.put(allocator, "autoImport", .{
         .object = autoImportData,
     });
-    _ = try writeConfigHandler(allocator, io, .{
+    _ = try writeConfigHandler(allocator, io, timers, .{
         .object = writeConfigData,
     }, context);
 
@@ -147,7 +149,7 @@ pub fn createDefaultDatabaseHandler(
     try readDatabasesData.put(allocator, "configPath", .{
         .string = data.databasesConfigPath,
     });
-    const databasesConfig = (try readDatabasesConfigHandler(allocator, io, .{
+    const databasesConfig = (try readDatabasesConfigHandler(allocator, io, timers, .{
         .object = readDatabasesData,
     }, context)).object;
     const existingDatabases = databasesConfig.get("databases").?.array.items;
@@ -189,7 +191,7 @@ pub fn createDefaultDatabaseHandler(
         if (databasesConfig.get("lastDatabase")) |lastDatabase| {
             try writeDatabasesData.put(allocator, "lastDatabase", lastDatabase);
         }
-        _ = try writeDatabasesConfigHandler(allocator, io, .{
+        _ = try writeDatabasesConfigHandler(allocator, io, timers, .{
             .object = writeDatabasesData,
         }, context);
     }
@@ -201,7 +203,7 @@ pub fn createDefaultDatabaseHandler(
             .databasePath = data.databasePath,
         };
         const text = try std.json.Stringify.valueAlloc(allocator, openedMessage, .{});
-        context.sendEvent(try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}));
+        context.sendEvent(io, allocator, try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}));
     }
     return .null;
 }

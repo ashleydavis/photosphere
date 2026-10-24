@@ -7,6 +7,7 @@ const utils = @import("utils-zig");
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const lan_share_network = @import("lan-share-network-zig");
+const ziggy = @import("ziggy");
 
 // The paths of the programs this `zig build test` built, handed in by build.zig, so the tests run exactly those
 // rather than whatever was last installed in the shared zig-out.
@@ -607,3 +608,83 @@ pub fn databasesToml(allocator: std.mem.Allocator, name: []const u8, description
         },
     });
 }
+
+//
+// The queues the blocking tasks of a test and the test's own thread talk through: the only thing the worker threads and the test
+// thread both touch. A blocking task posts "started" when it starts and "ended" when it returns to `events`, which the test thread
+// takes from, and runs until the test thread closes `release` or the task's source is cancelled.
+//
+pub const BlockingTaskQueues = struct {
+    // Where the blocking tasks post "started" and "ended", for the test thread.
+    events: ziggy.message_queue.MessageQueue,
+
+    // Closed by the test thread to release every blocking task. Nothing is posted to it.
+    release: ziggy.message_queue.MessageQueue,
+
+    //
+    // Two empty queues.
+    //
+    pub fn init() BlockingTaskQueues {
+        return .{
+            .events = ziggy.message_queue.MessageQueue.init(),
+            .release = ziggy.message_queue.MessageQueue.init(),
+        };
+    }
+
+    //
+    // Frees the queues and makes them empty again, for the next test. No task of an earlier test may still be running.
+    //
+    pub fn reset(self: *BlockingTaskQueues) void {
+        self.events.deinit();
+        self.release.deinit();
+        self.* = init();
+    }
+
+    //
+    // Runs one blocking task, on its worker's thread, with that thread's Io and allocator: says it started, waits until it is
+    // released or cancelled, and says it ended.
+    //
+    pub fn runBlockingTask(self: *BlockingTaskQueues, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_queue.types.ITaskContext) void {
+        self.events.post(io, 0, "{\"type\":\"started\"}") catch @panic("out of memory telling the test a task started");
+        defer self.events.post(io, 0, "{\"type\":\"ended\"}") catch @panic("out of memory telling the test a task ended");
+        while (!context.isCancelled(io, allocator)) {
+            if (self.release.take(io, allocator, .{ .duration = .{ .raw = .fromMilliseconds(2), .clock = .awake } })) |message| {
+                allocator.free(message.text);
+            }
+            if (self.release.isClosed(io)) {
+                return;
+            }
+        }
+    }
+};
+
+//
+// What the test thread has read of the blocking tasks' events: how many are running and the most that ran at once. Only the test
+// thread uses it.
+//
+pub const BlockingTaskCount = struct {
+    // How many blocking tasks are running.
+    running: usize = 0,
+
+    // The most blocking tasks that ran at the same time.
+    maxRunning: usize = 0,
+
+    //
+    // Reads every event waiting in the queue without waiting for one, with the test thread's allocator.
+    //
+    pub fn readEvents(self: *BlockingTaskCount, queues: *BlockingTaskQueues, allocator: std.mem.Allocator) void {
+        while (queues.events.tryTake(std.testing.io, allocator)) |message| {
+            defer allocator.free(message.text);
+            if (std.mem.eql(u8, message.text, "{\"type\":\"started\"}")) {
+                self.running += 1;
+                self.maxRunning = @max(self.maxRunning, self.running);
+            }
+            else if (std.mem.eql(u8, message.text, "{\"type\":\"ended\"}")) {
+                self.running -= 1;
+            }
+            else {
+                std.debug.panic("a blocking task sent an unknown event: {s}", .{message.text});
+            }
+        }
+    }
+};

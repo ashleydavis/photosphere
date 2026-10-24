@@ -132,9 +132,10 @@ const invalid_socket: usize = std.math.maxInt(usize);
 const winsock_pollin: i16 = 0x0100 | 0x0200;
 
 //
-// Set once WSAStartup has succeeded (Windows only).
+// Set once WSAStartup has succeeded on the calling thread (Windows only). Each thread has its own: Winsock counts the calls made for
+// the whole program, so each thread that uses sockets starts it once for itself.
 //
-var winsockStarted = std.atomic.Value(bool).init(false);
+threadlocal var winsockStarted = false;
 
 //
 // An IPv4 address and port.
@@ -186,13 +187,13 @@ fn throwLastError(operation: []const u8) errors.ThrownError {
 }
 
 //
-// Starts Winsock once for the process (Windows only; nothing to do elsewhere).
+// Starts Winsock when nothing has started it yet (Windows only; nothing to do elsewhere). See startSockets.
 //
 fn ensureStarted() !void {
     if (!is_windows) {
         return;
     }
-    if (winsockStarted.load(.acquire)) {
+    if (winsockStarted) {
         return;
     }
     var data: WsaData = undefined;
@@ -200,7 +201,15 @@ fn ensureStarted() !void {
     if (result != 0) {
         return errors.throwError("WSAStartup failed with Winsock error {d}", .{result});
     }
-    winsockStarted.store(true, .release);
+    winsockStarted = true;
+}
+
+//
+// Starts Winsock, once, on the main thread, before any worker starts. A program that never calls it, one with no workers, has it
+// started by its first socket. A failure is left for that socket to report.
+//
+pub fn startSockets() void {
+    ensureStarted() catch {};
 }
 
 //
@@ -370,6 +379,28 @@ pub fn waitReadable(handle: Handle, timeoutMs: i32) !bool {
             return throwLastError("poll");
         }
         return result > 0;
+    }
+}
+
+//
+// Waits up to timeoutMs for a socket to be readable, as waitReadable does, with the time spent on the Io: it looks at the socket
+// without waiting and sleeps a few milliseconds on the Io in turn, until the socket is readable or the time has run out. So a virtual
+// clock moves through the wait, and a cancel of the Io ends it.
+//
+pub fn waitReadableOn(io: std.Io, handle: Handle, timeoutMs: i32) !bool {
+    const deadline = std.Io.Clock.Timestamp.fromNow(io, .{
+        .raw = std.Io.Duration.fromMilliseconds(timeoutMs),
+        .clock = .awake,
+    });
+    while (true) {
+        if (try waitReadable(handle, 0)) {
+            return true;
+        }
+        const remaining_ms = @divTrunc(deadline.durationFromNow(io).raw.nanoseconds, std.time.ns_per_ms);
+        if (remaining_ms <= 0) {
+            return false;
+        }
+        try io.sleep(.fromMilliseconds(@intCast(@min(remaining_ms, 5))), .awake);
     }
 }
 

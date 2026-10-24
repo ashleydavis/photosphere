@@ -1,20 +1,19 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const storage_module = @import("storage.zig");
 const locale_compare = @import("locale-compare.zig");
 
 const errors = utils.errors;
 const log = &utils.log.log;
 const Date = utils.timestamp_provider.Date;
 const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
-const LockFileContent = storage_module.LockFileContent;
-const parseLockContent = storage_module.parseLockContent;
+const IFileInfo = @import("storage.zig").IFileInfo;
+const IListResult = @import("storage.zig").IListResult;
+const IStorage = @import("storage.zig").IStorage;
+const IReadStream = @import("storage.zig").IReadStream;
+const IWriteLockInfo = @import("storage.zig").IWriteLockInfo;
+const LockFileContent = @import("storage.zig").LockFileContent;
+const parseLockContent = @import("storage.zig").parseLockContent;
 const ensureDir = node_utils.fs.ensureDir;
 const pathExists = node_utils.fs.pathExists;
 const remove = node_utils.fs.remove;
@@ -61,7 +60,7 @@ pub const FileStorage = struct {
     // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *FileStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(FileStorage), .location = self.location };
+        return .{ .ptr = self, .vtable = @import("storage.zig").implement(FileStorage), .location = self.location };
     }
 
     //
@@ -343,7 +342,7 @@ pub const FileStorage = struct {
     pub fn acquireWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
 
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
-        const processId = storage_module.processId();
+        const processId = @import("storage.zig").processId();
 
         if (log.verboseEnabled()) {
             log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_ATTEMPT,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
@@ -441,7 +440,7 @@ pub const FileStorage = struct {
         };
 
         if (log.verboseEnabled()) {
-            log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},RELEASE_SUCCESS,{d},unknown,{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), storage_module.processId(), filePath }));
+            log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},RELEASE_SUCCESS,{d},unknown,{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), @import("storage.zig").processId(), filePath }));
         }
     }
 
@@ -452,7 +451,7 @@ pub const FileStorage = struct {
     //
     pub fn refreshWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
-        const processId = storage_module.processId();
+        const processId = @import("storage.zig").processId();
 
         if (log.verboseEnabled()) {
             log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_ATTEMPT,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
@@ -644,7 +643,7 @@ pub const FileReadStream = struct {
     // Gets the IReadStream interface of this stream.
     //
     pub fn readStream(self: *FileReadStream) IReadStream {
-        return .{ .ptr = self, .vtable = storage_module.implementReadStream(FileReadStream) };
+        return .{ .ptr = self, .vtable = @import("storage.zig").implementReadStream(FileReadStream) };
     }
 };
 

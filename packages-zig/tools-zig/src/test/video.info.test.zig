@@ -76,7 +76,7 @@ fn runTool(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
 // fails. It runs the same FFmpeg as Video, so the expected bytes come from the same version of it.
 //
 fn runBuiltInFfmpeg(allocator: std.mem.Allocator, runner: InProcessRunner, arguments: []const []const u8) !void {
-    const result = try runner.run(runner.context, allocator, "ffmpeg", arguments);
+    const result = try runner.run(runner.context, std.testing.io, allocator, "ffmpeg", arguments);
     if (result.exit_code != 0) {
         std.debug.print("ffmpeg failed with exit code {d}\n", .{result.exit_code});
         return error.TestUnexpectedResult;
@@ -103,7 +103,7 @@ fn requireFfmpeg(allocator: std.mem.Allocator, runner: InProcessRunner) !void {
 test "getInfo reads a video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -117,7 +117,7 @@ test "getInfo reads a video" {
 test "getInfo fails for a file that is not a video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -130,7 +130,7 @@ test "getInfo fails for a file that is not a video" {
 test "extractScreenshot writes the frame the ffmpeg command writes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -160,7 +160,7 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
 test "getFileInfo reads images and videos and nothing else" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -202,7 +202,7 @@ fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 test "getInfo reads the creation time of a silent video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -231,7 +231,7 @@ test "getInfo reads the creation time of a silent video" {
 test "getInfo fails for a file with no video stream" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -249,7 +249,7 @@ test "getInfo fails for a file with no video stream" {
 test "getInfo and extractScreenshot fail for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -263,7 +263,7 @@ test "getInfo and extractScreenshot fail for a file that does not exist" {
 test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -279,7 +279,7 @@ test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
 test "getFileInfo fails loudly for a video it cannot read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();

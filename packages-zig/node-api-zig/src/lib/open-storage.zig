@@ -4,7 +4,7 @@ const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
 const resolve_storage_credentials = @import("resolve-storage-credentials.zig");
 const IStorage = storage_zig.storage.IStorage;
-const IHostRequester = utils.host_requester.IHostRequester;
+const INativeCaller = utils.native_caller.INativeCaller;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
 const IStorageOptions = encryption.encryption_types.IStorageOptions;
@@ -68,7 +68,7 @@ pub fn openStorage(
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
-    host: ?IHostRequester,
+    host: ?INativeCaller,
 ) !IOpenStorageResult {
     const credentials = try resolveStorageCredentials(allocator, io, databasePath, encryptionKey, s3Key, host);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);

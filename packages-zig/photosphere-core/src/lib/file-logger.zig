@@ -2,15 +2,15 @@
 // The log of the desktop app, and the message a worker sends to it (WorkerLogMessage). It writes every log line to a log
 // file, and every error, exception and warning to a second file that is only ever written to for those.
 //
-// Writes are queued in memory and a thread appends them to the file, so a call to log never waits for the disk. There is
-// one queue and one thread for each of the two files.
+// The log files belong to the main thread: it is the log of the main thread alone, and each line is appended to its file as it is
+// logged. A worker's lines reach the main thread as messages and are logged there.
 //
 // The caller passes the directory to log in and the app's version as parameters of init, because this file has no way
 // to find them out itself.
 //
 // How it is created: `const file_logger = try FileLogger.init(allocator, io, tool_runner, logs_dir, app_version);` then
-// `utils.log.setLog(file_logger.ilog());`. At shutdown call `try file_logger.close();` (which writes the footers and waits for the
-// queues to drain) and then `file_logger.deinit();`. The logger must outlive every use of the installed ILog.
+// `utils.log.setLog(file_logger.ilog());` on the thread that logs to it. At shutdown call `try file_logger.close();` (which writes the
+// footers) and then `file_logger.deinit();`. The logger must outlive every use of the installed ILog.
 //
 
 const std = @import("std");
@@ -76,21 +76,8 @@ const log_start_marker = "--- Log Start ---";
 const header_read_limit = 1024 * 1024;
 
 //
-// The text waiting to be written to one file, and the thread that is writing it.
-//
-const WriteQueue = struct {
-    // The file the queue is appended to.
-    path: []const u8,
-    // The log lines not yet handed to the writing thread.
-    pending: std.ArrayList(u8),
-    // True while a thread is draining the queue.
-    is_writing: bool,
-    // The thread that is draining the queue, or that last drained it.
-    writer_thread: ?std.Thread,
-};
-
-//
-// Writes the log of the app to files. Make one with init.
+// Writes the log of the app to files. Make one with init. The log files belong to the main thread, which alone writes them: each line
+// is appended to its file as it is logged. A worker's lines reach it as messages.
 //
 pub const FileLogger = struct {
     // Allocates everything the logger owns.
@@ -105,12 +92,6 @@ pub const FileLogger = struct {
     error_log_file: []const u8,
     // When the logger was created, in milliseconds since the Unix epoch.
     start_ms: i64,
-    // Guards everything below.
-    mutex: std.Io.Mutex,
-    // The queue of the log file.
-    log_queue: WriteQueue,
-    // The queue of the error log file.
-    error_queue: WriteQueue,
     // True once close was called, after which nothing more is logged.
     is_closed: bool,
     // True once an error, an exception or a warning has been logged.
@@ -151,19 +132,6 @@ pub const FileLogger = struct {
             .log_file = log_file,
             .error_log_file = error_log_file,
             .start_ms = start_ms,
-            .mutex = .init,
-            .log_queue = .{
-                .path = log_file,
-                .pending = .empty,
-                .is_writing = false,
-                .writer_thread = null,
-            },
-            .error_queue = .{
-                .path = error_log_file,
-                .pending = .empty,
-                .is_writing = false,
-                .writer_thread = null,
-            },
             .is_closed = false,
             .has_errors = false,
         };
@@ -219,8 +187,6 @@ pub const FileLogger = struct {
         self.close() catch |err| {
             reportLoggingFailure("write the end of the log files", err);
         };
-        self.log_queue.pending.deinit(self.allocator);
-        self.error_queue.pending.deinit(self.allocator);
         self.allocator.free(self.logs_dir);
         self.allocator.free(self.log_file);
         self.allocator.free(self.error_log_file);
@@ -248,17 +214,14 @@ pub const FileLogger = struct {
     }
 
     //
-    // Writes the footers, waits for everything queued to be written, and stops accepting messages. Calling it again does nothing.
-    // The first failure to write is returned after every write has been tried.
+    // Writes the footers and stops accepting messages. Calling it again does nothing. The first failure to write is returned after
+    // every write has been tried.
     //
     pub fn close(self: *FileLogger) !void {
-        self.mutex.lockUncancelable(self.io);
         if (self.is_closed) {
-            self.mutex.unlock(self.io);
             return;
         }
         self.is_closed = true;
-        self.mutex.unlock(self.io);
         var arena_state = std.heap.ArenaAllocator.init(self.allocator);
         defer arena_state.deinit();
         const arena = arena_state.allocator();
@@ -280,42 +243,11 @@ pub const FileLogger = struct {
             rule_line,
             "",
         });
-        self.mutex.lockUncancelable(self.io);
-        self.log_queue.pending.appendSlice(self.allocator, footer) catch |err| {
-            self.mutex.unlock(self.io);
-            return err;
-        };
-        self.mutex.unlock(self.io);
-        while (self.isWriting()) {
-            try utils.sleep.sleep(self.io, 10);
-        }
-        self.mutex.lockUncancelable(self.io);
-        const log_content = self.log_queue.pending.toOwnedSlice(self.allocator);
-        const error_content = self.error_queue.pending.toOwnedSlice(self.allocator);
-        const has_errors = self.has_errors;
-        self.mutex.unlock(self.io);
-        const log_text = try log_content;
-        defer self.allocator.free(log_text);
-        const error_text = try error_content;
-        defer self.allocator.free(error_text);
-        if (self.log_queue.writer_thread) |thread| {
-            thread.join();
-            self.log_queue.writer_thread = null;
-        }
-        if (self.error_queue.writer_thread) |thread| {
-            thread.join();
-            self.error_queue.writer_thread = null;
-        }
         var first_error: ?anyerror = null;
-        appendToFile(self.io, self.log_file, log_text) catch |err| {
+        appendToFile(self.io, self.log_file, footer) catch |err| {
             first_error = err;
         };
-        if (error_text.len > 0) {
-            appendToFile(self.io, self.error_log_file, error_text) catch |err| {
-                first_error = first_error orelse err;
-            };
-        }
-        if (has_errors) {
+        if (self.has_errors) {
             appendToFile(self.io, self.error_log_file, error_footer) catch |err| {
                 first_error = first_error orelse err;
             };
@@ -350,8 +282,6 @@ pub const FileLogger = struct {
     // True when any error, exception or warning has been logged.
     //
     pub fn hasLoggedErrors(self: *FileLogger) bool {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
         return self.has_errors;
     }
 
@@ -406,15 +336,6 @@ pub const FileLogger = struct {
     }
 
     //
-    // True while either queue has a thread writing it.
-    //
-    fn isWriting(self: *FileLogger) bool {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        return self.log_queue.is_writing or self.error_queue.is_writing;
-    }
-
-    //
     // Formats a line of a log file: [timestamp] [LEVEL] [source] message, with a newline.
     //
     fn formatEntry(self: *FileLogger, level: []const u8, message: []const u8, source: ?[]const u8) ![]u8 {
@@ -431,76 +352,35 @@ pub const FileLogger = struct {
     }
 
     //
-    // Queues a line for the log file.
+    // Appends a line to the log file. Does nothing once the logger is closed.
     //
     fn writeToFile(self: *FileLogger, level: []const u8, message: []const u8, source: ?[]const u8) !void {
-        const entry = try self.formatEntry(level, message, source);
-        defer self.allocator.free(entry);
-        try self.enqueue(&self.log_queue, entry, false);
+        try self.append(self.log_file, level, message, source, false);
     }
 
     //
-    // Queues a line for the error log file, and notes that there are errors.
+    // Appends a line to the error log file, and records that there are errors. Does nothing once the logger is closed.
     //
     fn writeToErrorFile(self: *FileLogger, level: []const u8, message: []const u8, source: ?[]const u8) !void {
-        const entry = try self.formatEntry(level, message, source);
-        defer self.allocator.free(entry);
-        try self.enqueue(&self.error_queue, entry, true);
+        try self.append(self.error_log_file, level, message, source, true);
     }
 
     //
-    // Adds text to a queue and starts a thread to write it when none is writing. Does nothing once the logger is closed.
+    // Appends a line to a file. A failed write is reported on the console, so a log file that cannot be written does not stop what
+    // was being logged.
     //
-    fn enqueue(self: *FileLogger, queue: *WriteQueue, entry: []const u8, marks_errors: bool) !void {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
+    fn append(self: *FileLogger, path: []const u8, level: []const u8, message: []const u8, source: ?[]const u8, marks_errors: bool) !void {
         if (self.is_closed) {
             return;
         }
         if (marks_errors) {
             self.has_errors = true;
         }
-        try queue.pending.appendSlice(self.allocator, entry);
-        if (queue.is_writing) {
-            return;
-        }
-        // The thread that last drained the queue has finished with the queue (it clears is_writing and returns), so this is quick.
-        if (queue.writer_thread) |previous| {
-            previous.join();
-            queue.writer_thread = null;
-        }
-        queue.is_writing = true;
-        queue.writer_thread = std.Thread.spawn(.{}, drainQueue, .{ self, queue }) catch |err| {
-            queue.is_writing = false;
-            return err;
+        const entry = try self.formatEntry(level, message, source);
+        defer self.allocator.free(entry);
+        appendToFile(self.io, path, entry) catch |err| {
+            utils.console.errorFormat("Photosphere could not write to the log file {s}: {s}", .{ path, @errorName(err) });
         };
-    }
-
-    //
-    // The writing thread: appends what is queued to the file until the queue is empty. A failed write drops that batch
-    // and is reported on the console.
-    //
-    fn drainQueue(self: *FileLogger, queue: *WriteQueue) void {
-        while (true) {
-            self.mutex.lockUncancelable(self.io);
-            const taken = queue.pending.toOwnedSlice(self.allocator) catch |err| {
-                queue.is_writing = false;
-                self.mutex.unlock(self.io);
-                reportLoggingFailure("take the queued log lines", err);
-                return;
-            };
-            if (taken.len == 0) {
-                queue.is_writing = false;
-                self.mutex.unlock(self.io);
-                self.allocator.free(taken);
-                return;
-            }
-            self.mutex.unlock(self.io);
-            appendToFile(self.io, queue.path, taken) catch |err| {
-                utils.console.errorFormat("Photosphere could not write to the log file {s}: {s}", .{ queue.path, @errorName(err) });
-            };
-            self.allocator.free(taken);
-        }
     }
 
     //
@@ -706,30 +586,39 @@ pub const FileLogger = struct {
     //
     fn vtableGetLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!ILogDetails {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
-        const head = try node_utils.fs.readFileHead(allocator, io, self.log_file, header_read_limit);
-        if (std.mem.indexOf(u8, head, log_start_marker)) |marker_at| {
-            return .{
-                .logFilePath = self.log_file,
-                .logHeader = head[0 .. marker_at + log_start_marker.len],
-            };
-        }
-        var end: usize = head.len;
-        var newline_count: usize = 0;
-        for (head, 0..) |character, index| {
-            if (character == '\n') {
-                newline_count += 1;
-                if (newline_count == 50) {
-                    end = index;
-                    break;
-                }
-            }
-        }
-        return .{
-            .logFilePath = self.log_file,
-            .logHeader = head[0..end],
-        };
+        return readLogDetails(allocator, io, self.log_file);
     }
 };
+
+//
+// The details of the log file at the path, as a FileLogger's getLogDetails gives them for its own file: the path and the header, read
+// from the file. For a thread other than the one whose log the FileLogger is (a task that needs the main thread's), which knows the
+// path.
+//
+pub fn readLogDetails(allocator: std.mem.Allocator, io: std.Io, log_file: []const u8) !ILogDetails {
+    const head = try node_utils.fs.readFileHead(allocator, io, log_file, header_read_limit);
+    if (std.mem.indexOf(u8, head, log_start_marker)) |marker_at| {
+        return .{
+            .logFilePath = log_file,
+            .logHeader = head[0 .. marker_at + log_start_marker.len],
+        };
+    }
+    var end: usize = head.len;
+    var newline_count: usize = 0;
+    for (head, 0..) |character, index| {
+        if (character == '\n') {
+            newline_count += 1;
+            if (newline_count == 50) {
+                end = index;
+                break;
+            }
+        }
+    }
+    return .{
+        .logFilePath = log_file,
+        .logHeader = head[0..end],
+    };
+}
 
 //
 // Appends text to a file, creating the file when it is not there (as fs.appendFile does).

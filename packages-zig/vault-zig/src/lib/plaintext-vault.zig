@@ -2,10 +2,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const vault_module = @import("vault.zig");
-const ISecret = vault_module.ISecret;
-const IVault = vault_module.IVault;
-const IPrereqCheckResult = vault_module.IPrereqCheckResult;
+const vault = @import("vault.zig");
+const ISecret = vault.ISecret;
+const IVault = vault.IVault;
+const IPrereqCheckResult = vault.IPrereqCheckResult;
 const errors = utils.errors;
 const updateFileOptimistic = node_utils.fs.updateFileOptimistic;
 

@@ -1,11 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const s3_client = @import("s3-client.zig");
-const storage_module = @import("storage.zig");
 
 const retry = utils.retry.retry;
 const S3Client = s3_client.S3Client;
-const IReadStream = storage_module.IReadStream;
+const IReadStream = @import("storage.zig").IReadStream;
 
 //
 // Chunk sizes to attempt for range requests, in order.
@@ -140,7 +139,7 @@ pub const S3RangeReadableStream = struct {
     // Gets the IReadStream interface of this stream.
     //
     pub fn readStream(self: *S3RangeReadableStream) IReadStream {
-        return .{ .ptr = self, .vtable = storage_module.implementReadStream(S3RangeReadableStream) };
+        return .{ .ptr = self, .vtable = @import("storage.zig").implementReadStream(S3RangeReadableStream) };
     }
 
     //

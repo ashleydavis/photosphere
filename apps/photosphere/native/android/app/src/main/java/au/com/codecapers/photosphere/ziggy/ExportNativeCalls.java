@@ -5,9 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.DocumentsContract;
-import dev.ziggy.nativeapp.HostRequestException;
-import dev.ziggy.nativeapp.HostRequestHandler;
-import dev.ziggy.nativeapp.ZiggyShell;
+import dev.ziggy.nativeapp.NativeCallException;
+import dev.ziggy.nativeapp.NativeCallHandler;
+import dev.ziggy.nativeapp.ZiggyNativeApp;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -19,18 +19,18 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-// Hands finished files out of the app: exportFile asks the user where to save one file, exportFiles asks which folder to put several
+// Hands finished files out of the app: exportFile lets the user pick where to save one file, exportFiles the folder to put several
 // in. The download has already written the bytes under the app's files directory at the sandbox-relative paths in the request. Every
 // exit, whether the files were saved, the user backed out or the copy failed, removes the temporary copies. The core calls from a
 // worker thread and waits, so a request may block on the system's picker.
-public final class ExportHostRequests implements HostRequestHandler {
+public final class ExportNativeCalls implements NativeCallHandler {
     private final Context context;
-    private final ZiggyShell shell;
+    private final ZiggyNativeApp nativeApp;
     private final File storageRoot;
 
-    public ExportHostRequests(Context context, ZiggyShell shell) {
+    public ExportNativeCalls(Context context, ZiggyNativeApp nativeApp) {
         this.context = context;
-        this.shell = shell;
+        this.nativeApp = nativeApp;
         this.storageRoot = context.getFilesDir();
     }
 
@@ -40,7 +40,7 @@ public final class ExportHostRequests implements HostRequestHandler {
     }
 
     @Override
-    public String handle(String method, String requestJson) throws HostRequestException {
+    public String handle(String method, String requestJson) throws NativeCallException {
         try {
             JSONObject request = new JSONObject(requestJson);
             if (method.equals("exportFile")) {
@@ -53,27 +53,27 @@ public final class ExportHostRequests implements HostRequestHandler {
                 return exportFiles(readPaths(request.getJSONArray("paths")), request.optString("testOutcome", null));
             }
         } catch (JSONException error) {
-            throw new HostRequestException("The request " + method + " was not understood: " + error.getMessage(), error);
+            throw new NativeCallException("The request " + method + " was not understood: " + error.getMessage(), error);
         }
-        throw new HostRequestException("ExportHostRequests does not answer \"" + method + "\".");
+        throw new NativeCallException("ExportNativeCalls does not handle \"" + method + "\".");
     }
 
-    // Makes the folder one export's files are written into, so the save task can create files in it, and says where it is.
-    private String exportTempFolder(String folder) throws HostRequestException, JSONException {
+    // Makes the folder one export's files are written into, so the save task can create files in it, and returns its path.
+    private String exportTempFolder(String folder) throws NativeCallException, JSONException {
         try {
             File made = ExportTemp.prepareFolder(storageRoot, folder);
             return new JSONObject().put("path", made.getAbsolutePath()).toString();
         } catch (SecurityException error) {
-            throw new HostRequestException("exportTempFolder: " + error.getMessage(), error);
+            throw new NativeCallException("exportTempFolder: " + error.getMessage(), error);
         } catch (IOException error) {
-            throw new HostRequestException("exportTempFolder: " + error.getMessage(), error);
+            throw new NativeCallException("exportTempFolder: " + error.getMessage(), error);
         }
     }
 
     // Lets the user choose a destination for one file, copies it there and removes the temporary copy.
     // A request carrying a test outcome skips the picker and goes straight to the completion path, because the picker cannot be
-    // answered by an automated test.
-    private String exportFile(String path, String testOutcome) throws HostRequestException, JSONException {
+    // operated by an automated test.
+    private String exportFile(String path, String testOutcome) throws NativeCallException, JSONException {
         File temp = resolve(path, "exportFile");
         try {
             if (testOutcome != null) {
@@ -92,7 +92,7 @@ public final class ExportHostRequests implements HostRequestHandler {
             String exported = ExportTemp.finishExport(storageRoot, path, cancelled);
             return new JSONObject().put("path", exported == null ? JSONObject.NULL : exported).toString();
         } catch (IOException error) {
-            throw new HostRequestException("exportFile: failed to write destination: " + error.getMessage(), error);
+            throw new NativeCallException("exportFile: failed to write destination: " + error.getMessage(), error);
         } finally {
             ExportTemp.deleteTemp(storageRoot, path);
         }
@@ -100,7 +100,7 @@ public final class ExportHostRequests implements HostRequestHandler {
 
     // Lets the user choose a folder, copies every file into it and removes the temporary copies.
     // A request carrying a test outcome skips the picker, as for exportFile.
-    private String exportFiles(List<String> paths, String testOutcome) throws HostRequestException, JSONException {
+    private String exportFiles(List<String> paths, String testOutcome) throws NativeCallException, JSONException {
         try {
             for (String path : paths) {
                 resolve(path, "exportFiles");
@@ -124,7 +124,7 @@ public final class ExportHostRequests implements HostRequestHandler {
             }
             return reply.toString();
         } catch (IOException error) {
-            throw new HostRequestException("exportFiles: failed to write destination: " + error.getMessage(), error);
+            throw new NativeCallException("exportFiles: failed to write destination: " + error.getMessage(), error);
         } finally {
             for (String path : paths) {
                 ExportTemp.deleteTemp(storageRoot, path);
@@ -133,23 +133,23 @@ public final class ExportHostRequests implements HostRequestHandler {
     }
 
     // Confirms a temporary file is inside the sandbox before anything is shown.
-    private File resolve(String path, String method) throws HostRequestException {
+    private File resolve(String path, String method) throws NativeCallException {
         try {
             return PathSandbox.resolveWithin(storageRoot, path);
         } catch (SecurityException error) {
-            throw new HostRequestException(method + ": " + error.getMessage(), error);
+            throw new NativeCallException(method + ": " + error.getMessage(), error);
         }
     }
 
     // Shows the system's picker and waits. Null means the user backed out.
-    private Intent start(Intent intent, String method) throws HostRequestException {
+    private Intent start(Intent intent, String method) throws NativeCallException {
         try {
-            return shell.startActivityAndWait(intent);
+            return nativeApp.startActivityAndWait(intent);
         } catch (ActivityNotFoundException error) {
-            throw new HostRequestException(method + ": nothing on this device can show the save picker.", error);
+            throw new NativeCallException(method + ": nothing on this device can show the save picker.", error);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new HostRequestException(method + ": the save picker was interrupted.", interrupted);
+            throw new NativeCallException(method + ": the save picker was interrupted.", interrupted);
         }
     }
 

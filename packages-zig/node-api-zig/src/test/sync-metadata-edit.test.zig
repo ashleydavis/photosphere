@@ -177,7 +177,6 @@ fn expectEditReachesTheOrigin(partial: bool, editClockOffsetMs: i64, originDescr
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
     var capture: sync_helpers.Capture = undefined;
     capture.start(allocator);
     defer capture.stop();
@@ -189,14 +188,20 @@ fn expectEditReachesTheOrigin(partial: bool, editClockOffsetMs: i64, originDescr
 }
 
 test "a description set on a full replica reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try expectEditReachesTheOrigin(false, 0, null);
 }
 
 test "a description set on a partial replica reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try expectEditReachesTheOrigin(true, 0, null);
 }
 
 test "a description set on a device whose clock is behind still reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     // The emulator the mobile suite runs on was measured 30 seconds behind the host that wrote
     // the origin. The edit is made a minute after the origin, so even 30 seconds behind it is
     // still the later write and must win.
@@ -204,6 +209,8 @@ test "a description set on a device whose clock is behind still reaches the orig
 }
 
 test "a description set on a device whose clock is far behind still reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     // The failure this guards against is silent: last-write-wins compares timestamps taken from
     // two different machines' clocks, so a device far enough behind loses an edit it genuinely
     // made later, and the sync still reports that it pushed changes.
@@ -218,14 +225,20 @@ test "a description set on a device whose clock is far behind still reaches the 
 // These are the cases test 45 actually exercises.
 
 test "a description set over an empty one reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try expectEditReachesTheOrigin(true, 0, "");
 }
 
 test "a description set over an empty one on a device whose clock is behind reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try expectEditReachesTheOrigin(true, -30_000, "");
 }
 
 test "a description set over an empty one on a device whose clock is far behind reaches the origin" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     // This is smoke test 45's failure, reproduced on the host in a second. The device edits the
     // description a minute after the origin was written, but its clock is far enough behind that
     // the edit is stamped earlier than the origin's record, so the origin's empty string wins and

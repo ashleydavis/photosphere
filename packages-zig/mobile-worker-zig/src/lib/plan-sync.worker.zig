@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -191,6 +192,7 @@ fn refuse(reason: []const u8, settings: ISyncSettings, pauseBetweenRunsMs: std.j
 pub fn planSyncHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     data: std.json.Value,
     context: ITaskContext,
     host: INetworkStatusHost,
@@ -209,7 +211,7 @@ pub fn planSyncHandler(
         return toJsonValue(allocator, refuse("syncing is switched off", settings, pauseBetweenRunsMs));
     }
 
-    const connectionType = try readNetworkConnectionType(allocator, host);
+    const connectionType = try readNetworkConnectionType(io, allocator, host);
 
     // The same rule the interface applies, from the same function. "connected" is derived from the
     // connection type rather than asked for separately: the platform reports one thing here, and a
@@ -259,7 +261,7 @@ pub fn planSyncHandler(
     // A database with no origin has nowhere to sync to. The sync task itself would skip it, having
     // paid for an engine slot and a database open to find that out, and it would say so every pass
     // for as long as the phone was switched on.
-    const opened = try openStorage(allocator, io, databasePath.?, null, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, databasePath.?, null, null, context.nativeCaller);
     const databaseConfig = try loadDatabaseConfig(allocator, io, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" has no origin to sync to", .{databasePath.?}), settings, pauseBetweenRunsMs));

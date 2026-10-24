@@ -12,7 +12,6 @@ const IAppState = app_state.IAppState;
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
 //
 fn freshConfigDir(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const configDir = try std.fs.path.join(allocator, &.{ dir, "config" });
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
@@ -113,6 +112,8 @@ const FailingMutator = struct {
 // absent, and loading it does not create one.
 //
 test "loadAppState returns an empty state when no file exists and writes nothing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -132,6 +133,8 @@ test "loadAppState returns an empty state when no file exists and writes nothing
 // The snake_case keys of the document come back as the camelCase fields.
 //
 test "loadAppState converts snake_case document keys to camelCase fields" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -167,6 +170,8 @@ test "loadAppState converts snake_case document keys to camelCase fields" {
 // overwrite.
 //
 test "loadAppState throws when the file cannot be parsed" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -182,6 +187,8 @@ test "loadAppState throws when the file cannot be parsed" {
 // updateLastFolder sets desktop.last_folder and saves.
 //
 test "updateLastFolder sets lastFolder and saves" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -199,6 +206,8 @@ test "updateLastFolder sets lastFolder and saves" {
 // With no state file the edit creates one.
 //
 test "updateLastFolder creates the state file when there is none" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -215,6 +224,8 @@ test "updateLastFolder creates the state file when there is none" {
 // updateLastDownloadFolder sets desktop.last_download_folder and saves.
 //
 test "updateLastDownloadFolder sets lastDownloadFolder and saves" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -232,6 +243,8 @@ test "updateLastDownloadFolder sets lastDownloadFolder and saves" {
 // updateAppState writes devToolsOpen to dev_tools_open.
 //
 test "updateAppState writes devToolsOpen to dev_tools_open and loadAppState reads it back" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -250,6 +263,8 @@ test "updateAppState writes devToolsOpen to dev_tools_open and loadAppState read
 // The gallery view state is written with snake_case keys under gallery.
 //
 test "updateAppState writes the gallery view state with snake_case keys under gallery" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -267,6 +282,8 @@ test "updateAppState writes the gallery view state with snake_case keys under ga
 // A row height that is not a number is dropped rather than handed to the interface.
 //
 test "loadAppState drops a gallery row height that is not a number" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -282,6 +299,8 @@ test "loadAppState drops a gallery row height that is not a number" {
 // A mutator that throws leaves the file as it was, and the caller gets its error.
 //
 test "updateAppState leaves the file alone when the mutator throws" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -302,6 +321,8 @@ test "updateAppState leaves the file alone when the mutator throws" {
 // key takes it off the disk.
 //
 test "updateAppState stores keys by name, and clearing a key removes it from the file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -346,6 +367,8 @@ test "updateAppState stores keys by name, and clearing a key removes it from the
 // A value a key cannot hold fails the edit with the key named, and writes nothing.
 //
 test "updateAppState refuses a value a key cannot hold and writes nothing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -370,6 +393,8 @@ test "updateAppState refuses a value a key cannot hold and writes nothing" {
 // An edit keeps what it does not own, and two edits in turn both survive.
 //
 test "updateAppState keeps the news state and the other keys across edits" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -390,6 +415,8 @@ test "updateAppState keeps the news state and the other keys across edits" {
 // With no recent searches stored the list is empty.
 //
 test "getRecentSearches returns an empty list when recent is unset" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -405,6 +432,8 @@ test "getRecentSearches returns an empty list when recent is unset" {
 // The stored list comes back in order.
 //
 test "getRecentSearches returns the stored list" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -424,6 +453,8 @@ test "getRecentSearches returns the stored list" {
 // A search already in the list moves to the front rather than appearing twice.
 //
 test "addRecentSearch deduplicates and prepends" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -441,6 +472,8 @@ test "addRecentSearch deduplicates and prepends" {
 // A new search goes at the front.
 //
 test "addRecentSearch prepends a new search at the front" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -458,6 +491,8 @@ test "addRecentSearch prepends a new search at the front" {
 // The list keeps only MAX_RECENT_SEARCHES entries, dropping the oldest.
 //
 test "addRecentSearch caps the list at MAX_RECENT_SEARCHES entries" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -486,6 +521,8 @@ test "addRecentSearch caps the list at MAX_RECENT_SEARCHES entries" {
 // With no file the first search creates the list.
 //
 test "addRecentSearch starts the list when nothing is stored" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -502,6 +539,8 @@ test "addRecentSearch starts the list when nothing is stored" {
 // removeRecentSearch filters out the given search.
 //
 test "removeRecentSearch filters out the given search" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -519,6 +558,8 @@ test "removeRecentSearch filters out the given search" {
 // Removing a search that is not in the list leaves the list as it was.
 //
 test "removeRecentSearch leaves the list alone when the search is not in it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -536,6 +577,8 @@ test "removeRecentSearch leaves the list alone when the search is not in it" {
 // Each key a folder picker is allowed to use comes back as itself.
 //
 test "asFolderStateKey returns each of the keys a folder picker is allowed to use" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     for (app_state.FOLDER_STATE_KEYS) |folderKey| {
         try std.testing.expectEqual(folderKey, try app_state.asFolderStateKey(@tagName(folderKey)));
     }
@@ -545,6 +588,8 @@ test "asFolderStateKey returns each of the keys a folder picker is allowed to us
 // A key the state does not hold is refused, and the message names the keys it does accept so it says how to fix it.
 //
 test "asFolderStateKey throws on a key the state does not hold and names the keys it accepts" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try std.testing.expectError(error.Thrown, app_state.asFolderStateKey("lastFolde"));
     try std.testing.expectEqualStrings(
         "Unknown folder state key \"lastFolde\". Expected one of: lastFolder, lastDownloadFolder.",
@@ -562,6 +607,8 @@ test "asFolderStateKey throws on a key the state does not hold and names the key
 // An empty key is refused rather than treated as the default.
 //
 test "asFolderStateKey throws on an empty key" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try std.testing.expectError(error.Thrown, app_state.asFolderStateKey(""));
     try std.testing.expectEqualStrings(
         "Unknown folder state key \"\". Expected one of: lastFolder, lastDownloadFolder.",
@@ -573,6 +620,8 @@ test "asFolderStateKey throws on an empty key" {
 // The folder remembered under each key comes back for that key.
 //
 test "getFolderPath reads the folder remembered under the given key" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -589,6 +638,8 @@ test "getFolderPath reads the folder remembered under the given key" {
 // Nothing remembered under a key, or no file at all, reads as undefined.
 //
 test "getFolderPath returns undefined when nothing is remembered under the key or there is no file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -607,6 +658,8 @@ test "getFolderPath returns undefined when nothing is remembered under the key o
 // different error.
 //
 test "getFolderPath throws on an unknown key without reading the file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -627,6 +680,8 @@ test "getFolderPath throws on an unknown key without reading the file" {
 // The chosen folder is written under the key it was chosen for.
 //
 test "updateFolderPath writes the chosen folder under the given key" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -644,6 +699,8 @@ test "updateFolderPath writes the chosen folder under the given key" {
 // The folder previously remembered under the key is replaced.
 //
 test "updateFolderPath replaces the folder previously remembered under that key" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -662,6 +719,8 @@ test "updateFolderPath replaces the folder previously remembered under that key"
 // contents rather than a copy read before the dialog opened.
 //
 test "updateFolderPath leaves everything else alone" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -681,6 +740,8 @@ test "updateFolderPath leaves everything else alone" {
 // An unknown key writes nothing, not even an empty state file.
 //
 test "updateFolderPath throws on an unknown key and writes nothing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -698,6 +759,8 @@ test "updateFolderPath throws on an unknown key and writes nothing" {
 }
 
 test "getStatePath returns a string ending with state.yaml, beside the config file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -712,6 +775,8 @@ test "getStatePath returns a string ending with state.yaml, beside the config fi
 }
 
 test "getFolderPath returns undefined when there is no state file at all" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -724,6 +789,8 @@ test "getFolderPath returns undefined when there is no state file at all" {
 }
 
 test "asFolderStateKey names the keys it does accept, so the message says how to fix it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try std.testing.expectError(error.Thrown, app_state.asFolderStateKey("nonsense"));
 
     const message = utils.errors.lastErrorMessage();

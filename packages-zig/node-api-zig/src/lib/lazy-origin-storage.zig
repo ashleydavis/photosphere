@@ -1,18 +1,11 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 
-const storage_module = storage_zig.storage;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
-
-//
-// How many bytes of a file fetched from the origin may wait for the local cache write before the reader waits for
-// it (16 KiB).
-//
-const CACHE_PIPE_CAPACITY = 16 * 1024;
+const IStorage = storage_zig.storage.IStorage;
+const IReadStream = storage_zig.storage.IReadStream;
+const IFileInfo = storage_zig.storage.IFileInfo;
+const IListResult = storage_zig.storage.IListResult;
+const IWriteLockInfo = storage_zig.storage.IWriteLockInfo;
 
 //
 // A storage wrapper that transparently fetches missing files from an origin storage
@@ -53,7 +46,7 @@ pub const LazyOriginStorage = struct {
     // Its location is the local storage's location.
     //
     pub fn storage(self: *LazyOriginStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(LazyOriginStorage), .location = self.local.location };
+        return .{ .ptr = self, .vtable = storage_zig.storage.implement(LazyOriginStorage), .location = self.local.location };
     }
 
     //
@@ -144,14 +137,14 @@ pub const LazyOriginStorage = struct {
     }
 
     //
-    // Streams a file from local storage. If the file is absent locally, fetches it from
-    // origin using a tee stream: one branch writes to the local cache, the other is
-    // returned to the caller. The origin stream is never fully buffered in memory, which
-    // is required for large files such as 7 GB videos.
+    // Streams a file from local storage. If the file is absent locally, fetches it from origin into the local cache first and then
+    // streams the cached copy. The origin stream is never fully buffered in memory, which is required for large files such as 7 GB
+    // videos.
     //
     // Cache write errors are non-fatal — the caller's stream is unaffected.
-    // (Zig: the cache write runs concurrently and destroying the returned stream waits for it to finish. When the cache
-    // write fails, the tee stops feeding the cache and hands the caller the whole file.)
+    // (Zig: in TypeScript a tee writes the cache while the caller reads. Writing the cache and reading the file side by side takes two
+    // threads, or one thread switching between them, and a task runs only on its own thread, so the file is cached first. When the
+    // cache write fails, the caller is given the origin's stream instead.)
     //
     pub fn readStream(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
         if (try self.local.fileExists(allocator, io, filePath)) {
@@ -159,27 +152,17 @@ pub const LazyOriginStorage = struct {
         }
 
         const originStream = try self.origin.readStream(allocator, io, filePath);
-        const teeStream = try allocator.create(TeeStream);
-        teeStream.* = .{
-            .allocator = allocator,
-            .io = io,
-            .originStream = originStream,
-            .cachePipe = .{ .io = io },
-            .interface = .{
-                .vtable = &.{ .stream = TeeStream.streamFunction },
-                .buffer = try allocator.alloc(u8, CACHE_PIPE_CAPACITY),
-                .seek = 0,
-                .end = 0,
-            },
-            .cacheWrite = undefined,
+        const cached = cached: {
+            defer originStream.destroy(io);
+            self.local.writeStream(allocator, io, filePath, null, originStream.reader(), null) catch {
+                break :cached false;
+            };
+            break :cached true;
         };
-
-        //
-        // Cache in the background; errors are swallowed so the caller is not affected.
-        //
-        teeStream.cacheWrite = try io.concurrent(writeCache, .{ self.local, io, try allocator.dupe(u8, filePath), &teeStream.cachePipe });
-
-        return .{ .ptr = teeStream, .vtable = &TeeStream.read_stream_vtable };
+        if (cached) {
+            return self.local.readStream(allocator, io, filePath);
+        }
+        return self.origin.readStream(allocator, io, filePath);
     }
 
     //
@@ -236,192 +219,5 @@ pub const LazyOriginStorage = struct {
     //
     pub fn refreshWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
         try self.local.refreshWriteLock(allocator, io, filePath, owner);
-    }
-};
-
-//
-// Writes the cache branch of a tee to local storage. A failure to write is ignored. Runs concurrently with the
-// caller's reads, with its own allocator because the caller's is not shared between threads.
-//
-fn writeCache(local: IStorage, io: std.Io, filePath: []const u8, cachePipe: *CachePipe) void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    local.writeStream(arena.allocator(), io, filePath, null, &cachePipe.interface, null) catch {};
-    cachePipe.finishReading();
-}
-
-//
-// The cache branch of a tee: a bounded queue of bytes that the caller's
-// reads push into and the cache write reads from.
-//
-const CachePipe = struct {
-    // The io the queue waits with.
-    io: std.Io,
-
-    // Guards every field below.
-    mutex: std.Io.Mutex = .init,
-
-    // Signalled when bytes are added, taken, or the pipe ends.
-    changed: std.Io.Condition = .init,
-
-    // The bytes waiting for the cache write.
-    queue: [CACHE_PIPE_CAPACITY]u8 = undefined,
-
-    // How many bytes of queue are filled.
-    queued: usize = 0,
-
-    // True when the origin stream ended.
-    ended: bool = false,
-
-    // True when the caller's stream failed or was destroyed early.
-    failed: bool = false,
-
-    // True when the cache write has stopped reading (it finished or failed), so pushes are dropped.
-    readerDone: bool = false,
-
-    // The reader the cache write reads from.
-    interface: std.Io.Reader = .{
-        .vtable = &.{ .stream = streamFunction },
-        .buffer = &.{},
-        .seek = 0,
-        .end = 0,
-    },
-
-    //
-    // Adds bytes for the cache write, waiting while the queue is full (the origin is paused until it drains).
-    //
-    fn push(self: *CachePipe, data: []const u8) void {
-        var remaining = data;
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        while (remaining.len > 0) {
-            while (self.queued == self.queue.len and !self.readerDone) {
-                self.changed.waitUncancelable(self.io, &self.mutex);
-            }
-            if (self.readerDone) {
-                return;
-            }
-            const count = @min(remaining.len, self.queue.len - self.queued);
-            @memcpy(self.queue[self.queued .. self.queued + count], remaining[0..count]);
-            self.queued += count;
-            remaining = remaining[count..];
-            self.changed.broadcast(self.io);
-        }
-    }
-
-    //
-    // Ends the cache branch: normally at the end of the origin stream, or with a failure.
-    //
-    fn finish(self: *CachePipe, failed: bool) void {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        if (!self.ended) {
-            self.ended = true;
-            self.failed = failed;
-        }
-        self.changed.broadcast(self.io);
-    }
-
-    //
-    // Records that the cache write stopped reading.
-    //
-    fn finishReading(self: *CachePipe) void {
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        self.readerDone = true;
-        self.changed.broadcast(self.io);
-    }
-
-    //
-    // The std.Io.Reader stream function of the cache branch.
-    //
-    fn streamFunction(reader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
-        const self: *CachePipe = @alignCast(@fieldParentPtr("interface", reader));
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
-        while (self.queued == 0 and !self.ended) {
-            self.changed.waitUncancelable(self.io, &self.mutex);
-        }
-        if (self.failed) {
-            return error.ReadFailed;
-        }
-        if (self.queued == 0) {
-            return error.EndOfStream;
-        }
-        const count = try writer.write(limit.sliceConst(self.queue[0..self.queued]));
-        std.mem.copyForwards(u8, self.queue[0 .. self.queued - count], self.queue[count..self.queued]);
-        self.queued -= count;
-        self.changed.broadcast(self.io);
-        return count;
-    }
-};
-
-//
-// The caller's branch of a tee: reads the origin stream and hands each
-// chunk to the cache branch as well.
-//
-const TeeStream = struct {
-    // Allocates the stream.
-    allocator: std.mem.Allocator,
-
-    // The io of the read.
-    io: std.Io,
-
-    // The stream of the file in the origin storage.
-    originStream: IReadStream,
-
-    // The cache branch.
-    cachePipe: CachePipe,
-
-    // The reader the caller reads from.
-    interface: std.Io.Reader,
-
-    // The concurrent cache write.
-    cacheWrite: std.Io.Future(void),
-
-    //
-    // The IReadStream functions of the caller's branch.
-    //
-    const read_stream_vtable: IReadStream.VTable = .{
-        .reader = readerFunction,
-        .destroy = destroyFunction,
-    };
-
-    //
-    // Gets the caller's reader.
-    //
-    fn readerFunction(ptr: *anyopaque) *std.Io.Reader {
-        const self: *TeeStream = @ptrCast(@alignCast(ptr));
-        return &self.interface;
-    }
-
-    //
-    // Ends the cache branch (as a failure when the origin was not read to its end), waits for the cache write and
-    // releases the origin stream.
-    //
-    fn destroyFunction(ptr: *anyopaque, io: std.Io) void {
-        const self: *TeeStream = @ptrCast(@alignCast(ptr));
-        self.cachePipe.finish(true);
-        self.cacheWrite.await(io);
-        self.originStream.destroy(io);
-    }
-
-    //
-    // The std.Io.Reader stream function of the caller's branch: forwards data from origin to both branches.
-    //
-    fn streamFunction(reader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
-        const self: *TeeStream = @alignCast(@fieldParentPtr("interface", reader));
-        const destination = limit.slice(try writer.writableSliceGreedy(1));
-        const count = self.originStream.reader().readSliceShort(destination) catch {
-            self.cachePipe.finish(true);
-            return error.ReadFailed;
-        };
-        if (count == 0) {
-            self.cachePipe.finish(false);
-            return error.EndOfStream;
-        }
-        self.cachePipe.push(destination[0..count]);
-        writer.advance(count);
-        return count;
     }
 };

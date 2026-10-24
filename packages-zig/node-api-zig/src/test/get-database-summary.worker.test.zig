@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -16,7 +17,7 @@ const RecordingTaskContext = recording_task_context.RecordingTaskContext;
 fn run(allocator: std.mem.Allocator, io: std.Io, context: *RecordingTaskContext, databasePath: []const u8) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .string = databasePath });
-    return getDatabaseSummaryHandler(allocator, io, .{ .object = object }, context.taskContext());
+    return getDatabaseSummaryHandler(allocator, io, test_timers.timers(), .{ .object = object }, context.taskContext());
 }
 
 test "opens storage at the requested database path and returns the summary computed against it" {
@@ -24,7 +25,8 @@ test "opens storage at the requested database path and returns the summary compu
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "50-assets");
@@ -55,7 +57,8 @@ test "opens storage at the requested database path" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "50-assets");
@@ -72,7 +75,8 @@ test "computes the summary against the opened storage" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "50-assets");
@@ -90,7 +94,8 @@ test "returns the summary produced by getDatabaseSummary" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "50-assets");
@@ -110,7 +115,8 @@ test "leaves out the hashes a database that holds no files does not have" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "no-assets");
@@ -129,7 +135,8 @@ test "throws when databasePath is empty" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
@@ -142,11 +149,12 @@ test "throws when the task data has no database path" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    try std.testing.expectError(error.Thrown, getDatabaseSummaryHandler(allocator, io, .{ .object = .empty }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, getDatabaseSummaryHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
@@ -155,13 +163,14 @@ test "throws a descriptive error when the database path is not a string" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, getDatabaseSummaryHandler(allocator, io, .{ .object = object }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, getDatabaseSummaryHandler(allocator, io, test_timers.timers(), .{ .object = object }, context.taskContext()));
     try std.testing.expectEqualStrings("The get-database-summary task data is not valid: databasePath must be a string", errors.lastErrorMessage());
 }
 
@@ -170,7 +179,8 @@ test "throws when no database lives at the path" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "get-database-summary-empty");

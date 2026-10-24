@@ -1,7 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
+const ziggy = @import("ziggy");
+const MessageQueue = ziggy.message_queue.MessageQueue;
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
@@ -30,6 +33,9 @@ fn makeEntry(allocator: std.mem.Allocator, logicalPath: []const u8, source: Impo
 // What each test works in.
 //
 const RecordTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -47,7 +53,7 @@ const RecordTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         self.runRoot = try temp_dirs.makeTempDir(allocator, io, "import-record-test");
         try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ self.runRoot, "cache" }));
         self.databasePath = try std.fs.path.join(allocator, &.{ self.runRoot, "photos" });
@@ -62,6 +68,7 @@ const RecordTest = struct {
         };
         temp_dirs.removeTempDir(std.testing.io, self.runRoot);
         self.arena.deinit();
+        self.test_env.deinit();
     }
 };
 
@@ -263,19 +270,47 @@ test "the record stays capped across many imports" {
 }
 
 //
-// One of the concurrent writers of the test below.
+// What the test below tells one writer, as the JSON text of its first message: the database and the environment, which says where the
+// record is kept.
 //
-fn recordOneWriter(databasePath: []const u8, index: usize) void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+const IWriterStart = struct {
+    // The database the writer records into.
+    databasePath: []const u8,
+
+    // The test's environment, as a JSON object of names and values.
+    environment: std.json.Value,
+};
+
+//
+// One of the concurrent writers of the test below. It makes its own allocator and Io, and reads the database and the environment from
+// the message the test posted to its queue, so it shares nothing with the test thread but the queue.
+//
+fn recordOneWriter(index: usize, queue: *MessageQueue) void {
+    var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
+    var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
     defer arena.deinit();
     const allocator = arena.allocator();
+    const message = queue.take(io, allocator, .none).?;
+    const start = std.json.parseFromSliceLeaky(IWriterStart, allocator, message.text, .{}) catch |err| {
+        std.debug.panic("A writer could not read its start message: {s}", .{@errorName(err)});
+    };
+    var own_environment = ziggy.worker.environmentFromJson(allocator, start.environment) catch |err| {
+        std.debug.panic("A writer could not read the environment: {s}", .{@errorName(err)});
+    };
+    node_utils.process_env.setEnvironMap(&own_environment);
+    defer node_utils.process_env.setEnvironMap(null);
     const logicalPath = std.fmt.allocPrint(allocator, "writer-{d}", .{index}) catch |err| {
         std.debug.panic("A writer could not name its entry: {s}", .{@errorName(err)});
     };
     const entry = makeEntry(allocator, logicalPath, .manual) catch |err| {
         std.debug.panic("A writer could not make its entry: {s}", .{@errorName(err)});
     };
-    recordImports(allocator, std.testing.io, databasePath, &.{entry});
+    recordImports(allocator, io, start.databasePath, &.{entry});
 }
 
 test "writers into one database at the same time all survive" {
@@ -289,9 +324,23 @@ test "writers into one database at the same time all survive" {
     // read-modify-write loses all but the last of these, because each reads the same record
     // before any of them has written.
     const writerCount = 8;
+    const startText = try std.json.Stringify.valueAlloc(allocator, IWriterStart{
+        .databasePath = context.databasePath,
+        .environment = try ziggy.worker.environmentJson(allocator, test_environment.getEnvironment()),
+    }, .{});
+    var queues: [writerCount]MessageQueue = undefined;
+    for (&queues) |*queue| {
+        queue.* = MessageQueue.init();
+    }
+    defer {
+        for (&queues) |*queue| {
+            queue.deinit();
+        }
+    }
     var threads: [writerCount]std.Thread = undefined;
-    for (&threads, 0..) |*thread, index| {
-        thread.* = try std.Thread.spawn(.{}, recordOneWriter, .{ context.databasePath, index });
+    for (&threads, &queues, 0..) |*thread, *queue, index| {
+        try queue.post(io, 0, startText);
+        thread.* = try std.Thread.spawn(.{}, recordOneWriter, .{ index, queue });
     }
     for (threads) |thread| {
         thread.join();

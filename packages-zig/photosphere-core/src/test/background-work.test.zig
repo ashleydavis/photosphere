@@ -1,20 +1,22 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
+const Timers = @import("ziggy").timers.Timers;
 const background_work = @import("photosphere-core").background_work;
 
-const PassHost = background_work.PassHost;
+const PassServices = background_work.PassServices;
 const IPassResult = background_work.IPassResult;
 const IStep = background_work.IStep;
 const IStepResult = background_work.IStepResult;
 const ReplicaState = background_work.ReplicaState;
 
 //
-// A host that plays back what a test scripts: the outputs of each planning task and the result of each step. It records everything the
-// pass did, in order, and owns an arena the pass allocates from.
+// Pass services that play back what a test scripts: the outputs of each planning task and the result of each step. They record
+// everything the pass did, in order, and own an arena the pass allocates from.
 //
-const ScriptedHost = struct {
+const ScriptedPassServices = struct {
     // Allocates the records.
     allocator: std.mem.Allocator,
-    // What the pass allocates from, freed with the host.
+    // What the pass allocates from, freed with the pass services.
     arena: std.heap.ArenaAllocator,
     // The outputs each planning task gives, as JSON text, in the order they are asked for. A plan past the end is a test mistake.
     plans: []const []const u8,
@@ -30,10 +32,10 @@ const ScriptedHost = struct {
     events: std.ArrayList([]const u8),
     // The request the last plan was asked with, as JSON text.
     last_plan_request: ?[]const u8,
-    // How many steps run before the host says the pass was stopped, or null when it is never stopped that way.
+    // How many steps run before the pass services report the pass as stopped, or null when it is never stopped that way.
     stop_after_steps: ?usize,
 
-    const vtable: PassHost.VTable = .{
+    const vtable: PassServices.VTable = .{
         .readPlan = readPlan,
         .runStep = runStep,
         .holdAwake = holdAwake,
@@ -42,19 +44,19 @@ const ScriptedHost = struct {
         .isStopped = isStopped,
     };
 
-    fn host(self: *ScriptedHost) PassHost {
+    fn passServices(self: *ScriptedPassServices) PassServices {
         return .{
             .ptr = self,
             .vtable = &vtable,
         };
     }
 
-    fn note(self: *ScriptedHost, comptime format: []const u8, args: anytype) void {
+    fn note(self: *ScriptedPassServices, comptime format: []const u8, args: anytype) void {
         const line = std.fmt.allocPrint(self.allocator, format, args) catch @panic("out of memory");
         self.events.append(self.allocator, line) catch @panic("out of memory");
     }
 
-    fn deinit(self: *ScriptedHost) void {
+    fn deinit(self: *ScriptedPassServices) void {
         for (self.events.items) |line| {
             self.allocator.free(line);
         }
@@ -66,12 +68,12 @@ const ScriptedHost = struct {
     }
 
     // What the pass allocates from.
-    fn passAllocator(self: *ScriptedHost) std.mem.Allocator {
+    fn passAllocator(self: *ScriptedPassServices) std.mem.Allocator {
         return self.arena.allocator();
     }
 
-    fn readPlan(ptr: *anyopaque, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value {
-        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+    fn readPlan(ptr: *anyopaque, _: std.Io, allocator: std.mem.Allocator, _: Timers, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value {
+        const self: *ScriptedPassServices = @ptrCast(@alignCast(ptr));
         self.note("plan {s}", .{plan_task});
         if (self.last_plan_request) |text| {
             self.allocator.free(text);
@@ -85,32 +87,32 @@ const ScriptedHost = struct {
         return try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
     }
 
-    fn runStep(ptr: *anyopaque, allocator: std.mem.Allocator, step: IStep) anyerror!IStepResult {
+    fn runStep(ptr: *anyopaque, _: std.Io, allocator: std.mem.Allocator, _: Timers, _: background_work.Pass, step: IStep) anyerror!IStepResult {
         _ = allocator;
-        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+        const self: *ScriptedPassServices = @ptrCast(@alignCast(ptr));
         self.note("step {s}", .{step.@"type"});
         const result = self.step_results[self.steps_run];
         self.steps_run += 1;
         return result;
     }
 
-    fn holdAwake(ptr: *anyopaque, awake: bool) anyerror!void {
-        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+    fn holdAwake(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, awake: bool) anyerror!void {
+        const self: *ScriptedPassServices = @ptrCast(@alignCast(ptr));
         self.note("awake {}", .{awake});
     }
 
-    fn report(ptr: *anyopaque, message: []const u8) void {
-        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+    fn report(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, message: []const u8) void {
+        const self: *ScriptedPassServices = @ptrCast(@alignCast(ptr));
         self.note("report {s}", .{message});
     }
 
-    fn reportError(ptr: *anyopaque, message: []const u8) void {
-        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+    fn reportError(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, message: []const u8) void {
+        const self: *ScriptedPassServices = @ptrCast(@alignCast(ptr));
         self.note("error {s}", .{message});
     }
 
-    fn isStopped(ptr: *anyopaque) bool {
-        const self: *ScriptedHost = @ptrCast(@alignCast(ptr));
+    fn isStopped(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) bool {
+        const self: *ScriptedPassServices = @ptrCast(@alignCast(ptr));
         const limit = self.stop_after_steps orelse {
             return false;
         };
@@ -118,7 +120,7 @@ const ScriptedHost = struct {
     }
 };
 
-fn newHost(plans: []const []const u8, step_results: []const IStepResult) ScriptedHost {
+fn newPassServices(plans: []const []const u8, step_results: []const IStepResult) ScriptedPassServices {
     return .{
         .allocator = std.testing.allocator,
         .arena = std.heap.ArenaAllocator.init(std.testing.allocator),
@@ -133,9 +135,9 @@ fn newHost(plans: []const []const u8, step_results: []const IStepResult) Scripte
     };
 }
 
-fn expectEvents(host: *ScriptedHost, expected: []const []const u8) !void {
-    try std.testing.expectEqual(expected.len, host.events.items.len);
-    for (expected, host.events.items) |want, got| {
+fn expectEvents(pass_services: *ScriptedPassServices, expected: []const []const u8) !void {
+    try std.testing.expectEqual(expected.len, pass_services.events.items.len);
+    for (expected, pass_services.events.items) |want, got| {
         try std.testing.expectEqualStrings(want, got);
     }
 }
@@ -158,10 +160,10 @@ fn expectResult(expected_gap_ms: u64, expected_finished: bool, result: IPassResu
 }
 
 test "an import pass finishes the work when the plan says automatic import is switched off" {
-    var host = newHost(&.{"{\"shouldRun\":false,\"pauseBetweenRunsMs\":1000,\"steps\":[]}"}, &.{});
-    defer host.deinit();
-    const result = background_work.runImportPass(host.passAllocator(), host.host());
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{"{\"shouldRun\":false,\"pauseBetweenRunsMs\":1000,\"steps\":[]}"}, &.{});
+    defer pass_services.deinit();
+    const result = background_work.runImportPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices());
+    try expectEvents(&pass_services, &.{
         "plan plan-auto-import",
         "report Automatic import is switched off.",
     });
@@ -170,10 +172,10 @@ test "an import pass finishes the work when the plan says automatic import is sw
 
 test "an import pass runs the steps in order with the phone held awake, and asks for the gap the plan gave" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":7000,\"steps\":[{\"type\":\"create-default-database\",\"data\":{}},{\"type\":\"import-assets\",\"data\":{\"a\":1}}]}";
-    var host = newHost(&.{plan}, &.{ ok, ok });
-    defer host.deinit();
-    const result = background_work.runImportPass(host.passAllocator(), host.host());
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{plan}, &.{ ok, ok });
+    defer pass_services.deinit();
+    const result = background_work.runImportPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices());
+    try expectEvents(&pass_services, &.{
         "plan plan-auto-import",
         "awake true",
         "report Automatic import running into \"photos\".",
@@ -185,11 +187,11 @@ test "an import pass runs the steps in order with the phone held awake, and asks
 }
 
 test "an import pass whose plan could not be read does not finish the work, and asks for the fallback gap" {
-    var host = newHost(&.{}, &.{});
-    host.plan_fails = true;
-    defer host.deinit();
-    const result = background_work.runImportPass(host.passAllocator(), host.host());
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{}, &.{});
+    pass_services.plan_fails = true;
+    defer pass_services.deinit();
+    const result = background_work.runImportPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices());
+    try expectEvents(&pass_services, &.{
         "plan plan-auto-import",
         "error Could not work out what automatic import should do: PlanTaskFailed",
     });
@@ -198,10 +200,10 @@ test "an import pass whose plan could not be read does not finish the work, and 
 
 test "an import pass abandons the rest of its steps when one does not succeed, and does not finish the work" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":10,\"steps\":[{\"type\":\"first\",\"data\":{}},{\"type\":\"second\",\"data\":{}}]}";
-    var host = newHost(&.{plan}, &.{failed});
-    defer host.deinit();
-    const result = background_work.runImportPass(host.passAllocator(), host.host());
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{plan}, &.{failed});
+    defer pass_services.deinit();
+    const result = background_work.runImportPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices());
+    try expectEvents(&pass_services, &.{
         "plan plan-auto-import",
         "awake true",
         "report Automatic import running into \"photos\".",
@@ -214,33 +216,33 @@ test "an import pass abandons the rest of its steps when one does not succeed, a
 
 test "a gap of zero or less in a plan is replaced by the fallback" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":0,\"steps\":[]}";
-    var host = newHost(&.{plan}, &.{});
-    defer host.deinit();
-    const result = background_work.runImportPass(host.passAllocator(), host.host());
+    var pass_services = newPassServices(&.{plan}, &.{});
+    defer pass_services.deinit();
+    const result = background_work.runImportPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices());
     try expectResult(background_work.FALLBACK_PAUSE_MS, false, result);
 }
 
 test "a sync pass tells the plan what the prefetch is doing, and says why it is not syncing" {
     const plan = "{\"shouldRun\":false,\"reason\":\"syncing is off\",\"pauseBetweenRunsMs\":0,\"steps\":[]}";
-    var host = newHost(&.{plan}, &.{});
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.working);
-    const result = background_work.runSyncPass(host.passAllocator(), host.host(), &state, false);
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{plan}, &.{});
+    defer pass_services.deinit();
+    var state: ReplicaState = .working;
+    const result = background_work.runSyncPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state, false);
+    try expectEvents(&pass_services, &.{
         "plan plan-sync",
         "report Not syncing: syncing is off",
     });
-    try std.testing.expectEqualStrings("{\"prefetchState\":\"working\"}", host.last_plan_request.?);
+    try std.testing.expectEqualStrings("{\"prefetchState\":\"working\"}", pass_services.last_plan_request.?);
     try expectResult(background_work.SYNC_FALLBACK_PAUSE_MS, false, result);
 }
 
 test "a sync pass runs the sync step with the phone held awake" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":300,\"steps\":[{\"type\":\"sync-database\",\"data\":{}}]}";
-    var host = newHost(&.{plan}, &.{ok});
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    const result = background_work.runSyncPass(host.passAllocator(), host.host(), &state, false);
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{plan}, &.{ok});
+    defer pass_services.deinit();
+    var state: ReplicaState = .unknown;
+    const result = background_work.runSyncPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state, false);
+    try expectEvents(&pass_services, &.{
         "plan plan-sync",
         "awake true",
         "report Syncing \"photos\".",
@@ -252,11 +254,11 @@ test "a sync pass runs the sync step with the phone held awake" {
 
 test "the first sync pass only reads the gap, so the first sync waits the configured pause" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":300,\"steps\":[{\"type\":\"sync-database\",\"data\":{}}]}";
-    var host = newHost(&.{plan}, &.{ok});
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    const result = background_work.runSyncPass(host.passAllocator(), host.host(), &state, true);
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{plan}, &.{ok});
+    defer pass_services.deinit();
+    var state: ReplicaState = .unknown;
+    const result = background_work.runSyncPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state, true);
+    try expectEvents(&pass_services, &.{
         "plan plan-sync",
     });
     try expectResult(300, false, result);
@@ -265,12 +267,12 @@ test "the first sync pass only reads the gap, so the first sync waits the config
 const prefetch_plan = "{\"shouldRun\":true,\"databasePath\":\"replica\",\"pauseBetweenRunsMs\":50,\"steps\":[{\"type\":\"prefetch-database\",\"data\":{}}]}";
 
 test "a prefetch pass finishes the work, and marks the replica complete, when it fetches nothing and finds nothing missing" {
-    var host = newHost(&.{prefetch_plan}, &.{ok});
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    const result = background_work.runPrefetchPass(host.passAllocator(), host.host(), &state);
-    try std.testing.expectEqual(ReplicaState.complete, state.load(.acquire));
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{prefetch_plan}, &.{ok});
+    defer pass_services.deinit();
+    var state: ReplicaState = .unknown;
+    const result = background_work.runPrefetchPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state);
+    try std.testing.expectEqual(ReplicaState.complete, state);
+    try expectEvents(&pass_services, &.{
         "plan plan-prefetch",
         "awake true",
         "report Filling in \"replica\".",
@@ -292,35 +294,35 @@ test "a prefetch pass is working while it fetches files, and stalled when it fet
         .files_fetched = 0,
         .files_still_missing = 2,
     };
-    var host = newHost(&.{prefetch_plan}, &.{fetched});
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    try expectResult(50, false, background_work.runPrefetchPass(host.passAllocator(), host.host(), &state));
-    try std.testing.expectEqual(ReplicaState.working, state.load(.acquire));
-    host.deinit();
+    var pass_services = newPassServices(&.{prefetch_plan}, &.{fetched});
+    var state: ReplicaState = .unknown;
+    try expectResult(50, false, background_work.runPrefetchPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state));
+    try std.testing.expectEqual(ReplicaState.working, state);
+    pass_services.deinit();
 
-    host = newHost(&.{prefetch_plan}, &.{stuck});
-    defer host.deinit();
-    try expectResult(50, false, background_work.runPrefetchPass(host.passAllocator(), host.host(), &state));
-    try std.testing.expectEqual(ReplicaState.stalled, state.load(.acquire));
+    pass_services = newPassServices(&.{prefetch_plan}, &.{stuck});
+    defer pass_services.deinit();
+    try expectResult(50, false, background_work.runPrefetchPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state));
+    try std.testing.expectEqual(ReplicaState.stalled, state);
 }
 
 test "a prefetch pass is stalled and does not finish the work when a step does not succeed" {
-    var host = newHost(&.{prefetch_plan}, &.{failed});
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    const result = background_work.runPrefetchPass(host.passAllocator(), host.host(), &state);
-    try std.testing.expectEqual(ReplicaState.stalled, state.load(.acquire));
-    try std.testing.expectEqualStrings("error Prefetch step \"prefetch-database\" did not succeed.", host.events.items[host.events.items.len - 2]);
+    var pass_services = newPassServices(&.{prefetch_plan}, &.{failed});
+    defer pass_services.deinit();
+    var state: ReplicaState = .unknown;
+    const result = background_work.runPrefetchPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state);
+    try std.testing.expectEqual(ReplicaState.stalled, state);
+    try std.testing.expectEqualStrings("error Prefetch step \"prefetch-database\" did not succeed.", pass_services.events.items[pass_services.events.items.len - 2]);
     try expectResult(50, false, result);
 }
 
 test "an import pass reports a step that did not succeed while it was being stopped" {
     const plan = "{\"shouldRun\":true,\"databasePath\":\"photos\",\"pauseBetweenRunsMs\":10,\"steps\":[{\"type\":\"first\",\"data\":{}},{\"type\":\"second\",\"data\":{}}]}";
-    var host = newHost(&.{plan}, &.{failed});
-    host.stop_after_steps = 1;
-    defer host.deinit();
-    _ = background_work.runImportPass(host.passAllocator(), host.host());
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{plan}, &.{failed});
+    pass_services.stop_after_steps = 1;
+    defer pass_services.deinit();
+    _ = background_work.runImportPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices());
+    try expectEvents(&pass_services, &.{
         "plan plan-auto-import",
         "awake true",
         "report Automatic import running into \"photos\".",
@@ -331,13 +333,13 @@ test "an import pass reports a step that did not succeed while it was being stop
 }
 
 test "a prefetch pass is stalled and reports a step that did not succeed while it was being stopped" {
-    var host = newHost(&.{prefetch_plan}, &.{failed});
-    host.stop_after_steps = 1;
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    _ = background_work.runPrefetchPass(host.passAllocator(), host.host(), &state);
-    try std.testing.expectEqual(ReplicaState.stalled, state.load(.acquire));
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{prefetch_plan}, &.{failed});
+    pass_services.stop_after_steps = 1;
+    defer pass_services.deinit();
+    var state: ReplicaState = .unknown;
+    _ = background_work.runPrefetchPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state);
+    try std.testing.expectEqual(ReplicaState.stalled, state);
+    try expectEvents(&pass_services, &.{
         "plan plan-prefetch",
         "awake true",
         "report Filling in \"replica\".",
@@ -349,15 +351,15 @@ test "a prefetch pass is stalled and reports a step that did not succeed while i
 
 test "a prefetch pass says why it is not running and does not finish the work" {
     const refused = "{\"shouldRun\":false,\"reason\":\"a prefetch is still filling this database in\",\"pauseBetweenRunsMs\":50,\"steps\":[]}";
-    var host = newHost(&.{refused}, &.{});
-    defer host.deinit();
-    var state: std.atomic.Value(ReplicaState) = .init(.unknown);
-    const result = background_work.runPrefetchPass(host.passAllocator(), host.host(), &state);
-    try expectEvents(&host, &.{
+    var pass_services = newPassServices(&.{refused}, &.{});
+    defer pass_services.deinit();
+    var state: ReplicaState = .unknown;
+    const result = background_work.runPrefetchPass(std.testing.io, pass_services.passAllocator(), test_timers.timers(), pass_services.passServices(), &state);
+    try expectEvents(&pass_services, &.{
         "plan plan-prefetch",
         "report No database to fill in: a prefetch is still filling this database in",
     });
-    try std.testing.expectEqual(ReplicaState.unknown, state.load(.acquire));
+    try std.testing.expectEqual(ReplicaState.unknown, state);
     try expectResult(50, false, result);
 }
 

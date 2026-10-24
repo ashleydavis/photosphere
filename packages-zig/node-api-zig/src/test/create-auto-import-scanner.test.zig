@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -40,7 +41,7 @@ const storage_factory = @import("storage-zig").storage_factory;
 //
 // Nothing listening.
 //
-fn ignoreScannerProgress(context: ?*anyopaque, progress: IAutoImportScannerProgress) void {
+fn ignoreScannerProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").timers.Timers, progress: IAutoImportScannerProgress) void {
     _ = context;
     _ = progress;
 }
@@ -57,7 +58,7 @@ fn ignoreScanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, stat
 //
 // A task context that never cancels, and whose events go nowhere.
 //
-fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
     _ = context;
     _ = message;
 }
@@ -95,6 +96,9 @@ const Pushed = struct {
 // The state each test starts from.
 //
 const ScannerTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -136,7 +140,7 @@ const ScannerTest = struct {
         errdefer self.mutedLog.uninstall();
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
 
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "create-auto-import-scanner");
@@ -169,6 +173,7 @@ const ScannerTest = struct {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
         self.mutedLog.uninstall();
+        self.test_env.deinit();
     }
 
     //
@@ -231,7 +236,7 @@ const ScannerTest = struct {
         var pushed: Pushed = .{
             .allocator = allocator,
         };
-        try scanner.scan(allocator, std.testing.io, .{
+        try scanner.scan(allocator, std.testing.io, test_timers.timers(), .{
             .context = &pushed,
             .function = Pushed.visit,
         }, .{

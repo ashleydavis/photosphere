@@ -13,6 +13,7 @@
 //
 
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -127,7 +128,7 @@ const Sandbox = struct {
         try object.put(self.arenaAllocator(), "statePath", .{
             .string = statePath,
         });
-        return readStateHandler(self.arenaAllocator(), self.io, .{
+        return readStateHandler(self.arenaAllocator(), self.io, test_timers.timers(), .{
             .object = object,
         }, self.taskContext.context.taskContext());
     }
@@ -136,7 +137,7 @@ const Sandbox = struct {
     // Runs the write-state handler with the JSON text as its data.
     //
     fn writeState(self: *Sandbox, dataJson: []const u8) !void {
-        const result = try writeStateHandler(self.arenaAllocator(), self.io, try self.json(dataJson), self.taskContext.context.taskContext());
+        const result = try writeStateHandler(self.arenaAllocator(), self.io, test_timers.timers(), try self.json(dataJson), self.taskContext.context.taskContext());
         try std.testing.expect(result == .null);
     }
 };
@@ -479,7 +480,7 @@ test "a write with no path fails rather than writing nowhere quietly" {
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("statePath is required", writeStateHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json("{\"statePath\":\"\"}"), sandbox.taskContext.context.taskContext()));
+    try expectThrown("statePath is required", writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"statePath\":\"\"}"), sandbox.taskContext.context.taskContext()));
 }
 
 test "a write with nothing to write fails rather than doing nothing quietly" {
@@ -489,7 +490,7 @@ test "a write with nothing to write fails rather than doing nothing quietly" {
 
     try expectThrown(
         "write-state was given no settings and no news section, so there is nothing to write.",
-        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json("{\"statePath\":\"state.yaml\"}"), sandbox.taskContext.context.taskContext()),
+        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"statePath\":\"state.yaml\"}"), sandbox.taskContext.context.taskContext()),
     );
 }
 
@@ -500,7 +501,7 @@ test "a key with no name fails rather than being written under an empty name" {
 
     try expectThrown(
         "write-state was given a setting with no key.",
-        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"\",\"value\":true}]}"), sandbox.taskContext.context.taskContext()),
+        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"\",\"value\":true}]}"), sandbox.taskContext.context.taskContext()),
     );
 }
 

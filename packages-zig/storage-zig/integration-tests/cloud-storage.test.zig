@@ -10,20 +10,24 @@
 // AWS_ENDPOINT=your_endpoint (optional, for S3-compatible services)
 // TEST_S3_BUCKET=your_test_bucket_name
 //
-// The groups of tests are the prefixes of the test names. The concurrent lock attempts run on threads of their own,
-// each through the one shared storage.
+// The groups of tests are the prefixes of the test names. The concurrent lock attempts run on threads of their own, each
+// with its own allocator, Io and storage of the location, made from a copy of what it needs given as JSON on its queue,
+// and each tells the test whether it took the lock the same way.
 //
 
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const ziggy = @import("ziggy");
 
 const CloudStorage = storage_zig.cloud_storage.CloudStorage;
 const Date = utils.timestamp_provider.Date;
+const MessageQueue = ziggy.message_queue.MessageQueue;
+const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
 
 //
-// Allocates what lives for the whole test binary: the environment, the location and the storage.
+// Allocates what lives for the whole test binary: the environment, the location and the storage. Only the test thread uses it.
 //
 const process_allocator = std.heap.smp_allocator;
 
@@ -65,7 +69,7 @@ fn setUp() ![]const u8 {
     const testPrefix = try std.fmt.allocPrint(process_allocator, "test-{d}-{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), &std.fmt.bytesToHex(randomBytes, .lower) });
     const location = try std.fmt.allocPrint(process_allocator, "{s}/{s}", .{ node_utils.process_env.getEnv("TEST_S3_BUCKET").?, testPrefix });
 
-    shared_storage = CloudStorage.init(io, location, null);
+    shared_storage = CloudStorage.init(location, null);
     shared_location = location;
     return location;
 }
@@ -404,17 +408,67 @@ const ILockAttempt = struct {
 };
 
 //
-// One concurrent attempt to take a lock, run on a thread of its own: waits the given number of microseconds,
-// then tries. An error counts as not taking the lock.
+// One variable of an environment, as a thread is given it.
 //
-fn attemptLock(result: *ILockAttempt, lockFile: []const u8, delayMicroseconds: i64) void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
-    defer arena.deinit();
-    const io = std.testing.io;
-    if (delayMicroseconds > 0) {
-        io.sleep(.fromMicroseconds(delayMicroseconds), .awake) catch {};
+const IVariable = struct {
+    name: []const u8,
+    value: []const u8,
+};
+
+//
+// What the thread of one attempt is given: its place in the race, the storage's location and the environment its credentials come
+// from (the environment is each thread's own), the lock file, the owner and how long to wait first.
+//
+const ILockOrder = struct {
+    index: usize,
+    location: []const u8,
+    environment: []const IVariable,
+    lockFile: []const u8,
+    owner: []const u8,
+    delayMicroseconds: i64,
+};
+
+//
+// What the thread of one attempt tells the test.
+//
+const ILockOutcome = struct {
+    index: usize,
+    success: bool,
+};
+
+//
+// One concurrent attempt to take a lock, run on a thread of its own, which makes its own allocator, Io, environment and storage
+// from its order: waits the given number of microseconds, then tries, and tells the test whether it took the lock. An error counts
+// as not taking the lock.
+//
+fn attemptLock(orders: *MessageQueue, outcomes: *MessageQueue) void {
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var threaded: std.Io.Threaded = .init(thread_allocator.allocator(), .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const message = orders.take(io, arena, .none) orelse @panic("the attempt got no order");
+    const order = std.json.parseFromSliceLeaky(ILockOrder, arena, message.text, .{}) catch @panic("the attempt could not read its order");
+    var environment = std.process.Environ.Map.init(arena);
+    for (order.environment) |variable| {
+        environment.put(variable.name, variable.value) catch @panic("out of memory making the environment");
     }
-    result.success = shared_storage.acquireWriteLock(arena.allocator(), io, lockFile, result.owner) catch false;
+    node_utils.process_env.setEnvironMap(&environment);
+    defer node_utils.process_env.setEnvironMap(null);
+    var storage = CloudStorage.init(order.location, null);
+    defer storage.s3.deinit();
+    if (order.delayMicroseconds > 0) {
+        io.sleep(.fromMicroseconds(order.delayMicroseconds), .awake) catch {};
+    }
+    const success = storage.acquireWriteLock(arena, io, order.lockFile, order.owner) catch false;
+    const text = std.json.Stringify.valueAlloc(arena, ILockOutcome{
+        .index = order.index,
+        .success = success,
+    }, .{}) catch @panic("out of memory telling the test the outcome");
+    outcomes.post(io, 0, text) catch @panic("out of memory telling the test the outcome");
 }
 
 //
@@ -423,9 +477,28 @@ fn attemptLock(result: *ILockAttempt, lockFile: []const u8, delayMicroseconds: i
 //
 fn raceForLock(allocator: std.mem.Allocator, lockFile: []const u8, owners: []const []const u8, maxDelayMicroseconds: u32) ![]const u8 {
     const io = std.testing.io;
+    var environment: std.ArrayList(IVariable) = .empty;
+    var variables = node_utils.process_env.getEnvironMap().?.iterator();
+    while (variables.next()) |entry| {
+        try environment.append(allocator, .{
+            .name = entry.key_ptr.*,
+            .value = entry.value_ptr.*,
+        });
+    }
     const results = try allocator.alloc(ILockAttempt, owners.len);
     const threads = try allocator.alloc(std.Thread, owners.len);
-    for (owners, results, threads) |owner, *result, *thread| {
+    const orders = try allocator.alloc(MessageQueue, owners.len);
+    for (orders) |*queue| {
+        queue.* = MessageQueue.init();
+    }
+    defer {
+        for (orders) |*queue| {
+            queue.deinit();
+        }
+    }
+    var outcomes = MessageQueue.init();
+    defer outcomes.deinit();
+    for (owners, results, threads, orders, 0..) |owner, *result, *thread, *queue, index| {
         result.* = .{
             .success = false,
             .owner = owner,
@@ -433,10 +506,25 @@ fn raceForLock(allocator: std.mem.Allocator, lockFile: []const u8, owners: []con
         var randomBytes: [4]u8 = undefined;
         io.random(&randomBytes);
         const delay: i64 = if (maxDelayMicroseconds == 0) 0 else @intCast(std.mem.readInt(u32, &randomBytes, .little) % maxDelayMicroseconds);
-        thread.* = try std.Thread.spawn(.{}, attemptLock, .{ result, lockFile, delay });
+        try queue.post(io, 0, try std.json.Stringify.valueAlloc(allocator, ILockOrder{
+            .index = index,
+            .location = shared_location.?,
+            .environment = environment.items,
+            .lockFile = lockFile,
+            .owner = owner,
+            .delayMicroseconds = delay,
+        }, .{}));
+        thread.* = try std.Thread.spawn(.{}, attemptLock, .{ queue, &outcomes });
     }
     for (threads) |thread| {
         thread.join();
+    }
+    for (results) |_| {
+        const message = outcomes.tryTake(io, allocator) orelse {
+            return error.AnAttemptToldNothing;
+        };
+        const outcome = try std.json.parseFromSliceLeaky(ILockOutcome, allocator, message.text, .{});
+        results[outcome.index].success = outcome.success;
     }
 
     // Exactly one should succeed, all others should fail
@@ -675,7 +763,7 @@ test "CloudStorage Tests Error Handling should handle invalid bucket/key combina
     _ = try setUp();
 
     const invalidLocation = "invalid-bucket-name-that-does-not-exist";
-    var invalidStorage = CloudStorage.init(io, invalidLocation, null);
+    var invalidStorage = CloudStorage.init(invalidLocation, null);
     defer invalidStorage.s3.deinit();
 
     if (invalidStorage.write(allocator, io, invalidLocation ++ "/error-handling/invalid-bucket-test.txt", "text/plain", "test")) |_| {
@@ -728,7 +816,7 @@ test "CloudStorage Zig: credentials given to the storage reach the server" {
     const io = std.testing.io;
     const location = try setUp();
 
-    var storage = CloudStorage.init(io, location, .{
+    var storage = CloudStorage.init(location, .{
         .accessKeyId = node_utils.process_env.getEnv("AWS_ACCESS_KEY_ID").?,
         .secretAccessKey = node_utils.process_env.getEnv("AWS_SECRET_ACCESS_KEY").?,
         .region = node_utils.process_env.getEnv("AWS_REGION"),
@@ -829,7 +917,7 @@ test "CloudStorage Zig: every operation on a bucket that does not exist fails, n
     const io = std.testing.io;
     _ = try setUp();
     const missingBucket = "photosphere-zig-no-such-bucket";
-    var storage = CloudStorage.init(io, missingBucket, null);
+    var storage = CloudStorage.init(missingBucket, null);
     defer storage.s3.deinit();
     const filePath = missingBucket ++ "/dir/file.txt";
     const dirPath = missingBucket ++ "/dir";
@@ -864,7 +952,7 @@ test "CloudStorage Zig: a lock older than the timeout is broken and taken, and t
 
     // Every [LOCK] line is asked for, and the console log that gets them writes nothing.
     var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(verboseLog.ilog());
     defer utils.log.setLog(previousLog);
 

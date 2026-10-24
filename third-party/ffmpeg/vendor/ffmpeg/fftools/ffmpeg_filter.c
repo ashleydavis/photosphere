@@ -449,7 +449,7 @@ static int read_binary(void *logctx, const char *path,
     *data = NULL;
     *len  = 0;
 
-    ret = avio_open2(&io, path, AVIO_FLAG_READ, &int_cb, NULL);
+    ret = avio_open2(&io, path, AVIO_FLAG_READ, &FFMPEG_STATE(int_cb), NULL);
     if (ret < 0) {
         av_log(logctx, AV_LOG_ERROR, "Cannot open file '%s': %s\n",
                path, av_err2str(ret));
@@ -1106,19 +1106,19 @@ int fg_create(FilterGraph **pfg, char **graph_desc, Scheduler *sch,
         *pfg = fg;
         fg->index = -1;
     } else {
-        ret = av_dynarray_add_nofree(&filtergraphs, &nb_filtergraphs, fgp);
+        ret = av_dynarray_add_nofree(&FFMPEG_STATE(filtergraphs), &FFMPEG_STATE(nb_filtergraphs), fgp);
         if (ret < 0) {
             av_freep(graph_desc);
             av_freep(&fgp);
             return ret;
         }
 
-        fg->index = nb_filtergraphs - 1;
+        fg->index = FFMPEG_STATE(nb_filtergraphs) - 1;
     }
 
     fg->class       = &fg_class;
     fg->graph_desc  = *graph_desc;
-    fgp->disable_conversions = !auto_conversion_filters;
+    fgp->disable_conversions = !FFMPEG_STATE(auto_conversion_filters);
     fgp->nb_threads          = -1;
     fgp->sch                 = sch;
 
@@ -1302,7 +1302,7 @@ static int fg_complex_bind_input(FilterGraph *fg, InputFilter *ifilter, int comm
         int dec_idx;
 
         dec_idx = strtol(ifilter->linklabel + 4, &p, 0);
-        if (dec_idx < 0 || dec_idx >= nb_decoders) {
+        if (dec_idx < 0 || dec_idx >= FFMPEG_STATE(nb_decoders)) {
             av_log(fg, AV_LOG_ERROR, "Invalid decoder index %d in filtergraph description %s\n",
                    dec_idx, fg->graph_desc);
             return AVERROR(EINVAL);
@@ -1315,7 +1315,7 @@ static int fg_complex_bind_input(FilterGraph *fg, InputFilter *ifilter, int comm
                 return ret;
         }
 
-        ret = ifilter_bind_dec(ifp, decoders[dec_idx], &vs);
+        ret = ifilter_bind_dec(ifp, FFMPEG_STATE(decoders)[dec_idx], &vs);
         if (ret < 0)
             av_log(fg, AV_LOG_ERROR, "Error binding a decoder to filtergraph input %s\n",
                    ifilter->name);
@@ -1327,8 +1327,8 @@ static int fg_complex_bind_input(FilterGraph *fg, InputFilter *ifilter, int comm
         int file_idx;
 
         // try finding an unbound filtergraph output with this label
-        for (int i = 0; i < nb_filtergraphs; i++) {
-            FilterGraph *fg_src = filtergraphs[i];
+        for (int i = 0; i < FFMPEG_STATE(nb_filtergraphs); i++) {
+            FilterGraph *fg_src = FFMPEG_STATE(filtergraphs)[i];
 
             if (fg == fg_src)
                 continue;
@@ -1358,12 +1358,12 @@ static int fg_complex_bind_input(FilterGraph *fg, InputFilter *ifilter, int comm
 
         // bind to an explicitly specified demuxer stream
         file_idx = strtol(ifilter->linklabel, &p, 0);
-        if (file_idx < 0 || file_idx >= nb_input_files) {
+        if (file_idx < 0 || file_idx >= FFMPEG_STATE(nb_input_files)) {
             av_log(fg, AV_LOG_FATAL, "Invalid file index %d in filtergraph description %s.\n",
                    file_idx, fg->graph_desc);
             return AVERROR(EINVAL);
         }
-        s = input_files[file_idx]->ctx;
+        s = FFMPEG_STATE(input_files)[file_idx]->ctx;
 
         ret = stream_specifier_parse(&ss, *p == ':' ? p + 1 : p, 1, fg);
         if (ret < 0) {
@@ -1397,7 +1397,7 @@ static int fg_complex_bind_input(FilterGraph *fg, InputFilter *ifilter, int comm
                    "matches no streams.\n", p, fg->graph_desc);
             return AVERROR(EINVAL);
         }
-        ist = input_files[file_idx]->streams[st->index];
+        ist = FFMPEG_STATE(input_files)[file_idx]->streams[st->index];
 
         if (commit)
             av_log(fg, AV_LOG_VERBOSE,
@@ -1405,8 +1405,8 @@ static int fg_complex_bind_input(FilterGraph *fg, InputFilter *ifilter, int comm
                    ifilter->linklabel, ist->file->index, ist->index);
     } else {
         // try finding an unbound filtergraph output
-        for (int i = 0; i < nb_filtergraphs; i++) {
-            FilterGraph *fg_src = filtergraphs[i];
+        for (int i = 0; i < FFMPEG_STATE(nb_filtergraphs); i++) {
+            FilterGraph *fg_src = FFMPEG_STATE(filtergraphs)[i];
 
             if (fg == fg_src)
                 continue;
@@ -1482,16 +1482,16 @@ int fg_finalise_bindings(void)
 {
     int ret;
 
-    for (int i = 0; i < nb_filtergraphs; i++) {
-        ret = bind_inputs(filtergraphs[i], 0);
+    for (int i = 0; i < FFMPEG_STATE(nb_filtergraphs); i++) {
+        ret = bind_inputs(FFMPEG_STATE(filtergraphs)[i], 0);
         if (ret < 0)
             return ret;
     }
 
     // check that all outputs were bound
-    for (int i = nb_filtergraphs - 1; i >= 0; i--) {
-        FilterGraph *fg = filtergraphs[i];
-        FilterGraphPriv *fgp = fgp_from_fg(filtergraphs[i]);
+    for (int i = FFMPEG_STATE(nb_filtergraphs) - 1; i >= 0; i--) {
+        FilterGraph *fg = FFMPEG_STATE(filtergraphs)[i];
+        FilterGraphPriv *fgp = fgp_from_fg(FFMPEG_STATE(filtergraphs)[i]);
 
         for (int j = 0; j < fg->nb_outputs; j++) {
             OutputFilter *output = fg->outputs[j];
@@ -1509,19 +1509,19 @@ int fg_finalise_bindings(void)
                        output->name, j,
                        output->linklabel ? (const char *)output->linklabel : "unlabeled");
                 sch_remove_filtergraph(fgp->sch, fgp->sch_idx);
-                fg_free(&filtergraphs[i]);
-                nb_filtergraphs--;
-                if (nb_filtergraphs > 0)
-                    memmove(&filtergraphs[i],
-                            &filtergraphs[i + 1],
-                            (nb_filtergraphs - i) * sizeof(*filtergraphs));
+                fg_free(&FFMPEG_STATE(filtergraphs)[i]);
+                FFMPEG_STATE(nb_filtergraphs)--;
+                if (FFMPEG_STATE(nb_filtergraphs) > 0)
+                    memmove(&FFMPEG_STATE(filtergraphs)[i],
+                            &FFMPEG_STATE(filtergraphs)[i + 1],
+                            (FFMPEG_STATE(nb_filtergraphs) - i) * sizeof(*FFMPEG_STATE(filtergraphs)));
                 break;
             }
         }
     }
 
-    for (int i = 0; i < nb_filtergraphs; i++) {
-        ret = bind_inputs(filtergraphs[i], 1);
+    for (int i = 0; i < FFMPEG_STATE(nb_filtergraphs); i++) {
+        ret = bind_inputs(FFMPEG_STATE(filtergraphs)[i], 1);
         if (ret < 0)
             return ret;
     }
@@ -2069,8 +2069,8 @@ static int configure_filtergraph(FilterGraph *fg, FilterGraphThread *fgt)
     if (simple) {
         OutputFilterPriv *ofp = ofp_from_ofilter(fg->outputs[0]);
 
-        if (filter_nbthreads) {
-            ret = av_opt_set(fgt->graph, "threads", filter_nbthreads, 0);
+        if (FFMPEG_STATE(filter_nbthreads)) {
+            ret = av_opt_set(fgt->graph, "threads", FFMPEG_STATE(filter_nbthreads), 0);
             if (ret < 0)
                 goto fail;
         } else if (fgp->nb_threads >= 0) {
@@ -2096,11 +2096,11 @@ static int configure_filtergraph(FilterGraph *fg, FilterGraphThread *fgt)
             av_free(args);
         }
     } else {
-        fgt->graph->nb_threads = filter_complex_nbthreads;
+        fgt->graph->nb_threads = FFMPEG_STATE(filter_complex_nbthreads);
     }
 
-    if (filter_buffered_frames) {
-        ret = av_opt_set_int(fgt->graph, "max_buffered_frames", filter_buffered_frames, 0);
+    if (FFMPEG_STATE(filter_buffered_frames)) {
+        ret = av_opt_set_int(fgt->graph, "max_buffered_frames", FFMPEG_STATE(filter_buffered_frames), 0);
         if (ret < 0)
             return ret;
     }
@@ -2471,7 +2471,7 @@ static double adjust_frame_pts_to_encoder_tb(void *logctx, AVFrame *frame,
 
 early_exit:
 
-    if (debug_ts) {
+    if (FFMPEG_STATE(debug_ts)) {
         av_log(logctx, AV_LOG_INFO,
                "filter -> pts:%s pts_time:%s exact:%f time_base:%d/%d\n",
                frame ? av_ts2str(frame->pts) : "NULL",
@@ -2561,7 +2561,7 @@ static void video_sync_process(OutputFilterPriv *ofp, AVFrame *frame,
         av_fallthrough;
     case VSYNC_CFR:
         // FIXME set to 0.5 after we fix some dts/pts bugs like in avidec.c
-        if (frame_drop_threshold && delta < frame_drop_threshold && fps->frame_number) {
+        if (FFMPEG_STATE(frame_drop_threshold) && delta < FFMPEG_STATE(frame_drop_threshold) && fps->frame_number) {
             *nb_frames = 0;
         } else if (delta < -1.1)
             *nb_frames = 0;
@@ -2601,7 +2601,7 @@ finish:
     }
     if (*nb_frames > (*nb_frames_prev && fps->last_dropped) + (*nb_frames > *nb_frames_prev)) {
         uint64_t nb_frames_dup;
-        if (*nb_frames > dts_error_threshold * 30) {
+        if (*nb_frames > FFMPEG_STATE(dts_error_threshold) * 30) {
             av_log(ofp, AV_LOG_ERROR, "%"PRId64" frame duplication too large, skipping\n", *nb_frames - 1);
             atomic_fetch_add(&ofilter->nb_frames_drop, 1);
             *nb_frames = 0;
@@ -2798,7 +2798,7 @@ static int fg_output_step(OutputFilterPriv *ofp, FilterGraphThread *fgt,
 
     frame->time_base = av_buffersink_get_time_base(filter);
 
-    if (debug_ts)
+    if (FFMPEG_STATE(debug_ts))
         av_log(ofp, AV_LOG_INFO, "filter_raw -> pts:%s pts_time:%s time_base:%d/%d\n",
                av_ts2str(frame->pts), av_ts2timestr(frame->pts, &frame->time_base),
                          frame->time_base.num, frame->time_base.den);
@@ -3395,7 +3395,7 @@ read_frames:
 
 finish:
 
-    if (print_graphs || print_graphs_file)
+    if (FFMPEG_STATE(print_graphs) || FFMPEG_STATE(print_graphs_file))
         print_filtergraph(fg, fgt.graph);
 
     // EOF is normal termination

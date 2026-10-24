@@ -58,7 +58,7 @@ const IToolsTestEnvironment = struct {
     fn init(self: *IToolsTestEnvironment, name: []const u8) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
-        self.mediaTools = try media_tools.MediaTools.init(io);
+        self.mediaTools = try media_tools.MediaTools.init();
         const status = try tools.verifyTools(allocator, io, self.mediaTools.runner());
         if (!status.allAvailable) {
             std.debug.print("The built-in media tools did not run. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
@@ -88,7 +88,7 @@ const IToolsTestEnvironment = struct {
 
         self.stdout_capture = std.Io.Writer.Allocating.init(allocator);
         utils.console.setCapture(&self.stdout_capture.writer, &self.stdout_capture.writer);
-        self.previous_log = utils.log.log;
+        self.previous_log = utils.log.currentLog();
 
         const context = try init_cmd.initContext(allocator, io, &self.mediaTools, .{ .yes = true, .workers = "2" });
         self.toolContext = try allocator.create(IMcpToolContext);

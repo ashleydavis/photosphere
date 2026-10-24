@@ -4,8 +4,8 @@
 // configuration keeps working between launches, except in test mode, where it is a free port so that two instances can run side by side.
 //
 // The server does none of the work itself. Every tool forwards its call to the page, which holds the open database and knows what the
-// user is looking at, and gives the page's answer back to the client: the server sends the page an `mcp-tool-request` event and waits
-// for the page to answer on the `mcp-tool-response` message (see mcp-bridge.zig).
+// user is looking at, and gives the page's response back to the client: the server sends the page an `mcp-tool-request` event and waits
+// for the page to reply with the `mcp-tool-response` message, which the main thread passes to the connection thread that holds the call.
 //
 // The server runs for the life of the app, started when the main window is created and stopped when the app stops (see
 // MainState.mainWindowCreated and MainState.stop). A phone has no MCP server.
@@ -20,11 +20,11 @@ const config = @import("config-zig");
 const mcp = @import("mcp-zig");
 const events = @import("events.zig");
 const main_state = @import("main-state.zig");
-const mcp_bridge = @import("mcp-bridge.zig");
 const test_mode = @import("test-mode.zig");
 
-const Core = ziggy.core.Core;
 const json = ziggy.json;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const protocol = mcp.protocol;
 const McpServer = protocol.McpServer;
 const IField = mcp.input_schema.IField;
@@ -42,11 +42,6 @@ pub const MCP_PORT = 3475;
 // The host the server binds. The server lets a client work on the user's photos, so it must only be reachable from this machine.
 //
 const MCP_HOST = "127.0.0.1";
-
-//
-// Allocates the server and the threads of its connections, which use it from many threads at once, so it has to be thread safe.
-//
-const server_allocator = std.heap.smp_allocator;
 
 //
 // Server-level instructions describing what Photosphere is. Sent to MCP clients as part of the server's information so the model knows
@@ -302,99 +297,167 @@ const tool_definitions = [_]IToolDefinition{
 };
 
 //
-// What a tool needs to forward its call to the page. The server holds one for each tool, for as long as it runs.
+// The most connection threads the MCP server starts. A client makes a handful of calls at once at most.
 //
-pub const IForwardingTool = struct {
-    // The main process's state, which holds the bridge and tells when the app is stopping.
-    state: *main_state.MainState,
+const MAX_CONNECTION_THREADS = 4;
 
-    // The name of the tool, which the page dispatches on.
-    tool: []const u8,
+//
+// How long a tool call waits for a message to its connection thread at a time, in milliseconds, before it looks again.
+//
+const RESPONSE_WAIT_MS = 1000;
 
-    // Set when the server is stopping, so a call that is waiting for the page gives up.
-    stopping: *const std.atomic.Value(bool),
+//
+// The type of the message the main thread passes the page's response to a tool call on in, to the connection thread that holds the call.
+//
+pub const TOOL_RESPONSE_TYPE = "mcp-tool-response";
+
+//
+// The page's response to a tool call, as the main thread passes it to the server: the call's id in `key`, which the connection thread
+// holding the call holds.
+//
+const IToolResponse = struct {
+    // Always TOOL_RESPONSE_TYPE.
+    type: []const u8 = TOOL_RESPONSE_TYPE,
+    // The id of the tool call this responds to.
+    key: []const u8,
+    // Whether the page failed to do what the tool requested.
+    failed: bool,
+    // The text of the result, or the reason for the failure.
+    text: []const u8,
 };
 
 //
-// Creates the MCP server with every tool registered, each forwarding its call to the page. Everything it allocates, the tools and what they
-// are called with included, is allocated with the allocator, which must live as long as the server does.
+// What one connection thread of the server keeps: an MCP server of its own with every tool registered, and what its tools need to
+// forward their calls to the page. Made and freed on the thread, with the thread's own allocator.
 //
-pub fn createMcpServer(allocator: std.mem.Allocator, state: *main_state.MainState, stopping: *const std.atomic.Value(bool)) !*McpServer {
-    const server = try allocator.create(McpServer);
-    server.* = McpServer.init(allocator, .{
+pub const McpConnection = struct {
+    // The MCP server. The connection thread's state for the HTTP framework points at it.
+    server: McpServer,
+    // The thread's copy of the native app's callbacks, through which the thread sends the page each tool call itself.
+    native_callbacks: ziggy.core.NativeCallbacks,
+    // Makes the ids of the tool calls.
+    uuids: utils.random_uuid_generator.RandomUuidGenerator,
+    // What each tool is called with, one for each of tool_definitions, in the same order.
+    forwarding: [tool_definitions.len]IForwardingTool,
+};
+
+//
+// The type of the app event a connection thread sends the page a tool call in.
+//
+pub const TOOL_REQUEST_TYPE = "mcp-tool-request";
+
+//
+// What a tool needs to forward its call to the page. The connection thread's server holds one for each tool.
+//
+pub const IForwardingTool = struct {
+    // The connection the tool belongs to.
+    connection: *McpConnection,
+
+    // The name of the tool, which the page dispatches on.
+    tool: []const u8,
+};
+
+//
+// Gives the connection its MCP server with every tool registered, each forwarding its call to the page through the connection. The list of
+// tools is allocated with the allocator, the connection thread's own, which frees it with McpServer.deinit.
+//
+fn registerTools(connection: *McpConnection, allocator: std.mem.Allocator) !void {
+    connection.server = McpServer.init(.{
         .name = "photosphere",
         .version = config.version,
     }, .{
         .instructions = PHOTOSPHERE_INSTRUCTIONS,
     });
-    for (tool_definitions) |definition| {
-        const forwarding = try allocator.create(IForwardingTool);
+    errdefer connection.server.deinit(allocator);
+    for (tool_definitions, &connection.forwarding) |definition, *forwarding| {
         forwarding.* = .{
-            .state = state,
+            .connection = connection,
             .tool = definition.name,
-            .stopping = stopping,
         };
-        try server.registerTool(definition.name, .{
+        try connection.server.registerTool(allocator, definition.name, .{
             .description = definition.description,
             .inputSchema = definition.inputSchema,
         }, forwarding, forwardToPage);
     }
-    return server;
 }
 
 //
-// The handler of every tool: sends the call to the page and gives back what the page answers. A failure of the page is the failure of the
-// tool, with the page's reason as its text.
+// The handler of every tool: sends the call to the page and gives back the page's response. The connection thread holds the call,
+// so the main thread's message with the page's response is passed to it. A failure of the page is the failure of the tool, with the page's
+// reason as its text, and a server that stops while the call waits ends it as cancelled.
 //
 fn forwardToPage(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) anyerror!protocol.ICallToolResult {
     const forwarding: *IForwardingTool = @ptrCast(@alignCast(context.?));
-    const state = forwarding.state;
+    const connection = forwarding.connection;
+    const request = node_utils.http_server.currentRequest() orelse {
+        return utils.errors.throwError("A tool was called outside a request.", .{});
+    };
     const arguments_json = try protocol.stringifyCompact(allocator, .{
         .document = arguments,
     });
-    const request_id = try state.uuid_generator.generate(allocator, io);
-    // The bridge is told before the page is, so the answer can never arrive for a request it does not know.
-    try state.mcp_bridge.begin(request_id);
-    errdefer state.mcp_bridge.cancel(request_id);
-    try events.sendEvent(state.core, allocator, "mcp-tool-request", .{
+    const request_id = try connection.uuids.uuidGenerator().generate(allocator, io);
+    // The call is held before the page is told of it, so the page's result can never arrive for a call nobody holds. The thread sends
+    // the page the call itself, through the native app's callbacks.
+    try request.hold(io, allocator, request_id);
+    try events.sendEvent(connection.native_callbacks, io, allocator, TOOL_REQUEST_TYPE, .{
         .requestId = request_id,
         .tool = forwarding.tool,
         .args = try std.json.parseFromSliceLeaky(std.json.Value, allocator, arguments_json, .{}),
     });
-    const answer = try state.mcp_bridge.wait(allocator, request_id, forwarding.stopping);
-    if (answer.failed) {
-        return utils.errors.throwError("{s}", .{answer.text});
+    while (true) {
+        const message = request.waitForMessage(io, allocator, RESPONSE_WAIT_MS) orelse {
+            if (request.stopped) {
+                return error.Cancelled;
+            }
+            continue;
+        };
+        defer allocator.free(message.text);
+        const response = try std.json.parseFromSliceLeaky(IToolResponse, allocator, message.text, .{
+            .ignore_unknown_fields = true,
+            .allocate = .alloc_always,
+        });
+        if (!std.mem.eql(u8, response.key, request_id)) {
+            continue;
+        }
+        if (response.failed) {
+            return utils.errors.throwError("{s}", .{response.text});
+        }
+        const content = try allocator.alloc(protocol.ITextContent, 1);
+        content[0] = .{
+            .text = response.text,
+        };
+        return .{
+            .content = content,
+        };
     }
-    const content = try allocator.alloc(protocol.ITextContent, 1);
-    content[0] = .{
-        .text = answer.text,
-    };
-    return .{
-        .content = content,
-    };
 }
 
 //
-// The mcp-tool-response message: the page's answer to a tool call. The payload holds the `requestId` of the call and either a `result`, the
-// text to give the client, or an `error`, the reason the page could not do what was asked. The response is null.
+// The mcp-tool-response message: the page's response to a tool call. The payload holds the `requestId` of the call and either a `result`, the
+// text to give the client, or an `error`, the reason the page could not do what was requested. It is passed to the MCP server, whose
+// connection thread holding the call gives it to the client. The response is null.
 //
-pub fn mcpToolResponseHandler(core: *Core, arena: std.mem.Allocator, request: McpToolResponseRequest) !void {
-    _ = arena;
-    const state = main_state.fromCore(core);
+pub fn mcpToolResponseHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: McpToolResponseRequest) !void {
+    _ = services;
+    _ = timers;
+    const state = main_state.current();
+    const running = state.mcp_server orelse {
+        return;
+    };
     const failure = request.@"error" orelse "";
-    if (failure.len > 0) {
-        try state.mcp_bridge.respond(request.requestId, true, failure);
-    }
-    else {
-        try state.mcp_bridge.respond(request.requestId, false, request.result orelse "");
-    }
+    const text = try json.stringify(allocator, IToolResponse{
+        .key = request.requestId,
+        .failed = failure.len > 0,
+        .text = if (failure.len > 0) failure else request.result orelse "",
+    });
+    try running.http_server.post(io, text);
 }
 
 //
 // The data of mcp-tool-response.
 //
 pub const McpToolResponseRequest = struct {
-    // The id of the tool call this answers.
+    // The id of the tool call this responds to.
     requestId: []const u8,
     // The text to give the client, or null when the call failed.
     result: ?[]const u8 = null,
@@ -410,55 +473,82 @@ fn requestedPort() u16 {
 }
 
 //
-// The MCP server while it runs. Its HTTP server answers requests on threads of its own, so the server holds no worker of the task runner.
-// It was a task that slept until it was cancelled, which held a worker for the life of the app: with the asset server holding another,
-// a machine with three cores (the macOS arm64 GitHub runner) had one worker left, the import took it and waited for the work it queued,
-// which had no worker to run on, and every import in the macOS arm64 release workflow's app smoke tests timed out. Owned by the main
-// state, which stops it.
+// The MCP server while it runs: an HTTP server of Photosphere's own, not a task, so it holds no worker. It was a task that slept until it
+// was cancelled, which held a worker for the life of the app: with the asset server holding another, a machine with three cores (the
+// macOS arm64 GitHub runner) had one worker left, the import took it and waited for the work it queued, which had no worker to run on,
+// and every import in the macOS arm64 release workflow's app smoke tests timed out. Owned by the main state, which stops it. No
+// connection thread holds it: each has an MCP server of its own and a copy of the native app's callbacks.
 //
 pub const RunningMcpServer = struct {
-    // Holds the MCP server's tools and sessions.
-    arena_state: std.heap.ArenaAllocator,
-    // Tells the calls and the streams that are waiting that the server is closing.
-    stopping: std.atomic.Value(bool),
-    // What the HTTP server answers requests with, which points at the MCP server.
-    routes: mcp.streamable_http.StreamableHttpRoutes,
     // The HTTP server.
     http_server: *HttpServer,
+    // The port the server is listening on.
+    port: u16,
 
     //
-    // Closes the server and frees it. The calls and the streams that are waiting are told first, so that closing the server, which waits
-    // for the requests being answered, does not wait for a page that will never answer.
+    // Stops the server, which tells the calls and the open streams to end, waits for its threads and frees it.
     //
-    pub fn stop(self: *RunningMcpServer, state: *main_state.MainState) void {
-        self.stopping.store(true, .release);
-        self.http_server.close();
-        state.mcp_bridge.port.store(0, .release);
-        self.arena_state.deinit();
-        server_allocator.destroy(self);
+    pub fn stop(self: *RunningMcpServer, io: std.Io, allocator: std.mem.Allocator) void {
+        self.http_server.stop(io, allocator);
+        allocator.destroy(self);
     }
 };
 
 //
-// Starts the MCP server and returns it running. The server is not started in test mode on the fixed port, but on a free one, and the
-// port it bound is kept in the bridge. A failure to listen (the port is taken, say) is returned, and the caller carries on without the
-// server.
+// Starts the MCP server and returns it running, on the main thread. Each connection thread is given a copy of the native app's
+// callbacks, through which it sends the page its tool calls itself. The server is not started in test mode on the fixed port, but on a
+// free one. A failure to listen (the port is taken, for example) is returned, and the caller carries on without the server.
 //
-pub fn startMcpServer(state: *main_state.MainState, io: std.Io) !*RunningMcpServer {
-    const running = try server_allocator.create(RunningMcpServer);
-    errdefer server_allocator.destroy(running);
-    running.arena_state = std.heap.ArenaAllocator.init(server_allocator);
-    errdefer running.arena_state.deinit();
-    running.stopping = .init(false);
-    const server = try createMcpServer(running.arena_state.allocator(), state, &running.stopping);
-    running.routes = .{
-        .server = server,
-        .stopping = &running.stopping,
+pub fn startMcpServer(allocator: std.mem.Allocator, io: std.Io, native_callbacks: ziggy.core.NativeCallbacks) !*RunningMcpServer {
+    const running = try allocator.create(RunningMcpServer);
+    errdefer allocator.destroy(running);
+    const listener = try node_utils.http_server.open(io, MCP_HOST, requestedPort());
+    running.* = .{
+        .http_server = undefined,
+        .port = listener.port,
     };
-    running.http_server = try HttpServer.listen(server_allocator, io, MCP_HOST, requestedPort(), running.routes.requestHandler());
-    errdefer running.http_server.close();
-    const initialized = try std.fmt.allocPrint(running.arena_state.allocator(), "MCP server initialized on port {d}", .{running.http_server.port});
-    state.mcp_bridge.port.store(running.http_server.port, .release);
-    log.info(initialized);
+    running.http_server = try HttpServer.start(io, allocator, listener, .{
+        // The routes hold nothing: each request is given to the MCP server of the connection thread it arrives on.
+        .router = mcp.streamable_http.StreamableHttpRoutes.router,
+        .maxConnectionThreads = MAX_CONNECTION_THREADS,
+        .connectionState = .{
+            .create = createConnection,
+            .destroy = destroyConnection,
+        },
+        .nativeCallbacks = native_callbacks,
+        .environment = node_utils.process_env.getEnvironMap(),
+    });
+    var buffer: [64]u8 = undefined;
+    log.info(std.fmt.bufPrint(&buffer, "MCP server initialized on port {d}", .{running.port}) catch "MCP server initialized");
     return running;
 }
+
+//
+// Makes the state of one connection thread, on the thread: its own MCP server. The state the HTTP framework holds is the server inside
+// it.
+//
+fn createConnection(connection_config: []const u8, native_callbacks: ?*const ziggy.core.NativeCallbacks, allocator: std.mem.Allocator, io: std.Io) anyerror!*anyopaque {
+    _ = connection_config;
+    _ = io;
+    const connection = try allocator.create(McpConnection);
+    errdefer allocator.destroy(connection);
+    connection.* = .{
+        .server = undefined,
+        .native_callbacks = (native_callbacks orelse return error.McpServerNeedsTheNativeCallbacks).*,
+        .uuids = .{},
+        .forwarding = undefined,
+    };
+    try registerTools(connection, allocator);
+    return &connection.server;
+}
+
+//
+// Frees the state of one connection thread, on the thread, with the thread's allocator that made it.
+//
+fn destroyConnection(state: *anyopaque, allocator: std.mem.Allocator) void {
+    const server: *McpServer = @ptrCast(@alignCast(state));
+    const connection: *McpConnection = @fieldParentPtr("server", server);
+    connection.server.deinit(allocator);
+    allocator.destroy(connection);
+}
+

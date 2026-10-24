@@ -36,6 +36,7 @@
 #include "libavutil/pixdesc.h"
 #include "libavutil/dict.h"
 #include "libavutil/common.h"
+#include "fftools/fftools_state.h"
 
 extern const unsigned char ff_graph_html_data[];
 extern const unsigned int ff_graph_html_len;
@@ -58,9 +59,6 @@ typedef struct ResourceManagerContext {
     AVDictionary *resource_dic;
 } ResourceManagerContext;
 
-static AVMutex mutex = AV_MUTEX_INITIALIZER;
-
-static ResourceManagerContext resman_ctx = { .class = &resman_class };
 
 
 #if CONFIG_RESOURCE_COMPRESSION
@@ -119,16 +117,18 @@ static int decompress_gzip(ResourceManagerContext *ctx, uint8_t *in, unsigned in
 
 void ff_resman_uninit(void)
 {
-    ff_mutex_lock(&mutex);
+    ff_mutex_lock(&FFTOOLS_COMMON(resman_mutex));
 
-    av_dict_free(&resman_ctx.resource_dic);
+    av_dict_free(&FFTOOLS_COMMON(resman_resource_dic));
 
-    ff_mutex_unlock(&mutex);
+    ff_mutex_unlock(&FFTOOLS_COMMON(resman_mutex));
 }
 
 
 char *ff_resman_get_string(FFResourceId resource_id)
 {
+    /* Patched (fftools-per-run-state.patch): the cache of resources is the run's. */
+    ResourceManagerContext resman_ctx = { .class = &resman_class };
     ResourceManagerContext *ctx = &resman_ctx;
     FFResourceDefinition resource_definition = { 0 };
     AVDictionaryEntry *dic_entry;
@@ -144,7 +144,8 @@ char *ff_resman_get_string(FFResourceId resource_id)
 
     av_assert1(resource_definition.name);
 
-    ff_mutex_lock(&mutex);
+    ff_mutex_lock(&FFTOOLS_COMMON(resman_mutex));
+    ctx->resource_dic = FFTOOLS_COMMON(resman_resource_dic);
 
     dic_entry = av_dict_get(ctx->resource_dic, resource_definition.name, NULL, 0);
 
@@ -191,6 +192,7 @@ char *ff_resman_get_string(FFResourceId resource_id)
     res = dic_entry->value;
 
 end:
-    ff_mutex_unlock(&mutex);
+    FFTOOLS_COMMON(resman_resource_dic) = ctx->resource_dic;
+    ff_mutex_unlock(&FFTOOLS_COMMON(resman_mutex));
     return res;
 }

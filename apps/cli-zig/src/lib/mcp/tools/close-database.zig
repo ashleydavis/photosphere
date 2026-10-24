@@ -14,8 +14,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `close_database` tool: drops the currently open database handle for this
 // MCP session. Does not unregister the database from databases.toml.
 //
-pub fn registerCloseDatabaseTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerCloseDatabaseTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "close_database",
         .{
             .description = "Close the currently open database (does not unregister it from databases.toml).",

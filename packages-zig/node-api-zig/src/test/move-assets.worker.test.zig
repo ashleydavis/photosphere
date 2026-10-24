@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
@@ -40,7 +41,7 @@ const LoadCountingLog = struct {
     // Makes this the global log.
     //
     fn install(self: *LoadCountingLog) void {
-        self.previousLog = utils.log.log;
+        self.previousLog = utils.log.currentLog();
         utils.log.setLog(.{
             .ptr = self,
             .vtable = &vtable,
@@ -188,7 +189,7 @@ const World = struct {
         try object.put(allocator, "sourceDatabasePath", .{ .string = world.source.dir });
         try object.put(allocator, "destDatabasePath", .{ .string = world.dest.dir });
         try object.put(allocator, "assetIds", .{ .array = items });
-        const output = try moveAssetsHandler(allocator, io, .{ .object = object }, world.testContext.context.taskContext());
+        const output = try moveAssetsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext());
         return std.json.parseFromValueLeaky(IMoveAssetsResult, allocator, output, .{});
     }
 
@@ -417,6 +418,6 @@ test "throws a descriptive error when the task data is not valid" {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "sourceDatabasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, moveAssetsHandler(allocator, io, .{ .object = object }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, moveAssetsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The move-assets task data is not valid: sourceDatabasePath and destDatabasePath must be strings, and assetIds must be a list of strings", errors.lastErrorMessage());
 }

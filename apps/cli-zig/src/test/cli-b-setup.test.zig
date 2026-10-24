@@ -98,7 +98,7 @@ const ILogEnvironment = struct {
         startCapture(&self.capture, allocator);
         cli.process_argv.setArgv(&.{ "psi", "verify", "--db", "x" });
         var console_log = cli.log.Log.init(.{});
-        self.mediaTools = try media_tools.MediaTools.init(io);
+        self.mediaTools = try media_tools.MediaTools.init();
         self.logger = try FileLogger.create(allocator, io, self.mediaTools.runner(), console_log.ilog(), "verify --db x");
     }
 

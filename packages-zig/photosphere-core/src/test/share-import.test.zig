@@ -123,5 +123,5 @@ test "a failing import-share-payload request logs the error with the message of 
     try app.start();
     defer app.stop();
     try app.queueFailingTask("import-share-payload", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error importing share payload") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error importing share payload") != null);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -44,8 +45,9 @@ pub const IConsolidateCommandOptions = struct {
 //
 // Logs a replication progress message.
 //
-fn onReplicateProgress(context: ?*anyopaque, progress: []const u8) void {
+fn onReplicateProgress(context: ?*anyopaque, io: std.Io, progress: []const u8) void {
     _ = context;
+    _ = io;
     log.verbose(progress);
 }
 
@@ -102,7 +104,8 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
             .context = null,
             .function = onReplicateProgress,
         };
-        _ = try replicateDatabase(allocator, io, uuidGenerator, .{
+        var replicate_timers = TimerList.init();
+        _ = try replicateDatabase(allocator, io, replicate_timers.interface(), uuidGenerator, .{
             .sourcePath = databaseDir,
             .destPath = remotePath,
             .sourceEncryptionKey = options.base.key,
@@ -152,16 +155,17 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
 
     // The block's defers shut the queue down before the exit below.
     {
-        const queue = try TaskQueue.init(allocator, io, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "consolidate-", sessionId }));
-        defer queue.deinit();
-        defer queue.shutdown();
+        const queue = try TaskQueue.init(allocator, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "consolidate-", sessionId }));
+        var timer_list = TimerList.init();
+        defer queue.deinit(io, allocator);
+        defer queue.shutdown(io, allocator);
 
-        const taskId = try queue.addTask("consolidate-database", try consolidateDatabaseDataToJson(allocator, .{
+        const taskId = try queue.addTask(io, allocator, "consolidate-database", try consolidateDatabaseDataToJson(allocator, .{
             .databasePath = databaseDir,
             .remotePath = remotePath,
             .sessionId = sessionId,
         }), null, null);
-        const taskResult = try queue.awaitTask(taskId);
+        const taskResult = try queue.awaitTask(io, allocator, timer_list.interface(), taskId);
 
         if (taskResult == null or taskResult.?.status != TaskStatus.Succeeded) {
             const errorMessage = if (taskResult) |failedResult| failedResult.errorMessage orelse "the task did not finish" else "the task did not finish";

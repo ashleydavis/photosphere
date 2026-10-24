@@ -1,107 +1,52 @@
 const std = @import("std");
 const ziggy = @import("ziggy");
+const node_api = @import("node-api-zig");
 const media_tools = @import("media-tools-zig");
 const test_environment = @import("test-environment.zig");
+const test_timers = @import("test-timers.zig");
 
 const MediaTools = media_tools.MediaTools;
-const TaskRunner = ziggy.task_runner.TaskRunner;
-const ZiggyQueueBackend = ziggy.queue_backend.ZiggyQueueBackend;
+const MockWorkerPool = ziggy.task_queue.mock_worker_pool.MockWorkerPool;
 
 //
-// The queue backend the Photosphere App runs its tasks on (Ziggy's ZiggyQueueBackend over Ziggy's TaskRunner), set up the way
-// Ziggy's core sets it up, with its tool runner set to the runner of tools built into the program, as MainState sets it. It is for
-// the tests whose tasks run ImageMagick or FFmpeg, which the MockWorkerPool of test_environment cannot give a runner. While it is
-// started it is the queue backend the task queue talks to; stopping it puts the MockWorkerPool back.
+// The task types of the pool: every task handler of node-api, each task that runs the tools making them on its own thread.
+//
+const task_entries = node_api.task_handlers.taskEntries(media_tools.ThreadTools, test_environment.registerMediaSources);
+
+//
+// A worker pool whose tasks make the runner of the tools built into the program (ImageMagick and FFmpeg) on their threads, as the app's
+// do, for the tests whose tasks run them, which the pool of test_environment gives no runner. While it is started it is the test
+// thread's queue backend; stopping it puts the test environment's pool back.
 //
 pub const ProductionQueueBackend = struct {
-    // The runner that owns the worker threads. Its threads hold its address, so this must not move once started.
-    runner: TaskRunner,
+    // The pool.
+    pool: *MockWorkerPool,
 
-    // The queue backend over the runner. Owned.
-    backend: *ZiggyQueueBackend,
-
-    // The tools built into the program, whose runner the handlers are given.
+    // The tools built into the program, started for it, which the tools each task makes on its own thread need.
     mediaTools: MediaTools,
 
     //
-    // Starts the runner's threads and installs the backend as the task queue's backend. The task handlers must already be
-    // registered with the task queue (initTaskHandlers), which is where the runner finds them.
+    // Starts the pool, with the allocator the test passes to the code under test (which stop must be given too), and installs it as
+    // the test thread's queue backend. It must not move once started.
     //
-    pub fn start(self: *ProductionQueueBackend, io: std.Io) !void {
-        // The backend and the runner are used from every worker thread, so their allocator must be thread safe.
-        const allocator = std.heap.smp_allocator;
-        self.mediaTools = try MediaTools.init(io);
+    pub fn start(self: *ProductionQueueBackend, allocator: std.mem.Allocator) !void {
+        self.mediaTools = try MediaTools.init();
         errdefer self.mediaTools.deinit();
-        self.backend = try ZiggyQueueBackend.create(allocator, io, &self.runner);
-        errdefer self.backend.destroy();
-        self.backend.tool_runner = self.mediaTools.runner();
-        // Two child tasks in flight at once and four worker threads, as the MockWorkerPool the other tests run on.
-        try self.runner.start(allocator, io, .{
-            .user_data = null,
-            .emit = ignoreShellEvent,
-        }, &.{}, .{
-            .worker_threads = 4,
-            .max_concurrent_child_tasks = 2,
-            .describe_error = null,
-            .observer = .{
-                .user_data = self.backend,
-                .on_task_end = observeTaskEnd,
-                .on_task_event = observeTaskEvent,
-            },
-            .fallback_handler = ziggy.queue_backend.fallbackHandler(self.backend),
-        }, .{
-            .user_data = null,
-            .deliver = null,
-            .os_version = null,
-            .quit = null,
-            .pick_paths = null,
-            .menu_action = null,
-            .keep_alive = null,
-            .worker_threads = 4,
-            .max_concurrent_child_tasks = 2,
-            .app_url_prefix = "",
-            .data_dir = "",
-            .test_mode = false,
-            .test_port_file = null,
-            .host_request = null,
-            .screenshot = null,
-        });
-        ziggy.task_queue.queue_backend.setQueueBackend(self.backend.queueBackend());
+        // Two child tasks in flight at once and four workers, as the pool the other tests run on.
+        self.pool = try MockWorkerPool.init(allocator, 4, .{
+            .sessionId = "test-session",
+            .maxConcurrentChildTasks = 2,
+        }, &task_entries);
+        ziggy.task_queue.queue_backend.setQueueBackend(self.pool.queueBackend());
     }
 
     //
-    // Puts the MockWorkerPool back as the task queue's backend, cancels every task, waits for the worker threads and releases
-    // everything, as Ziggy's core does when it is destroyed.
+    // Puts the test environment's pool back as the test thread's queue backend, waits for the tasks, stops the workers and releases
+    // everything.
     //
-    pub fn stop(self: *ProductionQueueBackend) void {
+    pub fn stop(self: *ProductionQueueBackend, allocator: std.mem.Allocator) void {
         test_environment.restoreQueueBackend();
-        self.runner.stop();
-        self.backend.destroy();
+        self.pool.deinit(std.testing.io, allocator, test_timers.timers());
         self.mediaTools.deinit();
     }
 };
-
-//
-// The runner's events for the shell (task-event and task-completed as JSON text). The test program has no shell; the backend
-// learns of every task end and event through the observer, as it does in the App.
-//
-fn ignoreShellEvent(user_data: ?*anyopaque, message: []const u8) void {
-    _ = user_data;
-    _ = message;
-}
-
-//
-// Tells the backend a task has ended, as Ziggy's core does.
-//
-fn observeTaskEnd(user_data: ?*anyopaque, end: ziggy.types.TaskEnd) void {
-    const backend: *ZiggyQueueBackend = @ptrCast(@alignCast(user_data.?));
-    backend.taskEnded(end);
-}
-
-//
-// Tells the backend a task has sent an event, as Ziggy's core does.
-//
-fn observeTaskEvent(user_data: ?*anyopaque, sent: ziggy.types.TaskSentEvent) void {
-    const backend: *ZiggyQueueBackend = @ptrCast(@alignCast(user_data.?));
-    backend.eventSent(sent);
-}

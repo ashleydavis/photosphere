@@ -10,7 +10,7 @@ import UIKit
 import ZiggyNativeIOS
 
 // The export requests.
-final class ExportHostRequests: ZiggyHostRequestHandler {
+final class ExportNativeCalls: ZiggyNativeCallHandler {
     // The directory the paths in requests are relative to, which is the app's data directory.
     private let storageRoot: URL
 
@@ -28,36 +28,36 @@ final class ExportHostRequests: ZiggyHostRequestHandler {
     }
 
     func handle(method: String, requestJson: String) throws -> String {
-        let request = try HostJson.object(from: requestJson, method: method)
+        let request = try NativeCallJson.object(from: requestJson, method: method)
         switch method {
         case "exportFile":
-            return try exportFile(path: try HostJson.string(request, "path", method: method), testOutcome: request["testOutcome"] as? String)
+            return try exportFile(path: try NativeCallJson.string(request, "path", method: method), testOutcome: request["testOutcome"] as? String)
         case "exportTempFolder":
-            return try exportTempFolder(folder: try HostJson.string(request, "folder", method: method))
+            return try exportTempFolder(folder: try NativeCallJson.string(request, "folder", method: method))
         case "exportFiles":
-            return try exportFiles(paths: try HostJson.strings(request, "paths", method: method), testOutcome: request["testOutcome"] as? String)
+            return try exportFiles(paths: try NativeCallJson.strings(request, "paths", method: method), testOutcome: request["testOutcome"] as? String)
         default:
-            throw ZiggyHostRequestError("ExportHostRequests does not answer \"\(method)\".")
+            throw ZiggyNativeCallError("ExportNativeCalls does not handle \"\(method)\".")
         }
     }
 
-    // Makes the folder one export's files are written into, so the save task can create files in it, and says where it is.
+    // Makes the folder one export's files are written into, so the save task can create files in it, and returns its path.
     private func exportTempFolder(folder: String) throws -> String {
         let made: URL
         do {
             made = try ExportTemp.prepareFolder(root: storageRoot, relativeFolder: folder)
         }
         catch {
-            throw ZiggyHostRequestError("exportTempFolder: \(error)")
+            throw ZiggyNativeCallError("exportTempFolder: \(error)")
         }
         let reply: [String: Any] = [
             "path": made.path,
         ]
-        return try HostJson.text(from: reply, method: "exportTempFolder")
+        return try NativeCallJson.text(from: reply, method: "exportTempFolder")
     }
 
     // Shows the share sheet for one file, then removes the temporary copy. A request carrying a test outcome skips the sheet and goes
-    // straight to the completion path, because the sheet cannot be answered by an automated test.
+    // straight to the completion path, because the sheet cannot be operated by an automated test.
     private func exportFile(path: String, testOutcome: String?) throws -> String {
         let fileURL = try resolve(path, method: "exportFile")
         let cancelled: Bool
@@ -77,7 +77,7 @@ final class ExportHostRequests: ZiggyHostRequestHandler {
         let reply: [String: Any] = [
             "path": exported ?? NSNull(),
         ]
-        return try HostJson.text(from: reply, method: "exportFile")
+        return try NativeCallJson.text(from: reply, method: "exportFile")
     }
 
     // Shows one share sheet for all the files, then removes the temporary copies. A request carrying a test outcome skips the sheet, as
@@ -104,7 +104,7 @@ final class ExportHostRequests: ZiggyHostRequestHandler {
         let reply: [String: Any] = [
             "paths": exported ?? NSNull(),
         ]
-        return try HostJson.text(from: reply, method: "exportFiles")
+        return try NativeCallJson.text(from: reply, method: "exportFiles")
     }
 
     // Confirms a temporary file is inside the sandbox before anything is shown.
@@ -113,7 +113,7 @@ final class ExportHostRequests: ZiggyHostRequestHandler {
             return try PathSandbox.resolveWithin(root: storageRoot, candidate: path)
         }
         catch {
-            throw ZiggyHostRequestError("\(method): \(error)")
+            throw ZiggyNativeCallError("\(method): \(error)")
         }
     }
 
@@ -125,7 +125,7 @@ final class ExportHostRequests: ZiggyHostRequestHandler {
                 try ExportTemp.deleteTemp(root: storageRoot, relativePath: path)
             }
             catch {
-                throw ZiggyHostRequestError("The export failed (\(failure)) and its temporary copy of \(path) could not be removed (\(error)).")
+                throw ZiggyNativeCallError("The export failed (\(failure)) and its temporary copy of \(path) could not be removed (\(error)).")
             }
         }
     }
@@ -158,7 +158,7 @@ final class ExportHostRequests: ZiggyHostRequestHandler {
         finished.wait()
 
         if let failure = failure {
-            throw ZiggyHostRequestError(failure)
+            throw ZiggyNativeCallError(failure)
         }
         return completed
     }

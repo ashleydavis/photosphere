@@ -18,8 +18,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `save_media_file` tool: streams the original, display, or thumbnail
 // version of a media file to a path on disk.
 //
-pub fn registerSaveMediaFileTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerSaveMediaFileTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "save_media_file",
         .{
             .description = "Save a media file (photo or video) to a chosen path on disk. Type may be 'original', 'display' or 'thumb'.",

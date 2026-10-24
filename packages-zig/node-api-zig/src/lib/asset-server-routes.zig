@@ -3,6 +3,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const asset_server_core = @import("asset-server-core.zig");
+const http_server = node_utils.http_server;
 const IAssetServerCore = asset_server_core.IAssetServerCore;
 const IDatabaseOp = api.database_op.IDatabaseOp;
 const errors = utils.errors;
@@ -40,73 +41,128 @@ const cors_headers = [_]std.http.Header{
 // it, in the order express would try them.)
 //
 pub const AssetServerRoutes = struct {
-    // The core that does the work.
-    core: IAssetServerCore,
+    // The core that does the work, or null for a server whose connection threads each keep one of their own (their state is an
+    // AssetServerCore).
+    core: ?IAssetServerCore,
 
     // Whether to add the CORS headers.
     enableCors: bool,
 
     //
-    // Gets the handler an HTTP server (node_utils.http_server) calls with each request. The routes must stay where they are while
-    // the server runs.
+    // The routes, for the HTTP framework (node_utils.http_server). The routes must stay where they are while the server runs.
     //
-    pub fn requestHandler(self: *AssetServerRoutes) node_utils.http_server.RequestHandler {
+    pub fn router(self: *AssetServerRoutes) http_server.Router {
+        return routerOf(self);
+    }
+
+    //
+    // The routes of a constant, for a server whose connection threads all read the same routes, which nothing changes.
+    //
+    pub fn routerOf(self: *const AssetServerRoutes) http_server.Router {
         return .{
-            .context = self,
-            .handle = handleErased,
+            .context = @constCast(self),
+            .routes = &route_table,
+            .before = beforeRoutes,
+            .notFound = notFound,
         };
     }
 
     //
-    // The function the HTTP server calls, which gives the request to the routes it was made from.
+    // GET /asset, POST /asset and POST /apply-database-ops. HEAD is answered as GET.
     //
-    fn handleErased(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request) anyerror!void {
-        const self: *AssetServerRoutes = @ptrCast(@alignCast(context.?));
-        return self.handleRequest(allocator, io, request);
+    const route_table = [_]http_server.Route{
+        .{
+            .method = .GET,
+            .path = "/asset",
+            .handle = getAssetRoute,
+        },
+        .{
+            .method = .HEAD,
+            .path = "/asset",
+            .handle = getAssetRoute,
+        },
+        .{
+            .method = .POST,
+            .path = "/asset",
+            .handle = postAssetRoute,
+        },
+        .{
+            .method = .POST,
+            .path = "/apply-database-ops",
+            .handle = postApplyDatabaseOpsRoute,
+        },
+    };
+
+    //
+    // The routes a handler's context points at.
+    //
+    fn of(context: ?*anyopaque) *AssetServerRoutes {
+        return @ptrCast(@alignCast(context.?));
     }
 
     //
-    // Answers one request: the CORS middleware first, then the route that matches, and the 404 express sends when none does.
+    // The core for a request: the routes' one, or the connection thread's own when the routes have none.
     //
-    pub fn handleRequest(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request) !void {
-        const method = request.head.method;
-        // The target and the content type point into the request's head, which reading the body invalidates.
-        const target = try allocator.dupe(u8, request.head.target);
-        const content_type: ?[]const u8 = if (request.head.content_type) |value| try allocator.dupe(u8, value) else null;
-        const content_length = request.head.content_length;
-        const query_start = std.mem.indexOfScalar(u8, target, '?');
-        const path = target[0 .. query_start orelse target.len];
-        const query: []const u8 = if (query_start) |start| target[start + 1 ..] else "";
-
-        // Enable CORS for all routes (only when this server owns the app).
-        if (self.enableCors and method == .OPTIONS) {
-            return self.send(request, .ok, "text/plain; charset=utf-8", "OK");
+    fn coreFor(self: *AssetServerRoutes, request: *http_server.Request) IAssetServerCore {
+        if (self.core) |core| {
+            return core;
         }
+        const own: *asset_server_core.AssetServerCore = @ptrCast(@alignCast(request.state.?));
+        return own.assetServerCore();
+    }
 
-        if (pathIs(path, "/asset")) {
-            if (method == .GET or method == .HEAD) {
-                return self.getAsset(allocator, io, request, query);
-            }
-            if (method == .POST) {
-                return self.postAsset(allocator, io, request, query, content_type, content_length);
-            }
+    //
+    // The CORS middleware, before the routes: an OPTIONS request is answered with 200 when this server owns the application.
+    //
+    fn beforeRoutes(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!bool {
+        const self = of(context);
+        if (self.enableCors and request.method == .OPTIONS) {
+            try self.send(request.http, .ok, "text/plain; charset=utf-8", "OK");
+            return true;
         }
-        else if (pathIs(path, "/apply-database-ops") and method == .POST) {
-            return self.postApplyDatabaseOps(allocator, io, request, content_type);
-        }
+        return false;
+    }
 
-        // OPTIONS is answered for a path that has routes, listing the methods the routes answer.
-        if (method == .OPTIONS) {
-            if (pathIs(path, "/asset")) {
-                return sendAllowed(request, "GET, HEAD, POST");
+    //
+    // What express answers when no route matches: OPTIONS for a path that has routes lists the methods they answer, and anything
+    // else is a 404.
+    //
+    fn notFound(context: ?*anyopaque, request: *http_server.Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        const self = of(context);
+        if (request.method == .OPTIONS) {
+            if (http_server.pathIs(request.path, "/asset")) {
+                return sendAllowed(request.http, "GET, HEAD, POST");
             }
-            if (pathIs(path, "/apply-database-ops")) {
-                return sendAllowed(request, "POST");
+            if (http_server.pathIs(request.path, "/apply-database-ops")) {
+                return sendAllowed(request.http, "POST");
             }
         }
+        const message = try std.fmt.allocPrint(allocator, "Cannot {s} {s}", .{ @tagName(request.method), try escapeHtml(allocator, request.path) });
+        return self.sendErrorPage(allocator, request.http, .not_found, message);
+    }
 
-        const message = try std.fmt.allocPrint(allocator, "Cannot {s} {s}", .{ @tagName(method), try escapeHtml(allocator, path) });
-        return self.sendErrorPage(allocator, request, .not_found, message);
+    //
+    // GET /asset and HEAD /asset.
+    //
+    fn getAssetRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!void {
+        const self = of(context);
+        return self.getAsset(allocator, thread_arena, io, self.coreFor(request), request.http, request.query);
+    }
+
+    //
+    // POST /asset.
+    //
+    fn postAssetRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        const self = of(context);
+        return self.postAsset(allocator, io, self.coreFor(request), request.http, request.query, request.contentType, request.contentLength);
+    }
+
+    //
+    // POST /apply-database-ops.
+    //
+    fn postApplyDatabaseOpsRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+        const self = of(context);
+        return self.postApplyDatabaseOps(allocator, io, self.coreFor(request), request.http, request.contentType);
     }
 
     //
@@ -114,7 +170,7 @@ pub const AssetServerRoutes = struct {
     // (Zig: the route has `express.json()` before it, which reads a JSON body sent with a GET. The standard library's HTTP server
     // does not give the body of a GET to read, so a body sent with a GET is ignored.)
     //
-    fn getAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, query: []const u8) !void {
+    fn getAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, core: IAssetServerCore, request: *std.http.Server.Request, query: []const u8) !void {
         const assetId = try queryParameter(allocator, query, "id");
         const databasePath = try queryParameter(allocator, query, "db");
         const assetType = try queryParameter(allocator, query, "type");
@@ -133,7 +189,7 @@ pub const AssetServerRoutes = struct {
 
         // The stream is opened and its first bytes read before anything is sent, so that an asset that cannot be read is answered
         // with the 500 (the headers are not sent until the first byte is written).
-        const assetStream = self.core.serveAsset(allocator, io, assetId.?, assetType.?, databasePath.?) catch |err| {
+        const assetStream = core.serveAsset(allocator, thread_arena, io, assetId.?, assetType.?, databasePath.?) catch |err| {
             return self.failedToLoadAsset(allocator, request, assetId.?, err);
         };
         defer assetStream.destroy(io);
@@ -174,7 +230,7 @@ pub const AssetServerRoutes = struct {
     // Same query params as GET: id, type, db. Body: raw bytes. Content-Type: MIME of the blob.
     // Used when moving/copying assets between databases (gallery) so file data matches metadata applied via apply-database-ops.
     //
-    fn postAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, query: []const u8, contentType: ?[]const u8, contentLength: ?u64) !void {
+    fn postAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, core: IAssetServerCore, request: *std.http.Server.Request, query: []const u8, contentType: ?[]const u8, contentLength: ?u64) !void {
         const assetId = try queryParameter(allocator, query, "id");
         const databasePath = try queryParameter(allocator, query, "db");
         const assetType = try queryParameter(allocator, query, "type");
@@ -188,7 +244,7 @@ pub const AssetServerRoutes = struct {
 
         const body_buffer = try allocator.alloc(u8, 16 * 1024);
         const body = try request.readerExpectContinue(body_buffer);
-        self.core.writeAsset(allocator, io, assetId.?, assetType.?, databasePath.?, contentType, body, announcedLength) catch |err| {
+        core.writeAsset(allocator, io, assetId.?, assetType.?, databasePath.?, contentType, body, announcedLength) catch |err| {
             log.exception(try std.fmt.allocPrint(allocator, "Error storing asset {s} ({s})", .{ assetId.?, assetType.? }), err);
             var message = errors.errorMessage(err);
             if (message.len == 0) {
@@ -206,7 +262,7 @@ pub const AssetServerRoutes = struct {
     // Request body: JSON { ops: IDatabaseOp[] } where each op targets a database path (databaseId), collection, record id, and operation.
     // Responses: 400 if ops is missing or not an array; 204 on success; 500 if applying ops fails.
     //
-    fn postApplyDatabaseOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, request: *std.http.Server.Request, contentType: ?[]const u8) !void {
+    fn postApplyDatabaseOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, core: IAssetServerCore, request: *std.http.Server.Request, contentType: ?[]const u8) !void {
         // Reads a JSON body of at most 100kb, and leaves the body undefined for
         // a request that does not say it holds JSON.
         const has_body = request.head.method.requestHasBody() and (request.head.content_length != null or request.head.transfer_encoding != .none);
@@ -235,7 +291,7 @@ pub const AssetServerRoutes = struct {
             return self.sendHtmlText(request, .bad_request, "Request body must be a JSON object with an \"ops\" array.");
         }
 
-        self.applyOps(allocator, io, ops_value.?.array.items) catch |err| {
+        applyOps(allocator, io, core, ops_value.?.array.items) catch |err| {
             log.exception("Error applying database ops", err);
             var message = errors.errorMessage(err);
             if (message.len == 0) {
@@ -249,12 +305,12 @@ pub const AssetServerRoutes = struct {
     //
     // Reads the operations the page sent and has the core apply them.
     //
-    fn applyOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, items: []const std.json.Value) !void {
+    fn applyOps(allocator: std.mem.Allocator, io: std.Io, core: IAssetServerCore, items: []const std.json.Value) !void {
         const ops = try allocator.alloc(IDatabaseOp, items.len);
         for (items, ops) |item, *op| {
             op.* = try api.database_op.databaseOpFromJson(item);
         }
-        try self.core.applyDatabaseOps(allocator, io, ops);
+        try core.applyDatabaseOps(allocator, io, ops);
     }
 
     //
@@ -368,7 +424,7 @@ fn sendAllowed(request: *std.http.Server.Request, allowed: []const u8) !void {
 // true (i.e. when the asset server owns the app rather than attaching to an existing one).
 // (Zig: returns the routes, for an HTTP server to call; there is no application to attach them to.)
 //
-pub fn attachAssetServerRoutes(core: IAssetServerCore, enableCors: bool) AssetServerRoutes {
+pub fn attachAssetServerRoutes(core: ?IAssetServerCore, enableCors: bool) AssetServerRoutes {
     return .{
         .core = core,
         .enableCors = enableCors,
@@ -376,64 +432,10 @@ pub fn attachAssetServerRoutes(core: IAssetServerCore, enableCors: bool) AssetSe
 }
 
 //
-// Whether a request path is the route's path: case-insensitive, and with or without a trailing slash.
-//
-fn pathIs(path: []const u8, route: []const u8) bool {
-    var trimmed = path;
-    if (trimmed.len > 1 and trimmed[trimmed.len - 1] == '/') {
-        trimmed = trimmed[0 .. trimmed.len - 1];
-    }
-    return std.ascii.eqlIgnoreCase(trimmed, route);
-}
-
-//
 // Reads one parameter of a query string: the first value of the name, with percent-encoding and `+` decoded.
 // Returns null when the name is not there.
 //
-pub fn queryParameter(allocator: std.mem.Allocator, query: []const u8, name: []const u8) !?[]const u8 {
-    var pairs = std.mem.splitScalar(u8, query, '&');
-    while (pairs.next()) |pair| {
-        const equals = std.mem.indexOfScalar(u8, pair, '=');
-        const key = try decodeQueryComponent(allocator, pair[0 .. equals orelse pair.len]);
-        if (!std.mem.eql(u8, key, name)) {
-            continue;
-        }
-        const value = if (equals) |position| pair[position + 1 ..] else "";
-        return try decodeQueryComponent(allocator, value);
-    }
-    return null;
-}
-
-//
-// Decodes a component of a query string: `+` is a space and `%XX` is a byte. A `%` that does not start two hexadecimal digits is left
-// as it is.
-//
-fn decodeQueryComponent(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
-    var decoded: std.ArrayList(u8) = .empty;
-    var index: usize = 0;
-    while (index < text.len) {
-        const character = text[index];
-        if (character == '+') {
-            try decoded.append(allocator, ' ');
-            index += 1;
-        }
-        else if (character == '%' and index + 2 < text.len) {
-            if (std.fmt.parseInt(u8, text[index + 1 .. index + 3], 16)) |byte| {
-                try decoded.append(allocator, byte);
-                index += 3;
-            }
-            else |_| {
-                try decoded.append(allocator, character);
-                index += 1;
-            }
-        }
-        else {
-            try decoded.append(allocator, character);
-            index += 1;
-        }
-    }
-    return decoded.items;
-}
+pub const queryParameter = http_server.queryParameterOf;
 
 //
 // Escapes the characters that matter in the text of an HTML page.

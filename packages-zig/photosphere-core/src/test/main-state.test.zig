@@ -6,9 +6,20 @@ const background_work = @import("photosphere-core").background_work;
 
 const MainState = main_state.MainState;
 const TestApp = support.TestApp;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
+const TimerId = ziggy.timers.TimerId;
+
+//
+// The state belongs to the core's main thread, so every test reads and changes it from a function the test app runs there
+// (TestApp.onMainThread).
+//
 
 // Where the sync pass is in the state's arrays, which are indexed by pass.
 const sync_index = @intFromEnum(background_work.Pass.sync);
+
+// Where the import pass is in the state's arrays.
+const import_index = @intFromEnum(background_work.Pass.import);
 
 // Where the prefetch pass is in the state's arrays.
 const prefetch_index = @intFromEnum(background_work.Pass.prefetch);
@@ -17,207 +28,332 @@ const prefetch_index = @intFromEnum(background_work.Pass.prefetch);
 // Waits until the native app has been told as many keep-alive changes as are expected, and checks they are the ones expected.
 //
 fn expectKeepAliveCalls(app: *TestApp, expected: []const bool) !void {
-    const io = app.shell.threaded.io();
+    const io = std.testing.io;
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var calls: []const bool = &.{};
     var waited_ms: u32 = 0;
     while (waited_ms < 2_000) : (waited_ms += 1) {
-        app.shell.mutex.lockUncancelable(io);
-        const have = app.shell.keep_alive_calls.items.len;
-        app.shell.mutex.unlock(io);
-        if (have >= expected.len) {
+        calls = try std.json.parseFromSliceLeaky([]const bool, allocator, try app.native_app.keepAliveCalls(io, allocator), .{});
+        if (calls.len >= expected.len) {
             break;
         }
         try std.Io.sleep(io, .fromMilliseconds(1), .awake);
     }
-    app.shell.mutex.lockUncancelable(io);
-    defer app.shell.mutex.unlock(io);
-    try std.testing.expectEqualSlices(bool, expected, app.shell.keep_alive_calls.items);
+    try std.testing.expectEqualSlices(bool, expected, calls);
 }
 
 //
-// Stops the state's timer thread, so a test of the background pass bookkeeping is not raced by the timer starting a pass that is due.
+// The main thread's timers, which Ziggy gives every handler as the Timers interface of its TimerList. Called on the main thread.
 //
-fn stopTimerThread(state: *MainState) void {
-    state.stopping.store(true, .release);
-    if (state.timer_thread) |thread| {
-        thread.join();
-        state.timer_thread = null;
-    }
-    state.stopping.store(false, .release);
+fn timerList(timers: Timers) *ziggy.timers.TimerList {
+    return @ptrCast(@alignCast(timers.ptr));
 }
+
+//
+// How many milliseconds are left before the main thread's timer is due, or null when it is not set. Called on the main thread.
+//
+fn msUntilDue(timers: Timers, main_io: std.Io, id: TimerId) ?i64 {
+    const list = timerList(timers);
+    for (list.timers[0..list.count]) |timer| {
+        if (timer.id == id) {
+            return @intCast(@divTrunc(timer.due.durationFromNow(main_io).raw.nanoseconds, std.time.ns_per_ms));
+        }
+    }
+    return null;
+}
+
+//
+// Handler services that count the tasks queued and queue none, given to the state for a call that must queue nothing. Any other call
+// fails the test, since the call was not expected to make it.
+//
+const CountedServices = struct {
+    // How many tasks were queued.
+    added: usize = 0,
+
+    const vtable: HandlerServices.VTable = .{
+        .sendEvent = sendEvent,
+        .addTask = addTask,
+        .cancelTasks = cancelTasks,
+        .holdKeepAlive = holdKeepAlive,
+        .quit = quit,
+        .menuAction = menuAction,
+        .dataDir = dataDir,
+        .isPhone = isPhone,
+        .nativeCallbacks = nativeCallbacks,
+    };
+
+    fn interface(self: *CountedServices) HandlerServices {
+        return .{
+            .ptr = self,
+            .vtable = &vtable,
+        };
+    }
+
+    fn of(ptr: *anyopaque) *CountedServices {
+        return @ptrCast(@alignCast(ptr));
+    }
+
+    fn unexpected(comptime name: []const u8) noreturn {
+        @panic("the state called " ++ name ++ " on services that only count the tasks queued");
+    }
+
+    fn sendEvent(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) anyerror!void {
+        unexpected("sendEvent");
+    }
+
+    fn addTask(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8, _: []const u8, _: []const u8, _: []const u8, _: ziggy.task_runner.TaskPriority) anyerror!void {
+        of(ptr).added += 1;
+    }
+
+    fn cancelTasks(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) void {
+        unexpected("cancelTasks");
+    }
+
+    fn holdKeepAlive(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: bool) void {
+        unexpected("holdKeepAlive");
+    }
+
+    fn quit(_: *anyopaque, _: std.Io, _: std.mem.Allocator) void {
+        unexpected("quit");
+    }
+
+    fn menuAction(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) void {
+        unexpected("menuAction");
+    }
+
+    fn dataDir(_: *anyopaque) []const u8 {
+        unexpected("dataDir");
+    }
+
+    fn isPhone(_: *anyopaque) bool {
+        unexpected("isPhone");
+    }
+
+    fn nativeCallbacks(_: *anyopaque) ziggy.core.NativeCallbacks {
+        unexpected("nativeCallbacks");
+    }
+};
 
 //
 // A task that sends an event and then runs until it is cancelled.
 //
-fn spinTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn spinTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
     _ = data;
-    try context.sendEvent(.{ .spinning = true });
+    try services.sendEvent(io, allocator, .{ .spinning = true });
     while (true) {
-        try context.checkCancelled();
-        try context.io().sleep(.fromMilliseconds(2), .awake);
+        try services.checkCancelled(io, allocator);
+        try io.sleep(.fromMilliseconds(2), .awake);
     }
 }
 
 //
-// Whether the state says a sync is running. Reads under the lock and gives it back before the test checks anything, so that a
-// failed check cannot leave the lock held for the destroy that follows.
+// Reads whether a sync is running, on the main thread.
 //
-fn isSyncRunning(state: *MainState) bool {
-    state.lock();
-    defer state.unlock();
-    return state.is_sync_running;
+fn readSyncRunning(_: u8, _: HandlerServices, _: Timers, _: std.Io, _: std.mem.Allocator) anyerror!bool {
+    return main_state.current().is_sync_running;
 }
 
 //
-// When the periodic sync is next due, or null.
+// Whether the state records a sync as running.
 //
-fn periodicDeadline(state: *MainState) ?i64 {
-    state.lock();
-    defer state.unlock();
-    return state.sync_periodic_at;
-}
-
-//
-// When the debounced sync is due, or null.
-//
-fn debounceDeadline(state: *MainState) ?i64 {
-    state.lock();
-    defer state.unlock();
-    return state.sync_debounce_at;
+fn isSyncRunning(app: *TestApp) !bool {
+    return try app.onMainThread(@as(u8, 0), readSyncRunning);
 }
 
 test "stopPeriodicSync stops the periodic sync, startPeriodicSync starts it, and a second start changes nothing" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    // The state starts the periodic sync when the core starts it.
-    try std.testing.expect(periodicDeadline(state) != null);
-    state.stopPeriodicSync();
-    try std.testing.expect(periodicDeadline(state) == null);
-    state.startPeriodicSync();
-    const first_deadline = periodicDeadline(state).?;
-    app.shell.sleepMs(30);
-    state.startPeriodicSync();
-    try std.testing.expectEqual(first_deadline, periodicDeadline(state).?);
+    const Check = struct {
+        fn run(_: u8, _: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            // The state starts the periodic sync when the core starts it.
+            try std.testing.expect(state.sync_periodic_timer != null);
+            state.stopPeriodicSync(timers);
+            try std.testing.expect(state.sync_periodic_timer == null);
+            try state.startPeriodicSync(timers, main_io);
+            const first = state.sync_periodic_timer.?;
+            try std.testing.expect(timers.isSet(first));
+            try state.startPeriodicSync(timers, main_io);
+            try std.testing.expectEqual(first, state.sync_periodic_timer.?);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }
 
-test "scheduleSync called again moves the deadline later, so only the last edit counts" {
+test "scheduleSync called again replaces the debounce timer, so only the last edit counts" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.scheduleSync();
-    const first_deadline = debounceDeadline(state).?;
-    app.shell.sleepMs(30);
-    state.scheduleSync();
-    try std.testing.expect(debounceDeadline(state).? > first_deadline);
+    const Check = struct {
+        fn run(_: u8, _: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            try state.scheduleSync(timers, main_io);
+            const first = state.sync_debounce_timer.?;
+            try state.scheduleSync(timers, main_io);
+            const second = state.sync_debounce_timer.?;
+            try std.testing.expect(first != second);
+            try std.testing.expect(!timers.isSet(first));
+            try std.testing.expect(msUntilDue(timers, main_io, second).? > @as(i64, @intCast(state.sync_debounce_ms)) - 1_000);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }
 
 test "enqueueSyncTask queues nothing unless syncing is allowed, a database is open and no sync is running" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    state.sync_allowed = true;
-    state.unlock();
-    // No database is open.
-    try state.enqueueSyncTask();
-    try std.testing.expect(!isSyncRunning(state));
-    state.lock();
-    try state.setOwned(&state.current_database_path, "/the/open/db");
-    state.sync_allowed = false;
-    state.unlock();
-    // Syncing is not allowed.
-    try state.enqueueSyncTask();
-    try std.testing.expect(!isSyncRunning(state));
-    state.lock();
-    state.sync_allowed = true;
-    state.is_sync_running = true;
-    state.unlock();
-    // A sync is running already, so nothing is queued. A sync that was queued would end here (the database has no origin, so the sync is
-    // skipped), which would reset the running flag.
-    try state.enqueueSyncTask();
-    app.shell.sleepMs(100);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("sync-completed"));
-    try std.testing.expect(isSyncRunning(state));
-    state.lock();
-    state.is_sync_running = false;
-    state.unlock();
-    // Everything allows it, so the sync is queued. The database has no origin, so the sync is skipped, which the page is told, and the
-    // end of the task is what resets the running flag.
-    try state.enqueueSyncTask();
-    try app.shell.expectMessageContaining("\"type\":\"sync-skipped\"");
-    try app.shell.expectMessageContaining("no origin configured");
+    const Refused = struct {
+        fn run(_: u8, services: HandlerServices, _: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.sync_allowed = true;
+            // No database is open.
+            try state.enqueueSyncTask(services, main_io, main_state.stateAllocator());
+            try std.testing.expect(!state.is_sync_running);
+            try main_state.setOwned(main_state.stateAllocator(), &state.current_database_path, "/the/open/db");
+            state.sync_allowed = false;
+            // Syncing is not allowed.
+            try state.enqueueSyncTask(services, main_io, main_state.stateAllocator());
+            try std.testing.expect(!state.is_sync_running);
+            state.sync_allowed = true;
+            state.is_sync_running = true;
+            // A sync is running already, so nothing is queued. A sync that was queued would end here (the database has no origin, so
+            // the sync is skipped), which would reset the running flag.
+            try state.enqueueSyncTask(services, main_io, main_state.stateAllocator());
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Refused.run);
+    ziggy.fake_native_app.sleepMs(std.testing.io, 100);
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "sync-completed"));
+    try std.testing.expect(try isSyncRunning(&app));
+
+    const Queued = struct {
+        fn run(_: u8, services: HandlerServices, _: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.is_sync_running = false;
+            // Everything allows it, so the sync is queued.
+            try state.enqueueSyncTask(services, main_io, main_state.stateAllocator());
+            try std.testing.expect(state.is_sync_running);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Queued.run);
+    // The database has no origin, so the sync is skipped, which the page is told, and the end of the task is what resets the running
+    // flag.
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"type\":\"sync-skipped\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "no origin configured");
     var waited_ms: u32 = 0;
-    while (isSyncRunning(state) and waited_ms < 20_000) : (waited_ms += 5) {
-        app.shell.sleepMs(5);
+    while ((try isSyncRunning(&app)) and waited_ms < 20_000) : (waited_ms += 5) {
+        ziggy.fake_native_app.sleepMs(std.testing.io, 5);
     }
-    try std.testing.expect(!isSyncRunning(state));
+    try std.testing.expect(!try isSyncRunning(&app));
 }
 
 test "resetSyncState to the database that is already open cancels nothing, and to another one cancels its tasks" {
     var app: TestApp = undefined;
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "spin", .handler = spinTask }});
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    try state.setOwned(&state.current_database_path, "/the/open/db");
-    state.is_sync_running = true;
-    state.sync_debounce_at = state.now() + 100_000;
-    state.unlock();
-    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"long-1\",\"taskType\":\"spin\",\"source\":\"/the/open/db\",\"data\":null,\"priority\":\"background\"}}");
-    try app.shell.expectMessageContaining("\"kind\":\"system\",\"name\":\"task-event\"");
-    try state.resetSyncState("/the/open/db");
-    app.shell.sleepMs(100);
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("\"errorMessage\":\"Cancelled\""));
-    try std.testing.expect(!isSyncRunning(state));
-    try std.testing.expect(debounceDeadline(state) == null);
-    try state.resetSyncState("/another/db");
-    try app.shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
+    const Open = struct {
+        fn run(_: u8, _: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            try main_state.setOwned(main_state.stateAllocator(), &state.current_database_path, "/the/open/db");
+            state.is_sync_running = true;
+            try state.scheduleSync(timers, main_io);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Open.run);
+    app.native_app.sendMessage(std.testing.allocator, "{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"long-1\",\"taskType\":\"spin\",\"source\":\"/the/open/db\",\"data\":null,\"priority\":\"background\"}}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"kind\":\"system\",\"name\":\"task-event\"");
+
+    const ResetToSame = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.resetSyncState(services, timers, main_io, main_state.stateAllocator(), "/the/open/db");
+            try std.testing.expect(!state.is_sync_running);
+            try std.testing.expect(state.sync_debounce_timer == null);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), ResetToSame.run);
+    ziggy.fake_native_app.sleepMs(std.testing.io, 100);
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"errorMessage\":\"Cancelled\""));
+
+    const ResetToAnother = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            main_state.current().resetSyncState(services, timers, main_io, main_state.stateAllocator(), "/another/db");
+        }
+    };
+    try app.onMainThread(@as(u8, 0), ResetToAnother.run);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"errorMessage\":\"Cancelled\"");
 }
 
-test "a background pass is taken only while it is switched on, due and not running, and the passes are taken separately" {
+test "a background pass is queued only while it is switched on and not running, and the passes are queued separately" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    stopTimerThread(state);
-
-    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
-    state.switchOnBackgroundPass(.import);
-    state.switchOnBackgroundPass(.sync);
-    try std.testing.expect(state.takeDueBackgroundPass(.import, state.now()));
-    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
-    try std.testing.expect(state.takeDueBackgroundPass(.sync, state.now()));
-    state.backgroundPassEnded(.import, .{
-        .gap_ms = 60_000,
-        .finished = false,
-    });
-    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now() + 60_000 + 1_000));
-    state.releaseBackgroundPass(.import);
-    try std.testing.expect(!state.takeDueBackgroundPass(.import, state.now()));
-    try std.testing.expect(state.takeDueBackgroundPass(.import, state.now() + 60_000 + 1_000));
-    try std.testing.expectEqual(background_work.ReplicaState.unknown, state.prefetch_replica_state.load(.acquire));
+    const Check = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            // Switched off, so nothing is queued.
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .import);
+            try std.testing.expect(!state.background_passes_running[import_index]);
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .import);
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .import);
+            try std.testing.expect(state.background_passes_running[import_index]);
+            try std.testing.expect(!state.background_passes_running[sync_index]);
+            // Running already, so it is not queued again: its end below is the only one.
+            var counted: CountedServices = .{};
+            state.queueDueBackgroundPass(counted.interface(), timers, main_io, main_state.stateAllocator(), .import);
+            try std.testing.expectEqual(@as(usize, 0), counted.added);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            try std.testing.expect(state.background_passes_running[sync_index]);
+            state.backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .import, .{
+                .gapMs = 60_000,
+                .finished = false,
+                .replicaState = .unknown,
+            });
+            try std.testing.expect(!state.background_passes_running[import_index]);
+            try std.testing.expect(state.background_passes_on[import_index]);
+            try std.testing.expectEqual(background_work.ReplicaState.unknown, state.prefetch_replica_state);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }
 
 test "the app is held running while any background work is switched on, and let go when the last of it finishes or is switched off" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    stopTimerThread(state);
-
-    state.switchOnBackgroundPass(.sync);
-    state.switchOnBackgroundPass(.prefetch);
+    const SwitchOn = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), SwitchOn.run);
     try expectKeepAliveCalls(&app, &[_]bool{true});
-    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
-    state.backgroundPassEnded(.prefetch, .{
-        .gap_ms = 50,
-        .finished = true,
-    });
+    const PrefetchFinishes = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            main_state.current().backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .prefetch, .{
+                .gapMs = 50,
+                .finished = true,
+                .replicaState = .complete,
+            });
+        }
+    };
+    try app.onMainThread(@as(u8, 0), PrefetchFinishes.run);
     try expectKeepAliveCalls(&app, &[_]bool{true});
-    state.switchOffBackgroundPasses();
+    const SwitchOff = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            main_state.current().switchOffBackgroundPasses(services, timers, main_io, main_state.stateAllocator());
+        }
+    };
+    try app.onMainThread(@as(u8, 0), SwitchOff.run);
     try expectKeepAliveCalls(&app, &[_]bool{ true, false });
 }
 
@@ -225,71 +361,89 @@ test "a background pass switched on is due at once, and the next is due after th
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    stopTimerThread(state);
-
-    const before = state.now();
-    state.switchOnBackgroundPass(.prefetch);
-    try std.testing.expect(state.background_pass_due_at[prefetch_index].? >= before);
-    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
-    try std.testing.expect(state.background_pass_due_at[prefetch_index] == null);
-    const ended_at = state.now();
-    state.backgroundPassEnded(.prefetch, .{
-        .gap_ms = 60_000,
-        .finished = false,
-    });
-    try std.testing.expect(state.background_pass_due_at[prefetch_index].? >= ended_at + 60_000);
+    const Check = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+            try std.testing.expect(msUntilDue(timers, main_io, state.background_pass_timers[prefetch_index].?).? <= 0);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+            try std.testing.expect(state.background_pass_timers[prefetch_index] == null);
+            state.backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .prefetch, .{
+                .gapMs = 60_000,
+                .finished = false,
+                .replicaState = .working,
+            });
+            try std.testing.expect(msUntilDue(timers, main_io, state.background_pass_timers[prefetch_index].?).? > 59_000);
+            try std.testing.expectEqual(background_work.ReplicaState.working, state.prefetch_replica_state);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }
 
 test "a background pass that finishes the work switches it off until it is switched on again" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    stopTimerThread(state);
-
-    state.switchOnBackgroundPass(.prefetch);
-    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
-    state.backgroundPassEnded(.prefetch, .{
-        .gap_ms = 60_000,
-        .finished = true,
-    });
-    state.releaseBackgroundPass(.prefetch);
-    try std.testing.expect(!state.background_passes_on[prefetch_index]);
-    try std.testing.expect(state.background_pass_due_at[prefetch_index] == null);
-    try std.testing.expect(!state.takeDueBackgroundPass(.prefetch, state.now()));
-    state.switchOnBackgroundPass(.prefetch);
-    try std.testing.expect(state.takeDueBackgroundPass(.prefetch, state.now()));
+    const Check = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+            state.backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .prefetch, .{
+                .gapMs = 60_000,
+                .finished = true,
+                .replicaState = .complete,
+            });
+            try std.testing.expect(!state.background_passes_on[prefetch_index]);
+            try std.testing.expect(state.background_pass_timers[prefetch_index] == null);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+            try std.testing.expect(!state.background_passes_running[prefetch_index]);
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .prefetch);
+            try std.testing.expect(state.background_passes_on[prefetch_index]);
+            try std.testing.expect(state.background_pass_timers[prefetch_index] != null);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }
 
 test "switching the background work off leaves nothing due, even when a pass in flight ends afterwards" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    stopTimerThread(state);
-
-    state.switchOnBackgroundPass(.sync);
-    try std.testing.expect(state.takeDueBackgroundPass(.sync, state.now()));
-    state.switchOffBackgroundPasses();
-    state.backgroundPassEnded(.sync, .{
-        .gap_ms = 10,
-        .finished = false,
-    });
-    try std.testing.expect(state.background_pass_due_at[sync_index] == null);
-    try std.testing.expect(!state.background_passes_on[sync_index]);
+    const Check = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            state.switchOffBackgroundPasses(services, timers, main_io, main_state.stateAllocator());
+            state.backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .sync, .{
+                .gapMs = 10,
+                .finished = false,
+                .replicaState = .unknown,
+            });
+            try std.testing.expect(state.background_pass_timers[sync_index] == null);
+            try std.testing.expect(!state.background_passes_on[sync_index]);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }
 
 test "only the first sync pass after the sync is switched on is the first" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    const state = main_state.fromCore(app.core);
-    stopTimerThread(state);
-
-    state.switchOnBackgroundPass(.sync);
-    try std.testing.expect(state.takeFirstSyncPass());
-    try std.testing.expect(!state.takeFirstSyncPass());
-    state.switchOnBackgroundPass(.sync);
-    try std.testing.expect(!state.takeFirstSyncPass());
+    const Check = struct {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const state = main_state.current();
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            try std.testing.expect(state.first_sync_pass);
+            state.queueDueBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            try std.testing.expect(!state.first_sync_pass);
+            state.backgroundPassEnded(services, timers, main_io, main_state.stateAllocator(), .sync, null);
+            // Switching on a pass that is on changes nothing.
+            state.switchOnBackgroundPass(services, timers, main_io, main_state.stateAllocator(), .sync);
+            try std.testing.expect(!state.first_sync_pass);
+        }
+    };
+    try app.onMainThread(@as(u8, 0), Check.run);
 }

@@ -5,12 +5,11 @@ const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 
 const LazyOriginStorage = node_api.lazy_origin_storage.LazyOriginStorage;
-const storage_module = storage_zig.storage;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
+const IStorage = storage_zig.storage.IStorage;
+const IReadStream = storage_zig.storage.IReadStream;
+const IFileInfo = storage_zig.storage.IFileInfo;
+const IListResult = storage_zig.storage.IListResult;
+const IWriteLockInfo = storage_zig.storage.IWriteLockInfo;
 
 const io = std.testing.io;
 
@@ -91,15 +90,12 @@ const FailingReadStream = struct {
 
 //
 // A minimal mock IStorage. Only the methods used by LazyOriginStorage tests have
-// real implementations; the rest throw so accidental calls are obvious. Its files are shared with the concurrent
-// cache write, so they are guarded and allocated with a thread safe allocator.
+// real implementations; the rest throw so accidental calls are obvious. It is used only on the test thread, and its files are
+// allocated with the page allocator, which keeps no state of its own that two threads could share.
 //
 const MockStorage = struct {
     // The files, by path.
     files: std.StringHashMapUnmanaged([]const u8) = .empty,
-
-    // Guards files.
-    mutex: std.Io.Mutex = .init,
 
     // Set when read is called.
     readCalled: bool = false,
@@ -126,24 +122,20 @@ const MockStorage = struct {
     // Gets the IStorage interface.
     //
     fn storage(self: *MockStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(MockStorage), .location = "mock://local" };
+        return .{ .ptr = self, .vtable = storage_zig.storage.implement(MockStorage), .location = "mock://local" };
     }
 
     //
     // Adds a file.
     //
     fn put(self: *MockStorage, filePath: []const u8, data: []const u8) !void {
-        self.mutex.lockUncancelable(io);
-        defer self.mutex.unlock(io);
-        try self.files.put(std.heap.smp_allocator, try std.heap.smp_allocator.dupe(u8, filePath), try std.heap.smp_allocator.dupe(u8, data));
+        try self.files.put(std.heap.page_allocator, try std.heap.page_allocator.dupe(u8, filePath), try std.heap.page_allocator.dupe(u8, data));
     }
 
     //
     // Gets a file.
     //
     fn get(self: *MockStorage, filePath: []const u8) ?[]const u8 {
-        self.mutex.lockUncancelable(io);
-        defer self.mutex.unlock(io);
         return self.files.get(filePath);
     }
 
@@ -153,10 +145,10 @@ const MockStorage = struct {
     fn deinit(self: *MockStorage) void {
         var iterator = self.files.iterator();
         while (iterator.next()) |entry| {
-            std.heap.smp_allocator.free(entry.key_ptr.*);
-            std.heap.smp_allocator.free(entry.value_ptr.*);
+            std.heap.page_allocator.free(entry.key_ptr.*);
+            std.heap.page_allocator.free(entry.value_ptr.*);
         }
-        self.files.deinit(std.heap.smp_allocator);
+        self.files.deinit(std.heap.page_allocator);
     }
 
     pub fn isEmpty(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, path: []const u8) !bool {
@@ -262,8 +254,6 @@ const MockStorage = struct {
 
     pub fn deleteFile(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8) !void {
         _ = .{ allocator, storageIo };
-        self.mutex.lockUncancelable(io);
-        defer self.mutex.unlock(io);
         _ = self.files.remove(filePath);
     }
 

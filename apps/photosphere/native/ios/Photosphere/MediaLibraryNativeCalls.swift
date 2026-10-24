@@ -1,5 +1,5 @@
 //
-// Answers the core's requests for the device photo library: mediaLibraryList, mediaLibraryAlbums, mediaLibraryOpen, mediaLibraryClose
+// Handles the core's native calls for the device photo library: mediaLibraryList, mediaLibraryAlbums, mediaLibraryOpen, mediaLibraryClose
 // and mediaLibraryDelete. Automatic import reads the library through these, with the Photos framework. The pure decisions (where a
 // page starts and stops, the path an exported item lands on, which types are supported, batching deletions) are in MediaLibrary. The
 // core calls from a worker thread and waits, so a request may block on the system's delete confirmation.
@@ -13,7 +13,7 @@ import Photos
 import ZiggyNativeIOS
 
 // The photo library requests.
-final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
+final class MediaLibraryNativeCalls: ZiggyNativeCallHandler {
     // The directory exported items are written under.
     private let exportRoot: URL
 
@@ -25,34 +25,34 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
     func handle(method: String, requestJson: String) throws -> String {
         switch method {
         case "mediaLibraryList":
-            let request = try HostJson.object(from: requestJson, method: method)
+            let request = try NativeCallJson.object(from: requestJson, method: method)
             try requireAccess(method)
-            let cursor = try HostJson.string(request, "cursor", method: method)
+            let cursor = try NativeCallJson.string(request, "cursor", method: method)
             guard let pageSize = request["pageSize"] as? Int else {
-                throw ZiggyHostRequestError("The request \(method) was not understood: \"pageSize\" is missing or is not a number.")
+                throw ZiggyNativeCallError("The request \(method) was not understood: \"pageSize\" is missing or is not a number.")
             }
             return try list(cursor: cursor, pageSize: pageSize)
         case "mediaLibraryAlbums":
             try requireAccess(method)
             return try albums()
         case "mediaLibraryOpen":
-            let request = try HostJson.object(from: requestJson, method: method)
+            let request = try NativeCallJson.object(from: requestJson, method: method)
             try requireAccess(method)
-            return try HostJson.quote(try open(itemId: try HostJson.string(request, "itemId", method: method)), method: method)
+            return try NativeCallJson.quote(try open(itemId: try NativeCallJson.string(request, "itemId", method: method)), method: method)
         case "mediaLibraryClose":
-            let request = try HostJson.object(from: requestJson, method: method)
-            try close(itemId: try HostJson.string(request, "itemId", method: method))
+            let request = try NativeCallJson.object(from: requestJson, method: method)
+            try close(itemId: try NativeCallJson.string(request, "itemId", method: method))
             return "null"
         case "mediaLibraryDelete":
-            let request = try HostJson.object(from: requestJson, method: method)
+            let request = try NativeCallJson.object(from: requestJson, method: method)
             try requireAccess(method)
-            return try delete(itemIds: try HostJson.strings(request, "itemIds", method: method))
+            return try delete(itemIds: try NativeCallJson.strings(request, "itemIds", method: method))
         default:
-            throw ZiggyHostRequestError("MediaLibraryHostRequests does not answer \"\(method)\".")
+            throw ZiggyNativeCallError("MediaLibraryNativeCalls does not handle \"\(method)\".")
         }
     }
 
-    // A request fails, naming the permission, when the app can see none of the library, because an empty answer would be taken for a
+    // A request fails, naming the permission, when the app can see none of the library, because an empty result would be taken for a
     // library with no photos in it and nothing would be backed up.
     private func requireAccess(_ method: String) throws {
         let status = PHPhotoLibrary.authorizationStatus()
@@ -62,7 +62,7 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
         if #available(iOS 14.0, *), status == .limited {
             return
         }
-        throw ZiggyHostRequestError("\(method) needs permission to read the photo library, and the app does not have it. Allow access to Photos for Photosphere in the phone's Settings.")
+        throw ZiggyNativeCallError("\(method) needs permission to read the photo library, and the app does not have it. Allow access to Photos for Photosphere in the phone's Settings.")
     }
 
     // Every image and video in the library, newest first, so a backfill that is interrupted has brought in the photos the user is most
@@ -123,7 +123,7 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
         return resources.first?.originalFilename ?? asset.localIdentifier
     }
 
-    // The size of an asset's primary resource in bytes, or zero when the framework will not say.
+    // The size of an asset's primary resource in bytes, or zero when the framework does not report it.
     private func fileSize(for asset: PHAsset) -> Int64 {
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = resources.first else {
@@ -176,7 +176,7 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
             page["nextCursor"] = nextCursor
         }
 
-        return try HostJson.text(from: page, method: "mediaLibraryList")
+        return try NativeCallJson.text(from: page, method: "mediaLibraryList")
     }
 
     // The albums in the library as JSON.
@@ -206,7 +206,7 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
             ])
         }
 
-        return try HostJson.text(from: albums, method: "mediaLibraryAlbums")
+        return try NativeCallJson.text(from: albums, method: "mediaLibraryAlbums")
     }
 
     // Copies one library item into the temporary directory and returns the absolute path the import can read it from. A library asset
@@ -214,13 +214,13 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
     private func open(itemId: String) throws -> String {
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: [itemId], options: nil)
         guard assets.count > 0 else {
-            throw ZiggyHostRequestError(MediaLibraryError.itemNotFound(itemId).description)
+            throw ZiggyNativeCallError(MediaLibraryError.itemNotFound(itemId).description)
         }
         let asset = assets.object(at: 0)
 
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = resources.first else {
-            throw ZiggyHostRequestError(MediaLibraryError.exportFailed(itemId).description)
+            throw ZiggyNativeCallError(MediaLibraryError.exportFailed(itemId).description)
         }
 
         let relativePath = MediaLibrary.buildExportPath(
@@ -235,7 +235,7 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
             try FileManager.default.removeItem(at: destination)
         }
 
-        // writeData is asynchronous, and the core's worker thread that asked waits for the answer, so it waits here.
+        // writeData is asynchronous, and the core's worker thread that made the call needs the result, so it blocks here until the write finishes.
         let finished = DispatchSemaphore(value: 0)
         var writeError: Error?
 
@@ -249,7 +249,7 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
         finished.wait()
 
         if let writeError = writeError {
-            throw ZiggyHostRequestError("\(MediaLibraryError.exportFailed(itemId).description) \(writeError.localizedDescription)")
+            throw ZiggyNativeCallError("\(MediaLibraryError.exportFailed(itemId).description) \(writeError.localizedDescription)")
         }
 
         return destination.path
@@ -270,9 +270,9 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
         }
     }
 
-    // Asks to delete the named items, as one system confirmation per batch, and returns what happened as JSON.
+    // Requests deletion of the named items, as one system confirmation per batch, and returns what happened as JSON.
     //
-    // Nothing is reported as deleted unless the framework said so. A caller that believed a photo was gone when it was not would go on
+    // Nothing is reported as deleted unless the framework reported it. A caller that believed a photo was gone when it was not would go on
     // to free space that is still in use.
     private func delete(itemIds: [String]) throws -> String {
         var deletedIds: [String] = []
@@ -297,10 +297,10 @@ final class MediaLibraryHostRequests: ZiggyHostRequestHandler {
             "deletedIds": deletedIds,
             "failedIds": failedIds,
         ]
-        return try HostJson.text(from: reply, method: "mediaLibraryDelete")
+        return try NativeCallJson.text(from: reply, method: "mediaLibraryDelete")
     }
 
-    // Deletes the given assets through the Photos framework, which presents its own confirmation, and waits for the answer.
+    // Deletes the given assets through the Photos framework, which presents its own confirmation, and blocks until the user chooses.
     private func performDelete(_ assets: [PHAsset]) -> Bool {
         if assets.isEmpty {
             return true

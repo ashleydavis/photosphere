@@ -18,8 +18,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // local registry (via loadDatabase) and stores the result as the active database for
 // subsequent tools.
 //
-pub fn registerOpenDatabaseTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerOpenDatabaseTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "open_database",
         .{
             .description = "Open a database by name (from list_databases) or by path. Becomes the active database for subsequent tools.",

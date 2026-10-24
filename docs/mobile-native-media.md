@@ -23,15 +23,15 @@ The built-in ImageMagick is built with zero configuration, so it reads no `polic
 
 If the policy cannot be set, `init` stops ImageMagick and returns an error carrying ImageMagick's reason, so `MediaTools.init` fails and the program does not run without it.
 
-## Stopping a timed-out ffmpeg
+## A timed-out ffmpeg
 
-FFmpeg's `ffmpeg` keeps state for the whole process and one run holds `Ffmpeg.mutex`, so a run that never ends would block every later `ffmpeg` and `ffprobe` in the process. `ffmpeg_main` reads no task's cancel flag, so cancelling the task alone does not end it. `third-party/ffmpeg/ffmpeg-main.c` (Photosphere's wrapper around `fftools/ffmpeg.c`, which is not edited) adds two functions. `ffmpeg_request_stop` sets the flags FFmpeg's own SIGTERM handler sets, so the run ends the way it does on Ctrl+C. `ffmpeg_reset_stop` clears them after every run. `Ffmpeg` (`packages-zig/media-tools-zig/src/lib/ffmpeg.zig`) records the thread a run is on. `stopIfRunningOn(thread_id)` asks for the stop only when the current run is on that thread. The record, the request and the reset are all done under `stop_mutex`, so a stop can never land after its run has ended and stop the next one.
+Each run of `ffmpeg` and `ffprobe` has state of its own (`third-party/ffmpeg/fftools-per-run-state.patch`, see `third-party/ffmpeg/update-ffmpeg.md`), so a run that never ends holds only the thread it runs on, and the other workers' runs go on. `ffmpeg_main` reads no task's cancel flag, so cancelling the task does not end the run.
 
-The CLI's worker pool calls `stopIfRunningOn` with the worker's thread when a task times out, beside the task's cancel. The App runs tasks on Ziggy's queue, which has no task timeout and abandons no thread, so it never needs the stop. `ffprobe` has no stop flag and cannot be stopped once started; it reads only a file's header, so a run that never ends is less likely there, but one would still hold the mutex.
+The CLI's worker pool abandons a worker whose task timed out, because a thread cannot be stopped, and the run goes on until it ends on its own; what the worker sends after that is dropped. The App runs tasks on Ziggy's queue, which has no task timeout and abandons no thread.
 
 ## Source, builds and scripts
 
-Vendored source (never edited) is in `third-party/imagemagick/vendor/imagemagick`, `third-party/imagemagick/vendor/libjpeg`, `third-party/imagemagick/vendor/libpng`, `third-party/imagemagick/vendor/libwebp` and `third-party/ffmpeg/vendor/ffmpeg`, each with a `VENDORED_VERSION`. The files each target needs that the libraries' own `configure` writes are kept in `third-party/imagemagick/config` and `third-party/ffmpeg/config`.
+Vendored source (never edited, except FFmpeg's command line programs, patched by `third-party/ffmpeg/fftools-per-run-state.patch`) is in `third-party/imagemagick/vendor/imagemagick`, `third-party/imagemagick/vendor/libjpeg`, `third-party/imagemagick/vendor/libpng`, `third-party/imagemagick/vendor/libwebp` and `third-party/ffmpeg/vendor/ffmpeg`, each with a `VENDORED_VERSION`. The files each target needs that the libraries' own `configure` writes are kept in `third-party/imagemagick/config` and `third-party/ffmpeg/config`.
 
 - Take a version: `third-party/imagemagick/update-imagemagick.sh`, `third-party/imagemagick/update-libjpeg.sh`, `third-party/imagemagick/update-libpng.sh`, `third-party/imagemagick/update-libwebp.sh`, `third-party/ffmpeg/update-ffmpeg.sh` (see their `.md` files).
 - Make the generated files for a target: `third-party/imagemagick/generate-config.sh` and `third-party/ffmpeg/generate-config.sh`.

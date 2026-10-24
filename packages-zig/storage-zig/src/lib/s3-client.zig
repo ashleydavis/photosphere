@@ -120,22 +120,16 @@ pub const SigningConfigAws = extern struct {
 };
 
 //
-// Guards library_initialized. (aws_thread_call_once is not used: its AWS_THREAD_ONCE_STATIC_INIT is a braced
-// initializer on Windows, which translate-c cannot translate.)
+// True once the calling thread has called aws_s3_library_init. Each thread has its own. The SDK keeps its own note of having been
+// started for the whole program, so a thread that calls it after the main thread has finds it started and does nothing.
 //
-var library_mutex: std.Io.Mutex = .init;
+threadlocal var library_initialized: bool = false;
 
 //
-// True once aws_s3_library_init has run.
+// Starts the AWS SDK for C (aws-c-s3 and every library it depends on), on the main thread, before any worker starts. A program that
+// never calls it, one with no workers, has it started by its first client.
 //
-var library_initialized: bool = false;
-
-//
-// Initializes the AWS SDK for C (aws-c-s3 and every library it depends on) the first time it is called.
-//
-fn initLibrary(io: std.Io) void {
-    library_mutex.lockUncancelable(io);
-    defer library_mutex.unlock(io);
+pub fn startLibrary() void {
     if (!library_initialized) {
         aws.aws_s3_library_init(aws.aws_default_allocator());
         library_initialized = true;
@@ -285,7 +279,7 @@ pub const GetObjectOutput = struct {
 };
 
 //
-// The S3 error codes most often met, named without taking the lock of interned_error_names.
+// The S3 error codes most often met, named without looking through interned_error_names.
 //
 const known_error_names = [_][]const u8{
     "NoSuchKey",
@@ -312,15 +306,11 @@ const known_error_names = [_][]const u8{
 };
 
 //
-// Guards interned_error_names.
-//
-var interned_error_names_mutex: std.Io.Mutex = .init;
-
-//
 // The error codes met that are not in known_error_names, kept for the life of the process, because an error name
-// must outlive the error.
+// must outlive the error. Each thread keeps its own, so it needs no lock. The names are allocated with the page allocator, which
+// keeps no state of its own that two threads could share.
 //
-var interned_error_names: std.ArrayList([]const u8) = .empty;
+threadlocal var interned_error_names: std.ArrayList([]const u8) = .empty;
 
 //
 // The most codes interned_error_names keeps, so a server cannot grow it without end.
@@ -331,14 +321,12 @@ const max_interned_error_names = 256;
 // Gets the error name of an S3 error code, the code itself as the SDK names its errors, as a string that lives as long
 // as the process. Past max_interned_error_names new codes it is the SDK's base class name, "S3ServiceException".
 //
-pub fn staticErrorName(io: std.Io, code: []const u8) ![]const u8 {
+pub fn staticErrorName(code: []const u8) ![]const u8 {
     for (known_error_names) |name| {
         if (std.mem.eql(u8, name, code)) {
             return name;
         }
     }
-    interned_error_names_mutex.lockUncancelable(io);
-    defer interned_error_names_mutex.unlock(io);
     for (interned_error_names.items) |name| {
         if (std.mem.eql(u8, name, code)) {
             return name;
@@ -347,9 +335,9 @@ pub fn staticErrorName(io: std.Io, code: []const u8) ![]const u8 {
     if (interned_error_names.items.len >= max_interned_error_names) {
         return "S3ServiceException";
     }
-    const name = try std.heap.smp_allocator.dupe(u8, code);
-    errdefer std.heap.smp_allocator.free(name);
-    try interned_error_names.append(std.heap.smp_allocator, name);
+    const name = try std.heap.page_allocator.dupe(u8, code);
+    errdefer std.heap.page_allocator.free(name);
+    try interned_error_names.append(std.heap.page_allocator, name);
     return name;
 }
 
@@ -582,7 +570,7 @@ fn replaceNumericReferences(allocator: std.mem.Allocator, text: []const u8, base
 // the SDK's error ("Response code indicates internal server error") rather than the Code and
 // Message of a body.
 //
-fn throwResultError(allocator: std.mem.Allocator, io: std.Io, result: *const MetaRequestCall) anyerror {
+fn throwResultError(allocator: std.mem.Allocator, result: *const MetaRequestCall) anyerror {
     if (result.responseStatus == 0) {
         return throwSdkError(result.errorCode);
     }
@@ -591,7 +579,7 @@ fn throwResultError(allocator: std.mem.Allocator, io: std.Io, result: *const Met
     var message: []const u8 = "UnknownError";
     if (result.errorBody) |body| {
         if (try errorElementText(allocator, body, "Code")) |code| {
-            name = try staticErrorName(io, code);
+            name = try staticErrorName(code);
         }
         if (try errorElementText(allocator, body, "Message")) |text| {
             message = text;
@@ -618,6 +606,60 @@ pub fn canResendOnClosedConnection(errorCode: c_int, responseStatus: c_int, meth
     }
     const readOnly = std.mem.eql(u8, method, "GET") or std.mem.eql(u8, method, "HEAD");
     return errorCode == aws.AWS_ERROR_HTTP_CONNECTION_CLOSED and readOnly;
+}
+
+//
+// The time limit on the calling thread's requests, in milliseconds (see setRequestTimeout), or null for none. Each request that has
+// not finished within it is cancelled. The time is read from the Io each request is given, so a test's virtual clock moves it.
+//
+threadlocal var request_timeout_ms: ?u64 = null;
+
+//
+// Set when a request of the calling thread was cancelled at its time limit (see takeRequestTimedOut).
+//
+threadlocal var request_timed_out: bool = false;
+
+//
+// Sets the time limit on the S3 requests the calling thread makes from now on, or removes it (null), for an operation a user waits on
+// the answer to. A request that reaches it fails with error.RequestTimedOut, which the layers above may report as their own failure.
+//
+pub fn setRequestTimeout(timeout_ms: ?u64) void {
+    request_timeout_ms = timeout_ms;
+    request_timed_out = false;
+}
+
+//
+// Whether a request of the calling thread was cancelled at its time limit since setRequestTimeout, and forgets it.
+//
+pub fn takeRequestTimedOut() bool {
+    const timed_out = request_timed_out;
+    request_timed_out = false;
+    return timed_out;
+}
+
+//
+// Waits for the call to finish, looking every few milliseconds, until the time limit, measured on the Io's awake clock. Returns true
+// when the limit passed first.
+//
+fn waitWithin(io: std.Io, call: *MetaRequestCall, timeout_ms: u64) bool {
+    const deadline = std.Io.Clock.Timestamp.fromNow(io, .{
+        .raw = std.Io.Duration.fromMilliseconds(@intCast(timeout_ms)),
+        .clock = .awake,
+    });
+    while (true) {
+        _ = aws.aws_mutex_lock(&call.mutex);
+        const finished = call.finished;
+        _ = aws.aws_mutex_unlock(&call.mutex);
+        if (finished) {
+            return false;
+        }
+        if (deadline.durationFromNow(io).raw.nanoseconds <= 0) {
+            return true;
+        }
+        io.sleep(.fromMilliseconds(10), .awake) catch {
+            return true;
+        };
+    }
 }
 
 //
@@ -1267,18 +1309,15 @@ pub fn throwServiceException(name: []const u8, message: []const u8, httpStatusCo
     return error.Thrown;
 }
 
+//
+// An S3 client. It belongs to the thread that creates it, which is the only thread that calls it, so it has no lock.
+//
 pub const S3Client = struct {
-    // The io the client locks with.
-    io: std.Io,
-
     // The client configuration.
     config: IS3ClientConfig,
 
     // Answers the commands in place of the SDK when set (null in normal use; see ISend).
     send: ?ISend,
-
-    // Guards the creation of `runtime`.
-    mutex: aws.aws_mutex,
 
     // The SDK objects (null until the first request).
     runtime: ?*ClientRuntime,
@@ -1286,17 +1325,13 @@ pub const S3Client = struct {
     //
     // Creates a client.
     //
-    pub fn init(io: std.Io, config: IS3ClientConfig) S3Client {
-        initLibrary(io);
-        var client: S3Client = .{
-            .io = io,
+    pub fn init(config: IS3ClientConfig) S3Client {
+        startLibrary();
+        return .{
             .config = config,
             .send = null,
-            .mutex = undefined,
             .runtime = null,
         };
-        _ = aws.aws_mutex_init(&client.mutex);
-        return client;
     }
 
     //
@@ -1315,11 +1350,10 @@ pub const S3Client = struct {
             runtime.wait(&runtime.eventLoopGroupShutDown);
             aws.aws_condition_variable_clean_up(&runtime.signal);
             aws.aws_mutex_clean_up(&runtime.mutex);
-            std.heap.smp_allocator.free(runtime.region);
-            std.heap.smp_allocator.destroy(runtime);
+            std.heap.page_allocator.free(runtime.region);
+            std.heap.page_allocator.destroy(runtime);
             self.runtime = null;
         }
-        aws.aws_mutex_clean_up(&self.mutex);
     }
 
     //
@@ -1363,8 +1397,6 @@ pub const S3Client = struct {
     // Gets the SDK objects, creating them on the first request.
     //
     fn getRuntime(self: *S3Client) !*ClientRuntime {
-        _ = aws.aws_mutex_lock(&self.mutex);
-        defer _ = aws.aws_mutex_unlock(&self.mutex);
         if (self.runtime) |runtime| {
             return runtime;
         }
@@ -1380,8 +1412,8 @@ pub const S3Client = struct {
     //
     fn createRuntime(credentials: ICredentials, region: []const u8) !*ClientRuntime {
         const allocator = aws.aws_default_allocator();
-        const runtime = try std.heap.smp_allocator.create(ClientRuntime);
-        runtime.region = try std.heap.smp_allocator.dupe(u8, region);
+        const runtime = try std.heap.page_allocator.create(ClientRuntime);
+        runtime.region = try std.heap.page_allocator.dupe(u8, region);
         runtime.s3ClientShutDown = false;
         runtime.eventLoopGroupShutDown = false;
         _ = aws.aws_mutex_init(&runtime.mutex);
@@ -1501,13 +1533,13 @@ pub const S3Client = struct {
     // has closed or is closing" and failed the import with it. The server never answered the request, so this is
     // not the retry `maxAttempts: 1` turns off.
     //
-    fn run(self: *S3Client, allocator: std.mem.Allocator, request: OperationRequest) !*MetaRequestCall {
-        var call = try self.sendOnce(allocator, request);
+    fn run(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, request: OperationRequest) !*MetaRequestCall {
+        var call = try self.sendOnce(allocator, io, request);
         if (canResendOnClosedConnection(call.errorCode, call.responseStatus, request.method, request.bodyStream != null)) {
-            call = try self.sendOnce(allocator, request);
+            call = try self.sendOnce(allocator, io, request);
         }
         if (call.errorCode != 0) {
-            return throwResultError(allocator, self.io, call);
+            return throwResultError(allocator, call);
         }
         return call;
     }
@@ -1516,7 +1548,7 @@ pub const S3Client = struct {
     // Sends one operation as an aws-c-s3 meta request and waits for it. Returns the finished call, whether the
     // operation succeeded or not (run() throws its error).
     //
-    fn sendOnce(self: *S3Client, allocator: std.mem.Allocator, request: OperationRequest) !*MetaRequestCall {
+    fn sendOnce(self: *S3Client, allocator: std.mem.Allocator, io: std.Io, request: OperationRequest) !*MetaRequestCall {
         const runtime = try self.getRuntime();
         const sdkAllocator = aws.aws_default_allocator();
 
@@ -1624,10 +1656,22 @@ pub const S3Client = struct {
             };
         }
 
+        // A request the calling thread has a time limit for is cancelled once the limit has passed, and then ends as cancelled.
+        var timedOut = false;
+        if (request_timeout_ms) |timeout_ms| {
+            timedOut = waitWithin(io, call, timeout_ms);
+            if (timedOut) {
+                aws.aws_s3_meta_request_cancel(metaRequest);
+            }
+        }
         call.wait(&call.finished, false);
         _ = aws.aws_s3_meta_request_release(metaRequest);
         call.wait(&call.shutDown, false);
 
+        if (timedOut) {
+            request_timed_out = true;
+            return error.RequestTimedOut;
+        }
         if (streamError) |err| {
             return err;
         }
@@ -1644,7 +1688,6 @@ pub const S3Client = struct {
         if (self.send) |send| {
             return (try send.function(send.context, .{ .ListObjectsV2Command = input })).ListObjectsV2;
         }
-        _ = io;
         var query: std.ArrayList(u8) = .empty;
         try query.appendSlice(allocator, "list-type=2");
         if (input.Delimiter) |delimiter| {
@@ -1657,7 +1700,7 @@ pub const S3Client = struct {
         if (input.ContinuationToken) |continuationToken| {
             try appendQueryParameter(allocator, &query, "continuation-token", continuationToken);
         }
-        const call = try self.run(allocator, .{
+        const call = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "ListObjectsV2",
             .method = "GET",
@@ -1680,7 +1723,6 @@ pub const S3Client = struct {
         if (self.send) |send| {
             return (try send.function(send.context, .{ .HeadObjectCommand = .{ .Bucket = bucket, .Key = key, .ChecksumMode = checksumMode } })).HeadObject;
         }
-        _ = io;
         var headers: std.ArrayList(IHeader) = .empty;
         if (checksumMode) |checksumModeValue| {
             try headers.append(allocator, .{
@@ -1688,7 +1730,7 @@ pub const S3Client = struct {
                 .value = checksumModeValue,
             });
         }
-        const call = try self.run(allocator, .{
+        const call = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "HeadObject",
             .method = "HEAD",
@@ -1724,7 +1766,6 @@ pub const S3Client = struct {
         if (self.send) |send| {
             return (try send.function(send.context, .{ .GetObjectCommand = .{ .Bucket = bucket, .Key = key, .Range = range } })).GetObject;
         }
-        _ = io;
         var headers: std.ArrayList(IHeader) = .empty;
         if (range) |rangeValue| {
             try headers.append(allocator, .{
@@ -1732,7 +1773,7 @@ pub const S3Client = struct {
                 .value = rangeValue,
             });
         }
-        const call = try self.run(allocator, .{
+        const call = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "GetObject",
             .method = "GET",
@@ -1769,7 +1810,6 @@ pub const S3Client = struct {
             } });
             return;
         }
-        _ = io;
         var headers: std.ArrayList(IHeader) = .empty;
         if (contentType) |contentTypeValue| {
             try headers.append(allocator, .{
@@ -1789,7 +1829,7 @@ pub const S3Client = struct {
                 .value = checksumValue,
             });
         }
-        _ = try self.run(allocator, .{
+        _ = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "PutObject",
             .method = "PUT",
@@ -1812,8 +1852,7 @@ pub const S3Client = struct {
             _ = try send.function(send.context, .{ .DeleteObjectCommand = .{ .Bucket = bucket, .Key = key } });
             return;
         }
-        _ = io;
-        _ = try self.run(allocator, .{
+        _ = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "DeleteObject",
             .method = "DELETE",
@@ -1837,7 +1876,6 @@ pub const S3Client = struct {
             _ = try send.function(send.context, .{ .DeleteObjectsCommand = .{ .Bucket = bucket, .Keys = keys } });
             return;
         }
-        _ = io;
         var body: std.ArrayList(u8) = .empty;
         try body.appendSlice(allocator, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Delete xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">");
         for (keys) |key| {
@@ -1856,7 +1894,7 @@ pub const S3Client = struct {
                 .value = "application/xml",
             },
         };
-        _ = try self.run(allocator, .{
+        _ = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "DeleteObjects",
             .method = "POST",
@@ -1879,7 +1917,6 @@ pub const S3Client = struct {
             _ = try send.function(send.context, .{ .CopyObjectCommand = .{ .Bucket = bucket, .CopySource = copySource, .Key = key } });
             return;
         }
-        _ = io;
         var encodedCopySource: aws.aws_byte_buf = undefined;
         if (aws.aws_byte_buf_init(&encodedCopySource, aws.aws_default_allocator(), copySource.len) != aws.AWS_OP_SUCCESS) {
             return throwLastSdkError();
@@ -1895,7 +1932,7 @@ pub const S3Client = struct {
                 .value = try allocator.dupe(u8, sliceOf(aws.aws_byte_cursor_from_buf(&encodedCopySource))),
             },
         };
-        _ = try self.run(allocator, .{
+        _ = try self.run(allocator, io, .{
             .type = aws.AWS_S3_META_REQUEST_TYPE_DEFAULT,
             .operationName = "CopyObject",
             .method = "PUT",
@@ -2339,7 +2376,7 @@ pub const Upload = struct {
         switch (params.Body) {
             .buffer => |buffer| {
                 request.body = .{ .bytes = buffer };
-                _ = try self.options.client.run(allocator, request);
+                _ = try self.options.client.run(allocator, io, request);
             },
             .stream => |stream| {
                 const partSize: usize = @intCast(self.options.partSize);
@@ -2359,7 +2396,7 @@ pub const Upload = struct {
                         .rest = stream,
                     };
                 }
-                _ = try self.options.client.run(allocator, request);
+                _ = try self.options.client.run(allocator, io, request);
             },
         }
     }

@@ -1,58 +1,62 @@
 const std = @import("std");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
-const task_queue = @import("ziggy").task_queue;
+const ziggy = @import("ziggy");
 const media_tools = @import("media-tools-zig");
 const worker_pool_test = @import("worker-pool.test.zig");
 const WorkerPoolBun = cli.worker_pool.WorkerPoolBun;
 const Collector = worker_pool_test.Collector;
-const types = task_queue.types;
+const types = ziggy.task_queue.types;
+const Timers = ziggy.timers.Timers;
 
 //
-// A task type name as long as a real one: the worker lists every registered type in the error it reports for
-// an unregistered one, so one name this long makes that message longer than the fixed buffer the Collector
-// used to copy it into, which panicked the whole test binary and took every other test in the package with it.
+// Text as long as a real task type name, repeated to make an error message longer than the fixed buffer the Collector used to copy
+// it into, which panicked the whole test binary and took every other test in the package with it.
 //
-const long_handler_type_name = "photosphere-library-sync-photos-provider-s3-bucket-credential-refresh-and-reconciliation-of-the-metadata-index";
+const long_text = "photosphere-library-sync-photos-provider-s3-bucket-credential-refresh-and-reconciliation-of-the-metadata-index";
 
 //
-// The task type the failing task asks for, which nothing has registered.
+// The task type of the failing task.
 //
-const unregistered_task_type = "photosphere-library-sync-no-such-task-type";
+const long_error_task_type = "long-error";
 
 //
-// The handler registered for the long task type name (it is never called; only its name in the registry
-// matters, because the worker prints the registry in the error it reports for an unregistered task type).
+// Fails with an error message several times as long as long_text.
 //
-fn longNameHandler(allocator: std.mem.Allocator, io: std.Io, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn longErrorHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = timers;
     _ = allocator;
     _ = io;
     _ = data;
     _ = context;
-    return .null;
+    return utils.errors.throwError("Failed: {s} {s} {s}", .{ long_text, long_text, long_text });
 }
 
+//
+// The task types the worker of the test runs.
+//
+const test_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
+    .{ .name = long_error_task_type, .handler = ziggy.task_runner.fromQueueHandler(longErrorHandler) },
+};
+
 test "an error message longer than the collector's buffer is recorded whole" {
-    try task_queue.worker.registerHandler(long_handler_type_name, longNameHandler);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    // The pool installs the worker log routing in place of the global log; put the global log back after.
-    const previousLog = utils.log.log;
-    defer utils.log.setLog(previousLog);
-    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    const allocator = std.testing.allocator;
+    var timer_list = ziggy.timers.TimerList.init();
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(std.testing.io, &mediaTools, 1, 10000, .{});
-    defer pool.deinit();
+    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
-    _ = try pool.onTaskComplete(.{ .context = &collector, .function = Collector.onComplete });
-    _ = try pool.addTask(arena.allocator(), std.testing.io, unregistered_task_type, .null, "source", null, null);
-    try collector.waitForCompleted(1);
+    _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
+    const taskId = try pool.addTask(allocator, std.testing.io, long_error_task_type, .null, "source", null, null);
+    allocator.free(taskId);
+    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
 
-    // The message the worker builds is longer than the 256 bytes the collector used to copy it into.
+    // The message is longer than the 256 bytes the collector used to copy it into.
     try std.testing.expectEqual(@as(usize, 1), collector.failed);
     try std.testing.expectEqualStrings("Error", collector.lastErrorName);
     try std.testing.expect(collector.lastErrorMessage.len > 256);
-    try std.testing.expect(std.mem.startsWith(u8, collector.lastErrorMessage, "No handler registered for task type: "));
-    try std.testing.expect(std.mem.indexOf(u8, collector.lastErrorMessage, unregistered_task_type) != null);
-    try std.testing.expect(std.mem.indexOf(u8, collector.lastErrorMessage, long_handler_type_name) != null);
+    try std.testing.expectEqualStrings("Failed: " ++ long_text ++ " " ++ long_text ++ " " ++ long_text, collector.lastErrorMessage);
 }

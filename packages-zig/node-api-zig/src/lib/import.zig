@@ -9,6 +9,7 @@ const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
+const Timers = @import("ziggy").timers.Timers;
 const ITaskEventData = task_queue_zig.types.ITaskEventData;
 const IJobTag = task_queue_zig.types.IJobTag;
 const IAddSummary = media_file_database.IAddSummary;
@@ -48,7 +49,7 @@ const AddPathsState = struct {
     //
     // Counts one task event.
     //
-    fn onAnyTaskEvent(context: ?*anyopaque, data: ITaskEventData) anyerror!void {
+    fn onAnyTaskEvent(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, data: ITaskEventData) anyerror!void {
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));
         // A message that is not an object has no type.
         const message: std.json.ObjectMap = if (data.event == .object) data.event.object else .empty;
@@ -93,10 +94,9 @@ const AddPathsState = struct {
     // Ctrl-C has to reach the task, not just this process.
     //
     fn shutdownOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
-        _ = io;
         _ = exitCode;
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));
-        self.queue.shutdown();
+        self.queue.shutdown(io, self.allocator);
     }
 };
 
@@ -115,6 +115,7 @@ const AddPathsState = struct {
 pub fn addPaths(
     allocator: std.mem.Allocator,
     io: std.Io,
+    timers: Timers,
     uuidGenerator: IUuidGenerator,
     storageDescriptor: IDatabaseDescriptor,
     paths: []const []const u8,
@@ -124,7 +125,7 @@ pub fn addPaths(
     onProgress: ?AddPathsProgressCallback,
     options: ?IImportOptions,
 ) !IAddSummary {
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator, storageDescriptor.databasePath);
+    const queue = try TaskQueue.init(allocator, uuidGenerator, storageDescriptor.databasePath);
 
     const state = try allocator.create(AddPathsState);
     state.* = .{
@@ -143,7 +144,7 @@ pub fn addPaths(
         .queue = queue,
     };
 
-    _ = try queue.onAnyTaskEvent(.{
+    _ = try queue.onAnyTaskEvent(allocator, .{
         .context = state,
         .function = AddPathsState.onAnyTaskEvent,
     });
@@ -177,7 +178,7 @@ pub fn addPaths(
     try job.put(allocator, "cancelSource", .{ .string = storageDescriptor.databasePath });
     try taskData.put(allocator, "job", .{ .object = job });
 
-    const taskId = try queue.addTask("import-assets", .{ .object = taskData }, null, null);
+    const taskId = try queue.addTask(io, allocator, "import-assets", .{ .object = taskData }, null, null);
 
     // Ctrl-C has to reach the task, not just this process: the task is what holds the temporary
     // directory, and shutting the queue down is what tells it to stop. An automatic import only ends
@@ -187,9 +188,9 @@ pub fn addPaths(
         .function = AddPathsState.shutdownOnTermination,
     });
 
-    _ = try queue.awaitTask(taskId);
+    _ = try queue.awaitTask(io, allocator, timers, taskId);
 
-    queue.shutdown();
+    queue.shutdown(io, allocator);
 
     state.summary.averageSize = if (state.summary.filesAdded > 0)
         @floor(state.summary.totalSize / state.summary.filesAdded)

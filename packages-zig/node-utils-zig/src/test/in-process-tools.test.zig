@@ -29,7 +29,7 @@ const RecordingRunner = struct {
         return !std.mem.eql(u8, tool, self.refused_tool);
     }
 
-    fn run(context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
+    fn run(context: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
         const self: *RecordingRunner = @ptrCast(@alignCast(context.?));
         self.tool = tool;
         self.arguments = arguments;
@@ -164,9 +164,9 @@ test "tryRun leaves a command for a tool the runner does not handle to the calle
     defer arena.deinit();
     var recorder = newRunner(0, "ignored");
     recorder.refused_tool = "ffmpeg";
-    try std.testing.expect((try in_process_tools.tryRun(arena.allocator(), recorder.runner(), "ffmpeg -version")) == null);
+    try std.testing.expect((try in_process_tools.tryRun(arena.allocator(), std.testing.io, recorder.runner(), "ffmpeg -version")) == null);
     try std.testing.expectEqual(@as(u32, 0), recorder.calls);
-    const result = (try in_process_tools.tryRun(arena.allocator(), recorder.runner(), "magick -version")).?;
+    const result = (try in_process_tools.tryRun(arena.allocator(), std.testing.io, recorder.runner(), "magick -version")).?;
     try std.testing.expectEqualStrings("ignored", result.stdout);
     try std.testing.expectEqual(@as(u32, 1), recorder.calls);
 }

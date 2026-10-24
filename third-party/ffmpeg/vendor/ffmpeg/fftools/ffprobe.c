@@ -93,59 +93,14 @@ typedef struct InputFile {
 const char program_name[] = "ffprobe";
 const int program_birth_year = 2007;
 
-static int do_analyze_frames = 0;
-static int do_bitexact = 0;
-static int do_count_frames = 0;
-static int do_count_packets = 0;
-static int do_read_frames  = 0;
-static int do_read_packets = 0;
-static int do_show_chapters = 0;
-static int do_show_error   = 0;
-static int do_show_format  = 0;
-static int do_show_frames  = 0;
-static int do_show_packets = 0;
-static int do_show_programs = 0;
-static int do_show_stream_groups = 0;
-static int do_show_stream_group_components = 0;
-static int do_show_streams = 0;
-static int do_show_stream_disposition = 0;
-static int do_show_stream_group_disposition = 0;
-static int do_show_data    = 0;
-static int do_show_program_version  = 0;
-static int do_show_library_versions = 0;
-static int do_show_pixel_formats = 0;
-static int do_show_pixel_format_flags = 0;
-static int do_show_pixel_format_components = 0;
-static int do_show_log = 0;
 
-static int do_show_chapter_tags = 0;
-static int do_show_format_tags = 0;
-static int do_show_frame_tags = 0;
-static int do_show_program_tags = 0;
-static int do_show_stream_group_tags = 0;
-static int do_show_stream_tags = 0;
-static int do_show_packet_tags = 0;
 
-static int show_value_unit              = 0;
-static int use_value_prefix             = 0;
-static int use_byte_value_binary_prefix = 0;
-static int use_value_sexagesimal_format = 0;
-static int show_private_data            = 1;
 
-static const char *audio_codec_name = NULL;
-static const char *data_codec_name = NULL;
-static const char *subtitle_codec_name = NULL;
-static const char *video_codec_name = NULL;
 
 #define SHOW_OPTIONAL_FIELDS_AUTO       -1
 #define SHOW_OPTIONAL_FIELDS_NEVER       0
 #define SHOW_OPTIONAL_FIELDS_ALWAYS      1
-static int show_optional_fields = SHOW_OPTIONAL_FIELDS_AUTO;
 
-static char *output_format;
-static char *stream_specifier;
-static char *show_data_hash;
-static char *data_dump_format;
 
 typedef struct ReadInterval {
     int id;             ///< identifier
@@ -155,10 +110,7 @@ typedef struct ReadInterval {
     int duration_frames;
 } ReadInterval;
 
-static ReadInterval *read_intervals;
-static int read_intervals_nb = 0;
 
-static int find_stream_info  = 1;
 
 /* section structure definition */
 
@@ -335,28 +287,15 @@ typedef struct EntrySelection {
     AVDictionary *entries_to_show;
 } EntrySelection;
 
-static EntrySelection selected_entries[FF_ARRAY_ELEMS(sections)] = { 0 };
 
-static const OptionDef *options;
 
 /* FFprobe context */
-static const char *input_filename;
-static const char *print_input_filename;
-static const AVInputFormat *iformat = NULL;
-static const char *output_filename = NULL;
 
 static const char unit_hertz_str[]          = "Hz"   ;
 static const char unit_byte_str[]           = "byte" ;
 static const char unit_bit_per_second_str[] = "bit/s";
 
-static unsigned int nb_streams;
-static uint64_t *nb_streams_packets;
-static uint64_t *nb_streams_frames;
-static int *selected_streams;
-static int *streams_with_closed_captions;
-static int *streams_with_film_grain;
 
-static AVMutex log_mutex = AV_MUTEX_INITIALIZER;
 
 typedef struct LogBuffer {
     char *context_name;
@@ -367,13 +306,107 @@ typedef struct LogBuffer {
     AVClassCategory parent_category;
 }LogBuffer;
 
-static LogBuffer *log_buffer;
-static int log_buffer_size;
+/* Patched (fftools-per-run-state.patch): everything ffprobe kept in variables of the whole process, as the state of one run, so
+ * that runs on several threads at once share nothing (see fftools_state.h). */
+typedef struct FFprobeState {
+    int do_analyze_frames;
+    int do_bitexact;
+    int do_count_frames;
+    int do_count_packets;
+    int do_read_frames;
+    int do_read_packets;
+    int do_show_chapters;
+    int do_show_error;
+    int do_show_format;
+    int do_show_frames;
+    int do_show_packets;
+    int do_show_programs;
+    int do_show_stream_groups;
+    int do_show_stream_group_components;
+    int do_show_streams;
+    int do_show_stream_disposition;
+    int do_show_stream_group_disposition;
+    int do_show_data;
+    int do_show_program_version;
+    int do_show_library_versions;
+    int do_show_pixel_formats;
+    int do_show_pixel_format_flags;
+    int do_show_pixel_format_components;
+    int do_show_log;
+
+    int do_show_chapter_tags;
+    int do_show_format_tags;
+    int do_show_frame_tags;
+    int do_show_program_tags;
+    int do_show_stream_group_tags;
+    int do_show_stream_tags;
+    int do_show_packet_tags;
+
+    int show_value_unit;
+    int use_value_prefix;
+    int use_byte_value_binary_prefix;
+    int use_value_sexagesimal_format;
+    int show_private_data;
+
+    const char *audio_codec_name;
+    const char *data_codec_name;
+    const char *subtitle_codec_name;
+    const char *video_codec_name;
+
+    int show_optional_fields;
+
+    char *output_format;
+    char *stream_specifier;
+    char *show_data_hash;
+    char *data_dump_format;
+
+    ReadInterval *read_intervals;
+    int read_intervals_nb;
+
+    int find_stream_info;
+
+    EntrySelection selected_entries[FF_ARRAY_ELEMS(sections)];
+
+    const OptionDef *options;
+
+    const char *input_filename;
+    const char *print_input_filename;
+    const AVInputFormat *iformat;
+    const char *output_filename;
+
+    unsigned int nb_streams;
+    uint64_t *nb_streams_packets;
+    uint64_t *nb_streams_frames;
+    int *selected_streams;
+    int *streams_with_closed_captions;
+    int *streams_with_film_grain;
+
+    AVMutex log_mutex;
+
+    LogBuffer *log_buffer;
+    int log_buffer_size;
+
+    // what was a static variable of log_callback
+    int log_print_prefix;
+} FFprobeState;
+
+/* What the state of a run of ffprobe starts as. The options that set a field point into this (see fftools_option_target). */
+const FFprobeState ffprobe_defaults = {
+    .show_private_data    = 1,
+    .show_optional_fields = SHOW_OPTIONAL_FIELDS_AUTO,
+    .find_stream_info     = 1,
+    .log_mutex            = AV_MUTEX_INITIALIZER,
+    .log_print_prefix     = 1,
+};
+
+/* The calling thread's run's state of ffprobe. */
+#define FFPROBE_STATE(name) (((FFprobeState *)fftools_run()->program)->name)
+
 
 static int is_key_selected_callback(AVTextFormatContext *tctx, const char *key)
 {
     const AVTextFormatSection *section = tctx->section[tctx->level];
-    const EntrySelection *selection = &selected_entries[section - sections];
+    const EntrySelection *selection = &FFPROBE_STATE(selected_entries)[section - sections];
 
     return selection->show_all_entries || av_dict_get(selection->entries_to_show, key, NULL, 0);
 }
@@ -383,31 +416,30 @@ static void log_callback(void *ptr, int level, const char *fmt, va_list vl)
     AVClass* avc = ptr ? *(AVClass **) ptr : NULL;
     va_list vl2;
     char line[1024];
-    static int print_prefix = 1;
     void *new_log_buffer;
 
     va_copy(vl2, vl);
     av_log_default_callback(ptr, level, fmt, vl);
-    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
+    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &FFPROBE_STATE(log_print_prefix));
     va_end(vl2);
 
 #if HAVE_THREADS
-    ff_mutex_lock(&log_mutex);
+    ff_mutex_lock(&FFPROBE_STATE(log_mutex));
 
-    new_log_buffer = av_realloc_array(log_buffer, log_buffer_size + 1, sizeof(*log_buffer));
+    new_log_buffer = av_realloc_array(FFPROBE_STATE(log_buffer), FFPROBE_STATE(log_buffer_size) + 1, sizeof(*FFPROBE_STATE(log_buffer)));
     if (new_log_buffer) {
         char *msg;
         int i;
 
-        log_buffer = new_log_buffer;
-        memset(&log_buffer[log_buffer_size], 0, sizeof(log_buffer[log_buffer_size]));
-        log_buffer[log_buffer_size].context_name= avc ? av_strdup(avc->item_name(ptr)) : NULL;
+        FFPROBE_STATE(log_buffer) = new_log_buffer;
+        memset(&FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)], 0, sizeof(FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)]));
+        FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].context_name= avc ? av_strdup(avc->item_name(ptr)) : NULL;
         if (avc) {
-            if (avc->get_category) log_buffer[log_buffer_size].category = avc->get_category(ptr);
-            else                   log_buffer[log_buffer_size].category = avc->category;
+            if (avc->get_category) FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].category = avc->get_category(ptr);
+            else                   FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].category = avc->category;
         }
-        log_buffer[log_buffer_size].log_level   = level;
-        msg = log_buffer[log_buffer_size].log_message = av_strdup(line);
+        FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].log_level   = level;
+        msg = FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].log_message = av_strdup(line);
         for (i=strlen(msg) - 1; i>=0 && msg[i] == '\n'; i--) {
             msg[i] = 0;
         }
@@ -415,15 +447,15 @@ static void log_callback(void *ptr, int level, const char *fmt, va_list vl)
             AVClass** parent = *(AVClass ***) (((uint8_t *) ptr) +
                                    avc->parent_log_context_offset);
             if (parent && *parent) {
-                log_buffer[log_buffer_size].parent_name = av_strdup((*parent)->item_name(parent));
-                log_buffer[log_buffer_size].parent_category =
+                FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].parent_name = av_strdup((*parent)->item_name(parent));
+                FFPROBE_STATE(log_buffer)[FFPROBE_STATE(log_buffer_size)].parent_category =
                     (*parent)->get_category ? (*parent)->get_category(parent) :(*parent)->category;
             }
         }
-        log_buffer_size ++;
+        FFPROBE_STATE(log_buffer_size) ++;
     }
 
-    ff_mutex_unlock(&log_mutex);
+    ff_mutex_unlock(&FFPROBE_STATE(log_mutex));
 #endif
 }
 
@@ -1180,7 +1212,7 @@ static void print_pkt_side_data(AVTextFormatContext *tfc,
         print_int("vbv_delay",   prop->vbv_delay);
     } else if (sd->type == AV_PKT_DATA_WEBVTT_IDENTIFIER ||
                sd->type == AV_PKT_DATA_WEBVTT_SETTINGS) {
-        if (do_show_data)
+        if (FFPROBE_STATE(do_show_data))
             avtext_print_data(tfc, "data", sd->data, sd->size);
         avtext_print_data_hash(tfc, "data_hash", sd->data, sd->size);
     } else if (sd->type == AV_PKT_DATA_FRAME_CROPPING && sd->size >= sizeof(uint32_t) * 4) {
@@ -1194,7 +1226,7 @@ static void print_pkt_side_data(AVTextFormatContext *tfc,
         print_int("size", sd->size);
     } else if (sd->type == AV_PKT_DATA_MATROSKA_BLOCKADDITIONAL && sd->size >= 8) {
         print_int("block_additional_id", AV_RB64(sd->data));
-        if (do_show_data)
+        if (FFPROBE_STATE(do_show_data))
             avtext_print_data(tfc, "block_additional_data", sd->data + 8, sd->size - 8);
     }
 }
@@ -1219,7 +1251,7 @@ static void print_pixel_format(AVTextFormatContext *tfc, enum AVPixelFormat pix_
 
     if (!s) {
         print_str_opt("pix_fmt", "unknown");
-    } else if (!do_bitexact ||
+    } else if (!FFPROBE_STATE(do_bitexact) ||
                (swapped_pix_fmt = av_pix_fmt_swap_endianness(pix_fmt)) == AV_PIX_FMT_NONE) {
         print_str    ("pix_fmt", s);
     } else {
@@ -1302,46 +1334,46 @@ static void clear_log(int need_lock)
     int i;
 
     if (need_lock)
-        ff_mutex_lock(&log_mutex);
-    for (i=0; i<log_buffer_size; i++) {
-        av_freep(&log_buffer[i].context_name);
-        av_freep(&log_buffer[i].parent_name);
-        av_freep(&log_buffer[i].log_message);
+        ff_mutex_lock(&FFPROBE_STATE(log_mutex));
+    for (i=0; i<FFPROBE_STATE(log_buffer_size); i++) {
+        av_freep(&FFPROBE_STATE(log_buffer)[i].context_name);
+        av_freep(&FFPROBE_STATE(log_buffer)[i].parent_name);
+        av_freep(&FFPROBE_STATE(log_buffer)[i].log_message);
     }
-    log_buffer_size = 0;
+    FFPROBE_STATE(log_buffer_size) = 0;
     if(need_lock)
-        ff_mutex_unlock(&log_mutex);
+        ff_mutex_unlock(&FFPROBE_STATE(log_mutex));
 }
 
 static int show_log(AVTextFormatContext *tfc, int section_ids, int section_id, int log_level)
 {
     int i;
-    ff_mutex_lock(&log_mutex);
-    if (!log_buffer_size) {
-        ff_mutex_unlock(&log_mutex);
+    ff_mutex_lock(&FFPROBE_STATE(log_mutex));
+    if (!FFPROBE_STATE(log_buffer_size)) {
+        ff_mutex_unlock(&FFPROBE_STATE(log_mutex));
         return 0;
     }
     avtext_print_section_header(tfc, NULL, section_ids);
 
-    for (i=0; i<log_buffer_size; i++) {
-        if (log_buffer[i].log_level <= log_level) {
+    for (i=0; i<FFPROBE_STATE(log_buffer_size); i++) {
+        if (FFPROBE_STATE(log_buffer)[i].log_level <= log_level) {
             avtext_print_section_header(tfc, NULL, section_id);
-            print_str("context", log_buffer[i].context_name);
-            print_int("level", log_buffer[i].log_level);
-            print_int("category", log_buffer[i].category);
-            if (log_buffer[i].parent_name) {
-                print_str("parent_context", log_buffer[i].parent_name);
-                print_int("parent_category", log_buffer[i].parent_category);
+            print_str("context", FFPROBE_STATE(log_buffer)[i].context_name);
+            print_int("level", FFPROBE_STATE(log_buffer)[i].log_level);
+            print_int("category", FFPROBE_STATE(log_buffer)[i].category);
+            if (FFPROBE_STATE(log_buffer)[i].parent_name) {
+                print_str("parent_context", FFPROBE_STATE(log_buffer)[i].parent_name);
+                print_int("parent_category", FFPROBE_STATE(log_buffer)[i].parent_category);
             } else {
                 print_str_opt("parent_context", "N/A");
                 print_str_opt("parent_category", "N/A");
             }
-            print_str("message", log_buffer[i].log_message);
+            print_str("message", FFPROBE_STATE(log_buffer)[i].log_message);
             avtext_print_section_footer(tfc);
         }
     }
     clear_log(0);
-    ff_mutex_unlock(&log_mutex);
+    ff_mutex_unlock(&FFPROBE_STATE(log_mutex));
 
     avtext_print_section_footer(tfc);
 
@@ -1374,7 +1406,7 @@ static void show_packet(AVTextFormatContext *tfc, InputFile *ifile, AVPacket *pk
     print_fmt("flags", "%c%c%c",      pkt->flags & AV_PKT_FLAG_KEY ? 'K' : '_',
               pkt->flags & AV_PKT_FLAG_DISCARD ? 'D' : '_',
               pkt->flags & AV_PKT_FLAG_CORRUPT ? 'C' : '_');
-    if (do_show_data)
+    if (FFPROBE_STATE(do_show_data))
         avtext_print_data(tfc, "data", pkt->data, pkt->size);
     avtext_print_data_hash(tfc, "data_hash", pkt->data, pkt->size);
 
@@ -1383,7 +1415,7 @@ static void show_packet(AVTextFormatContext *tfc, InputFile *ifile, AVPacket *pk
         const uint8_t *side_metadata;
 
         side_metadata = av_packet_get_side_data(pkt, AV_PKT_DATA_STRINGS_METADATA, &size);
-        if (side_metadata && size && do_show_packet_tags) {
+        if (side_metadata && size && FFPROBE_STATE(do_show_packet_tags)) {
             AVDictionary *dict = NULL;
             if (av_packet_unpack_dictionary(side_metadata, size, &dict) >= 0)
                 show_tags(tfc, dict, SECTION_ID_PACKET_TAGS);
@@ -1580,10 +1612,10 @@ static void show_frame(AVTextFormatContext *tfc, AVFrame *frame, AVStream *strea
             print_str_opt("channel_layout", "unknown");
         break;
     }
-    if (do_show_frame_tags)
+    if (FFPROBE_STATE(do_show_frame_tags))
         show_tags(tfc, frame->metadata, SECTION_ID_FRAME_TAGS);
-    if (do_show_log)
-        show_log(tfc, SECTION_ID_FRAME_LOGS, SECTION_ID_FRAME_LOG, do_show_log);
+    if (FFPROBE_STATE(do_show_log))
+        show_log(tfc, SECTION_ID_FRAME_LOGS, SECTION_ID_FRAME_LOG, FFPROBE_STATE(do_show_log));
     if (frame->nb_side_data)
         print_frame_side_data(tfc, frame, stream);
 
@@ -1644,19 +1676,19 @@ static av_always_inline int process_frame(AVTextFormatContext *tfc,
         return ret;
     if (got_frame) {
         int is_sub = (par->codec_type == AVMEDIA_TYPE_SUBTITLE);
-        nb_streams_frames[pkt->stream_index]++;
-        if (do_show_frames)
+        FFPROBE_STATE(nb_streams_frames)[pkt->stream_index]++;
+        if (FFPROBE_STATE(do_show_frames))
             if (is_sub)
                 show_subtitle(tfc, &sub, ifile->streams[pkt->stream_index].st, fmt_ctx);
             else
                 show_frame(tfc, frame, ifile->streams[pkt->stream_index].st, fmt_ctx);
 
-        if (!is_sub && do_analyze_frames) {
+        if (!is_sub && FFPROBE_STATE(do_analyze_frames)) {
             for (int i = 0; i < frame->nb_side_data; i++) {
                 if (frame->side_data[i]->type == AV_FRAME_DATA_A53_CC)
-                    streams_with_closed_captions[pkt->stream_index] = 1;
+                    FFPROBE_STATE(streams_with_closed_captions)[pkt->stream_index] = 1;
                 else if (frame->side_data[i]->type == AV_FRAME_DATA_FILM_GRAIN_PARAMS)
-                    streams_with_film_grain[pkt->stream_index] = 1;
+                    FFPROBE_STATE(streams_with_film_grain)[pkt->stream_index] = 1;
             }
         }
 
@@ -1738,15 +1770,15 @@ static int read_interval_packets(AVTextFormatContext *tfc, InputFile *ifile,
         goto end;
     }
     while (!av_read_frame(fmt_ctx, pkt)) {
-        if (fmt_ctx->nb_streams > nb_streams) {
-            REALLOCZ_ARRAY_STREAM(nb_streams_frames,  nb_streams, fmt_ctx->nb_streams);
-            REALLOCZ_ARRAY_STREAM(nb_streams_packets, nb_streams, fmt_ctx->nb_streams);
-            REALLOCZ_ARRAY_STREAM(selected_streams,   nb_streams, fmt_ctx->nb_streams);
-            REALLOCZ_ARRAY_STREAM(streams_with_closed_captions,   nb_streams, fmt_ctx->nb_streams);
-            REALLOCZ_ARRAY_STREAM(streams_with_film_grain,        nb_streams, fmt_ctx->nb_streams);
-            nb_streams = fmt_ctx->nb_streams;
+        if (fmt_ctx->nb_streams > FFPROBE_STATE(nb_streams)) {
+            REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(nb_streams_frames),  FFPROBE_STATE(nb_streams), fmt_ctx->nb_streams);
+            REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(nb_streams_packets), FFPROBE_STATE(nb_streams), fmt_ctx->nb_streams);
+            REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(selected_streams),   FFPROBE_STATE(nb_streams), fmt_ctx->nb_streams);
+            REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(streams_with_closed_captions),   FFPROBE_STATE(nb_streams), fmt_ctx->nb_streams);
+            REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(streams_with_film_grain),        FFPROBE_STATE(nb_streams), fmt_ctx->nb_streams);
+            FFPROBE_STATE(nb_streams) = fmt_ctx->nb_streams;
         }
-        if (selected_streams[pkt->stream_index]) {
+        if (FFPROBE_STATE(selected_streams)[pkt->stream_index]) {
             AVRational tb = ifile->streams[pkt->stream_index].st->time_base;
             int64_t pts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
 
@@ -1771,12 +1803,12 @@ static int read_interval_packets(AVTextFormatContext *tfc, InputFile *ifile,
             }
 
             frame_count++;
-            if (do_read_packets) {
-                if (do_show_packets)
+            if (FFPROBE_STATE(do_read_packets)) {
+                if (FFPROBE_STATE(do_show_packets))
                     show_packet(tfc, ifile, pkt, i++);
-                nb_streams_packets[pkt->stream_index]++;
+                FFPROBE_STATE(nb_streams_packets)[pkt->stream_index]++;
             }
-            if (do_read_frames) {
+            if (FFPROBE_STATE(do_read_frames)) {
                 int packet_new = 1;
                 FrameData *fd;
 
@@ -1798,7 +1830,7 @@ static int read_interval_packets(AVTextFormatContext *tfc, InputFile *ifile,
     //Flush remaining frames that are cached in the decoder
     for (int i = 0; i < ifile->nb_streams; i++) {
         pkt->stream_index = i;
-        if (do_read_frames) {
+        if (FFPROBE_STATE(do_read_frames)) {
             while (process_frame(tfc, ifile, frame, pkt, &(int){1}) > 0);
         }
     }
@@ -1817,7 +1849,7 @@ static void flush_buffers(InputFile *ifile)
 {
     int i;
 
-    if (!do_read_frames)
+    if (!FFPROBE_STATE(do_read_frames))
         return;
     for (i = 0; i < ifile->nb_streams; i++) {
         if (ifile->streams[i].dec_ctx)
@@ -1831,16 +1863,16 @@ static int read_packets(AVTextFormatContext *tfc, InputFile *ifile)
     int ret = 0;
     int64_t cur_ts = fmt_ctx->start_time;
 
-    if (read_intervals_nb == 0) {
+    if (FFPROBE_STATE(read_intervals_nb) == 0) {
         ReadInterval interval = (ReadInterval) { .has_start = 0, .has_end = 0 };
         ret = read_interval_packets(tfc, ifile, &interval, &cur_ts);
     } else {
-        for (int i = 0; i < read_intervals_nb; i++) {
+        for (int i = 0; i < FFPROBE_STATE(read_intervals_nb); i++) {
             /* flushing buffers can reset parts of the private context which may be
              * read by show_streams(), so only flush between each read_interval */
             if (i)
                 flush_buffers(ifile);
-            ret = read_interval_packets(tfc, ifile, &read_intervals[i], &cur_ts);
+            ret = read_interval_packets(tfc, ifile, &FFPROBE_STATE(read_intervals)[i], &cur_ts);
             if (ret < 0)
                 break;
         }
@@ -1904,18 +1936,18 @@ static int show_stream(AVTextFormatContext *tfc, AVFormatContext *fmt_ctx, int s
     dec_ctx = ist->dec_ctx;
     if (cd = avcodec_descriptor_get(par->codec_id)) {
         print_str("codec_name", cd->name);
-        if (!do_bitexact) {
+        if (!FFPROBE_STATE(do_bitexact)) {
             print_str("codec_long_name",
                       cd->long_name ? cd->long_name : "unknown");
         }
     } else {
         print_str_opt("codec_name", "unknown");
-        if (!do_bitexact) {
+        if (!FFPROBE_STATE(do_bitexact)) {
             print_str_opt("codec_long_name", "unknown");
         }
     }
 
-    if (!do_bitexact && (profile = avcodec_profile_name(par->codec_id, par->profile)))
+    if (!FFPROBE_STATE(do_bitexact) && (profile = avcodec_profile_name(par->codec_id, par->profile)))
         print_str("profile", profile);
     else {
         if (par->profile != AV_PROFILE_UNKNOWN) {
@@ -1946,9 +1978,9 @@ static int show_stream(AVTextFormatContext *tfc, AVFormatContext *fmt_ctx, int s
             print_int("coded_width",  dec_ctx->coded_width);
             print_int("coded_height", dec_ctx->coded_height);
 
-            if (do_analyze_frames) {
-                print_int("closed_captions", streams_with_closed_captions[stream->index]);
-                print_int("film_grain",      streams_with_film_grain[stream->index]);
+            if (FFPROBE_STATE(do_analyze_frames)) {
+                print_int("closed_captions", FFPROBE_STATE(streams_with_closed_captions)[stream->index]);
+                print_int("film_grain",      FFPROBE_STATE(streams_with_film_grain)[stream->index]);
             }
         }
         print_int("has_b_frames", par->video_delay);
@@ -1986,7 +2018,7 @@ static int show_stream(AVTextFormatContext *tfc, AVFormatContext *fmt_ctx, int s
         else
             print_str_opt("field_order", "unknown");
 
-        if (dec_ctx && do_read_frames)
+        if (dec_ctx && FFPROBE_STATE(do_read_frames))
             print_int("refs", dec_ctx->refs);
         break;
 
@@ -2021,7 +2053,7 @@ static int show_stream(AVTextFormatContext *tfc, AVFormatContext *fmt_ctx, int s
         break;
     }
 
-    if (show_private_data) {
+    if (FFPROBE_STATE(show_private_data)) {
         if (dec_ctx && dec_ctx->codec->priv_class)
             print_private_data(tfc, dec_ctx->priv_data);
         if (fmt_ctx->iformat->priv_class)
@@ -2047,11 +2079,11 @@ static int show_stream(AVTextFormatContext *tfc, AVFormatContext *fmt_ctx, int s
     else                                             print_str_opt("bits_per_raw_sample", "N/A");
     if (stream->nb_frames) print_fmt    ("nb_frames", "%"PRId64, stream->nb_frames);
     else                   print_str_opt("nb_frames", "N/A");
-    if (nb_streams_frames[stream_idx])  print_fmt    ("nb_read_frames", "%"PRIu64, nb_streams_frames[stream_idx]);
+    if (FFPROBE_STATE(nb_streams_frames)[stream_idx])  print_fmt    ("nb_read_frames", "%"PRIu64, FFPROBE_STATE(nb_streams_frames)[stream_idx]);
     else                                print_str_opt("nb_read_frames", "N/A");
-    if (nb_streams_packets[stream_idx]) print_fmt    ("nb_read_packets", "%"PRIu64, nb_streams_packets[stream_idx]);
+    if (FFPROBE_STATE(nb_streams_packets)[stream_idx]) print_fmt    ("nb_read_packets", "%"PRIu64, FFPROBE_STATE(nb_streams_packets)[stream_idx]);
     else                                print_str_opt("nb_read_packets", "N/A");
-    if (do_show_data)
+    if (FFPROBE_STATE(do_show_data))
         avtext_print_data(tfc, "extradata", par->extradata,
                                           par->extradata_size);
 
@@ -2062,12 +2094,12 @@ static int show_stream(AVTextFormatContext *tfc, AVFormatContext *fmt_ctx, int s
     }
 
     /* Print disposition information */
-    if (do_show_stream_disposition) {
+    if (FFPROBE_STATE(do_show_stream_disposition)) {
         av_assert0(container < FF_ARRAY_ELEMS(section_disposition));
         print_dispositions(tfc, stream->disposition, section_disposition[container]);
     }
 
-    if (do_show_stream_tags) {
+    if (FFPROBE_STATE(do_show_stream_tags)) {
         av_assert0(container < FF_ARRAY_ELEMS(section_tags));
         ret = show_tags(tfc, stream->metadata, section_tags[container]);
     }
@@ -2096,7 +2128,7 @@ static int show_streams(AVTextFormatContext *tfc, InputFile *ifile)
 
     avtext_print_section_header(tfc, NULL, SECTION_ID_STREAMS);
     for (int i = 0; i < ifile->nb_streams; i++)
-        if (selected_streams[i]) {
+        if (FFPROBE_STATE(selected_streams)[i]) {
             ret = show_stream(tfc, fmt_ctx, i, &ifile->streams[i], 0);
             if (ret < 0)
                 break;
@@ -2117,14 +2149,14 @@ static int show_program(AVTextFormatContext *tfc, InputFile *ifile, AVProgram *p
     print_int("nb_streams", program->nb_stream_indexes);
     print_int("pmt_pid", program->pmt_pid);
     print_int("pcr_pid", program->pcr_pid);
-    if (do_show_program_tags)
+    if (FFPROBE_STATE(do_show_program_tags))
         ret = show_tags(tfc, program->metadata, SECTION_ID_PROGRAM_TAGS);
     if (ret < 0)
         goto end;
 
     avtext_print_section_header(tfc, NULL, SECTION_ID_PROGRAM_STREAMS);
     for (unsigned i = 0; i < program->nb_stream_indexes; i++) {
-        if (selected_streams[program->stream_index[i]]) {
+        if (FFPROBE_STATE(selected_streams)[program->stream_index[i]]) {
             ret = show_stream(tfc, fmt_ctx, program->stream_index[i], &ifile->streams[program->stream_index[i]], IN_PROGRAM);
             if (ret < 0)
                 break;
@@ -2388,21 +2420,21 @@ static int show_stream_group(AVTextFormatContext *tfc, InputFile *ifile, AVStrea
         print_str("type", av_x_if_null(avformat_stream_group_name(stg->type), "unknown"));
     else
         print_str_opt("type", "unknown");
-    if (do_show_stream_group_components)
+    if (FFPROBE_STATE(do_show_stream_group_components))
         print_stream_group_params(tfc, stg);
 
     /* Print disposition information */
-    if (do_show_stream_group_disposition)
+    if (FFPROBE_STATE(do_show_stream_group_disposition))
         print_dispositions(tfc, stg->disposition, SECTION_ID_STREAM_GROUP_DISPOSITION);
 
-    if (do_show_stream_group_tags)
+    if (FFPROBE_STATE(do_show_stream_group_tags))
         ret = show_tags(tfc, stg->metadata, SECTION_ID_STREAM_GROUP_TAGS);
     if (ret < 0)
         goto end;
 
     avtext_print_section_header(tfc, NULL, SECTION_ID_STREAM_GROUP_STREAMS);
     for (unsigned i = 0; i < stg->nb_streams; i++) {
-        if (selected_streams[stg->streams[i]->index]) {
+        if (FFPROBE_STATE(selected_streams)[stg->streams[i]->index]) {
             ret = show_stream(tfc, fmt_ctx, stg->streams[i]->index, &ifile->streams[stg->streams[i]->index], IN_STREAM_GROUP);
             if (ret < 0)
                 break;
@@ -2449,7 +2481,7 @@ static int show_chapters(AVTextFormatContext *tfc, InputFile *ifile)
         print_time("start_time", chapter->start, &chapter->time_base);
         print_int("end", chapter->end);
         print_time("end_time", chapter->end, &chapter->time_base);
-        if (do_show_chapter_tags)
+        if (FFPROBE_STATE(do_show_chapter_tags))
             ret = show_tags(tfc, chapter->metadata, SECTION_ID_CHAPTER_TAGS);
         avtext_print_section_footer(tfc);
     }
@@ -2470,7 +2502,7 @@ static int show_format(AVTextFormatContext *tfc, InputFile *ifile)
     print_int("nb_programs",      fmt_ctx->nb_programs);
     print_int("nb_stream_groups", fmt_ctx->nb_stream_groups);
     print_str("format_name",      fmt_ctx->iformat->name);
-    if (!do_bitexact) {
+    if (!FFPROBE_STATE(do_bitexact)) {
         if (fmt_ctx->iformat->long_name) print_str    ("format_long_name", fmt_ctx->iformat->long_name);
         else                             print_str_opt("format_long_name", "unknown");
     }
@@ -2481,7 +2513,7 @@ static int show_format(AVTextFormatContext *tfc, InputFile *ifile)
     if (fmt_ctx->bit_rate > 0) print_val    ("bit_rate", fmt_ctx->bit_rate, unit_bit_per_second_str);
     else                       print_str_opt("bit_rate", "N/A");
     print_int("probe_score", fmt_ctx->probe_score);
-    if (do_show_format_tags)
+    if (FFPROBE_STATE(do_show_format_tags))
         ret = show_tags(tfc, fmt_ctx->metadata, SECTION_ID_FORMAT_TAGS);
 
     avtext_print_section_footer(tfc);
@@ -2516,7 +2548,7 @@ static int set_decoders(AVFormatContext *fmt_ctx)
     int ret;
 
 #define GET_DECODER(type_) \
-    ret = get_decoder_by_name(type_##_codec_name, &fmt_ctx->type_##_codec); \
+    ret = get_decoder_by_name(FFPROBE_STATE(type_##_codec_name), &fmt_ctx->type_##_codec); \
     if (ret < 0) return ret;
 
     GET_DECODER(audio);
@@ -2571,12 +2603,12 @@ static int open_input_file(InputFile *ifile, const char *filename,
     err = set_decoders(fmt_ctx);
     if (err < 0)
         return err;
-    if (!av_dict_get(format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
-        av_dict_set(&format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
+    if (!av_dict_get(FFTOOLS_COMMON(format_opts), "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
+        av_dict_set(&FFTOOLS_COMMON(format_opts), "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
         scan_all_pmts_set = 1;
     }
     if ((err = avformat_open_input(&fmt_ctx, filename,
-                                   iformat, &format_opts)) < 0) {
+                                   FFPROBE_STATE(iformat), &FFTOOLS_COMMON(format_opts))) < 0) {
         print_error(filename, err);
         return err;
     }
@@ -2586,15 +2618,15 @@ static int open_input_file(InputFile *ifile, const char *filename,
     }
     ifile->fmt_ctx = fmt_ctx;
     if (scan_all_pmts_set)
-        av_dict_set(&format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE);
-    while ((t = av_dict_iterate(format_opts, t)))
+        av_dict_set(&FFTOOLS_COMMON(format_opts), "scan_all_pmts", NULL, AV_DICT_MATCH_CASE);
+    while ((t = av_dict_iterate(FFTOOLS_COMMON(format_opts), t)))
         av_log(NULL, AV_LOG_WARNING, "Option %s skipped - not known to demuxer.\n", t->key);
 
-    if (find_stream_info) {
+    if (FFPROBE_STATE(find_stream_info)) {
         AVDictionary **opts;
         int orig_nb_streams = fmt_ctx->nb_streams;
 
-        err = setup_find_stream_info_opts(fmt_ctx, codec_opts, &opts);
+        err = setup_find_stream_info_opts(fmt_ctx, FFTOOLS_COMMON(codec_opts), &opts);
         if (err < 0)
             return err;
 
@@ -2632,7 +2664,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
         {
             AVDictionary *opts;
 
-            err = filter_codec_opts(codec_opts, stream->codecpar->codec_id,
+            err = filter_codec_opts(FFTOOLS_COMMON(codec_opts), stream->codecpar->codec_id,
                                     fmt_ctx, stream, codec, &opts, NULL);
             if (err < 0)
                 exit(1);
@@ -2645,11 +2677,11 @@ static int open_input_file(InputFile *ifile, const char *filename,
             if (err < 0)
                 exit(1);
 
-            if (do_show_log) {
+            if (FFPROBE_STATE(do_show_log)) {
                 // For logging it is needed to disable at least frame threads as otherwise
                 // the log information would need to be reordered and matches up to contexts and frames
                 // That is in fact possible but not trivial
-                av_dict_set(&codec_opts, "threads", "1", 0);
+                av_dict_set(&FFTOOLS_COMMON(codec_opts), "threads", "1", 0);
             }
 
             av_dict_set(&opts, "flags", "+copy_opaque", AV_DICT_MULTIKEY);
@@ -2694,9 +2726,9 @@ static int probe_file(AVTextFormatContext *tfc, const char *filename,
     int ret;
     int section_id;
 
-    do_analyze_frames = do_analyze_frames && do_show_streams;
-    do_read_frames = do_show_frames || do_count_frames || do_analyze_frames;
-    do_read_packets = do_show_packets || do_count_packets;
+    FFPROBE_STATE(do_analyze_frames) = FFPROBE_STATE(do_analyze_frames) && FFPROBE_STATE(do_show_streams);
+    FFPROBE_STATE(do_read_frames) = FFPROBE_STATE(do_show_frames) || FFPROBE_STATE(do_count_frames) || FFPROBE_STATE(do_analyze_frames);
+    FFPROBE_STATE(do_read_packets) = FFPROBE_STATE(do_show_packets) || FFPROBE_STATE(do_count_packets);
 
     ret = open_input_file(&ifile, filename, print_filename);
     if (ret < 0)
@@ -2704,64 +2736,64 @@ static int probe_file(AVTextFormatContext *tfc, const char *filename,
 
 #define CHECK_END if (ret < 0) goto end
 
-    nb_streams = ifile.fmt_ctx->nb_streams;
-    REALLOCZ_ARRAY_STREAM(nb_streams_frames,0,ifile.fmt_ctx->nb_streams);
-    REALLOCZ_ARRAY_STREAM(nb_streams_packets,0,ifile.fmt_ctx->nb_streams);
-    REALLOCZ_ARRAY_STREAM(selected_streams,0,ifile.fmt_ctx->nb_streams);
-    REALLOCZ_ARRAY_STREAM(streams_with_closed_captions,0,ifile.fmt_ctx->nb_streams);
-    REALLOCZ_ARRAY_STREAM(streams_with_film_grain,0,ifile.fmt_ctx->nb_streams);
+    FFPROBE_STATE(nb_streams) = ifile.fmt_ctx->nb_streams;
+    REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(nb_streams_frames),0,ifile.fmt_ctx->nb_streams);
+    REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(nb_streams_packets),0,ifile.fmt_ctx->nb_streams);
+    REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(selected_streams),0,ifile.fmt_ctx->nb_streams);
+    REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(streams_with_closed_captions),0,ifile.fmt_ctx->nb_streams);
+    REALLOCZ_ARRAY_STREAM(FFPROBE_STATE(streams_with_film_grain),0,ifile.fmt_ctx->nb_streams);
 
     for (unsigned i = 0; i < ifile.fmt_ctx->nb_streams; i++) {
-        if (stream_specifier) {
+        if (FFPROBE_STATE(stream_specifier)) {
             ret = avformat_match_stream_specifier(ifile.fmt_ctx,
                                                   ifile.fmt_ctx->streams[i],
-                                                  stream_specifier);
+                                                  FFPROBE_STATE(stream_specifier));
             CHECK_END;
             else
-                selected_streams[i] = ret;
+                FFPROBE_STATE(selected_streams)[i] = ret;
             ret = 0;
         } else {
-            selected_streams[i] = 1;
+            FFPROBE_STATE(selected_streams)[i] = 1;
         }
-        if (!selected_streams[i])
+        if (!FFPROBE_STATE(selected_streams)[i])
             ifile.fmt_ctx->streams[i]->discard = AVDISCARD_ALL;
     }
 
-    if (do_read_frames || do_read_packets) {
-        if (do_show_frames && do_show_packets &&
+    if (FFPROBE_STATE(do_read_frames) || FFPROBE_STATE(do_read_packets)) {
+        if (FFPROBE_STATE(do_show_frames) && FFPROBE_STATE(do_show_packets) &&
             tfc->formatter->flags & AV_TEXTFORMAT_FLAG_SUPPORTS_MIXED_ARRAY_CONTENT)
             section_id = SECTION_ID_PACKETS_AND_FRAMES;
-        else if (do_show_packets && !do_show_frames)
+        else if (FFPROBE_STATE(do_show_packets) && !FFPROBE_STATE(do_show_frames))
             section_id = SECTION_ID_PACKETS;
         else // (!do_show_packets && do_show_frames)
             section_id = SECTION_ID_FRAMES;
-        if (do_show_frames || do_show_packets)
+        if (FFPROBE_STATE(do_show_frames) || FFPROBE_STATE(do_show_packets))
             avtext_print_section_header(tfc, NULL, section_id);
         ret = read_packets(tfc, &ifile);
-        if (do_show_frames || do_show_packets)
+        if (FFPROBE_STATE(do_show_frames) || FFPROBE_STATE(do_show_packets))
             avtext_print_section_footer(tfc);
         CHECK_END;
     }
 
-    if (do_show_programs) {
+    if (FFPROBE_STATE(do_show_programs)) {
         ret = show_programs(tfc, &ifile);
         CHECK_END;
     }
 
-    if (do_show_stream_groups) {
+    if (FFPROBE_STATE(do_show_stream_groups)) {
         ret = show_stream_groups(tfc, &ifile);
         CHECK_END;
     }
 
-    if (do_show_streams) {
+    if (FFPROBE_STATE(do_show_streams)) {
         ret = show_streams(tfc, &ifile);
         CHECK_END;
     }
-    if (do_show_chapters) {
+    if (FFPROBE_STATE(do_show_chapters)) {
         ret = show_chapters(tfc, &ifile);
         CHECK_END;
     }
-    if (do_show_format) {
+    if (FFPROBE_STATE(do_show_format)) {
         ret = show_format(tfc, &ifile);
         CHECK_END;
     }
@@ -2769,15 +2801,15 @@ static int probe_file(AVTextFormatContext *tfc, const char *filename,
 end:
     if (ifile.fmt_ctx)
         close_input_file(&ifile);
-    av_freep(&nb_streams_frames);
-    av_freep(&nb_streams_packets);
-    av_freep(&selected_streams);
-    av_freep(&streams_with_closed_captions);
-    av_freep(&streams_with_film_grain);
-    av_freep(&audio_codec_name);
-    av_freep(&data_codec_name);
-    av_freep(&subtitle_codec_name);
-    av_freep(&video_codec_name);
+    av_freep(&FFPROBE_STATE(nb_streams_frames));
+    av_freep(&FFPROBE_STATE(nb_streams_packets));
+    av_freep(&FFPROBE_STATE(selected_streams));
+    av_freep(&FFPROBE_STATE(streams_with_closed_captions));
+    av_freep(&FFPROBE_STATE(streams_with_film_grain));
+    av_freep(&FFPROBE_STATE(audio_codec_name));
+    av_freep(&FFPROBE_STATE(data_codec_name));
+    av_freep(&FFPROBE_STATE(subtitle_codec_name));
+    av_freep(&FFPROBE_STATE(video_codec_name));
 
     return ret;
 }
@@ -2858,7 +2890,7 @@ static void ffprobe_show_pixel_formats(AVTextFormatContext *tfc)
         n = av_get_bits_per_pixel(pixdesc);
         if (n) print_int    ("bits_per_pixel", n);
         else   print_str_opt("bits_per_pixel", "N/A");
-        if (do_show_pixel_format_flags) {
+        if (FFPROBE_STATE(do_show_pixel_format_flags)) {
             avtext_print_section_header(tfc, NULL, SECTION_ID_PIXEL_FORMAT_FLAGS);
             PRINT_PIX_FMT_FLAG(BE,        "big_endian");
             PRINT_PIX_FMT_FLAG(PAL,       "palette");
@@ -2869,7 +2901,7 @@ static void ffprobe_show_pixel_formats(AVTextFormatContext *tfc)
             PRINT_PIX_FMT_FLAG(ALPHA,     "alpha");
             avtext_print_section_footer(tfc);
         }
-        if (do_show_pixel_format_components && (pixdesc->nb_components > 0)) {
+        if (FFPROBE_STATE(do_show_pixel_format_components) && (pixdesc->nb_components > 0)) {
             avtext_print_section_header(tfc, NULL, SECTION_ID_PIXEL_FORMAT_COMPONENTS);
             for (i = 0; i < pixdesc->nb_components; i++) {
                 avtext_print_section_header(tfc, NULL, SECTION_ID_PIXEL_FORMAT_COMPONENT);
@@ -2886,25 +2918,25 @@ static void ffprobe_show_pixel_formats(AVTextFormatContext *tfc)
 
 static int opt_show_optional_fields(void *optctx, const char *opt, const char *arg)
 {
-    if      (!av_strcasecmp(arg, "always")) show_optional_fields = SHOW_OPTIONAL_FIELDS_ALWAYS;
-    else if (!av_strcasecmp(arg, "never"))  show_optional_fields = SHOW_OPTIONAL_FIELDS_NEVER;
-    else if (!av_strcasecmp(arg, "auto"))   show_optional_fields = SHOW_OPTIONAL_FIELDS_AUTO;
+    if      (!av_strcasecmp(arg, "always")) FFPROBE_STATE(show_optional_fields) = SHOW_OPTIONAL_FIELDS_ALWAYS;
+    else if (!av_strcasecmp(arg, "never"))  FFPROBE_STATE(show_optional_fields) = SHOW_OPTIONAL_FIELDS_NEVER;
+    else if (!av_strcasecmp(arg, "auto"))   FFPROBE_STATE(show_optional_fields) = SHOW_OPTIONAL_FIELDS_AUTO;
 
-    if (show_optional_fields == SHOW_OPTIONAL_FIELDS_AUTO && av_strcasecmp(arg, "auto")) {
+    if (FFPROBE_STATE(show_optional_fields) == SHOW_OPTIONAL_FIELDS_AUTO && av_strcasecmp(arg, "auto")) {
         double num;
         int ret = parse_number("show_optional_fields", arg, OPT_TYPE_INT,
                                SHOW_OPTIONAL_FIELDS_AUTO, SHOW_OPTIONAL_FIELDS_ALWAYS, &num);
         if (ret < 0)
             return ret;
-        show_optional_fields = num;
+        FFPROBE_STATE(show_optional_fields) = num;
     }
     return 0;
 }
 
 static int opt_format(void *optctx, const char *opt, const char *arg)
 {
-    iformat = av_find_input_format(arg);
-    if (!iformat) {
+    FFPROBE_STATE(iformat) = av_find_input_format(arg);
+    if (!FFPROBE_STATE(iformat)) {
         av_log(NULL, AV_LOG_ERROR, "Unknown input format: %s\n", arg);
         return AVERROR(EINVAL);
     }
@@ -2914,7 +2946,7 @@ static int opt_format(void *optctx, const char *opt, const char *arg)
 static inline void mark_section_show_entries(SectionID section_id,
                                              int show_all_entries, AVDictionary *entries)
 {
-    EntrySelection *selection = &selected_entries[section_id];
+    EntrySelection *selection = &FFPROBE_STATE(selected_entries)[section_id];
 
     selection->show_all_entries = show_all_entries;
     if (show_all_entries) {
@@ -2997,16 +3029,16 @@ static int opt_show_entries(void *optctx, const char *opt, const char *arg)
 
 static int opt_input_file(void *optctx, const char *arg)
 {
-    if (input_filename) {
+    if (FFPROBE_STATE(input_filename)) {
         av_log(NULL, AV_LOG_ERROR,
                 "Argument '%s' provided as input filename, but '%s' was already specified.\n",
-                arg, input_filename);
+                arg, FFPROBE_STATE(input_filename));
         return AVERROR(EINVAL);
     }
     if (!strcmp(arg, "-"))
         arg = "fd:";
-    input_filename = av_strdup(arg);
-    if (!input_filename)
+    FFPROBE_STATE(input_filename) = av_strdup(arg);
+    if (!FFPROBE_STATE(input_filename))
         return AVERROR(ENOMEM);
 
     return 0;
@@ -3020,16 +3052,16 @@ static int opt_input_file_i(void *optctx, const char *opt, const char *arg)
 
 static int opt_output_file_o(void *optctx, const char *opt, const char *arg)
 {
-    if (output_filename) {
+    if (FFPROBE_STATE(output_filename)) {
         av_log(NULL, AV_LOG_ERROR,
                 "Argument '%s' provided as output filename, but '%s' was already specified.\n",
-                arg, output_filename);
+                arg, FFPROBE_STATE(output_filename));
         return AVERROR(EINVAL);
     }
     if (!strcmp(arg, "-"))
         arg = "fd:";
-    output_filename = av_strdup(arg);
-    if (!output_filename)
+    FFPROBE_STATE(output_filename) = av_strdup(arg);
+    if (!FFPROBE_STATE(output_filename))
         return AVERROR(ENOMEM);
 
     return 0;
@@ -3037,16 +3069,16 @@ static int opt_output_file_o(void *optctx, const char *opt, const char *arg)
 
 static int opt_print_filename(void *optctx, const char *opt, const char *arg)
 {
-    av_freep(&print_input_filename);
-    print_input_filename = av_strdup(arg);
-    return print_input_filename ? 0 : AVERROR(ENOMEM);
+    av_freep(&FFPROBE_STATE(print_input_filename));
+    FFPROBE_STATE(print_input_filename) = av_strdup(arg);
+    return FFPROBE_STATE(print_input_filename) ? 0 : AVERROR(ENOMEM);
 }
 
 void show_help_default(const char *opt, const char *arg)
 {
-    av_log_set_callback(log_callback_help);
+    fftools_log_set_callback(log_callback_help);
     show_usage();
-    show_help_options(options, "Main options:", 0, 0);
+    show_help_options(FFPROBE_STATE(options), "Main options:", 0, 0);
     printf("\n");
 
     show_help_children(avformat_get_class(), AV_OPT_FLAG_DECODING_PARAM);
@@ -3153,35 +3185,35 @@ static int parse_read_intervals(const char *intervals_spec)
             n++;
     n++;
 
-    read_intervals = av_malloc_array(n, sizeof(*read_intervals));
-    if (!read_intervals) {
+    FFPROBE_STATE(read_intervals) = av_malloc_array(n, sizeof(*FFPROBE_STATE(read_intervals)));
+    if (!FFPROBE_STATE(read_intervals)) {
         ret = AVERROR(ENOMEM);
         goto end;
     }
-    read_intervals_nb = n;
+    FFPROBE_STATE(read_intervals_nb) = n;
 
     /* parse intervals */
     p = spec;
     for (i = 0; p; i++) {
         char *next;
 
-        av_assert0(i < read_intervals_nb);
+        av_assert0(i < FFPROBE_STATE(read_intervals_nb));
         next = strchr(p, ',');
         if (next)
             *next++ = 0;
 
-        read_intervals[i].id = i;
-        ret = parse_read_interval(p, &read_intervals[i]);
+        FFPROBE_STATE(read_intervals)[i].id = i;
+        ret = parse_read_interval(p, &FFPROBE_STATE(read_intervals)[i]);
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR, "Error parsing read interval #%d '%s'\n",
                    i, p);
             goto end;
         }
         av_log(NULL, AV_LOG_VERBOSE, "Parsed log interval ");
-        log_read_interval(&read_intervals[i], NULL, AV_LOG_VERBOSE);
+        log_read_interval(&FFPROBE_STATE(read_intervals)[i], NULL, AV_LOG_VERBOSE);
         p = next;
     }
-    av_assert0(i == read_intervals_nb);
+    av_assert0(i == FFPROBE_STATE(read_intervals_nb));
 
 end:
     av_free(spec);
@@ -3195,10 +3227,10 @@ static int opt_read_intervals(void *optctx, const char *opt, const char *arg)
 
 static int opt_pretty(void *optctx, const char *opt, const char *arg)
 {
-    show_value_unit              = 1;
-    use_value_prefix             = 1;
-    use_byte_value_binary_prefix = 1;
-    use_value_sexagesimal_format = 1;
+    FFPROBE_STATE(show_value_unit)              = 1;
+    FFPROBE_STATE(use_value_prefix)             = 1;
+    FFPROBE_STATE(use_byte_value_binary_prefix) = 1;
+    FFPROBE_STATE(use_value_sexagesimal_format) = 1;
     return 0;
 }
 
@@ -3247,10 +3279,10 @@ static int opt_codec(void *optctx, const char *opt, const char *arg)
    spec++;
 
    switch (spec[0]) {
-   case 'a' : name = &audio_codec_name;    break;
-   case 'd' : name = &data_codec_name;     break;
-   case 's' : name = &subtitle_codec_name; break;
-   case 'v' : name = &video_codec_name;    break;
+   case 'a' : name = &FFPROBE_STATE(audio_codec_name);    break;
+   case 'd' : name = &FFPROBE_STATE(data_codec_name);     break;
+   case 's' : name = &FFPROBE_STATE(subtitle_codec_name); break;
+   case 'v' : name = &FFPROBE_STATE(video_codec_name);    break;
    default:
        av_log(NULL, AV_LOG_ERROR,
               "Invalid media specifier '%s' in option '%s'. "
@@ -3292,52 +3324,52 @@ DEFINE_OPT_SHOW_SECTION(stream_groups,    STREAM_GROUPS)
 static const OptionDef real_options[] = {
     CMDUTILS_COMMON_OPTIONS
     { "f",                     OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_format}, "force format", "format" },
-    { "unit",                  OPT_TYPE_BOOL,        0, {&show_value_unit}, "show unit of the displayed values" },
-    { "prefix",                OPT_TYPE_BOOL,        0, {&use_value_prefix}, "use SI prefixes for the displayed values" },
-    { "byte_binary_prefix",    OPT_TYPE_BOOL,        0, {&use_byte_value_binary_prefix},
+    { "unit",                  OPT_TYPE_BOOL,        0, {(void *)&ffprobe_defaults.show_value_unit}, "show unit of the displayed values" },
+    { "prefix",                OPT_TYPE_BOOL,        0, {(void *)&ffprobe_defaults.use_value_prefix}, "use SI prefixes for the displayed values" },
+    { "byte_binary_prefix",    OPT_TYPE_BOOL,        0, {(void *)&ffprobe_defaults.use_byte_value_binary_prefix},
       "use binary prefixes for byte units" },
-    { "sexagesimal",           OPT_TYPE_BOOL,        0, {&use_value_sexagesimal_format},
+    { "sexagesimal",           OPT_TYPE_BOOL,        0, {(void *)&ffprobe_defaults.use_value_sexagesimal_format},
       "use sexagesimal format HOURS:MM:SS.MICROSECONDS for time units" },
     { "pretty",                OPT_TYPE_FUNC,        0, {.func_arg = opt_pretty},
       "prettify the format of displayed values, make it more human readable" },
-    { "output_format",         OPT_TYPE_STRING,      0, { &output_format },
+    { "output_format",         OPT_TYPE_STRING,      0, { (void *)&ffprobe_defaults.output_format },
       "set the output printing format (available formats are: default, compact, csv, flat, ini, json, xml)", "format" },
-    { "print_format",          OPT_TYPE_STRING,      0, { &output_format }, "alias for -output_format (deprecated)" },
-    { "of",                    OPT_TYPE_STRING,      0, { &output_format }, "alias for -output_format", "format" },
-    { "select_streams",        OPT_TYPE_STRING,      0, { &stream_specifier }, "select the specified streams", "stream_specifier" },
+    { "print_format",          OPT_TYPE_STRING,      0, { (void *)&ffprobe_defaults.output_format }, "alias for -output_format (deprecated)" },
+    { "of",                    OPT_TYPE_STRING,      0, { (void *)&ffprobe_defaults.output_format }, "alias for -output_format", "format" },
+    { "select_streams",        OPT_TYPE_STRING,      0, { (void *)&ffprobe_defaults.stream_specifier }, "select the specified streams", "stream_specifier" },
     { "sections",              OPT_TYPE_FUNC, OPT_EXIT, {.func_arg = opt_sections}, "print sections structure and section information, and exit" },
-    { "data_dump_format",      OPT_TYPE_STRING,      0, { &data_dump_format }, "set data dump format (available formats are: xxd, base64)" },
-    { "show_data",             OPT_TYPE_BOOL,        0, { &do_show_data }, "show packets data" },
-    { "show_data_hash",        OPT_TYPE_STRING,      0, { &show_data_hash }, "show packets data hash" },
+    { "data_dump_format",      OPT_TYPE_STRING,      0, { (void *)&ffprobe_defaults.data_dump_format }, "set data dump format (available formats are: xxd, base64)" },
+    { "show_data",             OPT_TYPE_BOOL,        0, { (void *)&ffprobe_defaults.do_show_data }, "show packets data" },
+    { "show_data_hash",        OPT_TYPE_STRING,      0, { (void *)&ffprobe_defaults.show_data_hash }, "show packets data hash" },
     { "show_error",            OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_error },  "show probing error" },
     { "show_format",           OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_format }, "show format/container info" },
     { "show_frames",           OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_frames }, "show frames info" },
     { "show_entries",          OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_show_entries},
       "show a set of specified entries", "entry_list" },
 #if HAVE_THREADS
-    { "show_log",              OPT_TYPE_INT,         0, { &do_show_log }, "show log" },
+    { "show_log",              OPT_TYPE_INT,         0, { (void *)&ffprobe_defaults.do_show_log }, "show log" },
 #endif
     { "show_packets",          OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_packets }, "show packets info" },
     { "show_programs",         OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_programs }, "show programs info" },
     { "show_stream_groups",    OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_stream_groups }, "show stream groups info" },
     { "show_streams",          OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_streams }, "show streams info" },
     { "show_chapters",         OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_chapters }, "show chapters info" },
-    { "count_frames",          OPT_TYPE_BOOL,        0, { &do_count_frames }, "count the number of frames per stream" },
-    { "count_packets",         OPT_TYPE_BOOL,        0, { &do_count_packets }, "count the number of packets per stream" },
+    { "count_frames",          OPT_TYPE_BOOL,        0, { (void *)&ffprobe_defaults.do_count_frames }, "count the number of frames per stream" },
+    { "count_packets",         OPT_TYPE_BOOL,        0, { (void *)&ffprobe_defaults.do_count_packets }, "count the number of packets per stream" },
     { "show_program_version",  OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_program_version },  "show ffprobe version" },
     { "show_library_versions", OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_library_versions }, "show library versions" },
     { "show_versions",         OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_versions }, "show program and library versions" },
     { "show_pixel_formats",    OPT_TYPE_FUNC,        0, { .func_arg = &opt_show_pixel_formats }, "show pixel format descriptions" },
     { "show_optional_fields",  OPT_TYPE_FUNC, OPT_FUNC_ARG, { .func_arg = &opt_show_optional_fields }, "show optional fields" },
-    { "show_private_data",     OPT_TYPE_BOOL,        0, { &show_private_data }, "show private data" },
-    { "private",               OPT_TYPE_BOOL,        0, { &show_private_data }, "same as show_private_data" },
-    { "analyze_frames",        OPT_TYPE_BOOL,        0, { &do_analyze_frames }, "analyze frames to provide additional stream-level information" },
-    { "bitexact",              OPT_TYPE_BOOL,        0, {&do_bitexact}, "force bitexact output" },
+    { "show_private_data",     OPT_TYPE_BOOL,        0, { (void *)&ffprobe_defaults.show_private_data }, "show private data" },
+    { "private",               OPT_TYPE_BOOL,        0, { (void *)&ffprobe_defaults.show_private_data }, "same as show_private_data" },
+    { "analyze_frames",        OPT_TYPE_BOOL,        0, { (void *)&ffprobe_defaults.do_analyze_frames }, "analyze frames to provide additional stream-level information" },
+    { "bitexact",              OPT_TYPE_BOOL,        0, {(void *)&ffprobe_defaults.do_bitexact}, "force bitexact output" },
     { "read_intervals",        OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_read_intervals}, "set read intervals", "read_intervals" },
     { "i",                     OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_input_file_i}, "read specified file", "input_file"},
     { "o",                     OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_output_file_o}, "write to specified output", "output_file"},
     { "print_filename",        OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_print_filename}, "override the printed input filename", "print_file"},
-    { "find_stream_info",      OPT_TYPE_BOOL, OPT_INPUT | OPT_EXPERT, { &find_stream_info },
+    { "find_stream_info",      OPT_TYPE_BOOL, OPT_INPUT | OPT_EXPERT, { (void *)&ffprobe_defaults.find_stream_info },
         "read and decode the streams to fill missing information with heuristics" },
     { "c",                     OPT_TYPE_FUNC, OPT_FUNC_ARG, { .func_arg = opt_codec}, "force decoder", "decoder_name" },
     { "codec",                 OPT_TYPE_FUNC, OPT_FUNC_ARG, { .func_arg = opt_codec}, "alias for -c (force decoder)", "decoder_name" },
@@ -3346,7 +3378,7 @@ static const OptionDef real_options[] = {
 
 static inline int check_section_show_entries(int section_id)
 {
-    const EntrySelection *selection = &selected_entries[section_id];
+    const EntrySelection *selection = &FFPROBE_STATE(selected_entries)[section_id];
 
     if (selection->show_all_entries || selection->entries_to_show)
         return 1;
@@ -3360,7 +3392,7 @@ static inline int check_section_show_entries(int section_id)
 
 #define SET_DO_SHOW(id, varname) do {                                   \
         if (check_section_show_entries(SECTION_ID_##id))                \
-            do_show_##varname = 1;                                      \
+            FFPROBE_STATE(do_show_##varname) = 1;                       \
     } while (0)
 
 int main(int argc, char **argv)
@@ -3373,28 +3405,26 @@ int main(int argc, char **argv)
     int ret, input_ret;
     AVTextFormatDataDump data_dump_format_id = AV_TEXTFORMAT_DATADUMP_XXD;
 
-    init_dynload();
+    /* Patched: the search path of libraries and the buffering of stderr belong to the whole process, which ffprobe runs inside of,
+     * so ffprobe changes neither (init_dynload and setvbuf are not called). */
+    fftools_log_set_flags(AV_LOG_SKIP_REPEATED);
 
-    setvbuf(stderr, NULL, _IONBF, 0); /* win32 runtime needs this */
-
-    av_log_set_flags(AV_LOG_SKIP_REPEATED);
-
-    options = real_options;
-    parse_loglevel(argc, argv, options);
+    FFPROBE_STATE(options) = real_options;
+    parse_loglevel(argc, argv, FFPROBE_STATE(options));
     avformat_network_init();
 #if CONFIG_AVDEVICE
     avdevice_register_all();
 #endif
 
-    show_banner(argc, argv, options);
-    ret = parse_options(NULL, argc, argv, options, opt_input_file);
+    show_banner(argc, argv, FFPROBE_STATE(options));
+    ret = parse_options(NULL, argc, argv, FFPROBE_STATE(options), opt_input_file);
     if (ret < 0) {
         ret = (ret == AVERROR_EXIT) ? 0 : ret;
         goto end;
     }
 
-    if (do_show_log)
-        av_log_set_callback(log_callback);
+    if (FFPROBE_STATE(do_show_log))
+        fftools_log_set_callback(log_callback);
 
     /* mark things to show, based on -show_entries */
     SET_DO_SHOW(CHAPTERS, chapters);
@@ -3426,7 +3456,7 @@ int main(int argc, char **argv)
     SET_DO_SHOW(STREAM_GROUP_STREAM_TAGS, stream_tags);
     SET_DO_SHOW(PACKET_TAGS, packet_tags);
 
-    if (do_bitexact && (do_show_program_version || do_show_library_versions)) {
+    if (FFPROBE_STATE(do_bitexact) && (FFPROBE_STATE(do_show_program_version) || FFPROBE_STATE(do_show_library_versions))) {
         av_log(NULL, AV_LOG_ERROR,
                "-bitexact and -show_program_version or -show_library_versions "
                "options are incompatible\n");
@@ -3434,13 +3464,13 @@ int main(int argc, char **argv)
         goto end;
     }
 
-    if (!output_format)
-        output_format = av_strdup("default");
-    if (!output_format) {
+    if (!FFPROBE_STATE(output_format))
+        FFPROBE_STATE(output_format) = av_strdup("default");
+    if (!FFPROBE_STATE(output_format)) {
         ret = AVERROR(ENOMEM);
         goto end;
     }
-    f_name = av_strtok(output_format, "=", &buf);
+    f_name = av_strtok(FFPROBE_STATE(output_format), "=", &buf);
     if (!f_name) {
         av_log(NULL, AV_LOG_ERROR,
                "No name specified for the output format\n");
@@ -3456,20 +3486,20 @@ int main(int argc, char **argv)
         goto end;
     }
 
-    if (data_dump_format) {
-        if (!strcmp(data_dump_format, "xxd")) {
+    if (FFPROBE_STATE(data_dump_format)) {
+        if (!strcmp(FFPROBE_STATE(data_dump_format), "xxd")) {
             data_dump_format_id = AV_TEXTFORMAT_DATADUMP_XXD;
-        } else if (!strcmp(data_dump_format, "base64")) {
+        } else if (!strcmp(FFPROBE_STATE(data_dump_format), "base64")) {
             data_dump_format_id = AV_TEXTFORMAT_DATADUMP_BASE64;
         } else {
-            av_log(NULL, AV_LOG_ERROR, "Unknown data dump format with name '%s'\n", data_dump_format);
+            av_log(NULL, AV_LOG_ERROR, "Unknown data dump format with name '%s'\n", FFPROBE_STATE(data_dump_format));
             ret = AVERROR(EINVAL);
             goto end;
         }
     }
 
-    if (output_filename) {
-        ret = avtextwriter_create_file(&wctx, output_filename);
+    if (FFPROBE_STATE(output_filename)) {
+        ret = avtextwriter_create_file(&wctx, FFPROBE_STATE(output_filename));
     } else
         ret = avtextwriter_create_stdout(&wctx);
 
@@ -3478,37 +3508,37 @@ int main(int argc, char **argv)
 
     AVTextFormatOptions tf_options = {
         .is_key_selected              = is_key_selected_callback,
-        .show_optional_fields = show_optional_fields,
-        .show_value_unit = show_value_unit,
-        .use_value_prefix = use_value_prefix,
-        .use_byte_value_binary_prefix = use_byte_value_binary_prefix,
-        .use_value_sexagesimal_format = use_value_sexagesimal_format,
+        .show_optional_fields = FFPROBE_STATE(show_optional_fields),
+        .show_value_unit = FFPROBE_STATE(show_value_unit),
+        .use_value_prefix = FFPROBE_STATE(use_value_prefix),
+        .use_byte_value_binary_prefix = FFPROBE_STATE(use_byte_value_binary_prefix),
+        .use_value_sexagesimal_format = FFPROBE_STATE(use_value_sexagesimal_format),
         .data_dump_format             = data_dump_format_id,
     };
 
-    if ((ret = avtext_context_open(&tctx, f, wctx, f_args, sections, FF_ARRAY_ELEMS(sections), tf_options, show_data_hash)) >= 0) {
+    if ((ret = avtext_context_open(&tctx, f, wctx, f_args, sections, FF_ARRAY_ELEMS(sections), tf_options, FFPROBE_STATE(show_data_hash))) >= 0) {
         if (f == &avtextformatter_xml)
             tctx->string_validation_utf8_flags |= AV_UTF8_FLAG_EXCLUDE_XML_INVALID_CONTROL_CODES;
 
         avtext_print_section_header(tctx, NULL, SECTION_ID_ROOT);
 
-        if (do_show_program_version)
+        if (FFPROBE_STATE(do_show_program_version))
             ffprobe_show_program_version(tctx);
-        if (do_show_library_versions)
+        if (FFPROBE_STATE(do_show_library_versions))
             ffprobe_show_library_versions(tctx);
-        if (do_show_pixel_formats)
+        if (FFPROBE_STATE(do_show_pixel_formats))
             ffprobe_show_pixel_formats(tctx);
 
-        if (!input_filename &&
-            ((do_show_format || do_show_programs || do_show_stream_groups || do_show_streams || do_show_chapters || do_show_packets || do_show_error) ||
-             (!do_show_program_version && !do_show_library_versions && !do_show_pixel_formats))) {
+        if (!FFPROBE_STATE(input_filename) &&
+            ((FFPROBE_STATE(do_show_format) || FFPROBE_STATE(do_show_programs) || FFPROBE_STATE(do_show_stream_groups) || FFPROBE_STATE(do_show_streams) || FFPROBE_STATE(do_show_chapters) || FFPROBE_STATE(do_show_packets) || FFPROBE_STATE(do_show_error)) ||
+             (!FFPROBE_STATE(do_show_program_version) && !FFPROBE_STATE(do_show_library_versions) && !FFPROBE_STATE(do_show_pixel_formats)))) {
             show_usage();
             av_log(NULL, AV_LOG_ERROR, "You have to specify one input file.\n");
             av_log(NULL, AV_LOG_ERROR, "Use -h to get full help or, even better, run 'man %s'.\n", program_name);
             ret = AVERROR(EINVAL);
-        } else if (input_filename) {
-            ret = probe_file(tctx, input_filename, print_input_filename);
-            if (ret < 0 && do_show_error)
+        } else if (FFPROBE_STATE(input_filename)) {
+            ret = probe_file(tctx, FFPROBE_STATE(input_filename), FFPROBE_STATE(print_input_filename));
+            if (ret < 0 && FFPROBE_STATE(do_show_error))
                 show_error(tctx, ret);
         }
 
@@ -3528,15 +3558,15 @@ int main(int argc, char **argv)
     }
 
 end:
-    av_freep(&output_format);
-    av_freep(&output_filename);
-    av_freep(&input_filename);
-    av_freep(&print_input_filename);
-    av_freep(&read_intervals);
+    av_freep(&FFPROBE_STATE(output_format));
+    av_freep(&FFPROBE_STATE(output_filename));
+    av_freep(&FFPROBE_STATE(input_filename));
+    av_freep(&FFPROBE_STATE(print_input_filename));
+    av_freep(&FFPROBE_STATE(read_intervals));
 
     uninit_opts();
-    for (size_t i = 0; i < FF_ARRAY_ELEMS(selected_entries); ++i)
-        av_dict_free(&selected_entries[i].entries_to_show);
+    for (size_t i = 0; i < FF_ARRAY_ELEMS(FFPROBE_STATE(selected_entries)); ++i)
+        av_dict_free(&FFPROBE_STATE(selected_entries)[i].entries_to_show);
 
     avformat_network_deinit();
 

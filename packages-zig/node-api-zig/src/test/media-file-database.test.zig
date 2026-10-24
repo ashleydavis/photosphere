@@ -27,10 +27,9 @@ const Generators = struct {
 };
 
 //
-// Creates the generators (after installing the test environment, which sets TEST_TMP_DIR).
+// Creates the generators (in the test environment, which sets TEST_TMP_DIR).
 //
-fn makeGenerators(allocator: std.mem.Allocator, io: std.Io) !*Generators {
-    _ = try test_environment.setupEnvironment(io);
+fn makeGenerators(allocator: std.mem.Allocator) !*Generators {
     const generators = try allocator.create(Generators);
     generators.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -40,6 +39,8 @@ fn makeGenerators(allocator: std.mem.Allocator, io: std.Io) !*Generators {
 }
 
 test "DATABASE_README_CONTENT is the README of the test databases" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const readme = try test_files.readFile(arena.allocator(), std.testing.io, fixture_dirs.TEST_DBS_DIR ++ "/v6/README.md");
@@ -47,6 +48,8 @@ test "DATABASE_README_CONTENT is the README of the test databases" {
 }
 
 test "createMediaFileDatabase creates the BSON database under .db/bson with the metadata collection" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -54,7 +57,7 @@ test "createMediaFileDatabase creates the BSON database under .db/bson with the 
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const storage = try test_files.directoryStorage(allocator, io, fixture_dirs.TEST_DBS_DIR ++ "/v6");
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try std.testing.expectEqualStrings(".db/bson", database.bsonDatabase.bsonDbPath);
@@ -66,6 +69,8 @@ test "createMediaFileDatabase creates the BSON database under .db/bson with the 
 }
 
 test "createDatabase creates README.md, the files tree, the sort indexes and config.json" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -73,7 +78,7 @@ test "createDatabase creates README.md, the files tree, the sort indexes and con
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database");
     defer temp_dirs.removeTempDir(io, dir);
     const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
@@ -96,6 +101,8 @@ test "createDatabase creates README.md, the files tree, the sort indexes and con
 }
 
 test "createDatabase generates a database id when none is given" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -103,7 +110,7 @@ test "createDatabase generates a database id when none is given" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-id");
     defer temp_dirs.removeTempDir(io, dir);
     const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
@@ -114,6 +121,8 @@ test "createDatabase generates a database id when none is given" {
 }
 
 test "createDatabase throws when the directory already contains files" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -121,7 +130,7 @@ test "createDatabase throws when the directory already contains files" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-full");
     defer temp_dirs.removeTempDir(io, dir);
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ dir, "something.txt" }), "x");
@@ -138,6 +147,8 @@ test "createDatabase throws when the directory already contains files" {
 }
 
 test "createReadme writes README.md and adds it to the tree" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -157,6 +168,8 @@ test "createReadme writes README.md and adds it to the tree" {
 }
 
 test "ensureSortIndex builds the hash and photoDate sort indexes" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -164,7 +177,7 @@ test "ensureSortIndex builds the hash and photoDate sort indexes" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     try std.Io.Dir.cwd().deleteTree(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes" }));
@@ -176,6 +189,8 @@ test "ensureSortIndex builds the hash and photoDate sort indexes" {
 }
 
 test "loadSortIndexes succeeds for an existing database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -183,13 +198,15 @@ test "loadSortIndexes succeeds for an existing database" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const storage = try test_files.directoryStorage(allocator, io, fixture_dirs.TEST_DBS_DIR ++ "/v6");
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try media_file_database.loadSortIndexes(allocator, database.assetStorage, database.metadataCollection);
 }
 
 test "getFilesImported, isPartialDatabase, emptyDatabaseMetadata and copyDatabaseMetadata read and write the metadata document" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -241,6 +258,8 @@ fn summaryMetadata(allocator: std.mem.Allocator, isPartial: bool) !bson.BsonDocu
 }
 
 test "getDatabaseSummary reports partial mode when the tree says the database is partial" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -258,6 +277,8 @@ test "getDatabaseSummary reports partial mode when the tree says the database is
 }
 
 test "getDatabaseSummary reports full mode when the tree says the database is not partial" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -275,6 +296,8 @@ test "getDatabaseSummary reports full mode when the tree says the database is no
 }
 
 test "getDatabaseSummary reports full mode when the tree has no database metadata" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -292,6 +315,8 @@ test "getDatabaseSummary reports full mode when the tree has no database metadat
 }
 
 test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -325,6 +350,8 @@ test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
 const V6_ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
 test "removeAsset removes the files, the tree entries and the record of an asset and records its id as deleted" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -332,7 +359,7 @@ test "removeAsset removes the files, the tree entries and the record of an asset
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
@@ -365,6 +392,8 @@ test "removeAsset removes the files, the tree entries and the record of an asset
 }
 
 test "removeAsset leaves deletedAssetIds alone when the removal is not to be recorded" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -372,7 +401,7 @@ test "removeAsset leaves deletedAssetIds alone when the removal is not to be rec
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
@@ -386,6 +415,8 @@ test "removeAsset leaves deletedAssetIds alone when the removal is not to be rec
 }
 
 test "removeAsset throws when another session holds the write lock" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -393,7 +424,7 @@ test "removeAsset throws when another session holds the write lock" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const generators = try makeGenerators(allocator, io);
+    const generators = try makeGenerators(allocator);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
@@ -415,7 +446,6 @@ test "removeAsset throws when another session holds the write lock" {
 // replaced, which restoreConfigDir puts back so later tests see the config dir they expect.
 //
 fn registerPathWithMissingKey(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8) !ConfigDirs {
-    _ = try test_environment.setupEnvironment(io);
     // Copied, because setEnv frees the value the environment held.
     const previous = try allocator.dupe(u8, test_environment.getEnvironment().get("PHOTOSPHERE_CONFIG_DIR").?);
     const configDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-config");
@@ -467,7 +497,8 @@ test "checkDatabaseExists is true when the database has a merkle tree" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
@@ -482,7 +513,8 @@ test "checkDatabaseExists is false when the directory exists but holds no databa
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-empty");
     defer temp_dirs.removeTempDir(io, emptyDir);
 
@@ -497,7 +529,8 @@ test "checkDatabaseExists is false when the path does not exist at all" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-missing");
     defer temp_dirs.removeTempDir(io, tempDir);
 
@@ -512,7 +545,8 @@ test "checkDatabaseExists does not catch a storage error: it is not reported as 
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const dirs = try registerPathWithMissingKey(allocator, io, databaseDir);
@@ -523,6 +557,8 @@ test "checkDatabaseExists does not catch a storage error: it is not reported as 
 }
 
 test "getFilesImported reads a count held as a 32 bit integer" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -537,7 +573,8 @@ test "openLazyOriginStorage hands back the local storage of a database with no o
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databaseDir, null, null);

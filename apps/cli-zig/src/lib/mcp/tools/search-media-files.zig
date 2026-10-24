@@ -21,8 +21,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `search_media_files` tool: filters media files by filename/location
 // substring, content type prefix, and a date range over photoDate.
 //
-pub fn registerSearchMediaFilesTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerSearchMediaFilesTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "search_media_files",
         .{
             .description = "Search photos and videos in the open Photosphere database by filename, location, content type, or photo date range.",

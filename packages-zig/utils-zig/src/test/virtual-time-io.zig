@@ -1,4 +1,5 @@
 const std = @import("std");
+const MessageQueue = @import("ziggy").message_queue.MessageQueue;
 
 //
 // An Io whose monotonic clock moves when a test waits instead of when time passes, so that a test of a retry back-off, a lock
@@ -67,6 +68,11 @@ pub const VirtualTimeIo = struct {
     // How far the waits have moved the monotonic clock, in nanoseconds.
     jumped_nanoseconds: std.atomic.Value(i64),
 
+    // Where each move of the clock by a short wait is posted, as {"jumped_nanoseconds": the total moved so far}, for a thread of a
+    // test that must know how far the clock has moved: it takes them from the queue rather than reading this Io. Null when no
+    // thread asked.
+    moves: ?*MessageQueue,
+
     //
     // Starts a clock at zero that every wait moves and no wait delays.
     //
@@ -87,6 +93,14 @@ pub const VirtualTimeIo = struct {
         self.options = options;
         self.start_nanoseconds = @intCast(self.threaded.io().vtable.now(&self.threaded, .awake).nanoseconds);
         self.jumped_nanoseconds = .init(0);
+        self.moves = null;
+    }
+
+    //
+    // Posts each move of the clock from now on to the queue, which must outlive the Io.
+    //
+    pub fn postMovesTo(self: *VirtualTimeIo, queue: *MessageQueue) void {
+        self.moves = queue;
     }
 
     //
@@ -196,6 +210,20 @@ fn virtualNow(userdata: ?*anyopaque, clock: std.Io.Clock) std.Io.Timestamp {
 }
 
 //
+// Moves the clock forward by the nanoseconds of a short wait, and posts the total moved so far to the queue a test gave, if it
+// gave one. The post is made with the real Io this one is built on, which is the Io of the thread that waited.
+//
+fn move(virtual_time: *VirtualTimeIo, nanoseconds: i64) void {
+    const jumped = virtual_time.jumped_nanoseconds.fetchAdd(nanoseconds, .monotonic) + nanoseconds;
+    const queue = virtual_time.moves orelse {
+        return;
+    };
+    var buffer: [64]u8 = undefined;
+    const text = std.fmt.bufPrint(&buffer, "{{\"jumped_nanoseconds\":{d}}}", .{jumped}) catch unreachable;
+    queue.post(virtual_time.threaded.io(), 0, text) catch @panic("out of memory posting a move of the clock");
+}
+
+//
 // Sleeps: a short sleep moves the clock, a long one really sleeps for its length divided by the speed.
 //
 fn virtualSleep(userdata: ?*anyopaque, timeout: std.Io.Timeout) std.Io.Cancelable!void {
@@ -205,7 +233,7 @@ fn virtualSleep(userdata: ?*anyopaque, timeout: std.Io.Timeout) std.Io.Cancelabl
             return virtual_time.threaded.io().vtable.sleep(userdata, timeout);
         },
         .short => |nanoseconds| {
-            _ = virtual_time.jumped_nanoseconds.fetchAdd(nanoseconds, .monotonic);
+            move(virtual_time, nanoseconds);
         },
         .long => |scaled| {
             return virtual_time.threaded.io().vtable.sleep(userdata, scaled);
@@ -223,7 +251,7 @@ fn virtualFutexWait(userdata: ?*anyopaque, ptr: *const u32, expected: u32, timeo
             return virtual_time.threaded.io().vtable.futexWait(userdata, ptr, expected, timeout);
         },
         .short => |nanoseconds| {
-            _ = virtual_time.jumped_nanoseconds.fetchAdd(nanoseconds, .monotonic);
+            move(virtual_time, nanoseconds);
         },
         .long => |scaled| {
             return virtual_time.threaded.io().vtable.futexWait(userdata, ptr, expected, scaled);
@@ -241,7 +269,7 @@ fn virtualBatchAwaitConcurrent(userdata: ?*anyopaque, batch: *std.Io.Batch, time
             return virtual_time.threaded.io().vtable.batchAwaitConcurrent(userdata, batch, timeout);
         },
         .short => |nanoseconds| {
-            _ = virtual_time.jumped_nanoseconds.fetchAdd(nanoseconds, .monotonic);
+            move(virtual_time, nanoseconds);
             return error.Timeout;
         },
         .long => |scaled| {

@@ -12,7 +12,7 @@ pub fn pairingCode() ![]const u8 {
     var bytes: [4]u8 = undefined;
     std.testing.io.random(&bytes);
     const code = 1000 + std.mem.readInt(u32, &bytes, .little) % 9000;
-    return std.fmt.allocPrint(std.heap.smp_allocator, "{d}", .{code});
+    return std.fmt.allocPrint(std.heap.page_allocator, "{d}", .{code});
 }
 
 //

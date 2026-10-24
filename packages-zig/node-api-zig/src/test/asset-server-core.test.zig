@@ -41,11 +41,11 @@ const CoreFixture = struct {
         fixture.virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
         const io = fixture.virtual_time.io();
         try fixture.database.init(allocator, io, name);
-        fixture.core = try asset_server_core.createAssetServerCore(std.testing.allocator, io, .{
+        fixture.core = try asset_server_core.createAssetServerCore(std.testing.allocator, .{
             .uuidGenerator = fixture.database.uuidGenerator.uuidGenerator(),
             .timestampProvider = fixture.database.timestampProvider.timestampProvider(),
             .sessionId = SESSION_ID,
-            .hostRequester = null,
+            .nativeCaller = null,
         });
     }
 
@@ -54,7 +54,7 @@ const CoreFixture = struct {
     //
     fn deinit(fixture: *CoreFixture) void {
         const io = fixture.virtual_time.io();
-        fixture.core.deinit();
+        fixture.core.deinit(std.testing.allocator);
         fixture.database.deinit(io);
         fixture.virtual_time.deinit();
     }
@@ -69,11 +69,12 @@ const CoreFixture = struct {
     }
 
     //
-    // Reads what the core serves for an asset.
+    // Reads what the core serves for an asset. The allocator, the test's, is also what the core keeps its cache in, as a connection
+    // thread's arena is.
     //
     fn served(fixture: *CoreFixture, allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8, databasePath: []const u8) ![]u8 {
         const io = fixture.virtual_time.io();
-        const stream = try fixture.core.assetServerCore().serveAsset(allocator, io, assetId, assetType, databasePath);
+        const stream = try fixture.core.assetServerCore().serveAsset(allocator, allocator, io, assetId, assetType, databasePath);
         defer stream.destroy(io);
         return stream.reader().allocRemaining(allocator, .unlimited);
     }

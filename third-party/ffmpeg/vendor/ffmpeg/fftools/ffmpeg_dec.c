@@ -412,7 +412,7 @@ static int video_frame_process(DecoderPriv *dp, AVFrame *frame,
     dp->last_frame_pts          = frame->pts;
     dp->last_frame_tb           = frame->time_base;
 
-    if (debug_ts) {
+    if (FFMPEG_STATE(debug_ts)) {
         av_log(dp, AV_LOG_INFO,
                "decoder -> pts:%s pts_time:%s "
                "pkt_dts:%s pkt_dts_time:%s "
@@ -665,7 +665,7 @@ static int transcode_subtitles(DecoderPriv *dp, const AVPacket *pkt,
         av_log(dp, AV_LOG_ERROR, "Error decoding subtitles: %s\n",
                av_err2str(ret));
         dp->dec.decode_errors++;
-        return exit_on_error ? ret : 0;
+        return FFMPEG_STATE(exit_on_error) ? ret : 0;
     }
 
     if (!got_output)
@@ -732,7 +732,7 @@ static int packet_decode(DecoderPriv *dp, AVPacket *pkt, AVFrame *frame)
             return ret;
 
         dp->dec.decode_errors++;
-        if (exit_on_error)
+        if (FFMPEG_STATE(exit_on_error))
             return ret;
     }
 
@@ -758,16 +758,16 @@ static int packet_decode(DecoderPriv *dp, AVPacket *pkt, AVFrame *frame)
             av_log(dp, AV_LOG_ERROR, "Decoding error: %s\n", av_err2str(ret));
             dp->dec.decode_errors++;
 
-            if (exit_on_error)
+            if (FFMPEG_STATE(exit_on_error))
                 return ret;
 
             continue;
         }
 
         if (frame->decode_error_flags || (frame->flags & AV_FRAME_FLAG_CORRUPT)) {
-            av_log(dp, exit_on_error ? AV_LOG_FATAL : AV_LOG_WARNING,
+            av_log(dp, FFMPEG_STATE(exit_on_error) ? AV_LOG_FATAL : AV_LOG_WARNING,
                    "corrupt decoded frame\n");
-            if (exit_on_error)
+            if (FFMPEG_STATE(exit_on_error))
                 return AVERROR_INVALIDDATA;
         }
 
@@ -1006,9 +1006,9 @@ static int decoder_thread(void *arg)
 
         err_rate = (dp->dec.frames_decoded || dp->dec.decode_errors) ?
                    (float)dp->dec.decode_errors / (dp->dec.frames_decoded + dp->dec.decode_errors) : 0.f;
-        if (err_rate > max_error_rate) {
+        if (err_rate > FFMPEG_STATE(max_error_rate)) {
             av_log(dp, AV_LOG_FATAL, "Decode error rate %g exceeds maximum %g\n",
-                   err_rate, max_error_rate);
+                   err_rate, FFMPEG_STATE(max_error_rate));
             ret = FFMPEG_ERROR_RATE_EXCEEDED;
         } else if (err_rate)
             av_log(dp, AV_LOG_VERBOSE, "Decode error rate %g\n", err_rate);
@@ -1178,12 +1178,12 @@ static int multiview_setup(DecoderPriv *dp, AVCodecContext *dec_ctx)
         switch (vs->type) {
         case VIEW_SPECIFIER_TYPE_IDX:
             if (vs->val >= nb_view_ids_av) {
-                av_log(dp, exit_on_error ? AV_LOG_ERROR : AV_LOG_WARNING,
+                av_log(dp, FFMPEG_STATE(exit_on_error) ? AV_LOG_ERROR : AV_LOG_WARNING,
                        "View with index %u requested, but only %u views available "
                        "in current video sequence (more views may or may not be "
                        "available in later sequences).\n",
                        vs->val, nb_view_ids_av);
-                if (exit_on_error) {
+                if (FFMPEG_STATE(exit_on_error)) {
                     ret = AVERROR(EINVAL);
                     goto fail;
                 }
@@ -1204,10 +1204,10 @@ static int multiview_setup(DecoderPriv *dp, AVCodecContext *dec_ctx)
                 }
             }
             if (view_idx < 0) {
-                av_log(dp, exit_on_error ? AV_LOG_ERROR : AV_LOG_WARNING,
+                av_log(dp, FFMPEG_STATE(exit_on_error) ? AV_LOG_ERROR : AV_LOG_WARNING,
                        "View with ID %u requested, but is not available "
                        "in the video sequence\n", vs->val);
-                if (exit_on_error) {
+                if (FFMPEG_STATE(exit_on_error)) {
                     ret = AVERROR(EINVAL);
                     goto fail;
                 }
@@ -1229,10 +1229,10 @@ static int multiview_setup(DecoderPriv *dp, AVCodecContext *dec_ctx)
                 }
             }
             if (view_idx < 0) {
-                av_log(dp, exit_on_error ? AV_LOG_ERROR : AV_LOG_WARNING,
+                av_log(dp, FFMPEG_STATE(exit_on_error) ? AV_LOG_ERROR : AV_LOG_WARNING,
                        "View position '%s' requested, but is not available "
                        "in the video sequence\n", av_stereo3d_view_name(vs->val));
-                if (exit_on_error) {
+                if (FFMPEG_STATE(exit_on_error)) {
                     ret = AVERROR(EINVAL);
                     goto fail;
                 }
@@ -1698,22 +1698,22 @@ int dec_create(const OptionsContext *o, const char *arg, Scheduler *sch)
     if (ret < 0)
         return ret;
 
-    dp->index = nb_decoders;
+    dp->index = FFMPEG_STATE(nb_decoders);
 
-    ret = GROW_ARRAY(decoders, nb_decoders);
+    ret = GROW_ARRAY(FFMPEG_STATE(decoders), FFMPEG_STATE(nb_decoders));
     if (ret < 0) {
         dec_free((Decoder **)&dp);
         return ret;
     }
 
-    decoders[nb_decoders - 1] = (Decoder *)dp;
+    FFMPEG_STATE(decoders)[FFMPEG_STATE(nb_decoders) - 1] = (Decoder *)dp;
 
     of_index = strtol(arg, &p, 0);
-    if (of_index < 0 || of_index >= nb_output_files) {
+    if (of_index < 0 || of_index >= FFMPEG_STATE(nb_output_files)) {
         av_log(dp, AV_LOG_ERROR, "Invalid output file index '%d' in %s\n", of_index, arg);
         return AVERROR(EINVAL);
     }
-    of = output_files[of_index];
+    of = FFMPEG_STATE(output_files)[of_index];
 
     ost_index = strtol(p + 1, NULL, 0);
     if (ost_index < 0 || ost_index >= of->nb_streams) {

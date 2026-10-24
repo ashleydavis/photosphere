@@ -172,16 +172,9 @@ log_success "Bad credentials surfaced an error rather than an empty list"
 
 close_s3_browser
 
-# The failed listing above is provoked on purpose and is logged by whatever lists the directories (the core on a desktop, the worker
-# task on a phone), so it is the one error allowed through. Anything else in app.log still fails the test.
-case "$PLATFORM" in
-    android|ios)
-        check_no_errors "$TMP_DIR" 'Failed to list directories|list-s3-dirs'
-        ;;
-    *)
-        check_no_errors "$TMP_DIR" 'Error listing S3 directories'
-        ;;
-esac
+# The failed listing above is provoked on purpose and is logged by the list-s3-dirs task, which runs the same way on a desktop and a
+# phone, so it is the one error allowed through. Anything else in app.log still fails the test.
+check_no_errors "$TMP_DIR" 'Error listing S3 directories'
 
 stop_app "$APP_PORT" "$TMP_DIR"
 

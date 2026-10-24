@@ -9,7 +9,6 @@ const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
 const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
-const log_module = @import("../lib/log.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const storage_helper = @import("../lib/storage-helper.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
@@ -30,7 +29,7 @@ const confirm = prompts.confirm;
 const isCancel = prompts.isCancel;
 const apiDecrypt = node_api.decrypt.decrypt;
 const IDecryptProgress = node_api.decrypt.IDecryptProgress;
-const configureLog = log_module.configureLog;
+const configureLog = @import("../lib/log.zig").configureLog;
 
 //
 // Options of the decrypt command.

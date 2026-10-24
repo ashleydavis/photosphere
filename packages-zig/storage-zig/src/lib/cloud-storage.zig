@@ -1,25 +1,24 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const storage_module = @import("storage.zig");
 const s3_client = @import("s3-client.zig");
 const s3_range_readable_stream = @import("s3-range-readable-stream.zig");
 const s3_path = @import("s3-path.zig");
 const storage_factory = @import("storage-factory.zig");
 
 const errors = utils.errors;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
+const IFileInfo = @import("storage.zig").IFileInfo;
+const IListResult = @import("storage.zig").IListResult;
+const IStorage = @import("storage.zig").IStorage;
+const IReadStream = @import("storage.zig").IReadStream;
 const S3Client = s3_client.S3Client;
 const Upload = s3_client.Upload;
 const ListObjectsV2Output = s3_client.ListObjectsV2Output;
 const S3RangeReadableStream = s3_range_readable_stream.S3RangeReadableStream;
 const parseS3ListPath = s3_path.parseS3ListPath;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
-const LockFileContent = storage_module.LockFileContent;
-const parseLockContent = storage_module.parseLockContent;
+const IWriteLockInfo = @import("storage.zig").IWriteLockInfo;
+const LockFileContent = @import("storage.zig").LockFileContent;
+const parseLockContent = @import("storage.zig").parseLockContent;
 const log = &utils.log.log;
 const Date = utils.timestamp_provider.Date;
 
@@ -185,7 +184,7 @@ pub const CloudStorage = struct {
     //
     // Creates cloud storage.
     //
-    pub fn init(io: std.Io, location: []const u8, credentials: ?IS3Credentials) CloudStorage {
+    pub fn init(location: []const u8, credentials: ?IS3Credentials) CloudStorage {
         var endpoint: ?[]const u8 = null;
         if (credentials) |credentialsValue| {
             if (credentialsValue.endpoint) |credentialsEndpoint| {
@@ -204,7 +203,7 @@ pub const CloudStorage = struct {
 
         return .{
             .location = location,
-            .s3 = buildClient(io, endpoint, credentials),
+            .s3 = buildClient(endpoint, credentials),
         };
     }
 
@@ -226,7 +225,7 @@ pub const CloudStorage = struct {
     // a connection timeout; aws-c-s3 has no whole-request timeout, so there is no
     // request timeout. The client signs every request that has a body with "UNSIGNED-PAYLOAD".
     //
-    fn buildClient(io: std.Io, endpoint: ?[]const u8, credentials: ?IS3Credentials) S3Client {
+    fn buildClient(endpoint: ?[]const u8, credentials: ?IS3Credentials) S3Client {
         var config: s3_client.IS3ClientConfig = .{
             .endpoint = endpoint,
             .region = null,
@@ -241,14 +240,14 @@ pub const CloudStorage = struct {
             config.region = credentialsValue.region;
         }
 
-        return S3Client.init(io, config);
+        return S3Client.init(config);
     }
 
     //
     // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *CloudStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(CloudStorage), .location = self.location };
+        return .{ .ptr = self, .vtable = @import("storage.zig").implement(CloudStorage), .location = self.location };
     }
 
     //
@@ -839,7 +838,7 @@ pub const CloudStorage = struct {
     pub fn acquireWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
 
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
-        const processId = storage_module.processId();
+        const processId = @import("storage.zig").processId();
 
         if (log.verboseEnabled()) {
             log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_ATTEMPT,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
@@ -948,12 +947,12 @@ pub const CloudStorage = struct {
         self.s3.deleteObject(allocator, io, parsed.bucket, key) catch |err| {
             // Ignore errors if the lock file doesn't exist
             if (log.verboseEnabled()) {
-                log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},RELEASE_FAILED,{d},unknown,{s},error:{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), storage_module.processId(), filePath, errors.errorMessage(err) }));
+                log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},RELEASE_FAILED,{d},unknown,{s},error:{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), @import("storage.zig").processId(), filePath, errors.errorMessage(err) }));
             }
             return;
         };
         if (log.verboseEnabled()) {
-            log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},RELEASE_SUCCESS,{d},unknown,{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), storage_module.processId(), filePath }));
+            log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},RELEASE_SUCCESS,{d},unknown,{s}", .{ std.Io.Clock.real.now(io).toMilliseconds(), @import("storage.zig").processId(), filePath }));
         }
     }
 
@@ -965,7 +964,7 @@ pub const CloudStorage = struct {
     pub fn refreshWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
 
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
-        const processId = storage_module.processId();
+        const processId = @import("storage.zig").processId();
 
         if (log.verboseEnabled()) {
             log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},REFRESH_ATTEMPT,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));

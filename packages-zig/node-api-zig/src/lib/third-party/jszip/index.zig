@@ -5,7 +5,7 @@
 //
 
 const std = @import("std");
-const load_module = @import("load.zig");
+const load = @import("load.zig");
 const object = @import("object.zig");
 pub const ZipObject = @import("zipObject.zig").ZipObject;
 pub const Files = object.Files;
@@ -33,7 +33,7 @@ pub const JSZip = struct {
     // Loads a zip from its bytes (JSZip: `loadAsync(data)`, which resolves to this zip).
     //
     pub fn loadAsync(self: *JSZip, data: []const u8) !*JSZip {
-        try load_module.load(self.allocator, &self.files, data);
+        try load.load(self.allocator, &self.files, data);
         return self;
     }
 };

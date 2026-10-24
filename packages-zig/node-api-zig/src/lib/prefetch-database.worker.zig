@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -139,8 +140,7 @@ const MissingFilesIterator = struct {
 };
 
 //
-// Copies one missing file down from the origin. Runs concurrently with the rest of its batch, with its own allocator because the caller's is
-// not shared between threads.
+// Copies one missing file down from the origin, with its own allocator, which is freed when the file is done.
 //
 const FetchFileTask = struct {
     // The storage the file is fetched from.
@@ -197,8 +197,7 @@ const FetchFileTask = struct {
 };
 
 //
-// Fetches a batch of files at once and waits for all of them,
-// throwing the error of the first one that failed.
+// Fetches a batch of files, one after another, and throws the error of the first one that failed.
 //
 fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, originStorage: IStorage, localStorage: IStorage, batch: []const []const u8) !void {
     const tasks = try allocator.alloc(FetchFileTask, batch.len);
@@ -210,11 +209,10 @@ fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, originStorage: IStorage,
         };
     }
 
-    var group: std.Io.Group = .init;
+    // The files of a batch are fetched one after another, on the task's own thread.
     for (tasks) |*task| {
-        group.async(io, FetchFileTask.run, .{ task, io });
+        task.run(io);
     }
-    try group.await(io);
 
     for (tasks) |*task| {
         if (task.failure) |failure| {
@@ -244,6 +242,7 @@ fn prefetchResultToJson(allocator: std.mem.Allocator, result: IPrefetchDatabaseR
 pub fn prefetchDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -267,7 +266,7 @@ pub fn prefetchDatabaseHandler(
     //
     // Check whether this is a partial database. Skip immediately for full databases.
     //
-    const local = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const local = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const rawStorage = local.rawStorage;
     const merkleTree = try loadMerkleTree(allocator, io, localStorage);
@@ -283,7 +282,7 @@ pub fn prefetchDatabaseHandler(
         return prefetchResultToJson(allocator, nothingToFetch);
     };
 
-    const originStorage = (try openStorage(allocator, io, origin, null, null, context.hostRequester)).storage;
+    const originStorage = (try openStorage(allocator, io, origin, null, null, context.nativeCaller)).storage;
 
     var missingFiles: MissingFilesIterator = .{
         .allocator = allocator,
@@ -298,14 +297,14 @@ pub fn prefetchDatabaseHandler(
     // The job the interface lists. Sent before the walk starts, because walking the origin is itself
     // minutes of work on a phone and a job that appears only once bytes move looks like nothing is
     // happening.
-    try sendJobProgress(allocator, context, data.job, runStartedAt, null);
+    try sendJobProgress(allocator, io, context, data.job, runStartedAt, null);
 
     //
     // Fetch missing files PREFETCH_CONCURRENCY at a time without accumulating them in memory.
     //
     var batches = batchGenerator([]const u8, allocator, &missingFiles, PREFETCH_CONCURRENCY);
     while (try batches.next()) |batch| {
-        if (context.isCancelled()) {
+        if (context.isCancelled(io, allocator)) {
             // The batch was drawn from the walk and is not going to be fetched, so it is left behind.
             // Reporting it is what stops the loop reading a cancelled pass as a finished one.
             filesStillMissing += batch.len;
@@ -314,7 +313,7 @@ pub fn prefetchDatabaseHandler(
         try fetchBatch(allocator, io, originStorage, localStorage, batch);
         filesFetched += batch.len;
 
-        try sendJobProgress(allocator, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} files fetched", .{filesFetched}));
+        try sendJobProgress(allocator, io, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} files fetched", .{filesFetched}));
     }
 
     return prefetchResultToJson(allocator, .{

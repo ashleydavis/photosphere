@@ -14,6 +14,7 @@
 //
 
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -125,7 +126,7 @@ const Sandbox = struct {
         try object.put(self.arenaAllocator(), "configPath", .{
             .string = configPath,
         });
-        return readDatabasesConfigHandler(self.arenaAllocator(), self.io, .{
+        return readDatabasesConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), .{
             .object = object,
         }, self.taskContext.context.taskContext());
     }
@@ -134,7 +135,7 @@ const Sandbox = struct {
     // Runs the write-databases-config handler with the JSON text as its data.
     //
     fn write(self: *Sandbox, dataJson: []const u8) !void {
-        const result = try writeDatabasesConfigHandler(self.arenaAllocator(), self.io, try self.json(dataJson), self.taskContext.context.taskContext());
+        const result = try writeDatabasesConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), try self.json(dataJson), self.taskContext.context.taskContext());
         try std.testing.expect(result == .null);
     }
 
@@ -393,7 +394,7 @@ test "mobile databases.toml: a missing configPath is rejected" {
     defer sandbox.deinit();
 
     try expectThrown("configPath is required", sandbox.read(""));
-    try expectThrown("configPath is required", writeDatabasesConfigHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(
+    try expectThrown("configPath is required", writeDatabasesConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
         \\{"configPath":"","databases":[],"recentDatabaseNames":[]}
     ), sandbox.taskContext.context.taskContext()));
 }

@@ -15,3 +15,7 @@ source "$PACKAGE_DIR/vendor-library.sh"
 # are read from that Makefile), and the presets and the player, which needs SDL.
 vendor_library "$PACKAGE_DIR" ffmpeg "https://ffmpeg.org/releases/ffmpeg-$1.tar.xz" "$1" \
     tests/ref presets fftools/ffplay.c fftools/ffplay_renderer.c fftools/ffplay_renderer.h
+
+# FFmpeg's command line programs keep their state per run, so the program can run several at once on its threads (see
+# update-ffmpeg.md). A version the patch no longer applies to fails here, naming the files it could not patch.
+patch -p1 --forward -d "$PACKAGE_DIR/vendor/ffmpeg" < "$PACKAGE_DIR/fftools-per-run-state.patch"

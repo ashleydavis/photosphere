@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -34,7 +35,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestTaskContext, 
     try object.put(allocator, "assets", .{ .array = items });
     try object.put(allocator, "folderPath", .{ .string = folderPath });
     try object.put(allocator, "databasePath", .{ .string = databasePath });
-    const output = try saveAssetsBatchHandler(allocator, io, .{ .object = object }, testContext.context.taskContext());
+    const output = try saveAssetsBatchHandler(allocator, io, test_timers.timers(), .{ .object = object }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(ISaveAssetsBatchResult, allocator, output, .{});
 }
 
@@ -180,6 +181,6 @@ test "throws a descriptive error when the task data is not valid" {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "assets", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, saveAssetsBatchHandler(allocator, io, .{ .object = object }, testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, saveAssetsBatchHandler(allocator, io, test_timers.timers(), .{ .object = object }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The save-assets-batch task data is not valid: assets must be a list of items with assetId, assetType and filename, and folderPath and databasePath must be strings", errors.lastErrorMessage());
 }

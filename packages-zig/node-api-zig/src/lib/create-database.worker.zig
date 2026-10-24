@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
@@ -32,6 +33,7 @@ pub const ICreateDatabaseData = struct {
 pub fn createDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -47,7 +49,7 @@ pub fn createDatabaseHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const credentials = try resolveStorageCredentials(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const credentials = try resolveStorageCredentials(allocator, io, data.databasePath, null, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.databasePath, credentials.s3Config, loadedKeys.options);
     const database = try createMediaFileDatabase(allocator, created.storage, context.uuidGenerator, context.timestampProvider);

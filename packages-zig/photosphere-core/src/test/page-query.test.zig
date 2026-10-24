@@ -1,6 +1,5 @@
 const std = @import("std");
 const support = @import("test-support.zig");
-const main_state = @import("photosphere-core").main_state;
 const page_query = @import("photosphere-core").page_query;
 
 const TestApp = support.TestApp;
@@ -45,7 +44,8 @@ test "the page's query holds the address of a running asset server and the theme
     try app.start();
     defer app.stop();
 
-    const query = try app.core.uiQuery();
+    const query = try app.native_app.uiQuery(std.testing.allocator);
+    defer std.testing.allocator.free(query);
 
     const port = try portOf(query);
     try std.testing.expect(port > 0);
@@ -58,12 +58,14 @@ test "asking for the query again does not start another asset server" {
     try app.start();
     defer app.stop();
 
-    const first = try app.core.uiQuery();
+    const first = try app.native_app.uiQuery(std.testing.allocator);
+    defer std.testing.allocator.free(first);
     const first_port = try portOf(first);
-    const second = try app.core.uiQuery();
+    const second = try app.native_app.uiQuery(std.testing.allocator);
+    defer std.testing.allocator.free(second);
 
+    // A second server would be on a port of its own.
     try std.testing.expectEqual(first_port, try portOf(second));
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"data\":{\"type\":\"asset-server-ready\""));
 }
 
 test "the query says the saved theme" {
@@ -71,7 +73,8 @@ test "the query says the saved theme" {
     try app.startWithTasksAndConfigFile(&.{}, "theme: dark\n");
     defer app.stop();
 
-    const query = try app.core.uiQuery();
+    const query = try app.native_app.uiQuery(std.testing.allocator);
+    defer std.testing.allocator.free(query);
 
     try std.testing.expect(std.mem.endsWith(u8, query, "&theme=dark"));
 }
@@ -80,37 +83,12 @@ test "test mode adds testMode=1 to the query" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
 
-    const without = try page_query.pageQuery(app.core, allocator, false);
-    const with = try page_query.pageQuery(app.core, allocator, true);
+    const without = try page_query.buildQuery(allocator, 4321, "system", false);
+    const with = try page_query.buildQuery(allocator, 4321, "system", true);
 
-    try std.testing.expect(std.mem.endsWith(u8, without, "&theme=system"));
-    try std.testing.expect(std.mem.endsWith(u8, with, "&theme=system&testMode=1"));
-}
-
-test "a query is an error when the asset server ended before it said which port it was using" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.asset_server_requested = true;
-    state.asset_server_ended = true;
-
-    try std.testing.expectError(error.Thrown, app.core.uiQuery());
-}
-
-test "a query is an error when the asset server says nothing within the time allowed" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const state = main_state.fromCore(app.core);
-    state.asset_server_requested = true;
-    state.asset_server_start_timeout_ms = 50;
-
-    try std.testing.expectError(error.Thrown, app.core.uiQuery());
+    try std.testing.expectEqualStrings("restApiUrl=http%3A%2F%2Flocalhost%3A4321&theme=system", without);
+    try std.testing.expectEqualStrings("restApiUrl=http%3A%2F%2Flocalhost%3A4321&theme=system&testMode=1", with);
 }
 
 test "a value of the query is written as encodeURIComponent writes it" {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -13,7 +14,7 @@ const ReplicateProgressCallback = node_api.replicate_database.ReplicateProgressC
 //
 // Records the progress strings of replicateDatabase.
 //
-fn recordProgress(context: ?*anyopaque, progress: []const u8) void {
+fn recordProgress(context: ?*anyopaque, _: std.Io, progress: []const u8) void {
     const recorder: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
     recorder.record(progress);
 }
@@ -23,8 +24,8 @@ test "replicateDatabase runs the replicate-database task and returns its result 
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
-    try node_api.task_handlers.initTaskHandlers();
+    const test_env = try test_environment.setupEnvironmentWith(io, allocator);
+    defer test_env.deinitWith(allocator);
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
     defer temp_dirs.removeTempDir(io, root);
@@ -32,7 +33,7 @@ test "replicateDatabase runs the replicate-database task and returns its result 
 
     var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
     const onProgress: ReplicateProgressCallback = .{ .context = &recorder, .function = recordProgress };
-    const result = try replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
+    const result = try replicateDatabase(allocator, io, test_timers.timers(), uuidGenerator.uuidGenerator(), .{
         .sourcePath = sourceDir,
         .destPath = try std.fs.path.join(allocator, &.{ root, "dest" }),
         .partial = false,
@@ -53,13 +54,13 @@ test "replicateDatabase throws the task error message when replication fails" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
-    try node_api.task_handlers.initTaskHandlers();
+    const test_env = try test_environment.setupEnvironmentWith(io, allocator);
+    defer test_env.deinitWith(allocator);
     const root = try temp_dirs.makeTempDir(allocator, io, "replicate-database-missing");
     defer temp_dirs.removeTempDir(io, root);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
-    try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
+    try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, test_timers.timers(), uuidGenerator.uuidGenerator(), .{
         .sourcePath = try std.fs.path.join(allocator, &.{ root, "missing" }),
         .destPath = try std.fs.path.join(allocator, &.{ root, "dest" }),
         .partial = false,
@@ -73,15 +74,15 @@ test "replicateDatabase fails when the destination is an unrelated database" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
-    try node_api.task_handlers.initTaskHandlers();
+    const test_env = try test_environment.setupEnvironmentWith(io, allocator);
+    defer test_env.deinitWith(allocator);
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
     const destDir = try temp_dirs.copyTestDatabase(allocator, io, "50-assets");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(destDir).?);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
 
-    try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
+    try std.testing.expectError(error.Thrown, replicateDatabase(allocator, io, test_timers.timers(), uuidGenerator.uuidGenerator(), .{
         .sourcePath = sourceDir,
         .destPath = destDir,
         .partial = false,
@@ -94,6 +95,8 @@ test "replicateDatabaseDataToJson leaves out the optional keys that are not set"
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironmentWith(std.testing.io, allocator);
+    defer test_env.deinitWith(allocator);
     const value = try node_api.replicate_database.replicateDatabaseDataToJson(allocator, .{ .sourcePath = "/a", .destPath = "/b", .destEncryptionKey = "key", .partial = true, .force = false });
     try std.testing.expectEqualStrings("{\"sourcePath\":\"/a\",\"destPath\":\"/b\",\"destEncryptionKey\":\"key\",\"partial\":true,\"force\":false}", try std.json.Stringify.valueAlloc(allocator, value, .{}));
 }
@@ -137,9 +140,9 @@ fn recordAddTask(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, task
 //
 // Records a source being cancelled, then cancels it in the real backend.
 //
-fn recordCancelTasks(ptr: *anyopaque, source: []const u8) void {
+fn recordCancelTasks(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, source: []const u8) void {
     recorded.cancelled.append(recorded.allocator, recorded.allocator.dupe(u8, source) catch source) catch {};
-    forwardedVTable.cancelTasks(ptr, source);
+    forwardedVTable.cancelTasks(ptr, io, allocator, source);
 }
 
 //
@@ -147,8 +150,6 @@ fn recordCancelTasks(ptr: *anyopaque, source: []const u8) void {
 // Returns the path of the source database (a directory that has been removed again).
 //
 fn replicateRecorded(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
-    try node_api.task_handlers.initTaskHandlers();
     const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const root = std.fs.path.dirname(sourceDir).?;
     defer temp_dirs.removeTempDir(io, root);
@@ -163,7 +164,7 @@ fn replicateRecorded(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
     task_queue_zig.queue_backend.setQueueBackend(.{ .ptr = realBackend.ptr, .vtable = &recordingVTable });
     defer task_queue_zig.queue_backend.setQueueBackend(realBackend);
 
-    _ = try replicateDatabase(allocator, io, uuidGenerator.uuidGenerator(), .{
+    _ = try replicateDatabase(allocator, io, test_timers.timers(), uuidGenerator.uuidGenerator(), .{
         .sourcePath = sourceDir,
         .destPath = try std.fs.path.join(allocator, &.{ root, "backup", "my-database" }),
         .partial = false,
@@ -176,6 +177,8 @@ test "queues the replication under the source database's path" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironmentWith(std.testing.io, allocator);
+    defer test_env.deinitWith(allocator);
     const io = std.testing.io;
     const sourceDir = try replicateRecorded(allocator, io);
     try std.testing.expectEqual(@as(usize, 1), recorded.sources.items.len);
@@ -186,6 +189,8 @@ test "does not tag the queue with a generated id" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironmentWith(std.testing.io, allocator);
+    defer test_env.deinitWith(allocator);
     const io = std.testing.io;
     const sourceDir = try replicateRecorded(allocator, io);
 
@@ -199,6 +204,8 @@ test "cancels that same source when it shuts the queue down" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironmentWith(std.testing.io, allocator);
+    defer test_env.deinitWith(allocator);
     const io = std.testing.io;
     _ = try replicateRecorded(allocator, io);
 
@@ -212,6 +219,8 @@ test "tags the task with a job named after the destination that cancels by the s
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironmentWith(std.testing.io, allocator);
+    defer test_env.deinitWith(allocator);
     const io = std.testing.io;
     const sourceDir = try replicateRecorded(allocator, io);
     const destPath = try std.fs.path.join(allocator, &.{ std.fs.path.dirname(sourceDir).?, "backup", "my-database" });

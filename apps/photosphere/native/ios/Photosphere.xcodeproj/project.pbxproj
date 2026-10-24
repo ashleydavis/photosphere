@@ -15,11 +15,11 @@
 		B10000000000000000000003 /* PathSandbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* PathSandbox.swift */; };
 		B10000000000000000000004 /* ExportTemp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* ExportTemp.swift */; };
 		B10000000000000000000005 /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* MediaLibrary.swift */; };
-		B10000000000000000000006 /* HostJson.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* HostJson.swift */; };
-		B10000000000000000000007 /* MediaLibraryHostRequests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* MediaLibraryHostRequests.swift */; };
-		B10000000000000000000008 /* ExportHostRequests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* ExportHostRequests.swift */; };
+		B10000000000000000000006 /* NativeCallJson.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* NativeCallJson.swift */; };
+		B10000000000000000000007 /* MediaLibraryNativeCalls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* MediaLibraryNativeCalls.swift */; };
+		B10000000000000000000008 /* ExportNativeCalls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* ExportNativeCalls.swift */; };
 		B10000000000000000000009 /* BackgroundWakeHold.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000009 /* BackgroundWakeHold.swift */; };
-		B1000000000000000000000D /* PhotosphereHostRequests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000D /* PhotosphereHostRequests.swift */; };
+		B1000000000000000000000D /* PhotosphereNativeCalls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000D /* PhotosphereNativeCalls.swift */; };
 		B1000000000000000000000E /* BackgroundPasses.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000000000000000000000E /* BackgroundPasses.swift */; };
 		A10000000000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -34,11 +34,11 @@
 		B20000000000000000000003 /* PathSandbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PathSandbox.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* ExportTemp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportTemp.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* MediaLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibrary.swift; sourceTree = "<group>"; };
-		B20000000000000000000006 /* HostJson.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostJson.swift; sourceTree = "<group>"; };
-		B20000000000000000000007 /* MediaLibraryHostRequests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryHostRequests.swift; sourceTree = "<group>"; };
-		B20000000000000000000008 /* ExportHostRequests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportHostRequests.swift; sourceTree = "<group>"; };
+		B20000000000000000000006 /* NativeCallJson.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCallJson.swift; sourceTree = "<group>"; };
+		B20000000000000000000007 /* MediaLibraryNativeCalls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibraryNativeCalls.swift; sourceTree = "<group>"; };
+		B20000000000000000000008 /* ExportNativeCalls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportNativeCalls.swift; sourceTree = "<group>"; };
 		B20000000000000000000009 /* BackgroundWakeHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundWakeHold.swift; sourceTree = "<group>"; };
-		B2000000000000000000000D /* PhotosphereHostRequests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosphereHostRequests.swift; sourceTree = "<group>"; };
+		B2000000000000000000000D /* PhotosphereNativeCalls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosphereNativeCalls.swift; sourceTree = "<group>"; };
 		B2000000000000000000000E /* BackgroundPasses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundPasses.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -72,11 +72,11 @@
 				A20000000000000000000003 /* Info.plist */,
 				A20000000000000000000007 /* Assets.xcassets */,
 				B2000000000000000000000E /* BackgroundPasses.swift */,
-				B2000000000000000000000D /* PhotosphereHostRequests.swift */,
+				B2000000000000000000000D /* PhotosphereNativeCalls.swift */,
 				B20000000000000000000009 /* BackgroundWakeHold.swift */,
-				B20000000000000000000008 /* ExportHostRequests.swift */,
-				B20000000000000000000007 /* MediaLibraryHostRequests.swift */,
-				B20000000000000000000006 /* HostJson.swift */,
+				B20000000000000000000008 /* ExportNativeCalls.swift */,
+				B20000000000000000000007 /* MediaLibraryNativeCalls.swift */,
+				B20000000000000000000006 /* NativeCallJson.swift */,
 				B20000000000000000000005 /* MediaLibrary.swift */,
 				B20000000000000000000004 /* ExportTemp.swift */,
 				B20000000000000000000003 /* PathSandbox.swift */,
@@ -143,7 +143,7 @@
 			);
 			mainGroup = A40000000000000000000001;
 			packageReferences = (
-				AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */,
+				AB0000000000000000000001 /* XCLocalSwiftPackageReference "ziggy" */,
 			);
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -175,11 +175,11 @@
 				A10000000000000000000001 /* ViewController.swift in Sources */,
 				A10000000000000000000002 /* AppDelegate.swift in Sources */,
 				B1000000000000000000000E /* BackgroundPasses.swift in Sources */,
-				B1000000000000000000000D /* PhotosphereHostRequests.swift in Sources */,
+				B1000000000000000000000D /* PhotosphereNativeCalls.swift in Sources */,
 				B10000000000000000000009 /* BackgroundWakeHold.swift in Sources */,
-				B10000000000000000000008 /* ExportHostRequests.swift in Sources */,
-				B10000000000000000000007 /* MediaLibraryHostRequests.swift in Sources */,
-				B10000000000000000000006 /* HostJson.swift in Sources */,
+				B10000000000000000000008 /* ExportNativeCalls.swift in Sources */,
+				B10000000000000000000007 /* MediaLibraryNativeCalls.swift in Sources */,
+				B10000000000000000000006 /* NativeCallJson.swift in Sources */,
 				B10000000000000000000005 /* MediaLibrary.swift in Sources */,
 				B10000000000000000000004 /* ExportTemp.swift in Sources */,
 				B10000000000000000000003 /* PathSandbox.swift in Sources */,
@@ -307,21 +307,17 @@
 /* End XCConfigurationList section */
 
 
-/* Begin XCRemoteSwiftPackageReference section */
-		AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ashleydavis/ziggy";
-			requirement = {
-				kind = exactVersion;
-				version = 0.0.10;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		AB0000000000000000000001 /* XCLocalSwiftPackageReference "ziggy" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../../../ziggy;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		A60000000000000000000001 /* ZiggyNativeIOS */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = AB0000000000000000000001 /* XCRemoteSwiftPackageReference "ziggy" */;
+			package = AB0000000000000000000001 /* XCLocalSwiftPackageReference "ziggy" */;
 			productName = ZiggyNativeIOS;
 		};
 /* End XCSwiftPackageProductDependency section */

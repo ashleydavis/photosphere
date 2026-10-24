@@ -140,7 +140,7 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
 // (Zig: the write lock is acquired with 3 attempts, the default of acquireWriteLock's maxAttempts, as Zig has no default
 // parameter values; the lock is released before the failure of the try block is returned, as the finally block does.)
 //
-pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.host_requester.IHostRequester) !void {
+pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.native_caller.INativeCaller) !void {
     if (ops.len == 0) {
         return;
     }

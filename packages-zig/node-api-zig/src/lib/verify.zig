@@ -15,11 +15,11 @@ const retry = utils.retry.retry;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ProgressCallback = media_file_database.ProgressCallback;
 const SortNode = merkle_tree_zig.merkle_tree.SortNode;
-const traverseTreeAsync = merkle_tree_zig.traverse.traverseTreeAsync;
 const IStorage = storage_zig.storage.IStorage;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const TaskStatus = task_queue_zig.types.TaskStatus;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
+const Timers = @import("ziggy").timers.Timers;
 const ITaskResult = task_queue_zig.types.ITaskResult;
 const IVerifyFileResult = verify_worker.IVerifyFileResult;
 const verifySerializedFile = serialization_zig.serialization.verify;
@@ -104,11 +104,11 @@ pub const IVerifyResult = struct {
 //
 // Formats a progress message and calls the progress callback with it, when there is one.
 //
-fn reportProgress(allocator: std.mem.Allocator, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) !void {
+fn reportProgress(allocator: std.mem.Allocator, io: std.Io, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) !void {
     const callback = progressCallback orelse {
         return;
     };
-    callback.call(try std.fmt.allocPrint(allocator, format, args));
+    callback.call(io, try std.fmt.allocPrint(allocator, format, args));
 }
 
 //
@@ -159,7 +159,7 @@ const VerifyState = struct {
     // Registers a callback to integrate results as tasks complete.
     // Runs on the thread blocked in awaitAllTasks.
     //
-    fn onTaskComplete(context: ?*anyopaque, taskResult: ITaskResult) anyerror!void {
+    fn onTaskComplete(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, taskResult: ITaskResult) anyerror!void {
         const self: *VerifyState = @ptrCast(@alignCast(context.?));
         const allocator = self.allocator;
 
@@ -168,7 +168,7 @@ const VerifyState = struct {
         if (taskResult.status == TaskStatus.Succeeded) {
             const fileResult = try std.json.parseFromValueLeaky(IVerifyFileResult, allocator, taskResult.outputs orelse .null, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
 
-            try reportProgress(allocator, self.progressCallback, "Verified file {d} of {d}", .{ self.result.filesProcessed, self.totalFiles });
+            try reportProgress(allocator, io, self.progressCallback, "Verified file {d} of {d}", .{ self.result.filesProcessed, self.totalFiles });
 
             if (fileResult.status == .removed) {
                 // For partial databases, ignore missing files (they're expected to be missing)
@@ -217,17 +217,17 @@ const VerifyState = struct {
     //
     // Queues the verification of a node and checks asset records.
     //
-    fn visitNode(self: *VerifyState, node: *SortNode) anyerror!bool {
+    fn visitNode(self: *VerifyState, io: std.Io, node: *SortNode) !void {
         const allocator = self.allocator;
         self.result.nodesProcessed += 1;
 
         if (node.name) |nodeName| {
             // Apply path filter before queuing the task
             if (self.pathFilter != null and !std.mem.startsWith(u8, nodeName, self.pathFilter.?)) {
-                return true; // Skip this node
+                return; // Skip this node
             }
 
-            _ = try self.queue.addTask("verify-file", try verify_worker.verifyFileDataToJson(allocator, .{
+            _ = try self.queue.addTask(io, allocator, "verify-file", try verify_worker.verifyFileDataToJson(allocator, .{
                 .node = node.*,
                 .storageDescriptor = self.storageDescriptor,
                 .options = .{
@@ -258,10 +258,22 @@ const VerifyState = struct {
                 }
             }
         }
-
-        return true;
     }
 };
+
+//
+// Adds the node and every node below it to the list, each node before its left side and its left side before its right, the order
+// traverseTreeAsync visits them in. (Zig: verify visits the nodes after gathering them rather than in traverseTreeAsync's callback,
+// because visiting one queues a task, which takes the thread's Io, and the callback is given none.)
+//
+fn gatherNodes(allocator: std.mem.Allocator, node: ?*SortNode, nodes: *std.ArrayList(*SortNode)) !void {
+    const current = node orelse {
+        return;
+    };
+    try nodes.append(allocator, current);
+    try gatherNodes(allocator, current.left, nodes);
+    try gatherNodes(allocator, current.right, nodes);
+}
 
 //
 // Verifies the media file database.
@@ -270,7 +282,7 @@ const VerifyState = struct {
 // Also checks each asset in the merkle tree has a database record with the correct id and hash.
 // A caller with nothing to supply for an optional parameter passes null.
 //
-pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IDatabaseDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: *IBsonCollection, options: ?IVerifyOptions, progressCallback: ?ProgressCallback) !IVerifyResult {
+pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageDescriptor: IDatabaseDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: *IBsonCollection, options: ?IVerifyOptions, progressCallback: ?ProgressCallback) !IVerifyResult {
 
     var pathFilter: ?[]const u8 = null;
     if (options != null and options.?.pathFilter != null and options.?.pathFilter.?.len > 0) {
@@ -320,10 +332,10 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
     //
     if (progressCallback) |callback| {
         if (options != null and options.?.pathFilter != null and options.?.pathFilter.?.len > 0) {
-            try reportProgress(allocator, callback, "Verifying files matching: {s}", .{options.?.pathFilter.?});
+            try reportProgress(allocator, io, callback, "Verifying files matching: {s}", .{options.?.pathFilter.?});
         }
         else {
-            callback.call("Verifying files...");
+            callback.call(io, "Verifying files...");
         }
     }
 
@@ -332,8 +344,8 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
     // Handlers are registered when the worker starts.
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator, storageDescriptor.databasePath);
-    defer queue.deinit();
+    const queue = try TaskQueue.init(allocator, uuidGenerator, storageDescriptor.databasePath);
+    defer queue.deinit(io, allocator);
     state.queue = queue;
 
     //
@@ -348,13 +360,13 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
             }
         }
         recordsLoaded += 1;
-        try reportProgress(allocator, progressCallback, "Loaded database records... {d} loaded", .{recordsLoaded});
+        try reportProgress(allocator, io, progressCallback, "Loaded database records... {d} loaded", .{recordsLoaded});
     }
 
     //
     // Registers a callback to integrate results as tasks complete.
     //
-    _ = try queue.onTaskComplete(.{ .context = &state, .function = VerifyState.onTaskComplete });
+    _ = try queue.onTaskComplete(allocator, .{ .context = &state, .function = VerifyState.onTaskComplete });
 
     //
     // Check if database is partial - missing files should be ignored for partial databases
@@ -366,12 +378,16 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, storageDescriptor: IData
     // Pass the storage descriptor instead of the storage object (which can't be serialized).
     // Filter nodes by pathFilter before queuing tasks.
     //
-    try traverseTreeAsync(SortNode, merkleTree.sort, &state, VerifyState.visitNode);
+    var nodes: std.ArrayList(*SortNode) = .empty;
+    try gatherNodes(allocator, merkleTree.sort, &nodes);
+    for (nodes.items) |node| {
+        try state.visitNode(io, node);
+    }
 
     //
     // Wait for all tasks to complete.
     //
-    try queue.awaitAllTasks();
+    try queue.awaitAllTasks(io, allocator, timers);
 
     state.result.modified = state.modified.items;
     state.result.removed = state.removed.items;
@@ -446,9 +462,9 @@ const DatabaseFileVerifyState = struct {
     //
     // Helper to report progress
     //
-    fn reportProgress(self: *DatabaseFileVerifyState) !void {
+    fn reportProgress(self: *DatabaseFileVerifyState, io: std.Io) !void {
         self.filesVerified += 1;
-        try verify_reportProgress(self.allocator, self.progressCallback, "Verified database file {d} of {d}", .{ self.filesVerified, self.expectedTotal });
+        try verify_reportProgress(self.allocator, io, self.progressCallback, "Verified database file {d} of {d}", .{ self.filesVerified, self.expectedTotal });
     }
 };
 
@@ -484,7 +500,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
     // Phase 1: Count all files to verify
     //
     if (progressCallback) |callback| {
-        callback.call("Verifying database files...");
+        callback.call(io, "Verifying database files...");
     }
 
     var expectedTotal: u64 = 0;
@@ -549,7 +565,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
         else {
             try state.addError(".db/files.dat", verifyResult.@"error" orelse "Unknown error");
         }
-        try state.reportProgress();
+        try state.reportProgress(io);
     }
 
     // 2. For each collection, verify all files
@@ -569,7 +585,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
             else {
                 try state.addError(collectionDatPath, verifyResult.@"error" orelse "Unknown error");
             }
-            try state.reportProgress();
+            try state.reportProgress(io);
         }
         // 3b. Get all files in the collection directory (v6: shards/ subdir)
         const collectionFiles = try assetStorage.listFiles(allocator, io, try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "shards" }), 10000, null);
@@ -587,7 +603,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                 else {
                     try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                 }
-                try state.reportProgress();
+                try state.reportProgress(io);
             }
             else {
                 // Shard data file (with checksum)
@@ -606,7 +622,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                         try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                     }
                 }
-                try state.reportProgress();
+                try state.reportProgress(io);
             }
         }
     }
@@ -650,7 +666,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                             try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                         }
                     }
-                    try state.reportProgress();
+                    try state.reportProgress(io);
                 }
             }
         }

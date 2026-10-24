@@ -74,7 +74,8 @@ test "getImageMetadata reads the date, the place and the tags of a HEIC from its
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
 
     const metadata = try image.getImageMetadata(allocator, std.testing.io, test_heic, "image/heic");
     try std.testing.expectEqualStrings("2021-05-06T07:08:09.000Z", metadata.photoDate.?);
@@ -126,7 +127,8 @@ test "getImageMetadata goes on without the metadata of a HEIC whose EXIF cannot 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
 
     // The code under test logs the failure; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};

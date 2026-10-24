@@ -5,45 +5,30 @@
 //
 
 const std = @import("std");
+const ziggy = @import("ziggy");
 const Mime = @import("Mime.zig").Mime;
 const standardTypes = @import("types/standard.zig").types;
 const otherTypes = @import("types/other.zig").types;
 
 //
-// Allocator for the default instance, which lives for the rest of the process.
+// The allocator of the calling thread's default instance, which lives as long as the thread. Each thread has its own, so no allocator
+// is used by two threads. It is a thread-local rather than an argument because mime() is called as the TypeScript module's default
+// export is, without one.
 //
-const mime_allocator = std.heap.smp_allocator;
+threadlocal var mime_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
 
 //
-// The default instance (TypeScript: `new Mime(standardTypes, otherTypes)._freeze()`, built when the module loads;
-// here it is built on first use).
+// The default instance of the calling thread (TypeScript: `new Mime(standardTypes, otherTypes)._freeze()`, built when the module loads;
+// here it is built on first use by each thread, so the threads share nothing).
 //
-var defaultMime: Mime = undefined;
-
-//
-// Whether the default instance has been built: 0 not yet, 1 being built, 2 built. (No TypeScript counterpart: a module
-// is loaded once, before anything uses it.)
-//
-var defaultMimeState = std.atomic.Value(u8).init(0);
+threadlocal var defaultMime: ?Mime = null;
 
 //
 // Gets the default instance (TypeScript: the module's default export).
 //
 pub fn mime() !*const Mime {
-    while (true) {
-        switch (defaultMimeState.load(.acquire)) {
-            2 => return &defaultMime,
-            0 => {
-                if (defaultMimeState.cmpxchgStrong(0, 1, .acq_rel, .acquire) == null) {
-                    defaultMime = Mime.init(mime_allocator, &.{ &standardTypes, &otherTypes }) catch |err| {
-                        defaultMimeState.store(0, .release);
-                        return err;
-                    };
-                    defaultMimeState.store(2, .release);
-                    return &defaultMime;
-                }
-            },
-            else => std.atomic.spinLoopHint(),
-        }
+    if (defaultMime == null) {
+        defaultMime = try Mime.init(mime_allocator.allocator(), &.{ &standardTypes, &otherTypes });
     }
+    return &defaultMime.?;
 }

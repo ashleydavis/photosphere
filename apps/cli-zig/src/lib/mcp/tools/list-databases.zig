@@ -14,8 +14,9 @@ const textResult = result.textResult;
 // Registers the `list_databases` tool: returns every database configured in the local
 // databases.toml registry. Available to the model even when no database is open.
 //
-pub fn registerListDatabasesTool(server: *McpServer) !void {
+pub fn registerListDatabasesTool(server: *McpServer, allocator: std.mem.Allocator) !void {
     try server.registerTool(
+        allocator,
         "list_databases",
         .{
             .description = "List databases configured in this Photosphere installation (from databases.toml).",

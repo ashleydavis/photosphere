@@ -326,7 +326,7 @@ pub fn chooseBestResult(allocator: std.mem.Allocator, results: std.json.Value) !
 // rejects when the status is not 2xx. Returns the parsed body.
 //
 fn getJson(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !std.json.Value {
-    var client: std.http.Client = .{ .allocator = std.heap.smp_allocator, .io = io };
+    var client: std.http.Client = .{ .allocator = allocator, .io = io };
     defer client.deinit();
     var body = std.Io.Writer.Allocating.init(allocator);
     const result = try client.fetch(.{

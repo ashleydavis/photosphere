@@ -4,15 +4,14 @@
 
 const std = @import("std");
 const utils = @import("utils-zig");
-const storage_module = @import("storage.zig");
 const storage_factory = @import("storage-factory.zig");
 
 const errors = utils.errors;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
+const IFileInfo = @import("storage.zig").IFileInfo;
+const IListResult = @import("storage.zig").IListResult;
+const IStorage = @import("storage.zig").IStorage;
+const IReadStream = @import("storage.zig").IReadStream;
+const IWriteLockInfo = @import("storage.zig").IWriteLockInfo;
 const pathJoin = storage_factory.pathJoin;
 
 //
@@ -46,7 +45,7 @@ pub const StoragePrefixWrapper = struct {
     // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *StoragePrefixWrapper) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(StoragePrefixWrapper), .location = self.location };
+        return .{ .ptr = self, .vtable = @import("storage.zig").implement(StoragePrefixWrapper), .location = self.location };
     }
 
     //

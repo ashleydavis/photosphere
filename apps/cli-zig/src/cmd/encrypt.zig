@@ -10,7 +10,6 @@ const encryption = @import("encryption-zig");
 const vault_zig = @import("vault-zig");
 const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
-const log_module = @import("../lib/log.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const storage_helper = @import("../lib/storage-helper.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
@@ -39,7 +38,7 @@ const isCancel = prompts.isCancel;
 const merkleTreeExists = node_api.tree.merkleTreeExists;
 const apiEncrypt = node_api.encrypt.encrypt;
 const IEncryptProgress = node_api.encrypt.IEncryptProgress;
-const configureLog = log_module.configureLog;
+const configureLog = @import("../lib/log.zig").configureLog;
 
 //
 // Options of the encrypt command.

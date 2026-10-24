@@ -6,6 +6,50 @@ const utils = @import("utils-zig");
 
 const TestApp = support.TestApp;
 
+//
+// What the state on the main thread holds of automatic import.
+//
+const AutoImportState = struct {
+    // Whether automatic import is running.
+    running: bool = false,
+    // Whether an ensure-auto-import task is queued or running.
+    starting: bool = false,
+    // A copy of the database automatic import is writing to, or null. Freed by deinit.
+    database_path: ?[]const u8 = null,
+
+    //
+    // Reads the state, which the test is sent as JSON. Runs on the main thread.
+    //
+    fn run(_: u8, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io, _: std.mem.Allocator) anyerror!AutoImportState {
+        const state = main_state.current();
+        return .{
+            .running = state.auto_import_running,
+            .starting = state.auto_import_starting,
+            .database_path = state.auto_import_database_path,
+        };
+    }
+
+    fn deinit(self: *AutoImportState) void {
+        if (self.database_path) |path| {
+            std.testing.allocator.free(path);
+        }
+    }
+};
+
+//
+// Reads what the state holds of automatic import. The caller frees it with deinit.
+//
+fn readAutoImport(app: *TestApp) !AutoImportState {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const read = try app.onMainThreadWith(arena_state.allocator(), @as(u8, 0), AutoImportState.run);
+    return .{
+        .running = read.running,
+        .starting = read.starting,
+        .database_path = if (read.database_path) |path| try std.testing.allocator.dupe(u8, path) else null,
+    };
+}
+
 fn expectReply(app: *TestApp, message_type: []const u8, data_json: []const u8, expected_json: []const u8) !void {
     const reply = try app.requestOk(message_type, data_json);
     defer std.testing.allocator.free(reply);
@@ -103,7 +147,7 @@ test "set-config of the theme tells the page, so the menu bar can follow" {
     defer app.stop();
     try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":\"dark\"}", "null");
     try expectReply(&app, "get-config", "\"theme\"", "\"dark\"");
-    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\",\"data\":\"dark\"}}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\",\"data\":\"dark\"}}");
 }
 
 test "set-config of a theme that does not exist is an error reply and stores nothing" {
@@ -148,20 +192,24 @@ test "get-config and set-config without a key are error replies" {
 //
 // A fake of the create-default-database task, which another part of the app provides: it ends at once.
 //
-fn createDefaultDatabaseTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    try context.sendEvent(.{ .createdDefaultDatabaseFor = data });
-    return try context.arena.dupe(u8, "null");
+fn createDefaultDatabaseTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
+    try services.sendEvent(io, allocator, .{ .createdDefaultDatabaseFor = data });
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // A fake of the import-assets task, which another part of the app provides: it reports what it was asked to do and then runs until
 // it is cancelled.
 //
-fn importAssetsTask(context: *ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    try context.sendEvent(.{ .importing = data });
+fn importAssetsTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
+    try services.sendEvent(io, allocator, .{ .importing = data });
     while (true) {
-        try context.checkCancelled();
-        try context.io().sleep(.fromMilliseconds(2), .awake);
+        try services.checkCancelled(io, allocator);
+        try io.sleep(.fromMilliseconds(2), .awake);
     }
 }
 
@@ -182,36 +230,35 @@ test "switching automatic import on creates the default database and starts the 
     defer allocator.free(path_request);
     try expectReply(&app, "set-config", path_request, "null");
     try expectReply(&app, "set-config", "{\"key\":\"autoImportSources\",\"value\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}", "null");
-    try std.testing.expectEqual(@as(usize, 0), app.shell.countContaining("createdDefaultDatabaseFor"));
+    try std.testing.expectEqual(@as(usize, 0), app.native_app.countContaining(std.testing.io, std.testing.allocator, "createdDefaultDatabaseFor"));
     try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}", "null");
 
     // The default database does not exist at that path, so it is created, and the page is told the databases changed.
-    try app.shell.expectMessageContaining("\"createdDefaultDatabaseFor\":{\"databasePath\":");
-    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"databases-changed\",\"data\":null}}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"createdDefaultDatabaseFor\":{\"databasePath\":");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"databases-changed\",\"data\":null}}");
 
     // The import is started, with the job the page lists and can cancel.
-    try app.shell.expectMessageContaining("\"importing\":{\"paths\":[],\"storageDescriptor\":{\"databasePath\":");
-    try app.shell.expectMessageContaining("\"options\":{\"auto\":true,\"enabled\":true,\"sources\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}");
-    try app.shell.expectMessageContaining("\"cancelSource\":\"auto-import\"");
-    const state = main_state.fromCore(app.core);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"importing\":{\"paths\":[],\"storageDescriptor\":{\"databasePath\":");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"options\":{\"auto\":true,\"enabled\":true,\"sources\":[{\"type\":\"folder\",\"path\":\"/watched\",\"recurse\":true}]}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"cancelSource\":\"auto-import\"");
     {
-        state.lock();
-        defer state.unlock();
-        try std.testing.expect(state.auto_import_running);
-        try std.testing.expectEqualStrings(database_path, state.auto_import_database_path.?);
+        var auto_import = try readAutoImport(&app);
+        defer auto_import.deinit();
+        try std.testing.expect(auto_import.running);
+        try std.testing.expectEqualStrings(database_path, auto_import.database_path.?);
     }
 
     // Writing the same settings again changes nothing: no second import is started.
     try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}", "null");
-    try std.testing.expectEqual(@as(usize, 1), app.shell.countContaining("\"importing\""));
+    try std.testing.expectEqual(@as(usize, 1), app.native_app.countContaining(std.testing.io, std.testing.allocator, "\"importing\""));
 
     try expectReply(&app, "set-config", "{\"key\":\"autoImportEnabled\",\"value\":false}", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Stopping automatic import.") != null);
-    try app.shell.expectMessageContaining("\"errorMessage\":\"Cancelled\"");
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.auto_import_running);
-    try std.testing.expect(state.auto_import_database_path == null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Stopping automatic import.") != null);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"errorMessage\":\"Cancelled\"");
+    var stopped = try readAutoImport(&app);
+    defer stopped.deinit();
+    try std.testing.expect(!stopped.running);
+    try std.testing.expect(stopped.database_path == null);
 }
 
 test "switching automatic import on reports a default database that could not be created" {
@@ -229,11 +276,10 @@ test "switching automatic import on reports a default database that could not be
     const reply = try app.requestError("set-config", "{\"key\":\"autoImportEnabled\",\"value\":true}");
     defer std.testing.allocator.free(reply);
     try std.testing.expect(std.mem.indexOf(u8, reply, "Failed to create the default photo database at") != null);
-    const state = main_state.fromCore(app.core);
-    state.lock();
-    defer state.unlock();
-    try std.testing.expect(!state.auto_import_running);
-    try std.testing.expect(!state.auto_import_starting);
+    var auto_import = try readAutoImport(&app);
+    defer auto_import.deinit();
+    try std.testing.expect(!auto_import.running);
+    try std.testing.expect(!auto_import.starting);
 }
 
 test "set-config of the theme with no value removes it and tells the page, with no theme in the event" {
@@ -244,7 +290,7 @@ test "set-config of the theme with no value removes it and tells the page, with 
     try expectReply(&app, "set-config", "{\"key\":\"theme\",\"value\":null}", "null");
     try expectReply(&app, "get-config", "\"theme\"", "null");
     // A removed theme has no value to send, so the event carries no data.
-    try app.shell.expectMessageContaining("{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\"}}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "{\"kind\":\"app\",\"data\":{\"type\":\"theme-changed\"}}");
 }
 
 test "a failing config or state request logs the error with the message of its handler" {
@@ -252,13 +298,13 @@ test "a failing config or state request logs the error with the message of its h
     try app.start();
     defer app.stop();
     try app.queueFailingTask("get-config", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting config value") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error getting config value") != null);
     try app.queueFailingTask("set-config", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting config value") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error setting config value") != null);
     try app.queueFailingTask("get-state", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error getting state value") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error getting state value") != null);
     try app.queueFailingTask("set-state", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting state value") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error setting state value") != null);
 }
 
 test "config and state requests that succeed log nothing to the error output" {
@@ -269,7 +315,7 @@ test "config and state requests that succeed log nothing to the error output" {
     allocator.free(try app.requestOk("set-state", "{\"key\":\"lastFolder\",\"value\":\"/photos\"}"));
     allocator.free(try app.requestOk("get-state", "\"lastFolder\""));
     allocator.free(try app.requestOk("get-config", "\"theme\""));
-    try std.testing.expectEqual(@as(usize, 0), app.console_err.written().len);
+    try std.testing.expectEqual(@as(usize, 0), (try app.consoleErr()).len);
 }
 
 test "reset-app-storage on desktop empties the settings and cache directories and leaves the app's data directory, which holds the default database, alone" {
@@ -278,10 +324,8 @@ test "reset-app-storage on desktop empties the settings and cache directories an
     defer app.stop();
     const allocator = std.testing.allocator;
     const io = std.testing.io;
-    // The cache directory is pointed into the test's own directory, or the reset would empty the developer's real one.
-    const cache_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "cache" });
-    defer allocator.free(cache_dir);
-    try app.environ_map.put("PHOTOSPHERE_CACHE_DIR", cache_dir);
+    // TestApp points the cache directory into the test's own directory, or the reset would empty the developer's real one.
+    const cache_dir = app.environ_map.get("PHOTOSPHERE_CACHE_DIR").?;
     const config_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "config" });
     defer allocator.free(config_dir);
     const settings_path = try std.fs.path.join(allocator, &.{ config_dir, "databases.toml" });
@@ -312,10 +356,10 @@ test "reset-app-storage on desktop empties the settings and cache directories an
         },
     });
     defer allocator.free(message);
-    app.core.postMessage(message);
+    app.native_app.sendMessage(std.testing.allocator, message);
 
-    try app.shell.expectMessageContaining("\"taskId\":\"reset-1\",\"status\":\"succeeded\"");
-    try app.shell.expectMessageContaining("\"entriesRemoved\":2}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"reset-1\",\"status\":\"succeeded\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"entriesRemoved\":2}");
     var config_contents = try std.Io.Dir.cwd().openDir(io, config_dir, .{
         .iterate = true,
     });

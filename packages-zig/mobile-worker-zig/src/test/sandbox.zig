@@ -54,7 +54,7 @@ pub const FixedUuidGenerator = struct {
 //
 // Drops a message: the handlers under test send none.
 //
-fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
     _ = context;
     _ = message;
 }
@@ -72,8 +72,8 @@ pub const Sandbox = struct {
     // The absolute path of the temporary directory.
     tempDir: []const u8,
 
-    // The directory the whole test program owns, which holds the config directory the sandbox puts back.
-    processDir: []const u8,
+    // The test's environment, freed when the sandbox is.
+    environment: *test_environment.TestEnvironment,
 
     // The working directory before the test changed it.
     previousCwd: []const u8,
@@ -97,7 +97,7 @@ pub const Sandbox = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         self.io = std.testing.io;
         // The environment the storage layer reads its config directory, vault and credentials from.
-        self.processDir = try test_environment.setupEnvironment(self.io);
+        self.environment = try test_environment.setupEnvironment(self.io);
         const allocator = self.arena.allocator();
         self.previousCwd = try std.process.currentPathAlloc(self.io, allocator);
         self.tempDir = try temp_dirs.makeTempDir(allocator, self.io, "mobile-worker");
@@ -121,12 +121,7 @@ pub const Sandbox = struct {
     //
     pub fn deinit(self: *Sandbox) void {
         self.mutedLog.uninstall();
-        const processConfigDir = std.fs.path.join(self.arena.allocator(), &.{ self.processDir, "config" }) catch {
-            @panic("The config directory could not be put back after a test.");
-        };
-        test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", processConfigDir) catch {
-            @panic("The config directory could not be put back after a test.");
-        };
+        self.environment.deinit();
         std.process.setCurrentPath(self.io, self.previousCwd) catch {
             @panic("The working directory could not be put back after a test.");
         };

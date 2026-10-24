@@ -20,6 +20,9 @@ const config = @import("config-zig");
 const Core = ziggy.core.Core;
 const json = ziggy.json;
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 const log = &utils.log.log;
 
@@ -38,12 +41,12 @@ const DEFAULT_NEWS_URL = "https://raw.githubusercontent.com/ashleydavis/photosph
 // The body of checkForUpdate inside its try block: fetches the latest release and tells the page about it when it is newer than the
 // running version and the user has not been told about it.
 //
-fn announceUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_version: []const u8) !void {
-    const response = try node_api.fetch.fetch(arena, io, LATEST_RELEASE_URL);
+fn announceUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, running_version: []const u8) !void {
+    const response = try node_api.fetch.fetch(allocator, io, LATEST_RELEASE_URL);
     if (!response.ok) {
         return;
     }
-    const data = std.json.parseFromSliceLeaky(std.json.Value, arena, response.body, .{}) catch |err| {
+    const data = std.json.parseFromSliceLeaky(std.json.Value, allocator, response.body, .{}) catch |err| {
         return utils.errors.throwError("The latest release could not be read ({s}).", .{@errorName(err)});
     };
     if (data == .null) {
@@ -59,14 +62,14 @@ fn announceUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_ver
     if (std.mem.eql(u8, latest_version, running_version)) {
         return;
     }
-    const last_shown = try node_api.news_state.getLastShownUpdateVersion(arena, io);
+    const last_shown = try node_api.news_state.getLastShownUpdateVersion(allocator, io);
     if (last_shown) |shown_version| {
         if (std.mem.eql(u8, shown_version, latest_version)) {
             return;
         }
     }
-    try events.sendUpdateAvailable(core, arena, latest_version);
-    log.info(try std.fmt.allocPrint(arena, "Showed update notification: v{s}", .{latest_version}));
+    try events.sendUpdateAvailable(sink, io, allocator, latest_version);
+    log.info(try std.fmt.allocPrint(allocator, "Showed update notification: v{s}", .{latest_version}));
 }
 
 //
@@ -82,24 +85,24 @@ fn announceUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_ver
 // The core has no window to be missing, and an event sent while the page is not there is the native app's to hold or drop. The message
 // of a reply that is not JSON is a sentence plus the parser's error name, and the message of a network failure is the Zig error name.
 //
-pub fn checkForUpdate(core: *Core, arena: std.mem.Allocator, io: std.Io, running_version: []const u8) !void {
+pub fn checkForUpdate(sink: anytype, allocator: std.mem.Allocator, io: std.Io, running_version: []const u8) !void {
     if (std.mem.eql(u8, running_version, "dev") or std.mem.indexOf(u8, running_version, "nightly") != null) {
         return;
     }
     if (test_mode.isTestMode() and test_mode.envValue("PHOTOSPHERE_FORCE_UPDATE_CHECK") == null) {
         return;
     }
-    announceUpdate(core, arena, io, running_version) catch |err| {
-        log.info(try std.fmt.allocPrint(arena, "Update check skipped: {s}", .{utils.errors.errorMessage(err)}));
+    announceUpdate(sink, allocator, io, running_version) catch |err| {
+        log.info(try std.fmt.allocPrint(allocator, "Update check skipped: {s}", .{utils.errors.errorMessage(err)}));
     };
 }
 
 //
 // The body of checkForNews inside its try block: fetches the feed and tells the page about the first item it has not shown.
 //
-fn announceNews(core: *Core, arena: std.mem.Allocator, io: std.Io, news_url: []const u8) !void {
-    const items = try node_api.news_fetcher.fetchNews(arena, io, news_url);
-    const shown_ids = try node_api.news_state.getShownNewsIds(arena, io);
+fn announceNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io, news_url: []const u8) !void {
+    const items = try node_api.news_fetcher.fetchNews(allocator, io, news_url);
+    const shown_ids = try node_api.news_state.getShownNewsIds(allocator, io);
     var next_item: ?node_api.news_fetcher.INewsItem = null;
     for (items) |item| {
         var already_shown = false;
@@ -117,7 +120,7 @@ fn announceNews(core: *Core, arena: std.mem.Allocator, io: std.Io, news_url: []c
     const item = next_item orelse {
         return;
     };
-    try events.sendShowNotification(core, arena, .{
+    try events.sendShowNotification(sink, io, allocator, .{
         .message = item.message,
         .color = if (item.color) |color| (if (color.len > 0) color else "primary") else "primary",
         .duration = item.duration orelse 0,
@@ -131,7 +134,7 @@ fn announceNews(core: *Core, arena: std.mem.Allocator, io: std.Io, news_url: []c
         } else null,
         .newsId = item.id,
     });
-    log.info(try std.fmt.allocPrint(arena, "Showed news notification: {s}", .{item.id}));
+    log.info(try std.fmt.allocPrint(allocator, "Showed news notification: {s}", .{item.id}));
 }
 
 //
@@ -144,57 +147,66 @@ fn announceNews(core: *Core, arena: std.mem.Allocator, io: std.Io, news_url: []c
 //
 // The core has no window to be missing. The message of a network failure is the Zig error name.
 //
-pub fn checkForNews(core: *Core, arena: std.mem.Allocator, io: std.Io) !void {
+pub fn checkForNews(sink: anytype, allocator: std.mem.Allocator, io: std.Io) !void {
     if (test_mode.isTestMode() and test_mode.envValue("PHOTOSPHERE_NEWS_URL") == null) {
         return;
     }
     const news_url = test_mode.envValue("PHOTOSPHERE_NEWS_URL") orelse DEFAULT_NEWS_URL;
-    announceNews(core, arena, io, news_url) catch |err| {
-        log.info(try std.fmt.allocPrint(arena, "News check skipped: {s}", .{utils.errors.errorMessage(err)}));
+    announceNews(sink, allocator, io, news_url) catch |err| {
+        log.info(try std.fmt.allocPrint(allocator, "News check skipped: {s}", .{utils.errors.errorMessage(err)}));
     };
 }
 
 //
 // check-for-update: no payload. Runs checkForUpdate for the running build, as a task because the check waits on the network.
 //
-pub fn checkForUpdateTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+pub fn checkForUpdateTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    _ = timers;
     _ = data;
-    const core = main_state.fromContext(context).core;
-    try checkForUpdate(core, context.arena, context.io(), config.version);
-    return try context.arena.dupe(u8, "null");
+    try checkForUpdate(services, allocator, io, config.version);
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // check-for-news: no payload. Runs checkForNews, as a task because the check waits on the network.
 //
-pub fn checkForNewsTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+pub fn checkForNewsTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    _ = timers;
     _ = data;
-    try checkForNews(main_state.fromContext(context).core, context.arena, context.io());
-    return try context.arena.dupe(u8, "null");
+    try checkForNews(services, allocator, io);
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // mark-update-shown: the payload is the version of the update the user has been shown. Records it as the last one shown.
 //
-fn markUpdateShown(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn markUpdateShown(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The request needs the version of the update that was shown.", .{});
     }
-    try node_api.news_state.setLastShownUpdateVersion(context.arena, context.io(), data.string);
-    log.info(try std.fmt.allocPrint(context.arena, "Marked update notification as shown: v{s}", .{data.string}));
-    return try context.arena.dupe(u8, "null");
+    try node_api.news_state.setLastShownUpdateVersion(allocator, io, data.string);
+    log.info(try std.fmt.allocPrint(allocator, "Marked update notification as shown: v{s}", .{data.string}));
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // mark-news-shown: the payload is the id of the news item the user has been shown. Adds it to the ones shown.
 //
-fn markNewsShown(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn markNewsShown(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The request needs the id of the news item that was shown.", .{});
     }
-    try node_api.news_state.addShownNewsIds(context.arena, context.io(), &[_][]const u8{data.string});
-    log.info(try std.fmt.allocPrint(context.arena, "Marked news notification as shown: {s}", .{data.string}));
-    return try context.arena.dupe(u8, "null");
+    try node_api.news_state.addShownNewsIds(allocator, io, &[_][]const u8{data.string});
+    log.info(try std.fmt.allocPrint(allocator, "Marked news notification as shown: {s}", .{data.string}));
+    return try allocator.dupe(u8, "null");
 }
 
 //
@@ -211,12 +223,14 @@ pub const markNewsShownHandler = logExceptions(markNewsShown, "Error marking new
 // mark-update-shown: the data is the version of the update that was shown, answered by the mark-update-shown task. The response
 // is null.
 //
-pub fn markUpdateShownMessageHandler(core: *Core, arena: std.mem.Allocator, version: []const u8) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn markUpdateShownMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, version: []const u8) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "mark-update-shown",
-            .data = try json.stringify(arena, version),
+            .data = try json.stringify(allocator, version),
         },
     };
 }
@@ -224,12 +238,14 @@ pub fn markUpdateShownMessageHandler(core: *Core, arena: std.mem.Allocator, vers
 //
 // mark-news-shown: the data is the id of the news item that was shown, answered by the mark-news-shown task. The response is null.
 //
-pub fn markNewsShownMessageHandler(core: *Core, arena: std.mem.Allocator, news_id: []const u8) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn markNewsShownMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, news_id: []const u8) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "mark-news-shown",
-            .data = try json.stringify(arena, news_id),
+            .data = try json.stringify(allocator, news_id),
         },
     };
 }

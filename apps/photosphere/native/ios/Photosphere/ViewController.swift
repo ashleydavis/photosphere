@@ -5,7 +5,7 @@
 import UIKit
 import ZiggyNativeIOS
 
-// Hosts Ziggy's web view as its whole view.
+// Shows Ziggy's web view as its whole view.
 final class ViewController: UIViewController {
     // Ziggy's bridge, once the view has loaded.
     private(set) var bridge: ZiggyBridge?
@@ -22,12 +22,12 @@ final class ViewController: UIViewController {
         fatalError("ViewController is made in code")
     }
 
-    // Makes the web view the controller's view, and gives the bridge what answers the core's host requests.
+    // Makes the web view the controller's view, and gives the bridge the handler of the core's native calls.
     override func loadView() {
         let newBridge = ZiggyBridge(frame: UIScreen.main.bounds)
         bridge = newBridge
 
-        let exportRequests = ExportHostRequests(storageRoot: newBridge.dataDirectory, presenter: { [weak self] in
+        let exportRequests = ExportNativeCalls(storageRoot: newBridge.dataDirectory, presenter: { [weak self] in
             self
         })
         do {
@@ -36,8 +36,8 @@ final class ViewController: UIViewController {
         catch {
             fatalError("could not remove the export temp files an earlier run left: \(error)")
         }
-        let mediaLibraryRequests = MediaLibraryHostRequests(exportRoot: URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
-        newBridge.setHostRequestHandler(PhotosphereHostRequests(otherHandlers: [
+        let mediaLibraryRequests = MediaLibraryNativeCalls(exportRoot: URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
+        newBridge.setNativeCallHandler(PhotosphereNativeCalls(otherHandlers: [
             "exportFile": exportRequests,
             "exportFiles": exportRequests,
             "exportTempFolder": exportRequests,

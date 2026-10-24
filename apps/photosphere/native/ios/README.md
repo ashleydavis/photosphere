@@ -1,11 +1,11 @@
 # iOS native app
 
-The iOS native app is a Swift app that hosts a `WKWebView` and passes messages between the page and the Zig core library.
+The iOS native app is a Swift app that runs a `WKWebView` and passes messages between the page and the Zig core library.
 
 ## What it does
 
 - Injects the `window.ziggy` script with a `WKUserScript`, receives page messages in a `WKScriptMessageHandler`, calls `ziggy_create` and `ziggy_post_message` through Ziggy's `ZiggyNativeIOS` package (taken from Ziggy's repository, see [Photosphere on Ziggy](../../../../docs/photosphere-on-ziggy.md)), and delivers Zig messages to the page on the main thread.
-- Provides what iOS forces, each as a host request the core makes by name and answers in `PhotosphereHostRequests.swift` or the file it hands the method to: the photo permission and the Photos framework (`MediaLibraryHostRequests.swift`), export and share with `UIActivityViewController` (`ExportHostRequests.swift`), the Keychain (`SecureStore.swift`), the connection type (`NetworkHost.swift`), the hold that keeps the app running during a background pass (`BackgroundWakeHold.swift`). The core makes the decisions.
+- Provides what iOS forces, each as a native call the core makes by name, handled in `PhotosphereNativeCalls.swift` or the file it hands the method to: the photo permission and the Photos framework (`MediaLibraryNativeCalls.swift`), export and share with `UIActivityViewController` (`ExportNativeCalls.swift`), the Keychain (`SecureStore.swift`), the connection type (`NetworkHost.swift`), the hold that keeps the app running during a background pass (`BackgroundWakeHold.swift`). The core makes the decisions.
 - Runs the three background processing tasks (auto-import, background-sync, background-prefetch) in `BackgroundPasses.swift`. Each is registered at launch and scheduled when the app leaves the screen while the core's background loops are running. When the system runs one, the native app asks the core to start its background work, and when the system's time is up it cancels the loop that task stands for.
 - Allows cleartext loopback to the asset server through the App Transport Security setting in `Info.plist`.
 

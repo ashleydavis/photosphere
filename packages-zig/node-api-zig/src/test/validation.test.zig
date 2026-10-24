@@ -18,11 +18,12 @@ const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 test "a zero-byte file is not valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
@@ -38,11 +39,12 @@ test "a zero-byte file is not valid" {
 test "an image the media tools can measure is valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, runner, "../test/test.png", "image/png", .{
         .length = 100,
@@ -54,10 +56,11 @@ test "a HEIC the bundled media tools can measure is valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     // ImageMagick has no HEIC support, and a machine's own ffprobe may be too old to read a HEIC's tile grid, so the bundled tools
     // are used, as the app does.
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
     try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, mediaTools.runner(), "../test/heic/tiled.heic", "image/heic", .{
@@ -69,12 +72,13 @@ test "a HEIC the bundled media tools can measure is valid" {
 test "an image the media tools cannot read is not valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const dir = try temp_dirs.makeTempDir(allocator, io, "validation");
     defer temp_dirs.removeTempDir(io, dir);
     const filePath = try std.fs.path.join(allocator, &.{ dir, "broken.png" });
@@ -94,11 +98,12 @@ test "an image the media tools cannot read is not valid" {
 test "a video the media tools can measure is valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, runner, "../test/multiple-files/test.mp4", "video/mp4", .{
         .length = 100,
@@ -109,11 +114,12 @@ test "a video the media tools can measure is valid" {
 test "a Photoshop file is let through without being checked" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, runner, "no-such-file.psd", "image/vnd.adobe.photoshop", .{
         .length = 10,
@@ -124,11 +130,12 @@ test "a Photoshop file is let through without being checked" {
 test "a file that is neither an image nor a video is valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     try std.testing.expectEqual(true, try validateFile(arena.allocator(), io, runner, "no-such-file.bin", "application/octet-stream", .{
         .length = 10,
@@ -164,12 +171,13 @@ fn validateCapturing(allocator: std.mem.Allocator, io: std.Io, runner: InProcess
 test "a content type that only starts with image or video gets no file info and is not valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     // getFileInfo only knows "image/" and "video/" types.
     const image = try validateCapturing(allocator, io, runner, "../test/test.png", "imagery");
@@ -184,12 +192,13 @@ test "a content type that only starts with image or video gets no file info and 
 test "a video the media tools cannot read is not valid" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
 
     const dir = try temp_dirs.makeTempDir(allocator, io, "validation-video");
     defer temp_dirs.removeTempDir(io, dir);

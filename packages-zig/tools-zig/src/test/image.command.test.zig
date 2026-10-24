@@ -112,7 +112,7 @@ test "verifyImageMagick reports a magick that fails with no install advice, and 
     try std.testing.expectEqualStrings("-version", try failing.argumentsOf("magick"));
 
     // Nothing is remembered from the failure, so the next call with the built-in ImageMagick runs it and finds it.
-    var mediaTools = try MediaTools.init(io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const builtIn = try tools.Image.verifyImageMagick(allocator, io, mediaTools.runner());
     try std.testing.expect(builtIn.available);

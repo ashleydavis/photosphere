@@ -69,13 +69,13 @@ pub const ProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, currentlyScanning: ?[]const u8) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, currentlyScanning: ?[]const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: ProgressCallback, currentlyScanning: ?[]const u8) void {
-        self.function(self.context, currentlyScanning);
+    pub fn call(self: ProgressCallback, io: std.Io, currentlyScanning: ?[]const u8) void {
+        self.function(self.context, io, currentlyScanning);
     }
 };
 
@@ -1099,7 +1099,7 @@ pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, databasePath:
 // (Zig: resolveStorageCredentials is given null for its optional encryptionKey and s3Key, and the LazyOriginStorage is allocated
 // with the allocator and keeps it.)
 //
-pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.host_requester.IHostRequester) !IStorage {
+pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.native_caller.INativeCaller) !IStorage {
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
 
     const config = try api.database_config.loadDatabaseConfig(allocator, io, created.rawStorage);
@@ -1133,7 +1133,7 @@ pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, datab
 // compare the local database against its origin, and a local read that falls back to the origin
 // makes the two look identical when they are not.
 //
-pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.host_requester.IHostRequester) !IStorage {
+pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.native_caller.INativeCaller) !IStorage {
     const config = try api.database_config.loadDatabaseConfig(allocator, io, localRawStorage);
     const origin = configOrigin(config) orelse {
         return localStorage;
@@ -1188,7 +1188,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
     databasePath: []const u8,
 
     // Reaches the phone's keychain for the credentials, or null where there is no phone shell.
-    host: ?utils.host_requester.IHostRequester,
+    host: ?utils.native_caller.INativeCaller,
 
     //
     // Opens the storage for the path and asks whether it holds a merkle tree.
@@ -1208,7 +1208,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
 // an automatic sync may run is a separate question, decided by computeSyncAllowed from the platform's
 // reported network status.
 //
-pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.host_requester.IHostRequester) !bool {
+pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !bool {
     // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
     // from the database's own config, so the existence check and the actual load agree on what is
     // reachable rather than probing with no credentials.
@@ -1227,12 +1227,22 @@ pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePat
     // where a connection is accepted and then answers nothing, which is what a phone reaching a
     // stopped server through an `adb reverse` forward gets, and is why this was invisible on an
     // emulator, where the same server refuses the connection at once.
+    //
+    // TypeScript races the check against a timer. A task runs only on its own thread, so here the S3 requests the check makes are
+    // given the limit instead, and one that reaches it is cancelled.
     var operation: OpenAndCheckMerkleTreeOperation = .{
         .allocator = allocator,
         .databasePath = databasePath,
         .host = host,
     };
-    return retryOnce(io, &operation, DATABASE_REACHABLE_TIMEOUT);
+    storage_zig.s3_client.setRequestTimeout(DATABASE_REACHABLE_TIMEOUT);
+    defer storage_zig.s3_client.setRequestTimeout(null);
+    return retryOnce(io, &operation, DATABASE_REACHABLE_TIMEOUT) catch |err| {
+        if (storage_zig.s3_client.takeRequestTimedOut()) {
+            return errors.throwError("Operation timed out after {d}ms: {s}", .{ DATABASE_REACHABLE_TIMEOUT, OpenAndCheckMerkleTreeOperation.source });
+        }
+        return err;
+    };
 }
 
 //

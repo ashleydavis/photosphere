@@ -12,6 +12,9 @@ const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const lan_share = api.lan_share;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
@@ -58,8 +61,10 @@ fn resolveFromChoices(context: ?*anyopaque, allocator: std.mem.Allocator, secret
 //
 // A payload of any other type is an error, because replying as if something had been imported would hide the failure.
 //
-fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const arena = context.arena;
+fn importSharePayload(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
+    const arena = allocator;
     const payload = if (data == .object) data.object.get("payload") else null;
     const payload_value = payload orelse {
         return utils.errors.throwError("The request needs the payload that was shared.", .{});
@@ -67,8 +72,8 @@ fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]c
     const payload_type = json.getString(payload_value, "type") orelse {
         return utils.errors.throwError("The shared payload does not say whether it is a database or a secret.", .{});
     };
-    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
-    const host = context.hostRequester(&requester_storage);
+    var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
+    const native_caller = services.nativeCaller(&requester_storage);
     if (std.mem.eql(u8, payload_type, "database")) {
         const database_payload = try std.json.parseFromValueLeaky(lan_share.IDatabaseSharePayload, arena, payload_value, .{
             .ignore_unknown_fields = true,
@@ -80,8 +85,8 @@ fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]c
             .context = &choices,
             .function = resolveFromChoices,
         };
-        const entry = try api.lan_share_receive.importDatabasePayload(arena, context.io(), database_payload, resolver, host);
-        try node_api.databases_config.addDatabaseEntry(arena, context.io(), .{
+        const entry = try api.lan_share_receive.importDatabasePayload(arena, io, database_payload, resolver, native_caller);
+        try node_api.databases_config.addDatabaseEntry(arena, io, .{
             .name = entry.name,
             .description = entry.description,
             .path = entry.path,
@@ -99,7 +104,7 @@ fn importSharePayload(context: *TaskContext, data: std.json.Value) anyerror!?[]c
         const save_name = json.getString(payload_value, "saveName") orelse {
             return utils.errors.throwError("The shared secret needs a name to be saved under.", .{});
         };
-        try api.lan_share_receive.importSecretPayload(arena, context.io(), secret_payload, save_name, host);
+        try api.lan_share_receive.importSecretPayload(arena, io, secret_payload, save_name, native_caller);
         return try arena.dupe(u8, "null");
     }
     return utils.errors.throwError("The shared payload is of a type that cannot be imported.", .{});
@@ -123,12 +128,14 @@ pub const ImportSharePayloadRequest = struct {
 //
 // import-share-payload: answered by the import-share-payload task. The response is null.
 //
-pub fn importSharePayloadMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ImportSharePayloadRequest) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn importSharePayloadMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: ImportSharePayloadRequest) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "import-share-payload",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }

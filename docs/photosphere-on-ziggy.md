@@ -4,14 +4,14 @@ The Photosphere App is built on [Ziggy](https://github.com/ashleydavis/ziggy), t
 
 ## Taking Ziggy
 
-Ziggy is not part of this repository. Photosphere takes every part of it from Ziggy's repository on GitHub, pinned to one version tag:
+Ziggy is not part of this repository. Photosphere takes every part of it from a checkout of [Ziggy's repository](https://github.com/ashleydavis/ziggy) in the directory beside this one, named `ziggy`:
 
-- The Zig package: the `ziggy` dependency in `build.zig.zon` (`git+https://github.com/ashleydavis/ziggy.git#<tag>` and its hash). It gives the module `ziggy`, which holds Ziggy's core and its task queue (`@import("ziggy").task_queue`), and the build functions `build.zig` uses to build the app's core and its Linux and Windows native apps.
-- The frontend package: `ziggy` in `apps/photosphere-frontend/package.json` (`git+https://github.com/ashleydavis/ziggy.git#<tag>`).
-- The Android native app: the `sourceControl` block in `apps/photosphere/native/android/settings.gradle` and the dependency `dev.ziggy:ziggy-native-android:<tag>` in `apps/photosphere/native/android/app/build.gradle`.
-- The Apple native apps: the remote Swift package `https://github.com/ashleydavis/ziggy` at the exact version in the Xcode projects under `apps/photosphere/native/ios` and `apps/photosphere/native/macos`, with the products `ZiggyNativeIOS` and `ZiggyNativeMacOS`.
+- The Zig package: the `ziggy` dependency in `build.zig.zon` (`.path = "../ziggy"`). It gives the module `ziggy`, which holds Ziggy's core and its task queue (`@import("ziggy").task_queue`), and the build functions `build.zig` uses to build the app's core and its Linux and Windows native apps.
+- The frontend package: `ziggy` in `apps/photosphere-frontend/package.json` (`file:../../../ziggy`).
+- The Android native app: the `includeBuild` in `apps/photosphere/native/android/settings.gradle`, which builds Ziggy's Android native app from the checkout in place of the dependency `dev.ziggy:ziggy-native-android` in `apps/photosphere/native/android/app/build.gradle`.
+- The Apple native apps: the local Swift package `../../../../../ziggy` in the Xcode projects under `apps/photosphere/native/ios` and `apps/photosphere/native/macos`, with the products `ZiggyNativeIOS` and `ZiggyNativeMacOS`.
 
-Every one of these names the same version. To move to a newer tag, change all of them together: put the new tag in each URL and version, run `zig fetch "git+https://github.com/ashleydavis/ziggy.git#<tag>"` for the new hash in `build.zig.zon`, run `bun install` to update `bun.lock`, and run the whole test set.
+Every one of these takes the same checkout. After changing Ziggy, run `bun install` to update `bun.lock` and run the whole test set.
 
 Within one program, the app, `photosphere-core` and every package in `packages-zig` take Ziggy's core from the same `dependency` call in `build.zig`, so they share one copy of the task queue and its registries. Ziggy's task queue is written with helpers that Photosphere's `utils-zig` and `node-utils-zig` also have (the log, errors, the console, the uuid generators, the timestamp providers, the host requester, the process environment, running tools and a few more). Those helpers keep state of their own and their types pass between the task queue and Photosphere's code, so there must be one copy of each: the index files of `utils-zig` and `node-utils-zig` export Ziggy's (`@import("ziggy").task_queue.utils`) under the same names, and the files of those helpers in the two packages are not used.
 

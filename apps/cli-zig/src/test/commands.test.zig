@@ -1448,7 +1448,7 @@ fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.proces
 // links the same libraries as psi.
 //
 fn builtInToolsStatus(allocator: std.mem.Allocator) !tools.ToolsStatus {
-    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     return tools.verifyTools(allocator, std.testing.io, mediaTools.runner());
 }

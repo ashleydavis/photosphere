@@ -1,3 +1,4 @@
+const std = @import("std");
 const mcp_zig = @import("mcp-zig");
 const protocol = mcp_zig.protocol;
 const types = @import("../types.zig");
@@ -18,15 +19,15 @@ const registerVerifyDatabaseTool = @import("verify-database.zig").registerVerify
 // Registers every CLI MCP tool against the given server. Kept apart from the
 // command entry point, which stays focused on transport, lifecycle, and state.
 //
-pub fn registerAllMcpTools(server: *McpServer, toolContext: *IMcpToolContext) !void {
-    try registerListDatabasesTool(server);
-    try registerOpenDatabaseTool(server, toolContext);
-    try registerCloseDatabaseTool(server, toolContext);
-    try registerGetDatabaseSummaryTool(server, toolContext);
-    try registerListMediaFilesTool(server, toolContext);
-    try registerGetMediaFileInfoTool(server, toolContext);
-    try registerSearchMediaFilesTool(server, toolContext);
-    try registerSaveMediaFileTool(server, toolContext);
-    try registerImportMediaFilesTool(server, toolContext);
-    try registerVerifyDatabaseTool(server, toolContext);
+pub fn registerAllMcpTools(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
+    try registerListDatabasesTool(server, allocator);
+    try registerOpenDatabaseTool(server, allocator, toolContext);
+    try registerCloseDatabaseTool(server, allocator, toolContext);
+    try registerGetDatabaseSummaryTool(server, allocator, toolContext);
+    try registerListMediaFilesTool(server, allocator, toolContext);
+    try registerGetMediaFileInfoTool(server, allocator, toolContext);
+    try registerSearchMediaFilesTool(server, allocator, toolContext);
+    try registerSaveMediaFileTool(server, allocator, toolContext);
+    try registerImportMediaFilesTool(server, allocator, toolContext);
+    try registerVerifyDatabaseTool(server, allocator, toolContext);
 }

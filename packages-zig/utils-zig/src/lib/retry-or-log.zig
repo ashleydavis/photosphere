@@ -1,8 +1,8 @@
 const std = @import("std");
-const retry_module = @import("retry.zig");
-const log_module = @import("ziggy").task_queue.utils.log;
-const sleep_module = @import("ziggy").task_queue.utils.sleep;
-const OperationResult = retry_module.OperationResult;
+const retry = @import("retry.zig");
+const log = @import("ziggy").task_queue.utils.log;
+const sleep = @import("ziggy").task_queue.utils.sleep;
+const OperationResult = retry.OperationResult;
 
 //
 // Retries a failing operation a number of times. If all retries fail,
@@ -21,14 +21,14 @@ pub fn retryOrLog(io: std.Io, operation: anytype, errorMessage: []const u8, maxA
         }
         else |err| {
             if (attemptsLeft >= 1) {
-                log_module.log.exception("Operation failed, will retry.", err);
+                log.log.exception("Operation failed, will retry.", err);
 
-                try sleep_module.sleep(io, waitTime);
+                try sleep.sleep(io, waitTime);
                 waitTime *= waitTimeScale;
             }
             else {
                 const message = if (errorMessage.len > 0) errorMessage else "Operation failed after all retries";
-                log_module.log.exception(message, err);
+                log.log.exception(message, err);
                 return null;
             }
         }

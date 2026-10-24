@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -19,7 +20,7 @@ const THUMB_PATH = "thumb/89171cd9-a652-4047-b869-1154bf2c95a1";
 //
 // Ignores task events.
 //
-fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
     _ = context;
     _ = message;
 }
@@ -28,7 +29,6 @@ fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
 // Runs the handler for the tree leaf of a file of a database.
 //
 fn runHandler(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8, fileName: []const u8, adjust: *const fn (*SortNode) void) !verify_worker.IVerifyFileResult {
-    _ = try test_environment.setupEnvironment(io);
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const tree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
     const leaf = merkle_tree_zig.merkle_tree.findItemInTree(tree.sort, fileName).?;
@@ -38,7 +38,7 @@ fn runHandler(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8,
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     var context = TaskContext.init(uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", "task", .{ .context = null, .function = ignoreMessage }, 10);
     const data = try verify_worker.verifyFileDataToJson(allocator, .{ .node = node, .storageDescriptor = .{ .databasePath = databaseDir }, .options = .{ .full = false } });
-    const output = try verify_worker.verifyFileHandler(allocator, io, data, context.taskContext());
+    const output = try verify_worker.verifyFileHandler(allocator, io, test_timers.timers(), data, context.taskContext());
     return std.json.parseFromValueLeaky(verify_worker.IVerifyFileResult, allocator, output, .{});
 }
 
@@ -65,6 +65,8 @@ fn changeSizeAndTimestamp(node: *SortNode) void {
 }
 
 test "verifyFileHandler reports unmodified, removed and modified files" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -103,6 +105,8 @@ fn dropContentHash(node: *SortNode) void {
 }
 
 test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whose node has no content hash" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -116,6 +120,8 @@ test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whos
 }
 
 test "verifyFileHandler does not hash a file whose size and timestamp are unchanged" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -142,6 +148,8 @@ test "verifyFileHandler does not hash a file whose size and timestamp are unchan
 }
 
 test "verifyFileDataToJson and verifyFileDataFromJson round trip a leaf" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -165,6 +173,8 @@ test "verifyFileDataToJson and verifyFileDataFromJson round trip a leaf" {
 }
 
 test "toLocaleString formats dates like Date.toLocaleString in en-US" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -174,6 +184,8 @@ test "toLocaleString formats dates like Date.toLocaleString in en-US" {
 }
 
 test "reports removed when the file no longer exists in storage" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -190,6 +202,8 @@ test "reports removed when the file no longer exists in storage" {
 }
 
 test "reports unmodified when size and timestamp are unchanged" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -221,6 +235,8 @@ test "reports unmodified when size and timestamp are unchanged" {
 }
 
 test "reports modified when metadata and content hash both changed" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -242,6 +258,8 @@ test "reports modified when metadata and content hash both changed" {
 }
 
 test "reports unmodified when metadata changed but content hash matches" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -257,6 +275,8 @@ test "reports unmodified when metadata changed but content hash matches" {
 }
 
 test "verifyFileDataFromJson reads a value with no node and no storage descriptor as an empty leaf" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -281,6 +301,8 @@ fn dropTimestamp(node: *SortNode) void {
 }
 
 test "verifyFileHandler fails like Bun for a changed file whose node has no timestamp" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -311,7 +333,7 @@ const VerboseRecordingLog = struct {
     // Makes this the global log.
     //
     fn install(self: *VerboseRecordingLog) void {
-        self.previousLog = utils.log.log;
+        self.previousLog = utils.log.currentLog();
         utils.log.setLog(.{
             .ptr = self,
             .vtable = &.{
@@ -391,6 +413,8 @@ const VerboseRecordingLog = struct {
 };
 
 test "verifyFileHandler logs the reasons a file was modified when verbose logging is on" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

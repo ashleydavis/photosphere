@@ -20,7 +20,7 @@ pub const TestTaskContext = struct {
     //
     // Drops a message.
     //
-    fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+    fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         _ = context;
         _ = message;
     }

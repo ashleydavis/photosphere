@@ -72,7 +72,7 @@ const TestEnvironment = struct {
         self.psiEnviron = try helpers.cliEnvironment(allocator, self.psiRoot);
         try self.psiEnviron.put("PHOTOSPHERE_VAULT_DIR", vaultDir);
         self.environ_map = std.process.Environ.Map.init(allocator);
-        self.mediaTools = try media_tools.MediaTools.init(std.testing.io);
+        self.mediaTools = try media_tools.MediaTools.init();
 
         // The PATH of the process running the tests is kept.
         const parent = try std.testing.environ.createMap(allocator);
@@ -628,7 +628,7 @@ test "initContext creates the session, the worker pool and the cleanup callback"
     try environment.environ_map.put("TEMP", tmpDir);
     try environment.environ_map.put("TEST_TMP_DIR", tmpDir);
     try environment.environ_map.put("NODE_ENV", "testing");
-    const previous = utils.log.log;
+    const previous = utils.log.currentLog();
     defer utils.log.setLog(previous);
     defer node_utils.termination.clearTerminationCallbacks();
     defer task_queue.queue_backend.setQueueBackend(null);
@@ -667,7 +667,7 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows (getProcessTmpDir uses it when PHOTOSPHERE_TMP_DIR is not set).
     try environment.environ_map.put("TMPDIR", tmpDir);
     try environment.environ_map.put("TEMP", tmpDir);
-    const previous = utils.log.log;
+    const previous = utils.log.currentLog();
     defer utils.log.setLog(previous);
     defer node_utils.termination.clearTerminationCallbacks();
     defer task_queue.queue_backend.setQueueBackend(null);
@@ -698,7 +698,7 @@ test "initContext joins the session temporary directory as path.join does" {
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
     try environment.environ_map.put("TMPDIR", tmpDir);
     try environment.environ_map.put("TEMP", tmpDir);
-    const previous = utils.log.log;
+    const previous = utils.log.currentLog();
     defer utils.log.setLog(previous);
     defer node_utils.termination.clearTerminationCallbacks();
     defer task_queue.queue_backend.setQueueBackend(null);

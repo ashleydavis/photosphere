@@ -255,8 +255,7 @@ fn readAndHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, file
 }
 
 //
-// Reads and hashes one file of a batch. Runs concurrently with the rest of its batch, with its own allocator
-// because the caller's is not shared between threads.
+// Reads and hashes one file of a batch, with its own allocator, which is freed when the file is done.
 //
 const ReadAndHashTask = struct {
     // The storage holding the file.
@@ -293,8 +292,8 @@ const ReadAndHashTask = struct {
 //
 // Builds the files merkle tree from storage: walks only paths that belong in the tree
 // (asset/, display/, thumb/; skips .db/). Hashes each file via storage (logical content
-// when encrypted), upserts into tree, saves once. Reads and hashes up to BATCH_SIZE
-// files in parallel per batch to overlap I/O.
+// when encrypted), upserts into tree, saves once. Reads and hashes the files in batches of
+// BATCH_SIZE, one after another, on the calling thread.
 //
 pub fn buildFilesTree(
     allocator: std.mem.Allocator,
@@ -333,11 +332,10 @@ pub fn buildFilesTree(
             };
         }
 
-        var group: std.Io.Group = .init;
+        // The files of a batch are read and hashed one after another, on the task's own thread.
         for (tasks) |*task| {
-            group.async(io, ReadAndHashTask.run, .{ task, io });
+            task.run(io);
         }
-        try group.await(io);
 
         for (tasks) |*task| {
             if (task.failure) |failure| {

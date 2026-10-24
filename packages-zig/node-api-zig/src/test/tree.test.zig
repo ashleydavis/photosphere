@@ -18,6 +18,8 @@ const merkle_tree = merkle_tree_zig.merkle_tree;
 const errors = utils.errors;
 
 test "merkleTreeExists is false for an empty directory and true for a database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -35,6 +37,8 @@ test "merkleTreeExists is false for an empty directory and true for a database" 
 }
 
 test "loadMerkleTree loads the files tree of a v6 database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -50,6 +54,8 @@ test "loadMerkleTree loads the files tree of a v6 database" {
 }
 
 test "loadMerkleTree returns null when there is no database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -63,6 +69,8 @@ test "loadMerkleTree returns null when there is no database" {
 }
 
 test "saveMerkleTree throws when no tree is provided" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -77,6 +85,8 @@ test "saveMerkleTree throws when no tree is provided" {
 }
 
 test "saveMerkleTree rebuilds a dirty tree and saves it to .db/files.dat" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -102,6 +112,8 @@ test "saveMerkleTree rebuilds a dirty tree and saves it to .db/files.dat" {
 }
 
 test "loadCollectionMerkleTree and loadShardMerkleTree load the BSON trees of a v6 database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -146,7 +158,6 @@ fn addFileToFilesTree(allocator: std.mem.Allocator, io: std.Io, assetStorage: st
 // Creates a new database (files tree only, no committed BSON record) in a new directory.
 //
 fn createEmptyDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !TestDatabase {
-    _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
@@ -174,13 +185,14 @@ const TestDatabase = struct {
 // A copy of test/dbs/v6: a database with a files tree and committed BSON records.
 //
 fn createPopulatedDatabase(allocator: std.mem.Allocator, io: std.Io) !TestDatabase {
-    _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
     return .{ .dir = dir, .assetStorage = opened.storage, .rawStorage = opened.rawStorage };
 }
 
 test "returns undefined when there is no database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -194,6 +206,8 @@ test "returns undefined when there is no database" {
 }
 
 test "returns undefined when the bson database tree is missing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -211,6 +225,8 @@ test "returns undefined when the bson database tree is missing" {
 }
 
 test "returns a 32-byte combined hash when both trees exist" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -231,6 +247,8 @@ test "returns a 32-byte combined hash when both trees exist" {
 }
 
 test "changes when the files tree changes" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -249,6 +267,8 @@ test "changes when the files tree changes" {
 }
 
 test "writes the content hash plus the extra fields while holding the lock" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -278,7 +298,8 @@ test "omits the content hash when the database is empty" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-locked-empty");
     defer temp_dirs.removeTempDir(io, dir);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
@@ -291,6 +312,8 @@ test "omits the content hash when the database is empty" {
 }
 
 test "does nothing when the lock is held by another owner" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -313,6 +336,8 @@ test "does nothing when the lock is held by another owner" {
 }
 
 test "writes the given fields plus the current content hash without acquiring the lock" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -342,7 +367,8 @@ test "omits the content hash when the database is empty and preserves other fiel
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-state-empty");
     defer temp_dirs.removeTempDir(io, dir);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
@@ -367,6 +393,8 @@ fn nowIsoString(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 test "writes lastModifiedAt and the current content hash" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -398,7 +426,8 @@ test "writes lastModifiedAt but no content hash when the database is empty" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-modified-empty");
     defer temp_dirs.removeTempDir(io, dir);
     const opened = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
@@ -411,6 +440,8 @@ test "writes lastModifiedAt but no content hash when the database is empty" {
 }
 
 test "preserves other state fields when stamping" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -431,6 +462,8 @@ test "preserves other state fields when stamping" {
 }
 
 test "isDatabaseEncrypted is true only when the database has the encryption marker" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -559,6 +592,8 @@ const noProgress: node_api.tree.IBuildFilesTreeProgress = .{
 };
 
 test "builds tree from storage when no existing tree" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -589,6 +624,8 @@ test "builds tree from storage when no existing tree" {
 }
 
 test "preserves existing tree id when rebuilding" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -613,6 +650,8 @@ test "preserves existing tree id when rebuilding" {
 }
 
 test "ignores paths under .db/" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -634,6 +673,8 @@ test "ignores paths under .db/" {
 }
 
 test "returns fileCount 0 and filesImported 0 when storage has no content files" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -653,6 +694,8 @@ test "returns fileCount 0 and filesImported 0 when storage has no content files"
 }
 
 test "invokes progressCallback with incrementing count for each file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -676,6 +719,8 @@ test "invokes progressCallback with incrementing count for each file" {
 }
 
 test "saved tree can be loaded and has correct databaseMetadata" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -707,6 +752,8 @@ fn refuseReadStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, f
 }
 
 test "fails with the error of a file it could not read and hash" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

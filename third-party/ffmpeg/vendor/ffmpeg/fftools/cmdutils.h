@@ -29,6 +29,7 @@
 #include "libavfilter/avfilter.h"
 #include "libavformat/avformat.h"
 #include "libswscale/swscale.h"
+#include "fftools_state.h"
 
 #ifdef _WIN32
 #undef main /* We don't want SDL to override our main() */
@@ -44,10 +45,8 @@ extern const char program_name[];
  */
 extern const int program_birth_year;
 
-extern AVDictionary *sws_dict;
-extern AVDictionary *swr_opts;
-extern AVDictionary *format_opts, *codec_opts;
-extern int hide_banner;
+/* Patched (fftools-per-run-state.patch): sws_dict, swr_opts, format_opts, codec_opts and hide_banner are fields of the run's
+ * FFToolsCommon (see fftools_state.h). */
 
 /**
  * Initialize dynamic library loading

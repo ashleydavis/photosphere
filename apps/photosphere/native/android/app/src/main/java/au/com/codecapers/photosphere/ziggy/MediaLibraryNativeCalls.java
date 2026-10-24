@@ -9,9 +9,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
-import dev.ziggy.nativeapp.HostRequestException;
-import dev.ziggy.nativeapp.HostRequestHandler;
-import dev.ziggy.nativeapp.ZiggyShell;
+import dev.ziggy.nativeapp.NativeCallException;
+import dev.ziggy.nativeapp.NativeCallHandler;
+import dev.ziggy.nativeapp.ZiggyNativeApp;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -23,12 +23,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-// Answers the core's requests for the device photo library: mediaLibraryList, mediaLibraryAlbums, mediaLibraryOpen, mediaLibraryClose
+// Handles the core's native calls for the device photo library: mediaLibraryList, mediaLibraryAlbums, mediaLibraryOpen, mediaLibraryClose
 // and mediaLibraryDelete. Automatic import reads the library through these. The library is read through MediaStore. The pure decisions
 // (where a page starts and stops, the cache path an exported item lands on, which types are supported, grouping albums, batching
 // deletions) are in MediaLibrary. The core calls from a worker thread and waits, so a request may block on the system's delete
 // confirmation.
-public final class MediaLibraryHostRequests implements HostRequestHandler {
+public final class MediaLibraryNativeCalls implements NativeCallHandler {
     // Buffer size used when copying a library item into the cache directory.
     private static final int COPY_BUFFER_SIZE = 64 * 1024;
 
@@ -53,17 +53,17 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
     private static final String SORT_NEWEST_FIRST = MediaStore.Files.FileColumns.DATE_ADDED + " DESC, " + MediaStore.Files.FileColumns._ID + " DESC";
 
     private final Context context;
-    private final ZiggyShell shell;
+    private final ZiggyNativeApp nativeApp;
     private final File cacheRoot;
 
-    public MediaLibraryHostRequests(Context context, ZiggyShell shell) {
+    public MediaLibraryNativeCalls(Context context, ZiggyNativeApp nativeApp) {
         this.context = context;
-        this.shell = shell;
+        this.nativeApp = nativeApp;
         this.cacheRoot = context.getCacheDir();
     }
 
     @Override
-    public String handle(String method, String requestJson) throws HostRequestException {
+    public String handle(String method, String requestJson) throws NativeCallException {
         try {
             switch (method) {
                 case "mediaLibraryList": {
@@ -84,20 +84,20 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
                     requireAccess(method);
                     return delete(readIds(new JSONObject(requestJson).getJSONArray("itemIds")));
                 default:
-                    throw new HostRequestException("MediaLibraryHostRequests does not answer \"" + method + "\".");
+                    throw new NativeCallException("MediaLibraryNativeCalls does not answer \"" + method + "\".");
             }
         } catch (JSONException error) {
-            throw new HostRequestException("The request " + method + " was not understood: " + error.getMessage(), error);
+            throw new NativeCallException("The request " + method + " was not understood: " + error.getMessage(), error);
         } catch (SecurityException error) {
-            throw new HostRequestException("The photo library refused " + method + ": " + error.getMessage(), error);
+            throw new NativeCallException("The photo library refused " + method + ": " + error.getMessage(), error);
         }
     }
 
     // A request fails, naming the permission, when the app can see none of the library, because an empty answer would be taken for a
     // library with no photos in it and nothing would be backed up.
-    private void requireAccess(String method) throws HostRequestException {
+    private void requireAccess(String method) throws NativeCallException {
         if (MediaAccessChecker.current(context) == MediaAccess.NONE) {
-            throw new HostRequestException(method + " needs permission to read the photo library, and the app does not have it. Allow access to photos and videos for Photosphere in the phone's settings.");
+            throw new NativeCallException(method + " needs permission to read the photo library, and the app does not have it. Allow access to photos and videos for Photosphere in the phone's settings.");
         }
     }
 
@@ -149,7 +149,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
     }
 
     // How many images and videos the library holds. Needed so a page can say whether it was the last.
-    private int countItems() throws HostRequestException {
+    private int countItems() throws NativeCallException {
         Cursor cursor = context.getContentResolver().query(
             contentUri(),
             new String[] { MediaStore.Files.FileColumns._ID },
@@ -157,7 +157,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
             mediaSelectionArgs(),
             null);
         if (cursor == null) {
-            throw new HostRequestException("The photo library could not be queried.");
+            throw new NativeCallException("The photo library could not be queried.");
         }
         try {
             return cursor.getCount();
@@ -168,7 +168,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
 
     // One page of the library. The offset is carried in the cursor rather than kept here, because the caller persists it between
     // runs and hands back what it was given.
-    private String list(String cursor, int pageSize) throws HostRequestException, JSONException {
+    private String list(String cursor, int pageSize) throws NativeCallException, JSONException {
         int offset = MediaLibrary.offsetFromCursor(cursor);
         int limit = pageSize > 0 ? pageSize : DEFAULT_PAGE_SIZE;
         int totalCount = countItems();
@@ -178,7 +178,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
 
         Cursor queryCursor = queryPage(limit, offset);
         if (queryCursor == null) {
-            throw new HostRequestException("The photo library could not be queried.");
+            throw new NativeCallException("The photo library could not be queried.");
         }
         try {
             int idColumn = queryCursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
@@ -224,7 +224,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
     }
 
     // The albums in the library.
-    private String albums() throws HostRequestException, JSONException {
+    private String albums() throws NativeCallException, JSONException {
         List<String> bucketIds = new ArrayList<String>();
         List<String> bucketNames = new ArrayList<String>();
 
@@ -238,7 +238,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
             mediaSelectionArgs(),
             null);
         if (cursor == null) {
-            throw new HostRequestException("The photo library could not be queried.");
+            throw new NativeCallException("The photo library could not be queried.");
         }
         try {
             int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_ID);
@@ -263,7 +263,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
 
     // Copies one library item into the app's cache directory and returns the absolute path the import can read it from. A library
     // item is not a file the import can open, which is why this exists. The copy is deleted again by close.
-    private String open(String itemId) throws HostRequestException {
+    private String open(String itemId) throws NativeCallException {
         Uri itemUri = uriForItem(itemId);
         ContentResolver resolver = context.getContentResolver();
 
@@ -290,7 +290,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
         File destination = new File(cacheRoot, MediaLibrary.buildExportPath(itemId, displayName, mimeType));
         File parent = destination.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
-            throw new HostRequestException("Failed to create the media export directory: " + parent.getAbsolutePath());
+            throw new NativeCallException("Failed to create the media export directory: " + parent.getAbsolutePath());
         }
 
         try {
@@ -303,7 +303,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
             }
             InputStream input = resolver.openInputStream(readUri);
             if (input == null) {
-                throw new HostRequestException("The photo library would not open item " + itemId + ".");
+                throw new NativeCallException("The photo library would not open item " + itemId + ".");
             }
             try {
                 OutputStream output = new FileOutputStream(destination);
@@ -322,7 +322,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
             }
         } catch (IOException error) {
             destination.delete();
-            throw new HostRequestException("Failed to copy item " + itemId + " out of the photo library: " + error.getMessage(), error);
+            throw new NativeCallException("Failed to copy item " + itemId + " out of the photo library: " + error.getMessage(), error);
         }
 
         return destination.getAbsolutePath();
@@ -346,7 +346,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
 
     // Asks to delete the items, one system confirmation per batch, and says what happened. Nothing is reported as deleted unless the
     // platform said so: a caller that believed a photo was gone when it was not would go on to free space that is still in use.
-    private String delete(List<String> itemIds) throws HostRequestException, JSONException {
+    private String delete(List<String> itemIds) throws NativeCallException, JSONException {
         JSONArray deletedIds = new JSONArray();
         JSONArray failedIds = new JSONArray();
 
@@ -370,7 +370,7 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
 
     // Presents the system confirmation for deleting the items, and waits until the user answers. Android 11 and later require it for
     // media the app does not own. Before that, an app holding the storage permission deletes directly.
-    private boolean requestDelete(List<Uri> uris) throws HostRequestException {
+    private boolean requestDelete(List<Uri> uris) throws NativeCallException {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             int deleted = 0;
             for (Uri uri : uris) {
@@ -380,20 +380,20 @@ public final class MediaLibraryHostRequests implements HostRequestHandler {
         }
 
         try {
-            return shell.startIntentSenderAndWait(
+            return nativeApp.startIntentSenderAndWait(
                 MediaStore.createDeleteRequest(context.getContentResolver(), uris).getIntentSender());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new HostRequestException("The delete confirmation was interrupted.", interrupted);
+            throw new NativeCallException("The delete confirmation was interrupted.", interrupted);
         }
     }
 
     // The content uri for one library item.
-    private static Uri uriForItem(String itemId) throws HostRequestException {
+    private static Uri uriForItem(String itemId) throws NativeCallException {
         try {
             return ContentUris.withAppendedId(contentUri(), Long.parseLong(itemId));
         } catch (NumberFormatException error) {
-            throw new HostRequestException("\"" + itemId + "\" is not a photo library item id.", error);
+            throw new NativeCallException("\"" + itemId + "\" is not a photo library item id.", error);
         }
     }
 

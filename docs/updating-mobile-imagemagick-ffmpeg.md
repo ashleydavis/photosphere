@@ -9,7 +9,7 @@
 
 An update changes what the Zig CLI (`psi`) ships as well as the Photosphere App, because both link the same libraries.
 
-The vendored source is never edited. If a new version does not build unchanged for a target, stop for that target and say so.
+The vendored source is never edited, except for FFmpeg's command line programs, which `third-party/ffmpeg/update-ffmpeg.sh` patches with `third-party/ffmpeg/fftools-per-run-state.patch` (see `third-party/ffmpeg/update-ffmpeg.md`). If a new version does not build unchanged for a target, or the patch does not apply to it, stop for that target and report which target failed and why.
 
 ## Phones
 

@@ -16,25 +16,30 @@ const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const app_state = node_api.app_state;
 const app_config = node_api.app_config;
 const auto_import_settings = @import("api-zig").auto_import_settings;
 const events = @import("events.zig");
 const main_state = @import("main-state.zig");
-const main_process = @import("main-process.zig");
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // get-state: the payload is a state key. The reply is the value remembered under it, or null when there is none.
 //
-fn getState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getState(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The state request needs the name of a key.", .{});
     }
-    const state = try app_state.loadAppState(context.arena, context.io());
-    const value = try app_state.getAppStateValue(context.arena, state, data.string);
-    return try json.stringify(context.arena, value);
+    const state = try app_state.loadAppState(allocator, io);
+    const value = try app_state.getAppStateValue(allocator, state, data.string);
+    return try json.stringify(allocator, value);
 }
 
 //
@@ -59,7 +64,10 @@ const SetStateMutator = struct {
 // left out. Nothing here reacts to a particular key the way set-config does: the theme and the automatic import settings are the
 // user's, and this file holds nothing anything else has to be told about. The reply is null.
 //
-fn setState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn setState(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     const key = json.getString(data, "key") orelse {
         return utils.errors.throwError("The state request needs the name of a key.", .{});
     };
@@ -68,14 +76,14 @@ fn setState(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
         .key = key,
         .value = value,
     };
-    try app_state.updateAppState(context.arena, context.io(), &mutator);
-    return try context.arena.dupe(u8, "null");
+    try app_state.updateAppState(allocator, io, &mutator);
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // The config keys that change what automatic import should be doing, so writing one restarts it.
 //
-const AUTO_IMPORT_CONFIG_KEYS = [_][]const u8{
+pub const AUTO_IMPORT_CONFIG_KEYS = [_][]const u8{
     "autoImportEnabled",
     "autoImportSources",
     "autoImportCleanupEnabled",
@@ -134,12 +142,15 @@ fn configValueToJson(arena: std.mem.Allocator, value: ?app_config.IAppConfigValu
 // get-config: the payload is a config key. The reply is the setting the user chose under it, from config.yaml, or null when there is
 // none.
 //
-fn getConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     }
-    const config = try app_config.loadAppConfig(context.arena, context.io());
-    return try configValueToJson(context.arena, app_config.getAppConfigValue(config, data.string));
+    const config = try app_config.loadAppConfig(allocator, io);
+    return try configValueToJson(allocator, app_config.getAppConfigValue(config, data.string));
 }
 
 //
@@ -165,8 +176,9 @@ const SetConfigMutator = struct {
 // of theme is announced to the page (the `theme-changed` event), so the menu bar can follow, and a change to a setting that decides what
 // automatic import does takes effect now rather than at the next start. The reply is null.
 //
-fn setConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const arena = context.arena;
+fn setConfig(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    const arena = allocator;
     const key = json.getString(data, "key") orelse {
         return utils.errors.throwError("The config request needs the name of a key.", .{});
     };
@@ -176,17 +188,21 @@ fn setConfig(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
         .key = key,
         .value = value,
     };
-    try app_config.updateAppConfig(arena, context.io(), &mutator);
+    try app_config.updateAppConfig(arena, io, &mutator);
     // Keep the theme-changed event so the menu bar can react to theme changes.
     if (std.mem.eql(u8, key, "theme")) {
-        try events.sendThemeChanged(main_state.fromContext(context).core, arena, json_value);
+        try events.sendThemeChanged(services, io, arena, json_value);
     }
-    // Switching automatic import on or off, or changing what it watches, takes effect now rather than at the next restart. The main
-    // process reads the same config the page just wrote, so this needs no message of its own.
-    for (AUTO_IMPORT_CONFIG_KEYS) |auto_import_key| {
-        if (std.mem.eql(u8, key, auto_import_key)) {
-            try main_process.ensureAutoImport(context);
-            break;
+    // Switching automatic import on or off, or changing what it watches, takes effect now rather than at the next restart: the check
+    // runs as a child of this task, and the main thread does what it found when it ends (see main-process.zig). A check that fails
+    // fails this request, as TypeScript's awaited ensureAutoImport rejects it.
+    if (data.object.get("ensure")) |ensure| {
+        if (ensure != .null) {
+            const child = try services.queueChild(io, arena, timers, "ensure-auto-import", ensure, null);
+            const completion = try services.awaitTask(io, arena, timers, child);
+            if (completion.status != .succeeded) {
+                return utils.errors.throwError("{s}", .{completion.error_message orelse "Unknown error"});
+            }
         }
     }
     return try arena.dupe(u8, "null");
@@ -221,11 +237,13 @@ pub const setConfigHandler = logExceptions(setConfig, "Error setting config valu
 // Support directory, which neither the config nor the cache directory is, so without this a reset on iOS left every database on the
 // device. On desktop the data directory holds the default database, the user's photos, so it is left alone there.
 //
-fn resetAppStorage(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn resetAppStorage(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
     _ = data;
-    const device_data_dir: ?[]const u8 = if (builtin.os.tag == .ios or builtin.abi.isAndroid()) std.mem.span(context.config().data_dir) else null;
-    const result = try node_api.reset_app_storage_worker.resetAppStorage(context.arena, context.io(), device_data_dir);
-    return try json.stringify(context.arena, result);
+    const device_data_dir: ?[]const u8 = if (builtin.os.tag == .ios or builtin.abi.isAndroid()) context.data_dir else null;
+    const result = try node_api.reset_app_storage_worker.resetAppStorage(allocator, io, device_data_dir);
+    return try json.stringify(allocator, result);
 }
 
 //
@@ -236,12 +254,14 @@ pub const resetAppStorageHandler = logExceptions(resetAppStorage, "Error resetti
 //
 // get-config: the data is a config key, answered by the get-config task. The response is the setting, or null.
 //
-pub fn getConfigMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, key: []const u8) !ziggy.core.Answer(std.json.Value) {
-    _ = core;
+pub fn getConfigMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, key: []const u8) !ziggy.core.Response(std.json.Value) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "get-config",
-            .data = try json.stringify(arena, key),
+            .data = try json.stringify(allocator, key),
         },
     };
 }
@@ -259,25 +279,74 @@ pub const SetConfigRequest = struct {
 //
 // set-config: answered by the set-config task. The response is null.
 //
-pub fn setConfigMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SetConfigRequest) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn setConfigMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SetConfigRequest) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
+    // A setting of automatic import takes effect now rather than at the next restart: the task makes automatic import match the
+    // config before it replies, as TypeScript awaits ensureAutoImport, and is given what automatic import is running now. One check
+    // at a time: while one is under way the setting is only written, as TypeScript's ensureAutoImport returns while one is starting.
+    var ensure: ?main_state.IEnsureAutoImportData = null;
+    if (isAutoImportConfigKey(request.key)) {
+        const state = main_state.current();
+        if (!state.auto_import_starting) {
+            const running = state.auto_import_running;
+            ensure = .{
+                .restarting = false,
+                .runningDatabasePath = if (running) state.auto_import_database_path else null,
+                .runningSettingsJson = if (running) state.auto_import_settings_json else null,
+            };
+            state.auto_import_starting = true;
+        }
+    }
     return .{
         .task = .{
             .task_type = "set-config",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, ISetConfigData{
+                .key = request.key,
+                .value = request.value,
+                .ensure = ensure,
+            }),
         },
     };
 }
 
 //
+// What the main thread gives the set-config task: the request, and for a setting of automatic import, what automatic import is running
+// now, which the check that the task runs takes.
+//
+const ISetConfigData = struct {
+    // The config key to write.
+    key: []const u8,
+    // The value to write, or null to remove the key.
+    value: std.json.Value = .null,
+    // The input of the check of automatic import the task runs once it has written the config, or null when it runs none.
+    ensure: ?main_state.IEnsureAutoImportData = null,
+};
+
+//
+// Whether the key is a setting of automatic import.
+//
+fn isAutoImportConfigKey(key: []const u8) bool {
+    for (AUTO_IMPORT_CONFIG_KEYS) |auto_import_key| {
+        if (std.mem.eql(u8, key, auto_import_key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//
 // get-state: the data is a state key, answered by the get-state task. The response is the value remembered, or null.
 //
-pub fn getStateMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, key: []const u8) !ziggy.core.Answer(std.json.Value) {
-    _ = core;
+pub fn getStateMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, key: []const u8) !ziggy.core.Response(std.json.Value) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "get-state",
-            .data = try json.stringify(arena, key),
+            .data = try json.stringify(allocator, key),
         },
     };
 }
@@ -295,12 +364,14 @@ pub const SetStateRequest = struct {
 //
 // set-state: answered by the set-state task. The response is null.
 //
-pub fn setStateMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SetStateRequest) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn setStateMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SetStateRequest) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "set-state",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }

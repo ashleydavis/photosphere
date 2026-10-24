@@ -4,6 +4,9 @@ const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const fs = node_utils.fs;
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
+const thread_messages = @import("../../../utils-zig/src/test/thread-messages.zig");
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
 const errors = utils.errors;
 
 //
@@ -313,10 +316,31 @@ fn tempFilePathInOwnDir(allocator: std.mem.Allocator, io: std.Io, suffix: []cons
 }
 
 //
-// Writes `content` to `filePath` with outputFile, for running writers concurrently.
+// What a writer's thread is given: the file and the content it writes there.
 //
-fn outputFileTask(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, content: []const u8) void {
-    fs.outputFile(allocator, io, filePath, content) catch |err| {
+const WriteOrder = struct {
+    filePath: []const u8,
+    content: []const u8,
+};
+
+//
+// A writer's thread, for running writers concurrently: makes its own allocator and Io, takes its order and writes the content to
+// the file with outputFile.
+//
+fn outputFileTask(orders: *MessageQueue) void {
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
+    const order = thread_messages.take(WriteOrder, orders, io, allocator) catch |err| {
+        std.debug.panic("The writer got no order: {s}", .{@errorName(err)});
+    };
+    fs.outputFile(allocator, io, order.filePath, order.content) catch |err| {
         std.debug.panic("outputFile failed: {s}", .{@errorName(err)});
     };
 }
@@ -332,24 +356,30 @@ test "concurrent writes to the same file never leave a torn result" {
     // would produce a mix that matches none of the inputs. Distinct lengths make
     // any torn write detectable.
     var contents: [20][]const u8 = undefined;
-    var task_allocators: [20]std.heap.ArenaAllocator = undefined;
-    for (&contents, 0..) |*content, index| {
+    var orders: [20]MessageQueue = undefined;
+    for (&contents, &orders, 0..) |*content, *queue, index| {
         const padding = try allocator.alloc(u8, index);
         @memset(padding, 'x');
         content.* = try std.fmt.allocPrint(allocator, "value-{d}-{s}", .{ index, padding });
-        task_allocators[index] = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        queue.* = MessageQueue.init();
     }
     defer {
-        for (&task_allocators) |*task_allocator| {
-            task_allocator.deinit();
+        for (&orders) |*queue| {
+            queue.deinit();
         }
     }
 
-    var group: std.Io.Group = .init;
-    for (contents, 0..) |content, index| {
-        group.async(io, outputFileTask, .{ task_allocators[index].allocator(), io, filePath, content });
+    var writers: [20]std.Thread = undefined;
+    for (contents, &orders, &writers) |content, *queue, *writer| {
+        try thread_messages.post(queue, io, allocator, WriteOrder{
+            .filePath = filePath,
+            .content = content,
+        });
+        writer.* = try std.Thread.spawn(.{}, outputFileTask, .{queue});
     }
-    try group.await(io);
+    for (writers) |writer| {
+        writer.join();
+    }
 
     const finalContent = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
 

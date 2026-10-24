@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const vault_zig = @import("vault-zig");
 const node_api = @import("node-api-zig");
@@ -22,7 +23,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: *RecordingTaskContext,
     if (origin) |text| {
         try object.put(allocator, "origin", .{ .string = text });
     }
-    return setDatabaseOriginHandler(allocator, io, .{ .object = object }, context.taskContext());
+    return setDatabaseOriginHandler(allocator, io, test_timers.timers(), .{ .object = object }, context.taskContext());
 }
 
 //
@@ -38,7 +39,8 @@ test "writes the origin into the database's own config" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
@@ -56,7 +58,8 @@ test "an absent origin clears it rather than being ignored" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
@@ -74,7 +77,8 @@ test "the config is written through the raw storage, so an encrypted database st
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
@@ -99,7 +103,7 @@ test "the config is written through the raw storage, so an encrypted database st
     });
     var createData: std.json.ObjectMap = .empty;
     try createData.put(allocator, "databasePath", .{ .string = databaseDir });
-    _ = try createDatabaseHandler(allocator, io, .{ .object = createData }, context.taskContext());
+    _ = try createDatabaseHandler(allocator, io, test_timers.timers(), .{ .object = createData }, context.taskContext());
 
     _ = try run(allocator, io, &context, databaseDir, "s3:my-bucket/photos");
 
@@ -115,7 +119,8 @@ test "a missing database path is refused rather than writing to nowhere" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
@@ -128,11 +133,12 @@ test "throws when the task data has no database path" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    try std.testing.expectError(error.Thrown, setDatabaseOriginHandler(allocator, io, .{ .object = .empty }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, setDatabaseOriginHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
@@ -141,13 +147,14 @@ test "throws a descriptive error when the origin is not a string" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .string = "db" });
     try object.put(allocator, "origin", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, setDatabaseOriginHandler(allocator, io, .{ .object = object }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, setDatabaseOriginHandler(allocator, io, test_timers.timers(), .{ .object = object }, context.taskContext()));
     try std.testing.expectEqualStrings("The set-database-origin task data is not valid: databasePath and origin must be strings", errors.lastErrorMessage());
 }

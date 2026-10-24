@@ -17,151 +17,141 @@ const mobile_worker = @import("mobile-worker-zig");
 const background_work = @import("background-work.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const INetworkStatusHost = mobile_worker.network_status.INetworkStatusHost;
 
 //
-// What the planning handlers' ITaskContext reaches: the Ziggy context of the task they run in.
+// What the planning handlers' ITaskContext reaches: the services of the task they run in, the argument the task was given, which the
+// context's pointer is.
 //
-const ContextBridge = struct {
-    // The task's context in Ziggy's runner.
-    context: *TaskContext,
-
-    // What the task's host requester asks through.
-    host_requester_storage: ziggy.task_runner.TaskHostRequester,
-
-    const vtable: ITaskContext.VTable = .{
-        .sendEvent = sendEventErased,
-        .isCancelled = isCancelledErased,
-    };
-
-    fn sendEventErased(ptr: *anyopaque, event: std.json.Value) void {
-        const self: *ContextBridge = @ptrCast(@alignCast(ptr));
-        self.context.sendEvent(event) catch |err| {
-            utils.log.log.exception("Error sending a task event", err);
-        };
-    }
-
-    fn isCancelledErased(ptr: *anyopaque) bool {
-        const self: *ContextBridge = @ptrCast(@alignCast(ptr));
-        return self.context.isCancelled();
-    }
+const context_bridge_vtable: ITaskContext.VTable = .{
+    .sendEvent = sendEventOfTask,
+    .isCancelled = isCancelledOfTask,
 };
 
 //
-// Asks the native app for the connection type through the host request callback, by the method `networkConnectionType`, and gives
-// its answer, which is a JSON string such as "wifi". On Windows, whose native app has no such callback, the core answers it
-// (windows-host.zig). Another platform with no such callback, and a native app that cannot answer, are errors with a
-// sentence the user can act on.
+// The services of the task a context or a network status host is for.
 //
-const ShellNetworkStatus = struct {
-    // The task's context in Ziggy's runner.
-    context: *TaskContext,
+fn servicesOf(ptr: *anyopaque) TaskServices {
+    const services: *const TaskServices = @ptrCast(@alignCast(ptr));
+    return services.*;
+}
 
-    const vtable: INetworkStatusHost.VTable = .{
-        .networkConnectionType = networkConnectionTypeErased,
+fn sendEventOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, event: std.json.Value) void {
+    servicesOf(ptr).sendEvent(io, allocator, event) catch |err| {
+        utils.log.log.exception("Error sending a task event", err);
     };
+}
 
-    fn networkConnectionTypeErased(ptr: *anyopaque, allocator: std.mem.Allocator) anyerror![]const u8 {
-        const self: *ShellNetworkStatus = @ptrCast(@alignCast(ptr));
-        const answer = try background_work.askShell(self.context, "networkConnectionType", "null");
-        const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, answer, .{}) catch {
-            return utils.errors.throwError("The phone's answer to networkConnectionType could not be read.", .{});
-        };
-        if (parsed != .string) {
-            return utils.errors.throwError("The phone's answer to networkConnectionType was not text.", .{});
-        }
-        return parsed.string;
-    }
+fn isCancelledOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) bool {
+    return servicesOf(ptr).isCancelled(io, allocator);
+}
+
+//
+// Calls the native app for the connection type through the native call callback, by the method `networkConnectionType`, and gives
+// its result, which is a JSON string such as "wifi". On Windows, whose native app has no such callback, the core makes the call itself
+// (windows-native-calls.zig). Another platform with no such callback, and a native app that cannot make the call, are errors with a
+// sentence the user can act on. The network status host's pointer is the task's services. The call is made with no timers, as the
+// network status shim has none to give.
+//
+const network_status_vtable: INetworkStatusHost.VTable = .{
+    .networkConnectionType = networkConnectionTypeOfTask,
 };
 
-//
-// Runs a handler with the minimum context the interface needs, and gives its result as JSON text.
-//
-fn bridgedContext(context: *TaskContext, bridge: *ContextBridge, uuid_generator: *utils.random_uuid_generator.RandomUuidGenerator, timestamp_provider: *utils.timestamp_provider.TimestampProvider) ITaskContext {
-    bridge.* = .{
-        .context = context,
-        .host_requester_storage = undefined,
+fn networkConnectionTypeOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) anyerror![]const u8 {
+    const result = try background_work.callNativeApp(servicesOf(ptr), io, allocator, null, "networkConnectionType", "null");
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, allocator, result, .{}) catch {
+        return utils.errors.throwError("The phone's answer to networkConnectionType could not be read.", .{});
     };
+    if (parsed != .string) {
+        return utils.errors.throwError("The phone's answer to networkConnectionType was not text.", .{});
+    }
+    return parsed.string;
+}
+
+//
+// The network status host of the task whose services are given.
+//
+fn networkStatusOf(services: *const TaskServices) INetworkStatusHost {
+    return .{
+        .ptr = @constCast(services),
+        .vtable = &network_status_vtable,
+    };
+}
+
+//
+// The minimum context the interface needs, for a handler run in the task whose services are given.
+//
+fn bridgedContext(services: *const TaskServices, context: TaskContext, native_caller_storage: *ziggy.task_runner.TaskNativeCaller, uuid_generator: *utils.random_uuid_generator.RandomUuidGenerator, timestamp_provider: *utils.timestamp_provider.TimestampProvider) ITaskContext {
     return .{
         .uuidGenerator = uuid_generator.uuidGenerator(),
         .timestampProvider = timestamp_provider.timestampProvider(),
-        .sessionId = context.source(),
-        .taskId = context.taskId(),
-        .maxConcurrentChildTasks = context.maxConcurrentChildTasks(),
-        .hostRequester = context.hostRequester(&bridge.host_requester_storage),
-        .toolRunner = null,
-        .ptr = bridge,
-        .vtable = &ContextBridge.vtable,
+        .sessionId = context.source,
+        .taskId = context.task_id,
+        .maxConcurrentChildTasks = context.max_concurrent_child_tasks,
+        .nativeCaller = services.nativeCaller(native_caller_storage),
+        .ptr = @constCast(services),
+        .vtable = &context_bridge_vtable,
     };
 }
 
 //
 // plan-auto-import: no payload. The reply is the plan for automatic import.
 //
-pub fn planAutoImportTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+pub fn planAutoImportTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
     // The phone's working directory is not the app's data directory, so the default database is given a place in it.
     var request: std.json.ObjectMap = .empty;
-    try request.put(context.arena, "appDataPath", .{
-        .string = std.mem.span(context.config().data_dir),
+    try request.put(allocator, "appDataPath", .{
+        .string = context.data_dir,
     });
-    var bridge: ContextBridge = undefined;
+    var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
-    const task_context = bridgedContext(context, &bridge, &uuid_generator, &timestamp_provider);
-    const result = try mobile_worker.plan_auto_import_worker.planAutoImportHandler(context.arena, context.io(), .{
+    const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
+    const result = try mobile_worker.plan_auto_import_worker.planAutoImportHandler(allocator, io, timers, .{
         .object = request,
     }, task_context);
-    return try std.json.Stringify.valueAlloc(context.arena, result, .{});
+    return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
 //
 // plan-sync: no payload. The reply is the plan for the background sync.
 //
-pub fn planSyncTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    var bridge: ContextBridge = undefined;
+pub fn planSyncTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
-    const task_context = bridgedContext(context, &bridge, &uuid_generator, &timestamp_provider);
-    var shell: ShellNetworkStatus = .{
-        .context = context,
-    };
-    const host: INetworkStatusHost = .{
-        .ptr = &shell,
-        .vtable = &ShellNetworkStatus.vtable,
-    };
-    const result = try mobile_worker.plan_sync_worker.planSyncHandler(context.arena, context.io(), data, task_context, host);
-    return try std.json.Stringify.valueAlloc(context.arena, result, .{});
+    const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
+    const host = networkStatusOf(&services);
+    const result = try mobile_worker.plan_sync_worker.planSyncHandler(allocator, io, timers, data, task_context, host);
+    return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
 //
 // plan-prefetch: no payload. The reply is the plan for the background prefetch.
 //
-pub fn planPrefetchTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    var bridge: ContextBridge = undefined;
+pub fn planPrefetchTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
-    const task_context = bridgedContext(context, &bridge, &uuid_generator, &timestamp_provider);
-    var shell: ShellNetworkStatus = .{
-        .context = context,
-    };
-    const host: INetworkStatusHost = .{
-        .ptr = &shell,
-        .vtable = &ShellNetworkStatus.vtable,
-    };
-    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(context.arena, context.io(), data, task_context, host);
-    return try std.json.Stringify.valueAlloc(context.arena, result, .{});
+    const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
+    const host = networkStatusOf(&services);
+    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, data, task_context, host);
+    return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
 //
 // Gives the config tasks the path of the config file the core reads and writes, whatever path the request names. The page does not
 // know where the settings directory is, and the planning tasks above read the same file.
 //
-fn withConfigPath(arena: std.mem.Allocator, data: std.json.Value) !std.json.Value {
-    var object: std.json.ObjectMap = if (data == .object) try data.object.clone(arena) else .empty;
-    try object.put(arena, "configPath", .{
-        .string = try node_api.config_file.getConfigPath(arena),
+fn withConfigPath(allocator: std.mem.Allocator, data: std.json.Value) !std.json.Value {
+    var object: std.json.ObjectMap = if (data == .object) try data.object.clone(allocator) else .empty;
+    try object.put(allocator, "configPath", .{
+        .string = try node_api.config_file.getConfigPath(allocator),
     });
     return .{
         .object = object,
@@ -172,24 +162,24 @@ fn withConfigPath(arena: std.mem.Allocator, data: std.json.Value) !std.json.Valu
 // read-config: no required payload. The reply is the sections of the config file the background work plans from: the automatic import
 // section, the syncing section and whether each has ever been written, and every setting that has a value under the name the page uses.
 //
-pub fn readConfigTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    var bridge: ContextBridge = undefined;
+pub fn readConfigTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
-    const task_context = bridgedContext(context, &bridge, &uuid_generator, &timestamp_provider);
-    const result = try node_api.config_worker.readConfigHandler(context.arena, context.io(), try withConfigPath(context.arena, data), task_context);
-    return try std.json.Stringify.valueAlloc(context.arena, result, .{});
+    const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
+    const result = try node_api.config_worker.readConfigHandler(allocator, io, timers, try withConfigPath(allocator, data), task_context);
+    return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
 //
 // write-config: the payload holds the section to write (autoImport, sync) or the settings (entries). Changes only what it is given and
 // leaves the rest of the config file as it is. The reply is null.
 //
-pub fn writeConfigTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    var bridge: ContextBridge = undefined;
+pub fn writeConfigTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
-    const task_context = bridgedContext(context, &bridge, &uuid_generator, &timestamp_provider);
-    const result = try node_api.config_worker.writeConfigHandler(context.arena, context.io(), try withConfigPath(context.arena, data), task_context);
-    return try std.json.Stringify.valueAlloc(context.arena, result, .{});
+    const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
+    const result = try node_api.config_worker.writeConfigHandler(allocator, io, timers, try withConfigPath(allocator, data), task_context);
+    return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }

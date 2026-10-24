@@ -85,7 +85,7 @@ test "configureLog installs the file logger unless file logging is disabled" {
     try environ_map.put("TEMP", tmpDir);
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
-    const previous = utils.log.log;
+    const previous = utils.log.currentLog();
     defer utils.log.setLog(previous);
     defer node_utils.termination.clearTerminationCallbacks();
 
@@ -94,7 +94,7 @@ test "configureLog installs the file logger unless file logging is disabled" {
     defer utils.console.setCapture(null, null);
 
     cli.process_argv.setArgv(&.{"psi"});
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     try cli.log.configureLog(allocator, io, mediaTools.runner(), .{ .disableFileLogging = true });
     const details = try utils.log.log.getLogDetails(allocator, io);

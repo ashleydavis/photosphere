@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -186,7 +187,7 @@ fn runWithBudget(allocator: std.mem.Allocator, io: std.Io, world: *World, budget
     if (budgetBytes) |budget| {
         try object.put(allocator, "localOriginalBudgetBytes", .{ .float = budget });
     }
-    const output = try evictOriginalsHandler(allocator, io, .{ .object = object }, world.testContext.context.taskContext());
+    const output = try evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext());
     return std.json.parseFromValueLeaky(IEvictOriginalsResult, allocator, output, .{});
 }
 
@@ -669,10 +670,10 @@ test "refuses a database path that is not given" {
     try object.put(allocator, "databasePath", .{ .string = "" });
     try object.put(allocator, "sessionId", .{ .string = "s" });
 
-    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, .{ .object = object }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 
-    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, .{ .object = .empty }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
@@ -687,7 +688,7 @@ test "throws a descriptive error when the task data is not valid" {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, .{ .object = object }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The evict-originals task data is not valid: databasePath and sessionId must be strings, and localOriginalBudgetBytes must be a number", errors.lastErrorMessage());
 }
 

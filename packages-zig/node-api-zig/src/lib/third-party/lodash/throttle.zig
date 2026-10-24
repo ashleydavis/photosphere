@@ -6,7 +6,6 @@
 // invoke them. See debounce.zig for how its timer fires in Zig.
 //
 
-const std = @import("std");
 const debounce = @import("debounce.zig");
 const Debounced = debounce.Debounced;
 const DebouncedFunction = debounce.DebouncedFunction;
@@ -26,10 +25,10 @@ pub const IThrottleOptions = struct {
 // Creates a throttled function (TypeScript: `throttle(func, wait, options)`): a debounced function whose maximum
 // wait is its wait.
 //
-pub fn throttle(io: std.Io, func: DebouncedFunction, wait: i64, options: IThrottleOptions, loopLock: *std.Io.Mutex) Debounced {
-    return Debounced.init(io, func, wait, .{
+pub fn throttle(func: DebouncedFunction, wait: i64, options: IThrottleOptions) Debounced {
+    return Debounced.init(func, wait, .{
         .leading = options.leading,
         .maxWait = wait,
         .trailing = options.trailing,
-    }, loopLock);
+    });
 }

@@ -1,12 +1,11 @@
 const std = @import("std");
 const encryption = @import("encryption-zig");
-const storage_module = @import("storage.zig");
 
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
+const IFileInfo = @import("storage.zig").IFileInfo;
+const IListResult = @import("storage.zig").IListResult;
+const IStorage = @import("storage.zig").IStorage;
+const IReadStream = @import("storage.zig").IReadStream;
+const IWriteLockInfo = @import("storage.zig").IWriteLockInfo;
 const IPrivateKeyMap = encryption.encryption_types.IPrivateKeyMap;
 const PublicKey = encryption.node_crypto.PublicKey;
 const computeEncryptedLength = encryption.encrypt_stream.computeEncryptedLength;
@@ -48,7 +47,7 @@ pub const EncryptedStorage = struct {
     // Gets the IStorage interface of this storage.
     //
     pub fn storage(self: *EncryptedStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(EncryptedStorage), .location = self.location };
+        return .{ .ptr = self, .vtable = @import("storage.zig").implement(EncryptedStorage), .location = self.location };
     }
 
     //
@@ -166,7 +165,7 @@ pub const EncryptedStorage = struct {
         const decryptionStream = try createDecryptionStream(allocator, &self.decryptionKeyMap, readStreamResult.reader());
         const decryptedStream = try allocator.create(DecryptedReadStream);
         decryptedStream.* = .{ .decryptionStream = decryptionStream, .source = readStreamResult };
-        return .{ .ptr = decryptedStream, .vtable = storage_module.implementReadStream(DecryptedReadStream) };
+        return .{ .ptr = decryptedStream, .vtable = @import("storage.zig").implementReadStream(DecryptedReadStream) };
     }
 
     //

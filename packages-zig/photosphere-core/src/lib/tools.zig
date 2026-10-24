@@ -8,20 +8,28 @@
 const std = @import("std");
 const ziggy = @import("ziggy");
 const tools_zig = @import("tools-zig");
-const main_state = @import("main-state.zig");
+const media_tools = @import("media-tools-zig");
+const utils = @import("utils-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
 // check-tools: no payload. The reply is {magick, ffprobe, ffmpeg, allAvailable, missingTools}, each tool as {available, version, error}.
 //
-fn checkTools(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn checkTools(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     _ = data;
-    // The tools built into the program answer for themselves, and a tool that is not built in is started as a program.
-    const status = try tools_zig.verifyTools(context.arena, context.io(), main_state.fromContext(context).media_tools.runner());
-    return try json.stringify(context.arena, status);
+    // The tools built into the program, made on the task's thread, report on themselves.
+    var tools = media_tools.ThreadTools.init();
+    const status = try tools_zig.verifyTools(allocator, io, tools.runner());
+    return try json.stringify(allocator, status);
 }
 
 //
@@ -37,12 +45,14 @@ pub const NoRequest = struct {};
 //
 // check-tools: answered by the check-tools task. The response is whether each tool is available, and its version.
 //
-pub fn checkToolsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(tools_zig.ToolsStatus) {
-    _ = core;
+pub fn checkToolsMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response(tools_zig.ToolsStatus) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "check-tools",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }

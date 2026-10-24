@@ -1,12 +1,11 @@
 const std = @import("std");
 const storage_zig = @import("storage-zig");
 
-const storage_module = storage_zig.storage;
-const IStorage = storage_module.IStorage;
-const IReadStream = storage_module.IReadStream;
-const IFileInfo = storage_module.IFileInfo;
-const IListResult = storage_module.IListResult;
-const IWriteLockInfo = storage_module.IWriteLockInfo;
+const IStorage = storage_zig.storage.IStorage;
+const IReadStream = storage_zig.storage.IReadStream;
+const IFileInfo = storage_zig.storage.IFileInfo;
+const IListResult = storage_zig.storage.IListResult;
+const IWriteLockInfo = storage_zig.storage.IWriteLockInfo;
 
 //
 // A test storage that records the method name and paths of every call and returns canned results.
@@ -29,7 +28,7 @@ pub const RecordingStorage = struct {
     // Gets the IStorage interface.
     //
     pub fn storage(self: *RecordingStorage) IStorage {
-        return .{ .ptr = self, .vtable = storage_module.implement(RecordingStorage), .location = "rec:" };
+        return .{ .ptr = self, .vtable = storage_zig.storage.implement(RecordingStorage), .location = "rec:" };
     }
 
     //

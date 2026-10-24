@@ -15,16 +15,9 @@ const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-s
 const io = std.testing.io;
 
 //
-// Creates a server on the given port with the generators the tests use, capturing what it writes to the console (the test program
-// talks to the build over standard output).
+// Captures what the server writes to the console (the test program talks to the build over standard output).
 //
 const Fixture = struct {
-    // Deterministic uuids.
-    uuidGenerator: node_utils.test_uuid_generator.TestUuidGenerator,
-
-    // Deterministic time.
-    timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider,
-
     // What the server wrote to standard output and standard error.
     stdout: std.Io.Writer.Allocating,
     stderr: std.Io.Writer.Allocating,
@@ -33,8 +26,6 @@ const Fixture = struct {
     // Fills in the fixture.
     //
     fn init(fixture: *Fixture, allocator: std.mem.Allocator) !void {
-        fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
-        fixture.timestampProvider = .{};
         fixture.stdout = std.Io.Writer.Allocating.init(allocator);
         fixture.stderr = std.Io.Writer.Allocating.init(allocator);
         utils.console.setCapture(&fixture.stdout.writer, &fixture.stderr.writer);
@@ -57,16 +48,14 @@ test "createAssetServer binds only to the loopback interface" {
     try fixture.init(allocator);
     defer fixture.deinit();
 
-    const server = try rest_api.asset_server.createAssetServer(std.heap.smp_allocator, io, .{
+    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, .{
         .port = 0,
-        .uuidGenerator = fixture.uuidGenerator.uuidGenerator(),
-        .timestampProvider = fixture.timestampProvider.timestampProvider(),
         .sessionId = "test-session",
     });
-    defer server.close();
+    defer server.close(std.testing.io, std.testing.allocator);
 
     try std.testing.expectEqualStrings("127.0.0.1", server.host);
-    const bound = server.server.listener.socket.address;
+    const bound = server.server.address;
     try std.testing.expectEqual(@as(u8, 127), bound.ip4.bytes[0]);
     try std.testing.expectEqual(@as(u8, 0), bound.ip4.bytes[1]);
     try std.testing.expectEqual(@as(u8, 0), bound.ip4.bytes[2]);
@@ -89,13 +78,11 @@ test "createAssetServer listens on the port it is asked for" {
     const freePort = listener.socket.address.getPort();
     listener.deinit(io);
 
-    const server = try rest_api.asset_server.createAssetServer(std.heap.smp_allocator, io, .{
+    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, .{
         .port = freePort,
-        .uuidGenerator = fixture.uuidGenerator.uuidGenerator(),
-        .timestampProvider = fixture.timestampProvider.timestampProvider(),
         .sessionId = "test-session",
     });
-    defer server.close();
+    defer server.close(std.testing.io, std.testing.allocator);
 
     try std.testing.expectEqual(freePort, server.port);
 }
@@ -107,10 +94,8 @@ test "createAssetServer serves the routes, with CORS headers, and stops answerin
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
     defer fixture.deinit();
-    const server = try rest_api.asset_server.createAssetServer(std.heap.smp_allocator, io, .{
+    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, .{
         .port = 0,
-        .uuidGenerator = fixture.uuidGenerator.uuidGenerator(),
-        .timestampProvider = fixture.timestampProvider.timestampProvider(),
         .sessionId = "test-session",
     });
     const port = server.port;
@@ -131,6 +116,6 @@ test "createAssetServer serves the routes, with CORS headers, and stops answerin
     try std.testing.expectEqual(std.http.Status.bad_request, result.status);
     try std.testing.expectEqualStrings("Missing 'id' parameter", body.written());
 
-    server.close();
+    server.close(std.testing.io, std.testing.allocator);
     try expectServerStopped(io, port);
 }

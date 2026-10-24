@@ -9,7 +9,7 @@ const ToolOutput = node_utils.in_process_tools.ToolOutput;
 test "ensureMediaProcessingTools returns when the built-in tools run" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try media_tools.MediaTools.init(std.testing.io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
     try cli.ensure_tools.ensureMediaProcessingTools(arena.allocator(), std.testing.io, mediaTools.runner());
@@ -18,8 +18,9 @@ test "ensureMediaProcessingTools returns when the built-in tools run" {
 //
 // A runner that takes every tool and fails every command, as a built-in ImageMagick that does not run would.
 //
-fn failingRun(context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!ToolOutput {
+fn failingRun(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!ToolOutput {
     _ = context;
+    _ = io;
     _ = allocator;
     _ = arguments;
     return utils.errors.throwError("{s} is broken in this test", .{tool});

@@ -396,6 +396,6 @@ test "decryptFile throws when the file it is asked to decrypt is not there" {
     const readStorage = readStore.asStorage();
     var tree = try buildMinimalFilesTree(allocator, &.{"asset/missing"});
 
-    try std.testing.expectError(error.Thrown, node_api.decrypt.decryptFile(allocator, io, "asset/missing", readStorage, writeStore.asStorage(), readStorage, &tree, null));
+    try std.testing.expectError(error.Thrown, node_api.decrypt.decryptFile(allocator, io, "asset/missing", readStorage, writeStore.asStorage(), readStorage, &tree));
     try std.testing.expectEqualStrings("Source file \"asset/missing\" does not exist.", errors.lastErrorMessage());
 }

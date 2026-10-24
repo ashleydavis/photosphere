@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -242,6 +243,7 @@ fn evictResultToJson(allocator: std.mem.Allocator, result: IEvictOriginalsResult
 pub fn evictOriginalsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -254,7 +256,7 @@ pub fn evictOriginalsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const local = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const local = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const localRawStorage = local.rawStorage;
 
@@ -276,7 +278,7 @@ pub fn evictOriginalsHandler(
         });
     };
 
-    const originStorage = (try openStorage(allocator, io, origin, null, null, context.hostRequester)).storage;
+    const originStorage = (try openStorage(allocator, io, origin, null, null, context.nativeCaller)).storage;
     const originMerkleTree = try loadMerkleTree(allocator, io, originStorage) orelse {
         return evictResultToJson(allocator, .{
             .evictedAssetIds = &.{},
@@ -319,7 +321,7 @@ pub fn evictOriginalsHandler(
     var freedBytes: f64 = 0;
 
     for (selectedAssetIds) |assetId| {
-        if (context.isCancelled()) {
+        if (context.isCancelled(io, allocator)) {
             break;
         }
 

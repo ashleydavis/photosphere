@@ -60,8 +60,7 @@ pub const RecordingTaskContext = struct {
             .sessionId = "session-1",
             .taskId = "task-1",
             .maxConcurrentChildTasks = 10,
-            .hostRequester = null,
-            .toolRunner = null,
+            .nativeCaller = null,
             .ptr = self,
             .vtable = &vtable,
         };
@@ -93,7 +92,7 @@ pub const RecordingTaskContext = struct {
     //
     // Records a message, failing the test run loudly when it cannot be copied.
     //
-    fn sendEventErased(ptr: *anyopaque, message: std.json.Value) void {
+    fn sendEventErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         const self: *RecordingTaskContext = @ptrCast(@alignCast(ptr));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch @panic("could not copy a task message");
         const copy = std.json.parseFromSliceLeaky(std.json.Value, self.allocator, text, .{}) catch @panic("could not copy a task message");
@@ -103,7 +102,7 @@ pub const RecordingTaskContext = struct {
     //
     // Counts the call and reports the task cancelled once more calls have been made than cancelAfterCalls.
     //
-    fn isCancelledErased(ptr: *anyopaque) bool {
+    fn isCancelledErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) bool {
         const self: *RecordingTaskContext = @ptrCast(@alignCast(ptr));
         self.cancelChecks += 1;
         const limit = self.cancelAfterCalls orelse {

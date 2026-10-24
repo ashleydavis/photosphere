@@ -19,7 +19,6 @@ const credential_variables = [_][]const u8{ "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACC
 // directory holding the given databases.toml (empty text means no file, like `getDatabases` returning []).
 //
 fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
     for (credential_variables) |name| {
         try test_environment.setEnv(name, null);
     }
@@ -47,6 +46,8 @@ fn readKey(allocator: std.mem.Allocator, io: std.Io, name: []const u8) ![]const 
 }
 
 test "returns empty credentials for a local path with no database entry" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -62,6 +63,8 @@ test "returns empty credentials for a local path with no database entry" {
 }
 
 test "does not look up S3 credentials for a non-s3: path" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -76,6 +79,8 @@ test "does not look up S3 credentials for a non-s3: path" {
 }
 
 test "loads S3 credentials from vault for an s3: path" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -94,6 +99,8 @@ test "loads S3 credentials from vault for an s3: path" {
 }
 
 test "an S3 secret with a repeated key is read with its last value" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -108,6 +115,8 @@ test "an S3 secret with a repeated key is read with its last value" {
 }
 
 test "falls back to AWS env vars for s3: path when vault entry is missing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -130,6 +139,8 @@ test "falls back to AWS env vars for s3: path when vault entry is missing" {
 }
 
 test "uses explicit s3Key argument to look up S3 credentials when the path is not registered" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -146,6 +157,8 @@ test "uses explicit s3Key argument to look up S3 credentials when the path is no
 }
 
 test "explicit s3Key argument takes priority over the databases.json entry s3Key" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -161,6 +174,8 @@ test "explicit s3Key argument takes priority over the databases.json entry s3Key
 }
 
 test "explicit s3Key argument is ignored for non-s3: paths" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -174,6 +189,8 @@ test "explicit s3Key argument is ignored for non-s3: paths" {
 }
 
 test "vault entry takes priority over AWS env vars for S3 credentials" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -193,6 +210,8 @@ test "vault entry takes priority over AWS env vars for S3 credentials" {
 }
 
 test "loads encryption key from vault when database entry has encryptionKey (raw PEM format)" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -210,6 +229,8 @@ test "loads encryption key from vault when database entry has encryptionKey (raw
 }
 
 test "throws when database entry encryptionKey is set but vault entry is missing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -222,6 +243,8 @@ test "throws when database entry encryptionKey is set but vault entry is missing
 }
 
 test "resolves encryptionKey param as a vault secret name when it is not a file path" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -238,6 +261,8 @@ test "resolves encryptionKey param as a vault secret name when it is not a file 
 }
 
 test "resolves encryptionKey param as a file path when the file exists" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -254,6 +279,8 @@ test "resolves encryptionKey param as a file path when the file exists" {
 }
 
 test "encryptionKey param takes priority over database entry encryptionKey" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -269,6 +296,8 @@ test "encryptionKey param takes priority over database entry encryptionKey" {
 }
 
 test "loads encryption key from PSI_ENCRYPTION_KEY env var (vault secret name) when no other source set" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -289,6 +318,8 @@ test "loads encryption key from PSI_ENCRYPTION_KEY env var (vault secret name) w
 }
 
 test "loads geocoding key from vault when database entry has geocodingKey" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -303,6 +334,8 @@ test "loads geocoding key from vault when database entry has geocodingKey" {
 }
 
 test "falls back to GOOGLE_API_KEY env var when geocoding vault entry is missing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -320,6 +353,8 @@ test "falls back to GOOGLE_API_KEY env var when geocoding vault entry is missing
 }
 
 test "vault geocoding entry takes priority over GOOGLE_API_KEY env var" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -338,6 +373,8 @@ test "vault geocoding entry takes priority over GOOGLE_API_KEY env var" {
 }
 
 test "throws when encryptionKey value is neither a file nor a vault secret" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -350,6 +387,8 @@ test "throws when encryptionKey value is neither a file nor a vault secret" {
 }
 
 test "s3Config has undefined endpoint when not provided in vault value" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -368,6 +407,8 @@ test "s3Config has undefined endpoint when not provided in vault value" {
 // empty string. Both are credentials that cannot work either way, so the secret is still resolved rather than refused.
 //
 test "an S3 secret without an access key resolves to the empty string, as the required field types force" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -384,6 +425,8 @@ test "an S3 secret without an access key resolves to the empty string, as the re
 }
 
 test "resolves comma-separated encryptionKey param as multiple vault secrets" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -403,6 +446,8 @@ test "resolves comma-separated encryptionKey param as multiple vault secrets" {
 }
 
 test "resolves comma-separated encryptionKey param with whitespace trimming" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -422,6 +467,8 @@ test "resolves comma-separated encryptionKey param with whitespace trimming" {
 }
 
 test "comma-separated encryptionKey names are trimmed of the whitespace String.prototype.trim removes" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -439,6 +486,8 @@ test "comma-separated encryptionKey names are trimmed of the whitespace String.p
 }
 
 test "geocoding vault entry stored as raw string" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -453,6 +502,8 @@ test "geocoding vault entry stored as raw string" {
 }
 
 test "parseEncryptionKeyFromVaultValue derives the public key PEM like node:crypto" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -462,6 +513,8 @@ test "parseEncryptionKeyFromVaultValue derives the public key PEM like node:cryp
 }
 
 test "falls back to AWS env vars for an s3: path whose registered vault key holds no secret" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -481,6 +534,8 @@ test "falls back to AWS env vars for an s3: path whose registered vault key hold
 }
 
 test "falls back to GOOGLE_API_KEY for a database whose registered geocoding vault key holds no secret" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -498,6 +553,8 @@ test "falls back to GOOGLE_API_KEY for a database whose registered geocoding vau
 }
 
 test "throws a JSON parse error for an S3 secret that is not JSON" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

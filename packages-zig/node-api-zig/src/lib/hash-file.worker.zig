@@ -1,9 +1,10 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const hash_cache = @import("hash-cache.zig");
-const hash_module = @import("hash.zig");
+const hash = @import("hash.zig");
 const file_scanner = @import("file-scanner.zig");
 const node_utils = @import("node-utils-zig");
 const errors = utils.errors;
@@ -12,8 +13,8 @@ const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const IFileCacheIdentity = api.import_assets_types.IFileCacheIdentity;
 const IFileStat = file_scanner.IFileStat;
 const loadSharedHashCache = hash_cache.loadSharedHashCache;
-const getHashFromCache = hash_module.getHashFromCache;
-const validateAndHash = hash_module.validateAndHash;
+const getHashFromCache = hash.getHashFromCache;
+const validateAndHash = hash.validateAndHash;
 
 //
 // Payload for the hash-file task. Contains everything needed to compute the content
@@ -104,10 +105,11 @@ fn dateNow(io: std.Io) i64 {
 // does both.
 // The task data and output are JSON values holding IHashFileData and IHashFileResult.
 //
-pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
-    // ImageMagick and FFmpeg are built into the program and run in its process through the task's tool runner. A task run with
+pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
+    _ = context;
+    // ImageMagick and FFmpeg are built into the program and run in its process through `tools`, made on the task's thread. A task run with
     // no runner fails here rather than starting an installed program.
-    const toolRunner = context.toolRunner orelse {
+    const toolRunner = tools orelse {
         return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
     };
     const data = try std.json.parseFromValueLeaky(IHashFileData, allocator, taskData, .{ .ignore_unknown_fields = true });

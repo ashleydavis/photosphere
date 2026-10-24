@@ -31,8 +31,8 @@ pub const InProcessRunner = struct {
     // program, as it is when there is no runner.
     handles: *const fn (context: ?*anyopaque, tool: []const u8) bool,
 
-    // Runs the tool (one of `magick`, `ffmpeg` or `ffprobe`) with the arguments.
-    run: *const fn (context: ?*anyopaque, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!ToolOutput,
+    // Runs the tool (one of `magick`, `ffmpeg` or `ffprobe`) with the arguments, with the calling thread's Io and allocator.
+    run: *const fn (context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!ToolOutput,
 };
 
 //
@@ -121,7 +121,7 @@ pub fn splitCommand(allocator: std.mem.Allocator, command: []const u8) ![]const 
 // stdout (everything the tool printed, which is all the runner reports). Returns null when there is no runner or the command is not
 // for the runner, so the caller starts it as usual. Fails with the message exec fails with when the tool ends with a non-zero code.
 //
-pub fn tryRun(allocator: std.mem.Allocator, tools: ?InProcessRunner, command: []const u8) !?exec.ExecResult {
+pub fn tryRun(allocator: std.mem.Allocator, io: std.Io, tools: ?InProcessRunner, command: []const u8) !?exec.ExecResult {
     const runner = tools orelse {
         return null;
     };
@@ -139,7 +139,7 @@ pub fn tryRun(allocator: std.mem.Allocator, tools: ?InProcessRunner, command: []
         return null;
     }
     const words = try splitCommand(allocator, command);
-    const result = try runner.run(runner.context, allocator, words[0], words[1..]);
+    const result = try runner.run(runner.context, io, allocator, words[0], words[1..]);
     if (result.exit_code != 0) {
         return errors.throwError("Command failed: {s}\n{s}", .{ command, result.output });
     }

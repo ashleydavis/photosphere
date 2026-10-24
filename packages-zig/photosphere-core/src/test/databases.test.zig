@@ -343,7 +343,7 @@ test "add-database logs that the entry was added" {
     try app.start();
     defer app.stop();
     std.testing.allocator.free(try app.requestOk("add-database", "{\"name\":\"logged\",\"description\":\"\",\"path\":\"/logged\"}"));
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Database entry added") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Database entry added") != null);
 }
 
 test "set-database-origin with an entry whose s3 secret is not JSON is an error reply" {
@@ -363,17 +363,17 @@ test "a failing database request logs the error with the message of its handler"
     try app.start();
     defer app.stop();
     try app.queueFailingTask("remove-database-entry", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error removing database entry") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error removing database entry") != null);
     try app.queueFailingTask("find-database", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error finding database") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error finding database") != null);
     try app.queueFailingTask("add-database", "{\"name\":\"x\",\"description\":\"\"}");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error adding database") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error adding database") != null);
     try app.queueFailingTask("update-database", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error updating database") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error updating database") != null);
     try app.queueFailingTask("set-database-origin", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error setting database origin") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error setting database origin") != null);
     try app.queueFailingTask("list-s3-dirs", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error listing S3 directories") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error listing S3 directories") != null);
 }
 
 test "database requests that succeed log nothing to the error output" {
@@ -384,5 +384,5 @@ test "database requests that succeed log nothing to the error output" {
     allocator.free(try app.requestOk("get-databases", "null"));
     allocator.free(try app.requestOk("add-database", "{\"name\":\"quiet\",\"description\":\"\",\"path\":\"/quiet\"}"));
     allocator.free(try app.requestOk("find-database", "\"quiet\""));
-    try std.testing.expectEqual(@as(usize, 0), app.console_err.written().len);
+    try std.testing.expectEqual(@as(usize, 0), (try app.consoleErr()).len);
 }

@@ -169,6 +169,9 @@ const Progress = struct {
 // The state each test starts from.
 //
 const ScannerTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -188,7 +191,7 @@ const ScannerTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         self.testDir = try temp_dirs.makeTempDir(allocator, io, "file-scanner-test");
         self.sessionTempDir = try temp_dirs.makeTempDir(allocator, io, "file-scanner-session");
         self.generator = .{};
@@ -201,6 +204,7 @@ const ScannerTest = struct {
         temp_dirs.removeTempDir(std.testing.io, self.testDir);
         temp_dirs.removeTempDir(std.testing.io, self.sessionTempDir);
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //

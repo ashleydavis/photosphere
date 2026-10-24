@@ -2,6 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const standard_streams = utils.standard_streams;
+const thread_messages = @import("thread-messages.zig");
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
 
 //
 // How much the writer sends through the pipe: many times the pipe's quota, so the pipe fills and writes
@@ -17,23 +20,53 @@ const IPipeReaderResult = struct {
     byteCount: usize = 0,
 
     // The error the reader hit, if any.
-    readError: ?anyerror = null,
+    // The name of the error the reader hit, or "" for none.
+    readError: []const u8 = "",
 };
 
 //
-// Waits before reading, then reads the pipe to its end and records how many bytes came through.
+// What the reader's thread is given: the handle of the pipe's read end, as a number.
 //
-fn readPipeSlowly(readEnd: std.Io.File, result: *IPipeReaderResult) void {
-    const io = std.testing.io;
+const IPipeReaderOrder = struct {
+    handle: usize,
+};
+
+//
+// The reader's thread: makes its own allocator and Io, takes its order, waits before reading, then reads the pipe to its end and
+// posts how many bytes came through to the test.
+//
+fn readPipeSlowly(orders: *MessageQueue, results: *MessageQueue) void {
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
+    const order = thread_messages.take(IPipeReaderOrder, orders, io, arena) catch |err| {
+        std.debug.panic("The reader got no order: {s}", .{@errorName(err)});
+    };
+    const readEnd: std.Io.File = .{
+        .handle = @ptrFromInt(order.handle),
+        .flags = .{
+            .nonblocking = false,
+        },
+    };
 
     // Waits so the pipe is full while the writer is still writing.
     utils.sleep.sleep(io, 300) catch {};
     var buffer: [4096]u8 = undefined;
     var fileReader = readEnd.readerStreaming(io, &buffer);
-    result.byteCount = fileReader.interface.discardRemaining() catch |err| {
-        result.readError = err;
-        return;
-    };
+    var result: IPipeReaderResult = .{};
+    if (fileReader.interface.discardRemaining()) |byteCount| {
+        result.byteCount = byteCount;
+    }
+    else |err| {
+        result.readError = @errorName(err);
+    }
+    thread_messages.post(results, io, arena, result) catch @panic("out of memory posting the reader's result");
 }
 
 test "the standard streams are the process's own handles" {
@@ -96,10 +129,18 @@ test "a slow reader of an asynchronous pipe gets every byte written to it" {
     });
     try std.testing.expect(writeEnd.flags.nonblocking);
 
-    var result: IPipeReaderResult = .{};
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var orders = MessageQueue.init();
+    defer orders.deinit();
+    var results = MessageQueue.init();
+    defer results.deinit();
+    try thread_messages.post(&orders, io, arena.allocator(), IPipeReaderOrder{
+        .handle = @intFromPtr(readEnd.handle),
+    });
     const reader = try std.Thread.spawn(.{}, readPipeSlowly, .{
-        readEnd,
-        &result,
+        &orders,
+        &results,
     });
 
     const payload = try std.testing.allocator.alloc(u8, PIPE_TEST_BYTE_COUNT);
@@ -111,9 +152,10 @@ test "a slow reader of an asynchronous pipe gets every byte written to it" {
     const flushResult = fileWriter.interface.flush();
     windows.CloseHandle(writeEnd.handle);
     reader.join();
+    const result = try thread_messages.take(IPipeReaderResult, &results, io, arena.allocator());
 
     try writeResult;
     try flushResult;
-    try std.testing.expectEqual(@as(?anyerror, null), result.readError);
+    try std.testing.expectEqualStrings("", result.readError);
     try std.testing.expectEqual(PIPE_TEST_BYTE_COUNT, result.byteCount);
 }

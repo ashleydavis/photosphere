@@ -20,8 +20,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `get_database_summary` tool: returns the merkle-tree-derived summary
 // (file count, total size, hashes, version) for the open database.
 //
-pub fn registerGetDatabaseSummaryTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerGetDatabaseSummaryTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "get_database_summary",
         .{
             .description = "Return a summary of the open database (file count, total size, hashes).",

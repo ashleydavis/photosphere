@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -38,7 +39,7 @@ const MessageCounter = struct {
     //
     // Counts one message.
     //
-    fn send(context: ?*anyopaque, message: std.json.Value) void {
+    fn send(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         _ = message;
         const self: *MessageCounter = @ptrCast(@alignCast(context.?));
         self.count += 1;
@@ -49,6 +50,9 @@ const MessageCounter = struct {
 // The state each test starts from.
 //
 const HandlerTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -79,7 +83,7 @@ const HandlerTest = struct {
     // The tools built into the program, whose runner the handler is given.
     mediaTools: MediaTools,
 
-    // The runner the handler is given in its task context: the runner of mediaTools, or null for a test of a task run with
+    // The runner the handler is given: the runner of mediaTools, or null for a test of a task run with
     // none.
     toolRunner: ?InProcessRunner,
 
@@ -90,7 +94,7 @@ const HandlerTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         forgetSharedHashCaches();
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "hash-file-worker");
         self.contents = try test_files.readFile(allocator, io, "../test/test.png");
@@ -104,7 +108,7 @@ const HandlerTest = struct {
             .context = &self.messages,
             .function = MessageCounter.send,
         }, 10);
-        self.mediaTools = try MediaTools.init(io);
+        self.mediaTools = try MediaTools.init();
         self.toolRunner = self.mediaTools.runner();
     }
 
@@ -116,6 +120,7 @@ const HandlerTest = struct {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.mediaTools.deinit();
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //
@@ -163,9 +168,8 @@ const HandlerTest = struct {
         const allocator = self.arena.allocator();
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
-        var taskContext = self.context.taskContext();
-        taskContext.toolRunner = self.toolRunner;
-        const output = try hashFileHandler(allocator, std.testing.io, taskData, taskContext);
+        const taskContext = self.context.taskContext();
+        const output = try hashFileHandler(allocator, std.testing.io, test_timers.timers(), taskData, taskContext, self.toolRunner);
         return std.json.parseFromValueLeaky(IHashFileResult, allocator, output, .{});
     }
 

@@ -1,10 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const vault_module = @import("vault.zig");
+const vault = @import("vault.zig");
 const keychain_types = @import("keychain-types.zig");
-const ISecret = vault_module.ISecret;
-const IVault = vault_module.IVault;
-const IPrereqCheckResult = vault_module.IPrereqCheckResult;
+const ISecret = vault.ISecret;
+const IVault = vault.IVault;
+const IPrereqCheckResult = vault.IPrereqCheckResult;
 const IKeychainPayload = keychain_types.IKeychainPayload;
 const toKeychainName = keychain_types.toKeychainName;
 const fromKeychainName = keychain_types.fromKeychainName;
@@ -94,13 +94,13 @@ pub const MacOSKeychainVault = struct {
     //
     // Set to true once the tool availability check has been performed.
     //
-    toolChecked: std.atomic.Value(bool),
+    toolChecked: bool,
 
     //
     // Creates the vault.
     //
     pub fn init() MacOSKeychainVault {
-        return .{ .toolChecked = std.atomic.Value(bool).init(false) };
+        return .{ .toolChecked = false };
     }
 
     //
@@ -143,9 +143,10 @@ pub const MacOSKeychainVault = struct {
     // Throws a helpful error if the tool is not found.
     //
     fn checkTool(self: *MacOSKeychainVault, allocator: std.mem.Allocator, io: std.Io) !void {
-        if (self.toolChecked.swap(true, .acq_rel)) {
+        if (self.toolChecked) {
             return;
         }
+        self.toolChecked = true;
         const result = self.checkPrereqs(allocator, io);
         if (!result.ok) {
             return errors.throwError("{s}", .{result.message.?});

@@ -45,7 +45,8 @@ pub const IRepairCommandOptions = struct {
 //
 // Writes each repair progress message.
 //
-fn onProgress(context: ?*anyopaque, progress: ?[]const u8) void {
+fn onProgress(context: ?*anyopaque, io: std.Io, progress: ?[]const u8) void {
+    _ = io;
     _ = context;
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();

@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -17,6 +18,9 @@ const RecordingTaskContext = recording_task_context.RecordingTaskContext;
 // reaching the developer's real record or each other's.
 //
 const RecordTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -33,7 +37,7 @@ const RecordTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironmentWith(io, allocator);
         self.runRoot = try temp_dirs.makeTempDir(allocator, io, "get-import-record-test");
         try test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", try std.fs.path.join(allocator, &.{ self.runRoot, "cache" }));
         try self.context.init(allocator, null, null);
@@ -47,6 +51,7 @@ const RecordTest = struct {
             std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
         };
         temp_dirs.removeTempDir(std.testing.io, self.runRoot);
+        self.test_env.deinitWith(self.arena.allocator());
         self.arena.deinit();
     }
 
@@ -65,7 +70,7 @@ const RecordTest = struct {
         const allocator = self.arena.allocator();
         var object: std.json.ObjectMap = .empty;
         try object.put(allocator, "databasePath", .{ .string = databasePath });
-        return getImportRecordHandler(allocator, std.testing.io, .{ .object = object }, self.context.taskContext());
+        return getImportRecordHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = object }, self.context.taskContext());
     }
 };
 
@@ -113,7 +118,7 @@ test "throws when the task data has no database path" {
     try recordTest.init();
     defer recordTest.deinit();
 
-    try std.testing.expectError(error.Thrown, getImportRecordHandler(recordTest.arena.allocator(), std.testing.io, .{ .object = .empty }, recordTest.context.taskContext()));
+    try std.testing.expectError(error.Thrown, getImportRecordHandler(recordTest.arena.allocator(), std.testing.io, test_timers.timers(), .{ .object = .empty }, recordTest.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
@@ -125,7 +130,7 @@ test "throws a descriptive error when the database path is not a string" {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, getImportRecordHandler(allocator, std.testing.io, .{ .object = object }, recordTest.context.taskContext()));
+    try std.testing.expectError(error.Thrown, getImportRecordHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = object }, recordTest.context.taskContext()));
     try std.testing.expectEqualStrings("The get-import-record task data is not valid: databasePath must be a string", errors.lastErrorMessage());
 }
 

@@ -85,7 +85,7 @@ const MockS3 = struct {
             .answer = answer,
             .ranges = .empty,
             .streamIo = std.testing.io,
-            .s3 = S3Client.init(std.testing.io, .{ .endpoint = null, .region = null, .credentials = null }),
+            .s3 = S3Client.init(.{ .endpoint = null, .region = null, .credentials = null }),
         };
         mock.s3.send = .{ .context = mock, .function = send };
     }

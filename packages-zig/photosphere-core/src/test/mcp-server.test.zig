@@ -1,12 +1,13 @@
 //
-// Tests for mcp-server.zig and mcp-bridge.zig: the MCP server task, the tools it offers, and the calls it forwards to the page.
+// Tests for mcp-server.zig: the MCP server, the tools it offers, and the calls it forwards to the page.
 //
-// Each test runs the real core on a fake native app with the MCP server task running on a free loopback port (the test sets test mode
+// Each test runs the real core on a fake native app with the MCP server running on a free loopback port (the test sets test mode
 // in the environment the core reads, which is what makes the server not claim its fixed port), and plays the part of the page: it reads
 // the `mcp-tool-request` events the fake native app records and answers them with `mcp-tool-response` messages.
 //
 
 const std = @import("std");
+const ziggy = @import("ziggy");
 const support = @import("test-support.zig");
 const main_state = @import("photosphere-core").main_state;
 const mcp_server = @import("photosphere-core").mcp_server;
@@ -21,79 +22,89 @@ const io = std.testing.io;
 const MCP_ACCEPT = "application/json, text/event-stream";
 
 //
-// A POST to the server that runs on its own thread, because the server does not answer until the page has, and the test is the page.
+// A POST to the server that runs on its own thread, because the server does not answer until the page has, and the test is the page. The
+// thread makes its own allocator and Io and shares nothing with the test but the queue it posts its outcome to, as JSON text.
 //
 const Call = struct {
-    // The port to post to.
-    port: u16,
-
-    // The JSON-RPC message to post.
-    payload: []const u8,
-
-    // The body of the answer, or null until there is one. Allocated with the testing allocator.
-    answer: ?[]u8,
-
-    // Whether the post failed.
-    failed: bool,
+    // The queue the call's thread posts its outcome to, an ICallOutcome as JSON text.
+    outcomes: ziggy.message_queue.MessageQueue,
 
     // The thread that makes the post.
     thread: std.Thread,
 
     //
-    // Starts the post in place.
+    // Starts the post in place. The payload is a constant of the test's, which the thread only reads.
     //
     fn start(self: *Call, port: u16, payload: []const u8) !void {
-        self.* = .{
-            .port = port,
-            .payload = payload,
-            .answer = null,
-            .failed = false,
-            .thread = undefined,
-        };
-        self.thread = try std.Thread.spawn(.{}, run, .{self});
+        self.outcomes = ziggy.message_queue.MessageQueue.init();
+        errdefer self.outcomes.deinit();
+        self.thread = try std.Thread.spawn(.{}, run, .{ port, payload, &self.outcomes });
     }
 
     //
-    // Waits for the post to end and returns the body of the answer. The caller frees it.
+    // Waits for the post to end and returns the body of the answer, allocated with the testing allocator. The caller frees it.
     //
     fn finish(self: *Call) ![]u8 {
         self.thread.join();
-        if (self.failed) {
+        defer self.outcomes.deinit();
+        const allocator = std.testing.allocator;
+        const message = self.outcomes.tryTake(io, allocator) orelse {
+            return error.CallPostedNoOutcome;
+        };
+        defer allocator.free(message.text);
+        const parsed = try std.json.parseFromSlice(ICallOutcome, allocator, message.text, .{});
+        defer parsed.deinit();
+        if (parsed.value.failed) {
             return error.CallFailed;
         }
-        return self.answer.?;
+        return try allocator.dupe(u8, parsed.value.answer);
     }
 
     //
-    // The thread: posts the message and keeps the body of the answer.
+    // The thread: makes its own allocator and Io, posts the message and posts the outcome to the test's queue.
     //
-    fn run(self: *Call) void {
-        self.post() catch |err| {
-            std.debug.print("The call to the MCP server failed: {s}\n", .{@errorName(err)});
-            self.failed = true;
+    fn run(port: u16, payload: []const u8, outcomes: *ziggy.message_queue.MessageQueue) void {
+        var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+        defer thread_allocator.deinit();
+        var threaded: std.Io.Threaded = .init_single_threaded;
+        threaded.allocator = thread_allocator.allocator();
+        defer threaded.deinit();
+        const thread_io = threaded.io();
+        var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+        defer arena_state.deinit();
+        const allocator = arena_state.allocator();
+        var outcome: ICallOutcome = .{
+            .failed = false,
+            .answer = "",
         };
+        if (post(allocator, thread_io, port, payload)) |answer| {
+            outcome.answer = answer;
+        }
+        else |err| {
+            std.debug.print("The call to the MCP server failed: {s}\n", .{@errorName(err)});
+            outcome.failed = true;
+        }
+        const text = std.json.Stringify.valueAlloc(allocator, outcome, .{}) catch @panic("out of memory reporting the call");
+        outcomes.post(thread_io, 0, text) catch @panic("out of memory reporting the call");
     }
 
     //
-    // Posts the message the way an MCP client does.
+    // Posts the message the way an MCP client does, with the thread's allocator and Io, and returns the body of the answer.
     //
-    fn post(self: *Call) !void {
-        const allocator = std.testing.allocator;
+    fn post(allocator: std.mem.Allocator, thread_io: std.Io, port: u16, payload: []const u8) ![]const u8 {
         var client: std.http.Client = .{
             .allocator = allocator,
-            .io = io,
+            .io = thread_io,
         };
         defer client.deinit();
         var body: std.Io.Writer.Allocating = .init(allocator);
-        defer body.deinit();
-        const url = try std.fmt.allocPrint(allocator, "http://127.0.0.1:{d}/mcp", .{self.port});
-        defer allocator.free(url);
+        const url = try std.fmt.allocPrint(allocator, "http://127.0.0.1:{d}/mcp", .{port});
         const result = try client.fetch(.{
             .location = .{
                 .url = url,
             },
             .method = .POST,
-            .payload = self.payload,
+            .payload = payload,
             .headers = .{
                 .content_type = .{
                     .override = "application/json",
@@ -112,16 +123,31 @@ const Call = struct {
             std.debug.print("The MCP server answered {d}\n", .{@intFromEnum(result.status)});
             return error.UnexpectedStatus;
         }
-        self.answer = try allocator.dupe(u8, body.written());
+        return body.written();
     }
+};
+
+//
+// What a call's thread posts to the test when its post has ended.
+//
+const ICallOutcome = struct {
+    // Whether the post failed.
+    failed: bool,
+
+    // The body of the answer, or "" when the post failed.
+    answer: []const u8,
 };
 
 //
 // Starts the MCP server on a free port and returns the port it bound.
 //
 fn startServer(app: *TestApp) !u16 {
-    try main_state.fromCore(app.core).startMcpServer();
-    const port = main_state.fromCore(app.core).mcp_bridge.port.load(.acquire);
+    const port = try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!u16 {
+            try state.startMcpServer(services, main_io, main_state.stateAllocator());
+            return if (state.mcp_server) |server| server.port else 0;
+        }
+    }.check);
     if (port == 0) {
         return error.ServerDidNotStart;
     }
@@ -135,8 +161,8 @@ fn waitForRequest(app: *TestApp, tool: []const u8) ![]u8 {
     const allocator = std.testing.allocator;
     const marker = try std.fmt.allocPrint(allocator, "\"type\":\"mcp-tool-request\",\"data\":{{\"requestId\":\"", .{});
     defer allocator.free(marker);
-    try app.shell.expectMessageContaining(marker);
-    const text = try app.shell.messageAt(allocator, app.shell.indexOfContaining(marker).?);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, marker);
+    const text = try app.native_app.messageAt(std.testing.io, allocator, app.native_app.indexOfContaining(std.testing.io, std.testing.allocator, marker).?);
     defer allocator.free(text);
     const parsed = try std.json.parseFromSlice(struct {
         data: struct {
@@ -159,7 +185,7 @@ fn waitForRequest(app: *TestApp, tool: []const u8) ![]u8 {
 fn answerRequest(app: *TestApp, request_id: []const u8, payload_json: []const u8) !void {
     const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"kind\":\"app\",\"name\":\"mcp-tool-response\",\"data\":{{\"requestId\":\"{s}\",{s}}}}}", .{ request_id, payload_json });
     defer std.testing.allocator.free(message);
-    app.core.postMessage(message);
+    app.native_app.sendMessage(std.testing.allocator, message);
 }
 
 test "a tool call is forwarded to the page and the page's answer is the result" {
@@ -189,7 +215,7 @@ test "the arguments the tool was called with, with the defaults filled in, are s
     try call.start(port, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_media_files\",\"arguments\":{\"pageId\":\"page-2\"}}}");
     const request_id = try waitForRequest(&app, "list_media_files");
     defer std.testing.allocator.free(request_id);
-    const text = try app.shell.messageAt(std.testing.allocator, app.shell.indexOfContaining("\"type\":\"mcp-tool-request\"").?);
+    const text = try app.native_app.messageAt(std.testing.io, std.testing.allocator, app.native_app.indexOfContaining(std.testing.io, std.testing.allocator, "\"type\":\"mcp-tool-request\"").?);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "\"tool\":\"list_media_files\",\"args\":{\"limit\":20,\"pageId\":\"page-2\"}") != null);
     try answerRequest(&app, request_id, "\"result\":\"ok\"");
@@ -226,7 +252,7 @@ test "a tool call with arguments that do not match the tool's input is refused w
     defer std.testing.allocator.free(answer);
 
     try std.testing.expect(std.mem.indexOf(u8, answer, "Input validation error") != null);
-    try std.testing.expect(app.shell.indexOfContaining("\"type\":\"mcp-tool-request\"") == null);
+    try std.testing.expect(app.native_app.indexOfContaining(std.testing.io, std.testing.allocator, "\"type\":\"mcp-tool-request\"") == null);
 }
 
 test "every tool of the desktop app is listed, in order" {
@@ -310,9 +336,12 @@ test "stopping the server closes its port" {
     defer app.stop();
     const port = try startServer(&app);
 
-    main_state.fromCore(app.core).stopMcpServer();
-
-    try std.testing.expectEqual(@as(u16, 0), main_state.fromCore(app.core).mcp_bridge.port.load(.acquire));
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io) anyerror!void {
+            state.stopMcpServer(main_io, main_state.stateAllocator());
+            try std.testing.expect(state.mcp_server == null);
+        }
+    }.check);
     try expectServerStopped(io, port);
 }
 
@@ -322,8 +351,8 @@ test "the MCP server holds no worker of the task runner, so an app with one work
     defer app.stop();
     _ = try startServer(&app);
 
-    app.core.postMessage("{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"after-mcp-1\",\"taskType\":\"get-databases\",\"source\":\"test\",\"data\":null,\"priority\":\"background\"}}");
-    try app.shell.expectMessageContaining("\"taskId\":\"after-mcp-1\",\"result\":{\"taskId\":\"after-mcp-1\",\"status\":\"succeeded\"");
+    app.native_app.sendMessage(std.testing.allocator, "{\"kind\":\"system\",\"name\":\"add-task\",\"data\":{\"taskId\":\"after-mcp-1\",\"taskType\":\"get-databases\",\"source\":\"test\",\"data\":null,\"priority\":\"background\"}}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"after-mcp-1\",\"result\":{\"taskId\":\"after-mcp-1\",\"status\":\"succeeded\"");
 }
 
 test "the fixed port is the one clients are told to use" {

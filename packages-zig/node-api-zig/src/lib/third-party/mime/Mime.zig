@@ -23,21 +23,16 @@ pub const TypeMapEntry = struct {
 // A map of MIME types to extensions and extensions to MIME types.
 //
 pub const Mime = struct {
-    // Allocates the maps.
-    allocator: std.mem.Allocator,
-
-    // The MIME type of each extension (TypeScript: #extensionToType).
+    // The MIME type of each extension (TypeScript: #extensionToType), allocated with the allocator given to init and define.
     extensionToType: std.StringHashMapUnmanaged([]const u8) = .empty,
 
     //
     // Creates a map from the type maps, defined in order (TypeScript: `new Mime(...args)`).
     //
     pub fn init(allocator: std.mem.Allocator, typeMaps: []const []const TypeMapEntry) !Mime {
-        var self: Mime = .{
-            .allocator = allocator,
-        };
+        var self: Mime = .{};
         for (typeMaps) |typeMap| {
-            try self.define(typeMap, false);
+            try self.define(allocator, typeMap, false);
         }
         return self;
     }
@@ -48,11 +43,11 @@ pub const Mime = struct {
     //
     // A leading '*' on an extension says it is known but not to be mapped back to the type.
     //
-    pub fn define(self: *Mime, typeMap: []const TypeMapEntry, force: bool) !void {
+    pub fn define(self: *Mime, allocator: std.mem.Allocator, typeMap: []const TypeMapEntry, force: bool) !void {
         for (typeMap) |entry| {
-            const mimeType = try std.ascii.allocLowerString(self.allocator, entry.type);
+            const mimeType = try std.ascii.allocLowerString(allocator, entry.type);
             for (entry.extensions) |rawExtension| {
-                const lowerExtension = try std.ascii.allocLowerString(self.allocator, rawExtension);
+                const lowerExtension = try std.ascii.allocLowerString(allocator, rawExtension);
                 const starred = std.mem.startsWith(u8, lowerExtension, "*");
                 const extension = if (starred) lowerExtension[1..] else lowerExtension;
 
@@ -64,7 +59,7 @@ pub const Mime = struct {
                 if (currentType != null and !std.mem.eql(u8, currentType.?, mimeType) and !force) {
                     return errors.throwError("\"{s} -> {s}\" conflicts with \"{s} -> {s}\". Pass `force=true` to override this definition.", .{ mimeType, extension, currentType.?, extension });
                 }
-                try self.extensionToType.put(self.allocator, extension, mimeType);
+                try self.extensionToType.put(allocator, extension, mimeType);
             }
         }
     }

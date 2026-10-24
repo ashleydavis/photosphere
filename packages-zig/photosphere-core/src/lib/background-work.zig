@@ -3,13 +3,14 @@
 // what to do, runs the tasks the plan hands back one after another, and ends. A pass with nothing to do ends straight away.
 //
 // A pass never waits for the next one: it holds a worker thread only while it works. The core's timer starts the next pass when the gap
-// the plan asked for is up (see MainState.runDueTimers). startBackgroundWork, which the page's startBackgroundImport request calls,
-// switches the work on, and stopBackgroundWork, which its stopBackgroundImport request calls, switches it off.
+// the plan set is up (see MainState). MainState.startBackgroundWork, which the page's startBackgroundImport request calls,
+// switches the work on, and MainState.stopBackgroundWork, which its stopBackgroundImport request calls, switches it off.
+// The main thread gives each pass task what it needs in its data and records how it ended from its result.
 //
 // While any of the work is switched on the core holds the app running (on Android a foreground service with its notification), so the
 // timer goes on starting passes with the app off screen. Each pass is also a task whose type is registered as keep-alive.
 //
-// The decisions of a pass are in the functions that take a PassHost, a plain interface over everything that needs the platform or the
+// The decisions of a pass are in the functions that take a PassServices, a plain interface over everything that needs the platform or the
 // core, so they are tested with no core and no phone. The passes report what they are doing to the native app, which writes it to the
 // system log: the app's own log file is written through the page, which is suspended exactly when this work matters.
 //
@@ -18,9 +19,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const main_state = @import("main-state.zig");
+const windows_native_calls = @import("windows-native-calls.zig");
+const macos_native_calls = @import("macos-native-calls.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 
 //
@@ -171,7 +176,7 @@ pub const IPlan = struct {
 // Everything a pass needs that it cannot do itself: running the planning task and the steps, keeping the CPU awake, and saying what
 // happened. An interface so the passes' decisions are tested with no core and no phone.
 //
-pub const PassHost = struct {
+pub const PassServices = struct {
     // The implementation.
     ptr: *anyopaque,
     // The implementation's functions.
@@ -180,44 +185,45 @@ pub const PassHost = struct {
     //
     // The functions an implementation provides.
     //
+    // Each is given the Io, the allocator, which is the pass's, and the timers of the pass's thread.
     pub const VTable = struct {
         // Runs the planning task and returns its outputs. Fails when the task fails, which the pass treats as a pass that did not work
         // rather than as a reason to give up.
-        readPlan: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value,
-        // Runs one step and waits for it to finish.
-        runStep: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, step: IStep) anyerror!IStepResult,
+        readPlan: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value,
+        // Runs one step of the pass and waits for it to finish.
+        runStep: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass: Pass, step: IStep) anyerror!IStepResult,
         // Keeps the CPU running while a pass is in flight, and lets it sleep again afterwards.
-        holdAwake: *const fn (ptr: *anyopaque, awake: bool) anyerror!void,
+        holdAwake: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, awake: bool) anyerror!void,
         // Says what the pass is doing.
-        report: *const fn (ptr: *anyopaque, message: []const u8) void,
+        report: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8) void,
         // Says what went wrong.
-        reportError: *const fn (ptr: *anyopaque, message: []const u8) void,
+        reportError: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8) void,
         // Whether the pass has been told to stop.
-        isStopped: *const fn (ptr: *anyopaque) bool,
+        isStopped: *const fn (ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) bool,
     };
 
-    fn readPlan(self: PassHost, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) !std.json.Value {
-        return try self.vtable.readPlan(self.ptr, allocator, plan_task, data);
+    fn readPlan(self: PassServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, plan_task: []const u8, data: std.json.Value) !std.json.Value {
+        return try self.vtable.readPlan(self.ptr, io, allocator, timers, plan_task, data);
     }
 
-    fn runStep(self: PassHost, allocator: std.mem.Allocator, step: IStep) !IStepResult {
-        return try self.vtable.runStep(self.ptr, allocator, step);
+    fn runStep(self: PassServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass: Pass, step: IStep) !IStepResult {
+        return try self.vtable.runStep(self.ptr, io, allocator, timers, pass, step);
     }
 
-    fn holdAwake(self: PassHost, awake: bool) !void {
-        try self.vtable.holdAwake(self.ptr, awake);
+    fn holdAwake(self: PassServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, awake: bool) !void {
+        try self.vtable.holdAwake(self.ptr, io, allocator, timers, awake);
     }
 
-    fn report(self: PassHost, message: []const u8) void {
-        self.vtable.report(self.ptr, message);
+    fn report(self: PassServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8) void {
+        self.vtable.report(self.ptr, io, allocator, timers, message);
     }
 
-    fn reportError(self: PassHost, message: []const u8) void {
-        self.vtable.reportError(self.ptr, message);
+    fn reportError(self: PassServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8) void {
+        self.vtable.reportError(self.ptr, io, allocator, timers, message);
     }
 
-    fn isStopped(self: PassHost) bool {
-        return self.vtable.isStopped(self.ptr);
+    fn isStopped(self: PassServices, io: std.Io, allocator: std.mem.Allocator) bool {
+        return self.vtable.isStopped(self.ptr, io, allocator);
     }
 };
 
@@ -285,15 +291,15 @@ pub fn parsePlan(allocator: std.mem.Allocator, outputs: std.json.Value, fallback
 // Reads the plan of a pass, reporting a failure to read it. A plan that cannot be read is not an answer of "finished": treating it as
 // one would switch the work off for good over a single failed task, so the caller counts the pass as run and the next one asks again.
 //
-fn readPlanOrReport(allocator: std.mem.Allocator, host: PassHost, plan_task: []const u8, data: std.json.Value, fallback_pause_ms: u64, what: []const u8) ?IPlan {
-    const outputs = host.readPlan(allocator, plan_task, data) catch |err| {
+fn readPlanOrReport(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass_services: PassServices, plan_task: []const u8, data: std.json.Value, fallback_pause_ms: u64, what: []const u8) ?IPlan {
+    const outputs = pass_services.readPlan(io, allocator, timers, plan_task, data) catch |err| {
         const text = std.fmt.allocPrint(allocator, "Could not work out {s}: {s}", .{ what, describe(allocator, err) }) catch "Could not work out what to do.";
-        host.reportError(text);
+        pass_services.reportError(io, allocator, timers, text);
         return null;
     };
     return parsePlan(allocator, outputs, fallback_pause_ms) catch |err| {
         const text = std.fmt.allocPrint(allocator, "Could not work out {s}: {s}", .{ what, describe(allocator, err) }) catch "Could not work out what to do.";
-        host.reportError(text);
+        pass_services.reportError(io, allocator, timers, text);
         return null;
     };
 }
@@ -316,21 +322,21 @@ const StepsOutcome = enum {
 // pass, from the plan. A step that does not work is reported even when the pass is being stopped, because a stop cancels the step and
 // says nothing about why it ended.
 //
-fn runSteps(allocator: std.mem.Allocator, host: PassHost, plan: IPlan, label: []const u8, results: *std.ArrayList(IStepResult)) StepsOutcome {
+fn runSteps(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass_services: PassServices, pass: Pass, plan: IPlan, label: []const u8, results: *std.ArrayList(IStepResult)) StepsOutcome {
     for (plan.steps) |step| {
-        if (host.isStopped()) {
+        if (pass_services.isStopped(io, allocator)) {
             return .stopped;
         }
-        const result = host.runStep(allocator, step) catch |err| {
-            host.reportError(std.fmt.allocPrint(allocator, "{s} step \"{s}\" failed: {s}", .{ label, step.@"type", describe(allocator, err) }) catch "A step failed.");
+        const result = pass_services.runStep(io, allocator, timers, pass, step) catch |err| {
+            pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "{s} step \"{s}\" failed: {s}", .{ label, step.@"type", describe(allocator, err) }) catch "A step failed.");
             return .failed;
         };
         if (!result.succeeded) {
-            host.reportError(std.fmt.allocPrint(allocator, "{s} step \"{s}\" did not succeed.", .{ label, step.@"type" }) catch "A step did not succeed.");
+            pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "{s} step \"{s}\" did not succeed.", .{ label, step.@"type" }) catch "A step did not succeed.");
             return .failed;
         }
         results.append(allocator, result) catch {
-            host.reportError("The pass ran out of memory.");
+            pass_services.reportError(io, allocator, timers, "The pass ran out of memory.");
             return .failed;
         };
     }
@@ -345,8 +351,8 @@ fn runSteps(allocator: std.mem.Allocator, host: PassHost, plan: IPlan, label: []
 // at that moment, a file being written as it was read), and giving up would leave automatic import switched on in the interface and
 // doing nothing.
 //
-pub fn runImportPass(allocator: std.mem.Allocator, host: PassHost) IPassResult {
-    const plan = readPlanOrReport(allocator, host, "plan-auto-import", .null, FALLBACK_PAUSE_MS, "what automatic import should do") orelse {
+pub fn runImportPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass_services: PassServices) IPassResult {
+    const plan = readPlanOrReport(io, allocator, timers, pass_services, "plan-auto-import", .null, FALLBACK_PAUSE_MS, "what automatic import should do") orelse {
         return .{
             .gap_ms = FALLBACK_PAUSE_MS,
             .finished = false,
@@ -357,22 +363,22 @@ pub fn runImportPass(allocator: std.mem.Allocator, host: PassHost) IPassResult {
         .finished = false,
     };
     if (!plan.should_run) {
-        host.report("Automatic import is switched off.");
+        pass_services.report(io, allocator, timers, "Automatic import is switched off.");
         return .{
             .gap_ms = plan.pause_ms,
             .finished = true,
         };
     }
-    host.holdAwake(true) catch |err| {
-        host.reportError(std.fmt.allocPrint(allocator, "Could not keep the phone awake for automatic import: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
+    pass_services.holdAwake(io, allocator, timers, true) catch |err| {
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the phone awake for automatic import: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
         return ran;
     };
-    defer host.holdAwake(false) catch |err| {
-        host.reportError(std.fmt.allocPrint(allocator, "Could not let the phone sleep again after automatic import: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
+    defer pass_services.holdAwake(io, allocator, timers, false) catch |err| {
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the phone sleep again after automatic import: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
     };
-    host.report(std.fmt.allocPrint(allocator, "Automatic import running into \"{s}\".", .{plan.database_path}) catch "Automatic import running.");
+    pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Automatic import running into \"{s}\".", .{plan.database_path}) catch "Automatic import running.");
     var results: std.ArrayList(IStepResult) = .empty;
-    _ = runSteps(allocator, host, plan, "Automatic import", &results);
+    _ = runSteps(io, allocator, timers, pass_services, .import, plan, "Automatic import", &results);
     return ran;
 }
 
@@ -388,15 +394,15 @@ fn replicaStateName(state: ReplicaState) []const u8 {
 // Asks the plan-sync task whether a sync should run. What the prefetch is doing goes with the question, because a sync that runs while
 // a prefetch is working does the same work slowly and gets in its own way.
 //
-fn readSyncPlan(allocator: std.mem.Allocator, host: PassHost, replica_state: *std.atomic.Value(ReplicaState)) ?IPlan {
+fn readSyncPlan(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass_services: PassServices, replica_state: *ReplicaState) ?IPlan {
     var request: std.json.ObjectMap = .empty;
     request.put(allocator, "prefetchState", .{
-        .string = replicaStateName(replica_state.load(.acquire)),
+        .string = replicaStateName(replica_state.*),
     }) catch {
-        host.reportError("The sync pass ran out of memory.");
+        pass_services.reportError(io, allocator, timers, "The sync pass ran out of memory.");
         return null;
     };
-    return readPlanOrReport(allocator, host, "plan-sync", .{ .object = request }, SYNC_FALLBACK_PAUSE_MS, "whether a sync should run");
+    return readPlanOrReport(io, allocator, timers, pass_services, "plan-sync", .{ .object = request }, SYNC_FALLBACK_PAUSE_MS, "whether a sync should run");
 }
 
 //
@@ -407,8 +413,8 @@ fn readSyncPlan(allocator: std.mem.Allocator, host: PassHost, replica_state: *st
 // on when a database is opened, and a sync at that moment would push a database the user has only just opened, racing whatever they do
 // to it next. The pause is a setting only the plan reads.
 //
-pub fn runSyncPass(allocator: std.mem.Allocator, host: PassHost, replica_state: *std.atomic.Value(ReplicaState), first: bool) IPassResult {
-    const plan = readSyncPlan(allocator, host, replica_state) orelse {
+pub fn runSyncPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass_services: PassServices, replica_state: *ReplicaState, first: bool) IPassResult {
+    const plan = readSyncPlan(io, allocator, timers, pass_services, replica_state) orelse {
         return .{
             .gap_ms = SYNC_FALLBACK_PAUSE_MS,
             .finished = false,
@@ -422,19 +428,19 @@ pub fn runSyncPass(allocator: std.mem.Allocator, host: PassHost, replica_state: 
         return ran;
     }
     if (!plan.should_run) {
-        host.report(std.fmt.allocPrint(allocator, "Not syncing: {s}", .{plan.reason}) catch "Not syncing.");
+        pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Not syncing: {s}", .{plan.reason}) catch "Not syncing.");
         return ran;
     }
-    host.holdAwake(true) catch |err| {
-        host.reportError(std.fmt.allocPrint(allocator, "Could not keep the phone awake for a sync: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
+    pass_services.holdAwake(io, allocator, timers, true) catch |err| {
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the phone awake for a sync: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
         return ran;
     };
-    defer host.holdAwake(false) catch |err| {
-        host.reportError(std.fmt.allocPrint(allocator, "Could not let the phone sleep again after a sync: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
+    defer pass_services.holdAwake(io, allocator, timers, false) catch |err| {
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the phone sleep again after a sync: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
     };
-    host.report(std.fmt.allocPrint(allocator, "Syncing \"{s}\".", .{plan.database_path}) catch "Syncing.");
+    pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Syncing \"{s}\".", .{plan.database_path}) catch "Syncing.");
     var results: std.ArrayList(IStepResult) = .empty;
-    _ = runSteps(allocator, host, plan, "Sync", &results);
+    _ = runSteps(io, allocator, timers, pass_services, .sync, plan, "Sync", &results);
     return ran;
 }
 
@@ -446,8 +452,8 @@ pub fn runSyncPass(allocator: std.mem.Allocator, host: PassHost, replica_state: 
 // A pass that fails does not finish the work. The next one runs anyway: a file can fail to copy for a reason that has since gone, and
 // these passes exist precisely because a prefetch that gave up was never tried again.
 //
-pub fn runPrefetchPass(allocator: std.mem.Allocator, host: PassHost, replica_state: *std.atomic.Value(ReplicaState)) IPassResult {
-    const plan = readPlanOrReport(allocator, host, "plan-prefetch", .null, FALLBACK_PAUSE_MS, "what the background prefetch should do") orelse {
+pub fn runPrefetchPass(io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass_services: PassServices, replica_state: *ReplicaState) IPassResult {
+    const plan = readPlanOrReport(io, allocator, timers, pass_services, "plan-prefetch", .null, FALLBACK_PAUSE_MS, "what the background prefetch should do") orelse {
         return .{
             .gap_ms = FALLBACK_PAUSE_MS,
             .finished = false,
@@ -460,20 +466,20 @@ pub fn runPrefetchPass(allocator: std.mem.Allocator, host: PassHost, replica_sta
     if (!plan.should_run) {
         // Refused, not finished. The next pass asks again, because everything that refuses a pass can stop refusing without the app
         // being touched.
-        host.report(std.fmt.allocPrint(allocator, "No database to fill in: {s}", .{plan.reason}) catch "No database to fill in.");
+        pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "No database to fill in: {s}", .{plan.reason}) catch "No database to fill in.");
         return ran;
     }
-    host.holdAwake(true) catch |err| {
-        host.reportError(std.fmt.allocPrint(allocator, "Could not keep the phone awake for the prefetch: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
+    pass_services.holdAwake(io, allocator, timers, true) catch |err| {
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not keep the phone awake for the prefetch: {s}", .{describe(allocator, err)}) catch "Could not keep the phone awake.");
         return ran;
     };
-    defer host.holdAwake(false) catch |err| {
-        host.reportError(std.fmt.allocPrint(allocator, "Could not let the phone sleep again after the prefetch: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
+    defer pass_services.holdAwake(io, allocator, timers, false) catch |err| {
+        pass_services.reportError(io, allocator, timers, std.fmt.allocPrint(allocator, "Could not let the phone sleep again after the prefetch: {s}", .{describe(allocator, err)}) catch "Could not let the phone sleep again.");
     };
-    host.report(std.fmt.allocPrint(allocator, "Filling in \"{s}\".", .{plan.database_path}) catch "Filling in a replica.");
+    pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "Filling in \"{s}\".", .{plan.database_path}) catch "Filling in a replica.");
 
     var results: std.ArrayList(IStepResult) = .empty;
-    switch (runSteps(allocator, host, plan, "Prefetch", &results)) {
+    switch (runSteps(io, allocator, timers, pass_services, .prefetch, plan, "Prefetch", &results)) {
         .completed => {},
         .stopped => {
             return ran;
@@ -481,7 +487,7 @@ pub fn runPrefetchPass(allocator: std.mem.Allocator, host: PassHost, replica_sta
         .failed => {
             // Stalled, not complete. A step that failed tells us nothing about what is left, and a sync that waited on it would wait
             // for ever.
-            replica_state.store(.stalled, .release);
+            replica_state.* = .stalled;
             return ran;
         },
     }
@@ -499,8 +505,8 @@ pub fn runPrefetchPass(allocator: std.mem.Allocator, host: PassHost, replica_sta
     if (!anything_fetched and !anything_left) {
         // Nothing fetched and nothing missing: the replica is complete and there is nothing left to walk. Opening a database switches
         // the prefetch on again when there is a reason to.
-        replica_state.store(.complete, .release);
-        host.report(std.fmt.allocPrint(allocator, "\"{s}\" is filled in; nothing left to fetch.", .{plan.database_path}) catch "The replica is filled in; nothing left to fetch.");
+        replica_state.* = .complete;
+        pass_services.report(io, allocator, timers, std.fmt.allocPrint(allocator, "\"{s}\" is filled in; nothing left to fetch.", .{plan.database_path}) catch "The replica is filled in; nothing left to fetch.");
         return .{
             .gap_ms = plan.pause_ms,
             .finished = true,
@@ -509,7 +515,7 @@ pub fn runPrefetchPass(allocator: std.mem.Allocator, host: PassHost, replica_sta
     // Fetching anything at all counts as progress, including a pass that fetched files and found nothing left: the next pass confirms
     // that and reports the replica complete, so at worst a sync waits one more gap. Fetching nothing while files are still missing is
     // the stuck case, and it is the one a sync must not wait on.
-    replica_state.store(if (anything_fetched) .working else .stalled, .release);
+    replica_state.* = if (anything_fetched) .working else .stalled;
     return ran;
 }
 
@@ -540,125 +546,127 @@ pub fn readPrefetchStepCounts(outputs: ?std.json.Value) IStepResult {
 }
 
 //
-// The host of a pass that runs as a task: its steps are child tasks of the pass's own task, so they take its source and are cancelled
-// with it, and the platform is reached through the native app's host requests.
+// The services of a pass that runs as a task: its steps are child tasks of the pass's own task, so they take its source and are
+// cancelled with it, and the platform is reached through the native app's native calls. The pass services' pointer is the task's
+// services, the argument the task was given (see runPass).
 //
-const TaskPassHost = struct {
-    // The context of the pass's task.
-    context: *TaskContext,
-    // Which pass this is.
-    pass: Pass,
-
-    const vtable: PassHost.VTable = .{
-        .readPlan = readPlanErased,
-        .runStep = runStepErased,
-        .holdAwake = holdAwakeErased,
-        .report = reportErased,
-        .reportError = reportErrorErased,
-        .isStopped = isStoppedErased,
-    };
-
-    fn host(self: *TaskPassHost) PassHost {
-        return .{
-            .ptr = self,
-            .vtable = &vtable,
-        };
-    }
-
-    //
-    // Runs a child task and waits for it. The completion is allocated with the allocator, which is the pass's. A child that did not
-    // succeed is returned as its completion, for the caller to decide on.
-    //
-    fn runChild(self: *TaskPassHost, allocator: std.mem.Allocator, task_type: []const u8, data: std.json.Value) !ziggy.types.Completion {
-        return try self.context.runChild(allocator, task_type, data, null);
-    }
-
-    fn readPlanErased(ptr: *anyopaque, allocator: std.mem.Allocator, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value {
-        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        const completion = try self.runChild(allocator, plan_task, data);
-        if (completion.status != .succeeded) {
-            return utils.errors.throwError("{s} failed: {s}", .{ plan_task, completion.error_message orelse "no reason given" });
-        }
-        const text = completion.result_json orelse {
-            return utils.errors.throwError("{s} returned nothing.", .{plan_task});
-        };
-        return try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
-    }
-
-    fn runStepErased(ptr: *anyopaque, allocator: std.mem.Allocator, step: IStep) anyerror!IStepResult {
-        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        const completion = try self.runChild(allocator, step.@"type", step.data);
-        if (completion.status != .succeeded) {
-            self.reportErrorMessage(std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ self.pass.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.");
-            return .{
-                .succeeded = false,
-                .files_fetched = 0,
-                .files_still_missing = 0,
-            };
-        }
-        if (self.pass != .prefetch) {
-            return .{
-                .succeeded = true,
-                .files_fetched = 0,
-                .files_still_missing = 0,
-            };
-        }
-        const outputs: ?std.json.Value = if (completion.result_json) |text| try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) else null;
-        return readPrefetchStepCounts(outputs);
-    }
-
-    fn holdAwakeErased(ptr: *anyopaque, awake: bool) anyerror!void {
-        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        _ = try askShell(self.context, "holdAwake", try json.stringify(self.context.arena, .{
-            .awake = awake,
-        }));
-    }
-
-    fn reportErased(ptr: *anyopaque, message: []const u8) void {
-        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        self.tellShell(message, false);
-    }
-
-    fn reportErrorErased(ptr: *anyopaque, message: []const u8) void {
-        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        self.tellShell(message, true);
-    }
-
-    fn reportErrorMessage(self: *TaskPassHost, message: []const u8) void {
-        self.tellShell(message, true);
-    }
-
-    fn isStoppedErased(ptr: *anyopaque) bool {
-        const self: *TaskPassHost = @ptrCast(@alignCast(ptr));
-        return self.context.isCancelled();
-    }
-
-    //
-    // Tells the native app what the pass is doing, for the system log. A native app that cannot take it is not allowed to make the
-    // pass's report vanish, so the message goes to the app's own log with the reason.
-    //
-    fn tellShell(self: *TaskPassHost, message: []const u8, is_error: bool) void {
-        const request = json.stringify(self.context.arena, .{
-            .@"error" = is_error,
-            .message = message,
-        }) catch {
-            utils.log.log.@"error"(message);
-            return;
-        };
-        _ = askShell(self.context, "backgroundLog", request) catch |err| {
-            utils.log.log.@"error"(std.fmt.allocPrint(self.context.arena, "The background work could not tell the system log \"{s}\": {s}", .{ message, utils.errors.errorMessage(err) }) catch message);
-        };
-    }
+const task_pass_services_vtable: PassServices.VTable = .{
+    .readPlan = readPlanOfTask,
+    .runStep = runStepOfTask,
+    .holdAwake = holdAwakeOfTask,
+    .report = reportOfTask,
+    .reportError = reportErrorOfTask,
+    .isStopped = isStoppedOfTask,
 };
 
 //
-// Asks the native app to do what the method names, and returns its answer, which is JSON text. A platform without the callback and a
-// native app that cannot do it are each an error with a sentence the user can act on.
+// The pass services of a pass that runs as the task whose services are given.
 //
-pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
-    const reply = context.hostRequest(method, request_json) catch |err| {
-        if (err == error.HostCallbackMissing) {
-            return try answerWithoutShell(context, method, request_json);
+fn taskPassServices(services: *const TaskServices) PassServices {
+    return .{
+        .ptr = @constCast(services),
+        .vtable = &task_pass_services_vtable,
+    };
+}
+
+//
+// The services of the task the pass services are for.
+//
+fn servicesOf(ptr: *anyopaque) TaskServices {
+    const services: *const TaskServices = @ptrCast(@alignCast(ptr));
+    return services.*;
+}
+
+//
+// Runs a child task and waits for it. The completion is allocated with the allocator, which is the pass's. A child that did not
+// succeed is returned as its completion, for the caller to decide on.
+//
+fn runChildOfTask(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, task_type: []const u8, data: std.json.Value) !ziggy.types.Completion {
+    return try services.runChild(io, allocator, timers, allocator, task_type, data, null);
+}
+
+fn readPlanOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, plan_task: []const u8, data: std.json.Value) anyerror!std.json.Value {
+    const completion = try runChildOfTask(servicesOf(ptr), io, allocator, timers, plan_task, data);
+    if (completion.status != .succeeded) {
+        return utils.errors.throwError("{s} failed: {s}", .{ plan_task, completion.error_message orelse "no reason given" });
+    }
+    const text = completion.result_json orelse {
+        return utils.errors.throwError("{s} returned nothing.", .{plan_task});
+    };
+    return try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
+}
+
+fn runStepOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass: Pass, step: IStep) anyerror!IStepResult {
+    const services = servicesOf(ptr);
+    const completion = try runChildOfTask(services, io, allocator, timers, step.@"type", step.data);
+    if (completion.status != .succeeded) {
+        sendBackgroundLog(services, io, allocator, timers, std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ pass.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.", true);
+        return .{
+            .succeeded = false,
+            .files_fetched = 0,
+            .files_still_missing = 0,
+        };
+    }
+    if (pass != .prefetch) {
+        return .{
+            .succeeded = true,
+            .files_fetched = 0,
+            .files_still_missing = 0,
+        };
+    }
+    const outputs: ?std.json.Value = if (completion.result_json) |text| try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) else null;
+    return readPrefetchStepCounts(outputs);
+}
+
+fn holdAwakeOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, awake: bool) anyerror!void {
+    _ = try callNativeApp(servicesOf(ptr), io, allocator, timers, "holdAwake", try json.stringify(allocator, .{
+        .awake = awake,
+    }));
+}
+
+fn reportOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8) void {
+    sendBackgroundLog(servicesOf(ptr), io, allocator, timers, message, false);
+}
+
+fn reportErrorOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8) void {
+    sendBackgroundLog(servicesOf(ptr), io, allocator, timers, message, true);
+}
+
+fn isStoppedOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) bool {
+    return servicesOf(ptr).isCancelled(io, allocator);
+}
+
+//
+// Tells the native app what the pass is doing, for the system log. A native app that cannot take it is not allowed to make the
+// pass's report vanish, so the message goes to the app's own log with the reason.
+//
+fn sendBackgroundLog(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8, is_error: bool) void {
+    const request = json.stringify(allocator, .{
+        .@"error" = is_error,
+        .message = message,
+    }) catch {
+        utils.log.log.@"error"(message);
+        return;
+    };
+    _ = callNativeApp(services, io, allocator, timers, "backgroundLog", request) catch |err| {
+        utils.log.log.@"error"(std.fmt.allocPrint(allocator, "The background work could not tell the system log \"{s}\": {s}", .{ message, utils.errors.errorMessage(err) }) catch message);
+    };
+}
+
+//
+// The type of the task event a task sends for the main thread to hold the computer awake, or let it go, on Windows and MacOS, where the
+// hold belongs to the main thread (see callOnDesktop). Its data is the JSON text of the holdAwake request.
+//
+pub const HOLD_AWAKE_EVENT_TYPE = "hold-awake";
+
+//
+// Calls the native app to do what the method names, and returns its result, which is JSON text, allocated with the allocator. A
+// platform without the callback and a native app that cannot do it are each an error with a sentence the user can act on.
+//
+pub fn callNativeApp(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: ?Timers, method: []const u8, request_json: []const u8) ![]const u8 {
+    const reply = services.nativeCall(io, allocator, timers, method, request_json) catch |err| {
+        if (err == error.NativeCallMissing) {
+            return try callOnDesktop(services, io, allocator, method, request_json);
         }
         return err;
     };
@@ -669,94 +677,103 @@ pub fn askShell(context: *TaskContext, method: []const u8, request_json: []const
 }
 
 //
-// Answers a host request when the native app has no host request callback. Ziggy's Windows native app and MacOS bridge have none, so
-// on Windows and MacOS the core answers the requests a desktop can itself (windows-host.zig, macos-host.zig). Anywhere else, and for a
-// request only a phone can answer, it is an error that says so.
+// Makes a native call when the native app has no native call callback. Ziggy's Windows native app and MacOS bridge have none, so on
+// Windows and MacOS the task makes the calls a desktop can do itself (windows-native-calls.zig, macos-native-calls.zig): the constant
+// results here, on the task's thread, and holdAwake on the main thread, which keeps the hold, through a task event of
+// HOLD_AWAKE_EVENT_TYPE. Anywhere else, and for a call only a phone can make, it is an error that names the method.
 //
-pub fn answerWithoutShell(context: *TaskContext, method: []const u8, request_json: []const u8) ![]const u8 {
+pub fn callOnDesktop(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) ![]const u8 {
+    if (builtin.os.tag == .windows or builtin.os.tag == .macos) {
+        if (std.mem.eql(u8, method, "holdAwake")) {
+            try services.sendEvent(io, allocator, .{
+                .type = HOLD_AWAKE_EVENT_TYPE,
+                .request = json.Raw{
+                    .text = request_json,
+                },
+            });
+            return "null";
+        }
+    }
     if (builtin.os.tag == .windows) {
-        if (try main_state.fromContext(context).windows_host.answer(context.arena, method, request_json)) |answer| {
-            return answer;
+        var native_calls = windows_native_calls.WindowsNativeCalls.init();
+        defer native_calls.deinit();
+        if (try native_calls.call(allocator, method, request_json)) |result| {
+            return result;
         }
     }
     if (builtin.os.tag == .macos) {
-        if (try main_state.fromContext(context).macos_host.answer(context.arena, method, request_json)) |answer| {
-            return answer;
+        var native_calls = macos_native_calls.MacosNativeCalls.init();
+        defer native_calls.deinit();
+        if (try native_calls.call(allocator, method, request_json)) |result| {
+            return result;
         }
     }
     return utils.errors.throwError("{s} is only available in the Photosphere app on a phone.", .{method});
 }
 
 //
-// Runs one pass in the task's own context, and records when the next one is due.
+// What the main thread gives a pass task: what it knows that the pass needs.
 //
-fn runPass(context: *TaskContext, pass: Pass) void {
-    const state = main_state.fromContext(context);
-    var pass_host: TaskPassHost = .{
-        .context = context,
-        .pass = pass,
-    };
+pub const IPassTaskData = struct {
+    // Whether this is the first sync pass since the sync was switched on, which only reads the gap (see runSyncPass).
+    first: bool = false,
+    // What the last completed prefetch pass reported about the replica, which the sync pass holds back for.
+    replicaState: ReplicaState = .unknown,
+};
+
+//
+// What a pass task gives back to the main thread, which records when the next pass is due and what the prefetch reported about the replica.
+//
+pub const IPassTaskResult = struct {
+    // How long to wait before the next pass, in milliseconds.
+    gapMs: u64,
+    // Whether the work is over until it is switched on again.
+    finished: bool,
+    // What the replica is like after the pass. Only the prefetch pass changes it.
+    replicaState: ReplicaState,
+};
+
+//
+// Runs one pass in the task, with what the main thread gave it, and gives back how it ended.
+//
+fn runPass(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, data: std.json.Value, pass: Pass) ![]const u8 {
+    const given = try std.json.parseFromValueLeaky(IPassTaskData, allocator, data, .{
+        .ignore_unknown_fields = true,
+    });
+    var replica_state = given.replicaState;
+    const pass_services = taskPassServices(&services);
     const result = switch (pass) {
-        .import => runImportPass(context.arena, pass_host.host()),
-        .sync => runSyncPass(context.arena, pass_host.host(), &state.prefetch_replica_state, state.takeFirstSyncPass()),
-        .prefetch => runPrefetchPass(context.arena, pass_host.host(), &state.prefetch_replica_state),
+        .import => runImportPass(io, allocator, timers, pass_services),
+        .sync => runSyncPass(io, allocator, timers, pass_services, &replica_state, given.first),
+        .prefetch => runPrefetchPass(io, allocator, timers, pass_services, &replica_state),
     };
-    state.backgroundPassEnded(pass, result);
+    return try json.stringify(allocator, IPassTaskResult{
+        .gapMs = result.gap_ms,
+        .finished = result.finished,
+        .replicaState = replica_state,
+    });
 }
 
 //
 // The task that is one pass of the automatic import.
 //
-pub fn autoImportPassTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    runPass(context, .import);
-    return try context.arena.dupe(u8, "null");
+pub fn autoImportPassTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    return try runPass(services, timers, io, allocator, data, .import);
 }
 
 //
 // The task that is one pass of the sync.
 //
-pub fn syncPassTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    runPass(context, .sync);
-    return try context.arena.dupe(u8, "null");
+pub fn syncPassTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    return try runPass(services, timers, io, allocator, data, .sync);
 }
 
 //
 // The task that is one pass of the prefetch.
 //
-pub fn prefetchPassTask(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    runPass(context, .prefetch);
-    return try context.arena.dupe(u8, "null");
-}
-
-//
-// Switches the background work on. Each pass that was off is due at once, and the core's timer starts it. Switching on a pass that is
-// already on changes nothing, and a pass that finished (the import when automatic import was switched off, the prefetch when its
-// replica was complete) is switched on again, which is how switching the feature back on, or opening a database, brings it back.
-//
-pub fn startBackgroundWork(context: *TaskContext) void {
-    const state = main_state.fromContext(context);
-    inline for (std.meta.fields(Pass)) |field| {
-        const pass: Pass = @enumFromInt(field.value);
-
-        // A desktop imports by watching folders (ensureAutoImport), so a second import here would import everything twice.
-        if (pass == .import and builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
-            continue;
-        }
-        state.switchOnBackgroundPass(pass);
-    }
-}
-
-//
-// Switches the background work off and stops the passes in flight.
-//
-pub fn stopBackgroundWork(context: *TaskContext) void {
-    const state = main_state.fromContext(context);
-    state.switchOffBackgroundPasses();
-    inline for (std.meta.fields(Pass)) |field| {
-        const pass: Pass = @enumFromInt(field.value);
-        state.core.runner.cancelSource(pass.source());
-    }
+pub fn prefetchPassTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    return try runPass(services, timers, io, allocator, data, .prefetch);
 }

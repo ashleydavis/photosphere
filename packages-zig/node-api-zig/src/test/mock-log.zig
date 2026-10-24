@@ -14,7 +14,7 @@ pub const MutedLog = struct {
     // Makes this the global log.
     //
     pub fn install(self: *MutedLog) void {
-        self.previousLog = utils.log.log;
+        self.previousLog = utils.log.currentLog();
         utils.log.setLog(self.ilog());
     }
 

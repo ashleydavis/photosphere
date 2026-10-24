@@ -8,7 +8,7 @@ const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
 const https = lan_share.https;
 const socket = lan_share.socket;
 const sha256Hex = lan_share.lan_share_sender.sha256Hex;
-const receiver_module = lan_share.lan_share_receiver;
+const ReceiveThread = @import("receive-thread.zig").ReceiveThread;
 
 //
 // Makes one HTTPS request to the receiver on this machine, without verifying its certificate.
@@ -18,6 +18,7 @@ fn requestReceiver(allocator: std.mem.Allocator, receiver: *const LanShareReceiv
     defer connection.close();
     return https.request(allocator, connection, "127.0.0.1", method, path, body);
 }
+
 
 test "cancel resolves receive with null" {
     const discoveryPort = try lan_share.socket.freeUdpPort();
@@ -68,6 +69,9 @@ test "GET /pairing-code-hash returns hash of the provided code" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const response = try requestReceiver(allocator, &receiver, "GET", "/pairing-code-hash", null);
 
@@ -75,7 +79,7 @@ test "GET /pairing-code-hash returns hash of the provided code" {
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, response.body, .{});
     try std.testing.expectEqualStrings(&expected, parsed.object.get("codeHash").?.string);
 
-    receiver.cancel();
+    _ = try receiving.cancelAndFinish();
 }
 
 test "accepts payload with correct code hash" {
@@ -87,6 +91,9 @@ test "accepts payload with correct code hash" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const codeHash = sha256Hex(code);
     const body = try utils.json.stringify(allocator, .{
@@ -99,7 +106,7 @@ test "accepts payload with correct code hash" {
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 200), response.statusCode);
 
-    const result = try receiver.receive();
+    const result = try receiving.finish();
     try std.testing.expectEqualStrings("hello", result.?.object.get("message").?.string);
     try std.testing.expectEqual(@as(usize, 1), result.?.object.count());
 }
@@ -112,6 +119,9 @@ test "rejects payload with wrong code hash" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(try pairing_code.pairingCode());
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const wrongCodeHash = sha256Hex("0000");
     const body = try utils.json.stringify(allocator, .{
@@ -124,8 +134,7 @@ test "rejects payload with wrong code hash" {
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 403), response.statusCode);
 
-    receiver.cancel();
-    const result = try receiver.receive();
+    const result = try receiving.cancelAndFinish();
     try std.testing.expect(result == null);
 }
 
@@ -137,6 +146,9 @@ test "aborts and returns 429 after exceeding the request budget" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(try pairing_code.pairingCode());
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const wrongCodeHash = sha256Hex("0000");
     // An empty struct literal would serialise as an array, so the empty payload object is given as text.
@@ -154,7 +166,7 @@ test "aborts and returns 429 after exceeding the request budget" {
     // The 6th request should have triggered a 429 and abort.
     try std.testing.expectEqual(@as(u16, 429), lastStatus);
 
-    const result = try receiver.receive();
+    const result = try receiving.finish();
     try std.testing.expect(result == null);
 }
 
@@ -167,6 +179,9 @@ test "does not abort when request count stays within budget" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     // GET /pairing-code-hash (request 1)
     const hashStatus = (try requestReceiver(allocator, &receiver, "GET", "/pairing-code-hash", null)).statusCode;
@@ -183,7 +198,7 @@ test "does not abort when request count stays within budget" {
     const payloadStatus = (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode;
     try std.testing.expectEqual(@as(u16, 200), payloadStatus);
 
-    const result = try receiver.receive();
+    const result = try receiving.finish();
     try std.testing.expectEqualStrings("ok", result.?.object.get("message").?.string);
 }
 
@@ -195,7 +210,7 @@ test "does not abort when request count stays within budget" {
 test "encodeAsn1Oid encodes sha256WithRSAEncryption" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const encoded = try receiver_module.encodeAsn1Oid(arena.allocator(), &.{ 1, 2, 840, 113549, 1, 1, 11 });
+    const encoded = try lan_share.lan_share_receiver.encodeAsn1Oid(arena.allocator(), &.{ 1, 2, 840, 113549, 1, 1, 11 });
     try std.testing.expectEqualSlices(u8, &.{ 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b }, encoded);
 }
 
@@ -203,24 +218,24 @@ test "encodeAsn1Length uses the long form from 128 bytes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expectEqualSlices(u8, &.{0x7f}, try receiver_module.encodeAsn1Length(allocator, 127));
-    try std.testing.expectEqualSlices(u8, &.{ 0x81, 0x80 }, try receiver_module.encodeAsn1Length(allocator, 128));
-    try std.testing.expectEqualSlices(u8, &.{ 0x82, 0x01, 0x2c }, try receiver_module.encodeAsn1Length(allocator, 300));
+    try std.testing.expectEqualSlices(u8, &.{0x7f}, try lan_share.lan_share_receiver.encodeAsn1Length(allocator, 127));
+    try std.testing.expectEqualSlices(u8, &.{ 0x81, 0x80 }, try lan_share.lan_share_receiver.encodeAsn1Length(allocator, 128));
+    try std.testing.expectEqualSlices(u8, &.{ 0x82, 0x01, 0x2c }, try lan_share.lan_share_receiver.encodeAsn1Length(allocator, 300));
 }
 
 test "encodeAsn1Integer adds a leading zero when the high bit is set" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try std.testing.expectEqualSlices(u8, &.{ 0x02, 0x01, 0x02 }, try receiver_module.encodeAsn1Integer(allocator, &.{2}));
-    try std.testing.expectEqualSlices(u8, &.{ 0x02, 0x02, 0x00, 0x80 }, try receiver_module.encodeAsn1Integer(allocator, &.{0x80}));
+    try std.testing.expectEqualSlices(u8, &.{ 0x02, 0x01, 0x02 }, try lan_share.lan_share_receiver.encodeAsn1Integer(allocator, &.{2}));
+    try std.testing.expectEqualSlices(u8, &.{ 0x02, 0x02, 0x00, 0x80 }, try lan_share.lan_share_receiver.encodeAsn1Integer(allocator, &.{0x80}));
 }
 
 test "encodeAsn1UtcTime writes YYMMDDHHMMSSZ in UTC" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     // 2026-09-28T04:05:06Z
-    const encoded = try receiver_module.encodeAsn1UtcTime(arena.allocator(), 1790568306);
+    const encoded = try lan_share.lan_share_receiver.encodeAsn1UtcTime(arena.allocator(), 1790568306);
     try std.testing.expectEqualSlices(u8, &.{ 0x17, 0x0d }, encoded[0..2]);
     try std.testing.expectEqualStrings("260928040506Z", encoded[2..]);
 }
@@ -229,11 +244,11 @@ test "generateSelfSignedCert makes a certificate the HTTPS server loads, with th
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const selfSigned = try receiver_module.generateSelfSignedCert(allocator, std.testing.io);
+    const selfSigned = try lan_share.lan_share_receiver.generateSelfSignedCert(allocator, std.testing.io);
 
     try std.testing.expect(std.mem.startsWith(u8, selfSigned.cert, "-----BEGIN CERTIFICATE-----\n"));
     try std.testing.expect(std.mem.endsWith(u8, selfSigned.cert, "\n-----END CERTIFICATE-----\n"));
-    const fingerprint = sha256Hex(try receiver_module.extractDerFromPem(allocator, selfSigned.cert));
+    const fingerprint = sha256Hex(try lan_share.lan_share_receiver.extractDerFromPem(allocator, selfSigned.cert));
     try std.testing.expectEqualStrings(&fingerprint, selfSigned.fingerprint);
 
     var context = try https.ServerContext.init(selfSigned.cert, selfSigned.key);
@@ -249,6 +264,9 @@ test "a payload with a repeated key is read with its last value" {
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const codeHash = sha256Hex(code);
     // Hand-written because the point of the test is the duplicate keys, which a serialiser cannot produce.
@@ -257,7 +275,7 @@ test "a payload with a repeated key is read with its last value" {
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 200), response.statusCode);
 
-    const result = try receiver.receive();
+    const result = try receiving.finish();
     try std.testing.expectEqualStrings("second", result.?.object.get("message").?.string);
 }
 
@@ -270,6 +288,9 @@ test "answers a body that is not JSON with 400 and a path it does not serve with
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const invalid = try requestReceiver(allocator, &receiver, "POST", "/share-payload", "{not json");
     try std.testing.expectEqual(@as(u16, 400), invalid.statusCode);
@@ -285,7 +306,7 @@ test "answers a body that is not JSON with 400 and a path it does not serve with
         .payload = "after",
     });
     try std.testing.expectEqual(@as(u16, 200), (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode);
-    try std.testing.expectEqualStrings("after", (try receiver.receive()).?.string);
+    try std.testing.expectEqualStrings("after", (try receiving.finish()).?.string);
 }
 
 //
@@ -296,6 +317,9 @@ fn receivePayloadText(discoveryPort: u16, allocator: std.mem.Allocator, payloadT
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 10000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
     const codeHash = sha256Hex(code);
     // The payload text goes in verbatim (numbers written as fractions or too long for an integer must not be re-serialised).
     const body = try utils.json.stringify(allocator, .{
@@ -303,7 +327,9 @@ fn receivePayloadText(discoveryPort: u16, allocator: std.mem.Allocator, payloadT
         .payload = utils.json.Raw{ .text = payloadText },
     });
     try std.testing.expectEqual(@as(u16, 200), (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode);
-    return receiver.receive();
+    // The payload belongs to the receiver, which is freed on the way out, so the caller is given a copy in its allocator.
+    const received = (try receiving.finish()) orelse return null;
+    return try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, received, .{}), .{});
 }
 
 test "a payload that is zero written as a fraction is falsy, and a number too long for an integer is not" {
@@ -325,6 +351,9 @@ test "a connection kept alive is served request after request, those sent togeth
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 30000);
     defer receiver.deinit();
     try receiver.start(code);
+    var receiving: ReceiveThread = .{ .receiver = &receiver };
+    try receiving.start();
+    defer receiving.stop();
 
     const connection = try https.Connection.connect(allocator, .{ .address = .{ 127, 0, 0, 1 }, .port = receiver.httpsPort });
     defer connection.close();
@@ -346,6 +375,5 @@ test "a connection kept alive is served request after request, those sent togeth
     try std.testing.expectError(error.EndOfStream, connection.reader.fillMore());
     try std.testing.expect(std.Io.Clock.awake.now(std.testing.io).toMilliseconds() - idleSince >= 4000);
 
-    receiver.cancel();
-    _ = try receiver.receive();
+    _ = try receiving.cancelAndFinish();
 }

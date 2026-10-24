@@ -1,6 +1,6 @@
 const std = @import("std");
-const retry_module = @import("retry.zig");
-const OperationResult = retry_module.OperationResult;
+const retry = @import("retry.zig");
+const OperationResult = retry.OperationResult;
 
 //
 // Attempts to execute an operation. If it succeeds, returns the result.

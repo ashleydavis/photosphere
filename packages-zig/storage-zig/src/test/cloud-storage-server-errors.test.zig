@@ -5,6 +5,9 @@ const node_utils = @import("node-utils-zig");
 const CloudStorage = storage_zig.cloud_storage.CloudStorage;
 const s3_client = storage_zig.s3_client;
 const errors = utils.errors;
+const thread_messages = @import("../../../utils-zig/src/test/thread-messages.zig");
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
 
 //
 // How a CannedServer answers the requests of one method.
@@ -28,130 +31,201 @@ const ICannedAnswer = struct {
 // the target of the last request: a server failing the way a real S3 service does when it is having trouble, or
 // answering the way no S3 service should (the real S3 client talks to it over HTTP, as it does to MinIO).
 //
+// The server runs on a thread of its own, which makes its own Io and allocator, and shares nothing with the test: it is given its
+// answers as JSON on its queue of orders, and it posts its port and the target of each request it reads to the test's queue of
+// events. The test keeps the last target it has read from there.
+//
 const CannedServer = struct {
-    // The io the server runs on.
-    io: std.Io,
+    // The thread the server runs on.
+    thread: std.Thread,
 
-    // The listening socket.
-    server: std.Io.net.Server,
+    // The server's orders, which the test posts and the server's thread takes: first the Order, then the stop.
+    orders: MessageQueue,
 
-    // The port the system chose.
+    // What the server's thread tells the test, which the test takes: first Listening, then a Target for each request.
+    events: MessageQueue,
+
+    // The port the system chose, as the server's thread told the test.
     port: u16,
 
-    // Runs the loop that answers requests.
-    group: std.Io.Group,
-
-    // The answers, the first one for the method of a request being the one given.
-    answers: []const ICannedAnswer,
-
-    // The answer of start, for every request.
-    onlyAnswer: [1]ICannedAnswer,
-
-    // Set to stop the loop: it is checked after each connection, and stop makes a last connection to wake it.
-    stopping: std.atomic.Value(bool),
-
-    // Guards target and targetLength.
-    targetMutex: std.Io.Mutex,
-
-    // The target (path and query) of the last request.
+    // The target (path and query) of the last request, as the test last read it from the events.
     target: [4096]u8,
 
     // The length of the target in `target`.
     targetLength: usize,
 
     //
+    // One answer, as the server's thread is given it: the method by its name (null for any) and the status by its number.
+    //
+    const AnswerOrder = struct {
+        method: ?[]const u8,
+        status: u16,
+        body: []const u8,
+        headers: []const std.http.Header,
+    };
+
+    //
+    // What the server's thread is given when it starts: its answers, the first one for the method of a request being the one given.
+    //
+    const Order = struct {
+        answers: []const AnswerOrder,
+    };
+
+    //
+    // What the server's thread takes from its orders after each connection: whether to stop.
+    //
+    const Stop = struct {
+        stop: bool,
+    };
+
+    //
+    // What the server's thread tells the test once it listens.
+    //
+    const Listening = struct {
+        port: u16,
+    };
+
+    //
+    // What the server's thread tells the test of each request it reads: its target.
+    //
+    const Target = struct {
+        target: []const u8,
+    };
+
+    //
     // Starts the server on a free port of 127.0.0.1, answering every request with the status and body.
     //
     fn start(self: *CannedServer, io: std.Io, status: std.http.Status, body: []const u8) !void {
-        try self.open(io);
-        self.onlyAnswer = .{
+        try self.startWithAnswers(io, &.{
             .{
                 .method = null,
                 .status = status,
                 .body = body,
                 .headers = &.{},
             },
-        };
-        self.answers = &self.onlyAnswer;
-        try self.group.concurrent(io, serve, .{self});
+        });
     }
 
     //
-    // Starts the server on a free port of 127.0.0.1, answering with the answers (which must outlive it).
+    // Starts the server on a free port of 127.0.0.1, answering with the answers, and waits for its port.
     //
     fn startWithAnswers(self: *CannedServer, io: std.Io, answers: []const ICannedAnswer) !void {
-        try self.open(io);
-        self.answers = answers;
-        try self.group.concurrent(io, serve, .{self});
-    }
-
-    //
-    // Listens on a free port of 127.0.0.1, without answers yet.
-    //
-    fn open(self: *CannedServer, io: std.Io) !void {
-        const address = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
+        var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
         self.* = .{
-            .io = io,
-            .server = try address.listen(io, .{
-                .reuse_address = true,
-            }),
+            .thread = undefined,
+            .orders = MessageQueue.init(),
+            .events = MessageQueue.init(),
             .port = 0,
-            .group = .init,
-            .answers = &.{},
-            .onlyAnswer = undefined,
-            .stopping = .init(false),
-            .targetMutex = .init,
             .target = undefined,
             .targetLength = 0,
         };
-        self.port = self.server.socket.address.getPort();
+        const answerOrders = try arena.alloc(AnswerOrder, answers.len);
+        for (answers, answerOrders) |candidate, *answerOrder| {
+            answerOrder.* = .{
+                .method = if (candidate.method) |method| @tagName(method) else null,
+                .status = @intFromEnum(candidate.status),
+                .body = candidate.body,
+                .headers = candidate.headers,
+            };
+        }
+        try thread_messages.post(&self.orders, io, arena, Order{
+            .answers = answerOrders,
+        });
+        self.thread = try std.Thread.spawn(.{}, serve, .{ &self.orders, &self.events });
+        self.port = (try thread_messages.take(Listening, &self.events, io, arena)).port;
     }
 
     //
-    // Stops the loop and closes the socket.
+    // Tells the server's thread to stop, makes a last connection to wake its accept, and waits for it to end.
     //
-    fn stop(self: *CannedServer) void {
-        self.stopping.store(true, .release);
+    fn stop(self: *CannedServer, io: std.Io) void {
+        var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_state.deinit();
+        thread_messages.post(&self.orders, io, arena_state.allocator(), Stop{
+            .stop = true,
+        }) catch @panic("out of memory stopping the server");
         const address = std.Io.net.IpAddress.parse("127.0.0.1", self.port) catch unreachable;
-        if (address.connect(self.io, .{
+        if (address.connect(io, .{
             .mode = .stream,
         })) |stream| {
-            stream.close(self.io);
+            stream.close(io);
         }
         else |_| {}
-        self.group.await(self.io) catch {};
-        self.server.deinit(self.io);
+        self.thread.join();
+        self.orders.deinit();
+        self.events.deinit();
     }
 
     //
-    // Answers connections until stopped.
+    // The server's thread: takes its order, listens, tells the test its port, and answers connections until told to stop.
     //
-    fn serve(self: *CannedServer) void {
-        while (!self.stopping.load(.acquire)) {
-            const stream = self.server.accept(self.io) catch {
+    fn serve(orders: *MessageQueue, events: *MessageQueue) void {
+        var thread_allocator: ThreadAllocator = .init;
+        defer thread_allocator.deinit();
+        var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        var threaded: std.Io.Threaded = .init_single_threaded;
+        threaded.allocator = thread_allocator.allocator();
+        defer threaded.deinit();
+        const io = threaded.io();
+        const order = thread_messages.take(Order, orders, io, arena) catch |err| {
+            std.debug.panic("The server got no order: {s}", .{@errorName(err)});
+        };
+        const answers = arena.alloc(ICannedAnswer, order.answers.len) catch @panic("out of memory reading the answers");
+        for (order.answers, answers) |answerOrder, *candidate| {
+            candidate.* = .{
+                .method = if (answerOrder.method) |name| std.meta.stringToEnum(std.http.Method, name).? else null,
+                .status = @enumFromInt(answerOrder.status),
+                .body = answerOrder.body,
+                .headers = answerOrder.headers,
+            };
+        }
+        const address = std.Io.net.IpAddress.parse("127.0.0.1", 0) catch unreachable;
+        var server = address.listen(io, .{
+            .reuse_address = true,
+        }) catch |err| {
+            std.debug.panic("The server could not listen: {s}", .{@errorName(err)});
+        };
+        defer server.deinit(io);
+        thread_messages.post(events, io, arena, Listening{
+            .port = server.socket.address.getPort(),
+        }) catch @panic("out of memory telling the test the port");
+        while (true) {
+            const stream = server.accept(io) catch {
                 return;
             };
-            self.answer(stream);
+            answer(io, events, answers, stream);
+            const stopped = thread_messages.tryTake(Stop, orders, io, arena) catch |err| {
+                std.debug.panic("The server could not read its orders: {s}", .{@errorName(err)});
+            };
+            if (stopped != null) {
+                return;
+            }
         }
     }
 
     //
-    // Answers the request of one connection with the status and body, then closes the connection.
+    // Answers the request of one connection with the status and body, then closes the connection. Tells the test the request's
+    // target before it answers, so the test has it once the answer has come.
     //
-    fn answer(self: *CannedServer, stream: std.Io.net.Stream) void {
-        defer stream.close(self.io);
+    fn answer(io: std.Io, events: *MessageQueue, answers: []const ICannedAnswer, stream: std.Io.net.Stream) void {
+        defer stream.close(io);
         var receiveBuffer: [16 * 1024]u8 = undefined;
         var sendBuffer: [4096]u8 = undefined;
-        var connectionReader = stream.reader(self.io, &receiveBuffer);
-        var connectionWriter = stream.writer(self.io, &sendBuffer);
+        var connectionReader = stream.reader(io, &receiveBuffer);
+        var connectionWriter = stream.writer(io, &sendBuffer);
         var httpServer = std.http.Server.init(&connectionReader.interface, &connectionWriter.interface);
         var request = httpServer.receiveHead() catch {
             return;
         };
-        self.targetMutex.lockUncancelable(self.io);
-        self.targetLength = @min(request.head.target.len, self.target.len);
-        @memcpy(self.target[0..self.targetLength], request.head.target[0..self.targetLength]);
-        self.targetMutex.unlock(self.io);
+        var postBuffer: [16 * 1024]u8 = undefined;
+        var postAllocator = std.heap.FixedBufferAllocator.init(&postBuffer);
+        thread_messages.post(events, io, postAllocator.allocator(), Target{
+            .target = request.head.target,
+        }) catch @panic("out of memory telling the test the target");
 
         // Read the body of the request, if its method has one, before answering. (For a method without a body,
         // readerExpectNone returns std.Io.Reader.ending, a constant that discarding would write to.)
@@ -162,7 +236,7 @@ const CannedServer = struct {
                 return;
             };
         }
-        const chosenAnswer = for (self.answers) |candidate| {
+        const chosenAnswer = for (answers) |candidate| {
             if (candidate.method == null or candidate.method.? == request.head.method) {
                 break candidate;
             }
@@ -190,9 +264,13 @@ const CannedServer = struct {
     //
     // Gets a copy of the target of the last request.
     //
-    fn lastTarget(self: *CannedServer, allocator: std.mem.Allocator) ![]const u8 {
-        self.targetMutex.lockUncancelable(self.io);
-        defer self.targetMutex.unlock(self.io);
+    fn lastTarget(self: *CannedServer, io: std.Io, allocator: std.mem.Allocator) ![]const u8 {
+        var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_state.deinit();
+        while (try thread_messages.tryTake(Target, &self.events, io, arena_state.allocator())) |event| {
+            self.targetLength = @min(event.target.len, self.target.len);
+            @memcpy(self.target[0..self.targetLength], event.target[0..self.targetLength]);
+        }
         return allocator.dupe(u8, self.target[0..self.targetLength]);
     }
 
@@ -207,8 +285,8 @@ const CannedServer = struct {
 //
 // Makes a CloudStorage whose S3 endpoint is the server.
 //
-fn storageOf(server: *CannedServer, allocator: std.mem.Allocator, io: std.Io) !CloudStorage {
-    return CloudStorage.init(io, "bucket", .{
+fn storageOf(server: *CannedServer, allocator: std.mem.Allocator) !CloudStorage {
+    return CloudStorage.init("bucket", .{
         .accessKeyId = "key",
         .secretAccessKey = "secret",
         .region = "us-east-1",
@@ -243,8 +321,8 @@ test "an S3 error response without a body is thrown as the SDK throws it, Unknow
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .bad_request, "");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
@@ -264,8 +342,8 @@ test "an S3 404 without a body is NotFound, so info and fileExists report a miss
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .not_found, "");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try std.testing.expectEqual(null, try storage.info(allocator, io, "dir/file.txt"));
@@ -280,8 +358,8 @@ test "an S3 error response is thrown with the Code and Message of its body" {
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>AccessDenied</Code><Message>Access &amp; Denied</Message></Error>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Access & Denied: Access & Denied", "AccessDenied", 403);
@@ -299,8 +377,8 @@ test "an S3 error response without a Message is thrown with the message UnknownE
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "<Error><Code>AccessDenied</Code></Error>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "AccessDenied", 403);
@@ -313,8 +391,8 @@ test "an S3 error response without a Code is thrown as Unknown with its Message"
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .bad_request, "<Error><Message>Bad thing.</Message></Error>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Bad thing.: Bad thing.", "Unknown", 400);
@@ -332,13 +410,13 @@ test "an S3 500 or 503 fails with the error aws-c-s3 gives it" {
     const io = std.testing.io;
     var internalErrorServer: CannedServer = undefined;
     try internalErrorServer.start(io, .internal_server_error, "<Error><Code>InternalError</Code><Message>We encountered an internal error. Please try again.</Message></Error>");
-    defer internalErrorServer.stop();
-    var internalErrorStorage = try storageOf(&internalErrorServer, allocator, io);
+    defer internalErrorServer.stop(io);
+    var internalErrorStorage = try storageOf(&internalErrorServer, allocator);
     defer internalErrorStorage.s3.deinit();
     var slowDownServer: CannedServer = undefined;
     try slowDownServer.start(io, .service_unavailable, "");
-    defer slowDownServer.stop();
-    var slowDownStorage = try storageOf(&slowDownServer, allocator, io);
+    defer slowDownServer.stop(io);
+    var slowDownStorage = try storageOf(&slowDownServer, allocator);
     defer slowDownStorage.s3.deinit();
 
     try expectFailure(internalErrorStorage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Response code indicates internal server error: Response code indicates internal server error", "AWS_ERROR_S3_INTERNAL_ERROR", 0);
@@ -353,8 +431,8 @@ test "writeStream and writeStreamHashed report the error of the server, for a st
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
     const expected = "Failed to write stream to dir/file.txt: Access Denied: Access Denied";
 
@@ -396,14 +474,14 @@ test "a storage given no credentials, where the environment has none either, can
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "");
-    defer server.stop();
+    defer server.stop(io);
     const previous = node_utils.process_env.getEnvironMap();
     defer node_utils.process_env.setEnvironMap(previous);
     node_utils.process_env.setEnvironMap(try environmentOf(allocator, &.{
         .{ "AWS_REGION", "us-east-1" },
         .{ "AWS_ENDPOINT", try server.endpoint(allocator) },
     }));
-    var storage = CloudStorage.init(io, "bucket", null);
+    var storage = CloudStorage.init("bucket", null);
     defer storage.s3.deinit();
 
     try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: Could not load credentials from any providers: Could not load credentials from any providers", "CredentialsProviderError", 0);
@@ -416,7 +494,7 @@ test "a storage given no region, where the environment has none either, fails wi
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "");
-    defer server.stop();
+    defer server.stop(io);
     const previous = node_utils.process_env.getEnvironMap();
     defer node_utils.process_env.setEnvironMap(previous);
     node_utils.process_env.setEnvironMap(try environmentOf(allocator, &.{
@@ -425,7 +503,7 @@ test "a storage given no region, where the environment has none either, fails wi
         .{ "AWS_SESSION_TOKEN", "token" },
         .{ "AWS_ENDPOINT", try server.endpoint(allocator) },
     }));
-    var storage = CloudStorage.init(io, "bucket", null);
+    var storage = CloudStorage.init("bucket", null);
     defer storage.s3.deinit();
 
     try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: Region is missing: Region is missing", "Error", 0);
@@ -438,7 +516,7 @@ test "a storage given no credentials uses those of the environment, session toke
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>");
-    defer server.stop();
+    defer server.stop(io);
     const previous = node_utils.process_env.getEnvironMap();
     defer node_utils.process_env.setEnvironMap(previous);
     node_utils.process_env.setEnvironMap(try environmentOf(allocator, &.{
@@ -448,12 +526,12 @@ test "a storage given no credentials uses those of the environment, session toke
         .{ "AWS_REGION", "us-east-1" },
         .{ "AWS_ENDPOINT", try server.endpoint(allocator) },
     }));
-    var storage = CloudStorage.init(io, "bucket", null);
+    var storage = CloudStorage.init("bucket", null);
     defer storage.s3.deinit();
 
     // The request was signed and sent, so the server's answer is the error.
     try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Access Denied: Access Denied", "AccessDenied", 403);
-    try std.testing.expectEqualStrings("/dir/file.txt", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/dir/file.txt", try server.lastTarget(io, allocator));
 }
 
 test "an endpoint that is not a URL is a TypeError, and one the endpoint rules refuse is named by its href, like the SDK" {
@@ -461,14 +539,14 @@ test "an endpoint that is not a URL is a TypeError, and one the endpoint rules r
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var notAUrl = CloudStorage.init(io, "bucket", .{
+    var notAUrl = CloudStorage.init("bucket", .{
         .accessKeyId = "key",
         .secretAccessKey = "secret",
         .region = "us-east-1",
         .endpoint = "not a url",
     });
     defer notAUrl.s3.deinit();
-    var notHttp = CloudStorage.init(io, "bucket", .{
+    var notHttp = CloudStorage.init("bucket", .{
         .accessKeyId = "key",
         .secretAccessKey = "secret",
         .region = "us-east-1",
@@ -504,31 +582,30 @@ test "an S3 error is named by its Code even when the client does not list the Co
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .conflict, "<Error><Code>OperationAborted</Code><Message>A conflicting operation is in progress.</Message></Error>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: A conflicting operation is in progress.: A conflicting operation is in progress.", "OperationAborted", 409);
 }
 
 test "staticErrorName keeps one copy of each code, and names the codes past its limit S3ServiceException" {
-    const io = std.testing.io;
-    const first = try s3_client.staticErrorName(io, "OperationAborted");
+    const first = try s3_client.staticErrorName("OperationAborted");
     try std.testing.expectEqualStrings("OperationAborted", first);
-    try std.testing.expectEqual(first.ptr, (try s3_client.staticErrorName(io, "OperationAborted")).ptr);
-    try std.testing.expectEqualStrings("NoSuchKey", try s3_client.staticErrorName(io, "NoSuchKey"));
+    try std.testing.expectEqual(first.ptr, (try s3_client.staticErrorName("OperationAborted")).ptr);
+    try std.testing.expectEqualStrings("NoSuchKey", try s3_client.staticErrorName("NoSuchKey"));
 
     var buffer: [32]u8 = undefined;
     var count: usize = 0;
     while (count < 300) {
         const code = try std.fmt.bufPrint(&buffer, "LimitTestCode{d}", .{count});
-        if (std.mem.eql(u8, try s3_client.staticErrorName(io, code), "S3ServiceException")) {
+        if (std.mem.eql(u8, try s3_client.staticErrorName(code), "S3ServiceException")) {
             break;
         }
         count += 1;
     }
     try std.testing.expect(count < 256);
-    try std.testing.expectEqual(first.ptr, (try s3_client.staticErrorName(io, "OperationAborted")).ptr);
+    try std.testing.expectEqual(first.ptr, (try s3_client.staticErrorName("OperationAborted")).ptr);
 }
 
 test "the root of a bucket, a path ending in //, is listed with the prefix of the whole bucket" {
@@ -538,22 +615,22 @@ test "the root of a bucket, a path ending in //, is listed with the prefix of th
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .ok, "<ListBucketResult><Contents><Key>top.txt</Key></Contents><CommonPrefixes><Prefix>dir/</Prefix></CommonPrefixes></ListBucketResult>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     const files = try storage.listFiles(allocator, io, "bucket//", 10, null);
     try std.testing.expectEqual(@as(usize, 1), files.names.len);
     try std.testing.expectEqualStrings("top.txt", files.names[0]);
-    try std.testing.expectEqualStrings("/bucket/?list-type=2&delimiter=%2F&max-keys=10&prefix=", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/?list-type=2&delimiter=%2F&max-keys=10&prefix=", try server.lastTarget(io, allocator));
     const dirs = try storage.listDirs(allocator, io, "bucket//", 10, null);
     try std.testing.expectEqual(@as(usize, 1), dirs.names.len);
     try std.testing.expectEqualStrings("dir", dirs.names[0]);
-    try std.testing.expectEqualStrings("/bucket/?list-type=2&delimiter=%2F&max-keys=10&prefix=", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/?list-type=2&delimiter=%2F&max-keys=10&prefix=", try server.lastTarget(io, allocator));
     try std.testing.expect(try storage.dirExists(allocator, io, "bucket//"));
-    try std.testing.expectEqualStrings("/bucket/?list-type=2&max-keys=1&prefix=", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/?list-type=2&max-keys=1&prefix=", try server.lastTarget(io, allocator));
     _ = try storage.listFiles(allocator, io, "bucket//", 10, "next/token");
-    try std.testing.expectEqualStrings("/bucket/?list-type=2&delimiter=%2F&max-keys=10&prefix=&continuation-token=next%2Ftoken", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/?list-type=2&delimiter=%2F&max-keys=10&prefix=&continuation-token=next%2Ftoken", try server.lastTarget(io, allocator));
 }
 
 test "a directory with only subdirectories is not empty" {
@@ -563,8 +640,8 @@ test "a directory with only subdirectories is not empty" {
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .ok, "<ListBucketResult><CommonPrefixes><Prefix>dir/sub/</Prefix></CommonPrefixes></ListBucketResult>");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try std.testing.expect(!try storage.isEmpty(allocator, io, "bucket/dir"));
@@ -577,8 +654,8 @@ test "info fails for a file whose HEAD response has no Last-Modified" {
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .ok, "");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.info(allocator, io, "bucket/dir/file.txt"), "Failed to get info for bucket/dir/file.txt: LastModified is undefined for bucket/dir/file.txt: LastModified is undefined for bucket/dir/file.txt", "Error", null);
@@ -591,8 +668,8 @@ test "storedHash reports an error of the server other than not found" {
     const io = std.testing.io;
     var server: CannedServer = undefined;
     try server.start(io, .forbidden, "");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try expectFailure(storage.storedHash(allocator, io, "bucket/dir/file.txt"), "Failed to get the stored hash of bucket/dir/file.txt: UnknownError: UnknownError", "Unknown", 403);
@@ -631,8 +708,8 @@ test "writeStream reports the error of a stream that cannot be read" {
     };
     var server: CannedServer = undefined;
     try server.startWithAnswers(io, &answers);
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     var failing = std.Io.Reader.failing;
@@ -815,27 +892,27 @@ test "a lock is taken, released, and refused when the server fails, and the verb
         .allocator = allocator,
         .lines = .empty,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
     var server: CannedServer = undefined;
     try server.start(io, .ok, "");
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
     var failingServer: CannedServer = undefined;
     try failingServer.start(io, .forbidden, "<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>");
-    defer failingServer.stop();
-    var failingStorage = try storageOf(&failingServer, allocator, io);
+    defer failingServer.stop(io);
+    var failingStorage = try storageOf(&failingServer, allocator);
     defer failingStorage.s3.deinit();
 
     try std.testing.expect(try storage.acquireWriteLock(allocator, io, "bucket//dir/file.lock", "owner"));
-    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(io, allocator));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_SUCCESS,"));
     try std.testing.expectEqual(null, try storage.checkWriteLock(allocator, io, "bucket//dir/file.lock"));
-    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(io, allocator));
     try storage.releaseWriteLock(allocator, io, "bucket//dir/file.lock");
-    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(io, allocator));
     try std.testing.expect(recordingLog.logged(",RELEASE_SUCCESS,"));
 
     try expectFailure(failingStorage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"), "Failed to acquire write lock for bucket/dir/file.lock: Access Denied: Access Denied", "AccessDenied", 403);
@@ -853,7 +930,7 @@ test "a lock that exists but reads back as nothing is refused, not broken" {
         .allocator = allocator,
         .lines = .empty,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
     const answers = [_]ICannedAnswer{
@@ -872,8 +949,8 @@ test "a lock that exists but reads back as nothing is refused, not broken" {
     };
     var server: CannedServer = undefined;
     try server.startWithAnswers(io, &answers);
-    defer server.stop();
-    var storage = try storageOf(&server, allocator, io);
+    defer server.stop(io);
+    var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
     try std.testing.expect(!try storage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"));
@@ -889,7 +966,7 @@ test "a stale lock that cannot be deleted, or cannot be written again once delet
         .allocator = allocator,
         .lines = .empty,
     };
-    const previousLog = utils.log.log;
+    const previousLog = utils.log.currentLog();
     utils.log.setLog(recordingLog.ilog());
     defer utils.log.setLog(previousLog);
     const lock = try staleLock(allocator);
@@ -915,8 +992,8 @@ test "a stale lock that cannot be deleted, or cannot be written again once delet
     };
     var undeletableServer: CannedServer = undefined;
     try undeletableServer.startWithAnswers(io, &undeletableAnswers);
-    defer undeletableServer.stop();
-    var undeletableStorage = try storageOf(&undeletableServer, allocator, io);
+    defer undeletableServer.stop(io);
+    var undeletableStorage = try storageOf(&undeletableServer, allocator);
     defer undeletableStorage.s3.deinit();
     const unwritableAnswers = [_]ICannedAnswer{
         .{
@@ -940,14 +1017,14 @@ test "a stale lock that cannot be deleted, or cannot be written again once delet
     };
     var unwritableServer: CannedServer = undefined;
     try unwritableServer.startWithAnswers(io, &unwritableAnswers);
-    defer unwritableServer.stop();
-    var unwritableStorage = try storageOf(&unwritableServer, allocator, io);
+    defer unwritableServer.stop(io);
+    var unwritableStorage = try storageOf(&unwritableServer, allocator);
     defer unwritableStorage.s3.deinit();
 
     try std.testing.expect(!try undeletableStorage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_TIMEOUT_BREAK,"));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_FAILED_RETRY,"));
-    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try undeletableServer.lastTarget(allocator));
+    try std.testing.expectEqualStrings("/bucket/dir/file.lock", try undeletableServer.lastTarget(io, allocator));
 
     recordingLog.lines.clearRetainingCapacity();
     try std.testing.expect(!try unwritableStorage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"));

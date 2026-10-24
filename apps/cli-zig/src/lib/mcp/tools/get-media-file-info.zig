@@ -19,8 +19,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `get_media_file_info` tool: returns the full metadata record for a single
 // media file by ID.
 //
-pub fn registerGetMediaFileInfoTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerGetMediaFileInfoTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "get_media_file_info",
         .{
             .description = "Return detailed metadata for a single media file (photo or video).",

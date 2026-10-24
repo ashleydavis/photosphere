@@ -31,7 +31,7 @@ pub const IMediaSourceBuildOptions = struct {
     uuidGenerator: IUuidGenerator,
 
     // Reaches the phone's shell, for a source only the phone can read (the device photo library). Null where there is no phone shell.
-    hostRequester: ?utils.host_requester.IHostRequester,
+    nativeCaller: ?utils.native_caller.INativeCaller,
 };
 
 //
@@ -41,34 +41,18 @@ pub const IMediaSourceBuildOptions = struct {
 pub const IMediaSourceBuilder = *const fn (allocator: std.mem.Allocator, sources: []const IAutoImportSource, options: IMediaSourceBuildOptions) anyerror!IMediaSource;
 
 //
-// The builders registered by this platform, by source type.
-// Process-wide and guarded by mediaSourceBuildersLock, because every worker thread shares it; the
-// types are static strings.
+// The builders registered by this platform on the calling thread, by source type; the types are static strings. Each thread has its
+// own: a worker registers them when it starts (the worker pool's start hook), before it runs any task. The map is allocated with the
+// page allocator, which keeps no state of its own that two threads could share.
 //
-var mediaSourceBuilders: std.StringArrayHashMapUnmanaged(IMediaSourceBuilder) = .empty;
+threadlocal var mediaSourceBuilders: std.StringArrayHashMapUnmanaged(IMediaSourceBuilder) = .empty;
 
 //
-// Guards mediaSourceBuilders, which every worker thread shares.
-//
-var mediaSourceBuildersLock: std.atomic.Mutex = .unlocked;
-
-//
-// Takes mediaSourceBuildersLock.
-//
-fn lockBuilders() void {
-    while (!mediaSourceBuildersLock.tryLock()) {
-        std.atomic.spinLoopHint();
-    }
-}
-
-//
-// Registers the builder for a source type. Called once per type at startup by the platform that can
-// serve it: node-api registers folders, the mobile worker registers the device photo library.
+// Registers the builder for a source type on the calling thread. Called once per type on each worker's thread when it starts, by the
+// platform that can serve it: node-api registers folders, the mobile worker registers the device photo library.
 //
 pub fn registerMediaSourceBuilder(sourceType: []const u8, builder: IMediaSourceBuilder) !void {
-    lockBuilders();
-    defer mediaSourceBuildersLock.unlock();
-    try mediaSourceBuilders.put(std.heap.smp_allocator, sourceType, builder);
+    try mediaSourceBuilders.put(std.heap.page_allocator, sourceType, builder);
 }
 
 //
@@ -76,8 +60,6 @@ pub fn registerMediaSourceBuilder(sourceType: []const u8, builder: IMediaSourceB
 // next.
 //
 pub fn clearMediaSourceBuilders() void {
-    lockBuilders();
-    defer mediaSourceBuildersLock.unlock();
     mediaSourceBuilders.clearRetainingCapacity();
 }
 
@@ -85,8 +67,6 @@ pub fn clearMediaSourceBuilders() void {
 // The builder registered for a source type, or null.
 //
 fn getMediaSourceBuilder(sourceType: []const u8) ?IMediaSourceBuilder {
-    lockBuilders();
-    defer mediaSourceBuildersLock.unlock();
     return mediaSourceBuilders.get(sourceType);
 }
 

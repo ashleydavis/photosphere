@@ -52,5 +52,5 @@ test "every file of the package compiles" {
     std.testing.refAllDecls(node_api.upload_asset_worker);
     std.testing.refAllDecls(node_api.import_assets_worker);
     std.testing.refAllDecls(node_api.cleanup_sources_worker);
-    std.testing.refAllDecls(node_api.import_module);
+    std.testing.refAllDecls(node_api.import);
 }

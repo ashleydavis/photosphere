@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const media_file_database = @import("media-file-database.zig");
@@ -29,6 +30,7 @@ pub const IGetDatabaseSummaryData = struct {
 pub fn getDatabaseSummaryHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -43,7 +45,7 @@ pub fn getDatabaseSummaryHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
     const summary = try getDatabaseSummary(allocator, io, opened.storage);
     const text = try std.json.Stringify.valueAlloc(allocator, summary, .{
         .emit_null_optional_fields = false,

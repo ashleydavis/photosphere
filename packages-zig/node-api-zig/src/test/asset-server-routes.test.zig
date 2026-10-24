@@ -16,6 +16,7 @@ const IAssetServerCore = asset_server_core.IAssetServerCore;
 const IReadStream = storage_zig.storage.IReadStream;
 const IDatabaseOp = api.database_op.IDatabaseOp;
 const HttpServer = node_utils.http_server.HttpServer;
+const MessageQueue = @import("ziggy").message_queue.MessageQueue;
 
 const io = std.testing.io;
 
@@ -35,12 +36,11 @@ const BytesStream = struct {
     }
 
     //
-    // Frees the stream.
+    // Ends the stream. Its memory is the request's, freed when the request ends (see FakeCore.serveAsset).
     //
     fn destroyFunction(ptr: *anyopaque, streamIo: std.Io) void {
+        _ = ptr;
         _ = streamIo;
-        const self: *BytesStream = @ptrCast(@alignCast(ptr));
-        std.heap.smp_allocator.destroy(self);
     }
 
     //
@@ -74,13 +74,11 @@ const FailingStream = struct {
     }
 
     //
-    // Frees the stream.
+    // Ends the stream. Its memory is the request's, freed when the request ends (see FakeCore.serveAsset).
     //
     fn destroyFunction(ptr: *anyopaque, streamIo: std.Io) void {
+        _ = ptr;
         _ = streamIo;
-        const self: *FailingStream = @ptrCast(@alignCast(ptr));
-        std.heap.smp_allocator.free(self.reader.buffer);
-        std.heap.smp_allocator.destroy(self);
     }
 
     //
@@ -162,10 +160,10 @@ const FakeCore = struct {
     };
 
     //
-    // Remembers what it was asked and streams the bytes the test set, or fails with the error it set.
+    // Remembers what it was asked and streams the bytes the test set, or fails with the error it set. The stream is in the request's
+    // memory, the allocator given, which the routes free when the request ends.
     //
-    fn serveAsset(ptr: *anyopaque, allocator: std.mem.Allocator, streamIo: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
-        _ = allocator;
+    fn serveAsset(ptr: *anyopaque, allocator: std.mem.Allocator, _: std.mem.Allocator, streamIo: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
         _ = streamIo;
         const self: *FakeCore = @ptrCast(@alignCast(ptr));
         self.serveCalls += 1;
@@ -174,13 +172,13 @@ const FakeCore = struct {
             return err;
         }
         if (self.streamFailsAfterAssetBytes) {
-            const failing = try std.heap.smp_allocator.create(FailingStream);
+            const failing = try allocator.create(FailingStream);
             failing.* = .{
                 .reader = .{
                     .vtable = &.{
                         .stream = FailingStream.streamFunction,
                     },
-                    .buffer = try std.heap.smp_allocator.alloc(u8, 64),
+                    .buffer = try allocator.alloc(u8, 64),
                     .seek = 0,
                     .end = 0,
                 },
@@ -192,7 +190,7 @@ const FakeCore = struct {
                 .vtable = &FailingStream.vtable,
             };
         }
-        const stream = try std.heap.smp_allocator.create(BytesStream);
+        const stream = try allocator.create(BytesStream);
         stream.* = .{
             .reader = std.Io.Reader.fixed(self.assetBytes),
         };
@@ -255,17 +253,29 @@ const Fixture = struct {
     //
     // Starts the server.
     //
-    fn start(fixture: *Fixture, enableCors: bool) !void {
+    fn start(fixture: *Fixture, enableCors: bool, log_queue: *MessageQueue) !void {
         fixture.fake = .{};
         fixture.routes = asset_server_routes.attachAssetServerRoutes(fixture.fake.core(), enableCors);
-        fixture.server = try HttpServer.listen(std.heap.smp_allocator, io, "127.0.0.1", 0, fixture.routes.requestHandler());
+        // One connection thread, because every request uses the one fake core. Its state is a log that sends its lines to the run's
+        // queue, which the configuration names by its address.
+        var config_buffer: [32]u8 = undefined;
+        const listener = try node_utils.http_server.open(io, "127.0.0.1", 0);
+        fixture.server = try HttpServer.start(io, std.testing.allocator, listener, .{
+            .router = fixture.routes.router(),
+            .maxConnectionThreads = 1,
+            .connectionState = .{
+                .config = try std.fmt.bufPrint(&config_buffer, "{d}", .{@intFromPtr(log_queue)}),
+                .create = QueueLines.create,
+                .destroy = QueueLines.destroy,
+            },
+        });
     }
 
     //
     // Stops the server.
     //
     fn stop(fixture: *Fixture) void {
-        fixture.server.close();
+        fixture.server.stop(io, std.testing.allocator);
     }
 
     //
@@ -290,7 +300,108 @@ const Fixture = struct {
 };
 
 //
-// Runs a test body against a started fixture, with an arena and the log's stderr captured, so that a passing test writes nothing.
+// The log of the fixture's connection thread (test-only code): it sends each error and exception, with its error, to the run's queue
+// as JSON text, which the test reads. The connection thread makes it as its state, so the thread's log lines reach the test.
+//
+const QueueLines = struct {
+    // The run's queue.
+    queue: *MessageQueue,
+
+    //
+    // Makes the log on the connection thread and sets it as the thread's log. The configuration is the queue's address.
+    //
+    fn create(config: []const u8, native_callbacks: ?*const @import("ziggy").core.NativeCallbacks, allocator: std.mem.Allocator, state_io: std.Io) anyerror!*anyopaque {
+        _ = native_callbacks;
+        _ = state_io;
+        const self = try allocator.create(QueueLines);
+        self.* = .{
+            .queue = @ptrFromInt(try std.fmt.parseInt(usize, config, 10)),
+        };
+        utils.log.setLog(.{
+            .ptr = self,
+            .vtable = &vtable,
+        });
+        return self;
+    }
+
+    //
+    // Puts the thread's log back and frees the log.
+    //
+    fn destroy(state: *anyopaque, allocator: std.mem.Allocator) void {
+        const self: *QueueLines = @ptrCast(@alignCast(state));
+        utils.log.setLog(null);
+        allocator.destroy(self);
+    }
+
+    const vtable: utils.log.ILog.VTable = .{
+        .info = ignore,
+        .verbose = ignore,
+        .@"error" = errorLine,
+        .exception = exceptionLine,
+        .warn = ignore,
+        .debug = ignore,
+        .tool = ignoreTool,
+        .event = ignore,
+        .verboseEnabled = verboseEnabled,
+        .getLogDetails = getLogDetails,
+    };
+
+    //
+    // Posts a line to the run's queue, with an Io of the calling thread's own.
+    //
+    fn post(self: *QueueLines, level: []const u8, message: []const u8, error_name: ?[]const u8) void {
+        // Memory of the calling thread's own, on its stack, for the Io and the line.
+        var buffer: [16 * 1024]u8 = undefined;
+        var fixed = std.heap.FixedBufferAllocator.init(&buffer);
+        var threaded: std.Io.Threaded = .init_single_threaded;
+        threaded.allocator = fixed.allocator();
+        defer threaded.deinit();
+        const text = @import("ziggy").json.stringify(fixed.allocator(), .{
+            .level = level,
+            .message = message,
+            .@"error" = error_name,
+        }) catch @panic("out of memory logging");
+        self.queue.post(threaded.io(), 0, text) catch @panic("out of memory logging");
+    }
+
+    fn errorLine(ptr: *anyopaque, message: []const u8) void {
+        const self: *QueueLines = @ptrCast(@alignCast(ptr));
+        self.post("error", message, null);
+    }
+
+    fn exceptionLine(ptr: *anyopaque, message: []const u8, err: anyerror) void {
+        const self: *QueueLines = @ptrCast(@alignCast(ptr));
+        self.post("exception", message, @errorName(err));
+    }
+
+    fn ignore(ptr: *anyopaque, message: []const u8) void {
+        _ = ptr;
+        _ = message;
+    }
+
+    fn ignoreTool(ptr: *anyopaque, tool_name: []const u8, data: utils.log.IToolOutput) void {
+        _ = ptr;
+        _ = tool_name;
+        _ = data;
+    }
+
+    fn verboseEnabled(ptr: *anyopaque) bool {
+        _ = ptr;
+        return false;
+    }
+
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, details_io: std.Io) anyerror!utils.log.ILogDetails {
+        _ = ptr;
+        _ = allocator;
+        _ = details_io;
+        return utils.log.noLogDetails;
+    }
+};
+
+//
+// Runs a test body against a started fixture, with an arena and stderr captured, so that a passing test writes nothing. The server's
+// connection thread sends its log lines to a queue of the run's (see QueueLines), which the test reads once the reply it waited for has
+// come.
 //
 const Run = struct {
     // The arena for the test.
@@ -299,17 +410,47 @@ const Run = struct {
     // The fixture.
     fixture: Fixture,
 
-    // What the code under test wrote to standard error.
+    // What the code under test wrote to standard error on the test's thread.
     stderr: std.Io.Writer.Allocating,
 
+    // The queue the server's connection thread sends its log lines to.
+    main_queue: MessageQueue,
+
+    // The errors and exceptions read from the queue so far, each its message and, for an exception, its error, one to a line.
+    logged_text: std.ArrayList(u8),
+
     //
-    // Captures the log, and starts the server.
+    // Captures stderr, and starts the server.
     //
     fn start(run: *Run, enableCors: bool) !void {
         run.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        run.stderr = std.Io.Writer.Allocating.init(std.heap.smp_allocator);
+        run.stderr = std.Io.Writer.Allocating.init(std.testing.allocator);
         utils.console.setCapture(null, &run.stderr.writer);
-        try run.fixture.start(enableCors);
+        run.main_queue = MessageQueue.init();
+        run.logged_text = .empty;
+        try run.fixture.start(enableCors, &run.main_queue);
+    }
+
+    //
+    // The errors and exceptions the server's connection thread has logged so far, read from its queue.
+    //
+    fn logged(run: *Run) ![]const u8 {
+        const allocator = run.arena.allocator();
+        while (run.main_queue.tryTake(io, allocator)) |message| {
+            defer allocator.free(message.text);
+            const line = try std.json.parseFromSliceLeaky(std.json.Value, allocator, message.text, .{});
+            const level = line.object.get("level") orelse continue;
+            if (!std.mem.eql(u8, level.string, "error") and !std.mem.eql(u8, level.string, "exception")) {
+                continue;
+            }
+            try run.logged_text.print(allocator, "{s}\n", .{line.object.get("message").?.string});
+            if (line.object.get("error")) |err| {
+                if (err == .string) {
+                    try run.logged_text.print(allocator, "{s}\n", .{err.string});
+                }
+            }
+        }
+        return run.logged_text.items;
     }
 
     //
@@ -319,6 +460,7 @@ const Run = struct {
         run.fixture.stop();
         utils.console.setCapture(null, null);
         run.stderr.deinit();
+        run.main_queue.deinit();
         run.arena.deinit();
     }
 };
@@ -409,7 +551,7 @@ test "GET /asset returns 500 and logs the error when the core cannot load the as
 
     try std.testing.expectEqual(@as(u16, 500), reply.status);
     try std.testing.expectEqualStrings("Error loading asset", reply.body);
-    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error loading asset missing") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.logged(), "Error loading asset missing") != null);
 }
 
 test "GET /asset returns 500 and logs the error when the asset cannot be read before its first byte" {
@@ -424,7 +566,7 @@ test "GET /asset returns 500 and logs the error when the asset cannot be read be
 
     try std.testing.expectEqual(@as(u16, 500), reply.status);
     try std.testing.expectEqualStrings("Error loading asset", reply.body);
-    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error loading asset unreadable") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.logged(), "Error loading asset unreadable") != null);
 }
 
 test "GET /asset logs the error and ends the response without the rest of the asset when a read fails part way through" {
@@ -438,7 +580,7 @@ test "GET /asset logs the error and ends the response without the rest of the as
     // The status has gone out with the first bytes, so the failure cannot be answered with a 500: the client gets a
     // response it cannot read to its end, rather than one that looks complete.
     try std.testing.expectError(error.HttpConnectionClosing, run.fixture.get(allocator, .GET, "/asset?id=broken&type=thumb&db=%2Fdb"));
-    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error loading asset broken") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.logged(), "Error loading asset broken") != null);
 }
 
 test "HEAD /asset is answered like GET, without the body" {
@@ -546,7 +688,7 @@ test "POST /asset returns 500 with the error's message and logs it when the core
 
     try std.testing.expectEqual(@as(u16, 500), reply.status);
     try std.testing.expectEqualStrings("DiskFull", reply.body);
-    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error storing asset a (thumb)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.logged(), "Error storing asset a (thumb)") != null);
 }
 
 const SET_OP = "{\"databaseId\":\"/db/a\",\"collectionName\":\"metadata\",\"recordId\":\"asset-1\",\"op\":{\"type\":\"set\",\"fields\":{\"description\":\"x\"}}}";
@@ -656,7 +798,7 @@ test "POST /apply-database-ops returns 500 with the message when an op is not an
 
     try std.testing.expectEqual(@as(u16, 500), reply.status);
     try std.testing.expectEqualStrings("InvalidOp", reply.body);
-    try std.testing.expect(std.mem.indexOf(u8, run.stderr.written(), "Error applying database ops") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.logged(), "Error applying database ops") != null);
 }
 
 test "POST /apply-database-ops returns 500 with the error's message when the core fails" {

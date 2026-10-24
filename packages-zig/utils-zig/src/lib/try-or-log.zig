@@ -1,7 +1,7 @@
 const std = @import("std");
-const retry_module = @import("retry.zig");
-const log_module = @import("ziggy").task_queue.utils.log;
-const OperationResult = retry_module.OperationResult;
+const retry = @import("retry.zig");
+const log = @import("ziggy").task_queue.utils.log;
+const OperationResult = retry.OperationResult;
 
 //
 // Attempts to execute an operation. If it succeeds, returns the result.
@@ -14,7 +14,7 @@ pub fn tryOrLog(io: std.Io, operation: anytype, errorMessage: []const u8) ?Opera
     }
     else |err| {
         const message = if (errorMessage.len > 0) errorMessage else "Operation failed";
-        log_module.log.exception(message, err);
+        log.log.exception(message, err);
         return null;
     }
 }

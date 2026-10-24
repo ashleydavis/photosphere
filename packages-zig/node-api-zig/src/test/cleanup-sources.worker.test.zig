@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -28,7 +29,7 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 //
 // A task context that never cancels, and whose events go nowhere.
 //
-fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
+fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
     _ = context;
     _ = message;
 }
@@ -37,6 +38,9 @@ fn ignoreMessage(context: ?*anyopaque, message: std.json.Value) void {
 // The state each test starts from.
 //
 const CleanupTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -68,7 +72,7 @@ const CleanupTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "cleanup-sources-worker");
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
@@ -104,6 +108,7 @@ const CleanupTest = struct {
         };
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //
@@ -182,7 +187,7 @@ const CleanupTest = struct {
         try data.put(allocator, "storageDescriptor", .{ .object = descriptor });
         try data.put(allocator, "settings", .{ .object = settings });
         try data.put(allocator, "dryRun", .{ .bool = dryRun });
-        const output = try cleanupSourcesHandler(allocator, std.testing.io, .{ .object = data }, self.context.taskContext());
+        const output = try cleanupSourcesHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = data }, self.context.taskContext());
         return std.json.parseFromValueLeaky(ICleanupSourcesResult, allocator, output, .{});
     }
 };

@@ -30,7 +30,6 @@ pub const directory_picker = @import("src/lib/directory-picker.zig");
 pub const storage_helper = @import("src/lib/storage-helper.zig");
 pub const init_cmd = @import("src/lib/init-cmd.zig");
 pub const worker_pool = @import("src/lib/worker-pool.zig");
-pub const worker_log_bun = @import("src/lib/worker-log-bun.zig");
 pub const add = @import("src/cmd/add.zig");
 pub const replicate = @import("src/cmd/replicate.zig");
 pub const init_command = @import("src/cmd/init.zig");
@@ -3088,7 +3087,7 @@ pub fn main(init: std.process.Init) !void {
 
     // The ImageMagick and FFmpeg built into the program. They live in this frame for the whole process and must not move, because
     // the runner handed to the commands points at them.
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
     const exitCode = run(allocator, io, &mediaTools, process_argv.userArgs()) catch |err| {

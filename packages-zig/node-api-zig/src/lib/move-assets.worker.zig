@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -107,6 +108,7 @@ const UpsertMetadataOperation = struct {
 pub fn moveAssetsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -122,13 +124,13 @@ pub fn moveAssetsHandler(
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const source = try openStorage(allocator, io, sourceDatabasePath, null, null, context.hostRequester);
+    const source = try openStorage(allocator, io, sourceDatabasePath, null, null, context.nativeCaller);
     const sourceStorage = source.storage;
     const sourceRawStorage = source.rawStorage;
     const sourceDb = try createMediaFileDatabase(allocator, sourceStorage, uuidGenerator, timestampProvider);
     try loadSortIndexes(allocator, sourceStorage, sourceDb.metadataCollection);
 
-    const dest = try openStorage(allocator, io, destDatabasePath, null, null, context.hostRequester);
+    const dest = try openStorage(allocator, io, destDatabasePath, null, null, context.nativeCaller);
     const destStorage = dest.storage;
     const destRawStorage = dest.rawStorage;
     const destDb = try createMediaFileDatabase(allocator, destStorage, uuidGenerator, timestampProvider);

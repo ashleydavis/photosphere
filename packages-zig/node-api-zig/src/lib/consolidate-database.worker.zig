@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const media_file_database = @import("media-file-database.zig");
@@ -57,11 +58,13 @@ const ProgressMessageSender = struct {
     //
     // Sends one progress event.
     //
-    fn send(callbackContext: ?*anyopaque, pushed: u64, total: u64) void {
+    fn send(callbackContext: ?*anyopaque, io: std.Io, pushed: u64, total: u64) void {
         const self: *ProgressMessageSender = @ptrCast(@alignCast(callbackContext.?));
-        var buffer: [1024]u8 = undefined;
-        var bufferAllocator = std.heap.FixedBufferAllocator.init(&buffer);
-        const allocator = bufferAllocator.allocator();
+        // An allocator of this call's own, made on the task's thread: the callback is given none, and sendEvent writes the whole
+        // message with it, which a fixed buffer is too small for.
+        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
         const message: IConsolidateProgressEvent = .{
             .pushed = pushed,
             .total = total,
@@ -72,7 +75,7 @@ const ProgressMessageSender = struct {
         const value = std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{}) catch |err| {
             std.debug.panic("The consolidate-progress message could not be read back: {s}", .{@errorName(err)});
         };
-        self.context.sendEvent(value);
+        self.context.sendEvent(io, allocator, value);
     }
 };
 
@@ -93,6 +96,7 @@ fn toJson(allocator: std.mem.Allocator, value: anytype) !std.json.Value {
 pub fn consolidateDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    timers: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -109,8 +113,8 @@ pub fn consolidateDatabaseHandler(
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
 
-    const local = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
-    const remote = try openStorage(allocator, io, data.remotePath, null, null, context.hostRequester);
+    const local = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
+    const remote = try openStorage(allocator, io, data.remotePath, null, null, context.nativeCaller);
 
     if (!try merkleTreeExists(allocator, io, remote.storage)) {
         return errors.throwError("There is no database at \"{s}\" to consolidate into.", .{data.remotePath});
@@ -148,7 +152,7 @@ pub fn consolidateDatabaseHandler(
     // Pulling them down is what makes it usable: without it the gallery is empty until something
     // happens to read each file, and a machine that goes offline straight after connecting would
     // show nothing at all. This is the same prefetch a partial replica gets after replication.
-    _ = try prefetchDatabaseHandler(allocator, io, try toJson(allocator, prefetch_database_worker.IPrefetchDatabaseData{
+    _ = try prefetchDatabaseHandler(allocator, io, timers, try toJson(allocator, prefetch_database_worker.IPrefetchDatabaseData{
         .databasePath = data.databasePath,
     }), context);
 

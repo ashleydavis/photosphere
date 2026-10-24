@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -40,7 +41,7 @@ const RecordingContext = struct {
     //
     // Records a message.
     //
-    fn sendEvent(context: ?*anyopaque, message: std.json.Value) void {
+    fn sendEvent(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         const self: *RecordingContext = @ptrCast(@alignCast(context.?));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch |err| {
             std.debug.panic("The recording context could not write a message: {s}", .{@errorName(err)});
@@ -54,8 +55,7 @@ const RecordingContext = struct {
 //
 // A task context that records the events sent through it.
 //
-fn makeContext(allocator: std.mem.Allocator, io: std.Io) !*RecordingContext {
-    _ = try test_environment.setupEnvironment(io);
+fn makeContext(allocator: std.mem.Allocator) !*RecordingContext {
     const recording = try allocator.create(RecordingContext);
     recording.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -136,6 +136,8 @@ fn readTreeFile(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u
 }
 
 test "a missing database path is refused rather than acted on" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -143,7 +145,7 @@ test "a missing database path is refused rather than acted on" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -152,12 +154,14 @@ test "a missing database path is refused rather than acted on" {
     defer removeDirectories(io, dirs);
     const remoteTree = try readTreeFile(allocator, io, dirs.remote);
 
-    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, try makeData(allocator, "", dirs.remote), recording.context.taskContext()));
+    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, "", dirs.remote), recording.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
     try std.testing.expectEqualStrings(remoteTree, try readTreeFile(allocator, io, dirs.remote));
 }
 
 test "a missing remote path is refused rather than acted on" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -165,7 +169,7 @@ test "a missing remote path is refused rather than acted on" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -174,12 +178,14 @@ test "a missing remote path is refused rather than acted on" {
     defer removeDirectories(io, dirs);
     const localTree = try readTreeFile(allocator, io, dirs.local);
 
-    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, ""), recording.context.taskContext()));
+    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, ""), recording.context.taskContext()));
     try std.testing.expectEqualStrings("remotePath is required", errors.lastErrorMessage());
     try std.testing.expectEqualStrings(localTree, try readTreeFile(allocator, io, dirs.local));
 }
 
 test "a remote with no database in it is refused, rather than consolidated into nothing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -187,7 +193,7 @@ test "a remote with no database in it is refused, rather than consolidated into 
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -197,12 +203,14 @@ test "a remote with no database in it is refused, rather than consolidated into 
     const localTree = try readTreeFile(allocator, io, dirs.local);
     const emptyRemote = try pathIn(allocator, dirs.remoteRoot, "empty");
 
-    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, emptyRemote), recording.context.taskContext()));
+    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, emptyRemote), recording.context.taskContext()));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "no database at") != null);
     try std.testing.expectEqualStrings(localTree, try readTreeFile(allocator, io, dirs.local));
 }
 
 test "returns what the consolidation did" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -210,7 +218,7 @@ test "returns what the consolidation did" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -221,13 +229,15 @@ test "returns what the consolidation did" {
     const dirs = try makeDirectories(allocator, io, "50-assets", "1-asset-2");
     defer removeDirectories(io, dirs);
 
-    const result = try consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
+    const result = try consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 49), result.object.get("pushedCount").?.integer);
     try std.testing.expectEqual(@as(i64, 1), result.object.get("alreadyPresentCount").?.integer);
 }
 
 test "pulls the remote's records and thumbnails down afterwards" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -235,7 +245,7 @@ test "pulls the remote's records and thumbnails down afterwards" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -243,7 +253,7 @@ test "pulls the remote's records and thumbnails down afterwards" {
     const dirs = try makeDirectories(allocator, io, "1-asset", "1-asset-2");
     defer removeDirectories(io, dirs);
 
-    _ = try consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
+    _ = try consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
 
     // Without this the local database is a partial replica with nothing local to show, so the
     // gallery is empty until something happens to read each file, and a machine that goes
@@ -254,6 +264,8 @@ test "pulls the remote's records and thumbnails down afterwards" {
 }
 
 test "does not pull anything down when the consolidation failed" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -261,7 +273,7 @@ test "does not pull anything down when the consolidation failed" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -273,13 +285,15 @@ test "does not pull anything down when the consolidation failed" {
     const remoteRawStorage = try test_files.directoryStorage(allocator, io, dirs.remote);
     try std.testing.expect(try api.write_lock.acquireWriteLock(allocator, io, remoteRawStorage, "another-session", 1));
 
-    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext()));
+    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext()));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Failed to acquire the write lock on the remote database") != null);
 
     try std.testing.expect(!test_files.fileExists(io, try pathIn(allocator, dirs.local, REMOTE_THUMB_PATH)));
 }
 
 test "streams progress as assets are pushed, so a long upload is not silent" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -287,7 +301,7 @@ test "streams progress as assets are pushed, so a long upload is not silent" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -299,12 +313,12 @@ test "streams progress as assets are pushed, so a long upload is not silent" {
     defer removeDirectories(io, dirs);
     const second = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(second).?);
-    _ = try consolidateDatabaseHandler(allocator, io, try makeData(allocator, second, dirs.local), recording.context.taskContext());
+    _ = try consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, second, dirs.local), recording.context.taskContext());
     recording.sentMessages.clearRetainingCapacity();
     const twoAssets = try pathIn(allocator, dirs.localRoot, "two-assets");
     try temp_dirs.copyDirectory(allocator, io, dirs.local, twoAssets);
 
-    _ = try consolidateDatabaseHandler(allocator, io, try makeData(allocator, twoAssets, dirs.remote), recording.context.taskContext());
+    _ = try consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, twoAssets, dirs.remote), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(usize, 2), recording.sentMessages.items.len);
     try std.testing.expectEqualStrings("{\"type\":\"consolidate-progress\",\"pushed\":1,\"total\":2}", recording.sentMessages.items[0]);
@@ -312,6 +326,8 @@ test "streams progress as assets are pushed, so a long upload is not silent" {
 }
 
 test "does nothing when the two databases are already the same database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -319,7 +335,7 @@ test "does nothing when the two databases are already the same database" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -330,7 +346,7 @@ test "does nothing when the two databases are already the same database" {
     defer removeDirectories(io, dirs);
     const localTreeBefore = try readTreeFile(allocator, io, dirs.local);
 
-    const result = try consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
+    const result = try consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 0), result.object.get("pushedCount").?.integer);
     try std.testing.expectEqual(@as(i64, 0), result.object.get("alreadyPresentCount").?.integer);
@@ -338,6 +354,8 @@ test "does nothing when the two databases are already the same database" {
 }
 
 test "fails when another session holds the local database's write lock" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -345,7 +363,7 @@ test "fails when another session holds the local database's write lock" {
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    const recording = try makeContext(allocator, io);
+    const recording = try makeContext(allocator);
     // The handler logs what it skips and what it fails on; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
@@ -356,6 +374,6 @@ test "fails when another session holds the local database's write lock" {
     const localRawStorage = try test_files.directoryStorage(allocator, io, dirs.local);
     try std.testing.expect(try api.write_lock.acquireWriteLock(allocator, io, localRawStorage, "another-session", 1));
 
-    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext()));
+    try std.testing.expectError(error.Thrown, consolidateDatabaseHandler(allocator, io, test_timers.timers(), try makeData(allocator, dirs.local, dirs.remote), recording.context.taskContext()));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Failed to acquire the write lock on the local database") != null);
 }

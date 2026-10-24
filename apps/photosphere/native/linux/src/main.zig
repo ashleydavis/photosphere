@@ -4,7 +4,7 @@
 //
 
 const std = @import("std");
-const shell = @import("ziggy-native-linux");
+const native_app = @import("ziggy-native-linux");
 
 //
 // What the core says when the background work reports something, as the core sends it.
@@ -25,11 +25,11 @@ const IHoldAwake = struct {
 };
 
 //
-// Answers the requests the core's background work makes of the platform: the connection type, and a notification permission a desktop has no need to ask for, so
+// Handles the native calls the core's background work makes of the platform: the connection type, and a notification permission a desktop never needs, so
 // that is always granted. The computer is held from suspending while a pass runs, and what the work reports goes to standard error,
 // which is the app's log.
 //
-fn hostRequest(host: shell.Host, method: []const u8, request_json: []const u8) anyerror!?[]const u8 {
+fn nativeCall(caller: native_app.NativeCallContext, method: []const u8, request_json: []const u8) anyerror!?[]const u8 {
     if (std.mem.eql(u8, method, "requestNotificationPermission")) {
         return "{\"granted\":true}";
     }
@@ -40,7 +40,7 @@ fn hostRequest(host: shell.Host, method: []const u8, request_json: []const u8) a
     if (std.mem.eql(u8, method, "holdAwake")) {
         const parsed = try std.json.parseFromSlice(IHoldAwake, std.heap.c_allocator, request_json, .{});
         defer parsed.deinit();
-        host.holdAwake(parsed.value.awake);
+        caller.holdAwake(parsed.value.awake);
         return "null";
     }
     if (std.mem.eql(u8, method, "backgroundLog")) {
@@ -57,8 +57,8 @@ fn hostRequest(host: shell.Host, method: []const u8, request_json: []const u8) a
 //
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    return try shell.run(.{
-        .host_request = hostRequest,
+    return try native_app.run(.{
+        .native_call = nativeCall,
         .app_id = "au.com.codecapers.photosphere",
         .title = "Photosphere",
         .default_width = 1200,

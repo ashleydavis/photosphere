@@ -1,6 +1,6 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const log_module = utils.log;
+const log = utils.log;
 
 //
 // The log methods a MockLog records calls to.
@@ -53,7 +53,7 @@ pub const MockLog = struct {
     calls: std.ArrayList(IMockLogCall) = .empty,
 
     // The log that was active before this one was installed.
-    previousLog: ?log_module.ILog = null,
+    previousLog: ?log.ILog = null,
 
     //
     // Creates a mock log that records with the allocator.
@@ -78,8 +78,8 @@ pub const MockLog = struct {
     // Makes this the global log.
     //
     pub fn install(self: *MockLog) void {
-        self.previousLog = log_module.log;
-        log_module.setLog(self.ilog());
+        self.previousLog = log.currentLog();
+        log.setLog(self.ilog());
     }
 
     //
@@ -87,14 +87,14 @@ pub const MockLog = struct {
     //
     pub fn uninstall(self: *MockLog) void {
         if (self.previousLog) |previous| {
-            log_module.setLog(previous);
+            log.setLog(previous);
         }
     }
 
     //
     // Gets the ILog interface for this log.
     //
-    pub fn ilog(self: *MockLog) log_module.ILog {
+    pub fn ilog(self: *MockLog) log.ILog {
         return .{
             .ptr = self,
             .vtable = &vtable,
@@ -141,7 +141,7 @@ pub const MockLog = struct {
     //
     // The ILog functions of this log.
     //
-    const vtable: log_module.ILog.VTable = .{
+    const vtable: log.ILog.VTable = .{
         .info = info,
         .verbose = verbose,
         .@"error" = logError,
@@ -212,7 +212,7 @@ pub const MockLog = struct {
     //
     // Records a call to tool.
     //
-    fn tool(ptr: *anyopaque, toolName: []const u8, data: log_module.IToolOutput) void {
+    fn tool(ptr: *anyopaque, toolName: []const u8, data: log.IToolOutput) void {
         _ = data;
         record(ptr, .tool, toolName);
     }
@@ -235,10 +235,10 @@ pub const MockLog = struct {
     //
     // Returns the placeholder log details.
     //
-    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!log_module.ILogDetails {
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!log.ILogDetails {
         _ = ptr;
         _ = allocator;
         _ = io;
-        return log_module.noLogDetails;
+        return log.noLogDetails;
     }
 };

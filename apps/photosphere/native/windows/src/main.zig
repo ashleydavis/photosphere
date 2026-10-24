@@ -4,14 +4,14 @@
 //
 
 const std = @import("std");
-const shell = @import("ziggy-native-windows");
+const native_app = @import("ziggy-native-windows");
 
 //
 // Runs the native app with Photosphere's name, window size and embedded page, and returns the exit code.
 //
 pub fn main(init: std.process.Init) !u8 {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    return try shell.run(.{
+    return try native_app.run(.{
         .app_id = "au.com.codecapers.photosphere",
         .title = "Photosphere",
         .default_width = 1200,

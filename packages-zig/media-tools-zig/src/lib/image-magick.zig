@@ -5,6 +5,7 @@ const node_utils = @import("node-utils-zig");
 pub const c = @import("magick");
 
 const in_process_tools = node_utils.in_process_tools;
+const ThreadAllocator = @import("ziggy").thread_allocator.ThreadAllocator;
 
 //
 // ImageMagick, built into the program and run in its process: the same thing the `magick` program does with its command line, which
@@ -30,17 +31,15 @@ const in_process_tools = node_utils.in_process_tools;
 //
 
 //
-// A running ImageMagick. ImageMagick keeps one set of state for the whole program, so a program holds one of these at a time, and may
-// run commands on it from several threads at once.
+// ImageMagick started for the whole program. ImageMagick keeps one set of state for the whole program, which MagickWandGenesis starts
+// and MagickWandTerminus ends for every thread at once, so the program's main thread holds one of these, started before any thread
+// runs a command and stopped after the last has ended. The program's code keeps no variable for it.
 //
-pub const ImageMagick = struct {
-    // Reads the files the commands write their text to.
-    io: std.Io,
-
-    // ImageMagick's warning handler before init set its own, put back by deinit.
+pub const Started = struct {
+    // ImageMagick's warning handler before start set its own, put back by stop.
     previous_warning_handler: c.WarningHandler,
 
-    // ImageMagick's error handler before init set its own, put back by deinit.
+    // ImageMagick's error handler before start set its own, put back by stop.
     previous_error_handler: c.ErrorHandler,
 
     //
@@ -50,7 +49,8 @@ pub const ImageMagick = struct {
     // warnings it meets to ImageMagick's warning handler as it goes, and clears them (CLICatchException in MagickWand/wandcli.c), and a
     // few parts of the library do the same with errors they carry on from. Those handlers are set for the whole of ImageMagick and
     // are given no pointer of the caller's, so they cannot tell which call a message belongs to. In place of the handlers that print to
-    // the standard error, this sets ones that send a warning to the log as the tool's standard error and an error to the log's errors.
+    // the standard error, this sets ones that send a warning to the log as the tool's standard error and an error to the log's errors:
+    // the log of the thread that runs the command, since each thread has a log of its own.
     //
     // The library is built with zero configuration, so it reads no policy.xml and applies no security policy of its own. This sets
     // one, and fails with ImageMagick's error when it cannot be set. The policy denies:
@@ -61,7 +61,7 @@ pub const ImageMagick = struct {
     //   * Every delegate, since none is meant to run a program.
     //   * Indirect reads, `@file`, which read a list of other paths from a file.
     //
-    pub fn init(io: std.Io) !ImageMagick {
+    pub fn start() !Started {
         c.MagickWandGenesis();
         const exception = c.AcquireExceptionInfo();
         defer _ = c.DestroyExceptionInfo(exception);
@@ -78,28 +78,33 @@ pub const ImageMagick = struct {
             return utils.errors.throwError("The ImageMagick security policy could not be set: {s} {s}", .{ reason, description });
         }
         return .{
-            .io = io,
             .previous_warning_handler = c.SetWarningHandler(logWarning),
             .previous_error_handler = c.SetErrorHandler(logError),
         };
     }
 
     //
-    // Stops ImageMagick and frees what it holds.
+    // Stops ImageMagick and frees what it holds, once no thread runs a command.
     //
-    pub fn deinit(self: *ImageMagick) void {
+    pub fn stop(self: *Started) void {
         _ = c.SetWarningHandler(self.previous_warning_handler);
         _ = c.SetErrorHandler(self.previous_error_handler);
         c.MagickWandTerminus();
     }
+};
 
+//
+// Running ImageMagick's commands, on any thread once ImageMagick has been started (see `Started`). ImageMagick runs commands from several
+// threads at once, each with the Io and allocator of the thread that runs it.
+//
+pub const ImageMagick = struct {
     //
     // Runs `magick` with the arguments and returns the exit code (0 when the command worked, 1 when it failed) and what it printed.
     // A command that fails hands back ImageMagick's messages instead of what it printed.
     //
-    pub fn runMagick(self: *ImageMagick, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runMagick(io: std.Io, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
-            return try self.readVersion(allocator);
+            return try readVersion(io, allocator);
         }
 
         // The unified `magick` command takes its first argument as an input file, so it cannot run `identify`; `identify` is its own
@@ -170,7 +175,7 @@ pub const ImageMagick = struct {
             try output.appendSlice(allocator, std.mem.span(metadata));
         }
         if (text_path) |path| {
-            const text = std.Io.Dir.cwd().readFileAlloc(self.io, path, allocator, .unlimited) catch |err| {
+            const text = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited) catch |err| {
                 return utils.errors.throwError("The text the magick command wrote to {s} could not be read: {s}", .{ path, @errorName(err) });
             };
             try output.appendSlice(allocator, text);
@@ -184,7 +189,7 @@ pub const ImageMagick = struct {
     //
     // What `magick -version` prints, which ImageMagick writes to a file it is given.
     //
-    fn readVersion(self: *ImageMagick, allocator: std.mem.Allocator) !in_process_tools.ToolOutput {
+    fn readVersion(io: std.Io, allocator: std.mem.Allocator) !in_process_tools.ToolOutput {
         var path_buffer: [c.MagickPathExtent]u8 = undefined;
         const path = try acquireTemporaryPath(&path_buffer);
         defer _ = c.RelinquishUniqueFileResource(path.ptr);
@@ -195,7 +200,7 @@ pub const ImageMagick = struct {
         if (c.fclose(file) != 0) {
             return utils.errors.throwError("The file {s} for the version of ImageMagick could not be closed.", .{path});
         }
-        const text = std.Io.Dir.cwd().readFileAlloc(self.io, path, allocator, .unlimited) catch |err| {
+        const text = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited) catch |err| {
             return utils.errors.throwError("The version of ImageMagick could not be read from {s}: {s}", .{ path, @errorName(err) });
         };
         return .{
@@ -255,9 +260,13 @@ fn appendMessage(allocator: std.mem.Allocator, messages: *std.ArrayList(u8), cli
 //
 fn logWarning(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
     _ = severity;
+    // This runs on whichever thread ImageMagick reports from, so the message is made with an allocator made for the call.
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    const allocator = thread_allocator.allocator();
     var message: std.ArrayList(u8) = .empty;
-    defer message.deinit(std.heap.smp_allocator);
-    appendMessage(std.heap.smp_allocator, &message, "magick", reason, description) catch @panic("out of memory logging a warning of ImageMagick");
+    defer message.deinit(allocator);
+    appendMessage(allocator, &message, "magick", reason, description) catch @panic("out of memory logging a warning of ImageMagick");
     if (message.items.len > 0) {
         utils.log.log.tool("magick", .{
             .stdout = null,
@@ -272,9 +281,13 @@ fn logWarning(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]
 //
 fn logError(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
     _ = severity;
+    // This runs on whichever thread ImageMagick reports from, so the message is made with an allocator made for the call.
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    const allocator = thread_allocator.allocator();
     var message: std.ArrayList(u8) = .empty;
-    defer message.deinit(std.heap.smp_allocator);
-    appendMessage(std.heap.smp_allocator, &message, "magick", reason, description) catch @panic("out of memory logging an error of ImageMagick");
+    defer message.deinit(allocator);
+    appendMessage(allocator, &message, "magick", reason, description) catch @panic("out of memory logging an error of ImageMagick");
     if (message.items.len > 0) {
         utils.log.log.@"error"(message.items[0 .. message.items.len - 1]);
     }

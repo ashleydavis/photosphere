@@ -17,9 +17,17 @@ const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const pickers = @import("pickers.zig");
-const main_state = @import("main-state.zig");
+
+//
+// The type of the task event a save-asset-request task sends the main thread to queue the save-asset task that writes the asset.
+// Its data is the save-asset task's input.
+//
+pub const QUEUE_SAVE_ASSET_EVENT_TYPE = "queue-save-asset";
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
@@ -75,9 +83,9 @@ const IBatchOutputs = struct {
 //
 // Queues a task as a child of the one answering the request and waits for it to end.
 //
-fn runChildTask(context: *TaskContext, task_type: []const u8, data: anytype) !ziggy.types.Completion {
-    const task_id = try context.queueChild(task_type, data, null);
-    return try context.awaitTask(task_id);
+fn runChildTask(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, task_type: []const u8, data: anytype) !ziggy.types.Completion {
+    const task_id = try services.queueChild(io, allocator, timers, task_type, data, null);
+    return try services.awaitTask(io, allocator, timers, task_id);
 }
 
 //
@@ -87,7 +95,8 @@ fn runChildTask(context: *TaskContext, task_type: []const u8, data: anytype) !zi
 //
 // The five values are read from the payload, because a Ziggy request carries one payload.
 //
-fn saveAsset(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn saveAsset(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
     const asset_id = json.getString(data, "assetId") orelse {
         return utils.errors.throwError("The asset to save needs its id.", .{});
     };
@@ -103,20 +112,21 @@ fn saveAsset(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
         const filename = json.getString(data, "filename") orelse {
             return utils.errors.throwError("The asset to save needs a file name to suggest in the save dialog.", .{});
         };
-        break :blk (try pickers.showSaveDialog(context, filename)) orelse {
-            return try context.arena.dupe(u8, "null");
+        break :blk (try pickers.showSaveDialog(services, io, allocator, timers, filename)) orelse {
+            return try allocator.dupe(u8, "null");
         };
     };
-    const state = main_state.fromContext(context);
-    const save_data = try json.stringify(context.arena, .{
-        .assetId = asset_id,
-        .assetType = asset_type,
-        .destPath = actual_dest_path,
-        .databasePath = database_path,
+    // The write is a task of its own under the database's source, which the main thread queues (see main-process.zig).
+    try services.sendEvent(io, allocator, .{
+        .type = QUEUE_SAVE_ASSET_EVENT_TYPE,
+        .data = .{
+            .assetId = asset_id,
+            .assetType = asset_type,
+            .destPath = actual_dest_path,
+            .databasePath = database_path,
+        },
     });
-    const task_id = try state.uuid_generator.generate(context.arena, context.io());
-    try state.core.runner.addTask(task_id, "save-asset", database_path, save_data, .background, null);
-    return try context.arena.dupe(u8, "null");
+    return try allocator.dupe(u8, "null");
 }
 
 //
@@ -127,8 +137,9 @@ fn saveAsset(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
 // The tasks that write the files are children of this one, and so take its source and are cancelled with the request and not with
 // the database. This handler has to wait for them.
 //
-fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    const arena = context.arena;
+fn saveAssets(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = context;
+    const arena = allocator;
     const request = try std.json.parseFromValueLeaky(ISaveAssetsRequest, arena, data, .{
         .ignore_unknown_fields = true,
     });
@@ -136,14 +147,14 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
         const item = try std.json.parseFromValueLeaky(ISaveAssetItem, arena, request.items[0], .{
             .ignore_unknown_fields = true,
         });
-        const dest_path = (try pickers.pickFile(context, item.filename)) orelse {
+        const dest_path = (try pickers.pickFile(services, io, allocator, timers, item.filename)) orelse {
             return try json.stringify(arena, ISaveAssetsReply{
                 .outcome = "cancelled",
                 .savedCount = 0,
                 .failedCount = 0,
             });
         };
-        const completion = try runChildTask(context, "save-asset", .{
+        const completion = try runChildTask(services, io, arena, timers, "save-asset", .{
             .assetId = item.assetId,
             .assetType = item.assetType,
             .destPath = dest_path,
@@ -165,14 +176,14 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
         });
     }
 
-    const folder_path = (try pickers.pickFolder(context, "Choose folder to save assets", "lastDownloadFolder")) orelse {
+    const folder_path = (try pickers.pickFolder(services, io, allocator, timers, "Choose folder to save assets", "lastDownloadFolder")) orelse {
         return try json.stringify(arena, ISaveAssetsReply{
             .outcome = "cancelled",
             .savedCount = 0,
             .failedCount = 0,
         });
     };
-    const completion = try runChildTask(context, "save-assets-batch", .{
+    const completion = try runChildTask(services, io, arena, timers, "save-assets-batch", .{
         .assets = request.items,
         .folderPath = folder_path,
         .databasePath = request.databasePath,
@@ -200,7 +211,9 @@ fn saveAssets(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
 // open-path: the payload is the path of a folder. Opens it in the operating system's file manager.
 // A file manager that cannot be started is an error.
 //
-fn openPath(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn openPath(services: TaskServices, _: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The folder to open needs a path.", .{});
     }
@@ -210,7 +223,7 @@ fn openPath(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
         else => "xdg-open",
     };
     const argv = [_][]const u8{ opener, data.string };
-    var child = std.process.spawn(context.io(), .{
+    var child = std.process.spawn(io, .{
         .argv = &argv,
         .environ_map = node_utils.process_env.getEnvironMap(),
         .stdin = .ignore,
@@ -221,8 +234,8 @@ fn openPath(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     };
     // The opener starts the file manager and ends, and its exit code says nothing the user can act on (Explorer exits with 1 after
     // it has opened a folder), so it is waited for only so that it does not stay behind as a zombie.
-    _ = try child.wait(context.io());
-    return try context.arena.dupe(u8, "null");
+    _ = try child.wait(io);
+    return try allocator.dupe(u8, "null");
 }
 
 //
@@ -259,12 +272,14 @@ pub const SaveAssetRequest = struct {
 //
 // save-asset: answered by the save-asset-request task. The response is null.
 //
-pub fn saveAssetMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SaveAssetRequest) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn saveAssetMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SaveAssetRequest) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "save-asset-request",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -282,12 +297,14 @@ pub const SaveAssetsRequest = struct {
 //
 // save-assets: answered by the save-assets task. The response is what happened to the assets.
 //
-pub fn saveAssetsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SaveAssetsRequest) !ziggy.core.Answer(ISaveAssetsReply) {
-    _ = core;
+pub fn saveAssetsMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SaveAssetsRequest) !ziggy.core.Response(ISaveAssetsReply) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "save-assets",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -295,12 +312,14 @@ pub fn saveAssetsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator
 //
 // open-path: the data is the path of a folder, answered by the open-path task. The response is null.
 //
-pub fn openPathMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, path: []const u8) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn openPathMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, path: []const u8) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "open-path",
-            .data = try json.stringify(arena, path),
+            .data = try json.stringify(allocator, path),
         },
     };
 }

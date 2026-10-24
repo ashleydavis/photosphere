@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const database_fixture = @import("database-fixture.zig");
@@ -24,7 +25,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestTaskContext, 
     try object.put(allocator, "assetType", .{ .string = assetType });
     try object.put(allocator, "destPath", .{ .string = destPath });
     try object.put(allocator, "databasePath", .{ .string = databasePath });
-    return saveAssetHandler(allocator, io, .{ .object = object }, testContext.context.taskContext());
+    return saveAssetHandler(allocator, io, test_timers.timers(), .{ .object = object }, testContext.context.taskContext());
 }
 
 test "streams an asset from the database to the destination file" {
@@ -151,6 +152,6 @@ test "throws a descriptive error when the task data is not valid" {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "assetId", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, saveAssetHandler(allocator, io, .{ .object = object }, testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, saveAssetHandler(allocator, io, test_timers.timers(), .{ .object = object }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The save-asset task data is not valid: assetId, assetType, destPath and databasePath must be strings", errors.lastErrorMessage());
 }

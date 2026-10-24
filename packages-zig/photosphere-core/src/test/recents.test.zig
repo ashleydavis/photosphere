@@ -85,7 +85,7 @@ test "remove-recent-database-name logs which name was removed" {
     try app.start();
     defer app.stop();
     std.testing.allocator.free(try app.requestOk("remove-recent-database-name", "\"alpha\""));
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.writer.buffered(), "Recent database removed: alpha") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Recent database removed: alpha") != null);
 }
 
 test "a failing recent database request logs the error with the message of its handler" {
@@ -93,5 +93,5 @@ test "a failing recent database request logs the error with the message of its h
     try app.start();
     defer app.stop();
     try app.queueFailingTask("remove-recent-database-name", "null");
-    try std.testing.expect(std.mem.indexOf(u8, app.console_err.written(), "Error removing recent database name") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error removing recent database name") != null);
 }

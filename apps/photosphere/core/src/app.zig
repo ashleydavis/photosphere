@@ -12,7 +12,7 @@ const page = @import("ui-files");
 // Photosphere, registered with Ziggy's core. A message whose work waits on something slow (the keychain, a file, a dialog, the phone)
 // is answered by a task, so it never holds up the thread that handles the page's messages.
 //
-pub const app = ziggy.core.App(.{
+pub const app = withNodeApiTasks(ziggy.core.App(.{
     .messages = .{
         .@"fps-measurement" = core.logging.fpsMeasurementHandler,
         .@"main-command" = core.main_process.mainCommandHandler,
@@ -101,7 +101,6 @@ pub const app = ziggy.core.App(.{
         .exportFiles = core.mobile_requests.exportFilesHandler,
         .exportTempFolder = core.mobile_requests.exportTempFolderHandler,
         .startBackgroundImport = core.mobile_requests.startBackgroundImportHandler,
-        .stopBackgroundImport = core.mobile_requests.stopBackgroundImportHandler,
         .secureStoreGet = core.mobile_requests.secureStoreGetHandler,
         .secureStoreSet = core.mobile_requests.secureStoreSetHandler,
         .secureStoreDelete = core.mobile_requests.secureStoreDeleteHandler,
@@ -135,4 +134,16 @@ pub const app = ziggy.core.App(.{
     .on_destroy = core.main_state.onDestroy,
     .on_task_end = core.main_process.onTaskEnd,
     .on_task_event = core.main_process.onTaskEvent,
-});
+}));
+
+//
+// The app with the task types of the node-api package (its task handlers, such as import-assets and sync-database) added to the ones
+// it declares, which a worker finds every task's handler in.
+//
+fn withNodeApiTasks(comptime registered: ziggy.core.RegisteredApp) ziggy.core.RegisteredApp {
+    var with_tasks = registered;
+    const declared = registered.tasks[0..registered.tasks.len].*;
+    const all = declared ++ core.node_api_task_entries;
+    with_tasks.tasks = &all;
+    return with_tasks;
+}

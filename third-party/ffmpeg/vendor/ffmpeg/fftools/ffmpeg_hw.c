@@ -22,18 +22,16 @@
 
 #include "ffmpeg.h"
 
-static int nb_hw_devices;
-static HWDevice **hw_devices;
 
 HWDevice *hw_device_get_by_type(enum AVHWDeviceType type)
 {
     HWDevice *found = NULL;
     int i;
-    for (i = 0; i < nb_hw_devices; i++) {
-        if (hw_devices[i]->type == type) {
+    for (i = 0; i < FFMPEG_STATE(nb_hw_devices); i++) {
+        if (FFMPEG_STATE(hw_devices)[i]->type == type) {
             if (found)
                 return NULL;
-            found = hw_devices[i];
+            found = FFMPEG_STATE(hw_devices)[i];
         }
     }
     return found;
@@ -42,9 +40,9 @@ HWDevice *hw_device_get_by_type(enum AVHWDeviceType type)
 HWDevice *hw_device_get_by_name(const char *name)
 {
     int i;
-    for (i = 0; i < nb_hw_devices; i++) {
-        if (!strcmp(hw_devices[i]->name, name))
-            return hw_devices[i];
+    for (i = 0; i < FFMPEG_STATE(nb_hw_devices); i++) {
+        if (!strcmp(FFMPEG_STATE(hw_devices)[i]->name, name))
+            return FFMPEG_STATE(hw_devices)[i];
     }
     return NULL;
 }
@@ -52,16 +50,16 @@ HWDevice *hw_device_get_by_name(const char *name)
 static HWDevice *hw_device_add(void)
 {
     int err;
-    err = av_reallocp_array(&hw_devices, nb_hw_devices + 1,
-                            sizeof(*hw_devices));
+    err = av_reallocp_array(&FFMPEG_STATE(hw_devices), FFMPEG_STATE(nb_hw_devices) + 1,
+                            sizeof(*FFMPEG_STATE(hw_devices)));
     if (err) {
-        nb_hw_devices = 0;
+        FFMPEG_STATE(nb_hw_devices) = 0;
         return NULL;
     }
-    hw_devices[nb_hw_devices] = av_mallocz(sizeof(HWDevice));
-    if (!hw_devices[nb_hw_devices])
+    FFMPEG_STATE(hw_devices)[FFMPEG_STATE(nb_hw_devices)] = av_mallocz(sizeof(HWDevice));
+    if (!FFMPEG_STATE(hw_devices)[FFMPEG_STATE(nb_hw_devices)])
         return NULL;
-    return hw_devices[nb_hw_devices++];
+    return FFMPEG_STATE(hw_devices)[FFMPEG_STATE(nb_hw_devices)++];
 }
 
 static char *hw_device_default_name(enum AVHWDeviceType type)
@@ -286,30 +284,30 @@ fail:
 void hw_device_free_all(void)
 {
     int i;
-    for (i = 0; i < nb_hw_devices; i++) {
-        av_freep(&hw_devices[i]->name);
-        av_buffer_unref(&hw_devices[i]->device_ref);
-        av_freep(&hw_devices[i]);
+    for (i = 0; i < FFMPEG_STATE(nb_hw_devices); i++) {
+        av_freep(&FFMPEG_STATE(hw_devices)[i]->name);
+        av_buffer_unref(&FFMPEG_STATE(hw_devices)[i]->device_ref);
+        av_freep(&FFMPEG_STATE(hw_devices)[i]);
     }
-    av_freep(&hw_devices);
-    nb_hw_devices = 0;
+    av_freep(&FFMPEG_STATE(hw_devices));
+    FFMPEG_STATE(nb_hw_devices) = 0;
 }
 
 AVBufferRef *hw_device_for_filter(void)
 {
     // Pick the last hardware device if the user doesn't pick the device for
     // filters explicitly with the filter_hw_device option.
-    if (filter_hw_device)
-        return filter_hw_device->device_ref;
-    else if (nb_hw_devices > 0) {
-        HWDevice *dev = hw_devices[nb_hw_devices - 1];
+    if (FFMPEG_STATE(filter_hw_device))
+        return FFMPEG_STATE(filter_hw_device)->device_ref;
+    else if (FFMPEG_STATE(nb_hw_devices) > 0) {
+        HWDevice *dev = FFMPEG_STATE(hw_devices)[FFMPEG_STATE(nb_hw_devices) - 1];
 
-        if (nb_hw_devices > 1)
+        if (FFMPEG_STATE(nb_hw_devices) > 1)
             av_log(NULL, AV_LOG_WARNING, "There are %d hardware devices. device "
                    "%s of type %s is picked for filters by default. Set hardware "
                    "device explicitly with the filter_hw_device option if device "
                    "%s is not usable for filters.\n",
-                   nb_hw_devices, dev->name,
+                   FFMPEG_STATE(nb_hw_devices), dev->name,
                    av_hwdevice_get_type_name(dev->type), dev->name);
 
         return dev->device_ref;

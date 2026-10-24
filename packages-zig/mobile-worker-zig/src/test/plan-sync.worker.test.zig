@@ -15,18 +15,24 @@
 //
 
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
-const sandbox_module = @import("sandbox.zig");
+const expectBool = @import("sandbox.zig").expectBool;
+const expectContains = @import("sandbox.zig").expectContains;
+const expectEmptyArray = @import("sandbox.zig").expectEmptyArray;
+const expectInteger = @import("sandbox.zig").expectInteger;
+const expectKeyStrings = @import("sandbox.zig").expectKeyStrings;
+const expectString = @import("sandbox.zig").expectString;
 const test_hosts = @import("test-hosts.zig");
-const Sandbox = sandbox_module.Sandbox;
+const Sandbox = @import("sandbox.zig").Sandbox;
 const ReportingHost = test_hosts.ReportingHost;
 const planSyncHandler = mobile_worker.plan_sync_worker.planSyncHandler;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
 const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
-const at = sandbox_module.at;
+const at = @import("sandbox.zig").at;
 
 //
 // The database the tests use, which stands in for the one automatic import creates.
@@ -108,7 +114,7 @@ fn plan(sandbox: *Sandbox, connectionType: []const u8, dataJson: []const u8) !st
     var host: ReportingHost = .{
         .reported = connectionType,
     };
-    return planSyncHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json(dataJson), sandbox.context(), host.networkStatusHost());
+    return planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(dataJson), sandbox.context(), host.networkStatusHost());
 }
 
 // A phone whose settings cannot be read must not start pushing photos over whatever connection it happens to have. Off is the only
@@ -121,8 +127,8 @@ test "plan-sync says not to sync when there is no settings file at all" {
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
 }
 
 // The master switch, and the first thing checked: it is what a user reaches for when they want syncing to stop, so nothing else can
@@ -136,8 +142,8 @@ test "plan-sync says not to sync when syncing is switched off" {
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
 }
 
 // Getting this wrong spends somebody's mobile data without asking.
@@ -150,8 +156,8 @@ test "plan-sync says not to sync on a cellular connection when the Wi-Fi-only re
 
     const result = try plan(&sandbox, "cellular", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
 }
 
 // Otherwise the restriction would read as "never sync".
@@ -164,7 +170,7 @@ test "plan-sync syncs on Wi-Fi when the Wi-Fi-only restriction is on" {
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 // Matching what computeSyncAllowed already does. A platform that cannot tell one connection from another must not be silently
@@ -178,7 +184,7 @@ test "plan-sync syncs when the connection type is unknown and the Wi-Fi-only res
 
     const result = try plan(&sandbox, "unknown", "{}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 test "plan-sync syncs on a cellular connection when the Wi-Fi-only restriction is off" {
@@ -190,7 +196,7 @@ test "plan-sync syncs on a cellular connection when the Wi-Fi-only restriction i
 
     const result = try plan(&sandbox, "cellular", "{}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 test "plan-sync says not to sync when there is no connection" {
@@ -202,8 +208,8 @@ test "plan-sync says not to sync when there is no connection" {
 
     const result = try plan(&sandbox, "none", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
 }
 
 test "plan-sync treats a connection type nobody anticipated as unknown rather than stopping syncing" {
@@ -215,7 +221,7 @@ test "plan-sync treats a connection type nobody anticipated as unknown rather th
 
     const result = try plan(&sandbox, "something-new", "{}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 test "plan-sync says not to sync when no default database has been created yet" {
@@ -227,9 +233,9 @@ test "plan-sync says not to sync when no default database has been created yet" 
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
-    try sandbox_module.expectString("no database has been opened to sync", result, "reason");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
+    try expectString("no database has been opened to sync", result, "reason");
 }
 
 // The sync task itself would skip it, having paid for an engine slot and a database open to find that out, and it would do so every
@@ -244,9 +250,9 @@ test "plan-sync says not to sync when the database has no origin to sync to" {
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectEmptyArray(result, "steps");
-    try sandbox_module.expectString("\"photosphere-default\" has no origin to sync to", result, "reason");
+    try expectBool(false, result, "shouldRun");
+    try expectEmptyArray(result, "steps");
+    try expectString("\"photosphere-default\" has no origin to sync to", result, "reason");
 }
 
 // Native code runs this step unchanged and builds no payload of its own, so getting it wrong here is getting the background sync
@@ -260,19 +266,19 @@ test "plan-sync hands back a sync-database step for the default database when a 
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
-    try sandbox_module.expectString(DATABASE_PATH, result, "databasePath");
-    try sandbox_module.expectKeyStrings(&.{"sync-database"}, "type", result, "steps");
+    try expectBool(true, result, "shouldRun");
+    try expectString(DATABASE_PATH, result, "databasePath");
+    try expectKeyStrings(&.{"sync-database"}, "type", result, "steps");
     const stepData = result.object.get("steps").?.array.items[0].object.get("data").?;
     try std.testing.expectEqual(@as(usize, 2), stepData.object.count());
-    try sandbox_module.expectString(DATABASE_PATH, stepData, "databasePath");
+    try expectString(DATABASE_PATH, stepData, "databasePath");
 
     // Named here rather than in native code, so a phone's job row reads the same as a desktop's. No cancel source: the pass is
     // queued by the native driver under a source the WebView never learns, so the row must not offer a Cancel button it cannot
     // honour.
     try std.testing.expectEqual(@as(usize, 2), at(stepData, "job").?.object.count());
-    try sandbox_module.expectString("sync:" ++ DATABASE_PATH, stepData, "job.id");
-    try sandbox_module.expectString("Syncing database", stepData, "job.name");
+    try expectString("sync:" ++ DATABASE_PATH, stepData, "job.id");
+    try expectString("Syncing database", stepData, "job.name");
 }
 
 test "plan-sync carries the pause through so the loop waits what the settings asked for" {
@@ -284,7 +290,7 @@ test "plan-sync carries the pause through so the loop waits what the settings as
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectInteger(90000, result, "pauseBetweenRunsMs");
+    try expectInteger(90000, result, "pauseBetweenRunsMs");
 }
 
 test "plan-sync's refusal still carries the pause, so the loop does not spin asking again" {
@@ -296,8 +302,8 @@ test "plan-sync's refusal still carries the pause, so the loop does not spin ask
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectInteger(DEFAULT_SYNC_PAUSE_MS, result, "pauseBetweenRunsMs");
+    try expectBool(false, result, "shouldRun");
+    try expectInteger(DEFAULT_SYNC_PAUSE_MS, result, "pauseBetweenRunsMs");
 }
 
 // A sync that overlaps a working prefetch does the same work slowly and gets in its own way: measured on a Pixel 6, reaching the
@@ -312,9 +318,9 @@ test "plan-sync says not to sync while a prefetch is still filling the database 
 
     const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"working\"}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("prefetch", result, "reason");
-    try sandbox_module.expectEmptyArray(result, "steps");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("prefetch", result, "reason");
+    try expectEmptyArray(result, "steps");
 }
 
 // The hazard this whole ordering could create, and the reason the wait is bounded by progress rather than by completion. A
@@ -329,7 +335,7 @@ test "plan-sync syncs when the prefetch is stalled, so a prefetch that cannot fi
 
     const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"stalled\"}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 test "plan-sync syncs when the prefetch has finished filling the database in" {
@@ -341,7 +347,7 @@ test "plan-sync syncs when the prefetch has finished filling the database in" {
 
     const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"complete\"}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 // Nothing has reported a pass, which is every phone at launch. Refusing on no evidence is how a loop gets stuck.
@@ -354,7 +360,7 @@ test "plan-sync syncs when nothing is known about the prefetch yet" {
 
     const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"unknown\"}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 // An older native build, or any caller that sends no input data. A missing value must not be able to stop a phone syncing.
@@ -367,7 +373,7 @@ test "plan-sync syncs when the native side said nothing about the prefetch at al
 
     const result = try plan(&sandbox, "wifi", "{}");
 
-    try sandbox_module.expectBool(true, result, "shouldRun");
+    try expectBool(true, result, "shouldRun");
 }
 
 // A value this build does not recognise, and input data that is not an object at all, are read as nothing known.
@@ -378,9 +384,9 @@ test "plan-sync syncs when the prefetch state is a value nobody recognises or th
     try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
     try setUpSyncableDatabase(&sandbox);
 
-    try sandbox_module.expectBool(true, try plan(&sandbox, "wifi", "{\"prefetchState\":\"something-new\"}"), "shouldRun");
-    try sandbox_module.expectBool(true, try plan(&sandbox, "wifi", "{\"prefetchState\":5}"), "shouldRun");
-    try sandbox_module.expectBool(true, try plan(&sandbox, "wifi", "null"), "shouldRun");
+    try expectBool(true, try plan(&sandbox, "wifi", "{\"prefetchState\":\"something-new\"}"), "shouldRun");
+    try expectBool(true, try plan(&sandbox, "wifi", "{\"prefetchState\":5}"), "shouldRun");
+    try expectBool(true, try plan(&sandbox, "wifi", "null"), "shouldRun");
 }
 
 // The reason a user is most likely to care about is the one the log should carry: a phone with syncing switched off is not syncing
@@ -394,8 +400,8 @@ test "plan-sync: the master switch wins over a working prefetch" {
 
     const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"working\"}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("switched off", result, "reason");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("switched off", result, "reason");
 }
 
 test "plan-sync: the connection check wins over a working prefetch" {
@@ -407,8 +413,8 @@ test "plan-sync: the connection check wins over a working prefetch" {
 
     const result = try plan(&sandbox, "cellular", "{\"prefetchState\":\"working\"}");
 
-    try sandbox_module.expectBool(false, result, "shouldRun");
-    try sandbox_module.expectContains("cellular", result, "reason");
+    try expectBool(false, result, "shouldRun");
+    try expectContains("cellular", result, "reason");
 }
 
 test "plan-sync's refusal says why, so a phone that is not syncing can be accounted for" {
@@ -420,7 +426,7 @@ test "plan-sync's refusal says why, so a phone that is not syncing can be accoun
 
     const result = try plan(&sandbox, "cellular", "{}");
 
-    try sandbox_module.expectString("the connection is \"cellular\" and syncing is not allowed on it", result, "reason");
+    try expectString("the connection is \"cellular\" and syncing is not allowed on it", result, "reason");
 }
 
 // The native side cannot tell what connection it has. Treated as unknown it would permit a sync on a connection nobody could
@@ -436,5 +442,5 @@ test "plan-sync fails when the host cannot report the connection type" {
         .failure = error.NoConnectivityManager,
     };
 
-    try std.testing.expectError(error.NoConnectivityManager, planSyncHandler(sandbox.arenaAllocator(), sandbox.io, try sandbox.json("{}"), sandbox.context(), host.networkStatusHost()));
+    try std.testing.expectError(error.NoConnectivityManager, planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{}"), sandbox.context(), host.networkStatusHost()));
 }

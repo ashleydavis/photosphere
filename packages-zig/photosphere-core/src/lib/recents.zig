@@ -13,6 +13,9 @@ const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const databases_config = node_api.databases_config;
 const log = &utils.log.log;
@@ -21,32 +24,41 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 //
 // get-recent-databases: no payload. The reply is the most recently opened database entries, most recent first, as an array.
 //
-fn getRecentDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getRecentDatabases(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     _ = data;
-    const recent = try databases_config.getRecentDatabases(context.arena, context.io());
-    return try json.stringify(context.arena, recent);
+    const recent = try databases_config.getRecentDatabases(allocator, io);
+    return try json.stringify(allocator, recent);
 }
 
 //
 // get-last-database: no payload. The reply is the path of the database to reopen on this launch, or null when none is open.
 //
-fn getLastDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getLastDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     _ = data;
-    const last = try databases_config.getLastDatabase(context.arena, context.io());
-    return try json.stringify(context.arena, last);
+    const last = try databases_config.getLastDatabase(allocator, io);
+    return try json.stringify(allocator, last);
 }
 
 //
 // remove-recent-database-name: the payload is a database name. Removes it from the recents only, not the database entry itself.
 //
-fn removeRecentDatabaseName(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn removeRecentDatabaseName(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     if (data != .string) {
         return utils.errors.throwError("The database needs a name.", .{});
     }
     const name = data.string;
-    try databases_config.removeRecentDatabaseName(context.arena, context.io(), name);
-    log.event(try std.fmt.allocPrint(context.arena, "Recent database removed: {s}", .{name}));
-    return try context.arena.dupe(u8, "null");
+    try databases_config.removeRecentDatabaseName(allocator, io, name);
+    log.event(try std.fmt.allocPrint(allocator, "Recent database removed: {s}", .{name}));
+    return try allocator.dupe(u8, "null");
 }
 
 //
@@ -72,12 +84,14 @@ pub const NoRequest = struct {};
 //
 // get-recent-databases: answered by the get-recent-databases task. The response is the most recently opened database entries.
 //
-pub fn getRecentDatabasesMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer([]const databases_config.IDatabaseEntry) {
-    _ = core;
+pub fn getRecentDatabasesMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response([]const databases_config.IDatabaseEntry) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "get-recent-databases",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -85,12 +99,14 @@ pub fn getRecentDatabasesMessageHandler(core: *ziggy.core.Core, arena: std.mem.A
 //
 // get-last-database: answered by the get-last-database task. The response is the path of the database to reopen, or null.
 //
-pub fn getLastDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(?[]const u8) {
-    _ = core;
+pub fn getLastDatabaseMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response(?[]const u8) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "get-last-database",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -98,12 +114,14 @@ pub fn getLastDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allo
 //
 // remove-recent-database-name: the data is a database name, answered by the remove-recent-database-name task. The response is null.
 //
-pub fn removeRecentDatabaseNameMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn removeRecentDatabaseNameMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, name: []const u8) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "remove-recent-database-name",
-            .data = try json.stringify(arena, name),
+            .data = try json.stringify(allocator, name),
         },
     };
 }

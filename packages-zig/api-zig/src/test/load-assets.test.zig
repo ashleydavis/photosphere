@@ -66,14 +66,13 @@ const RecordingQueueBackend = struct {
         .cancelTasks = cancelTasksErased,
         .onTasksCancelled = onTasksCancelledErased,
         .shutdown = shutdownErased,
+        .waitForMessage = waitForMessageErased,
     };
 
     //
     // Records the task.
     //
-    fn addTaskErased(ptr: *anyopaque, allocator: std.mem.Allocator, backendIo: std.Io, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
-        _ = allocator;
-        _ = backendIo;
+    fn addTaskErased(ptr: *anyopaque, allocator: std.mem.Allocator, _: std.Io, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         _ = source;
         const self: *RecordingQueueBackend = @ptrCast(@alignCast(ptr));
         try self.addedTasks.append(self.allocator, .{
@@ -82,7 +81,7 @@ const RecordingQueueBackend = struct {
             .taskId = taskId,
             .priority = priority,
         });
-        return taskId orelse "generated-id";
+        return allocator.dupe(u8, taskId orelse "generated-id");
     }
 
     //
@@ -99,7 +98,7 @@ const RecordingQueueBackend = struct {
     //
     // Removes a subscription that was never kept.
     //
-    fn removeNothing(context: ?*anyopaque, key: usize) void {
+    fn removeNothing(context: ?*anyopaque, _: std.mem.Allocator, key: usize) void {
         _ = context;
         _ = key;
     }
@@ -107,7 +106,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onTaskAddedErased(ptr: *anyopaque, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
+    fn onTaskAddedErased(ptr: *anyopaque, _: std.mem.Allocator, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = source;
         _ = callback;
@@ -117,7 +116,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onTaskCompleteErased(ptr: *anyopaque, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
+    fn onTaskCompleteErased(ptr: *anyopaque, _: std.mem.Allocator, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return noSubscription();
@@ -126,7 +125,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onTaskEventErased(ptr: *anyopaque, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onTaskEventErased(ptr: *anyopaque, _: std.mem.Allocator, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = eventType;
         _ = callback;
@@ -136,7 +135,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onAnyTaskEventErased(ptr: *anyopaque, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onAnyTaskEventErased(ptr: *anyopaque, _: std.mem.Allocator, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return noSubscription();
@@ -145,7 +144,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing is ever running here, so there is nothing to cancel.
     //
-    fn cancelTasksErased(ptr: *anyopaque, source: []const u8) void {
+    fn cancelTasksErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, source: []const u8) void {
         _ = ptr;
         _ = source;
     }
@@ -153,7 +152,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing subscribed.
     //
-    fn onTasksCancelledErased(ptr: *anyopaque, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
+    fn onTasksCancelledErased(ptr: *anyopaque, _: std.mem.Allocator, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = source;
         _ = callback;
@@ -163,8 +162,16 @@ const RecordingQueueBackend = struct {
     //
     // Nothing to shut down.
     //
-    fn shutdownErased(ptr: *anyopaque) void {
+    fn shutdownErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) void {
         _ = ptr;
+    }
+
+    //
+    // loadAssets only queues and never waits for a task, and no message ever comes here, so a wait would never end.
+    //
+    fn waitForMessageErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: @import("ziggy").timers.Timers) void {
+        _ = ptr;
+        @panic("loadAssets waited for a message, which a backend that only records tasks never sends");
     }
 };
 
@@ -178,10 +185,10 @@ test "loadAssets queues the load as interactive, because the user is waiting on 
     setQueueBackend(backend.queueBackend());
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator.uuidGenerator(), "/photos/db");
-    defer queue.deinit();
+    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
+    defer queue.deinit(io, allocator);
 
-    try loadAssets(allocator, queue, "/photos/db");
+    try loadAssets(allocator, io, queue, "/photos/db");
 
     try std.testing.expectEqual(@as(usize, 1), backend.addedTasks.items.len);
     try std.testing.expectEqual(TaskPriority.Interactive, backend.addedTasks.items[0].priority.?);
@@ -197,10 +204,10 @@ test "loadAssets queues a load-assets task naming the database" {
     setQueueBackend(backend.queueBackend());
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator.uuidGenerator(), "/photos/db");
-    defer queue.deinit();
+    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
+    defer queue.deinit(io, allocator);
 
-    try loadAssets(allocator, queue, "/photos/db");
+    try loadAssets(allocator, io, queue, "/photos/db");
 
     try std.testing.expectEqualStrings("load-assets", backend.addedTasks.items[0].type);
     try std.testing.expectEqualStrings("/photos/db", backend.addedTasks.items[0].taskId.?);
@@ -220,10 +227,10 @@ test "loadAssets cancels by the database path, which is the source its caller's 
     setQueueBackend(backend.queueBackend());
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const queue = try TaskQueue.init(allocator, io, uuidGenerator.uuidGenerator(), "/photos/db");
-    defer queue.deinit();
+    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
+    defer queue.deinit(io, allocator);
 
-    try loadAssets(allocator, queue, "/photos/db");
+    try loadAssets(allocator, io, queue, "/photos/db");
 
     // Callers build their TaskQueue with the database path as its source, and cancelTasks() takes a source. A cancel source that
     // did not match it would leave the Cancel button doing nothing at all.

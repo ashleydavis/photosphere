@@ -48,12 +48,12 @@ pub const PHOTOSPHERE_INSTRUCTIONS =
 
 //
 // Creates the server of `psi mcp` with every tool registered against the tool context.
+// The server and its list of tools are allocated with the allocator.
 // It is separate from mcpCommand so that the tests can drive the server without the standard streams.
 //
 pub fn createMcpServer(allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !*McpServer {
     const server = try allocator.create(McpServer);
     server.* = McpServer.init(
-        allocator,
         .{
             .name = "photosphere",
             .version = config.version,
@@ -62,7 +62,7 @@ pub fn createMcpServer(allocator: std.mem.Allocator, toolContext: *IMcpToolConte
             .instructions = PHOTOSPHERE_INSTRUCTIONS,
         },
     );
-    try registerAllMcpTools(server, toolContext);
+    try registerAllMcpTools(server, allocator, toolContext);
     return server;
 }
 

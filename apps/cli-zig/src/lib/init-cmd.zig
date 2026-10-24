@@ -4,6 +4,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const process_env = node_utils.process_env;
 const storage_zig = @import("storage-zig");
+const lan_share_network = @import("lan-share-network-zig");
 const encryption = @import("encryption-zig");
 const vault_zig = @import("vault-zig");
 const fuzzy_match = @import("fuzzy-match-zig");
@@ -16,7 +17,6 @@ const pc = @import("picocolors.zig");
 const directory_picker = @import("directory-picker.zig");
 const ensure_tools = @import("ensure-tools.zig");
 const prompts = @import("clack/prompts.zig");
-const log_module = @import("log.zig");
 const worker_pool = @import("worker-pool.zig");
 const process_argv = @import("process-argv.zig");
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
@@ -54,7 +54,7 @@ const TimestampProvider = utils.timestamp_provider.TimestampProvider;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 const WorkerPoolBun = worker_pool.WorkerPoolBun;
-const configureLog = log_module.configureLog;
+const configureLog = @import("log.zig").configureLog;
 const exit = node_utils.termination.exit;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
@@ -992,7 +992,7 @@ const ICleanupContext = struct {
 //
 fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
     const cleanup: *ICleanupContext = @ptrCast(@alignCast(context.?));
-    cleanup.workerPool.shutdown();
+    cleanup.workerPool.stopWorkers(io);
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1017,6 +1017,10 @@ fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror
 // mediaTools is the ImageMagick and FFmpeg built into the program, which must also live until the process exits.
 //
 pub fn initContext(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaTools, options: IBaseCommandOptions) !ICommandContext {
+    // The S3 library and Winsock start once, here on the main thread, before any worker does, so no lock guards their start.
+    storage_zig.s3_client.startLibrary();
+    lan_share_network.socket.startSockets();
+
     // Configure logging
     try configureLog(allocator, io, mediaTools.runner(), .{
         .verbose = options.verbose,
@@ -1060,7 +1064,7 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_
     // machine with one CPU) the only worker waits on tasks nothing is left to run and the import never ends.
     const workers: f64 = if (options.workers) |workersText| jsNumber(workersText) else @floatFromInt(try cpuCount(allocator, io));
     const timeout: f64 = if (options.timeout) |timeoutText| jsNumber(timeoutText) else 2400000;
-    const workerPool = try WorkerPoolBun.init(io, mediaTools, workers, timeout, .{
+    const workerPool = try WorkerPoolBun.init(allocator, mediaTools, workers, timeout, .{
         .verbose = options.verbose,
         .tools = options.tools,
         .sessionId = sessionId,

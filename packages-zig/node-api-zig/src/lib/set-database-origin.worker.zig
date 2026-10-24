@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -45,6 +46,7 @@ pub const ISetDatabaseOriginData = struct {
 pub fn setDatabaseOriginHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -59,7 +61,7 @@ pub fn setDatabaseOriginHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
     try updateDatabaseConfig(allocator, io, opened.rawStorage, .{
         .origin = data.origin,
     });

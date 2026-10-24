@@ -64,10 +64,20 @@ var callbackMode: []const u8 = "succeed";
 var callbackCalls: usize = 0;
 
 //
+// The log that writes the exceptions to stdout, or null when the mode does not write them. A log is the calling thread's own, and a
+// signal runs the callback on the signal watcher thread, so the callback gives that thread this log too, for what termination logs
+// after it.
+//
+var exceptionLog: ?utils.log.ILog = null;
+
+//
 // The termination callback: reports its exit code on stdout and throws as the mode says.
 //
 fn reportExitCode(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
     _ = context;
+    if (exceptionLog) |log| {
+        utils.log.setLog(log);
+    }
     callbackCalls += 1;
     var buffer: [32]u8 = undefined;
     const line = try std.fmt.bufPrint(&buffer, "callback {d}\n", .{exitCode});
@@ -100,23 +110,26 @@ pub fn main(init: std.process.Init) !void {
     }
     if (std.mem.eql(u8, callbackMode, "exit-verbose")) {
         stdoutIo = io;
-        verboseVtable = utils.log.log.vtable.*;
+        const base = utils.log.currentLog();
+        verboseVtable = base.vtable.*;
         verboseVtable.verbose = writeVerbose;
-        utils.log.log = .{
-            .ptr = utils.log.log.ptr,
+        utils.log.setLog(.{
+            .ptr = base.ptr,
             .vtable = &verboseVtable,
-        };
+        });
         termination.exit(io, 7);
     }
     const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
     if (logsExceptions) {
         stdoutIo = io;
-        verboseVtable = utils.log.log.vtable.*;
+        const base = utils.log.currentLog();
+        verboseVtable = base.vtable.*;
         verboseVtable.exception = writeException;
-        utils.log.log = .{
-            .ptr = utils.log.log.ptr,
+        exceptionLog = .{
+            .ptr = base.ptr,
             .vtable = &verboseVtable,
         };
+        utils.log.setLog(exceptionLog);
     }
     if (std.mem.eql(u8, callbackMode, "exit-fail")) {
         termination.exit(io, 7);

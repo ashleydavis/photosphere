@@ -49,7 +49,6 @@ const TestDatabase = struct {
 // Creates a new database in a temporary directory.
 //
 fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !TestDatabase {
-    _ = try test_environment.setupEnvironment(io);
     const generators = try allocator.create(Generators);
     generators.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -63,6 +62,8 @@ fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8
 }
 
 test "bumps lastModifiedAt when records are repaired" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -109,6 +110,8 @@ test "bumps lastModifiedAt when records are repaired" {
 }
 
 test "does not bump lastModifiedAt when no repairs were needed" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -153,7 +156,6 @@ const IV6Copy = struct {
 // Copies test/dbs/v6 into a temporary directory and opens it.
 //
 fn copyV6(allocator: std.mem.Allocator, io: std.Io) !IV6Copy {
-    _ = try test_environment.setupEnvironment(io);
     const generators = try allocator.create(Generators);
     generators.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -171,7 +173,7 @@ fn copyV6(allocator: std.mem.Allocator, io: std.Io) !IV6Copy {
 //
 // Records the progress messages of a repair.
 //
-fn recordProgress(context: ?*anyopaque, message: ?[]const u8) void {
+fn recordProgress(context: ?*anyopaque, _: std.Io, message: ?[]const u8) void {
     const recorder: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
     recorder.record(message.?);
 }
@@ -189,6 +191,8 @@ fn containsName(names: []const []const u8, name: []const u8) bool {
 }
 
 test "restores a missing file and a corrupted one from the source database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -221,6 +225,8 @@ test "restores a missing file and a corrupted one from the source database" {
 }
 
 test "reports what the source cannot restore: a file it does not have, or has with other bytes" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -256,6 +262,8 @@ test "reports what the source cannot restore: a file it does not have, or has wi
 }
 
 test "a full repair hashes every file, and puts right the hash of a record" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -300,6 +308,8 @@ test "a full repair hashes every file, and puts right the hash of a record" {
 
 // The error of a copy that fails is logged and the file is reported as unrepaired.
 test "reports a file as unrepaired when it cannot be copied into the database" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -329,6 +339,8 @@ test "reports a file as unrepaired when it cannot be copied into the database" {
 }
 
 test "logs a file whose restore fails part way and reports it as unrepaired" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

@@ -1,8 +1,10 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const task_queue_zig = @import("ziggy").task_queue;
+const Timers = @import("ziggy").timers.Timers;
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
@@ -54,9 +56,10 @@ const errors = utils.errors;
 //
 
 //
-// Thread-safe allocator for the backend's state.
+// Allocator for the backend's state and the recorded messages, the test thread's own: the import, its backend and its recorder all run on the
+// test thread.
 //
-const backend_allocator = std.heap.smp_allocator;
+threadlocal var backend_allocator_state: @import("ziggy").thread_allocator.ThreadAllocator = .init;
 
 //
 // What a task added to the backend was.
@@ -98,17 +101,12 @@ const ResultFactory = *const fn (backend: *MockBackend, allocator: std.mem.Alloc
 // Minimal mock IQueueBackend that records addTask calls, fires onTaskAdded callbacks,
 // and completes tasks via a result factory.
 //
-// A completion fires on the backend's own thread once no task has been added for `idleMs`:
-// the import gets to queue what it wants before anything completes, so the
-// concurrency tests measure the limit rather than a backend that completes everything at once.
+// Completions fire on the thread that waits, as a real backend's do, while it waits for a message (waitForMessage), and only once no
+// task has been added for `idleMs`: the import gets to queue what it wants before anything completes, so the concurrency tests
+// measure the limit rather than a backend that completes everything at once. The thread that waits gives it
+// its timers, which run while it waits.
 //
 const MockBackend = struct {
-    // Guards the backend's state.
-    mutex: std.Io.Mutex = .init,
-
-    // Wakes the completion thread.
-    condition: std.Io.Condition = .init,
-
     // The tasks added so far.
     addedTasks: std.ArrayList(IAddedTask) = .empty,
 
@@ -142,88 +140,69 @@ const MockBackend = struct {
     // How long the backend waits after the last addTask before completing tasks.
     idleMs: i64 = 0,
 
-    // Set when the completion thread has to exit.
-    stopping: bool = false,
-
-    // The completion thread.
-    thread: ?std.Thread = null,
-
     //
-    // Starts the completion thread.
-    //
-    fn start(self: *MockBackend) !void {
-        self.thread = try std.Thread.spawn(.{}, completionThreadMain, .{self});
-    }
-
-    //
-    // Stops the completion thread and frees the backend's state.
+    // Frees the backend's state.
     //
     fn deinit(self: *MockBackend) void {
-        const io = std.testing.io;
-        self.mutex.lockUncancelable(io);
-        self.stopping = true;
-        self.condition.broadcast(io);
-        self.mutex.unlock(io);
-        if (self.thread) |thread| {
-            thread.join();
-        }
         for (self.addedTasks.items) |task| {
-            backend_allocator.free(task.type);
-            backend_allocator.free(task.data);
-            backend_allocator.free(task.source);
-            backend_allocator.free(task.taskId);
+            backend_allocator_state.allocator().free(task.type);
+            backend_allocator_state.allocator().free(task.data);
+            backend_allocator_state.allocator().free(task.source);
+            backend_allocator_state.allocator().free(task.taskId);
         }
-        self.addedTasks.deinit(backend_allocator);
-        self.taskAddedCallbacks.deinit(backend_allocator);
-        self.completionCallbacks.deinit(backend_allocator);
+        self.addedTasks.deinit(backend_allocator_state.allocator());
+        self.taskAddedCallbacks.deinit(backend_allocator_state.allocator());
+        self.completionCallbacks.deinit(backend_allocator_state.allocator());
         for (self.pendingCompletions.items) |completion| {
-            backend_allocator.free(completion);
+            backend_allocator_state.allocator().free(completion);
         }
-        self.pendingCompletions.deinit(backend_allocator);
+        self.pendingCompletions.deinit(backend_allocator_state.allocator());
     }
 
     //
-    // Fires the completions once the import has stopped adding tasks for a while.
+    // Fires the next completion, when one is waiting and no task has been added for idleMs, or else waits a millisecond, and then
+    // runs the timers that are due, with the Io, the allocator and the timers of the thread that waits. A caller that waits for
+    // something loops until it has come, so a wait that ends with nothing is only a look.
     //
-    fn completionThreadMain(self: *MockBackend) void {
-        const io = std.testing.io;
-        while (true) {
-            self.mutex.lockUncancelable(io);
-            while (!self.stopping and self.pendingCompletions.items.len == 0) {
-                self.condition.waitUncancelable(io, &self.mutex);
-            }
-            if (self.stopping) {
-                self.mutex.unlock(io);
-                return;
-            }
-            const idleFor = std.Io.Clock.real.now(io).toMilliseconds() - self.lastAddedAt;
-            if (idleFor < self.idleMs) {
-                self.mutex.unlock(io);
-                utils.sleep.sleep(io, @intCast(self.idleMs - idleFor)) catch |err| {
-                    std.debug.panic("The mock backend could not wait before completing a task: {s}", .{@errorName(err)});
-                };
-                continue;
-            }
-            const completion = self.pendingCompletions.orderedRemove(0);
-            self.inFlight -= 1;
-            const callbacks = backend_allocator.dupe(?WorkerTaskCompletionCallback, self.completionCallbacks.items) catch |err| {
-                std.debug.panic("The mock backend could not copy its completion callbacks: {s}", .{@errorName(err)});
+    fn waitForMessage(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+        const self: *MockBackend = @ptrCast(@alignCast(ptr));
+        if (self.pendingCompletions.items.len == 0 and timers.nextTimeout() == .none) {
+            @panic("The import waited with no task left to complete and no timer set, so the wait would never end.");
+        }
+        const idleFor = std.Io.Clock.real.now(io).toMilliseconds() - self.lastAddedAt;
+        if (self.pendingCompletions.items.len > 0 and idleFor >= self.idleMs) {
+            self.completeNext(io, allocator, timers);
+        }
+        else {
+            utils.sleep.sleep(io, 1) catch |err| {
+                std.debug.panic("The mock backend could not wait: {s}", .{@errorName(err)});
             };
-            self.mutex.unlock(io);
-            defer backend_allocator.free(callbacks);
-            defer backend_allocator.free(completion);
+        }
+        timers.runDue(io, allocator, null);
+    }
 
-            var arena = std.heap.ArenaAllocator.init(backend_allocator);
-            defer arena.deinit();
-            const result = std.json.parseFromSliceLeaky(ITaskResult, arena.allocator(), completion, .{}) catch |err| {
-                std.debug.panic("The mock backend could not read back a completion: {s}", .{@errorName(err)});
-            };
-            for (callbacks) |registration| {
-                if (registration) |callback| {
-                    callback.call(result) catch |err| {
-                        std.debug.panic("The queue failed to take a completion from the mock backend: {s}", .{@errorName(err)});
-                    };
-                }
+    //
+    // Fires the first completion waiting.
+    //
+    fn completeNext(self: *MockBackend, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+        const completion = self.pendingCompletions.orderedRemove(0);
+        defer backend_allocator_state.allocator().free(completion);
+        self.inFlight -= 1;
+        // A callback may unsubscribe or subscribe, so the list is copied first.
+        const callbacks = backend_allocator_state.allocator().dupe(?WorkerTaskCompletionCallback, self.completionCallbacks.items) catch |err| {
+            std.debug.panic("The mock backend could not copy its completion callbacks: {s}", .{@errorName(err)});
+        };
+        defer backend_allocator_state.allocator().free(callbacks);
+        var arena = std.heap.ArenaAllocator.init(backend_allocator_state.allocator());
+        defer arena.deinit();
+        const result = std.json.parseFromSliceLeaky(ITaskResult, arena.allocator(), completion, .{}) catch |err| {
+            std.debug.panic("The mock backend could not read back a completion: {s}", .{@errorName(err)});
+        };
+        for (callbacks) |registration| {
+            if (registration) |callback| {
+                callback.call(io, allocator, timers, result) catch |err| {
+                    std.debug.panic("The queue failed to take a completion from the mock backend: {s}", .{@errorName(err)});
+                };
             }
         }
     }
@@ -250,6 +229,7 @@ const MockBackend = struct {
         .cancelTasks = cancelTasks,
         .onTasksCancelled = onTasksCancelled,
         .shutdown = shutdown,
+        .waitForMessage = waitForMessage,
     };
 
     //
@@ -258,27 +238,25 @@ const MockBackend = struct {
     fn addTask(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         _ = priority;
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
-        self.mutex.lockUncancelable(io);
-        const id = if (taskId) |given| try backend_allocator.dupe(u8, given) else try std.fmt.allocPrint(backend_allocator, "{s}-{d}", .{ taskType, self.addedTasks.items.len });
-        const dataText = try std.json.Stringify.valueAlloc(backend_allocator, data, .{});
-        try self.addedTasks.append(backend_allocator, .{
-            .type = try backend_allocator.dupe(u8, taskType),
+        const id = if (taskId) |given| try backend_allocator_state.allocator().dupe(u8, given) else try std.fmt.allocPrint(backend_allocator_state.allocator(), "{s}-{d}", .{ taskType, self.addedTasks.items.len });
+        const dataText = try std.json.Stringify.valueAlloc(backend_allocator_state.allocator(), data, .{});
+        try self.addedTasks.append(backend_allocator_state.allocator(), .{
+            .type = try backend_allocator_state.allocator().dupe(u8, taskType),
             .data = dataText,
-            .source = try backend_allocator.dupe(u8, source),
+            .source = try backend_allocator_state.allocator().dupe(u8, source),
             .taskId = id,
         });
         self.inFlight += 1;
         self.peakTasksInFlight = @max(self.peakTasksInFlight, self.inFlight);
         self.lastAddedAt = std.Io.Clock.real.now(io).toMilliseconds();
-        const addedCallbacks = try backend_allocator.dupe(TaskAddedCallback, self.taskAddedCallbacks.items);
-        defer backend_allocator.free(addedCallbacks);
-        self.mutex.unlock(io);
+        const addedCallbacks = try backend_allocator_state.allocator().dupe(TaskAddedCallback, self.taskAddedCallbacks.items);
+        defer backend_allocator_state.allocator().free(addedCallbacks);
 
         for (addedCallbacks) |callback| {
-            callback.call(id);
+            callback.call(allocator, id);
         }
 
-        var arena = std.heap.ArenaAllocator.init(backend_allocator);
+        var arena = std.heap.ArenaAllocator.init(backend_allocator_state.allocator());
         defer arena.deinit();
         const mockResult = try self.resultFactory(self, arena.allocator(), taskType, data) orelse {
             return allocator.dupe(u8, id);
@@ -292,34 +270,27 @@ const MockBackend = struct {
             .type = taskType,
             .inputs = data,
         };
-        const resultText = try std.json.Stringify.valueAlloc(backend_allocator, result, .{ .emit_null_optional_fields = false });
-        self.mutex.lockUncancelable(io);
-        try self.pendingCompletions.append(backend_allocator, resultText);
-        self.condition.broadcast(io);
-        self.mutex.unlock(io);
+        const resultText = try std.json.Stringify.valueAlloc(backend_allocator_state.allocator(), result, .{ .emit_null_optional_fields = false });
+        try self.pendingCompletions.append(backend_allocator_state.allocator(), resultText);
         return allocator.dupe(u8, id);
     }
 
     //
     // Registers a callback for added tasks.
     //
-    fn onTaskAdded(ptr: *anyopaque, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
+    fn onTaskAdded(ptr: *anyopaque, _: std.mem.Allocator, source: []const u8, callback: TaskAddedCallback) anyerror!UnsubscribeFn {
         _ = source;
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
-        self.mutex.lockUncancelable(std.testing.io);
-        defer self.mutex.unlock(std.testing.io);
-        try self.taskAddedCallbacks.append(backend_allocator, callback);
+        try self.taskAddedCallbacks.append(backend_allocator_state.allocator(), callback);
         return noUnsubscribe();
     }
 
     //
     // Registers a completion callback.
     //
-    fn onTaskComplete(ptr: *anyopaque, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
+    fn onTaskComplete(ptr: *anyopaque, _: std.mem.Allocator, callback: WorkerTaskCompletionCallback) anyerror!UnsubscribeFn {
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
-        self.mutex.lockUncancelable(std.testing.io);
-        defer self.mutex.unlock(std.testing.io);
-        try self.completionCallbacks.append(backend_allocator, callback);
+        try self.completionCallbacks.append(backend_allocator_state.allocator(), callback);
         return .{
             .context = self,
             .key = self.completionCallbacks.items.len - 1,
@@ -330,17 +301,15 @@ const MockBackend = struct {
     //
     // Removes a completion callback.
     //
-    fn unsubscribeCompletion(context: ?*anyopaque, key: usize) void {
+    fn unsubscribeCompletion(context: ?*anyopaque, _: std.mem.Allocator, key: usize) void {
         const self: *MockBackend = @ptrCast(@alignCast(context.?));
-        self.mutex.lockUncancelable(std.testing.io);
-        defer self.mutex.unlock(std.testing.io);
         self.completionCallbacks.items[key] = null;
     }
 
     //
     // Events are not sent by the mock's tasks.
     //
-    fn onTaskEvent(ptr: *anyopaque, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onTaskEvent(ptr: *anyopaque, _: std.mem.Allocator, eventType: []const u8, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = eventType;
         _ = callback;
@@ -350,7 +319,7 @@ const MockBackend = struct {
     //
     // Events are not sent by the mock's tasks.
     //
-    fn onAnyTaskEvent(ptr: *anyopaque, callback: TaskEventCallback) anyerror!UnsubscribeFn {
+    fn onAnyTaskEvent(ptr: *anyopaque, _: std.mem.Allocator, callback: TaskEventCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = callback;
         return noUnsubscribe();
@@ -359,18 +328,16 @@ const MockBackend = struct {
     //
     // Counts the cancellation.
     //
-    fn cancelTasks(ptr: *anyopaque, source: []const u8) void {
+    fn cancelTasks(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, source: []const u8) void {
         _ = source;
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
-        self.mutex.lockUncancelable(std.testing.io);
-        defer self.mutex.unlock(std.testing.io);
         self.cancelCount += 1;
     }
 
     //
     // Cancellation callbacks are never fired by the mock.
     //
-    fn onTasksCancelled(ptr: *anyopaque, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
+    fn onTasksCancelled(ptr: *anyopaque, _: std.mem.Allocator, source: []const u8, callback: TasksCancelledCallback) anyerror!UnsubscribeFn {
         _ = ptr;
         _ = source;
         _ = callback;
@@ -380,7 +347,7 @@ const MockBackend = struct {
     //
     // Nothing to shut down.
     //
-    fn shutdown(ptr: *anyopaque) void {
+    fn shutdown(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator) void {
         _ = ptr;
     }
 
@@ -412,7 +379,7 @@ fn noUnsubscribe() UnsubscribeFn {
 //
 // Does nothing.
 //
-fn ignoreUnsubscribe(context: ?*anyopaque, key: usize) void {
+fn ignoreUnsubscribe(context: ?*anyopaque, _: std.mem.Allocator, key: usize) void {
     _ = context;
     _ = key;
 }
@@ -566,23 +533,18 @@ fn sameNewHashUploadFails(backend: *MockBackend, allocator: std.mem.Allocator, t
 // Records the messages the import sends.
 //
 const MessageRecorder = struct {
-    // Guards the messages (the throttled writer sends from its own thread).
-    mutex: std.Io.Mutex = .init,
-
     // The messages, as JSON text.
     messages: std.ArrayList([]const u8) = .empty,
 
     //
     // Records one message.
     //
-    fn send(context: ?*anyopaque, message: std.json.Value) void {
+    fn send(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
         const self: *MessageRecorder = @ptrCast(@alignCast(context.?));
-        const text = std.json.Stringify.valueAlloc(backend_allocator, message, .{}) catch |err| {
+        const text = std.json.Stringify.valueAlloc(backend_allocator_state.allocator(), message, .{}) catch |err| {
             std.debug.panic("The message recorder could not write a message: {s}", .{@errorName(err)});
         };
-        self.mutex.lockUncancelable(std.testing.io);
-        defer self.mutex.unlock(std.testing.io);
-        self.messages.append(backend_allocator, text) catch |err| {
+        self.messages.append(backend_allocator_state.allocator(), text) catch |err| {
             std.debug.panic("The message recorder could not keep a message: {s}", .{@errorName(err)});
         };
     }
@@ -609,9 +571,9 @@ const MessageRecorder = struct {
     //
     fn deinit(self: *MessageRecorder) void {
         for (self.messages.items) |text| {
-            backend_allocator.free(text);
+            backend_allocator_state.allocator().free(text);
         }
-        self.messages.deinit(backend_allocator);
+        self.messages.deinit(backend_allocator_state.allocator());
     }
 };
 
@@ -619,6 +581,9 @@ const MessageRecorder = struct {
 // The state each test starts from.
 //
 const ImportTest = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
@@ -656,7 +621,7 @@ const ImportTest = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
-        _ = try test_environment.setupEnvironment(io);
+        self.test_env = try test_environment.setupEnvironment(io);
         try registerFolderMediaSourceBuilder();
         self.tempDir = try temp_dirs.makeTempDir(allocator, io, "import-assets-worker");
         self.photosDir = try path.join(allocator, &.{ self.tempDir, "photos" });
@@ -683,7 +648,6 @@ const ImportTest = struct {
         self.backend = .{
             .resultFactory = resultFactory,
         };
-        try self.backend.start();
         setQueueBackend(self.backend.queueBackend());
     }
 
@@ -702,6 +666,7 @@ const ImportTest = struct {
         };
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
+        self.test_env.deinit();
     }
 
     //
@@ -793,7 +758,8 @@ const ImportTest = struct {
     // Runs the handler on the given Io and returns its output.
     //
     fn runWithIo(self: *ImportTest, io: std.Io, data: std.json.Value) !std.json.Value {
-        return importAssetsHandler(self.arena.allocator(), io, data, self.context.taskContext());
+        // The backend's timers and waits are the import's thread's, so they run on the same Io as the import.
+        return importAssetsHandler(self.arena.allocator(), io, test_timers.timers(), data, self.context.taskContext());
     }
 
     //
@@ -861,7 +827,6 @@ test "the limit is read from the task data, so a different caller gets a differe
         .resultFactory = hashFileReportsDefault,
         .idleMs = 50,
     };
-    try secondBackend.start();
     defer secondBackend.deinit();
     setQueueBackend(secondBackend.queueBackend());
 
@@ -915,14 +880,26 @@ test "childQueue.shutdown is called in the finally block even when scanPaths thr
 // is the one the back-off sleeps of the import move, so the import has certainly been refused the lock and is waiting by the
 // time it is released, however fast the machine is.
 //
-fn releaseLockLater(rawStorage: storage_zig.storage.IStorage, importTime: *virtual_time_io.VirtualTimeIo) void {
-    const io = std.testing.io;
+// The thread makes its own allocator, Io and storage of the database, from a copy of its directory, so it shares no storage with the
+// import. What it reads of the import's Io is the time the import's sleeps have moved it, which VirtualTimeIo keeps for another thread
+// to read.
+//
+fn releaseLockLater(databaseDir: [512]u8, databaseDirLength: usize, importTime: *virtual_time_io.VirtualTimeIo) void {
+    var thread_allocator: @import("ziggy").thread_allocator.ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
     while (importTime.jumped_nanoseconds.load(.monotonic) < 1_000_000_000) {
         utils.sleep.sleep(io, 1) catch {};
     }
-    var arena = std.heap.ArenaAllocator.init(backend_allocator);
+    var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
     defer arena.deinit();
-    rawStorage.releaseWriteLock(arena.allocator(), io, ".db/write.lock") catch {};
+    const created = storage_zig.storage_factory.createStorage(arena.allocator(), io, databaseDir[0..databaseDirLength], null, null) catch |err| {
+        std.debug.panic("The releaser could not open the database's storage: {s}", .{@errorName(err)});
+    };
+    created.rawStorage.releaseWriteLock(arena.allocator(), io, ".db/write.lock") catch {};
 }
 
 test "when acquireWriteLock returns false, retries until lock is acquired and sleep is called" {
@@ -942,7 +919,9 @@ test "when acquireWriteLock returns false, retries until lock is acquired and sl
     var mutedLog: mock_log.MutedLog = .{};
     mutedLog.install();
     defer mutedLog.uninstall();
-    const releaser = try std.Thread.spawn(.{}, releaseLockLater, .{ created.rawStorage, &virtual_time });
+    var databaseDir: [512]u8 = undefined;
+    @memcpy(databaseDir[0..context.databaseDir.len], context.databaseDir);
+    const releaser = try std.Thread.spawn(.{}, releaseLockLater, .{ databaseDir, context.databaseDir.len, &virtual_time });
     defer releaser.join();
 
     const startedAt = std.Io.Clock.awake.now(io).toMilliseconds();

@@ -21,36 +21,42 @@ fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8) !void {
         },
     });
     defer std.testing.allocator.free(message);
-    app.core.postMessage(message);
+    app.native_app.sendMessage(std.testing.allocator, message);
 }
 
 test "plan-auto-import runs on Ziggy's runner and says not to run when nothing has been set" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    var calls = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer calls.deinit();
 
     try addTask(&app, "plan-auto-1", "plan-auto-import");
 
-    try app.shell.expectMessageContaining("\"taskId\":\"plan-auto-1\",\"status\":\"succeeded\"");
-    try app.shell.expectMessageContaining("\"shouldRun\":false");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-auto-1\",\"status\":\"succeeded\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"shouldRun\":false");
 }
 
 test "plan-sync runs on Ziggy's runner and refuses when syncing is switched off, without asking the phone anything" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    var calls = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer calls.deinit();
 
     try addTask(&app, "plan-sync-1", "plan-sync");
 
-    try app.shell.expectMessageContaining("\"taskId\":\"plan-sync-1\",\"status\":\"succeeded\"");
-    try app.shell.expectMessageContaining("syncing is switched off");
-    try std.testing.expect(app.last_host_method == null);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-sync-1\",\"status\":\"succeeded\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "syncing is switched off");
+    try std.testing.expect((try app.lastNativeCall(calls.allocator())) == null);
 }
 
 test "plan-sync asks the phone for the connection type when syncing is switched on, and a phone that cannot answer is an error that says so" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    var calls = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer calls.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config_path = try node_api.config_file.getConfigPath(arena.allocator());
@@ -62,30 +68,33 @@ test "plan-sync asks the phone for the connection type when syncing is switched 
         .sub_path = config_path,
         .data = yaml,
     });
-    app.host_answer = "The phone cannot say.";
-    app.host_fails = true;
+    app.setNativeCallResult(false, "The phone cannot tell.");
 
     try addTask(&app, "plan-sync-2", "plan-sync");
 
-    try app.shell.expectMessageContaining("\"taskId\":\"plan-sync-2\",\"status\":\"failed\"");
-    try app.shell.expectMessageContaining("The phone cannot say.");
-    try std.testing.expectEqualStrings("networkConnectionType", app.last_host_method.?);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-sync-2\",\"status\":\"failed\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "The phone cannot tell.");
+    try std.testing.expectEqualStrings("networkConnectionType", (try app.lastNativeCall(calls.allocator())).?.method);
 }
 
 test "plan-prefetch runs on Ziggy's runner and does not ask the phone when no database is chosen to prefetch" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    var calls = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer calls.deinit();
 
     try addTask(&app, "plan-prefetch-1", "plan-prefetch");
 
-    try app.shell.expectMessageContaining("\"taskId\":\"plan-prefetch-1\",\"status\":\"succeeded\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-prefetch-1\",\"status\":\"succeeded\"");
 }
 
 test "write-config records the database to sync in the config file the core reads, and read-config gives it back whatever path the request names" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
+    var calls = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer calls.deinit();
 
     const write = try utils.json.stringify(std.testing.allocator, .{
         .kind = "system",
@@ -109,8 +118,8 @@ test "write-config records the database to sync in the config file the core read
         },
     });
     defer std.testing.allocator.free(write);
-    app.core.postMessage(write);
-    try app.shell.expectMessageContaining("\"taskId\":\"write-config-1\",\"status\":\"succeeded\"");
+    app.native_app.sendMessage(std.testing.allocator, write);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"write-config-1\",\"status\":\"succeeded\"");
 
     const read = try utils.json.stringify(std.testing.allocator, .{
         .kind = "system",
@@ -126,8 +135,8 @@ test "write-config records the database to sync in the config file the core read
         },
     });
     defer std.testing.allocator.free(read);
-    app.core.postMessage(read);
-    try app.shell.expectMessageContaining("\"taskId\":\"read-config-1\",\"status\":\"succeeded\"");
-    try app.shell.expectMessageContaining("\"databasePath\":\"/data/photos\"");
-    try app.shell.expectMessageContaining("\"syncSettingsWritten\":true");
+    app.native_app.sendMessage(std.testing.allocator, read);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"read-config-1\",\"status\":\"succeeded\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"databasePath\":\"/data/photos\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"syncSettingsWritten\":true");
 }

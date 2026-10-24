@@ -30,7 +30,7 @@ const Fixture = struct {
         self.console_out = std.Io.Writer.Allocating.init(allocator);
         self.console_err = std.Io.Writer.Allocating.init(allocator);
         utils.console.setCapture(&self.console_out.writer, &self.console_err.writer);
-        self.tools = try media_tools.MediaTools.init(std.testing.io);
+        self.tools = try media_tools.MediaTools.init();
         self.tmp = std.testing.tmpDir(.{});
         const current_path = try std.process.currentPathAlloc(std.testing.io, allocator);
         defer allocator.free(current_path);
@@ -127,9 +127,9 @@ test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const runner = fixture.tools.runner();
-    const magick = try runner.run(runner.context, arena.allocator(), "magick", &.{"-version"});
-    const ffmpeg = try runner.run(runner.context, arena.allocator(), "ffmpeg", &.{"-version"});
-    const ffprobe = try runner.run(runner.context, arena.allocator(), "ffprobe", &.{"-version"});
+    const magick = try runner.run(runner.context, std.testing.io, arena.allocator(), "magick", &.{"-version"});
+    const ffmpeg = try runner.run(runner.context, std.testing.io, arena.allocator(), "ffmpeg", &.{"-version"});
+    const ffprobe = try runner.run(runner.context, std.testing.io, arena.allocator(), "ffprobe", &.{"-version"});
     const expected = try std.fmt.allocPrint(arena.allocator(), "\n--- Tool Versions ---\nImageMagick: {s}\nFFmpeg: {s}\nFFprobe: {s}\n", .{
         try wordAfter(magick.output, "Version: ImageMagick "),
         try wordAfter(ffmpeg.output, "ffmpeg version "),
@@ -376,47 +376,6 @@ test "a failed write is reported on the console and the lines after it are still
     try std.testing.expectError(error.IsDir, logger.close());
     try std.testing.expect(std.mem.indexOf(u8, fixture.console_err.writer.buffered(), "Photosphere could not write to the log file ") != null);
     try std.testing.expect(std.mem.indexOf(u8, fixture.console_err.writer.buffered(), "IsDir") != null);
-}
-
-test "lines logged from several threads at once are all written whole" {
-    var fixture: Fixture = undefined;
-    try fixture.start();
-    defer fixture.stop();
-    const logger = try fixture.createLogger();
-    defer logger.deinit();
-    const thread_count = 4;
-    var threads: [thread_count]std.Thread = undefined;
-    for (&threads, 0..) |*thread, index| {
-        thread.* = try std.Thread.spawn(.{}, logManyLines, .{ logger, index });
-    }
-    for (threads) |thread| {
-        thread.join();
-    }
-    try logger.close();
-    const log_text = try readFile(logger.getLogFilePath());
-    defer std.testing.allocator.free(log_text);
-    var thread_index: usize = 0;
-    while (thread_index < thread_count) : (thread_index += 1) {
-        var needle_buffer: [32]u8 = undefined;
-        const needle = try std.fmt.bufPrint(&needle_buffer, "] [INFO] thread {d} line ", .{thread_index});
-        try std.testing.expectEqual(@as(usize, 200), countLinesContaining(log_text, needle));
-    }
-    // Lines of one thread are in the order that thread logged them.
-    const first_at = std.mem.indexOf(u8, log_text, "thread 0 line 0\n").?;
-    const last_at = std.mem.indexOf(u8, log_text, "thread 0 line 199\n").?;
-    try std.testing.expect(first_at < last_at);
-}
-
-//
-// Logs 200 numbered lines from the thread with the index.
-//
-fn logManyLines(logger: *FileLogger, thread_index: usize) void {
-    var line_number: usize = 0;
-    while (line_number < 200) : (line_number += 1) {
-        var buffer: [64]u8 = undefined;
-        const message = std.fmt.bufPrint(&buffer, "thread {d} line {d}", .{ thread_index, line_number }) catch @panic("the message did not fit the buffer");
-        logger.ilog().info(message);
-    }
 }
 
 test "handleWorkerLogMessage treats an empty error text as no error text" {

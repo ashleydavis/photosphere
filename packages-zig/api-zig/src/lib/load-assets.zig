@@ -12,7 +12,7 @@ const ILoadAssetsData = load_assets_types.ILoadAssetsData;
 // first page the user is looking at an empty gallery. Queued behind an automatic import's backlog it
 // took two minutes and eight seconds to open a database of 2,300 photos on a Pixel 6.
 //
-pub fn loadAssets(allocator: std.mem.Allocator, queue: *TaskQueue, databasePath: []const u8) !void {
+pub fn loadAssets(allocator: std.mem.Allocator, io: std.Io, queue: *TaskQueue, databasePath: []const u8) !void {
     const data: ILoadAssetsData = .{
         .databasePath = databasePath,
         .job = .{
@@ -25,5 +25,5 @@ pub fn loadAssets(allocator: std.mem.Allocator, queue: *TaskQueue, databasePath:
         .emit_null_optional_fields = false,
     });
     const dataValue = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
-    _ = try queue.addTask("load-assets", dataValue, databasePath, .Interactive);
+    _ = try queue.addTask(io, allocator, "load-assets", dataValue, databasePath, .Interactive);
 }

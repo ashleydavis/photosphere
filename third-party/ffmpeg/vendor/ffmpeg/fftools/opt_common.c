@@ -73,8 +73,8 @@ enum show_codec {
     SHOW_ENCODER,
 };
 
-static FILE *report_file;
-static int report_file_level = AV_LOG_DEBUG;
+/* Patched (fftools-per-run-state.patch): report_file, report_file_level and warned_cfg are fields of the run's FFToolsCommon
+ * (see fftools_state.h). */
 
 int show_license(void *optctx, const char *opt, const char *arg)
 {
@@ -150,8 +150,6 @@ int show_license(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
-static int warned_cfg = 0;
-
 #define INDENT        1
 #define SHOW_VERSION  2
 #define SHOW_CONFIG   4
@@ -174,11 +172,11 @@ static int warned_cfg = 0;
         if (flags & SHOW_CONFIG) {                                      \
             const char *cfg = libname##_configuration();                \
             if (strcmp(FFMPEG_CONFIGURATION, cfg)) {                    \
-                if (!warned_cfg) {                                      \
+                if (!FFTOOLS_COMMON(warned_cfg)) {                                      \
                     av_log(NULL, level,                                 \
                             "%sWARNING: library configuration mismatch\n", \
                             indent);                                    \
-                    warned_cfg = 1;                                     \
+                    FFTOOLS_COMMON(warned_cfg) = 1;                                     \
                 }                                                       \
                 av_log(NULL, level, "%s%-11s configuration: %s\n",      \
                         indent, #libname, cfg);                         \
@@ -240,7 +238,7 @@ static void print_buildconf(int flags, int level)
 void show_banner(int argc, char **argv, const OptionDef *options)
 {
     int idx = locate_option(argc, argv, options, "version");
-    if (hide_banner || idx)
+    if (FFTOOLS_COMMON(hide_banner) || idx)
         return;
 
     print_program_info (INDENT|SHOW_COPYRIGHT, AV_LOG_INFO);
@@ -250,7 +248,7 @@ void show_banner(int argc, char **argv, const OptionDef *options)
 
 int show_version(void *optctx, const char *opt, const char *arg)
 {
-    av_log_set_callback(log_callback_help);
+    fftools_log_set_callback(log_callback_help);
     print_program_info (SHOW_COPYRIGHT, AV_LOG_INFO);
     print_all_libs_info(SHOW_VERSION, AV_LOG_INFO);
 
@@ -259,7 +257,7 @@ int show_version(void *optctx, const char *opt, const char *arg)
 
 int show_buildconf(void *optctx, const char *opt, const char *arg)
 {
-    av_log_set_callback(log_callback_help);
+    fftools_log_set_callback(log_callback_help);
     print_buildconf      (INDENT|0, AV_LOG_INFO);
 
     return 0;
@@ -590,7 +588,7 @@ static void show_help_bsf(const char *name)
 int show_help(void *optctx, const char *opt, const char *arg)
 {
     char *topic, *par;
-    av_log_set_callback(log_callback_help);
+    fftools_log_set_callback(log_callback_help);
 
     topic = av_strdup(arg ? arg : "");
     if (!topic)
@@ -1074,42 +1072,23 @@ int show_dispositions(void *optctx, const char *opt, const char *arg)
     return 0;
 }
 
+/* Patched (fftools-per-run-state.patch): -cpuflags, -cpucount and -max_alloc set values of libavutil for the whole process,
+ * which other runs on other threads would use too, so they are refused. */
+static int refuse_process_wide_option(const char *opt)
+{
+    av_log(NULL, AV_LOG_FATAL, "-%s sets a value for the whole process, which this program runs several ffmpeg and ffprobe "
+           "commands in at once, so it is not supported.\n", opt);
+    return AVERROR(ENOSYS);
+}
+
 int opt_cpuflags(void *optctx, const char *opt, const char *arg)
 {
-    int ret;
-    unsigned flags = av_get_cpu_flags();
-
-    if ((ret = av_parse_cpu_caps(&flags, arg)) < 0)
-        return ret;
-
-    av_force_cpu_flags(flags);
-    return 0;
+    return refuse_process_wide_option(opt);
 }
 
 int opt_cpucount(void *optctx, const char *opt, const char *arg)
 {
-    int ret;
-    int count;
-
-    static const AVOption opts[] = {
-        {"count", NULL, 0, AV_OPT_TYPE_INT, { .i64 = -1}, -1, INT_MAX},
-        {NULL},
-    };
-    static const AVClass class = {
-        .class_name = "cpucount",
-        .item_name  = av_default_item_name,
-        .option     = opts,
-        .version    = LIBAVUTIL_VERSION_INT,
-    };
-    const AVClass *pclass = &class;
-
-    ret = av_opt_eval_int(&pclass, opts, arg, &count);
-
-    if (!ret) {
-        av_cpu_force_count(count);
-    }
-
-    return ret;
+    return refuse_process_wide_option(opt);
 }
 
 static void expand_filename_template(AVBPrint *bp, const char *template,
@@ -1144,15 +1123,14 @@ static void log_callback_report(void *ptr, int level, const char *fmt, va_list v
 {
     va_list vl2;
     char line[1024];
-    static int print_prefix = 1;
 
     va_copy(vl2, vl);
     av_log_default_callback(ptr, level, fmt, vl);
-    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
+    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &FFTOOLS_COMMON(report_print_prefix));
     va_end(vl2);
-    if (report_file_level >= level) {
-        fputs(line, report_file);
-        fflush(report_file);
+    if (FFTOOLS_COMMON(report_file_level) >= level) {
+        fputs(line, FFTOOLS_COMMON(report_file));
+        fflush(FFTOOLS_COMMON(report_file));
     }
 }
 
@@ -1166,7 +1144,7 @@ int init_report(const char *env, FILE **file)
     struct tm *tm;
     AVBPrint filename;
 
-    if (report_file) /* already opened */
+    if (FFTOOLS_COMMON(report_file)) /* already opened */
         return 0;
     time(&now);
     tm = localtime(&now);
@@ -1188,7 +1166,7 @@ int init_report(const char *env, FILE **file)
             val = NULL;
         } else if (!strcmp(key, "level")) {
             char *tail;
-            report_file_level = strtol(val, &tail, 10);
+            FFTOOLS_COMMON(report_file_level) = strtol(val, &tail, 10);
             if (*tail) {
                 av_log(NULL, AV_LOG_FATAL, "Invalid report file level\n");
                 av_free(key);
@@ -1213,18 +1191,18 @@ int init_report(const char *env, FILE **file)
         return AVERROR(ENOMEM);
     }
 
-    prog_loglevel = av_log_get_level();
+    prog_loglevel = fftools_log_get_level();
     if (!envlevel)
-        report_file_level = FFMAX(report_file_level, prog_loglevel);
+        FFTOOLS_COMMON(report_file_level) = FFMAX(FFTOOLS_COMMON(report_file_level), prog_loglevel);
 
-    report_file = fopen_utf8(filename.str, "w");
-    if (!report_file) {
+    FFTOOLS_COMMON(report_file) = fopen_utf8(filename.str, "w");
+    if (!FFTOOLS_COMMON(report_file)) {
         int ret = AVERROR(errno);
         av_log(NULL, AV_LOG_ERROR, "Failed to open report \"%s\": %s\n",
                filename.str, strerror(errno));
         return ret;
     }
-    av_log_set_callback(log_callback_report);
+    fftools_log_set_callback(log_callback_report);
     av_log(NULL, AV_LOG_INFO,
            "%s started on %04d-%02d-%02d at %02d:%02d:%02d\n"
            "Report written to \"%s\"\n"
@@ -1232,11 +1210,11 @@ int init_report(const char *env, FILE **file)
            program_name,
            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
            tm->tm_hour, tm->tm_min, tm->tm_sec,
-           filename.str, report_file_level);
+           filename.str, FFTOOLS_COMMON(report_file_level));
     av_bprint_finalize(&filename, NULL);
 
     if (file)
-        *file = report_file;
+        *file = FFTOOLS_COMMON(report_file);
 
     return 0;
 }
@@ -1248,16 +1226,7 @@ int opt_report(void *optctx, const char *opt, const char *arg)
 
 int opt_max_alloc(void *optctx, const char *opt, const char *arg)
 {
-    char *tail;
-    size_t max;
-
-    max = strtol(arg, &tail, 10);
-    if (*tail) {
-        av_log(NULL, AV_LOG_FATAL, "Invalid max_alloc \"%s\".\n", arg);
-        return AVERROR(EINVAL);
-    }
-    av_max_alloc(max);
-    return 0;
+    return refuse_process_wide_option(opt);
 }
 
 int opt_loglevel(void *optctx, const char *opt, const char *arg)
@@ -1275,8 +1244,8 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
     };
     const char *token;
     char *tail;
-    int flags = av_log_get_flags();
-    int level = av_log_get_level();
+    int flags = fftools_log_get_flags();
+    int level = fftools_log_get_level();
     int cmd, i = 0;
 
     av_assert0(arg);
@@ -1324,7 +1293,7 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
     } else if (*arg == '+') {
         arg++;
     } else if (!i) {
-        flags = av_log_get_flags();  /* level value without prefix, reset flags */
+        flags = fftools_log_get_flags();  /* level value without prefix, reset flags */
     }
 
     for (i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
@@ -1349,8 +1318,8 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg)
     }
 
 end:
-    av_log_set_flags(flags);
-    av_log_set_level(level);
+    fftools_log_set_flags(flags);
+    fftools_log_set_level(level);
     return 0;
 }
 
@@ -1446,9 +1415,9 @@ int show_sources(void *optctx, const char *opt, const char *arg)
     char *dev = NULL;
     AVDictionary *opts = NULL;
     int ret = 0;
-    int error_level = av_log_get_level();
+    int error_level = fftools_log_get_level();
 
-    av_log_set_level(AV_LOG_WARNING);
+    fftools_log_set_level(AV_LOG_WARNING);
 
     if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
         goto fail;
@@ -1474,7 +1443,7 @@ int show_sources(void *optctx, const char *opt, const char *arg)
   fail:
     av_dict_free(&opts);
     av_free(dev);
-    av_log_set_level(error_level);
+    fftools_log_set_level(error_level);
     return ret;
 }
 
@@ -1484,9 +1453,9 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
     char *dev = NULL;
     AVDictionary *opts = NULL;
     int ret = 0;
-    int error_level = av_log_get_level();
+    int error_level = fftools_log_get_level();
 
-    av_log_set_level(AV_LOG_WARNING);
+    fftools_log_set_level(AV_LOG_WARNING);
 
     if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
         goto fail;
@@ -1510,7 +1479,7 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
   fail:
     av_dict_free(&opts);
     av_free(dev);
-    av_log_set_level(error_level);
+    fftools_log_set_level(error_level);
     return ret;
 }
 #endif /* CONFIG_AVDEVICE */

@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -279,13 +280,13 @@ const ComputeAssetHashOperation = struct {
 // Handler for verifying a single file
 // The task data is the JSON value made by verifyFileDataToJson and the output is an IVerifyFileResult as JSON.
 //
-pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     const data = try verifyFileDataFromJson(allocator, taskData);
     const node = data.node;
     const storageDescriptor = data.storageDescriptor;
     const fileName = node.name orelse "";
 
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const storage = opened.storage;
 
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{ .allocator = allocator, .storage = storage, .fileName = fileName };

@@ -1,18 +1,18 @@
 //
-// The answers the Windows app gives to the host requests the background work makes of the platform. Ziggy's Windows native app has no
-// host request callback, so the core answers these itself on Windows, in place of the native app, with what the Linux native app
-// answers (apps/photosphere/native/linux/src/main.zig):
+// The results the Windows app gives to the native calls the background work makes of the platform. Ziggy's Windows native app has no
+// native call callback, so the core makes these calls itself on Windows, in place of the native app, with the results the Linux native
+// app gives (apps/photosphere/native/linux/src/main.zig):
 //
-// - requestNotificationPermission: a desktop has no permission to ask for, so it is always granted.
+// - requestNotificationPermission: a desktop has no permission to request, so it is always granted.
 // - networkConnectionType: a desktop cannot tell Wi-Fi from a wired or a metered connection, so it is "unknown", which is what the page's
-//   own network status says too.
+//   own network status gives too.
 // - holdAwake: holds the computer from suspending while a pass runs, or lets it go. Holds nest, and the computer may suspend again once
 //   every hold has been let go. It is a Windows power request (PowerSetRequest with PowerRequestSystemRequired) rather than
 //   SetThreadExecutionState, because a power request belongs to its handle and not to a thread, so a hold taken on one worker thread
 //   and let go on another is still the same hold.
 // - backgroundLog: the message goes to standard error, which is the app's log.
 //
-// Any other method is not something a desktop can do, and the caller says so.
+// Any other method is not something a desktop can do, and the caller reports that.
 //
 
 const std = @import("std");
@@ -50,7 +50,7 @@ const ReasonContext = extern struct {
         // The reason as a resource of a module, which is not used here but sets the size of the union.
         detailed: extern struct {
             // The module holding the string resources.
-            localized_reason_module: ?*anyopaque,
+            localized_reason: ?*anyopaque,
             // The resource id of the reason.
             localized_reason_id: u32,
             // The number of strings substituted into it.
@@ -73,25 +73,19 @@ extern "kernel32" fn PowerSetRequest(request: std.os.windows.HANDLE, request_typ
 extern "kernel32" fn PowerClearRequest(request: std.os.windows.HANDLE, request_type: c_int) callconv(.winapi) std.os.windows.BOOL;
 
 //
-// The Windows app's answers to host requests, and the holds it has on the computer staying awake. The main process state owns one.
+// The Windows app's results for native calls, and the holds it has on the computer staying awake. The main process state owns one, and only the main thread uses it.
 //
-pub const WindowsHost = struct {
-    // For the mutex.
-    io: std.Io,
-    // Guards everything below.
-    mutex: std.Io.Mutex,
+pub const WindowsNativeCalls = struct {
     // How many holds on the computer staying awake have been taken and not let go.
     awake_holds: u32,
     // The power request that keeps the computer awake, made when the first hold is taken, or null before then. Owned.
     power_request: ?std.os.windows.HANDLE,
 
     //
-    // A host with no holds.
+    // Native calls with no holds.
     //
-    pub fn init(io: std.Io) WindowsHost {
+    pub fn init() WindowsNativeCalls {
         return .{
-            .io = io,
-            .mutex = .init,
             .awake_holds = 0,
             .power_request = null,
         };
@@ -100,7 +94,7 @@ pub const WindowsHost = struct {
     //
     // Closes the power request, which lets go of any hold still taken.
     //
-    pub fn deinit(self: *WindowsHost) void {
+    pub fn deinit(self: *WindowsNativeCalls) void {
         if (builtin.os.tag == .windows) {
             if (self.power_request) |request| {
                 std.os.windows.CloseHandle(request);
@@ -110,10 +104,10 @@ pub const WindowsHost = struct {
     }
 
     //
-    // Answers a host request with the JSON text of its result, allocated with the allocator, or null when the method is not one a
-    // desktop can do. A request that cannot be read, and a hold that Windows refuses, are errors that say so.
+    // Makes a native call and returns the JSON text of its result, allocated with the allocator, or null when the method is not one a
+    // desktop can do. A request that cannot be read, and a hold that Windows refuses, are errors that report it.
     //
-    pub fn answer(self: *WindowsHost, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) !?[]const u8 {
+    pub fn call(self: *WindowsNativeCalls, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) !?[]const u8 {
         if (std.mem.eql(u8, method, "requestNotificationPermission")) {
             return "{\"granted\":true}";
         }
@@ -141,12 +135,10 @@ pub const WindowsHost = struct {
     // Takes one hold on the computer staying awake, or lets one go. The first hold sets the power request, and letting go of the last
     // one clears it. Letting go of a hold that was never taken is an error, as it is on Linux.
     //
-    fn holdAwake(self: *WindowsHost, awake: bool) !void {
+    fn holdAwake(self: *WindowsNativeCalls, awake: bool) !void {
         if (builtin.os.tag != .windows) {
-            return utils.errors.throwError("The Windows host cannot hold the computer awake on {s}.", .{@tagName(builtin.os.tag)});
+            return utils.errors.throwError("WindowsNativeCalls cannot hold the computer awake on {s}.", .{@tagName(builtin.os.tag)});
         }
-        self.mutex.lockUncancelable(self.io);
-        defer self.mutex.unlock(self.io);
         if (awake) {
             if (self.awake_holds == 0) {
                 const request = try self.powerRequest();
@@ -169,9 +161,9 @@ pub const WindowsHost = struct {
     }
 
     //
-    // The power request, made the first time it is needed. The caller holds the mutex.
+    // The power request, made the first time it is needed.
     //
-    fn powerRequest(self: *WindowsHost) !std.os.windows.HANDLE {
+    fn powerRequest(self: *WindowsNativeCalls) !std.os.windows.HANDLE {
         if (self.power_request) |request| {
             return request;
         }

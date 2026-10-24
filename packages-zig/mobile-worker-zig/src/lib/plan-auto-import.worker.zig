@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -132,6 +133,7 @@ fn toJsonValue(allocator: std.mem.Allocator, value: anytype) !std.json.Value {
 pub fn planAutoImportHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     data: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {

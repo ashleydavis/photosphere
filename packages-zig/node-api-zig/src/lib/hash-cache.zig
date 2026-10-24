@@ -2,6 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const bdb = @import("bdb-zig");
+const ziggy = @import("ziggy");
 const database_cache_dir = @import("database-cache-dir.zig");
 const errors = utils.errors;
 const log = &utils.log.log;
@@ -61,9 +62,19 @@ const SAVE_RETRIES = 20;
 
 //
 // Allocates what a HashCache keeps: its buffer, lookup table and changeset, which are replaced and freed as the
-// cache changes, so they cannot live in an arena.
+// cache changes, so they cannot live in an arena. Each thread has its own, so no allocator is used by two threads, and a HashCache
+// is used only on the thread that made it, so what it allocates is freed on that thread. It is a thread-local rather than an
+// argument because the CLI calls HashCache's functions as they are, without one.
 //
-const cache_allocator = std.heap.smp_allocator;
+threadlocal var cache_allocator_state: ziggy.thread_allocator.ThreadAllocator = .init;
+
+//
+// The calling thread's cache allocator (see cache_allocator_state).
+//
+fn cacheAllocator() std.mem.Allocator {
+    return cache_allocator_state.allocator();
+}
+
 
 //
 // Recognises the two ways updateFileRawOptimistic reports that it could not get in, as opposed to
@@ -260,14 +271,14 @@ pub const HashCache = struct {
     // Entries this instance has added or updated since the last load or save, keyed by normalized
     // file path. They are merged onto the on-disk cache at save time so a concurrent writer's
     // entries are kept instead of being overwritten by this instance's whole snapshot.
-    // (Keys and asset ids are owned by cache_allocator; iterated in insertion order like a JS Map.)
+    // (Keys and asset ids are owned by the cache allocator; iterated in insertion order like a JS Map.)
     //
     pendingUpserts: std.StringArrayHashMapUnmanaged(IHashCacheEntry) = .empty,
 
     //
     // Normalized file paths this instance has removed since the last load or save. Applied to the
     // on-disk cache at save time, before the pending upserts.
-    // (Keys are owned by cache_allocator.)
+    // (Keys are owned by the cache allocator.)
     //
     pendingRemovals: std.StringArrayHashMapUnmanaged(void) = .empty,
 
@@ -283,7 +294,7 @@ pub const HashCache = struct {
     //
     pub fn init(cacheDir: []const u8, isReadonly: bool) !HashCache {
         return .{
-            .cacheDir = try cache_allocator.dupe(u8, cacheDir),
+            .cacheDir = try cacheAllocator().dupe(u8, cacheDir),
             .isReadonly = isReadonly,
         };
     }
@@ -293,15 +304,15 @@ pub const HashCache = struct {
     //
     pub fn deinit(self: *HashCache) void {
         if (self.buffer) |buffer| {
-            cache_allocator.free(buffer);
+            cacheAllocator().free(buffer);
         }
         self.buffer = null;
-        self.offsetLookup.deinit(cache_allocator);
+        self.offsetLookup.deinit(cacheAllocator());
         self.clearPendingUpserts();
-        self.pendingUpserts.deinit(cache_allocator);
+        self.pendingUpserts.deinit(cacheAllocator());
         self.clearPendingRemovals();
-        self.pendingRemovals.deinit(cache_allocator);
-        cache_allocator.free(self.cacheDir);
+        self.pendingRemovals.deinit(cacheAllocator());
+        cacheAllocator().free(self.cacheDir);
     }
 
     //
@@ -309,9 +320,9 @@ pub const HashCache = struct {
     //
     fn clearPendingUpserts(self: *HashCache) void {
         for (self.pendingUpserts.keys(), self.pendingUpserts.values()) |key, entry| {
-            cache_allocator.free(key);
+            cacheAllocator().free(key);
             if (entry.assetId) |assetId| {
-                cache_allocator.free(assetId);
+                cacheAllocator().free(assetId);
             }
         }
         self.pendingUpserts.clearRetainingCapacity();
@@ -322,7 +333,7 @@ pub const HashCache = struct {
     //
     fn clearPendingRemovals(self: *HashCache) void {
         for (self.pendingRemovals.keys()) |key| {
-            cache_allocator.free(key);
+            cacheAllocator().free(key);
         }
         self.pendingRemovals.clearRetainingCapacity();
     }
@@ -331,23 +342,23 @@ pub const HashCache = struct {
     // Puts an entry in the changeset's upserts, copying its key and asset id.
     //
     fn setPendingUpsert(self: *HashCache, key: []const u8, entry: IHashCacheEntry) !void {
-        const ownedAssetId = if (entry.assetId) |assetId| try cache_allocator.dupe(u8, assetId) else null;
-        errdefer if (ownedAssetId) |assetId| cache_allocator.free(assetId);
+        const ownedAssetId = if (entry.assetId) |assetId| try cacheAllocator().dupe(u8, assetId) else null;
+        errdefer if (ownedAssetId) |assetId| cacheAllocator().free(assetId);
         if (self.pendingUpserts.getEntry(key)) |existing| {
             if (existing.value_ptr.assetId) |previousAssetId| {
-                cache_allocator.free(previousAssetId);
+                cacheAllocator().free(previousAssetId);
             }
             existing.value_ptr.* = entry;
             existing.value_ptr.key = existing.key_ptr.*;
             existing.value_ptr.assetId = ownedAssetId;
             return;
         }
-        const ownedKey = try cache_allocator.dupe(u8, key);
-        errdefer cache_allocator.free(ownedKey);
+        const ownedKey = try cacheAllocator().dupe(u8, key);
+        errdefer cacheAllocator().free(ownedKey);
         var ownedEntry = entry;
         ownedEntry.key = ownedKey;
         ownedEntry.assetId = ownedAssetId;
-        try self.pendingUpserts.put(cache_allocator, ownedKey, ownedEntry);
+        try self.pendingUpserts.put(cacheAllocator(), ownedKey, ownedEntry);
     }
 
     //
@@ -355,9 +366,9 @@ pub const HashCache = struct {
     //
     fn deletePendingUpsert(self: *HashCache, key: []const u8) void {
         if (self.pendingUpserts.fetchOrderedRemove(key)) |removed| {
-            cache_allocator.free(removed.key);
+            cacheAllocator().free(removed.key);
             if (removed.value.assetId) |assetId| {
-                cache_allocator.free(assetId);
+                cacheAllocator().free(assetId);
             }
         }
     }
@@ -367,7 +378,7 @@ pub const HashCache = struct {
     //
     fn deletePendingRemoval(self: *HashCache, key: []const u8) void {
         if (self.pendingRemovals.fetchOrderedRemove(key)) |removed| {
-            cache_allocator.free(removed.key);
+            cacheAllocator().free(removed.key);
         }
     }
 
@@ -378,9 +389,9 @@ pub const HashCache = struct {
         if (self.pendingRemovals.contains(key)) {
             return;
         }
-        const ownedKey = try cache_allocator.dupe(u8, key);
-        errdefer cache_allocator.free(ownedKey);
-        try self.pendingRemovals.put(cache_allocator, ownedKey, {});
+        const ownedKey = try cacheAllocator().dupe(u8, key);
+        errdefer cacheAllocator().free(ownedKey);
+        try self.pendingRemovals.put(cacheAllocator(), ownedKey, {});
     }
 
     //
@@ -560,7 +571,7 @@ pub const HashCache = struct {
     // Running out of memory still fails.
     //
     pub fn load(self: *HashCache, io: std.Io) !bool {
-        var arena = std.heap.ArenaAllocator.init(cache_allocator);
+        var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
         const cachePath = try path.join(allocator, &.{ self.cacheDir, "hash-cache-x.dat" });
@@ -604,10 +615,10 @@ pub const HashCache = struct {
     //
     fn initializeFreshCache(self: *HashCache) !void {
         if (self.buffer) |buffer| {
-            cache_allocator.free(buffer);
+            cacheAllocator().free(buffer);
         }
         self.buffer = null;
-        const freshBuffer = try cache_allocator.alloc(u8, 1024); // Start with 1KB
+        const freshBuffer = try cacheAllocator().alloc(u8, 1024); // Start with 1KB
         @memset(freshBuffer, 0);
         self.buffer = freshBuffer;
         self.entryCount = 0;
@@ -625,10 +636,10 @@ pub const HashCache = struct {
     // which is what encodeEntries produces minus its last 32 bytes.
     //
     fn adoptEntries(self: *HashCache, entries: []const IHashCacheEntry) !void {
-        const encoded = try encodeEntries(cache_allocator, entries);
-        const shrunk = cache_allocator.realloc(encoded, encoded.len - 32) catch encoded[0 .. encoded.len - 32];
+        const encoded = try encodeEntries(cacheAllocator(), entries);
+        const shrunk = cacheAllocator().realloc(encoded, encoded.len - 32) catch encoded[0 .. encoded.len - 32];
         if (self.buffer) |buffer| {
-            cache_allocator.free(buffer);
+            cacheAllocator().free(buffer);
         }
         self.buffer = shrunk;
         try self.createLookupTable();
@@ -678,7 +689,7 @@ pub const HashCache = struct {
             }
 
             // Store the offset in our lookup table
-            try self.offsetLookup.append(cache_allocator, offset);
+            try self.offsetLookup.append(cacheAllocator(), offset);
 
             // Skip to the next entry
             offset += size;
@@ -690,7 +701,7 @@ pub const HashCache = struct {
     //
     fn ensureCapacity(self: *HashCache, requiredBytes: usize) !void {
         const buffer = self.buffer orelse {
-            const newBuffer = try cache_allocator.alloc(u8, @max(1024, requiredBytes * 2));
+            const newBuffer = try cacheAllocator().alloc(u8, @max(1024, requiredBytes * 2));
             @memset(newBuffer, 0);
             self.buffer = newBuffer;
             return;
@@ -710,10 +721,10 @@ pub const HashCache = struct {
         // If we don't have enough space, resize the buffer
         if (usedBytes + requiredBytes > buffer.len) {
             const newSize = @max(buffer.len * 2, usedBytes + requiredBytes);
-            const newBuffer = try cache_allocator.alloc(u8, newSize);
+            const newBuffer = try cacheAllocator().alloc(u8, newSize);
             @memset(newBuffer, 0);
             @memcpy(newBuffer[0..usedBytes], buffer[0..usedBytes]);
-            cache_allocator.free(buffer);
+            cacheAllocator().free(buffer);
             self.buffer = newBuffer;
         }
     }
@@ -783,7 +794,7 @@ pub const HashCache = struct {
             return;
         }
 
-        var arena = std.heap.ArenaAllocator.init(cache_allocator);
+        var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
         const cachePath = try path.join(allocator, &.{ self.cacheDir, "hash-cache-x.dat" });
@@ -965,7 +976,7 @@ pub const HashCache = struct {
             return errors.throwError("Invalid hash length: {d}. Expected 32 bytes.", .{hash.len});
         }
 
-        var arena = std.heap.ArenaAllocator.init(cache_allocator);
+        var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
         const key = try normalizeKey(allocator, rawKey);
@@ -1043,15 +1054,15 @@ pub const HashCache = struct {
             // Update the offset lookup table
             // Only need to adjust offsets after the insertion point
             var newOffsetLookup: std.ArrayList(usize) = .empty;
-            try newOffsetLookup.appendSlice(cache_allocator, self.offsetLookup.items[0..insertionIndex]);
-            try newOffsetLookup.append(cache_allocator, @intCast(newEntryOffset));
+            try newOffsetLookup.appendSlice(cacheAllocator(), self.offsetLookup.items[0..insertionIndex]);
+            try newOffsetLookup.append(cacheAllocator(), @intCast(newEntryOffset));
 
             // Shift all subsequent offsets by entrySize
             for (self.offsetLookup.items[insertionIndex..]) |subsequentOffset| {
-                try newOffsetLookup.append(cache_allocator, subsequentOffset + size);
+                try newOffsetLookup.append(cacheAllocator(), subsequentOffset + size);
             }
 
-            self.offsetLookup.deinit(cache_allocator);
+            self.offsetLookup.deinit(cacheAllocator());
             self.offsetLookup = newOffsetLookup;
         }
 
@@ -1087,7 +1098,7 @@ pub const HashCache = struct {
             return false;
         };
 
-        var arena = std.heap.ArenaAllocator.init(cache_allocator);
+        var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
         const key = try normalizeKey(allocator, rawKey);
@@ -1146,7 +1157,7 @@ pub const HashCache = struct {
     // unaffected because a photo library id has neither a leading slash nor a backslash in it.
     //
     pub fn removeSourceEntriesNotIn(self: *HashCache, liveSourceIds: []const []const u8) !usize {
-        var arena = std.heap.ArenaAllocator.init(cache_allocator);
+        var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
 
@@ -1182,7 +1193,7 @@ pub const HashCache = struct {
             return false;
         };
 
-        var arena = std.heap.ArenaAllocator.init(cache_allocator);
+        var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
         const key = try normalizeKey(allocator, rawKey);
@@ -1218,14 +1229,14 @@ pub const HashCache = struct {
 
         // Remove the entry from the lookup table
         var newOffsetLookup: std.ArrayList(usize) = .empty;
-        try newOffsetLookup.appendSlice(cache_allocator, self.offsetLookup.items[0..removedIndex]);
+        try newOffsetLookup.appendSlice(cacheAllocator(), self.offsetLookup.items[0..removedIndex]);
 
         // Shift all subsequent offsets by -entrySize
         for (self.offsetLookup.items[removedIndex + 1 ..]) |subsequentOffset| {
-            try newOffsetLookup.append(cache_allocator, subsequentOffset - size);
+            try newOffsetLookup.append(cacheAllocator(), subsequentOffset - size);
         }
 
-        self.offsetLookup.deinit(cache_allocator);
+        self.offsetLookup.deinit(cacheAllocator());
         self.offsetLookup = newOffsetLookup;
 
         return true;
@@ -1334,7 +1345,7 @@ threadlocal var loadedHashCaches: std.StringHashMapUnmanaged(ILoadedHashCache) =
 // have found, which is the same answer it would have given before the entry was written.
 //
 pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
-    var arena = std.heap.ArenaAllocator.init(cache_allocator);
+    var arena = std.heap.ArenaAllocator.init(cacheAllocator());
     defer arena.deinit();
     const cachePath = try path.join(arena.allocator(), &.{ cacheDir, "hash-cache-x.dat" });
 
@@ -1351,8 +1362,8 @@ pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
         return alreadyLoaded.?.cache;
     }
 
-    const cache = try cache_allocator.create(HashCache);
-    errdefer cache_allocator.destroy(cache);
+    const cache = try cacheAllocator().create(HashCache);
+    errdefer cacheAllocator().destroy(cache);
     cache.* = try HashCache.init(cacheDir, true);
     errdefer cache.deinit();
     _ = try cache.load(io);
@@ -1360,7 +1371,7 @@ pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
     if (loadedHashCaches.getEntry(cacheDir)) |existing| {
         // The copy this thread held before is no longer handed out: the task that used it has finished.
         existing.value_ptr.cache.deinit();
-        cache_allocator.destroy(existing.value_ptr.cache);
+        cacheAllocator().destroy(existing.value_ptr.cache);
         existing.value_ptr.* = .{
             .cache = cache,
             .fileLength = fileLength,
@@ -1368,7 +1379,7 @@ pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
         };
     }
     else {
-        try loadedHashCaches.put(cache_allocator, try cache_allocator.dupe(u8, cacheDir), .{
+        try loadedHashCaches.put(cacheAllocator(), try cacheAllocator().dupe(u8, cacheDir), .{
             .cache = cache,
             .fileLength = fileLength,
             .fileLastModified = fileLastModified,
@@ -1388,8 +1399,8 @@ pub fn forgetSharedHashCaches() void {
     var iterator = loadedHashCaches.iterator();
     while (iterator.next()) |entry| {
         entry.value_ptr.cache.deinit();
-        cache_allocator.destroy(entry.value_ptr.cache);
-        cache_allocator.free(entry.key_ptr.*);
+        cacheAllocator().destroy(entry.value_ptr.cache);
+        cacheAllocator().free(entry.key_ptr.*);
     }
     loadedHashCaches.clearRetainingCapacity();
 }

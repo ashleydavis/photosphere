@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -6,7 +7,6 @@ const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
-const log_module = @import("../lib/log.zig");
 const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const clearProgressMessage = terminal_utils.clearProgressMessage;
@@ -14,7 +14,7 @@ const writeProgress = terminal_utils.writeProgress;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
-const getFileLogger = log_module.getFileLogger;
+const getFileLogger = @import("../lib/log.zig").getFileLogger;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const checkPaths = node_api.check.checkPaths;
 const CheckPathsProgressCallback = node_api.check.CheckPathsProgressCallback;
@@ -87,9 +87,11 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
         .context = null,
         .function = onProgress,
     };
+    var timer_list = TimerList.init();
     const addSummary = try checkPaths(
         allocator,
         io,
+        timer_list.interface(),
         storageDescriptor,
         paths,
         progressCallback,

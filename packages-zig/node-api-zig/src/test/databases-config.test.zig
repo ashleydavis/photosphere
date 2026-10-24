@@ -12,7 +12,6 @@ const databases_config_format = node_api.databases_config_format;
 // Points PHOTOSPHERE_CONFIG_DIR at a new empty directory and returns it.
 //
 fn useNewConfigDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
     const dir = try temp_dirs.makeTempDir(allocator, io, "config");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", dir);
     return dir;
@@ -33,6 +32,8 @@ fn readToml(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) ![]
 }
 
 test "the paths of databases.toml and state.yaml are joined and normalized as path.join does" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -50,6 +51,8 @@ test "the paths of databases.toml and state.yaml are joined and normalized as pa
 }
 
 test "returns default config when no file exists" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -65,6 +68,8 @@ test "returns default config when no file exists" {
 }
 
 test "returns config from TOML when file exists" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -82,6 +87,8 @@ test "returns config from TOML when file exists" {
 }
 
 test "coerces missing databases to []" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -96,6 +103,8 @@ test "coerces missing databases to []" {
 }
 
 test "coerces missing recent_database_names to []" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -110,6 +119,8 @@ test "coerces missing recent_database_names to []" {
 }
 
 test "converts snake_case TOML fields to camelCase fields" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -127,6 +138,8 @@ test "converts snake_case TOML fields to camelCase fields" {
 }
 
 test "reads the file without writing to it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -144,6 +157,8 @@ test "reads the file without writing to it" {
 }
 
 test "an unrecognised key leaves the recents empty and still writes nothing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -168,6 +183,8 @@ fn parseToml(allocator: std.mem.Allocator, text: []const u8) !std.json.ObjectMap
 }
 
 test "converts snake_case fields to camelCase" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -182,6 +199,8 @@ test "converts snake_case fields to camelCase" {
 }
 
 test "coerces missing lists to empty ones" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -193,6 +212,8 @@ test "coerces missing lists to empty ones" {
 }
 
 test "coerces lists that are not arrays to empty ones" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -206,6 +227,8 @@ test "coerces lists that are not arrays to empty ones" {
 }
 
 test "reads last_database when the file names one" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -218,6 +241,8 @@ test "reads last_database when the file names one" {
 }
 
 test "returns the databases array from config" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -235,6 +260,8 @@ test "returns the databases array from config" {
 
 
 test "loadDatabasesConfig reads a databases.toml as the desktop app writes it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -279,6 +306,8 @@ test "loadDatabasesConfig reads a databases.toml as the desktop app writes it" {
 }
 
 test "converts camelCase fields to snake_case" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -307,6 +336,8 @@ test "converts camelCase fields to snake_case" {
 }
 
 test "round trips a config through TOML and back unchanged" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -341,11 +372,15 @@ fn configAsJson(allocator: std.mem.Allocator, config: databases_config.IDatabase
 }
 
 test "matches regardless of case" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try std.testing.expect(databases_config.namesMatch("Alpha", "alpha"));
     try std.testing.expect(databases_config.namesMatch("ALPHA", "alpha"));
 }
 
 test "does not match different names" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     try std.testing.expect(!databases_config.namesMatch("alpha", "beta"));
     try std.testing.expect(!databases_config.namesMatch("alpha", "alpha2"));
 }
@@ -378,6 +413,8 @@ const RecordingMutator = struct {
 };
 
 test "hands the mutator the current contents of the file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -395,6 +432,8 @@ test "hands the mutator the current contents of the file" {
 }
 
 test "hands the mutator an empty config when the file does not exist" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -409,6 +448,8 @@ test "hands the mutator an empty config when the file does not exist" {
 }
 
 test "writes what the mutator returns, converted to TOML" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -438,6 +479,8 @@ test "writes what the mutator returns, converted to TOML" {
 }
 
 test "lets a throwing mutator through, writing nothing" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -457,6 +500,8 @@ test "lets a throwing mutator through, writing nothing" {
 }
 
 test "returns undefined when no entry matches" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -469,6 +514,8 @@ test "returns undefined when no entry matches" {
 }
 
 test "returns entry on case-insensitive match" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -483,6 +530,8 @@ test "returns entry on case-insensitive match" {
 }
 
 test "appends entry and saves" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -503,6 +552,8 @@ test "appends entry and saves" {
 }
 
 test "throws on case-insensitive name collision" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -524,6 +575,8 @@ test "throws on case-insensitive name collision" {
 }
 
 test "replaces matched entry by originalName and saves" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -543,6 +596,8 @@ test "replaces matched entry by originalName and saves" {
 }
 
 test "rewrites the matching recent slot when renaming" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -565,6 +620,8 @@ test "rewrites the matching recent slot when renaming" {
 }
 
 test "throws when rename collides with another entry" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -586,6 +643,8 @@ test "throws when rename collides with another entry" {
 }
 
 test "throws when no entry matches originalName" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -604,6 +663,8 @@ test "throws when no entry matches originalName" {
 }
 
 test "removes only the first matching entry by name and saves" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -621,6 +682,8 @@ test "removes only the first matching entry by name and saves" {
 }
 
 test "also removes the name from recents" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -637,6 +700,8 @@ test "also removes the name from recents" {
 }
 
 test "idempotent when name not found and recents already clean" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -655,6 +720,8 @@ test "idempotent when name not found and recents already clean" {
 }
 
 test "addDatabaseEntry writes databases.toml as the desktop app writes it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -701,6 +768,8 @@ test "addDatabaseEntry writes databases.toml as the desktop app writes it" {
 // read as "" when they are absent or are not text, and each optional key is carried over only when it is text.
 //
 test "tomlEntryToDatabaseEntry carries the three required keys and the optional ones that are there" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -732,6 +801,8 @@ test "tomlEntryToDatabaseEntry carries the three required keys and the optional 
 // every key empty.
 //
 test "tomlEntryToDatabaseEntry drops an optional key that is not text, and reads a non-object entry as all empty" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -753,6 +824,8 @@ test "tomlEntryToDatabaseEntry drops an optional key that is not text, and reads
 // order tomlEntryToDatabaseEntry reads them back.
 //
 test "databaseEntryToToml leaves out every optional key the entry does not have" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -791,6 +864,8 @@ test "databaseEntryToToml leaves out every optional key the entry does not have"
 }
 
 test "getRecentDatabases returns the entries named by the recents in recents order and drops names that match no entry" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -807,6 +882,8 @@ test "getRecentDatabases returns the entries named by the recents in recents ord
 }
 
 test "getRecentDatabases returns nothing when there is no file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -820,6 +897,8 @@ test "getRecentDatabases returns nothing when there is no file" {
 }
 
 test "removeRecentDatabaseName removes only the name from the recents and keeps the entry" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -838,6 +917,8 @@ test "removeRecentDatabaseName removes only the name from the recents and keeps 
 }
 
 test "removeRecentDatabaseName leaves the recents alone when the name is not there" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -854,6 +935,8 @@ test "removeRecentDatabaseName leaves the recents alone when the name is not the
 }
 
 test "markDatabaseOpened moves the entry's own name to the front without repeating it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -872,6 +955,8 @@ test "markDatabaseOpened moves the entry's own name to the front without repeati
 }
 
 test "markDatabaseOpened keeps at most MAX_RECENT_DATABASES names, dropping the oldest" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -889,6 +974,8 @@ test "markDatabaseOpened keeps at most MAX_RECENT_DATABASES names, dropping the 
 }
 
 test "markDatabaseOpened does nothing when no entry matches" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -905,6 +992,8 @@ test "markDatabaseOpened does nothing when no entry matches" {
 }
 
 test "getLastDatabase is null when none is recorded and the path when one is" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -920,6 +1009,8 @@ test "getLastDatabase is null when none is recorded and the path when one is" {
 }
 
 test "setLastDatabase records the path, carries the lists through, and null clears it" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -945,6 +1036,8 @@ test "setLastDatabase records the path, carries the lists through, and null clea
 }
 
 test "the last database survives every other edit to the file" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -978,6 +1071,8 @@ test "the last database survives every other edit to the file" {
 }
 
 test "the last opened database is undefined when the file names none" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -990,6 +1085,8 @@ test "the last opened database is undefined when the file names none" {
 }
 
 test "setting the last opened database leaves the databases and recents lists exactly as they were" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1012,6 +1109,8 @@ test "setting the last opened database leaves the databases and recents lists ex
 }
 
 test "the last opened database is undefined when there is no file at all" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1023,6 +1122,8 @@ test "the last opened database is undefined when there is no file at all" {
 }
 
 test "the last opened database reads back the path that was set" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1038,6 +1139,8 @@ test "the last opened database reads back the path that was set" {
 }
 
 test "setting the last opened database to undefined removes the key rather than writing an empty string" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1056,6 +1159,8 @@ test "setting the last opened database to undefined removes the key rather than 
 }
 
 test "the last opened database round-trips through the TOML conversions in both directions" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

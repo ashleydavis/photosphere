@@ -104,7 +104,7 @@ fn expectCoordinates(expected: ?utils.reverse_geocode.ILocation, actual: ?utils.
 // "<w> <h> <format> <quality>", and whether it still holds any EXIF.
 //
 fn describeImage(allocator: std.mem.Allocator, runner: InProcessRunner, filePath: []const u8) ![]const u8 {
-    const result = try runner.run(runner.context, allocator, "magick", &.{ "identify", "-format", "%w %h %m %Q exif:[%[EXIF:*]]", filePath });
+    const result = try runner.run(runner.context, std.testing.io, allocator, "magick", &.{ "identify", "-format", "%w %h %m %Q exif:[%[EXIF:*]]", filePath });
     if (result.exit_code != 0) {
         std.debug.print("identify failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
         return error.TestUnexpectedResult;
@@ -139,7 +139,8 @@ test "getImageMetadata reads the metadata" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
 
     // The code under test logs the failure below; a passing test must write nothing to stderr, so the log is muted.
     var mutedLog: mock_log.MutedLog = .{};
@@ -235,11 +236,12 @@ const IDetailsCase = struct {
 test "getImageDetails produces the details and the files" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
-    _ = try test_environment.setupEnvironment(std.testing.io);
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
 
     // resizeImage makes the short side minSize and the long side
     // trunc(long / short * minSize): the display at 1000 and quality 95, the thumbnail at 300 and quality 90
@@ -450,12 +452,13 @@ fn writeJpegWithExif(allocator: std.mem.Allocator, io: std.Io, dir: []const u8, 
 test "getImageDetails turns a photo its Orientation says is on its side, and ignores GPS coordinates out of range" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-rotated");
     defer temp_dirs.removeTempDir(io, tempDir);
     const filePath = try writeJpegWithExif(allocator, io, tempDir, 6, &.{
@@ -488,7 +491,8 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-metadata-gps");
     defer temp_dirs.removeTempDir(io, tempDir);
 
@@ -529,12 +533,13 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
 test "getImageDetails refuses a file whose content type no image tool can read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-unsupported");
     defer temp_dirs.removeTempDir(io, tempDir);
     var uuidGenerator: CountingUuidGenerator = .{};
@@ -549,12 +554,13 @@ test "getImageDetails makes the pictures of a HEIC from FFmpeg's decode of it, w
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-heic");
     defer temp_dirs.removeTempDir(io, tempDir);
     // The bundled ImageMagick has no HEIC support and a machine's own ffmpeg may be too old to join a HEIC's tiles, so the tools the
     // app ships are used.
-    var mediaTools = try media_tools.MediaTools.init(io);
+    var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
     var generator: CountingUuidGenerator = .{};
     const heicPath = "../test/heic/tiled.heic";

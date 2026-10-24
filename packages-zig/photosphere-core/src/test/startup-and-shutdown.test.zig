@@ -1,4 +1,5 @@
 const std = @import("std");
+const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const support = @import("test-support.zig");
 const main_state = @import("photosphere-core").main_state;
@@ -6,10 +7,11 @@ const file_logger = @import("photosphere-core").file_logger;
 const main_process = @import("photosphere-core").main_process;
 
 const TestApp = support.TestApp;
+const sendTaskEvent = support.sendTaskEvent;
 
 //
 // Reads the log file the core started, which is the one file in the logs folder that is not the error log, or null when there is none
-// yet. The writer thread of the logger appends in the background, so a caller that needs a line waits for it with waitForLogLine.
+// yet. The core's main thread writes it, so a caller that needs a line it has not seen written waits for it with waitForLogLine.
 //
 fn readLogFile(allocator: std.mem.Allocator, app: *TestApp) !?[]u8 {
     const logs_dir = try std.fs.path.join(allocator, &.{ app.tmp_path, "logs-root", "logs" });
@@ -77,33 +79,45 @@ test "what the process logs reaches the log file, and the console" {
     try app.start();
     defer app.stop();
 
-    utils.log.log.info("a line written by the code under test");
+    // Logged by code running on the main thread, as the app's code runs.
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, _: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            utils.log.log.info("a line written by the code under test");
+        }
+    }.check);
 
     const text = try waitForLogLine(std.testing.allocator, &app, "a line written by the code under test");
     defer std.testing.allocator.free(text);
-    try std.testing.expect(std.mem.indexOf(u8, app.console_out.written(), "a line written by the code under test") != null);
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "a line written by the code under test") != null);
 }
 
-test "the log is the file logger while the core runs" {
+test "the log is the file logger on the main thread while the core runs" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
 
-    try std.testing.expect(file_logger.FileLogger.fromILog(utils.log.log) != null);
+    try app.onState(@as(u8, 0), struct {
+        fn check(_: u8, _: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(file_logger.FileLogger.fromILog(utils.log.currentLog()) != null);
+        }
+    }.check);
 }
 
-test "destroying the core logs that the app is shutting down and ends the log file, and puts the earlier log back" {
+test "destroying the core logs that the app is shutting down and ends the log file, and the thread that made the core keeps its own log" {
     var app: TestApp = undefined;
-    const earlier_log = utils.log.log;
+    const earlier_log = utils.log.currentLog();
     try app.start();
     defer app.stop();
     const text_before = try waitForLogLine(std.testing.allocator, &app, "Instance started (pid=");
     std.testing.allocator.free(text_before);
+    // The file logger is the main thread's log, so the thread that made the core has the log it had before.
+    try std.testing.expect(utils.log.currentLog().ptr == earlier_log.ptr);
+    try std.testing.expect(utils.log.currentLog().vtable == earlier_log.vtable);
 
     app.stopCore();
 
-    try std.testing.expect(utils.log.log.ptr == earlier_log.ptr);
-    try std.testing.expect(utils.log.log.vtable == earlier_log.vtable);
+    try std.testing.expect(utils.log.currentLog().ptr == earlier_log.ptr);
+    try std.testing.expect(utils.log.currentLog().vtable == earlier_log.vtable);
     const text = (try readLogFile(std.testing.allocator, &app)).?;
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "[Main] Photosphere Desktop shutting down...") != null);
@@ -116,7 +130,7 @@ test "a sync that moved changes is logged as having synced them" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEvent(app.core, .{
+    try sendTaskEvent(&app, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",
@@ -133,7 +147,7 @@ test "a sync that found both sides identical is logged as having nothing to sync
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    main_process.onTaskEvent(app.core, .{
+    try sendTaskEvent(&app, .{
         .task_id = "sync-1",
         .task_type = "sync-database",
         .source = "/db",

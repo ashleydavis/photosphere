@@ -6,7 +6,6 @@ const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
-const replicate_module = @import("replicate.zig");
 const tree = @import("tree.zig");
 const sync = @import("sync.zig");
 const retry_operations = @import("retry-operations.zig");
@@ -27,7 +26,7 @@ const BsonDatabase = bdb.database.BsonDatabase;
 const acquireWriteLock = api.write_lock.acquireWriteLock;
 const releaseWriteLock = api.write_lock.releaseWriteLock;
 const updateDatabaseConfig = api.database_config.updateDatabaseConfig;
-const replicate = replicate_module.replicate;
+const replicate = @import("replicate.zig").replicate;
 const releaseWriteLockAfter = sync.releaseWriteLockAfter;
 
 //
@@ -159,13 +158,13 @@ pub const IConsolidationProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, pushed: u64, total: u64) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, pushed: u64, total: u64) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: IConsolidationProgressCallback, pushed: u64, total: u64) void {
-        self.function(self.context, pushed, total);
+    pub fn call(self: IConsolidationProgressCallback, io: std.Io, pushed: u64, total: u64) void {
+        self.function(self.context, io, pushed, total);
     }
 };
 
@@ -332,7 +331,7 @@ fn pushAbsentAssets(
         try remoteMetadata.insertOne(io, &assetRecord, null);
         pushedCount.* += 1;
         if (onProgress) |progressCallback| {
-            progressCallback.call(pushedCount.*, plan.absentAssetIds.len);
+            progressCallback.call(io, pushedCount.*, plan.absentAssetIds.len);
         }
     }
 

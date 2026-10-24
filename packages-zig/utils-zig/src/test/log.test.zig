@@ -1,6 +1,5 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const log_module = utils.log;
 const errors = utils.errors;
 const console = utils.console;
 
@@ -20,14 +19,14 @@ const RecordingLog = struct {
     //
     // Gets the ILog interface for this log.
     //
-    fn ilog(self: *RecordingLog) log_module.ILog {
+    fn ilog(self: *RecordingLog) utils.log.ILog {
         return .{ .ptr = self, .vtable = &vtable };
     }
 
     //
     // The ILog functions of this log.
     //
-    const vtable: log_module.ILog.VTable = .{
+    const vtable: utils.log.ILog.VTable = .{
         .info = info,
         .verbose = verbose,
         .@"error" = logError,
@@ -96,7 +95,7 @@ const RecordingLog = struct {
     //
     // Records tool output.
     //
-    fn tool(ptr: *anyopaque, toolName: []const u8, data: log_module.IToolOutput) void {
+    fn tool(ptr: *anyopaque, toolName: []const u8, data: utils.log.IToolOutput) void {
         _ = data;
         record(ptr, "tool", toolName);
     }
@@ -119,7 +118,7 @@ const RecordingLog = struct {
     //
     // Returns fixed log details.
     //
-    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!log_module.ILogDetails {
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!utils.log.ILogDetails {
         _ = ptr;
         _ = allocator;
         _ = io;
@@ -142,7 +141,7 @@ test "default log writes info and event to stdout and error, warn and exception 
     console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer console.setCapture(null, null);
 
-    const log = log_module.log;
+    const log = utils.log.log;
     log.info("info message");
     log.verbose("verbose message");
     log.debug("debug message");
@@ -160,38 +159,38 @@ test "default log writes info and event to stdout and error, warn and exception 
 }
 
 test "default log has no log details" {
-    const details = try log_module.log.getLogDetails(std.testing.allocator, std.testing.io);
+    const details = try utils.log.log.getLogDetails(std.testing.allocator, std.testing.io);
     try std.testing.expect(details.logFilePath == null);
     try std.testing.expectEqualStrings("No log file available", details.logHeader);
-    try std.testing.expectEqualStrings(log_module.noLogDetails.logHeader, details.logHeader);
+    try std.testing.expectEqualStrings(utils.log.noLogDetails.logHeader, details.logHeader);
 }
 
-test "setLog replaces the global log" {
-    const original = log_module.log;
-    defer log_module.setLog(original);
+test "setLog replaces the log of the calling thread" {
+    const original = utils.log.currentLog();
+    defer utils.log.setLog(original);
     var recording: RecordingLog = .{};
-    log_module.setLog(recording.ilog());
+    utils.log.setLog(recording.ilog());
 
-    log_module.log.info("a");
+    utils.log.log.info("a");
     try std.testing.expectEqualStrings("info", recording.lastMethod);
-    log_module.log.verbose("b");
+    utils.log.log.verbose("b");
     try std.testing.expectEqualStrings("verbose", recording.lastMethod);
-    log_module.log.@"error"("c");
+    utils.log.log.@"error"("c");
     try std.testing.expectEqualStrings("error", recording.lastMethod);
-    log_module.log.exception("d", error.FileNotFound);
+    utils.log.log.exception("d", error.FileNotFound);
     try std.testing.expectEqualStrings("exception", recording.lastMethod);
     try std.testing.expectEqualStrings("FileNotFound", recording.lastErrorName);
-    log_module.log.warn("e");
+    utils.log.log.warn("e");
     try std.testing.expectEqualStrings("warn", recording.lastMethod);
-    log_module.log.debug("f");
+    utils.log.log.debug("f");
     try std.testing.expectEqualStrings("debug", recording.lastMethod);
-    log_module.log.tool("g", .{ .stdout = null, .stderr = null });
+    utils.log.log.tool("g", .{ .stdout = null, .stderr = null });
     try std.testing.expectEqualStrings("tool", recording.lastMethod);
-    log_module.log.event("h");
+    utils.log.log.event("h");
     try std.testing.expectEqualStrings("event", recording.lastMethod);
     try std.testing.expectEqualStrings("h", recording.lastMessage);
-    try std.testing.expect(log_module.log.verboseEnabled());
-    const details = try log_module.log.getLogDetails(std.testing.allocator, std.testing.io);
+    try std.testing.expect(utils.log.log.verboseEnabled());
+    const details = try utils.log.log.getLogDetails(std.testing.allocator, std.testing.io);
     try std.testing.expectEqualStrings("/tmp/test.log", details.logFilePath.?);
 }
 
@@ -200,7 +199,7 @@ test "ilog of a console log gives a log that writes to the console" {
     defer stdout_capture.deinit();
     console.setCapture(&stdout_capture.writer, null);
     defer console.setCapture(null, null);
-    var consoleLog: log_module.ConsoleLog = .{ .verbose_enabled = false };
+    var consoleLog: utils.log.ConsoleLog = .{ .verbose_enabled = false };
     const log = consoleLog.ilog();
     log.info("from ilog");
     try std.testing.expectEqualStrings("from ilog\n", stdout_capture.written());

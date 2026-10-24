@@ -9,6 +9,7 @@
 
 const std = @import("std");
 const utils = @import("utils-zig");
+const ziggy = @import("ziggy");
 const errors = utils.errors;
 
 //
@@ -112,9 +113,10 @@ pub const IMediaSource = struct {
 
 //
 // Allocator for the source ids the most recent MediaSourceDeleteError carries (they outlive the call
-// that threw it).
+// that threw it). Each thread has its own, as it has its own lastDeleteErrorSourceIds, so no allocator is used by two threads and the
+// ids are freed on the thread that allocated them.
 //
-const delete_error_allocator = std.heap.smp_allocator;
+threadlocal var delete_error_allocator_state: ziggy.thread_allocator.ThreadAllocator = .init;
 
 //
 // The source ids of the most recent MediaSourceDeleteError thrown on this thread (a Zig error cannot
@@ -133,6 +135,7 @@ pub const MediaSourceDeleteError = struct {
     // Equivalent of `throw new MediaSourceDeleteError(message, sourceIds)`.
     //
     pub fn throw(undeletableSourceIds: []const []const u8, comptime format: []const u8, args: anytype) !void {
+        const delete_error_allocator = delete_error_allocator_state.allocator();
         for (lastDeleteErrorSourceIds.items) |sourceId| {
             delete_error_allocator.free(sourceId);
         }

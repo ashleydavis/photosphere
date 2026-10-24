@@ -14,6 +14,9 @@ const media_file_database = node_api.media_file_database;
 // The database and what the tests need to reach it.
 //
 pub const DatabaseFixture = struct {
+    // The environment of the test (see test-environment.zig), freed by deinit.
+    test_env: *test_environment.TestEnvironment,
+
     // The directory of the database.
     dir: []const u8,
 
@@ -33,7 +36,7 @@ pub const DatabaseFixture = struct {
     // Creates the database.
     //
     pub fn init(fixture: *DatabaseFixture, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-        _ = try test_environment.setupEnvironment(io);
+        fixture.test_env = try test_environment.setupEnvironment(io);
         fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
         fixture.timestampProvider = .{};
         fixture.dir = try temp_dirs.makeTempDir(allocator, io, name);
@@ -48,5 +51,6 @@ pub const DatabaseFixture = struct {
     //
     pub fn deinit(fixture: *DatabaseFixture, io: std.Io) void {
         temp_dirs.removeTempDir(io, fixture.dir);
+        fixture.test_env.deinit();
     }
 };

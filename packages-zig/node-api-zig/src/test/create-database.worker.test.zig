@@ -1,4 +1,5 @@
 const std = @import("std");
+const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
@@ -19,7 +20,7 @@ const RecordingTaskContext = recording_task_context.RecordingTaskContext;
 fn run(allocator: std.mem.Allocator, io: std.Io, context: *RecordingTaskContext, databasePath: []const u8) !std.json.Value {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .string = databasePath });
-    return createDatabaseHandler(allocator, io, .{ .object = object }, context.taskContext());
+    return createDatabaseHandler(allocator, io, test_timers.timers(), .{ .object = object }, context.taskContext());
 }
 
 test "initializes a new empty database at a directory that does not exist yet" {
@@ -27,7 +28,8 @@ test "initializes a new empty database at a directory that does not exist yet" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const rootDir = try temp_dirs.makeTempDir(allocator, io, "create-database-new");
@@ -51,7 +53,8 @@ test "initializes a new empty database in an empty directory" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "create-database-empty");
@@ -67,7 +70,8 @@ test "refuses a directory that already holds a database" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
@@ -88,7 +92,8 @@ test "throws when no database path is supplied" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
@@ -101,11 +106,12 @@ test "throws when the task data has no database path" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    try std.testing.expectError(error.Thrown, createDatabaseHandler(allocator, io, .{ .object = .empty }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, createDatabaseHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
@@ -114,12 +120,13 @@ test "throws a descriptive error when the database path is not a string" {
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, createDatabaseHandler(allocator, io, .{ .object = object }, context.taskContext()));
+    try std.testing.expectError(error.Thrown, createDatabaseHandler(allocator, io, test_timers.timers(), .{ .object = object }, context.taskContext()));
     try std.testing.expectEqualStrings("The create-database task data is not valid: databasePath must be a string", errors.lastErrorMessage());
 }

@@ -64,7 +64,7 @@ test "dimensionsFromProbe fails loudly on a report it cannot take a size from" {
 test "getHeicInfo reads the size of a tiled HEIC with the bundled ffprobe" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
 
     const info = try heic.getHeicInfo(arena.allocator(), std.testing.io, mediaTools.runner(), test_heic);
@@ -76,7 +76,7 @@ test "decodeHeic joins and trims the tiles of a HEIC into a JPEG of the picture'
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
@@ -96,7 +96,7 @@ test "decodeHeic joins and trims the tiles of a HEIC into a JPEG of the picture'
 test "getFileInfo reads a HEIC with ffprobe rather than ImageMagick" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
 
     const info = (try tools.getFileInfo(arena.allocator(), std.testing.io, mediaTools.runner(), test_heic, "image/heic")).?;

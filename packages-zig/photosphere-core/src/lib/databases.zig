@@ -21,6 +21,9 @@ const storage_zig = @import("storage-zig");
 const vault_zig = @import("vault-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const databases_config = node_api.databases_config;
 const IDatabaseEntry = databases_config.IDatabaseEntry;
@@ -121,8 +124,8 @@ pub const IOpenedDatabaseStorage = struct {
 // Opens the raw storage of the database at a path, using the S3 credentials in the vault secret the database's entry names when it
 // has one. set-database-origin and notify-database-opened each need this block.
 //
-pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: []const IDatabaseEntry, database_path: []const u8, host: ?utils.host_requester.IHostRequester) !IOpenedDatabaseStorage {
-    const vault = try vault_zig.get_vault.getVaultWithHost(allocator, vault_zig.get_vault.getDefaultVaultType(), host);
+pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: []const IDatabaseEntry, database_path: []const u8, native_caller: ?utils.native_caller.INativeCaller) !IOpenedDatabaseStorage {
+    const vault = try vault_zig.get_vault.getVaultWithHost(allocator, vault_zig.get_vault.getDefaultVaultType(), native_caller);
     var database_entry: ?IDatabaseEntry = null;
     for (databases) |existing_entry| {
         if (std.mem.eql(u8, existing_entry.path, database_path)) {
@@ -152,28 +155,37 @@ pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: 
 // remove-database-entry: the payload is a database name. Removes the entry and the name from the recents. The secrets are
 // independent and are managed on the secrets page.
 //
-fn removeDatabaseEntry(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn removeDatabaseEntry(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     const name = try databaseName(data);
-    try databases_config.removeDatabaseEntry(context.arena, context.io(), name);
-    return try context.arena.dupe(u8, "null");
+    try databases_config.removeDatabaseEntry(allocator, io, name);
+    return try allocator.dupe(u8, "null");
 }
 
 //
 // find-database: the payload is a database name. The reply is the entry (matched case-insensitively), or null when there is none.
 //
-fn findDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn findDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     const name = try databaseName(data);
-    const found = try databases_config.findDatabase(context.arena, context.io(), name);
-    return try json.stringify(context.arena, found);
+    const found = try databases_config.findDatabase(allocator, io, name);
+    return try json.stringify(allocator, found);
 }
 
 //
 // get-databases: no payload. The reply is every configured database entry, as an array.
 //
-fn getDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn getDatabases(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     _ = data;
-    const databases = try databases_config.getDatabases(context.arena, context.io());
-    return try json.stringify(context.arena, databases);
+    const databases = try databases_config.getDatabases(allocator, io);
+    return try json.stringify(allocator, databases);
 }
 
 //
@@ -182,18 +194,24 @@ fn getDatabases(context: *TaskContext, data: std.json.Value) anyerror!?[]const u
 // The reply is the entry as read into IDatabaseEntry, so a key of the page's object that is not a field of the entry is not
 // echoed back. The entry type has no other keys.
 //
-fn addDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn addDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     const entry = try entryFromJson(data);
-    try databases_config.addDatabaseEntry(context.arena, context.io(), entry);
+    try databases_config.addDatabaseEntry(allocator, io, entry);
     log.event("Database entry added");
-    return try json.stringify(context.arena, entry);
+    return try json.stringify(allocator, entry);
 }
 
 //
 // update-database: the payload is {originalName, entry}. Updates the entry that originalName names, renaming it if the entry's name
 // differs.
 //
-fn updateDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn updateDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
     const original_name = json.getString(data, "originalName") orelse {
         return utils.errors.throwError("The database needs a name.", .{});
     };
@@ -204,8 +222,8 @@ fn updateDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const
         return utils.errors.throwError("The request needs the database entry to save.", .{});
     };
     const entry = try entryFromJson(entry_data);
-    try databases_config.updateDatabaseEntry(context.arena, context.io(), original_name, entry);
-    return try context.arena.dupe(u8, "null");
+    try databases_config.updateDatabaseEntry(allocator, io, original_name, entry);
+    return try allocator.dupe(u8, "null");
 }
 
 //
@@ -213,26 +231,26 @@ fn updateDatabase(context: *TaskContext, data: std.json.Value) anyerror!?[]const
 // set a key (an origin of null leaves the existing one alone), so a null origin is cleared here by loading the config, taking
 // the key out and saving it.
 //
-fn writeDatabaseOrigin(context: *TaskContext, rawStorage: storage_zig.storage.IStorage, origin: ?[]const u8) !void {
+fn writeDatabaseOrigin(io: std.Io, allocator: std.mem.Allocator, rawStorage: storage_zig.storage.IStorage, origin: ?[]const u8) !void {
     if (origin != null) {
-        try api_zig.database_config.updateDatabaseConfig(context.arena, context.io(), rawStorage, .{
+        try api_zig.database_config.updateDatabaseConfig(allocator, io, rawStorage, .{
             .origin = origin,
         });
         return;
     }
-    const existing = try api_zig.database_config.loadDatabaseConfig(context.arena, context.io(), rawStorage);
+    const existing = try api_zig.database_config.loadDatabaseConfig(allocator, io, rawStorage);
     var config: std.json.ObjectMap = .empty;
     if (existing) |existing_value| {
         if (existing_value == .object) {
             var iterator = existing_value.object.iterator();
             while (iterator.next()) |config_entry| {
                 if (!std.mem.eql(u8, config_entry.key_ptr.*, "origin")) {
-                    try config.put(context.arena, config_entry.key_ptr.*, config_entry.value_ptr.*);
+                    try config.put(allocator, config_entry.key_ptr.*, config_entry.value_ptr.*);
                 }
             }
         }
     }
-    try api_zig.database_config.saveDatabaseConfig(context.arena, context.io(), rawStorage, std.json.Value{
+    try api_zig.database_config.saveDatabaseConfig(allocator, io, rawStorage, std.json.Value{
         .object = config,
     });
 }
@@ -241,24 +259,26 @@ fn writeDatabaseOrigin(context: *TaskContext, rawStorage: storage_zig.storage.IS
 // set-database-origin: the payload is {databasePath, origin}, where a missing origin clears it. Writes the origin to the database's
 // .db/config.json, and to the database's entry when it has one with a different origin.
 //
-fn setDatabaseOrigin(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn setDatabaseOrigin(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
     const database_path = json.getString(data, "databasePath") orelse {
         return utils.errors.throwError("The database needs a path.", .{});
     };
     const origin = json.getString(data, "origin");
-    const databases = try databases_config.getDatabases(context.arena, context.io());
-    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
-    const opened = try openDatabaseStorage(context.arena, context.io(), databases, database_path, context.hostRequester(&requester_storage));
-    try writeDatabaseOrigin(context, opened.rawStorage, origin);
+    const databases = try databases_config.getDatabases(allocator, io);
+    var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
+    const opened = try openDatabaseStorage(allocator, io, databases, database_path, services.nativeCaller(&requester_storage));
+    try writeDatabaseOrigin(io, allocator, opened.rawStorage, origin);
     if (opened.entry) |found_entry| {
         if (!optionalStringsEqual(found_entry.origin, origin)) {
             var updated_entry = found_entry;
             updated_entry.origin = origin;
-            try databases_config.updateDatabaseEntry(context.arena, context.io(), found_entry.name, updated_entry);
+            try databases_config.updateDatabaseEntry(allocator, io, found_entry.name, updated_entry);
         }
     }
-    log.event(try std.fmt.allocPrint(context.arena, "Database origin updated for {s}", .{node_utils.path.basename(database_path)}));
-    return try context.arena.dupe(u8, "null");
+    log.event(try std.fmt.allocPrint(allocator, "Database origin updated for {s}", .{node_utils.path.basename(database_path)}));
+    return try allocator.dupe(u8, "null");
 }
 
 //
@@ -275,7 +295,9 @@ fn optionalStringsEqual(left: ?[]const u8, right: ?[]const u8) bool {
 // list-s3-dirs: the payload is {s3Key, bucket, prefix}. The reply is the names of the directories under the prefix in the bucket
 // (at most one page of them), or an empty array when the vault holds no secret of that name.
 //
-fn listS3Dirs(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+fn listS3Dirs(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = timers;
+    _ = context;
     const s3_key = json.getString(data, "s3Key") orelse {
         return utils.errors.throwError("The request needs the name of the secret that holds the S3 credentials.", .{});
     };
@@ -285,17 +307,17 @@ fn listS3Dirs(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 
     const prefix = json.getString(data, "prefix") orelse {
         return utils.errors.throwError("The request needs the folder to list in the S3 bucket.", .{});
     };
-    var requester_storage: ziggy.task_runner.TaskHostRequester = undefined;
-    const vault = try vault_zig.get_vault.getVaultWithHost(context.arena, vault_zig.get_vault.getDefaultVaultType(), context.hostRequester(&requester_storage));
-    const secret = try vault.get(context.arena, context.io(), s3_key);
+    var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
+    const vault = try vault_zig.get_vault.getVaultWithHost(allocator, vault_zig.get_vault.getDefaultVaultType(), services.nativeCaller(&requester_storage));
+    const secret = try vault.get(allocator, io, s3_key);
     const found_secret = secret orelse {
-        return try context.arena.dupe(u8, "[]");
+        return try allocator.dupe(u8, "[]");
     };
-    const credentials = try s3CredentialsFromSecret(context.arena, found_secret.value);
-    var storage = CloudStorage.init(context.io(), bucket, credentials);
-    const path = try storage_zig.storage_factory.pathJoin(context.arena, &.{ bucket, prefix });
-    const result = try storage.listDirs(context.arena, context.io(), path, 100, null);
-    return try json.stringify(context.arena, result.names);
+    const credentials = try s3CredentialsFromSecret(allocator, found_secret.value);
+    var storage = CloudStorage.init(bucket, credentials);
+    const path = try storage_zig.storage_factory.pathJoin(allocator, &.{ bucket, prefix });
+    const result = try storage.listDirs(allocator, io, path, 100, null);
+    return try json.stringify(allocator, result.names);
 }
 
 //
@@ -341,12 +363,14 @@ pub const NoRequest = struct {};
 //
 // remove-database-entry: the data is a database name, answered by the remove-database-entry task. The response is null.
 //
-pub fn removeDatabaseEntryMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn removeDatabaseEntryMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, name: []const u8) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "remove-database-entry",
-            .data = try json.stringify(arena, name),
+            .data = try json.stringify(allocator, name),
         },
     };
 }
@@ -354,12 +378,14 @@ pub fn removeDatabaseEntryMessageHandler(core: *ziggy.core.Core, arena: std.mem.
 //
 // find-database: the data is a database name, answered by the find-database task. The response is the entry, or null.
 //
-pub fn findDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, name: []const u8) !ziggy.core.Answer(?IDatabaseEntry) {
-    _ = core;
+pub fn findDatabaseMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, name: []const u8) !ziggy.core.Response(?IDatabaseEntry) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "find-database",
-            .data = try json.stringify(arena, name),
+            .data = try json.stringify(allocator, name),
         },
     };
 }
@@ -367,12 +393,14 @@ pub fn findDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocat
 //
 // get-databases: answered by the get-databases task. The response is every configured database entry.
 //
-pub fn getDatabasesMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer([]const IDatabaseEntry) {
-    _ = core;
+pub fn getDatabasesMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response([]const IDatabaseEntry) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "get-databases",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -400,12 +428,14 @@ pub const AddDatabaseRequest = struct {
 //
 // add-database: answered by the add-database task, which adds the entry. The response is the entry.
 //
-pub fn addDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: AddDatabaseRequest) !ziggy.core.Answer(IDatabaseEntry) {
-    _ = core;
+pub fn addDatabaseMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: AddDatabaseRequest) !ziggy.core.Response(IDatabaseEntry) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "add-database",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -423,12 +453,14 @@ pub const UpdateDatabaseRequest = struct {
 //
 // update-database: answered by the update-database task. The response is null.
 //
-pub fn updateDatabaseMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: UpdateDatabaseRequest) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn updateDatabaseMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: UpdateDatabaseRequest) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "update-database",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -446,12 +478,14 @@ pub const SetDatabaseOriginRequest = struct {
 //
 // set-database-origin: answered by the set-database-origin task. The response is null.
 //
-pub fn setDatabaseOriginMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: SetDatabaseOriginRequest) !ziggy.core.Answer(void) {
-    _ = core;
+pub fn setDatabaseOriginMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: SetDatabaseOriginRequest) !ziggy.core.Response(void) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "set-database-origin",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }
@@ -471,12 +505,14 @@ pub const ListS3DirsRequest = struct {
 //
 // list-s3-dirs: answered by the list-s3-dirs task. The response is the names of the directories under the prefix.
 //
-pub fn listS3DirsMessageHandler(core: *ziggy.core.Core, arena: std.mem.Allocator, request: ListS3DirsRequest) !ziggy.core.Answer([]const []const u8) {
-    _ = core;
+pub fn listS3DirsMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: ListS3DirsRequest) !ziggy.core.Response([]const []const u8) {
+    _ = services;
+    _ = timers;
+    _ = io;
     return .{
         .task = .{
             .task_type = "list-s3-dirs",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, request),
         },
     };
 }

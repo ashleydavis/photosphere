@@ -14,7 +14,7 @@ const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
 const exportPublicKeyToPem = encryption.key_utils.exportPublicKeyToPem;
 const IVault = vault_zig.vault.IVault;
 const getVaultWithHost = vault_zig.get_vault.getVaultWithHost;
-const IHostRequester = utils.host_requester.IHostRequester;
+const INativeCaller = utils.native_caller.INativeCaller;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
 const IDatabaseEntry = databases_config.IDatabaseEntry;
 
@@ -92,7 +92,7 @@ pub fn resolveStorageCredentials(
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
-    host: ?IHostRequester,
+    host: ?INativeCaller,
 ) !IResolvedStorageCredentials {
     const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
 

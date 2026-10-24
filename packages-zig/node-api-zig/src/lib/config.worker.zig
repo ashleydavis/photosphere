@@ -20,6 +20,7 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -303,6 +304,7 @@ fn syncFileToJson(allocator: std.mem.Allocator, sync: ISyncFile) !std.json.Value
 pub fn readConfigHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -356,6 +358,7 @@ pub fn readConfigHandler(
 pub fn writeConfigHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {

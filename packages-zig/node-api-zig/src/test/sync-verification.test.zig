@@ -13,7 +13,7 @@ const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const tree = node_api.tree;
 const media_file_database = node_api.media_file_database;
-const hash_module = node_api.hash;
+const hash = node_api.hash;
 const IStorage = storage_zig.storage.IStorage;
 const createStorage = storage_zig.storage_factory.createStorage;
 const BsonDocument = serialization_zig.bson.BsonDocument;
@@ -53,7 +53,7 @@ fn writeAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, 
     const assetInfo = (try assetStorage.info(allocator, io, assetPath)).?;
     const stream = try assetStorage.readStream(allocator, io, assetPath);
     defer stream.destroy(io);
-    const hashedAsset = try hash_module.computeAssetHash(allocator, stream.reader(), .{
+    const hashedAsset = try hash.computeAssetHash(allocator, stream.reader(), .{
         .contentType = assetInfo.contentType,
         .length = assetInfo.length,
         .lastModified = assetInfo.lastModified,

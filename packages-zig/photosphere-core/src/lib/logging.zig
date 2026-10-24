@@ -4,8 +4,8 @@
 // The log they use is the one installed with utils.log.setLog, which the app makes a FileLogger (file-logger.zig) at startup.
 // renderer-log does what it does only when that log is a FileLogger.
 //
-// renderer-log is a message answered on the thread that handles the page's messages, and still never waits for the disk: the
-// FileLogger queues the line in memory and a thread of its own appends it. get-log-details reads the log file, so it is a task type.
+// renderer-log is a message handled on the main thread, whose log the FileLogger is, and which writes the line to the log file.
+// get-log-details reads the log file, so it is a task type, given the path of the main thread's log file.
 //
 
 const std = @import("std");
@@ -14,8 +14,10 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const file_logger = @import("file-logger.zig");
 
-const Core = ziggy.core.Core;
 const TaskContext = ziggy.task_runner.TaskContext;
+const TaskServices = ziggy.task_runner.TaskServices;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const FileLogger = file_logger.FileLogger;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
@@ -53,9 +55,11 @@ pub const RendererLogRequest = struct {
 // is dropped without being said, which is what the repository requires. The check happens before the test for a file logger, so a
 // bad message is reported even when there is no file logger.
 //
-pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, request: RendererLogRequest) !void {
-    _ = core;
-    _ = arena;
+pub fn rendererLogHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: RendererLogRequest) !void {
+    _ = services;
+    _ = timers;
+    _ = io;
+    _ = allocator;
     const level = std.meta.stringToEnum(file_logger.WorkerLogLevel, request.level) orelse {
         return utils.errors.throwError("The log message has the level \"{s}\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", .{request.level});
     };
@@ -66,7 +70,7 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, request: Render
             .stderr = tool_data_request.stderr,
         };
     }
-    const logger = FileLogger.fromILog(utils.log.log) orelse {
+    const logger = FileLogger.fromILog(utils.log.currentLog()) orelse {
         return;
     };
     try logger.handleWorkerLogMessage(.{
@@ -81,11 +85,27 @@ pub fn rendererLogHandler(core: *Core, arena: std.mem.Allocator, request: Render
 // get-log-details: no payload. The reply is {logFilePath, logHeader} of the active log: the path of the log file and the header of
 // the file, read from it on demand. A log that writes no file (the console log) replies with a null path and a placeholder header.
 //
-fn getLogDetails(context: *TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = data;
-    const details = try utils.log.log.getLogDetails(context.arena, context.io());
-    return try std.json.Stringify.valueAlloc(context.arena, details, .{});
+fn getLogDetails(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    _ = services;
+    _ = timers;
+    _ = context;
+    const given = try std.json.parseFromValueLeaky(ILogDetailsData, allocator, data, .{
+        .ignore_unknown_fields = true,
+    });
+    const log_file = given.logFilePath orelse {
+        return try std.json.Stringify.valueAlloc(allocator, utils.log.noLogDetails, .{});
+    };
+    const details = try file_logger.readLogDetails(allocator, io, log_file);
+    return try std.json.Stringify.valueAlloc(allocator, details, .{});
 }
+
+//
+// What the main thread gives the get-log-details task: the log is the main thread's, which a task cannot reach.
+//
+const ILogDetailsData = struct {
+    // The path of the main thread's log file, or null when its log writes no file (the console log).
+    logFilePath: ?[]const u8 = null,
+};
 
 //
 // fps-measurement: the payload is the frames per second the page measured, a number. A row of the time in milliseconds since the
@@ -98,14 +118,14 @@ fn getLogDetails(context: *TaskContext, data: std.json.Value) anyerror!?[]const 
 // environment variable is read for each message, and a message with it off is an error reply. A value that is
 // not a number is refused by Ziggy as InvalidMessageData, because all failures here are noisy.
 //
-pub fn fpsMeasurementHandler(core: *Core, arena: std.mem.Allocator, fps: f64) !void {
+pub fn fpsMeasurementHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, fps: f64) !void {
+    _ = timers;
     const enabled = node_utils.process_env.getEnv("FPS_LOGGING") orelse "";
     if (!std.mem.eql(u8, enabled, "1")) {
         return utils.errors.throwError("FPS logging is off. Start Photosphere with the environment variable FPS_LOGGING set to 1 to record frame rates.", .{});
     }
-    const fps_path = try std.fs.path.join(arena, &.{ core.data_dir, "photosphere-fps.csv" });
-    const io = core.threaded.io();
-    var rows = std.Io.Writer.Allocating.init(arena);
+    const fps_path = try std.fs.path.join(allocator, &.{ services.dataDir(), "photosphere-fps.csv" });
+    var rows = std.Io.Writer.Allocating.init(allocator);
     const existing_length = existingLength(io, fps_path) catch |err| {
         return utils.errors.throwError("The frame rate file {s} could not be read: {s}", .{ fps_path, @errorName(err) });
     };
@@ -147,12 +167,18 @@ pub const NoRequest = struct {};
 //
 // get-log-details: answered by the get-log-details task. The response is the path of the log file and its header.
 //
-pub fn getLogDetailsMessageHandler(core: *Core, arena: std.mem.Allocator, request: NoRequest) !ziggy.core.Answer(utils.log.ILogDetails) {
-    _ = core;
+pub fn getLogDetailsMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response(utils.log.ILogDetails) {
+    _ = services;
+    _ = timers;
+    _ = io;
+    _ = request;
+    const logger = FileLogger.fromILog(utils.log.currentLog());
     return .{
         .task = .{
             .task_type = "get-log-details",
-            .data = try json.stringify(arena, request),
+            .data = try json.stringify(allocator, ILogDetailsData{
+                .logFilePath = if (logger) |file_log| file_log.getLogFilePath() else null,
+            }),
         },
     };
 }

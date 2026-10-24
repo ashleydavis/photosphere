@@ -1,4 +1,5 @@
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -130,6 +131,7 @@ fn refuse(reason: []const u8, settings: ISyncSettings, pauseBetweenRunsMs: std.j
 pub fn planPrefetchHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     data: std.json.Value,
     context: ITaskContext,
     host: INetworkStatusHost,
@@ -147,7 +149,7 @@ pub fn planPrefetchHandler(
         return toJsonValue(allocator, refuse("syncing is switched off", settings, pauseBetweenRunsMs));
     }
 
-    const connectionType = try readNetworkConnectionType(allocator, host);
+    const connectionType = try readNetworkConnectionType(io, allocator, host);
 
     // The same rule the interface applies, from the same function.
     const allowed = computeSyncAllowed(.{
@@ -174,7 +176,7 @@ pub fn planPrefetchHandler(
     }
 
     // A database with no origin has nothing to fetch from.
-    const opened = try openStorage(allocator, io, databasePath.?, null, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, databasePath.?, null, null, context.nativeCaller);
     const databaseConfig = try loadDatabaseConfig(allocator, io, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" has no origin to fill in from", .{databasePath.?}), settings, pauseBetweenRunsMs));

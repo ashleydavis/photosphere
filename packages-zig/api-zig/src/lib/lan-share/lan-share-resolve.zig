@@ -8,7 +8,7 @@ const index = @import("index.zig");
 // Names used from other files.
 //
 const getVaultWithHost = vault_zig.get_vault.getVaultWithHost;
-const IHostRequester = @import("utils-zig").host_requester.IHostRequester;
+const INativeCaller = @import("utils-zig").native_caller.INativeCaller;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
 const createPrivateKey = encryption.node_crypto.createPrivateKey;
 const createPublicKeyFromPrivateKey = encryption.node_crypto.createPublicKeyFromPrivateKey;
@@ -47,7 +47,7 @@ fn s3CredentialField(parsed: std.json.Value, secretName: []const u8, field: []co
 // Builds a database share payload by reading the vault to resolve all
 // secret references on the given database config into full credential objects.
 //
-pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, entry: IShareDatabaseConfig, host: ?IHostRequester) !IDatabaseSharePayload {
+pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, entry: IShareDatabaseConfig, host: ?INativeCaller) !IDatabaseSharePayload {
     const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
 
     var s3Credentials: ?IShareS3Credentials = null;
@@ -106,7 +106,7 @@ pub fn resolveDatabaseSharePayload(allocator: std.mem.Allocator, io: std.Io, ent
 // Builds a secret share payload by reading a vault entry by name
 // and wrapping it in the share payload format.
 //
-pub fn resolveSecretSharePayload(allocator: std.mem.Allocator, io: std.Io, secretName: []const u8, host: ?IHostRequester) !ISecretSharePayload {
+pub fn resolveSecretSharePayload(allocator: std.mem.Allocator, io: std.Io, secretName: []const u8, host: ?INativeCaller) !ISecretSharePayload {
     const vault = try getVaultWithHost(allocator, getDefaultVaultType(), host);
     const secret = try vault.get(allocator, io, secretName) orelse {
         return errors.throwError("Secret \"{s}\" not found in vault.", .{secretName});

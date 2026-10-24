@@ -20,9 +20,9 @@ var vault_directory: ?std.testing.TmpDir = null;
 pub fn useTestVault() !void {
     if (environment == null) {
         vault_directory = std.testing.tmpDir(.{});
-        var map = std.process.Environ.Map.init(std.heap.smp_allocator);
+        var map = std.process.Environ.Map.init(std.heap.page_allocator);
         try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
-        try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(std.heap.smp_allocator, &.{ ".zig-cache", "tmp", &vault_directory.?.sub_path }));
+        try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(std.heap.page_allocator, &.{ ".zig-cache", "tmp", &vault_directory.?.sub_path }));
         environment = map;
     }
     node_utils.process_env.setEnvironMap(&environment.?);

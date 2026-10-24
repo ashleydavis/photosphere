@@ -11,6 +11,7 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const errors = utils.errors;
@@ -105,6 +106,7 @@ fn jobName(job: ?IJobTag) []const u8 {
 pub fn testJobHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -125,7 +127,7 @@ pub fn testJobHandler(
 
     while (true) {
         const now = context.timestampProvider.now(io);
-        if (context.isCancelled()) {
+        if (context.isCancelled(io, allocator)) {
             log.info(try std.fmt.allocPrint(allocator, "Test job \"{s}\" cancelled after {d}ms.", .{ jobName(data.job), now - startedAt }));
             return resultToJson(allocator, .{
                 .elapsedMs = now - startedAt,
@@ -138,7 +140,7 @@ pub fn testJobHandler(
         }
 
         const fraction = @as(f64, @floatFromInt(now - startedAt)) / @as(f64, @floatFromInt(data.durationMs));
-        try sendJobProgress(allocator, context, data.job, startedAt, try describeTestJobProgress(allocator, data.stages, data.itemCount, fraction));
+        try sendJobProgress(allocator, io, context, data.job, startedAt, try describeTestJobProgress(allocator, data.stages, data.itemCount, fraction));
 
         try sleep(io, @intCast(@min(STEP_MS, endsAt - now)));
     }

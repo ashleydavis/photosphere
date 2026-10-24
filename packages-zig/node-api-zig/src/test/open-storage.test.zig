@@ -13,7 +13,6 @@ const openStorage = node_api.open_storage.openStorage;
 // Installs the environment and points the config dir at a new directory with the given databases.toml.
 //
 fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![]const u8 {
-    _ = try test_environment.setupEnvironment(io);
     const configDir = try temp_dirs.makeTempDir(allocator, io, "open-storage-config");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
     if (databasesToml.len > 0) {
@@ -23,6 +22,8 @@ fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![
 }
 
 test "forwards databasePath, encryptionKey, and s3Key to resolveStorageCredentials" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -39,6 +40,8 @@ test "forwards databasePath, encryptionKey, and s3Key to resolveStorageCredentia
 }
 
 test "passes the resolved encryption PEMs to loadEncryptionKeysFromPem" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -61,6 +64,8 @@ test "passes the resolved encryption PEMs to loadEncryptionKeysFromPem" {
 }
 
 test "passes the resolved s3Config and storage options into createStorage" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -77,6 +82,8 @@ test "passes the resolved s3Config and storage options into createStorage" {
 }
 
 test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, and googleApiKey" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -113,6 +120,8 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
 }
 
 test "works without encryptionKey or s3Key arguments" {
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

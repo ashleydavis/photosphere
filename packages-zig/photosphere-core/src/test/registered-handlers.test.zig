@@ -20,7 +20,7 @@ fn addTask(app: *TestApp, task_id: []const u8, task_type: []const u8, data_json:
         },
     });
     defer std.testing.allocator.free(message);
-    app.core.postMessage(message);
+    app.native_app.sendMessage(std.testing.allocator, message);
 }
 
 test "a task type with a registered handler runs on Ziggy's runner and its outputs reach the page" {
@@ -34,7 +34,7 @@ test "a task type with a registered handler runs on Ziggy's runner and its outpu
     });
     defer std.testing.allocator.free(data);
     try addTask(&app, "exists-1", "check-database-exists", data);
-    try app.shell.expectMessageContaining("\"taskId\":\"exists-1\",\"status\":\"succeeded\",\"outputs\":{\"exists\":false},\"type\":\"check-database-exists\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"exists-1\",\"status\":\"succeeded\",\"outputs\":{\"exists\":false},\"type\":\"check-database-exists\"");
 }
 
 test "a registered task type that throws gives the page the message it threw" {
@@ -42,7 +42,7 @@ test "a registered task type that throws gives the page the message it threw" {
     try app.start();
     defer app.stop();
     try addTask(&app, "exists-2", "check-database-exists", "{}");
-    try app.shell.expectMessageContaining("\"taskId\":\"exists-2\",\"status\":\"failed\",\"error\":{\"message\":\"databasePath is required\"},\"errorMessage\":\"databasePath is required\"");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"exists-2\",\"status\":\"failed\",\"error\":{\"message\":\"databasePath is required\"},\"errorMessage\":\"databasePath is required\"");
 }
 
 test "a task type nothing is registered for still fails as an unknown type" {
@@ -50,7 +50,7 @@ test "a task type nothing is registered for still fails as an unknown type" {
     try app.start();
     defer app.stop();
     try addTask(&app, "nothing-1", "no-such-task-type", "null");
-    try app.shell.expectMessageContaining("\"taskId\":\"nothing-1\",\"status\":\"failed\",\"error\":{\"message\":\"UnknownTaskType\"}");
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"nothing-1\",\"status\":\"failed\",\"error\":{\"message\":\"UnknownTaskType\"}");
 }
 
 test "a message of a name Photosphere does not answer is an UnknownMessageName error" {

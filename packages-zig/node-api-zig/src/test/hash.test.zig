@@ -254,12 +254,13 @@ test "getHashFromCache looks an item up under its identity and compares against 
 test "validateAndHash hashes a valid image" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const contents = try test_files.readFile(allocator, io, "../test/test.png");
 
     const hashed = (try hash.validateAndHash(allocator, io, runner, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
@@ -274,12 +275,13 @@ test "validateAndHash hashes a valid image" {
 test "validateAndHash returns undefined for a file that fails its validation" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init(std.testing.io);
+    var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    _ = try test_environment.setupEnvironment(io);
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit();
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "validate-and-hash");
     defer temp_dirs.removeTempDir(io, workingDir);
     // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.

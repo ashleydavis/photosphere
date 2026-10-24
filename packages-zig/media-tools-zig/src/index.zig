@@ -9,3 +9,4 @@ pub const Ffmpeg = ffmpeg.Ffmpeg;
 // The tools built into the program, as the runner the code that runs tools takes.
 pub const media_tools = @import("lib/media-tools.zig");
 pub const MediaTools = media_tools.MediaTools;
+pub const ThreadTools = media_tools.ThreadTools;

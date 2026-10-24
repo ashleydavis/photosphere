@@ -23,7 +23,7 @@ pub const IFetchResponse = struct {
 // Sends a GET request and reads the whole response.
 //
 pub fn fetch(allocator: std.mem.Allocator, io: std.Io, url: []const u8) !IFetchResponse {
-    var client: std.http.Client = .{ .allocator = std.heap.smp_allocator, .io = io };
+    var client: std.http.Client = .{ .allocator = allocator, .io = io };
     defer client.deinit();
     var body = std.Io.Writer.Allocating.init(allocator);
     const result = try client.fetch(.{

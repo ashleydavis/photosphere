@@ -1,10 +1,10 @@
 const std = @import("std");
 const utils = @import("utils-zig");
-const vault_module = @import("vault.zig");
+const vault = @import("vault.zig");
 const keychain_types = @import("keychain-types.zig");
-const ISecret = vault_module.ISecret;
-const IVault = vault_module.IVault;
-const IPrereqCheckResult = vault_module.IPrereqCheckResult;
+const ISecret = vault.ISecret;
+const IVault = vault.IVault;
+const IPrereqCheckResult = vault.IPrereqCheckResult;
 const IKeychainPayload = keychain_types.IKeychainPayload;
 const toKeychainName = keychain_types.toKeychainName;
 const fromKeychainName = keychain_types.fromKeychainName;
@@ -17,9 +17,9 @@ const errors = utils.errors;
 const KEYCHAIN_SERVICE = "photosphere";
 
 //
-// Set to true once the tool availability check has been performed.
+// Set to true once the tool availability check has been performed on this thread.
 //
-var toolChecked = std.atomic.Value(bool).init(false);
+threadlocal var toolChecked: bool = false;
 
 //
 // Checks that PowerShell is available and executable.
@@ -42,9 +42,10 @@ fn checkPrereqsOnce(allocator: std.mem.Allocator, io: std.Io) IPrereqCheckResult
 // Throws a helpful error if PowerShell is not found.
 //
 fn checkTool(allocator: std.mem.Allocator, io: std.Io) !void {
-    if (toolChecked.swap(true, .acq_rel)) {
+    if (toolChecked) {
         return;
     }
+    toolChecked = true;
     const result = checkPrereqsOnce(allocator, io);
     if (!result.ok) {
         return errors.throwError("{s}", .{result.message.?});

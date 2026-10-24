@@ -2,39 +2,34 @@ const std = @import("std");
 const task_queue_zig = @import("ziggy").task_queue;
 const node_api = @import("node-api-zig");
 
-test "initTaskHandlers registers the verify-file and replicate-database handlers" {
-    try node_api.task_handlers.initTaskHandlers();
-    try std.testing.expect(task_queue_zig.worker.getHandler("verify-file") == node_api.verify_worker.verifyFileHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("replicate-database") == node_api.replicate_database_worker.replicateDatabaseHandler);
+test "the handler list has the verify-file and replicate-database handlers" {
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "verify-file") == node_api.verify_worker.verifyFileHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "replicate-database") == node_api.replicate_database_worker.replicateDatabaseHandler);
 }
 
-test "initTaskHandlers registers the handlers psi add runs" {
-    try node_api.task_handlers.initTaskHandlers();
-    try std.testing.expect(task_queue_zig.worker.getHandler("import-assets") == node_api.import_assets_worker.importAssetsHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("hash-file") == node_api.hash_file_worker.hashFileHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("upload-asset") == node_api.upload_asset_worker.uploadAssetHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("cleanup-sources") == node_api.cleanup_sources_worker.cleanupSourcesHandler);
+test "the handler list has the handlers psi add runs" {
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "import-assets") == node_api.import_assets_worker.importAssetsHandler);
+    try std.testing.expect(node_api.task_handlers.getToolHandler("hash-file") == node_api.hash_file_worker.hashFileHandler);
+    try std.testing.expect(node_api.task_handlers.getToolHandler("upload-asset") == node_api.upload_asset_worker.uploadAssetHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "cleanup-sources") == node_api.cleanup_sources_worker.cleanupSourcesHandler);
 }
 
-test "initTaskHandlers registers the handlers psi consolidate runs" {
-    try node_api.task_handlers.initTaskHandlers();
-    try std.testing.expect(task_queue_zig.worker.getHandler("consolidate-database") == node_api.consolidate_database_worker.consolidateDatabaseHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("prefetch-database") == node_api.prefetch_database_worker.prefetchDatabaseHandler);
+test "the handler list has the handlers psi consolidate runs" {
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "consolidate-database") == node_api.consolidate_database_worker.consolidateDatabaseHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "prefetch-database") == node_api.prefetch_database_worker.prefetchDatabaseHandler);
 }
 
-test "initTaskHandlers registers the handler psi check runs" {
-    try node_api.task_handlers.initTaskHandlers();
-    try std.testing.expect(task_queue_zig.worker.getHandler("check-file") == node_api.check_worker.checkFileHandler);
+test "the handler list has the handler psi check runs" {
+    try std.testing.expect(node_api.task_handlers.getToolHandler("check-file") == node_api.check_worker.checkFileHandler);
 }
 
-test "initTaskHandlers registers the check-database-exists handler" {
-    try node_api.task_handlers.initTaskHandlers();
-    try std.testing.expect(task_queue_zig.worker.getHandler("check-database-exists") == node_api.check_database_exists_worker.checkDatabaseExistsHandler);
+test "the handler list has the check-database-exists handler" {
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "check-database-exists") == node_api.check_database_exists_worker.checkDatabaseExistsHandler);
 }
 
-test "initTaskHandlers registers the folder media source builder" {
+test "registerMediaSourceBuilders registers the folder media source builder" {
     node_api.media_source_registry.clearMediaSourceBuilders();
-    try node_api.task_handlers.initTaskHandlers();
+    try node_api.task_handlers.registerMediaSourceBuilders();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var generator: @import("utils-zig").random_uuid_generator.RandomUuidGenerator = .{};
@@ -47,14 +42,14 @@ test "initTaskHandlers registers the folder media source builder" {
     }}, .{
         .sessionTempDir = "/tmp/session",
         .uuidGenerator = generator.uuidGenerator(),
-        .hostRequester = null,
+        .nativeCaller = null,
     });
 
     const folderSource: *node_api.folder_media_source.FolderMediaSource = @ptrCast(@alignCast(source.ptr));
     try std.testing.expectEqualStrings("/photos", folderSource.folders[0].path);
 }
 
-test "initTaskHandlers registers a handler for every task type of the application" {
+test "the handler list has a handler for every task type of the application" {
     const taskTypes = [_][]const u8{
         "test-job",
         "verify-file",
@@ -74,7 +69,6 @@ test "initTaskHandlers registers a handler for every task type of the applicatio
         "get-import-record",
         "set-database-origin",
         "move-assets",
-        "asset-server",
         "receive-share",
         "find-receiver",
         "send-payload",
@@ -84,14 +78,13 @@ test "initTaskHandlers registers a handler for every task type of the applicatio
         "consolidate-database",
         "reset-app-storage",
     };
-    try node_api.task_handlers.initTaskHandlers();
 
     for (taskTypes) |taskType| {
-        try std.testing.expect(task_queue_zig.worker.getHandler(taskType) != null);
+        try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, taskType) != null or node_api.task_handlers.getToolHandler(taskType) != null);
     }
-    try std.testing.expect(task_queue_zig.worker.getHandler("test-job") == node_api.test_job_worker.testJobHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("receive-share") == node_api.lan_share_worker.receiveShareHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("find-receiver") == node_api.lan_share_worker.findReceiverHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("send-payload") == node_api.lan_share_worker.sendPayloadHandler);
-    try std.testing.expect(task_queue_zig.worker.getHandler("reset-app-storage") == node_api.reset_app_storage_worker.resetAppStorageHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "test-job") == node_api.test_job_worker.testJobHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "receive-share") == node_api.lan_share_worker.receiveShareHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "find-receiver") == node_api.lan_share_worker.findReceiverHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "send-payload") == node_api.lan_share_worker.sendPayloadHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "reset-app-storage") == node_api.reset_app_storage_worker.resetAppStorageHandler);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
 const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
 const api = @import("api-zig");
@@ -23,8 +24,9 @@ const IMcpToolContext = types.IMcpToolContext;
 // Registers the `verify_database` tool: runs the full database+asset integrity check and
 // returns the combined summary as a JSON blob.
 //
-pub fn registerVerifyDatabaseTool(server: *McpServer, toolContext: *IMcpToolContext) !void {
+pub fn registerVerifyDatabaseTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
     try server.registerTool(
+        allocator,
         "verify_database",
         .{
             .description = "Run a full integrity check over the open database. Returns a summary of any issues.",
@@ -53,7 +55,8 @@ fn verifyDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io
         .encryptionKey = database.encryptionKey,
     };
     const dbFileResult = try verifyDatabaseFiles(toolContext.allocator, io, database.assetStorage, null);
-    const verifyResult = try verify(toolContext.allocator, io, storageDescriptor, database.assetStorage, toolContext.uuidGenerator, database.metadataCollection, null, null);
+    var timer_list = TimerList.init();
+    const verifyResult = try verify(toolContext.allocator, io, timer_list.interface(), storageDescriptor, database.assetStorage, toolContext.uuidGenerator, database.metadataCollection, null, null);
     var response: BsonDocument = .empty;
     try response.put(allocator, "databaseFiles", try toJsValue(allocator, dbFileResult));
     try response.put(allocator, "assets", try toJsValue(allocator, verifyResult));

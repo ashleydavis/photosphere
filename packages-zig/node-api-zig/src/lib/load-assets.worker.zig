@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -50,12 +51,6 @@ const GALLERY_FIELD_NAMES = [_][]const u8{
 };
 
 //
-// Allocates the queue that runs the prefetch, which outlives this task.
-// (The queue has to stay alive for as long as the backend holds its subscriptions.)
-//
-const queue_allocator = std.heap.smp_allocator;
-
-//
 // Picks the fields of a record that are sent for gallery display. A field the record does not hold is left out.
 // (Zig: the batch is a list of JSON values.)
 //
@@ -84,6 +79,7 @@ fn galleryRecordToJson(allocator: std.mem.Allocator, record: api.asset_query.IAs
 pub fn loadAssetsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
+    _: Timers,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -101,13 +97,13 @@ pub fn loadAssetsHandler(
 
     log.info(try std.fmt.allocPrint(allocator, "Loading assets from database \"{s}\"", .{data.databasePath}));
 
-    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.hostRequester);
+    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
     const plainStorage = opened.storage;
     const isPartial = try isDatabasePartial(allocator, io, data.databasePath, opened.s3Config, opened.storageOptions);
 
     // Only wrap in lazy storage for partial databases; plain storage otherwise.
     const storage = if (isPartial)
-        try createLazyDatabaseStorage(allocator, io, data.databasePath, opened.s3Config, opened.storageOptions, context.hostRequester)
+        try createLazyDatabaseStorage(allocator, io, data.databasePath, opened.s3Config, opened.storageOptions, context.nativeCaller)
     else
         plainStorage;
 
@@ -122,7 +118,7 @@ pub fn loadAssetsHandler(
     var totalAssets: u64 = 0;
     var batchesSent: u64 = 0;
 
-    while (!context.isCancelled()) {
+    while (!context.isCancelled(io, allocator)) {
         //todo: The sort order should be configurable.
         const sortIndex = try metadataCollection.sortIndex("photoDate", .desc);
         const result = try sortIndex.getPage(io, nextPageId);
@@ -147,11 +143,11 @@ pub fn loadAssetsHandler(
             .databasePath = data.databasePath,
             .batch = batch,
         };
-        context.sendEvent(try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, pageMessage, .{}), .{}));
+        context.sendEvent(io, allocator, try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, pageMessage, .{}), .{}));
 
         // The same count as the job the interface lists and can cancel. Indeterminate: the pages are
         // walked one at a time and how many there are is not known until the last one comes back.
-        try sendJobProgress(allocator, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} assets loaded", .{totalAssets}));
+        try sendJobProgress(allocator, io, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} assets loaded", .{totalAssets}));
 
         if (result.nextPageId == null) {
             break;
@@ -165,12 +161,14 @@ pub fn loadAssetsHandler(
         // otherwise inherit this task's interactive priority and hold an engine for as long as it
         // takes to pull down every thumbnail, which is exactly the work interactive tasks must not
         // wait behind.
-        const queue = try TaskQueue.init(queue_allocator, io, context.uuidGenerator, data.databasePath);
+        // The queue is not shut down, which would cancel the prefetch. It is in the task's memory, which goes when the task ends, as
+        // its subscriptions do.
+        const queue = try TaskQueue.init(allocator, context.uuidGenerator, data.databasePath);
         var prefetchData: std.json.ObjectMap = .empty;
         try prefetchData.put(allocator, "databasePath", .{
             .string = data.databasePath,
         });
-        _ = try queue.addTask("prefetch-database", .{
+        _ = try queue.addTask(io, allocator, "prefetch-database", .{
             .object = prefetchData,
         }, null, TaskPriority.Background);
     }

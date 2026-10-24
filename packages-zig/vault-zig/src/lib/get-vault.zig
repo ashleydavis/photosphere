@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
+const ziggy = @import("ziggy");
 const IVault = @import("vault.zig").IVault;
 const PlaintextVault = @import("plaintext-vault.zig").PlaintextVault;
 const DEFAULT_VAULT_DIR = @import("plaintext-vault.zig").DEFAULT_VAULT_DIR;
@@ -9,25 +10,21 @@ const MacOSKeychainVault = @import("macos-keychain-vault.zig").MacOSKeychainVaul
 const LinuxKeychainVault = @import("linux-keychain-vault.zig").LinuxKeychainVault;
 const WindowsKeychainVault = @import("windows-keychain-vault.zig").WindowsKeychainVault;
 const PhoneVault = @import("phone-vault.zig").PhoneVault;
-const IHostRequester = utils.host_requester.IHostRequester;
+const INativeCaller = utils.native_caller.INativeCaller;
 const errors = utils.errors;
 const process_env = node_utils.process_env;
 
 //
-// Allocator for the cached vault instances, which live for the rest of the process. It is thread-safe because worker threads call getVault too.
+// The allocator of the calling thread's cached vault instances, which live as long as the thread. Each thread has its own, as it has
+// its own vaultInstances, so no allocator is used by two threads.
 //
-const instance_allocator = std.heap.smp_allocator;
+threadlocal var instance_allocator_state: ziggy.thread_allocator.ThreadAllocator = .init;
 
 //
-// Cache of vault instances keyed by type string.
-// getVault always returns the same instance for the same type.
+// Cache of vault instances keyed by type string, one for each thread: a task runs on a thread of its own, and its vaults are its
+// own. getVault always returns the same instance for the same type on a thread.
 //
-var vaultInstances: std.StringHashMapUnmanaged(IVault) = .empty;
-
-//
-// Guards vaultInstances (worker threads share the cache).
-//
-var vaultInstancesMutex: std.Io.Mutex = .init;
+threadlocal var vaultInstances: std.StringHashMapUnmanaged(IVault) = .empty;
 
 //
 // Returns the default vault type from the PHOTOSPHERE_VAULT_TYPE environment
@@ -43,7 +40,7 @@ pub fn getDefaultVaultType() []const u8 {
 // by asking the host through the given requester. The phone vault is made with the allocator for the caller to use, because the
 // requester belongs to the caller (the task running), and it is not cached. A phone vault with no requester is an error.
 //
-pub fn getVaultWithHost(allocator: std.mem.Allocator, @"type": []const u8, host: ?IHostRequester) !IVault {
+pub fn getVaultWithHost(allocator: std.mem.Allocator, @"type": []const u8, host: ?INativeCaller) !IVault {
     if (!std.mem.eql(u8, @"type", "phone")) {
         return getVault(@"type");
     }
@@ -53,22 +50,6 @@ pub fn getVaultWithHost(allocator: std.mem.Allocator, @"type": []const u8, host:
     const instance = try allocator.create(PhoneVault);
     instance.* = PhoneVault.init(requester);
     return instance.vault();
-}
-
-//
-// Locks vaultInstancesMutex without an Io (getVault has no Io parameter).
-//
-fn lockVaultInstances() void {
-    while (!vaultInstancesMutex.tryLock()) {
-        std.atomic.spinLoopHint();
-    }
-}
-
-//
-// Unlocks vaultInstancesMutex (it is only ever locked with tryLock, so there are no waiters to wake).
-//
-fn unlockVaultInstances() void {
-    vaultInstancesMutex.state.store(.unlocked, .release);
 }
 
 //
@@ -83,9 +64,7 @@ fn unlockVaultInstances() void {
 // Throws if the type is not recognised.
 //
 pub fn getVault(@"type": []const u8) !IVault {
-    lockVaultInstances();
-    defer unlockVaultInstances();
-
+    const instance_allocator = instance_allocator_state.allocator();
     if (vaultInstances.get(@"type")) |existing| {
         return existing;
     }
@@ -110,6 +89,7 @@ fn processPlatform() []const u8 {
 // Creates a new vault instance for the given type.
 //
 pub fn instantiateVault(@"type": []const u8) !IVault {
+    const instance_allocator = instance_allocator_state.allocator();
     if (std.mem.eql(u8, @"type", "plaintext")) {
         const vaultDir = process_env.getEnv("PHOTOSPHERE_VAULT_DIR");
         const instance = try instance_allocator.create(PlaintextVault);

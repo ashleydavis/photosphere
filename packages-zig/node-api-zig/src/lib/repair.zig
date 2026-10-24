@@ -5,7 +5,7 @@ const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
 const media_file_database = @import("media-file-database.zig");
-const hash_module = @import("hash.zig");
+const hash = @import("hash.zig");
 const tree = @import("tree.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
@@ -13,8 +13,8 @@ const log = &utils.log.log;
 const retry = utils.retry.retry;
 const ProgressCallback = media_file_database.ProgressCallback;
 const getDatabaseSummary = media_file_database.getDatabaseSummary;
-const computeHash = hash_module.computeHash;
-const computeAssetHash = hash_module.computeAssetHash;
+const computeHash = hash.computeHash;
+const computeAssetHash = hash.computeAssetHash;
 const IMerkleTree = merkle_tree_zig.merkle_tree.IMerkleTree;
 const SortNode = merkle_tree_zig.merkle_tree.SortNode;
 const traverseTreeAsync = merkle_tree_zig.traverse.traverseTreeAsync;
@@ -113,13 +113,13 @@ pub const IRepairResult = struct {
 //
 // Calls the progress callback with a formatted message, when there is one.
 //
-fn reportProgress(progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
+fn reportProgress(io: std.Io, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
     const callback = progressCallback orelse {
         return;
     };
     var buffer: [1024]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, format, args) catch buffer[0..];
-    callback.call(message);
+    callback.call(io, message);
 }
 
 //
@@ -249,12 +249,12 @@ const RepairState = struct {
 
         self.result.filesProcessed += 1;
 
-        reportProgress(self.progressCallback, "Checking file {d} of {d}", .{ self.result.filesProcessed, self.summaryTotalFiles });
+        reportProgress(self.io, self.progressCallback, "Checking file {d} of {d}", .{ self.result.filesProcessed, self.summaryTotalFiles });
 
         const fileName = node.name.?;
         const fileInfo = try self.assetStorage.info(allocator, io, fileName) orelse {
             // File is missing - try to repair.
-            reportProgress(self.progressCallback, "Repairing missing file: {s}", .{fileName});
+            reportProgress(self.io, self.progressCallback, "Repairing missing file: {s}", .{fileName});
 
             const repaired = try self.repairFile(fileName, node.contentHash.?);
             if (repaired) {
@@ -280,7 +280,7 @@ const RepairState = struct {
             stream.destroy(io);
             if (!std.mem.eql(u8, (try freshHash).hash, node.contentHash.?)) {
                 // File is corrupted - try to repair.
-                reportProgress(self.progressCallback, "Repairing corrupted file: {s}", .{fileName});
+                reportProgress(self.io, self.progressCallback, "Repairing corrupted file: {s}", .{fileName});
 
                 const repaired = try self.repairFile(fileName, node.contentHash.?);
                 if (repaired) {
@@ -322,7 +322,7 @@ const RepairState = struct {
                     //
                     // Record missing: synthesize a minimal database record.
                     //
-                    reportProgress(self.progressCallback, "Repairing missing database record: {s}", .{nodeName});
+                    reportProgress(self.io, self.progressCallback, "Repairing missing database record: {s}", .{nodeName});
                     var now: std.Io.Writer.Allocating = .init(allocator);
                     try js_date.writeIsoString(&now.writer, std.Io.Clock.real.now(io).toMilliseconds());
                     const color = try allocator.alloc(BsonValue, 3);
@@ -347,7 +347,7 @@ const RepairState = struct {
                     //
                     // Hash wrong: update the record with the hash from the merkle tree.
                     //
-                    reportProgress(self.progressCallback, "Repairing database record hash: {s}", .{nodeName});
+                    reportProgress(self.io, self.progressCallback, "Repairing database record hash: {s}", .{nodeName});
                     var updates: BsonDocument = .empty;
                     try updates.put(allocator, "hash", .{ .string = expectedHashHex });
                     var updateOperation: UpdateOneOperation = .{ .metadataCollection = self.metadataCollection, .id = assetId, .updates = updates };
@@ -452,7 +452,7 @@ pub fn repair(
         },
     };
 
-    reportProgress(progressCallback, "Checking for missing or corrupt files in merkle tree...", .{});
+    reportProgress(io, progressCallback, "Checking for missing or corrupt files in merkle tree...", .{});
 
     var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{ .allocator = allocator, .storage = assetStorage };
     const merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {

@@ -3,7 +3,7 @@ const vault_zig = @import("vault-zig");
 const utils = @import("utils-zig");
 const PhoneVault = vault_zig.phone_vault.PhoneVault;
 const ISecret = vault_zig.vault.ISecret;
-const IHostRequester = utils.host_requester.IHostRequester;
+const INativeCaller = utils.native_caller.INativeCaller;
 const errors = utils.errors;
 const node_utils = @import("node-utils-zig");
 const isolated_vault = @import("isolated-vault.zig");
@@ -42,14 +42,15 @@ const MemoryHost = struct {
         };
     }
 
-    fn requester(self: *MemoryHost) IHostRequester {
+    fn requester(self: *MemoryHost) INativeCaller {
         return .{
             .ptr = self,
             .request = request,
         };
     }
 
-    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+    fn request(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+        _ = io;
         const self: *MemoryHost = @ptrCast(@alignCast(ptr));
         try self.methods.append(self.allocator, try self.allocator.dupe(u8, method));
         if (self.failure) |reason| {
@@ -232,14 +233,15 @@ const FixedAnswerHost = struct {
     // The answer to every request.
     answer: []const u8,
 
-    fn requester(self: *FixedAnswerHost) IHostRequester {
+    fn requester(self: *FixedAnswerHost) INativeCaller {
         return .{
             .ptr = self,
             .request = request,
         };
     }
 
-    fn request(ptr: *anyopaque, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+    fn request(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, method: []const u8, request_json: []const u8) anyerror![]const u8 {
+        _ = io;
         _ = method;
         _ = request_json;
         const self: *FixedAnswerHost = @ptrCast(@alignCast(ptr));

@@ -41,7 +41,7 @@ test "connection type: reading goes to the host and comes back as a type compute
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
-    try std.testing.expectEqual(.cellular, try readNetworkConnectionType(arena.allocator(), host.networkStatusHost()));
+    try std.testing.expectEqual(.cellular, try readNetworkConnectionType(std.testing.io, arena.allocator(), host.networkStatusHost()));
 }
 
 // The native side returns an error rather than a type when it cannot tell. Read as a connection type it would map to "unknown"
@@ -52,5 +52,5 @@ test "connection type: a host error is returned rather than read as a connection
         .failure = error.NoConnectivityManager,
     };
 
-    try std.testing.expectError(error.NoConnectivityManager, readNetworkConnectionType(std.testing.allocator, host.networkStatusHost()));
+    try std.testing.expectError(error.NoConnectivityManager, readNetworkConnectionType(std.testing.io, std.testing.allocator, host.networkStatusHost()));
 }

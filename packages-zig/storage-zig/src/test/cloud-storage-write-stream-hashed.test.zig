@@ -55,7 +55,7 @@ fn createStorage(allocator: std.mem.Allocator, client: *FakeClient, handler: Han
         .inputs = .empty,
         .handler = handler,
     };
-    var storage = CloudStorage.init(std.testing.io, "s3:", null);
+    var storage = CloudStorage.init("s3:", null);
     storage.s3.send = .{ .context = client, .function = FakeClient.send };
     return storage;
 }

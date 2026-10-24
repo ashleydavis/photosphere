@@ -28,7 +28,7 @@ const MAX_REQUESTS = 5;
 const BROADCAST_INTERVAL_MS = 1000;
 
 //
-// How long the receiver's threads wait at a time before checking whether the receive has finished.
+// How long the receiver waits at a time before checking whether the receive has finished.
 //
 const POLL_INTERVAL_MS: i32 = 100;
 
@@ -293,17 +293,14 @@ pub fn encodeAsn1Explicit(allocator: std.mem.Allocator, tagNumber: u8, content: 
 // Hosts an HTTPS server on the LAN and broadcasts availability via UDP.
 // Accepts a single payload delivery from a sender after pairing code verification.
 //
-// The server accepts connections on a thread of its own, serves each connection on a thread of its own, and
-// broadcasts on another. What they share is kept in atomics. Call deinit once finished with the receiver.
+// Everything runs on the thread that calls receive, which serves one connection at a time. It waits for a connection with the broadcast
+// interval as its timeout, and broadcasts each time the timeout passes. Call deinit once finished with the receiver.
 //
 pub const LanShareReceiver = struct {
-    // Allocates what the receiver keeps between calls and what its threads allocate (thread-safe).
+    // Allocates what the receiver keeps between calls.
     arena: std.heap.ArenaAllocator,
 
-    // Guards the arena, which the threads share.
-    arenaMutex: std.Io.Mutex,
-
-    // The Io the threads sleep and wait with.
+    // The Io the receiver sleeps and waits with.
     io: std.Io,
 
     // Timeout in milliseconds before the receiver gives up waiting.
@@ -330,17 +327,17 @@ pub const LanShareReceiver = struct {
     // The UDP socket for broadcasting availability.
     udpSocket: ?socket.Handle,
 
-    // The thread that accepts connections.
-    serverThread: ?std.Thread,
+    // The announcement the receiver broadcasts (null until start).
+    announcement: ?[]const u8,
 
-    // The thread that broadcasts availability every BROADCAST_INTERVAL_MS.
-    broadcastTimer: ?std.Thread,
+    // When the announcement is next broadcast, in milliseconds on the awake clock.
+    nextBroadcastAt: i64,
 
-    // The threads serving connections, joined when the receiver shuts down.
-    connectionThreads: std.ArrayList(std.Thread),
+    // When the receive gives up, in milliseconds on the awake clock (null until the receive begins).
+    deadline: ?i64,
 
     // Total number of incoming requests so far (across all endpoints).
-    requestCount: std.atomic.Value(u32),
+    requestCount: u32,
 
     // The delivered payload, set before isDone.
     payload: ?std.json.Value,
@@ -351,7 +348,7 @@ pub const LanShareReceiver = struct {
     // Set by the first call of complete, which is the one that counts.
     isCompleting: std.atomic.Value(bool),
 
-    // Whether the threads and sockets have been shut down.
+    // Whether the sockets have been shut down.
     isShutDown: bool,
 
     //
@@ -361,7 +358,6 @@ pub const LanShareReceiver = struct {
         return .{
             .discoveryPort = discoveryPort,
             .arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator),
-            .arenaMutex = .init,
             .io = io,
             .timeoutMs = timeoutMs,
             .code = null,
@@ -370,10 +366,10 @@ pub const LanShareReceiver = struct {
             .httpsServer = null,
             .httpsPort = 0,
             .udpSocket = null,
-            .serverThread = null,
-            .broadcastTimer = null,
-            .connectionThreads = .empty,
-            .requestCount = .init(0),
+            .announcement = null,
+            .nextBroadcastAt = 0,
+            .deadline = null,
+            .requestCount = 0,
             .payload = null,
             .isDone = .init(false),
             .isCompleting = .init(false),
@@ -391,10 +387,17 @@ pub const LanShareReceiver = struct {
     }
 
     //
-    // Allocates from the arena, which the threads share.
+    // Allocates from the arena.
     //
     fn allocator(self: *LanShareReceiver) std.mem.Allocator {
         return self.arena.allocator();
+    }
+
+    //
+    // The time on the awake clock, in milliseconds.
+    //
+    fn now(self: *LanShareReceiver) i64 {
+        return std.Io.Clock.awake.now(self.io).toMilliseconds();
     }
 
     //
@@ -421,7 +424,6 @@ pub const LanShareReceiver = struct {
         try socket.bind(httpsServer, .{ .address = .{ 0, 0, 0, 0 }, .port = 0 });
         try socket.listen(httpsServer);
         self.httpsPort = try socket.localPort(httpsServer);
-        self.serverThread = try std.Thread.spawn(.{}, serve, .{self});
 
         // Start UDP broadcast
         const udpSocket = try socket.createUdp(false, true);
@@ -441,9 +443,10 @@ pub const LanShareReceiver = struct {
         // sha256(code) that any caller can fetch from this receiver at GET /pairing-code-hash,
         // on a receiver that is already broadcasting its port to the whole subnet.
         const message = try std.fmt.allocPrint(arenaAllocator, "PSIE_RECV:{d}:{s}:{s}", .{ self.httpsPort, &self.codeHash, selfSigned.fingerprint });
+        self.announcement = message;
         // Send first broadcast immediately
         self.broadcast(message);
-        self.broadcastTimer = try std.Thread.spawn(.{}, broadcastEvery, .{ self, message });
+        self.nextBroadcastAt = self.now() + BROADCAST_INTERVAL_MS;
     }
 
     //
@@ -462,55 +465,13 @@ pub const LanShareReceiver = struct {
     }
 
     //
-    // The broadcast timer: sends the announcement every BROADCAST_INTERVAL_MS until the receive is done.
+    // Sends the announcement when BROADCAST_INTERVAL_MS has passed since the last one.
     //
-    fn broadcastEvery(self: *LanShareReceiver, message: []const u8) void {
-        var sinceLastBroadcast: i64 = 0;
-        while (!self.isDone.load(.acquire)) {
-            self.io.sleep(.fromMilliseconds(POLL_INTERVAL_MS), .awake) catch {
-                return;
-            };
-            sinceLastBroadcast += POLL_INTERVAL_MS;
-            if (sinceLastBroadcast >= BROADCAST_INTERVAL_MS and !self.isDone.load(.acquire)) {
-                self.broadcast(message);
-                sinceLastBroadcast = 0;
-            }
-        }
-    }
-
-    //
-    // The server thread: accepts connections until the receive is done, serving each on a thread of its own. Then
-    // it closes the listening socket (`httpsServer.close()` in complete()), so that a connection made after that is
-    // refused rather than left waiting to be accepted.
-    //
-    fn serve(self: *LanShareReceiver) void {
-        const httpsServer = self.httpsServer.?;
-        defer {
-            socket.close(httpsServer);
-            self.httpsServer = null;
-        }
-        while (!self.isDone.load(.acquire)) {
-            const readable = socket.waitReadable(httpsServer, POLL_INTERVAL_MS) catch |err| {
-                utils.log.log.exception("The LAN share receiver stopped accepting connections.", err);
-                self.complete(null);
-                return;
-            };
-            if (!readable or self.isDone.load(.acquire)) {
-                continue;
-            }
-            const accepted = socket.accept(httpsServer) catch {
-                continue;
-            };
-            const thread = std.Thread.spawn(.{}, serveConnection, .{ self, accepted }) catch |err| {
-                utils.log.log.exception("The LAN share receiver could not serve a connection.", err);
-                socket.close(accepted);
-                continue;
-            };
-            self.arenaMutex.lockUncancelable(self.io);
-            defer self.arenaMutex.unlock(self.io);
-            self.connectionThreads.append(self.allocator(), thread) catch |err| {
-                std.debug.panic("Recording a LAN share connection thread failed: {s}", .{@errorName(err)});
-            };
+    fn broadcastIfDue(self: *LanShareReceiver) void {
+        const current = self.now();
+        if (current >= self.nextBroadcastAt) {
+            self.broadcast(self.announcement.?);
+            self.nextBroadcastAt = current + BROADCAST_INTERVAL_MS;
         }
     }
 
@@ -522,22 +483,23 @@ pub const LanShareReceiver = struct {
         if (connection.hasBufferedInput()) {
             return true;
         }
-        var idle: i64 = 0;
-        while (!self.isDone.load(.acquire) and idle < KEEP_ALIVE_TIMEOUT_MS) {
-            const readable = socket.waitReadable(connection.handle, POLL_INTERVAL_MS) catch {
+        var waited: i64 = 0;
+        while (!self.isDone.load(.acquire) and waited < KEEP_ALIVE_TIMEOUT_MS) {
+            // The receiver goes on announcing itself while it serves a connection, so a sender can still find it.
+            self.broadcastIfDue();
+            const readable = socket.waitReadableOn(self.io, connection.handle, POLL_INTERVAL_MS) catch {
                 return false;
             };
             if (readable) {
                 return !self.isDone.load(.acquire);
             }
-            idle += POLL_INTERVAL_MS;
+            waited += POLL_INTERVAL_MS;
         }
         return false;
     }
 
     //
-    // A connection thread: performs the TLS handshake and handles requests until the connection closes or the
-    // receive is done.
+    // Serves one connection: performs the TLS handshake and handles requests until the connection closes or the receive is done.
     //
     fn serveConnection(self: *LanShareReceiver, handle: socket.Handle) void {
         const connection = https.Connection.accept(std.heap.smp_allocator, &self.serverContext.?, handle) catch {
@@ -560,19 +522,57 @@ pub const LanShareReceiver = struct {
     }
 
     //
-    // Waits for a valid payload to arrive from a sender.
+    // Waits for a valid payload to arrive from a sender, serving the connections that arrive one at a time and broadcasting the
+    // announcement every BROADCAST_INTERVAL_MS meanwhile.
     // Returns the payload on success, or null on timeout or cancellation. The payload belongs to the receiver
     // and is freed by deinit.
     //
     pub fn receive(self: *LanShareReceiver) !?std.json.Value {
-        const deadline = std.Io.Clock.awake.now(self.io).toMilliseconds() + self.timeoutMs;
-        while (!self.isDone.load(.acquire)) {
-            if (std.Io.Clock.awake.now(self.io).toMilliseconds() >= deadline) {
-                self.complete(null);
-                break;
-            }
-            try self.io.sleep(.fromMilliseconds(20), .awake);
+        while (self.receiveStep()) {}
+        return self.finishReceive();
+    }
+
+    //
+    // One slice of receive: waits for a connection no longer than POLL_INTERVAL_MS and serves the one that arrives. Returns false once
+    // the receive has finished (a payload, a cancel or the timeout), and finishReceive then gives what it received. A caller that runs
+    // the receive itself calls this until it returns false, and so can cancel the receiver between the slices on its own thread.
+    //
+    pub fn receiveStep(self: *LanShareReceiver) bool {
+        if (self.isDone.load(.acquire)) {
+            return false;
         }
+        const current = self.now();
+        const deadline = self.deadline orelse begun: {
+            self.deadline = current + self.timeoutMs;
+            break :begun self.deadline.?;
+        };
+        if (current >= deadline) {
+            self.complete(null);
+            return false;
+        }
+        self.broadcastIfDue();
+        // Waits for a connection no longer than until the next broadcast, the deadline or the next check of whether the receive
+        // has finished.
+        const wait_ms = @min(@min(self.nextBroadcastAt - current, deadline - current), POLL_INTERVAL_MS);
+        const readable = socket.waitReadableOn(self.io, self.httpsServer.?, @intCast(@max(wait_ms, 0))) catch |err| {
+            utils.log.log.exception("The LAN share receiver stopped accepting connections.", err);
+            self.complete(null);
+            return false;
+        };
+        if (readable) {
+            if (socket.accept(self.httpsServer.?)) |accepted| {
+                self.serveConnection(accepted);
+            }
+            else |_| {}
+        }
+        return !self.isDone.load(.acquire);
+    }
+
+    //
+    // Ends a receive run with receiveStep: closes the sockets and returns the payload, or null on timeout or cancellation. The payload
+    // belongs to the receiver and is freed by deinit.
+    //
+    pub fn finishReceive(self: *LanShareReceiver) ?std.json.Value {
         self.shutdown();
         return self.payload;
     }
@@ -580,7 +580,7 @@ pub const LanShareReceiver = struct {
     //
     // Cancels the receiver, cleaning up all resources.
     // The receive() call resolves with null. Safe to call from a signal handler or another thread: it only sets
-    // flags, and the receiver's threads and receive() see them.
+    // flags, and receive() sees them.
     //
     pub fn cancel(self: *LanShareReceiver) void {
         self.complete(null);
@@ -605,8 +605,8 @@ pub const LanShareReceiver = struct {
     // Handles an incoming HTTP request to the HTTPS server. Returns false when the connection should be closed.
     //
     fn handleRequest(self: *LanShareReceiver, request: *std.http.Server.Request) !bool {
-        const requestCount = self.requestCount.fetchAdd(1, .acq_rel) + 1;
-        if (requestCount > MAX_REQUESTS) {
+        self.requestCount += 1;
+        if (self.requestCount > MAX_REQUESTS) {
             try respondJson(request, .too_many_requests, "{\"error\":\"Too many requests\"}");
             self.complete(null);
             return false;
@@ -627,12 +627,10 @@ pub const LanShareReceiver = struct {
             const rawBody = try bodyReader.allocRemaining(std.heap.smp_allocator, .unlimited);
             defer std.heap.smp_allocator.free(rawBody);
 
-            self.arenaMutex.lockUncancelable(self.io);
             // The last value of a repeated key wins.
             const parsed = std.json.parseFromSliceLeaky(std.json.Value, self.allocator(), rawBody, .{
                 .duplicate_field_behavior = .use_last,
             });
-            self.arenaMutex.unlock(self.io);
             const shareRequest = parsed catch {
                 try respondJson(request, .bad_request, "{\"error\":\"Invalid JSON\"}");
                 return true;
@@ -677,8 +675,7 @@ pub const LanShareReceiver = struct {
     }
 
     //
-    // Completes the receive operation: records the payload and tells the threads and receive() to finish. Only the
-    // first call counts.
+    // Completes the receive operation: records the payload and tells receive() to finish. Only the first call counts.
     //
     fn complete(self: *LanShareReceiver, payload: ?std.json.Value) void {
         if (self.isCompleting.swap(true, .acq_rel)) {
@@ -694,28 +691,13 @@ pub const LanShareReceiver = struct {
     }
 
     //
-    // Waits for the threads to finish and closes the sockets and the TLS settings (the cleanup of complete()).
+    // Closes the sockets and the TLS settings (the cleanup of complete()).
     //
     fn shutdown(self: *LanShareReceiver) void {
         if (self.isShutDown) {
             return;
         }
         self.isShutDown = true;
-
-        if (self.broadcastTimer) |thread| {
-            thread.join();
-            self.broadcastTimer = null;
-        }
-
-        if (self.serverThread) |thread| {
-            thread.join();
-            self.serverThread = null;
-        }
-
-        for (self.connectionThreads.items) |thread| {
-            thread.join();
-        }
-        self.connectionThreads.clearRetainingCapacity();
 
         if (self.udpSocket) |udpSocket| {
             socket.close(udpSocket);

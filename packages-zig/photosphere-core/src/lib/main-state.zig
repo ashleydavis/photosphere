@@ -1,15 +1,16 @@
 //
 // What the main process remembers while the app runs: whether a database is open and which one, whether
-// syncing is allowed, whether a sync is running, the debounce and periodic sync timers, and what automatic import is doing. These are
-// one value, made by onCreate when Ziggy creates the core and freed by onDestroy when Ziggy destroys it, and the handlers reach it
-// through the core or through their task's context.
+// syncing is allowed, whether a sync is running, the debounce and periodic sync timers, what automatic import is doing, the background
+// work, and the asset server and MCP server. These are one value, made by onCreate when Ziggy creates the core and freed by onDestroy
+// when Ziggy destroys it. Only the main thread uses it, with the handler services each function is given, so it needs no lock. A task
+// never reaches it: it gets what it needs in its data, and the main thread applies what it sends back (see main-process.zig).
 //
-// The timers (the debounce after an edit, the periodic sync for the life of the app, and the check that automatic import
-// is still running, which also runs once at the start) are one thread, which wakes often,
-// finds out which deadline has passed and does what that timer is for.
+// The timers (the debounce after an edit, the periodic sync for the life of the app, the check that automatic import is still running,
+// the look for a second copy of the app and the background passes) are the main thread's timers, whose callbacks run on the main
+// thread, as in the TypeScript app.
 //
-// ensureAutoImport waits for the task that creates the default database, so it can only run as a task. The timer thread
-// queues the `ensure-auto-import` task.
+// ensureAutoImport waits for the task that creates the default database, so it runs as a task, the `ensure-auto-import` task, and the
+// main thread does what its result names.
 //
 
 const std = @import("std");
@@ -25,18 +26,19 @@ const config = @import("config-zig");
 const environment = @import("environment.zig");
 const file_logger = @import("file-logger.zig");
 const background_work = @import("background-work.zig");
-const mcp_bridge = @import("mcp-bridge.zig");
 const mcp_server = @import("mcp-server.zig");
 const single_instance = @import("single-instance.zig");
-const windows_host = @import("windows-host.zig");
-const macos_host = @import("macos-host.zig");
+const windows_native_calls = @import("windows-native-calls.zig");
+const macos_native_calls = @import("macos-native-calls.zig");
 
-const Core = ziggy.core.Core;
-const TaskContext = ziggy.task_runner.TaskContext;
+const HandlerServices = ziggy.core.HandlerServices;
+const Timers = ziggy.timers.Timers;
+const TimerId = ziggy.core.TimerId;
 const json = ziggy.json;
+const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
 
 //
-// How long the sync debounce waits after the last edit notification, in milliseconds.
+// How long the debounce waits after the last edit before a sync, in milliseconds.
 //
 pub const SYNC_DEBOUNCE_MS = 10_000;
 
@@ -46,75 +48,68 @@ pub const SYNC_DEBOUNCE_MS = 10_000;
 pub const SYNC_PERIODIC_MS = 5 * 60 * 1_000;
 
 //
-// How often to check that automatic import is still running, in milliseconds.
+// How often the app checks that automatic import is running when it should be, in milliseconds.
 //
 pub const AUTO_IMPORT_RESTART_CHECK_MS = 30_000;
 
 //
-// How long to wait for the asset server to say which port it bound, in milliseconds.
-//
-pub const ASSET_SERVER_START_TIMEOUT_MS = 60_000;
-
-//
-// The source the asset server task is queued under, so cancelling it stops the server.
-//
-pub const ASSET_SERVER_TASK_SOURCE = "asset-server";
-
-//
-// The source the `check-for-update` task is queued under.
+// The source tag of the check for a newer release.
 //
 pub const CHECK_FOR_UPDATE_TASK_SOURCE = "check-for-update";
 
 //
-// The source the `check-for-news` task is queued under.
+// The source tag of the check of the news feed.
 //
 pub const CHECK_FOR_NEWS_TASK_SOURCE = "check-for-news";
 
 //
-// The source the `ensure-auto-import` task is queued under. It is not the source of the automatic import tasks, because ensureAutoImport
-// cancels that source and must not cancel itself.
+// The source tag of the task that makes automatic import match the config.
 //
 pub const ENSURE_AUTO_IMPORT_TASK_SOURCE = "ensure-auto-import";
 
 //
-// The input of the `ensure-auto-import` task queued by mainWindowCreated, the call of ensureAutoImport at startup.
-//
-pub const ENSURE_AUTO_IMPORT_STARTING_INPUT = "\"starting\"";
-
-//
-// The input of the `ensure-auto-import` task queued on every tick of the check, the call from the automatic import restart timer.
-//
-pub const ENSURE_AUTO_IMPORT_RESTARTING_INPUT = "\"restarting\"";
-
-//
-// How often the timer thread looks at the deadlines, in milliseconds.
-//
-const TIMER_TICK_MS = 20;
-
-//
-// How often the first copy of the app looks for the signal a second copy leaves, in milliseconds.
+// How often the signal of a second copy of the app is looked for, in milliseconds.
 //
 pub const SINGLE_INSTANCE_CHECK_MS = 500;
 
 //
-// Holds the app's state. Set by onCreate while Ziggy creates the core, before any message or task can reach the app, and null again
-// once onDestroy has destroyed it, after every task has ended. It is written only at those two points, when nothing else can be
-// reading it, so it needs no lock.
+// What the main thread gives the `ensure-auto-import` task: whether it is a tick of the check (worded "restarting" when it fails) or
+// the call at startup, and what automatic import is running now, so the task does nothing when that already matches the config.
 //
-var main_state: ?*MainState = null;
+pub const IEnsureAutoImportData = struct {
+    // Whether this is a tick of the check rather than the call at startup.
+    restarting: bool = false,
+    // The database automatic import is writing to, or null when it is not running.
+    runningDatabasePath: ?[]const u8 = null,
+    // The settings it was started with, as JSON, or null when it is not running.
+    runningSettingsJson: ?[]const u8 = null,
+};
 
 //
-// What the main process remembers.
+// Holds the app's state, the main thread's own: set by onCreate on the core's main thread, before any message or task can reach the
+// app, and null again once onDestroy has destroyed it, after every task has ended. No other thread has it.
+//
+threadlocal var main_state: ?*MainState = null;
+
+//
+// The main thread's allocator for what the state keeps, which lives as long as the main thread and only the main thread uses. Ziggy
+// gives a handler an arena that is freed when the handler returns, so what outlives a handler is allocated with this, which each
+// function of the state that keeps something is given (see stateAllocator).
+//
+threadlocal var state_allocator: ThreadAllocator = .init;
+
+//
+// The main thread's allocator for what the state keeps (see state_allocator).
+//
+pub fn stateAllocator() std.mem.Allocator {
+    return state_allocator.allocator();
+}
+
+//
+// What the main process remembers. It keeps no system service: each function is given the handler services, the timers, the Io and
+// the allocator it uses, those of the main thread, and the allocator is the state's own (see stateAllocator).
 //
 pub const MainState = struct {
-    // Allocates everything the state owns.
-    allocator: std.mem.Allocator,
-    // The core the state belongs to, for the task runner and for sending events.
-    core: *Core,
-    // The Io the timer thread sleeps with and the mutex is used with.
-    io: std.Io,
-    // Guards every field below except `stopping`.
-    mutex: std.Io.Mutex,
     // Whether a database is currently open. Nothing reads it, because
     // Ziggy's menu is written once and the page decides what each item does, but the page's notifications keep it true to the app.
     is_database_open: bool,
@@ -125,20 +120,18 @@ pub const MainState = struct {
     sync_allowed: bool,
     // Whether a sync task is queued or running (`isSyncRunning`).
     is_sync_running: bool,
-    // When the debounced sync is due, in milliseconds of the awake clock, or null when none is waiting (`syncDebounceTimer`).
-    sync_debounce_at: ?i64,
-    // When the periodic sync is next due, or null before it is started or after it is stopped (`syncPeriodicTimer`).
-    sync_periodic_at: ?i64,
-    // When automatic import is next checked (at startup and then on the restart timer), or null
-    // before the main window has been created, which is when both start. Due at once when armed, then every
-    // `auto_import_check_ms`.
-    auto_import_check_at: ?i64,
+    // The debounced sync's timer, or null when none is set (`syncDebounceTimer`).
+    sync_debounce_timer: ?TimerId,
+    // The periodic sync's timer, or null before it is started or after it is stopped (`syncPeriodicTimer`).
+    sync_periodic_timer: ?TimerId,
+    // The timer of the check that automatic import is running, or null before the main window has been created.
+    auto_import_check_timer: ?TimerId,
     // How often automatic import is checked. A field so that a test can shorten it.
-    auto_import_check_ms: i64,
+    auto_import_check_ms: u64,
     // How long the debounce waits. A field so that a test can shorten it.
-    sync_debounce_ms: i64,
+    sync_debounce_ms: u64,
     // How often the periodic sync runs. A field so that a test can shorten it.
-    sync_periodic_ms: i64,
+    sync_periodic_ms: u64,
     // Whether automatic import is running (`autoImportRunning`).
     auto_import_running: bool,
     // The id of the running automatic import task, or null (`autoImportTaskId`). Owned by the state.
@@ -147,100 +140,85 @@ pub const MainState = struct {
     auto_import_database_path: ?[]u8,
     // The settings the running automatic import was started with, as JSON, or null (`autoImportSettingsJson`). Owned by the state.
     auto_import_settings_json: ?[]u8,
-    // Set while ensureAutoImport is part way through, so two config writes arriving together do not both create the default database
-    // (`autoImportStarting`).
+    // Set while an ensure-auto-import task is queued or running, so two config writes arriving together do not both create the default
+    // database (`autoImportStarting`).
     auto_import_starting: bool,
+    // Whether the main window has been created, which happens once.
+    main_window_created: bool,
     // Whether the checks made once the page has loaded (for an update and for news) have been queued, which happens once.
     startup_checks_queued: bool,
-    // Whether the asset server task has been queued.
-    asset_server_requested: bool,
-    // The port the asset server bound, from its asset-server-ready message, or 0 before that (`restApiPort`).
-    asset_server_port: u16,
-    // Set when the asset server task ended, so a wait for its port can stop waiting for a message that will never come.
-    asset_server_ended: bool,
-    // Why the asset server ended before it said which port it bound, or null when it did not end that way. Owned by the state.
-    asset_server_error: ?[]u8,
-    // How long to wait for the asset server to say which port it bound. A field so that a test can shorten it.
-    asset_server_start_timeout_ms: i64,
-    // The meeting point of the MCP server and the page, which holds the tool calls waiting for the page and the port the server bound.
-    mcp_bridge: mcp_bridge.McpBridge,
-    // The MCP server while it runs, or null before it starts, when it could not start and after the app stops. Owned by the state.
+    // The asset server while it runs, or null before it starts and after the app stops.
+    asset_server: ?*node_api.asset_server.AssetServer,
+    // The MCP server while it runs, or null before it starts, when it could not start and after the app stops.
     mcp_server: ?*mcp_server.RunningMcpServer,
     // The lock this copy holds so that no other copy runs, or null when the rule does not apply to it (a build with no version, a test or a phone).
     single_instance: ?single_instance.SingleInstance,
-    // When the signal of a second copy is next looked for, or null when this copy holds no lock.
-    single_instance_check_at: ?i64,
+    // The timer that looks for the signal of a second copy, or null when this copy holds no lock.
+    single_instance_timer: ?TimerId,
     // Which pieces of background work (see background-work.zig) are switched on, by pass.
     background_passes_on: [background_work.PASS_COUNT]bool,
-    // When each pass that is switched on is next due, by pass, or null while it is running or switched off.
-    background_pass_due_at: [background_work.PASS_COUNT]?i64,
+    // The timer of each pass that is switched on and not yet due, by pass.
+    background_pass_timers: [background_work.PASS_COUNT]?TimerId,
     // Which passes are queued or running, by pass, so a pass is never run twice at once.
     background_passes_running: [background_work.PASS_COUNT]bool,
     // Whether the next sync pass is the first since the sync was switched on, which only reads the gap (see runSyncPass).
     first_sync_pass: bool,
     // What the last completed background prefetch pass said about the replica, which the background sync pass holds back for.
-    prefetch_replica_state: std.atomic.Value(background_work.ReplicaState),
+    prefetch_replica_state: background_work.ReplicaState,
+    // The arguments of the background pass timers, one for each pass, which name the pass a timer is for.
+    background_pass_targets: [background_work.PASS_COUNT]PassTimer,
     // Makes the ids of the tasks the main process queues.
     uuid_generator: utils.random_uuid_generator.RandomUuidGenerator,
-    // What answers the background work's host requests on Windows, whose native app has no host request callback (see
-    // windows-host.zig).
-    windows_host: windows_host.WindowsHost,
-    // What answers the background work's host requests on MacOS, whose bridge has no host request callback (see macos-host.zig).
-    macos_host: macos_host.MacosHost,
-    // Tells the timer thread to end.
-    stopping: std.atomic.Value(bool),
-    // The timer thread.
-    timer_thread: ?std.Thread,
+    // What makes the background work's native calls on Windows, whose native app has no native call callback (see
+    // windows-native-calls.zig).
+    windows_native_calls: windows_native_calls.WindowsNativeCalls,
+    // What makes the background work's native calls on MacOS, whose bridge has no native call callback (see macos-native-calls.zig).
+    macos_native_calls: macos_native_calls.MacosNativeCalls,
+    // Set once the app is stopping, so that nothing the stopping tasks do restarts anything.
+    stopping: bool,
+    // The environment read from the process, which this thread reads, or null when the thread already had one. Owned.
+    environment: ?*std.process.Environ.Map,
     // The tools built into the program (ImageMagick and FFmpeg), started before the file logger and stopped after it. Owned.
     media_tools: *media_tools.MediaTools,
-    // The file logger (`fileLogger`), made first when the state is made and closed last when the core is destroyed. Owned.
+    // The file logger (`fileLogger`), made first when the state is made and closed last when the core is destroyed. It is the main
+    // thread's log. Owned.
     logger: *file_logger.FileLogger,
-    // The log that was installed before the file logger took its place, put back when the file logger is closed.
-    previous_log: utils.log.ILog,
 
     //
-    // Makes the state and starts the periodic sync, which runs for the life of the app. The timer thread that runs it is started by
-    // onCreate once the state can be reached through fromCore, because the tasks it queues reach the state that way.
+    // Makes the state and starts the periodic sync, which runs for the life of the app. It runs in onCreate, on the main thread, before
+    // any message or task can reach the app, and logs to the file logger meanwhile. The allocator is the state's own (see
+    // stateAllocator), because the state lives for as long as the main thread.
     //
-    pub fn create(core: *Core) anyerror!*MainState {
+    pub fn create(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!*MainState {
         // A core a native app hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig).
-        // The map stays for the life of the process, because the tasks still running while the core is destroyed read it too.
-        _ = try environment.adoptProcessEnvironment(core.allocator);
-        // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (through the queue backend) and for the file
-        // logger's header, which asks them for their versions.
-        const media = try core.allocator.create(media_tools.MediaTools);
-        errdefer core.allocator.destroy(media);
-        media.* = try media_tools.MediaTools.init(core.io());
+        const process_environment = try environment.adoptProcessEnvironment(allocator);
+        errdefer freeEnvironment(allocator, process_environment);
+        // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (each makes its own runner of them)
+        // and for the file logger's header, which requests their versions.
+        const media = try allocator.create(media_tools.MediaTools);
+        errdefer allocator.destroy(media);
+        media.* = try media_tools.MediaTools.init();
         errdefer media.deinit();
-        core.queue_backend.tool_runner = media.runner();
-        // The file logger is made first so everything after it is logged.
-        const previous_log = utils.log.log;
-        const logger = try startFileLogger(core.allocator, core.io(), media.runner());
-        errdefer stopFileLogger(logger, previous_log);
-        // The task handlers register with Ziggy's task queue, which is where the runner finds them.
-        try node_api.task_handlers.initTaskHandlers();
-        // A phone has a photo library to import from, which only its native app can read.
-        if (core.config.host_request != null) {
-            try mobile_worker.device_media_source.registerDeviceMediaSourceBuilder();
+        // The file logger is made first so everything after it is logged. It is the main thread's log, which startFileLogger sets.
+        const logger = try startFileLogger(allocator, io, media.runner());
+        errdefer {
+            utils.log.setLog(null);
+            logger.deinit();
         }
         utils.console.log("Worker pool initialized");
-        const state = try core.allocator.create(MainState);
-        errdefer core.allocator.destroy(state);
+        const state = try allocator.create(MainState);
+        errdefer allocator.destroy(state);
         state.* = .{
+            .environment = process_environment,
             .media_tools = media,
             .logger = logger,
-            .previous_log = previous_log,
-            .allocator = core.allocator,
-            .core = core,
-            .io = core.io(),
-            .mutex = .init,
             .is_database_open = false,
             .current_database_path = null,
             .sync_allowed = false,
             .is_sync_running = false,
-            .sync_debounce_at = null,
-            .sync_periodic_at = null,
-            .auto_import_check_at = null,
+            .sync_debounce_timer = null,
+            .sync_periodic_timer = null,
+            .auto_import_check_timer = null,
             .auto_import_check_ms = AUTO_IMPORT_RESTART_CHECK_MS,
             .sync_debounce_ms = SYNC_DEBOUNCE_MS,
             .sync_periodic_ms = SYNC_PERIODIC_MS,
@@ -249,68 +227,64 @@ pub const MainState = struct {
             .auto_import_database_path = null,
             .auto_import_settings_json = null,
             .auto_import_starting = false,
+            .main_window_created = false,
             .startup_checks_queued = false,
-            .asset_server_requested = false,
-            .asset_server_port = 0,
-            .asset_server_ended = false,
-            .asset_server_error = null,
-            .asset_server_start_timeout_ms = ASSET_SERVER_START_TIMEOUT_MS,
-            .mcp_bridge = mcp_bridge.McpBridge.init(core.allocator, core.io()),
+            .asset_server = null,
             .mcp_server = null,
             .single_instance = null,
-            .single_instance_check_at = null,
+            .single_instance_timer = null,
             .background_passes_on = [_]bool{false} ** background_work.PASS_COUNT,
-            .background_pass_due_at = [_]?i64{null} ** background_work.PASS_COUNT,
+            .background_pass_timers = [_]?TimerId{null} ** background_work.PASS_COUNT,
             .background_passes_running = [_]bool{false} ** background_work.PASS_COUNT,
             .first_sync_pass = false,
-            .prefetch_replica_state = .init(.unknown),
+            .prefetch_replica_state = .unknown,
+            .background_pass_targets = undefined,
             .uuid_generator = .{},
-            .windows_host = windows_host.WindowsHost.init(core.io()),
-            .macos_host = macos_host.MacosHost.init(core.io()),
-            .stopping = .init(false),
-            .timer_thread = null,
+            .windows_native_calls = windows_native_calls.WindowsNativeCalls.init(),
+            .macos_native_calls = macos_native_calls.MacosNativeCalls.init(),
+            .stopping = false,
         };
+        inline for (std.meta.fields(background_work.Pass)) |field| {
+            state.background_pass_targets[field.value] = .{
+                .state = state,
+                .pass = @enumFromInt(field.value),
+            };
+        }
         // Undoes what the state now owns, in the order destroy uses, when applying the single instance rule fails. The rule can fail after
         // taking the lock (logging that it was acquired), so the lock is released too.
         errdefer {
-            state.mcp_bridge.deinit();
-            state.windows_host.deinit();
-            state.macos_host.deinit();
+            state.windows_native_calls.deinit();
+            state.macos_native_calls.deinit();
             if (state.single_instance) |*instance| {
-                instance.release(state.io);
+                instance.release(io);
             }
         }
-        try state.applySingleInstanceRule();
-        state.startPeriodicSync();
+        try state.applySingleInstanceRule(services, timers, io, allocator);
+        try state.startPeriodicSync(timers, io);
         return state;
     }
 
     //
-    // Does what is needed before the worker pool goes: stops the periodic sync, cancels the automatic
-    // import task if one is running, clears the debounce, and logs that the app is shutting down. Then stops the timer thread.
-    // The state stays valid, because tasks that are still running read it.
+    // Does what is needed before the worker pool goes: stops the servers and the periodic sync, cancels the automatic import task if
+    // one is running, clears the debounce, and logs that the app is shutting down. Ziggy clears the timers after this.
     //
-    pub fn stop(self: *MainState) void {
-        // Set first, so that nothing the stopping tasks do restarts the asset server.
-        self.stopping.store(true, .release);
-        self.stopMcpServer();
-        self.stopPeriodicSync();
-        var cancel_auto_import = false;
-        {
-            self.lock();
-            defer self.unlock();
-            // The automatic import task holds filesystem watchers and a temporary directory, so it is told to stop before the worker pool
-            // goes away under it.
-            if (self.auto_import_running) {
-                cancel_auto_import = true;
-                self.auto_import_running = false;
-                self.freeOwned(&self.auto_import_database_path);
-            }
-            self.sync_debounce_at = null;
+    pub fn stop(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) void {
+        // Set first, so that nothing the stopping tasks do restarts anything.
+        self.stopping = true;
+        self.stopMcpServer(io, allocator);
+        if (self.asset_server) |server| {
+            server.stop(io, allocator);
+            self.asset_server = null;
         }
-        if (cancel_auto_import) {
-            self.core.runner.cancelSource(node_api.auto_import_desktop.AUTO_IMPORT_TASK_SOURCE);
+        self.stopPeriodicSync(timers);
+        // The automatic import task holds filesystem watchers and a temporary directory, so it is told to stop before the worker pool
+        // goes away under it.
+        if (self.auto_import_running) {
+            self.auto_import_running = false;
+            freeOwned(allocator, &self.auto_import_database_path);
+            services.cancelTasks(io, allocator, node_api.auto_import_desktop.AUTO_IMPORT_TASK_SOURCE);
         }
+        clearTimer(timers, &self.sync_debounce_timer);
         self.logger.handleWorkerLogMessage(.{
             .level = .info,
             .message = "Photosphere Desktop shutting down...",
@@ -319,9 +293,32 @@ pub const MainState = struct {
         }, "Main") catch |err| {
             utils.log.log.exception("Could not log that the app is shutting down", err);
         };
-        if (self.timer_thread) |thread| {
-            thread.join();
-            self.timer_thread = null;
+    }
+
+    //
+    // Switches the background work on, as the page's startBackgroundImport request calls for. Each pass that was off is due at once. Switching on
+    // a pass that is already on changes nothing, and a pass that finished (the import when automatic import was switched off, the
+    // prefetch when its replica was complete) is switched on again, which is how switching the feature back on, or opening a database,
+    // brings it back.
+    //
+    pub fn startBackgroundWork(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) void {
+        inline for (std.meta.fields(background_work.Pass)) |field| {
+            const pass: background_work.Pass = @enumFromInt(field.value);
+            // A desktop imports by watching folders (ensureAutoImport), so a second import here would import everything twice.
+            if (pass != .import or builtin.os.tag == .ios or builtin.abi.isAndroid()) {
+                self.switchOnBackgroundPass(services, timers, io, allocator, pass);
+            }
+        }
+    }
+
+    //
+    // Switches the background work off and stops the passes in flight, as the page's stopBackgroundImport request calls for.
+    //
+    pub fn stopBackgroundWork(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) void {
+        self.switchOffBackgroundPasses(services, timers, io, allocator);
+        inline for (std.meta.fields(background_work.Pass)) |field| {
+            const pass: background_work.Pass = @enumFromInt(field.value);
+            services.cancelTasks(io, allocator, pass.source());
         }
     }
 
@@ -329,206 +326,147 @@ pub const MainState = struct {
     // Switches a piece of background work on. A pass that was off is due at once. One that is already on changes nothing. While any of
     // the work is on the app is held running, so the passes go on with the app off screen.
     //
-    pub fn switchOnBackgroundPass(self: *MainState, pass: background_work.Pass) void {
-        {
-            self.lock();
-            defer self.unlock();
-            const index = @intFromEnum(pass);
-            if (self.background_passes_on[index]) {
-                return;
-            }
-            self.background_passes_on[index] = true;
-            self.background_pass_due_at[index] = self.now();
-            if (pass == .sync) {
-                self.first_sync_pass = true;
-            }
+    pub fn switchOnBackgroundPass(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass) void {
+        const index = @intFromEnum(pass);
+        if (self.background_passes_on[index]) {
+            return;
         }
-        // Outside the state's lock, so it is never held while the runner's lock is taken.
-        self.core.runner.holdKeepAlive(true);
+        self.background_passes_on[index] = true;
+        if (pass == .sync) {
+            self.first_sync_pass = true;
+        }
+        self.scheduleBackgroundPass(timers, io, pass, 0);
+        services.holdKeepAlive(io, allocator, true);
     }
 
     //
     // Switches all the background work off, and lets the app go. A pass in flight still ends, and nothing is due after it.
     //
-    pub fn switchOffBackgroundPasses(self: *MainState) void {
-        {
-            self.lock();
-            defer self.unlock();
-            self.background_passes_on = [_]bool{false} ** background_work.PASS_COUNT;
-            self.background_pass_due_at = [_]?i64{null} ** background_work.PASS_COUNT;
+    pub fn switchOffBackgroundPasses(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) void {
+        self.background_passes_on = [_]bool{false} ** background_work.PASS_COUNT;
+        for (&self.background_pass_timers) |*timer| {
+            clearTimer(timers, timer);
         }
-        self.core.runner.holdKeepAlive(false);
+        services.holdKeepAlive(io, allocator, false);
     }
 
     //
-    // Takes the right to run a pass when it is switched on, due by the given time and not queued or running. Returns true when it
-    // took it, in which case the caller must run the pass and give the right back with releaseBackgroundPass, and false otherwise.
+    // Sets the timer that queues a pass after the gap.
     //
-    pub fn takeDueBackgroundPass(self: *MainState, pass: background_work.Pass, current: i64) bool {
-        self.lock();
-        defer self.unlock();
+    fn scheduleBackgroundPass(self: *MainState, timers: Timers, io: std.Io, pass: background_work.Pass, gap_ms: u64) void {
         const index = @intFromEnum(pass);
-        const due = self.background_pass_due_at[index] orelse {
-            return false;
+        clearTimer(timers, &self.background_pass_timers[index]);
+        self.background_pass_timers[index] = timers.setTimeout(io, .{
+            .context = &self.background_pass_targets[index],
+            .function = backgroundPassDue,
+        }, gap_ms) catch |err| {
+            utils.log.log.exception("Error setting the timer of a background pass", err);
+            return;
         };
-        if (!self.background_passes_on[index] or self.background_passes_running[index] or current < due) {
-            return false;
+    }
+
+    //
+    // Queues a pass whose time has come, when it is switched on and not queued or running already. One that cannot be queued is logged
+    // and tried again after the fallback gap.
+    //
+    pub fn queueDueBackgroundPass(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass) void {
+        const index = @intFromEnum(pass);
+        self.background_pass_timers[index] = null;
+        if (!self.background_passes_on[index] or self.background_passes_running[index]) {
+            return;
         }
+        self.queueBackgroundPass(services, io, allocator, pass) catch |err| {
+            utils.log.log.exception("Error queuing a background pass", err);
+            self.scheduleBackgroundPass(timers, io, pass, background_work.FALLBACK_PAUSE_MS);
+            return;
+        };
         self.background_passes_running[index] = true;
-        self.background_pass_due_at[index] = null;
-        return true;
     }
 
     //
-    // Says a pass is no longer queued or running.
+    // Queues one pass as a task of its own, under its own source, with what the pass needs to know.
     //
-    pub fn releaseBackgroundPass(self: *MainState, pass: background_work.Pass) void {
-        self.lock();
-        defer self.unlock();
-        self.background_passes_running[@intFromEnum(pass)] = false;
-    }
-
-    //
-    // Records how a pass ended: the next is due after the gap it asked for, unless the work is finished or has been switched off. When
-    // the last of the work finishes, the app is let go.
-    //
-    pub fn backgroundPassEnded(self: *MainState, pass: background_work.Pass, result: background_work.IPassResult) void {
-        {
-            self.lock();
-            defer self.unlock();
-            const index = @intFromEnum(pass);
-            if (!self.background_passes_on[index]) {
-                return;
-            }
-            if (!result.finished) {
-                self.background_pass_due_at[index] = self.now() + @as(i64, @intCast(result.gap_ms));
-                return;
-            }
-            self.background_passes_on[index] = false;
-            self.background_pass_due_at[index] = null;
-            for (self.background_passes_on) |on| {
-                if (on) {
-                    return;
-                }
-            }
-        }
-        self.core.runner.holdKeepAlive(false);
-    }
-
-    //
-    // Whether the next sync pass is the first since the sync was switched on, and from now on it is not.
-    //
-    pub fn takeFirstSyncPass(self: *MainState) bool {
-        self.lock();
-        defer self.unlock();
-        const first = self.first_sync_pass;
-        self.first_sync_pass = false;
-        return first;
-    }
-
-    //
-    // Queues the passes that are due. One that cannot be queued is said out loud and tried again after the fallback gap.
-    //
-    fn queueDueBackgroundPasses(self: *MainState) void {
-        const current = self.now();
-        inline for (std.meta.fields(background_work.Pass)) |field| {
-            const pass: background_work.Pass = @enumFromInt(field.value);
-            if (self.takeDueBackgroundPass(pass, current)) {
-                self.queueBackgroundPass(pass) catch |err| {
-                    utils.log.log.exception("Error queuing a background pass", err);
-                    self.releaseBackgroundPass(pass);
-                    self.backgroundPassEnded(pass, .{
-                        .gap_ms = background_work.FALLBACK_PAUSE_MS,
-                        .finished = false,
-                    });
-                };
-            }
-        }
-    }
-
-    //
-    // Queues one pass as a task of its own, under its own source.
-    //
-    fn queueBackgroundPass(self: *MainState, pass: background_work.Pass) !void {
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+    fn queueBackgroundPass(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass) !void {
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
-        const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-        try self.core.runner.addTask(task_id, pass.taskType(), pass.source(), "null", .background, null);
+        const arena = arena_state.allocator();
+        const first = pass == .sync and self.first_sync_pass;
+        const data_json = try json.stringify(arena, background_work.IPassTaskData{
+            .first = first,
+            .replicaState = self.prefetch_replica_state,
+        });
+        const task_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
+        try services.addTask(io, arena, task_id, pass.taskType(), pass.source(), data_json, .background);
+        if (first) {
+            self.first_sync_pass = false;
+        }
     }
 
     //
-    // Releases everything the state owns, after the task runner has stopped. The file logger is closed last
-    // to capture all shutdown logs, and the log that was installed before it takes its place again.
+    // Records how a pass ended, from its task's result: what the prefetch reported about the replica, and that the next pass is due after
+    // the gap it gave, unless the work is finished or has been switched off. When the last of the work finishes, the app is let go.
+    // A pass that failed is tried again after the fallback gap.
     //
-    pub fn destroy(self: *MainState) void {
-        self.freeOwned(&self.current_database_path);
-        self.freeOwned(&self.auto_import_task_id);
-        self.freeOwned(&self.auto_import_database_path);
-        self.freeOwned(&self.auto_import_settings_json);
-        self.freeOwned(&self.asset_server_error);
-        // A state that was never stopped still has its server, which uses the bridge, so the server goes first.
-        self.stopMcpServer();
-        self.mcp_bridge.deinit();
-        self.windows_host.deinit();
-        self.macos_host.deinit();
+    pub fn backgroundPassEnded(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass, result: ?background_work.IPassTaskResult) void {
+        const index = @intFromEnum(pass);
+        self.background_passes_running[index] = false;
+        const ended = result orelse background_work.IPassTaskResult{
+            .gapMs = background_work.FALLBACK_PAUSE_MS,
+            .finished = false,
+            .replicaState = self.prefetch_replica_state,
+        };
+        if (pass == .prefetch) {
+            self.prefetch_replica_state = ended.replicaState;
+        }
+        if (!self.background_passes_on[index]) {
+            return;
+        }
+        if (!ended.finished) {
+            self.scheduleBackgroundPass(timers, io, pass, ended.gapMs);
+            return;
+        }
+        self.background_passes_on[index] = false;
+        for (self.background_passes_on) |on| {
+            if (on) {
+                return;
+            }
+        }
+        services.holdKeepAlive(io, allocator, false);
+    }
+
+    //
+    // Releases everything the state owns, after the workers have stopped, with the allocator it was made with. The file logger is closed
+    // last to capture all shutdown logs.
+    //
+    pub fn destroy(self: *MainState, io: std.Io, allocator: std.mem.Allocator) void {
+        freeOwned(allocator, &self.current_database_path);
+        freeOwned(allocator, &self.auto_import_task_id);
+        freeOwned(allocator, &self.auto_import_database_path);
+        freeOwned(allocator, &self.auto_import_settings_json);
+        // A state that was never stopped still has its servers.
+        self.stopMcpServer(io, allocator);
+        if (self.asset_server) |server| {
+            server.stop(io, allocator);
+            self.asset_server = null;
+        }
+        self.windows_native_calls.deinit();
+        self.macos_native_calls.deinit();
         if (self.single_instance) |*instance| {
-            instance.release(self.io);
+            instance.release(io);
         }
-        stopFileLogger(self.logger, self.previous_log);
+        // The file logger is the main thread's log, so the main thread is given its console back before the logger goes.
+        utils.log.setLog(null);
+        self.logger.deinit();
         self.media_tools.deinit();
-        self.allocator.destroy(self.media_tools);
-        self.allocator.destroy(self);
-    }
-
-    //
-    // The time now, in milliseconds of the awake clock.
-    //
-    pub fn now(self: *MainState) i64 {
-        return std.Io.Clock.awake.now(self.io).toMilliseconds();
-    }
-
-    //
-    // Replaces a string the state owns with a copy of a new one, or with null, freeing the old one. The caller holds the mutex, or is
-    // the only user of the state.
-    //
-    pub fn setOwned(self: *MainState, field: *?[]u8, value: ?[]const u8) !void {
-        const copy: ?[]u8 = if (value) |text| try self.allocator.dupe(u8, text) else null;
-        if (field.*) |old| {
-            self.allocator.free(old);
-        }
-        field.* = copy;
-    }
-
-    //
-    // Frees a string the state owns and sets it to null. The caller holds the mutex, or is the only user of the state.
-    //
-    pub fn freeOwned(self: *MainState, field: *?[]u8) void {
-        if (field.*) |old| {
-            self.allocator.free(old);
-        }
-        field.* = null;
-    }
-
-    //
-    // Takes the mutex that guards the state.
-    //
-    pub fn lock(self: *MainState) void {
-        self.mutex.lockUncancelable(self.io);
-    }
-
-    //
-    // Releases the mutex that guards the state.
-    //
-    pub fn unlock(self: *MainState) void {
-        self.mutex.unlock(self.io);
+        allocator.destroy(self.media_tools);
+        freeEnvironment(allocator, self.environment);
+        allocator.destroy(self);
     }
 
     //
     // Resets the isSyncRunning flag. Called when a sync task finishes (success, skip, or failure).
     //
     pub fn syncStopped(self: *MainState) void {
-        self.lock();
-        defer self.unlock();
         self.is_sync_running = false;
     }
 
@@ -540,58 +478,51 @@ pub const MainState = struct {
     // different database from the one running now. Cancelling is by database path, and the load that fills the gallery is tagged with
     // that same path, so cancelling on a reopen of the database already open kills the load the page has just started for it.
     //
-    pub fn resetSyncState(self: *MainState, next_database_path: ?[]const u8) !void {
-        var to_cancel: ?[]u8 = null;
-        defer if (to_cancel) |path| self.allocator.free(path);
-        {
-            self.lock();
-            defer self.unlock();
-            // (`currentDatabasePath &&` is false for an empty path as well as for none.)
-            if (self.current_database_path) |current| {
-                const next_is_different = if (next_database_path) |next| !std.mem.eql(u8, current, next) else true;
-                if (current.len > 0 and next_is_different) {
-                    to_cancel = try self.allocator.dupe(u8, current);
-                }
+    pub fn resetSyncState(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, next_database_path: ?[]const u8) void {
+        // (`currentDatabasePath &&` is false for an empty path as well as for none.)
+        if (self.current_database_path) |current_path| {
+            const next_is_different = if (next_database_path) |next| !std.mem.eql(u8, current_path, next) else true;
+            if (current_path.len > 0 and next_is_different) {
+                services.cancelTasks(io, allocator, current_path);
             }
         }
-        if (to_cancel) |path| {
-            self.core.runner.cancelSource(path);
-        }
-        self.lock();
-        defer self.unlock();
         self.is_sync_running = false;
-        self.sync_debounce_at = null;
+        clearTimer(timers, &self.sync_debounce_timer);
     }
 
     //
     // Schedules a debounced sync after the last edit notification. Resets the debounce timer if called again before it fires.
     //
-    pub fn scheduleSync(self: *MainState) void {
+    pub fn scheduleSync(self: *MainState, timers: Timers, io: std.Io) !void {
         utils.log.log.info("Sync debounce triggered");
-        self.lock();
-        defer self.unlock();
-        self.sync_debounce_at = self.now() + self.sync_debounce_ms;
+        clearTimer(timers, &self.sync_debounce_timer);
+        self.sync_debounce_timer = try timers.setTimeout(io, .{
+            .context = self,
+            .function = syncDebounceDue,
+        }, self.sync_debounce_ms);
     }
 
     //
     // Starts the periodic sync timer. It runs for the lifetime of the app. A second call changes nothing.
     //
-    pub fn startPeriodicSync(self: *MainState) void {
-        self.lock();
-        defer self.unlock();
-        if (self.sync_periodic_at != null) {
+    pub fn startPeriodicSync(self: *MainState, timers: Timers, io: std.Io) !void {
+        if (self.sync_periodic_timer != null) {
             return;
         }
-        self.sync_periodic_at = self.now() + self.sync_periodic_ms;
+        self.sync_periodic_timer = try timers.setInterval(io, .{
+            .context = self,
+            .function = syncTimerDue,
+        }, self.sync_periodic_ms);
     }
 
     //
     // Stops the periodic sync timer.
     //
-    pub fn stopPeriodicSync(self: *MainState) void {
-        self.lock();
-        defer self.unlock();
-        self.sync_periodic_at = null;
+    pub fn stopPeriodicSync(self: *MainState, timers: Timers) void {
+        if (self.sync_periodic_timer) |id| {
+            timers.clearInterval(id);
+            self.sync_periodic_timer = null;
+        }
     }
 
     //
@@ -601,22 +532,17 @@ pub const MainState = struct {
     // When the task cannot be queued the running flag is put back before the error is returned, otherwise the flag would stay
     // set and no sync would ever run again.
     //
-    pub fn enqueueSyncTask(self: *MainState) !void {
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+    pub fn enqueueSyncTask(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
+        // Never auto-sync unless the page's decision permits it (sync enabled, online, and the Wi-Fi restriction satisfied).
+        // (`!currentDatabasePath` is true for an empty path as well as for none.)
+        if (!self.sync_allowed or self.current_database_path == null or self.current_database_path.?.len == 0 or self.is_sync_running) {
+            return;
+        }
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
         const arena = arena_state.allocator();
-        var database_path: []u8 = undefined;
-        {
-            self.lock();
-            defer self.unlock();
-            // Never auto-sync unless the page's decision permits it (sync enabled, online, and the Wi-Fi restriction satisfied).
-            // (`!currentDatabasePath` is true for an empty path as well as for none.)
-            if (!self.sync_allowed or self.current_database_path == null or self.current_database_path.?.len == 0 or self.is_sync_running) {
-                return;
-            }
-            self.is_sync_running = true;
-            database_path = try arena.dupe(u8, self.current_database_path.?);
-        }
+        const database_path = try arena.dupe(u8, self.current_database_path.?);
+        self.is_sync_running = true;
         errdefer self.syncStopped();
         utils.log.log.info(try std.fmt.allocPrint(arena, "Queuing sync task for \"{s}\"", .{database_path}));
         // No cancel source: the page lists this job but must not be able to stop it, because syncing is switched off from Settings and
@@ -629,49 +555,36 @@ pub const MainState = struct {
                 .name = "Syncing database",
             },
         });
-        const task_id = try self.uuid_generator.generate(arena, self.io);
-        try self.core.runner.addTask(task_id, "sync-database", database_path, sync_data, .background, null);
+        const task_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
+        try services.addTask(io, arena, task_id, "sync-database", database_path, sync_data, .background);
     }
 
     //
-    // Starts the asset server the first time it is called and returns the port the server bound, once the
-    // server has said so. The page needs the address before it can render, so the page's query asks for it. A later call returns the
-    // port without starting another server. The port is the OS's choice, because the server is asked for port 0.
+    // Starts the asset server the first time it is called and returns the port it is listening on. The page needs the address before
+    // it can render, so the page's query requests it. The main thread opens the server's socket itself, so it knows the port at once.
+    // A later call returns the port without starting another server. The port is the OS's choice, because the server requests
+    // port 0.
     //
-    // The server is a task and the event is its
-    // asset-server-ready event, which onTaskEvent records. A server that ended before it said anything, or that said nothing for
-    // as long as the timeout, is an error the page's query reports.)
-    //
-    pub fn startAssetServer(self: *MainState) !u16 {
-        var needs_task = false;
-        {
-            self.lock();
-            defer self.unlock();
-            if (!self.asset_server_requested) {
-                self.asset_server_requested = true;
-                needs_task = true;
-            }
+    pub fn startAssetServer(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !u16 {
+        if (self.asset_server) |server| {
+            return server.port;
         }
-        if (needs_task) {
-            try self.queueAssetServer(0);
-        }
-        const deadline = self.now() + self.asset_server_start_timeout_ms;
-        while (true) {
-            {
-                self.lock();
-                defer self.unlock();
-                if (self.asset_server_port != 0) {
-                    return self.asset_server_port;
-                }
-                if (self.asset_server_ended) {
-                    return utils.errors.throwError("REST API failed to start: {s}", .{self.asset_server_error orelse "the asset server ended before it said which port it was using"});
-                }
-            }
-            if (self.now() >= deadline) {
-                return utils.errors.throwError("REST API failed to start within timeout", .{});
-            }
-            try self.io.sleep(.fromMilliseconds(TIMER_TICK_MS), .awake);
-        }
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        const listener = node_utils.http_server.open(io, node_api.asset_server.HOST, 0) catch |err| {
+            return utils.errors.throwError("REST API failed to start: {s}", .{utils.errors.errorMessage(err)});
+        };
+        const session_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
+        const server = node_api.asset_server.AssetServer.start(allocator, io, listener, .{
+            .sessionId = session_id,
+            .nativeCallbacks = services.nativeCallbacks(),
+        }) catch |err| {
+            return utils.errors.throwError("REST API failed to start: {s}", .{utils.errors.errorMessage(err)});
+        };
+        self.asset_server = server;
+        utils.log.log.info(try std.fmt.allocPrint(arena, "REST API initialized on port {d}", .{server.port}));
+        return server.port;
     }
 
     //
@@ -679,37 +592,35 @@ pub const MainState = struct {
     // and asks the native app to quit. The rule does not apply to a build with no version, a test or a phone, which all log that the lock
     // was acquired.
     //
-    pub fn applySingleInstanceRule(self: *MainState) !void {
-        try self.enforceSingleInstance(single_instance.ruleApplies());
+    pub fn applySingleInstanceRule(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) !void {
+        try self.enforceSingleInstance(services, timers, io, allocator, single_instance.ruleApplies());
     }
 
     //
     // Does what applySingleInstanceRule does once it has decided whether the rule applies to this copy.
     //
-    pub fn enforceSingleInstance(self: *MainState, rule_applies: bool) !void {
+    pub fn enforceSingleInstance(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, rule_applies: bool) !void {
         const pid = storage.storage.processId();
         const packaged: []const u8 = if (single_instance.isUnpackaged()) "false" else "true";
         if (rule_applies) {
-            switch (try single_instance.acquire(self.allocator, self.io, std.mem.span(self.core.config.data_dir))) {
+            switch (try single_instance.acquire(allocator, io, services.dataDir())) {
                 .acquired => |instance| {
-                    self.lock();
-                    defer self.unlock();
                     self.single_instance = instance;
-                    self.single_instance_check_at = self.now() + SINGLE_INSTANCE_CHECK_MS;
+                    self.single_instance_timer = try timers.setInterval(io, .{
+                        .context = self,
+                        .function = singleInstanceDue,
+                    }, SINGLE_INSTANCE_CHECK_MS);
                 },
                 .denied => {
-                    var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+                    var arena_state = std.heap.ArenaAllocator.init(allocator);
                     defer arena_state.deinit();
                     utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock denied (pid={d}, packaged={s}); quitting", .{ pid, packaged }));
-                    const quit = self.core.config.quit orelse {
-                        return utils.errors.throwError("Another copy of the app is running and this platform gives no way to quit this one.", .{});
-                    };
-                    quit(self.core.config.user_data);
+                    services.quit(io, arena_state.allocator());
                     return;
                 },
             }
         }
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
         utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock acquired (pid={d}, packaged={s})", .{ pid, packaged }));
     }
@@ -718,88 +629,57 @@ pub const MainState = struct {
     // Looks for the signal a second copy of the app leaves when it is started and quits, and brings this copy's window to the front when it is
     // there. The native app does the bringing to the front, as the `focus-window` action.
     //
-    pub fn checkSecondInstance(self: *MainState) !void {
+    pub fn checkSecondInstance(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
         const instance = if (self.single_instance) |*held| held else {
             return;
         };
-        if (!try instance.takeSignal(self.io)) {
+        if (!try instance.takeSignal(io)) {
             return;
         }
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
         utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Second-instance signal received by pid={d}", .{storage.storage.processId()}));
-        const menu_action = self.core.config.menu_action orelse {
+        services.menuAction(io, arena_state.allocator(), "focus-window");
+    }
+
+    //
+    // Takes one hold on the computer staying awake for a background pass, or lets one go, from the JSON text of a holdAwake request a
+    // pass task sent as an event (see background_work.callOnDesktop). The hold belongs to the main thread, which keeps it across
+    // passes. Windows and MacOS only: no other platform's tasks send the event.
+    //
+    pub fn holdAwake(self: *MainState, arena: std.mem.Allocator, request_json: []const u8) !void {
+        if (builtin.os.tag == .windows) {
+            _ = try self.windows_native_calls.call(arena, "holdAwake", request_json);
             return;
-        };
-        menu_action(self.core.config.user_data, "focus-window");
+        }
+        if (builtin.os.tag == .macos) {
+            _ = try self.macos_native_calls.call(arena, "holdAwake", request_json);
+            return;
+        }
+        return utils.errors.throwError("The computer is held awake on Windows and MacOS only, and this is {s}.", .{@tagName(builtin.os.tag)});
     }
 
     //
-    // Looks at the deadlines and does what a timer's callback did for each one that has passed.
+    // Queues the task that makes automatic import match the config, unless one is queued or running already. The task's input gives
+    // whether it is the call at startup or a tick of the check, which are worded differently when it fails ('Error starting automatic
+    // import' and 'Error restarting automatic import'), and what automatic import is running now.
     //
-    fn runDueTimers(self: *MainState) void {
-        var run_debounced = false;
-        var run_periodic = false;
-        var run_auto_import_check = false;
-        var run_single_instance_check = false;
-        {
-            self.lock();
-            defer self.unlock();
-            const current = self.now();
-            if (self.single_instance_check_at) |due| {
-                if (current >= due) {
-                    self.single_instance_check_at = current + SINGLE_INSTANCE_CHECK_MS;
-                    run_single_instance_check = true;
-                }
-            }
-            if (self.auto_import_check_at) |due| {
-                if (current >= due) {
-                    self.auto_import_check_at = current + self.auto_import_check_ms;
-                    run_auto_import_check = true;
-                }
-            }
-            if (self.sync_debounce_at) |due| {
-                if (current >= due) {
-                    self.sync_debounce_at = null;
-                    run_debounced = true;
-                }
-            }
-            if (self.sync_periodic_at) |due| {
-                if (current >= due) {
-                    self.sync_periodic_at = current + self.sync_periodic_ms;
-                    run_periodic = true;
-                }
-            }
+    pub fn enqueueEnsureAutoImportTask(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator, restarting: bool) !void {
+        if (self.auto_import_starting) {
+            return;
         }
-        if (run_debounced or run_periodic) {
-            self.enqueueSyncTask() catch |err| {
-                utils.log.log.exception("Error queuing a sync task", err);
-            };
-        }
-        if (run_auto_import_check) {
-            self.enqueueEnsureAutoImportTask(true) catch |err| {
-                utils.log.log.exception("Error queuing the check that automatic import is running", err);
-            };
-        }
-        if (run_single_instance_check) {
-            self.checkSecondInstance() catch |err| {
-                utils.log.log.exception("Error looking for a second instance of the app", err);
-            };
-        }
-        self.queueDueBackgroundPasses();
-    }
-
-    //
-    // Queues the task that makes automatic import match the config. The task's input says whether it
-    // is the call at startup or a tick of the check, which are worded differently when it fails ('Error starting automatic import'
-    // and 'Error restarting automatic import').
-    //
-    pub fn enqueueEnsureAutoImportTask(self: *MainState, restarting: bool) !void {
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
-        const task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-        const data_json: []const u8 = if (restarting) ENSURE_AUTO_IMPORT_RESTARTING_INPUT else ENSURE_AUTO_IMPORT_STARTING_INPUT;
-        try self.core.runner.addTask(task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, data_json, .background, null);
+        const arena = arena_state.allocator();
+        const running = self.auto_import_running;
+        const data_json = try json.stringify(arena, IEnsureAutoImportData{
+            .restarting = restarting,
+            .runningDatabasePath = if (running) self.auto_import_database_path else null,
+            .runningSettingsJson = if (running) self.auto_import_settings_json else null,
+        });
+        const task_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
+        try services.addTask(io, arena, task_id, "ensure-auto-import", ENSURE_AUTO_IMPORT_TASK_SOURCE, data_json, .background);
+        self.auto_import_starting = true;
     }
 
     //
@@ -808,22 +688,22 @@ pub const MainState = struct {
     // and reads the theme, so it calls this when it has built the query. Only the
     // first call does anything, because these steps run once and a window made again later does not repeat them.
     //
-    pub fn mainWindowCreated(self: *MainState) !void {
-        {
-            self.lock();
-            defer self.unlock();
-            if (self.auto_import_check_at != null) {
-                return;
-            }
-            self.auto_import_check_at = self.now() + self.auto_import_check_ms;
+    pub fn mainWindowCreated(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) !void {
+        if (self.main_window_created) {
+            return;
         }
+        self.main_window_created = true;
+        self.auto_import_check_timer = try timers.setInterval(io, .{
+            .context = self,
+            .function = autoImportCheckDue,
+        }, self.auto_import_check_ms);
         utils.log.log.event("Main window created");
         // Automatic import picks up where it left off, so a machine that was backing photos up before it was shut down carries on
         // without the user having to open anything.
-        try self.enqueueEnsureAutoImportTask(false);
+        try self.enqueueEnsureAutoImportTask(services, io, allocator, false);
         // A phone has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
         if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
-            self.startMcpServer() catch |err| {
+            self.startMcpServer(services, io, allocator) catch |err| {
                 utils.log.log.exception("MCP server failed to start, continuing without it", err);
             };
         }
@@ -834,143 +714,199 @@ pub const MainState = struct {
     // a phone is updated by its store) and the check of the news feed, which announce what they find to the page as events. Only the
     // first call does anything, because the checks run once however many times the page loads.
     //
-    pub fn pageLoaded(self: *MainState) !void {
-        {
-            self.lock();
-            defer self.unlock();
-            if (self.startup_checks_queued) {
-                return;
-            }
-            self.startup_checks_queued = true;
+    pub fn pageLoaded(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
+        if (self.startup_checks_queued) {
+            return;
         }
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
+        self.startup_checks_queued = true;
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
+        const arena = arena_state.allocator();
         if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
-            const update_task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-            try self.core.runner.addTask(update_task_id, "check-for-update", CHECK_FOR_UPDATE_TASK_SOURCE, "null", .background, null);
+            const update_task_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
+            try services.addTask(io, arena, update_task_id, "check-for-update", CHECK_FOR_UPDATE_TASK_SOURCE, "null", .background);
         }
-        const news_task_id = try self.uuid_generator.generate(arena_state.allocator(), self.io);
-        try self.core.runner.addTask(news_task_id, "check-for-news", CHECK_FOR_NEWS_TASK_SOURCE, "null", .background, null);
+        const news_task_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
+        try services.addTask(io, arena, news_task_id, "check-for-news", CHECK_FOR_NEWS_TASK_SOURCE, "null", .background);
     }
 
     //
-    // Starts the MCP server, unless it is already running. It is not a task, so it holds no worker (see RunningMcpServer).
+    // Starts the MCP server, unless it is already running. It is a server of its own, not a task, so it holds no worker.
     //
-    pub fn startMcpServer(self: *MainState) !void {
-        {
-            self.lock();
-            defer self.unlock();
-            if (self.mcp_server != null) {
-                return;
-            }
+    pub fn startMcpServer(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
+        if (self.mcp_server != null) {
+            return;
         }
-        const running = try mcp_server.startMcpServer(self, self.io);
-        self.lock();
-        defer self.unlock();
-        self.mcp_server = running;
+        self.mcp_server = try mcp_server.startMcpServer(allocator, io, services.nativeCallbacks());
     }
 
     //
     // Stops the MCP server if it is running.
     //
-    pub fn stopMcpServer(self: *MainState) void {
-        var running: ?*mcp_server.RunningMcpServer = null;
-        {
-            self.lock();
-            defer self.unlock();
-            running = self.mcp_server;
+    pub fn stopMcpServer(self: *MainState, io: std.Io, allocator: std.mem.Allocator) void {
+        if (self.mcp_server) |server| {
             self.mcp_server = null;
+            server.stop(io, allocator);
         }
-        if (running) |server| {
-            server.stop(self);
-        }
-    }
-
-    //
-    // Queues the task that is the asset server, asking it to bind the port. The port is 0 on the first start, so that the operating system chooses a free one, and the
-    // port already chosen on a restart, so that the address the page was loaded with stays valid.
-    //
-    pub fn queueAssetServer(self: *MainState, port: u16) !void {
-        var arena_state = std.heap.ArenaAllocator.init(self.allocator);
-        defer arena_state.deinit();
-        const arena = arena_state.allocator();
-        const data_json = try json.stringify(arena, .{
-            .port = port,
-        });
-        const task_id = try self.uuid_generator.generate(arena, self.io);
-        try self.core.runner.addTask(task_id, "asset-server", ASSET_SERVER_TASK_SOURCE, data_json, .background, null);
     }
 };
 
 //
-// The timer thread.
+// Clears a timer that is set, and forgets it.
 //
-fn timerMain(state: *MainState) void {
-    while (!state.stopping.load(.acquire)) {
-        state.io.sleep(.fromMilliseconds(TIMER_TICK_MS), .awake) catch {
-            return;
-        };
-        state.runDueTimers();
+fn clearTimer(timers: Timers, timer: *?TimerId) void {
+    if (timer.*) |id| {
+        timers.clearTimeout(id);
+        timer.* = null;
     }
 }
 
 //
-// The main process's state, from the core a handler runs in. Panics when there is none, because onCreate makes it before any
-// handler or task can run and onDestroy frees it only once none can.
+// Replaces a string the state owns with a copy of a new one, or with null, freeing the old one, with the state's allocator.
 //
-pub fn fromCore(core: *Core) *MainState {
-    _ = core;
+pub fn setOwned(allocator: std.mem.Allocator, field: *?[]u8, value: ?[]const u8) !void {
+    const copy: ?[]u8 = if (value) |text| try allocator.dupe(u8, text) else null;
+    if (field.*) |old| {
+        allocator.free(old);
+    }
+    field.* = copy;
+}
+
+//
+// Frees a string the state owns, with the state's allocator, and sets it to null.
+//
+pub fn freeOwned(allocator: std.mem.Allocator, field: *?[]u8) void {
+    if (field.*) |old| {
+        allocator.free(old);
+    }
+    field.* = null;
+}
+
+//
+// Frees the environment the state read from the process, when it read one, and takes it from the thread.
+//
+fn freeEnvironment(allocator: std.mem.Allocator, map: ?*std.process.Environ.Map) void {
+    const given = map orelse {
+        return;
+    };
+    node_utils.process_env.setEnvironMap(null);
+    given.deinit();
+    allocator.destroy(given);
+}
+
+//
+// Which pass a background pass timer is for.
+//
+pub const PassTimer = struct {
+    // The state.
+    state: *MainState,
+    // The pass.
+    pass: background_work.Pass,
+};
+
+//
+// The timer of a background pass. A timer on the main thread is given its handler services.
+//
+fn backgroundPassDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, timers: Timers, services: ?*const anyopaque) void {
+    const target: *PassTimer = @ptrCast(@alignCast(context.?));
+    target.state.queueDueBackgroundPass(ziggy.core.handlerServicesOf(services), timers, io, stateAllocator(), target.pass);
+}
+
+//
+// The debounce timer: queues the sync the last edit called for.
+//
+fn syncDebounceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
+    const state: *MainState = @ptrCast(@alignCast(context.?));
+    state.sync_debounce_timer = null;
+    state.enqueueSyncTask(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
+        utils.log.log.exception("Error queuing a sync task", err);
+    };
+}
+
+//
+// The periodic sync timer.
+//
+fn syncTimerDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
+    const state: *MainState = @ptrCast(@alignCast(context.?));
+    state.enqueueSyncTask(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
+        utils.log.log.exception("Error queuing a sync task", err);
+    };
+}
+
+//
+// The timer of the check that automatic import is running.
+//
+fn autoImportCheckDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
+    const state: *MainState = @ptrCast(@alignCast(context.?));
+    state.enqueueEnsureAutoImportTask(ziggy.core.handlerServicesOf(services), io, stateAllocator(), true) catch |err| {
+        utils.log.log.exception("Error queuing the check that automatic import is running", err);
+    };
+}
+
+//
+// The timer that looks for a second copy of the app.
+//
+fn singleInstanceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
+    const state: *MainState = @ptrCast(@alignCast(context.?));
+    state.checkSecondInstance(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
+        utils.log.log.exception("Error looking for a second instance of the app", err);
+    };
+}
+//
+// The main process's state, for a handler on the main thread. Panics when there is none, because onCreate makes it before any
+// handler can run and onDestroy frees it only once none can.
+//
+pub fn current() *MainState {
     return main_state orelse {
         std.debug.panic("The main process's state does not exist: it is made by onCreate when the core is created and freed by onDestroy when the core is destroyed", .{});
     };
 }
 
 //
-// Makes the main process's state when Ziggy creates the core, before any message or task can reach the app. Fails when a state
-// already exists, because the state is one per process and so only one core can run at a time.
+// Registers, on a task's thread before the task runs, the builders of the media sources automatic import reads: a folder's everywhere,
+// and on a phone, whose native app is the one that reaches the platform (the task's context can reach it), the photo library's too.
 //
-pub fn onCreate(core: *Core) anyerror!void {
-    if (main_state != null) {
-        return error.MainStateAlreadyExists;
+pub fn registerMediaSources(context: ziggy.task_queue.types.ITaskContext) anyerror!void {
+    try node_api.task_handlers.registerMediaSourceBuilders();
+    if (context.nativeCaller != null) {
+        try mobile_worker.device_media_source.registerDeviceMediaSourceBuilder();
     }
-    const state = try MainState.create(core);
+}
+
+//
+// Makes the main process's state when Ziggy creates the core, on the core's main thread, before any message or task can reach the app.
+// The file logger is the main thread's log from then on. The state is made with the state's allocator, not the arena Ziggy gives.
+//
+pub fn onCreate(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!void {
+    _ = allocator;
+    const state = try MainState.create(services, timers, io, stateAllocator());
     main_state = state;
-    errdefer {
-        main_state = null;
-        state.destroy();
-    }
-    state.timer_thread = try std.Thread.spawn(.{}, timerMain, .{state});
 }
 
 //
-// The main process's state, from the context of a task. The task runner is a field of the core, so the core is the struct around it.
+// Stops the main process's state before the workers stop, while tasks can still be queued, and destroys it once the workers have
+// stopped and no task can run. Ziggy destroys only a core it created, so onCreate has made the state. Both run on the main thread. The
+// state's allocator goes with the state, ready for a core made again on this thread.
 //
-pub fn fromContext(context: *TaskContext) *MainState {
-    const core: *Core = @fieldParentPtr("runner", context.runner);
-    return fromCore(core);
-}
-
-//
-// Stops the main process's state before the task runner stops, while tasks can still be queued, and destroys it once the runner has
-// stopped and no task can run. Ziggy destroys only a core it created, so onCreate has made the state.
-//
-pub fn onDestroy(core: *Core, phase: ziggy.core.DestroyPhase) void {
-    const state = fromCore(core);
+pub fn onDestroy(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, phase: ziggy.core.DestroyPhase) void {
+    _ = allocator;
+    const state = current();
     switch (phase) {
-        .before_tasks_stop => state.stop(),
+        .before_tasks_stop => state.stop(services, timers, io, stateAllocator()),
         .after_tasks_stopped => {
             main_state = null;
-            state.destroy();
+            state.destroy(io, stateAllocator());
+            state_allocator.deinit();
+            state_allocator = .init;
         },
     }
 }
 
 //
-// Makes the file logger and installs it as the log first, then logs that the app is starting. The
+// Makes the file logger and installs it as the log of the calling thread, then logs that the app is starting. The
 // logs are in the `logs` folder of PHOTOSPHERE_LOG_DIR, or of `photosphere` in the operating system's temporary folder when it is not
 // set.
 //
-// The tasks run in this process and write to the log themselves, so the file logger is the log.
 // A build that has been given a version is the packaged one.
 //
 fn startFileLogger(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) !*file_logger.FileLogger {
@@ -1000,13 +936,4 @@ fn startFileLogger(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_u
     defer allocator.free(started);
     utils.log.log.event(started);
     return logger;
-}
-
-//
-// Puts back the log that was installed before the file logger and closes the file logger, which writes the end of both files and waits
-// for everything queued to be written.
-//
-fn stopFileLogger(logger: *file_logger.FileLogger, previous_log: utils.log.ILog) void {
-    utils.log.setLog(previous_log);
-    logger.deinit();
 }

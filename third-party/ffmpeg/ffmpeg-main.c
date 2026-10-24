@@ -4,21 +4,45 @@
 #include "fftools/cmdutils.h"
 #define main ffmpeg_main
 #include "fftools/ffmpeg.c"
+#undef main
 
-// Asks a running ffmpeg_main to stop, the way one SIGTERM does (sigterm_handler in fftools/ffmpeg.c): the transcode loop and
-// decode_interrupt_cb see the signal count and end the run, which then returns a non-zero exit code. The program's own stop
-// flags are static to fftools/ffmpeg.c, so they are set here, in the same translation unit, rather than from Zig.
-void ffmpeg_request_stop(void)
+// Runs ffmpeg_main as a run of its own on the calling thread, with state of its own (fftools/fftools_state.h, which
+// fftools-per-run-state.patch adds), so that runs on several threads at once share nothing. `log_context` is handed back to the
+// program's log callback through the run. Puts ffmpeg's exit code in `exit_code` and returns 0, or returns a negative AVERROR when the
+// run could not be started.
+int ffmpeg_run(int argc, char **argv, void *log_context, int *exit_code)
 {
-    received_sigterm = SIGTERM;
-    received_nb_signals++;
+    int ret = fftools_run_begin(&ffmpeg_defaults, sizeof(ffmpeg_defaults), log_context);
+    if (ret < 0)
+        return ret;
+    ffmpeg_state_init(fftools_run());
+    *exit_code = ffmpeg_main(argc, argv);
+    fftools_run_end();
+    return ret;
 }
 
-// Clears what ffmpeg_request_stop set, and the mark that a run reached its transcode loop, so the next run starts as the first
-// run of a fresh program does. Called after every run.
-void ffmpeg_reset_stop(void)
+// The value the calling thread's run of ffmpeg or ffprobe was given for the log callback, or NULL on a thread that runs neither (a
+// thread of the libraries' own).
+void *fftools_current_log_context(void)
 {
-    received_sigterm = 0;
-    received_nb_signals = 0;
-    atomic_store(&transcode_init_done, 0);
+    FFToolsRun *run = fftools_current_run();
+    return run ? run->log_context : NULL;
+}
+
+// The log level the calling thread's run set (-loglevel), which starts at libavutil's own default. Called only on a thread that
+// runs ffmpeg or ffprobe.
+int fftools_current_log_level(void)
+{
+    return fftools_run()->log_level;
+}
+
+// Hands a message of FFmpeg's log to the log callback one of the run's own options set (help, -report, -show_log), and says
+// whether there was one.
+int fftools_forward_log(void *avcl, int level, const char *fmt, va_list vl)
+{
+    FFToolsRun *run = fftools_current_run();
+    if (!run || !run->log_callback)
+        return 0;
+    run->log_callback(avcl, level, fmt, vl);
+    return 1;
 }

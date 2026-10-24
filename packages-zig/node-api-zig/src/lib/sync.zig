@@ -7,7 +7,7 @@ const bdb = @import("bdb-zig");
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
 const tree = @import("tree.zig");
-const hash_module = @import("hash.zig");
+const hash = @import("hash.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
 const log = &utils.log.log;
@@ -40,7 +40,7 @@ const loadDatabaseState = api.database_state.loadDatabaseState;
 const acquireWriteLock = api.write_lock.acquireWriteLock;
 const releaseWriteLock = api.write_lock.releaseWriteLock;
 const LARGE_FILE_TIMEOUT = api.constants.LARGE_FILE_TIMEOUT;
-const computeAssetHash = hash_module.computeAssetHash;
+const computeAssetHash = hash.computeAssetHash;
 
 //
 // How long one step of a sync may take before the pass gives up on it.
@@ -80,13 +80,13 @@ pub const SyncChangeCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, change: ISyncChange) anyerror!void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, change: ISyncChange) anyerror!void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: SyncChangeCallback, change: ISyncChange) anyerror!void {
-        return self.function(self.context, change);
+    pub fn call(self: SyncChangeCallback, io: std.Io, change: ISyncChange) anyerror!void {
+        return self.function(self.context, io, change);
     }
 };
 
@@ -1385,7 +1385,7 @@ const SyncDatabaseState = struct {
             try targetCollection.setInternalRecord(io, merged);
             self.mergedCount += 1;
             if (self.onLocalChange != null and isMetadata) {
-                try self.onLocalChange.?.call(.{ .type = .updated, .asset = try toExternal(allocator, merged) });
+                try self.onLocalChange.?.call(io, .{ .type = .updated, .asset = try toExternal(allocator, merged) });
             }
         }
         else if (diff.sourceRecord) |sourceRecord| {
@@ -1394,12 +1394,12 @@ const SyncDatabaseState = struct {
                 try targetCollection.setInternalRecord(io, sourceRecord);
                 self.mergedCount += 1;
                 if (self.onLocalChange != null and isMetadata) {
-                    try self.onLocalChange.?.call(.{ .type = .added, .asset = try toExternal(allocator, sourceRecord) });
+                    try self.onLocalChange.?.call(io, .{ .type = .added, .asset = try toExternal(allocator, sourceRecord) });
                 }
             }
             else {
                 if (self.onLocalChange != null and isMetadata) {
-                    try self.onLocalChange.?.call(.{ .type = .deleted, .assetId = sourceRecord._id });
+                    try self.onLocalChange.?.call(io, .{ .type = .deleted, .assetId = sourceRecord._id });
                 }
             }
         }

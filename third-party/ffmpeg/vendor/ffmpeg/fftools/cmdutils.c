@@ -53,18 +53,109 @@
 #include "compat/w32dlfcn.h"
 #endif
 
-AVDictionary *sws_dict;
-AVDictionary *swr_opts;
-AVDictionary *format_opts, *codec_opts;
+/* Patched (fftools-per-run-state.patch): the state of the run on each thread. A run starts on the thread that calls
+ * fftools_run_begin, and the threads the run starts (see task_wrapper in ffmpeg_sched.c) are given its run, so every thread of
+ * one run shares the run's state and no thread of another run sees it. */
+static _Thread_local FFToolsRun *current_run;
 
-int hide_banner = 0;
+const FFToolsCommon fftools_common_defaults = {
+    .report_file_level = AV_LOG_DEBUG,
+    .report_print_prefix = 1,
+    .resman_mutex = AV_MUTEX_INITIALIZER,
+};
+
+FFToolsRun *fftools_current_run(void)
+{
+    return current_run;
+}
+
+void fftools_set_current_run(FFToolsRun *run)
+{
+    current_run = run;
+}
+
+FFToolsRun *fftools_run(void)
+{
+    if (!current_run) {
+        fprintf(stderr, "The state of ffmpeg or ffprobe was used on a thread that runs neither.\n");
+        abort();
+    }
+    return current_run;
+}
+
+int fftools_run_begin(const void *program_defaults, size_t program_size, void *log_context)
+{
+    FFToolsRun *run = av_mallocz(sizeof(*run));
+    if (!run)
+        return AVERROR(ENOMEM);
+    run->program = av_malloc(program_size);
+    if (!run->program) {
+        av_free(run);
+        return AVERROR(ENOMEM);
+    }
+    memcpy(&run->common, &fftools_common_defaults, sizeof(run->common));
+    memcpy(run->program, program_defaults, program_size);
+    run->program_defaults = program_defaults;
+    run->program_size = program_size;
+    run->log_level = AV_LOG_INFO;
+    run->log_context = log_context;
+    current_run = run;
+    return 0;
+}
+
+void fftools_run_end(void)
+{
+    FFToolsRun *run = fftools_run();
+    av_dict_free(&run->common.resman_resource_dic);
+    av_free(run->program);
+    av_free(run);
+    current_run = NULL;
+}
+
+void *fftools_option_target(void *dst_ptr)
+{
+    FFToolsRun *run = fftools_run();
+    uintptr_t dst = (uintptr_t)dst_ptr;
+    uintptr_t common = (uintptr_t)&fftools_common_defaults;
+    uintptr_t program = (uintptr_t)run->program_defaults;
+    if (dst >= common && dst < common + sizeof(fftools_common_defaults))
+        return (uint8_t *)&run->common + (dst - common);
+    if (dst >= program && dst < program + run->program_size)
+        return (uint8_t *)run->program + (dst - program);
+    return dst_ptr;
+}
+
+void fftools_log_set_level(int level)
+{
+    fftools_run()->log_level = level;
+}
+
+int fftools_log_get_level(void)
+{
+    return fftools_run()->log_level;
+}
+
+void fftools_log_set_flags(int flags)
+{
+    fftools_run()->log_flags = flags;
+}
+
+int fftools_log_get_flags(void)
+{
+    return fftools_run()->log_flags;
+}
+
+void fftools_log_set_callback(FFToolsLogCallback callback)
+{
+    fftools_run()->log_callback = callback;
+}
 
 void uninit_opts(void)
 {
-    av_dict_free(&swr_opts);
-    av_dict_free(&sws_dict);
-    av_dict_free(&format_opts);
-    av_dict_free(&codec_opts);
+    av_dict_free(&FFTOOLS_COMMON(swr_opts));
+    av_dict_free(&FFTOOLS_COMMON(sws_dict));
+    av_dict_free(&FFTOOLS_COMMON(format_opts));
+    av_dict_free(&FFTOOLS_COMMON(codec_opts));
 }
 
 void log_callback_help(void *ptr, int level, const char *fmt, va_list vl)
@@ -242,8 +333,10 @@ static int write_option(void *optctx, const OptionDef *po, const char *opt,
 {
     /* new-style options contain an offset into optctx, old-style address of
      * a global var*/
+    /* Patched: an old-style address of a global var is the address of its field in the defaults, which is turned into the
+     * same field of the run's state. */
     void *dst = po->flags & OPT_FLAG_OFFSET ?
-                (uint8_t *)optctx + po->u.off : po->u.dst_ptr;
+                (uint8_t *)optctx + po->u.off : fftools_option_target(po->u.dst_ptr);
     char *arg_allocated = NULL;
 
     enum OptionType so_type = po->type;
@@ -583,7 +676,7 @@ void parse_loglevel(int argc, char **argv, const OptionDef *options)
     freeenv_utf8(env);
     idx = locate_option(argc, argv, options, "hide_banner");
     if (idx)
-        hide_banner = 1;
+        FFTOOLS_COMMON(hide_banner) = 1;
 }
 
 static const AVOption *opt_find(void *obj, const char *name, const char *unit,
@@ -611,7 +704,7 @@ int opt_default(void *optctx, const char *opt, const char *arg)
 #endif
 
     if (!strcmp(opt, "debug") || !strcmp(opt, "fdebug"))
-        av_log_set_level(AV_LOG_DEBUG);
+        fftools_log_set_level(AV_LOG_DEBUG);
 
     if (!(p = strchr(opt, ':')))
         p = opt + strlen(opt);
@@ -621,12 +714,12 @@ int opt_default(void *optctx, const char *opt, const char *arg)
                          AV_OPT_SEARCH_CHILDREN | AV_OPT_SEARCH_FAKE_OBJ)) ||
         ((opt[0] == 'v' || opt[0] == 'a' || opt[0] == 's') &&
          (o = opt_find(&cc, opt + 1, NULL, 0, AV_OPT_SEARCH_FAKE_OBJ)))) {
-        av_dict_set(&codec_opts, opt, arg, FLAGS);
+        av_dict_set(&FFTOOLS_COMMON(codec_opts), opt, arg, FLAGS);
         consumed = 1;
     }
     if ((o = opt_find(&fc, opt, NULL, 0,
                          AV_OPT_SEARCH_CHILDREN | AV_OPT_SEARCH_FAKE_OBJ))) {
-        av_dict_set(&format_opts, opt, arg, FLAGS);
+        av_dict_set(&FFTOOLS_COMMON(format_opts), opt, arg, FLAGS);
         if (consumed)
             av_log(NULL, AV_LOG_VERBOSE, "Routing option %s to both codec and muxer layer\n", opt);
         consumed = 1;
@@ -640,7 +733,7 @@ int opt_default(void *optctx, const char *opt, const char *arg)
             av_log(NULL, AV_LOG_ERROR, "Directly using swscale dimensions/format options is not supported, please use the -s or -pix_fmt options\n");
             return AVERROR(EINVAL);
         }
-        av_dict_set(&sws_dict, opt, arg, FLAGS);
+        av_dict_set(&FFTOOLS_COMMON(sws_dict), opt, arg, FLAGS);
 
         consumed = 1;
     }
@@ -653,7 +746,7 @@ int opt_default(void *optctx, const char *opt, const char *arg)
 #if CONFIG_SWRESAMPLE
     if (!consumed && (o=opt_find(&swr_class, opt, NULL, 0,
                                     AV_OPT_SEARCH_CHILDREN | AV_OPT_SEARCH_FAKE_OBJ))) {
-        av_dict_set(&swr_opts, opt, arg, FLAGS);
+        av_dict_set(&FFTOOLS_COMMON(swr_opts), opt, arg, FLAGS);
         consumed = 1;
     }
 #endif
@@ -704,15 +797,15 @@ static int finish_group(OptionParseContext *octx, int group_idx,
     *g             = octx->cur_group;
     g->arg         = arg;
     g->group_def   = l->group_def;
-    g->sws_dict    = sws_dict;
-    g->swr_opts    = swr_opts;
-    g->codec_opts  = codec_opts;
-    g->format_opts = format_opts;
+    g->sws_dict    = FFTOOLS_COMMON(sws_dict);
+    g->swr_opts    = FFTOOLS_COMMON(swr_opts);
+    g->codec_opts  = FFTOOLS_COMMON(codec_opts);
+    g->format_opts = FFTOOLS_COMMON(format_opts);
 
-    codec_opts  = NULL;
-    format_opts = NULL;
-    sws_dict    = NULL;
-    swr_opts    = NULL;
+    FFTOOLS_COMMON(codec_opts)  = NULL;
+    FFTOOLS_COMMON(format_opts) = NULL;
+    FFTOOLS_COMMON(sws_dict)    = NULL;
+    FFTOOLS_COMMON(swr_opts)    = NULL;
 
     memset(&octx->cur_group, 0, sizeof(octx->cur_group));
 
@@ -901,7 +994,7 @@ do {                                                                           \
         return AVERROR_OPTION_NOT_FOUND;
     }
 
-    if (octx->cur_group.nb_opts || codec_opts || format_opts)
+    if (octx->cur_group.nb_opts || FFTOOLS_COMMON(codec_opts) || FFTOOLS_COMMON(format_opts))
         av_log(NULL, AV_LOG_WARNING, "Trailing option(s) found in the "
                "command: may be ignored.\n");
 
