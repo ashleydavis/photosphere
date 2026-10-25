@@ -993,7 +993,9 @@ fn addPhotosphere(
     // that owns the module, so the third-party libraries the packages link reach the core's static library, which does not hold them,
     // and not the executable. Without this the Linux native app failed to link with every symbol of the AWS SDK for C, aws-lc,
     // ImageMagick and FFmpeg undefined. Each native app's executable, which Ziggy makes and installs under the step, links them itself.
-    for ([_][]const u8{ "photosphere-linux", "photosphere-windows" }) |step_name| {
+    // The dev host's executable is the same: without it `bun run dev` failed to link photosphere-dev-host with every ImageMagick symbol
+    // undefined.
+    for ([_][]const u8{ "photosphere-linux", "photosphere-windows", "photosphere-dev-host" }) |step_name| {
         const native_app_step = &b.top_level_steps.get(step_name).?.step;
         for (native_app_step.dependencies.items) |dependency| {
             const install = dependency.cast(std.Build.Step.InstallArtifact) orelse continue;

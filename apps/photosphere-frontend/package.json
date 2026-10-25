@@ -6,6 +6,7 @@
   "scripts": {
     "compile": "tsc --noEmit",
     "c": "bun run compile",
+    "dev:ui": "vite",
     "bundle": "vite build",
     "test": "jest --passWithNoTests",
     "t": "bun run test"
@@ -13,7 +14,7 @@
   "dependencies": {
     "task-queue": "workspace:*",
     "user-interface": "workspace:*",
-    "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.13",
+    "ziggy": "git+https://github.com/ashleydavis/ziggy.git#v0.0.15",
     "eruda": "^3.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
