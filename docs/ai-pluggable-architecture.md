@@ -357,7 +357,7 @@ The CLI and Electron share the same cache directory. Multiple Photosphere instal
 5. On mismatch or network error, delete the temp file, exponential-backoff retry (max 3 attempts), then surface the error to the caller.
 
 **Progress reporting**:
-The download is exposed as a Photosphere background task using the existing background-tasks system (see `docs/background-tasks.md`). The Electron UI shows it as "Downloading model: SigLIP 2 (200MB of 400MB)" with cancel.
+The download is exposed as a Photosphere background task using the existing background-tasks system (see `docs/tasks.md`). The Electron UI shows it as "Downloading model: SigLIP 2 (200MB of 400MB)" with cancel.
 
 **First-launch behaviour**:
 Plugin `init()` does *not* download resources. Resources are downloaded lazily on first capability use, so launching Photosphere does not require a network. The first time a feature calls `getCapability("image-embedding")` and invokes a method that needs the model, the resource manager downloads it.
@@ -373,7 +373,7 @@ Users on air-gapped machines can download the GitHub release assets on a connect
 - `ResourceUnavailableError` typed error class — *invented design proposal*.
 - "Exponential-backoff retry (max 3 attempts)" — *invented design proposal*, not a standard or referenced policy.
 - "Atomic rename" pattern for crash-safe writes — [VERIFIED] as standard POSIX behaviour (`rename(2)` is atomic on the same filesystem); not a specific URL needed.
-- Existing background-tasks system reference (`docs/background-tasks.md`) — [VERIFIED]: file is referenced in [CLAUDE.md](../CLAUDE.md) and exists at [docs/background-tasks.md](background-tasks.md).
+- Existing background-tasks system reference (`docs/tasks.md`) — [VERIFIED]: file is referenced in [CLAUDE.md](../CLAUDE.md) and exists at [docs/tasks.md](tasks.md).
 - "First the first time a feature calls `getCapability(...)`" lazy-download behaviour — *invented design proposal*.
 
 ---

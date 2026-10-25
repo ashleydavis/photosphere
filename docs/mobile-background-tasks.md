@@ -125,5 +125,5 @@ Nothing checks it automatically, which is why it is written down. The places tha
 
 ## See also
 
-- [Background tasks](background-tasks.md) - how to add a new task type and wire it up on every platform.
+- [Tasks](tasks.md) - how to add a new task type and wire it up on every platform.
 - [Automatic photo backup](automatic-photo-backup.md) - the feature whose chain sets the current pool size.

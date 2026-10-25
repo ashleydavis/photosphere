@@ -271,4 +271,4 @@ The background tests are Android only. Each of `50-background-sync`, `57-prefetc
 - [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md) - what all of this actually costs on a Pixel 6 against a database of 8,231 photos, and what does not work at that size.
 - [Automatic photo backup](automatic-photo-backup.md) - what puts the photos in the database in the first place, and the loop this one is modelled on.
 - [Mobile background tasks](mobile-background-tasks.md) - the engine pool both background loops run on.
-- [Background tasks](background-tasks.md) - adding a new task type and wiring it up on every platform.
+- [Tasks](tasks.md) - adding a new task type and wiring it up on every platform.

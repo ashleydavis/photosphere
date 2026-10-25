@@ -24,7 +24,7 @@ Opening the app on a database of eight thousand photos shows an empty screen, th
 
 8. **Speed up the streaming itself.** With the measurements from step 1 in hand, look at what the load actually spends its time on: the page size the sort index returns, the per-record fields sent (the handler already excludes EXIF for a documented reason), the cost of the structured clone per batch, and how many batches the interface re-renders for. Change one thing at a time and re-measure against step 1's numbers, recording each in the performance doc. Do not change several at once: a combined change that helps overall can hide one that made things worse.
 
-9. **Update the documentation to match the code**, including the final measurements, which is the whole point of having taken the first set. The documents affected are `docs/background-tasks.md` (the invisible job) and a new section under `docs/performance/` describing what the gallery does on open.
+9. **Update the documentation to match the code**, including the final measurements, which is the whole point of having taken the first set. The documents affected are `docs/tasks.md` (the invisible job) and a new section under `docs/performance/` describing what the gallery does on open.
 
 ## Unit Tests
 

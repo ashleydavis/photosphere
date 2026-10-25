@@ -6,7 +6,7 @@ Tasks are queued through one interface, `IQueueBackend`, but six different imple
 
 This plan produces one document, `docs/task-queue-architecture.md`, that inventories every backend, states for each how tasks are scheduled, how workers are hosted, and exactly what cancellation does, and shows the differences in Mermaid diagrams. The work is deliberately split into read-and-record steps followed by write-up steps, so the document describes what the code actually does rather than what it is assumed to do. Where the inventory turns up a genuine inconsistency, the document records it in a "Known divergences" section rather than fixing it: fixes are separate work with their own tests.
 
-`docs/background-tasks.md` already covers how to add a task type and how the mobile host bridge works. The new document must not repeat that; it covers scheduling, worker hosting and cancellation across platforms, and the two link to each other.
+`docs/tasks.md` already covers how to add a task type and how the mobile host bridge works. The new document must not repeat that; it covers scheduling, worker hosting and cancellation across platforms, and the two link to each other.
 
 ## Issues
 
@@ -67,7 +67,7 @@ From the notes, assemble a matrix with one row per backend (Bun CLI, Electron ma
 
 Create `docs/task-queue-architecture.md` with this structure and no content yet beyond headings:
 
-- Overview, and what this document does not cover (pointing at `docs/background-tasks.md`)
+- Overview, and what this document does not cover (pointing at `docs/tasks.md`)
 - The shared model: `IQueueBackend`, `TaskQueue`, sources, task lifecycle
 - Backend by backend: one section each for the six backends
 - Cancellation across platforms
@@ -97,7 +97,7 @@ Record each real difference found, with file and line, and a plain statement of 
 ### Step 12: Cross-link and verify
 
 - Add a link to `docs/task-queue-architecture.md` from the guides list in `CLAUDE.md` and from `docs/development.md`.
-- Add a line near the top of `docs/background-tasks.md` pointing at the new document for the cross-platform scheduling and cancellation detail, and a line in the new document pointing back for how to add a task type.
+- Add a line near the top of `docs/tasks.md` pointing at the new document for the cross-platform scheduling and cancellation detail, and a line in the new document pointing back for how to add a task type.
 - Confirm every file path named in the document exists, by resolving each one.
 - Confirm every Mermaid block parses, by publishing the document as an artifact and viewing it, or by rendering it in the stories browser if that is available; a diagram that does not render is a failed step.
 
@@ -120,7 +120,7 @@ No new smoke tests. This plan changes documentation only, so the existing suites
 - `bun run test` passes.
 - `bun run test:all` passes.
 - `bun run test:and` shows the same result as before this work: only `34-s3-database` failing.
-- `git status` shows changes only to `docs/task-queue-architecture.md`, `docs/background-tasks.md`, `docs/development.md` and `CLAUDE.md`. Any change to a source file means the plan was exceeded and must be reverted.
+- `git status` shows changes only to `docs/task-queue-architecture.md`, `docs/tasks.md`, `docs/development.md` and `CLAUDE.md`. Any change to a source file means the plan was exceeded and must be reverted.
 - Every file path named in `docs/task-queue-architecture.md` resolves to a file that exists.
 - Every Mermaid block in the document renders.
 - The document has a section for each of the six backends and a filled comparison matrix with no unknown cells, or an explicit statement of why a cell could not be determined.
@@ -128,7 +128,7 @@ No new smoke tests. This plan changes documentation only, so the existing suites
 ## Notes
 
 - The document describes what the code does today, not what it should do. Where the code is wrong, that goes in "Known divergences" with a file and line, and the fix is separate work.
-- `docs/background-tasks.md` already covers adding a task type, the host bridge and the NOT IMPLEMENTED rule. Duplicating any of it is a defect in this plan's output; link instead.
+- `docs/tasks.md` already covers adding a task type, the host bridge and the NOT IMPLEMENTED rule. Duplicating any of it is a defect in this plan's output; link instead.
 - Findings must come from reading code, not from this conversation or from existing prose. Two of the behaviours that matter most here (mobile remembering a cancelled source, the WebSocket backend's constant-false `isCancelled`) were both invisible in the documentation that existed at the time.
 - The mobile `cancelledSources` behaviour was changed recently in `EnginePool.java` and `EnginePool.swift`: `addTask` now clears the source while `queueChildTask` still honours it. Read the current code rather than relying on any earlier description.
 - Six backends is itself the finding worth surfacing. If the inventory shows some of them are near-duplicates that could be collapsed, note it in "Known divergences" as an observation, and leave the decision to a later plan.

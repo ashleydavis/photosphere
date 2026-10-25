@@ -24,7 +24,7 @@ Build these six things, in this order. Stop after each one and ship it.
 2. Download SigLIP 2 base ONNX weights on first use into the user data dir. Do not bundle them into the CLI exe (keeps the single-exe small).
 3. Store one embedding per photo as a new binary asset type `embedding/<assetId>` (float16 binary, ~1.5KB each) under `assetStorage`, alongside the existing `asset/`, `thumb/`, `display/` types. Merkle-tracked the same way. Works on `fs:` and `s3:` collections unchanged.
 4. Build the search index in RAM at app launch by streaming all embedding files. 50k photos at 768 dims fp16 is ~75MB, fine for desktop.
-5. Add a CLI command (`psi index <db-path>`) and a background-task handler (see `docs/background-tasks.md`) that walks the collection and encodes any photo without an embedding. Incremental on import, batch on backfill.
+5. Add a CLI command (`psi index <db-path>`) and a background-task handler (see `docs/tasks.md`) that walks the collection and encodes any photo without an embedding. Incremental on import, batch on backfill.
 6. Wire into the existing gallery search bar: embed the query, cosine-rank in memory, return photo ids. No new query path beyond what gallery search already does.
 
 **BSON database**:

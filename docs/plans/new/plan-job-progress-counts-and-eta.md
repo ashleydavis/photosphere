@@ -31,7 +31,7 @@ A job row says what it is called, how long it has been going and a sentence abou
     - **Consolidate** (`packages/node-api/src/lib/consolidate-database.worker.ts`): it already knows pushed and total and already streams them, but as its own message type consumed only by its dialog. Move it onto the job mechanism so it is one row like everything else.
     Each of these is its own step: change the handler, unit test the counting, and confirm the row shows a total for that job.
 
-7. **Update the documentation to match the code**, including which jobs report a total and which cannot, and the exact wording the row shows. The document affected is `docs/background-tasks.md`, whose "Surfacing a task as a job" section describes what a handler reports.
+7. **Update the documentation to match the code**, including which jobs report a total and which cannot, and the exact wording the row shows. The document affected is `docs/tasks.md`, whose "Surfacing a task as a job" section describes what a handler reports.
 
 ## Unit Tests
 

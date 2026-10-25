@@ -2,7 +2,7 @@
 
 ## Overview
 
-The navbar shows two indicators for running work at once. One is the jobs indicator, which names each job, shows what it is doing and offers a Cancel where the job can be cancelled. The other is an older block at `packages/user-interface/src/components/navbar.tsx` that renders the word "Loading" and a spinner whenever `isLoading` from `useAssetDatabase()` is true, and the work it stands for is `load-assets`, which is already a job in its own right: `loadAssets` in `packages/api/src/lib/load-assets.ts` tags its task with the name "Loading assets" and a `cancelSource`, so it appears in the jobs list and is counted by the indicator. So opening a database while a sync is running shows a spinner beside a chip that says two jobs, both describing the same load, and the spinner is the worse of the two: it has no name, no progress, no elapsed time and no cancel. This removes it, leaving the jobs indicator as the one place the navbar says work is happening, which is what `docs/background-tasks.md` and the repository's own rule already say it should be.
+The navbar shows two indicators for running work at once. One is the jobs indicator, which names each job, shows what it is doing and offers a Cancel where the job can be cancelled. The other is an older block at `packages/user-interface/src/components/navbar.tsx` that renders the word "Loading" and a spinner whenever `isLoading` from `useAssetDatabase()` is true, and the work it stands for is `load-assets`, which is already a job in its own right: `loadAssets` in `packages/api/src/lib/load-assets.ts` tags its task with the name "Loading assets" and a `cancelSource`, so it appears in the jobs list and is counted by the indicator. So opening a database while a sync is running shows a spinner beside a chip that says two jobs, both describing the same load, and the spinner is the worse of the two: it has no name, no progress, no elapsed time and no cancel. This removes it, leaving the jobs indicator as the one place the navbar says work is happening, which is what `docs/tasks.md` and the repository's own rule already say it should be.
 
 ## Issues
 
@@ -16,7 +16,7 @@ The navbar shows two indicators for running work at once. One is the jobs indica
 
 4. **Check the stories still render.** Run `bun run stories` and confirm the navbar stories and the gallery stories still render with no missing component, since step 2 may remove a component a story imports. The screenshots are also where the visual change is seen: one indicator in the navbar rather than two.
 
-5. **Update the documentation to match the code**, including whether the spinner component was deleted. The document affected is `docs/background-tasks.md`, which should say the jobs indicator is the only thing in the navbar reporting running work.
+5. **Update the documentation to match the code**, including whether the spinner component was deleted. The document affected is `docs/tasks.md`, which should say the jobs indicator is the only thing in the navbar reporting running work.
 
 ## Unit Tests
 

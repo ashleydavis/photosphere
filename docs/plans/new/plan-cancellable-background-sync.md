@@ -2,7 +2,7 @@
 
 ## Overview
 
-The jobs list shows "Syncing database" running and offers no way to stop it. That is deliberate today and written down twice: `enqueueSyncTask` in `apps/desktop/src/main.ts` and the plan builder in `packages/mobile-worker/src/lib/plan-sync.worker.ts` both leave `cancelSource` out of the job tag, so the row renders without a Cancel button, and `docs/background-tasks.md` gives the reasoning ("syncing is switched off from Settings"). That reasoning does not survive contact with a phone: a sync of a real library moves gigabytes over somebody's connection, and switching syncing off in Settings to stop it is a different act with a different meaning, because it also stops every future pass. The user wants the ordinary thing: stop this one, and let the next interval start a fresh one. Two pieces are missing for that. The job tag has to carry a `cancelSource` the interface can name, and the sync itself has to notice: `sync.ts` and `sync-database.worker.ts` do not mention cancellation at all, so cancelling today would drop a queued sync and do nothing at all to one already running.
+The jobs list shows "Syncing database" running and offers no way to stop it. That is deliberate today and written down twice: `enqueueSyncTask` in `apps/desktop/src/main.ts` and the plan builder in `packages/mobile-worker/src/lib/plan-sync.worker.ts` both leave `cancelSource` out of the job tag, so the row renders without a Cancel button, and `docs/tasks.md` gives the reasoning ("syncing is switched off from Settings"). That reasoning does not survive contact with a phone: a sync of a real library moves gigabytes over somebody's connection, and switching syncing off in Settings to stop it is a different act with a different meaning, because it also stops every future pass. The user wants the ordinary thing: stop this one, and let the next interval start a fresh one. Two pieces are missing for that. The job tag has to carry a `cancelSource` the interface can name, and the sync itself has to notice: `sync.ts` and `sync-database.worker.ts` do not mention cancellation at all, so cancelling today would drop a queued sync and do nothing at all to one already running.
 
 ## Issues
 
@@ -20,7 +20,7 @@ The jobs list shows "Syncing database" running and offers no way to stop it. Tha
 
 6. **Cover it end to end.** Extend `apps/smoke-tests/tests/50-background-sync/test.sh`, which already drives a real sync against an S3 origin: while a sync is running, cancel it from the jobs list (the row's Cancel, reached from the navbar jobs indicator), assert the job row clears, and assert that a later pass syncs the photo anyway, which is what proves cancelling stopped one pass rather than switching syncing off. On the desktop, add the same to `apps/desktop/smoke-tests` beside the existing sync coverage. Watch both fail first, by asserting against the code before step 1.
 
-7. **Update the documentation to match the code**, including exactly what a cancelled pass does to the state files and how long until the next one starts. The documents affected are `docs/background-tasks.md`, whose passage saying a background sync deliberately has no cancel is now wrong, and `docs/syncing.md`.
+7. **Update the documentation to match the code**, including exactly what a cancelled pass does to the state files and how long until the next one starts. The documents affected are `docs/tasks.md`, whose passage saying a background sync deliberately has no cancel is now wrong, and `docs/syncing.md`.
 
 ## Unit Tests
 

@@ -607,7 +607,7 @@ The rest of the set, all written in step 1 and all reviewed together:
 - `docs/development.md`: the day to day loop, the toolchain, the Bun scripts, and an index of every other document.
 - `docs/testing/README.md`: the four kinds of test (Zig unit, TypeScript unit, CLI smoke, application smoke), how to run each, how the harness allocates ports and directories, and what parallel safety requires of a new test.
 - `docs/architecture.md`: the three channels between the frontend and Zig, the threading rule, where state lives, and how a request travels from a click to storage and back. Written from the probe repository's working code and from the SDK's source, not from the SDK's documentation.
-- `docs/background-tasks.md`: what a task handler is now, the single registration site, and how to add one.
+- `docs/tasks.md`: what a task handler is now, the single registration site, and how to add one.
 - `docs/zig-conventions.md`: the two writing rules in full, with worked examples of a TypeScript file and its Zig counterpart side by side, the divergence document's format, and the conventions taken from `what-changed`.
 - `docs/how-it-works.md`: the internals, in the manner of `what-changed`'s document of the same name.
 - `docs/performance.md`: what an operation costs and the budgets the performance tests enforce.

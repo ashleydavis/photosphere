@@ -45,7 +45,7 @@ Fixing either alone is not enough: without the first, the failure never reaches 
 
 10. **Make the existing completion toast tell the truth.** In the import-completion `useEffect` in `packages/user-interface/src/main.tsx`, replace the hardcoded success message and `color: 'success'` with the output of `summariseImport` from step 2, so an import that ended with failures is reported as a failure. Do not add a second toast on the import page: this toast already exists and a page-level one duplicates it. The step is complete when the code compiles, all unit tests pass, and the behaviour is confirmed by driving the real app as described under Verify.
 
-11. **Update the background-tasks guide.** Add a short section to `docs/background-tasks.md` describing the single import failure channel: picker rejection and task failure both land in `ImportContextProvider` and surface as one toast plus one inline error, identically on all four platforms. The step is complete when the document is written.
+11. **Update the background-tasks guide.** Add a short section to `docs/tasks.md` describing the single import failure channel: picker rejection and task failure both land in `ImportContextProvider` and surface as one toast plus one inline error, identically on all four platforms. The step is complete when the document is written.
 
 ## Unit Tests
 
