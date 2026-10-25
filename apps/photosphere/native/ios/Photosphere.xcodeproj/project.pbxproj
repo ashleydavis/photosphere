@@ -313,7 +313,7 @@
 			repositoryURL = "https://github.com/ashleydavis/ziggy";
 			requirement = {
 				kind = exactVersion;
-				version = 0.0.15;
+				version = 0.0.16;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
