@@ -20,15 +20,6 @@ PAIRING_CODE="$(allocate_pairing_code)"
 # stop_app trap is armed, so failing here does not run a teardown for an app that never started.
 require_lan_bridge
 
-# On a desktop the app and the host CLI share this machine, so discovery gets a UDP port of its own rather than the default
-# 54321, which any other process on the machine (another worktree's run, a share left running) may be holding. Exported
-# before the app starts and before the sender runs, since both read it. A device has its own network stack, so it keeps the default.
-if [ "$PLATFORM" != "android" ] && [ "$PLATFORM" != "ios" ]; then
-    PHOTOSPHERE_LAN_SHARE_PORT="$(allocate_lan_share_port)" || exit 1
-    export PHOTOSPHERE_LAN_SHARE_PORT
-    log_info "LAN share discovery port: $PHOTOSPHERE_LAN_SHARE_PORT"
-fi
-
 trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
 # Seed the host CLI with the database to send and the geocoding secret it carries, in a vault and

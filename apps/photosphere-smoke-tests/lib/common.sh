@@ -140,6 +140,17 @@ fi
 mkdir -p "$TMP_DIR"
 TMP_DIR="$(cd "$TMP_DIR" && native_pwd)"
 
+# On a desktop every app and CLI a scenario starts shares this machine with every other scenario and every other run, so the
+# scenario gets a LAN share discovery port of its own rather than the default 54321. On the default port a sender pairs with any
+# receiver that announces the same pairing code, and the codes the app draws for itself are not claimed against anyone else's, so
+# two shares that drew one code would deliver to each other. Exported before anything starts, since the apps and the CLI all read
+# it. A device has its own network stack, so it keeps the default.
+if [ "$PLATFORM" != "android" ] && [ "$PLATFORM" != "ios" ]; then
+    PHOTOSPHERE_LAN_SHARE_PORT="$(allocate_lan_share_port)" || exit 1
+    export PHOTOSPHERE_LAN_SHARE_PORT
+    log_info "LAN share discovery port: $PHOTOSPHERE_LAN_SHARE_PORT"
+fi
+
 # The fixtures a scenario hands the app (a database to open, photos to drop) are paths in the repository, so the repository's path is
 # converted to the native form too. Git Bash converts a path that is a whole argument of a native program by itself, but not one inside
 # a JSON message, which is how most of them reach the app.
@@ -272,14 +283,17 @@ dump_app_stacks() {
     fi
     case "$PLATFORM" in
         linux)
-            if ! command -v gdb > /dev/null 2>&1; then
-                log_error "No stacks: gdb is not installed, so the stacks of the hung app cannot be read."
-                return 0
-            fi
+            # The thread listing below needs no gdb, so a missing gdb skips only the stacks. It once returned here instead, and
+            # 38-reset-device-s3 hanging in the Release Zig Linux workflow (run 40161921825, where gdb is not installed) left
+            # nothing at all to say where the app was waiting.
             for stack_pid in $(process_tree_pids "$root_pid"); do
-                log_error "Stacks of pid $stack_pid ($(ps -o comm= -p "$stack_pid" 2>/dev/null)):"
-                if ! gdb -p "$stack_pid" -batch -ex "thread apply all bt" 2>&1 | tee -a "$test_dir/hang-stacks.txt"; then
-                    log_error "gdb failed on pid $stack_pid."
+                if ! command -v gdb > /dev/null 2>&1; then
+                    log_error "No stacks of pid $stack_pid: gdb is not installed, so the stacks of the hung app cannot be read."
+                else
+                    log_error "Stacks of pid $stack_pid ($(ps -o comm= -p "$stack_pid" 2>/dev/null)):"
+                    if ! gdb -p "$stack_pid" -batch -ex "thread apply all bt" 2>&1 | tee -a "$test_dir/hang-stacks.txt"; then
+                        log_error "gdb failed on pid $stack_pid."
+                    fi
                 fi
                 # With the kernel's default ptrace_scope of 1 a process may attach only to its descendants, and the app was
                 # reparented away from the test when its launcher exited, so gdb is often refused. Each thread's name, state
