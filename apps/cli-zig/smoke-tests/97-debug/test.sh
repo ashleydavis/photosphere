@@ -647,11 +647,12 @@ native_path() {
 #
 # Prints the expected merkle tree text with its placeholders filled in: the aggregate root hash, the
 # directory the test files were imported from (as the JSON of a record writes it) and the size of
-# each shard. A record holds the directory twice: as origPath, and as labels, one per part of it, each
-# costing its length and 3 bytes. So a shard's size grows by two bytes for each character of that
-# directory and two for each part of it, for each record it holds. Counting characters alone held on a
-# checkout nine parts deep and failed this test on the Linux release runner, whose checkout is six
-# parts deep ("Total Size: 4079 bytes" expected, 4067 written).
+# each shard. A shard's size is the length of its records' JSON, and a record holds the directory twice:
+# as origPath, a JSON string, and as labels, one per part of it, each costing its length and 3 bytes
+# (two quotes and a comma). Counting characters alone held on a checkout nine parts deep and failed
+# this test on the Linux release runner, whose checkout is six parts deep ("Total Size: 4079 bytes"
+# expected, 4067 written). Counting the parts but not the JSON failed it on Windows, where origPath
+# escapes each backslash and the path has no leading separator (819 expected, 824 written).
 #
 fill_debug_placeholders() {
     local expected_text="$1"
@@ -661,14 +662,18 @@ fill_debug_placeholders() {
     test_files_dir="$(native_path "$(cd "$TEST_FILES_DIR" && pwd)")"
     local json_test_files_dir="${test_files_dir//\\/\\\\}"
 
-    # The parts are split as the importer splits them, on either separator, skipping empty ones.
+    # The parts are split as the importer splits them, on either separator, skipping empty ones, so
+    # together they hold every character that is not a separator.
     local test_files_dir_parts
     test_files_dir_parts="$(printf '%s' "$test_files_dir" | tr '\\' '/' | tr '/' '\n' | grep -c .)"
+    local test_files_dir_label_characters
+    test_files_dir_label_characters="$(printf '%s' "$test_files_dir" | tr -d '\\/' | wc -c | tr -d ' ')"
+    local record_directory_size=$((${#json_test_files_dir} + test_files_dir_label_characters + 3 * test_files_dir_parts))
 
     expected_text="${expected_text//<aggregate-root-hash>/$aggregate_root_hash}"
     expected_text="${expected_text//<test-files-dir>/$json_test_files_dir}"
-    expected_text="${expected_text//<shard-59-size>/$((3859 + 4 * ${#test_files_dir} + 4 * test_files_dir_parts))}"
-    expected_text="${expected_text//<shard-72-size>/$((743 + 2 * ${#test_files_dir} + 2 * test_files_dir_parts))}"
+    expected_text="${expected_text//<shard-59-size>/$((3859 + 2 * record_directory_size))}"
+    expected_text="${expected_text//<shard-72-size>/$((743 + record_directory_size))}"
     printf '%s' "$expected_text"
 }
 
