@@ -49,11 +49,11 @@ Expected:
 ### 1. Add a secret named `old-name`
 
 1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. Type `old-name` into the name field.
-4. Set the **Type** to `api-key`.
-5. Type `sk-rename-me` into the value field.
-6. Click **Save**.
+2. Click **Add secret** (`add-secret-button`).
+3. Type `old-name` into the name field (`secret-name-input`).
+4. Set the **Type** (`secret-type-select`) to `api-key` (`secret-type-option-api-key`).
+5. Type `sk-rename-me` into the value field (`secret-value-input`).
+6. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The Manage Secrets page lists `old-name`.
@@ -63,9 +63,9 @@ Expected:
 ### 2. Edit the secret and change its name
 
 1. Navigate to the **Manage Secrets** page.
-2. Click the **Edit** button on the `old-name` row.
-3. In the name field, type `new-name`.
-4. Click **Save**.
+2. Click the **Edit** button (`edit-secret-button`, the `old-name` row) on the `old-name` row.
+3. In the name field (`secret-name-input`), type `new-name`.
+4. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes.
@@ -85,4 +85,4 @@ bun run start -- secrets list
 ```
 
 Expected:
-- `secrets list` shows `new-name` with `Type: api-key` and does not show `old-name`.
+- `secrets list` shows a `new-name` row with `api-key` in its Type column, and no `old-name` row.

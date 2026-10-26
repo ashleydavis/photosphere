@@ -48,13 +48,13 @@ Expected:
 ### 1. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **New database** from the File menu or the left side menu.
-3. Enter `source` as the database name.
-4. Choose the following as the database directory:
+2. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+3. Enter `source` (`database-name-input`) as the database name.
+4. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-move-file-between-databases/source
    ```
-5. Click **Create**.
+5. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -62,8 +62,8 @@ Expected: The app opens the new empty database with no assets shown.
 
 ### 2. Import a file
 
-1. Navigate to the **Import** page.
-2. Click **Import photos**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import files** (`import-files-button`).
 3. Select `test/test.jpg` from the repo root.
 4. Wait for the import to complete.
 
@@ -75,13 +75,13 @@ Expected:
 
 ### 3. Create a second database
 
-1. Click **New database** from the File menu or the left side menu.
-2. Enter `dest` as the database name.
-3. Choose the following as the database directory:
+1. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+2. Enter `dest` (`database-name-input`) as the database name.
+3. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-move-file-between-databases/dest
    ```
-4. Click **Create**.
+4. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty destination database with no assets shown.
 
@@ -89,7 +89,7 @@ Expected: The app opens the new empty destination database with no assets shown.
 
 ### 4. Switch back to the source database
 
-1. Open the left side menu.
+1. Open the left side menu (`sidebar-toggle-button`).
 2. Click on the **source** database to open it.
 
 Expected: The gallery shows `test.jpg`.
@@ -98,7 +98,7 @@ Expected: The gallery shows `test.jpg`.
 
 ### 5. Select the file
 
-1. Select the file by hovering over `test.jpg` and clicking the circle that appears in the top-left corner.
+1. Select the file by hovering over `test.jpg` and clicking the circle (`gallery-item-checkbox`) that appears in the top-left corner.
 
 Expected:
 - A blue circle with a checkmark appears on the selected file.
@@ -107,8 +107,8 @@ Expected:
 
 ### 6. Move the file to the destination database
 
-1. Click the **three-dot menu** button (top right of the navbar) to open the right sidebar.
-2. Under the **Selection** section, click **Move to dest**.
+1. Click the **three-dot menu** button (`right-sidebar-button`) (top right of the navbar) to open the right sidebar.
+2. Under the **Selection** section, click **Move to dest** (`move-to-database-dest`).
 
 Expected:
 - The file disappears from the source gallery.
@@ -118,7 +118,7 @@ Expected:
 
 ### 7. Open the destination database and check the gallery
 
-1. Open the left side menu.
+1. Open the left side menu (`sidebar-toggle-button`).
 2. Click on the **dest** database to open it.
 
 Expected:

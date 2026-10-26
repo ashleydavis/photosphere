@@ -75,8 +75,8 @@ Expected:
 In the sender instance:
 
 1. Navigate to the **Manage Secrets** page and add an `encryption-key` secret named `test-enc-key`.
-2. Navigate to the **Manage Databases** page and click **Add database**.
-3. Enter name `test-db` and an arbitrary filesystem path, toggle **Encrypted** on and link the `test-enc-key` encryption key.
+2. Navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page and click **Add database** (`add-database-button`).
+3. Enter name `test-db` (`database-name-input`) and an arbitrary filesystem path (`database-path-input`), toggle **Encrypted** (`database-encrypted-switch`) on and link the `test-enc-key` encryption key (`select-encryption-button`, then `secret-select-button`, the `test-enc-key` row).
 
 Expected:
 - `test-db` is listed on the Databases page.
@@ -85,20 +85,20 @@ Expected:
 
 ### 2. Start the share on the sender
 
-1. From the sender's Databases page, click **Share database**.
-2. Click the **Send** button on the share dialog.
+1. From the sender's Databases page, click **Share database** (`share-database-button`, the `test-db` row).
+2. Click the **Send** button (`share-database-send-button`) on the share dialog.
 
 Expected:
 - A 4-digit pairing code is shown.
 
-Record the pairing code as `<code>` for the next step.
+Record the pairing code (`share-pairing-code`) as `<code>` for the next step.
 
 ---
 
 ### 3. Start the receive on the other instance
 
-1. In the receiver instance, navigate to the **Manage Databases** page.
-2. Click **Receive database**, enter `<code>` and click **Start**.
+1. In the receiver instance, navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page.
+2. Click **Receive database** (`receive-database-button`), enter `<code>` (`receive-database-code-input`) and click **Start** (`receive-database-start-button`).
 
 Expected:
 - Inside the "Receive Database" modal, the form is populated with the database name (`test-db`), description and path, plus a checkbox for each linked secret (for example "Import S3 credentials (test-s3-key)").
@@ -107,7 +107,7 @@ Expected:
 
 ### 4. Save the database on the receiver
 
-1. Click **Save**.
+1. Click **Save** (`receive-database-save-button`).
 
 Expected:
 - A success message indicates the database was imported.
@@ -118,7 +118,8 @@ Expected:
 
 ### 5. Verify the secret value came across
 
-1. On the receiver's **Manage Secrets** page, click the **View secret** (eye) button on the `test-enc-key` row.
+1. On the receiver's **Manage Secrets** page, click the **View secret** (eye) button (`view-secret-button`, the `test-enc-key` row) on the `test-enc-key` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Expected:
 - The view dialog shows the same value that was seeded on the sender.

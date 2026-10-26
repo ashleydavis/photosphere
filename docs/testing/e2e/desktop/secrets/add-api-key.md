@@ -49,11 +49,11 @@ Expected:
 ### 1. Add a new api-key secret
 
 1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. Type `api-key-1` into the name field.
-4. Set the **Type** to `api-key`.
-5. Type `sk-test-1234567890ABCDEF` into the **API Key** field.
-6. Click **Save**.
+2. Click **Add secret** (`add-secret-button`).
+3. Type `api-key-1` into the name field (`secret-name-input`).
+4. Set the **Type** (`secret-type-select`) to `api-key` (`secret-type-option-api-key`).
+5. Type `sk-test-1234567890ABCDEF` into the **API Key** field (`secret-value-input`).
+6. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes.
@@ -63,7 +63,8 @@ Expected:
 
 ### 2. Confirm the value in the app and the CLI
 
-1. Click the **View secret** (eye) button on the `api-key-1` row.
+1. Click the **View secret** (eye) button (`view-secret-button`, the `api-key-1` row) on the `api-key-1` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Then run in the CLI terminal:
 
@@ -79,9 +80,9 @@ Expected:
 
 ### 3. Edit the secret
 
-1. Click the **Edit** button on the `api-key-1` row.
-2. Change the **API Key** field to `sk-test-CHANGED-99999`.
-3. Click **Save**.
+1. Click the **Edit** button (`edit-secret-button`, the `api-key-1` row) on the `api-key-1` row.
+2. Change the **API Key** field (`secret-value-input`) to `sk-test-CHANGED-99999`.
+3. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes.
@@ -90,7 +91,8 @@ Expected:
 
 ### 4. Confirm the edit in the app and the CLI
 
-1. Click the **View secret** (eye) button on the `api-key-1` row.
+1. Click the **View secret** (eye) button (`view-secret-button`, the `api-key-1` row) on the `api-key-1` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Then run in the CLI terminal:
 

@@ -49,8 +49,8 @@ Expected:
 
 ### 1. Add the database to the app
 
-1. Navigate to the **Manage Databases** page in the desktop app.
-2. Click **Add database**, enter `My Test DB` and `/tmp/psi-desktop-view-database-secret/db`, then click **Add**.
+1. Navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page in the desktop app.
+2. Click **Add database** (`add-database-button`), enter `My Test DB` (`database-name-input`) and `/tmp/psi-desktop-view-database-secret/db` (`database-path-input`), then click **Add** (`add-database-confirm`).
 
 Expected:
 - The new entry appears on the Databases page.
@@ -59,12 +59,12 @@ Expected:
 
 ### 2. Link a secret to the database
 
-1. Click the **Edit** button for the `My Test DB` row.
-2. Click **Configure secrets…**.
-3. On the **Geocoding API Key** row, click **+ New**.
-4. In the create-secret dialog, enter the name `smoke-geocoding` and the value `test-api-key-12345`, then click **Create**.
-5. Confirm `smoke-geocoding` is now selected in the Geocoding API Key dropdown, then click **Save**.
-6. Back in the Edit dialog, click **Save**.
+1. Click the **Edit** button (`edit-database-button`, the `My Test DB` row) for the `My Test DB` row.
+2. Click **Configure secrets…** (`edit-database-configure-secrets-button`).
+3. On the **Geocoding API Key** row, click **+ New** (`configure-secrets-geocoding-new-button`).
+4. In the create-secret dialog, enter the name `smoke-geocoding` (`create-secret-name-input`) and the value `test-api-key-12345` (`create-secret-api-key-input`), then click **Create** (`create-secret-confirm`).
+5. Confirm `smoke-geocoding` is now selected in the Geocoding API Key dropdown (`configure-secrets-geocoding-select`), then click **Save** (`configure-secrets-save`).
+6. Back in the Edit dialog, click **Save** (`save-database-button`).
 
 Expected:
 - The dialogs close without errors and the entry is updated.
@@ -73,7 +73,7 @@ Expected:
 
 ### 3. Open the View Database modal
 
-1. From the row for `My Test DB`, click the **View** button.
+1. From the row for `My Test DB`, click the **View** button (`view-database-button`, the `My Test DB` row).
 
 Expected:
 - The **View Database** modal opens.
@@ -83,7 +83,7 @@ Expected:
 
 ### 4. Drill into the linked secret
 
-1. Click the **View Secret** button on the Geocoding API Key row.
+1. Click the **View Secret** button (`view-secret-geocoding-button`) on the Geocoding API Key row.
 
 Expected:
 - A nested **View Secret** dialog opens for `smoke-geocoding`.
@@ -93,7 +93,7 @@ Expected:
 
 ### 5. Reveal the secret value
 
-1. Click **Reveal**.
+1. Click **Reveal** (`reveal-secret-button`).
 
 Expected:
 - The API key value `test-api-key-12345` is shown.

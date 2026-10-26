@@ -64,7 +64,7 @@ Expected:
 
 ### 2. Dismiss the first item
 
-1. Click the dismiss button on the toast.
+1. Click the dismiss button (`toast-dismiss`) on the toast.
 
 Expected:
 - The toast disappears.
@@ -84,7 +84,7 @@ Expected:
 
 ### 4. Dismiss the second item and restart again
 
-1. Dismiss the second toast.
+1. Dismiss the second toast (`toast-dismiss`).
 2. Stop the app and start it again in the same terminal, so the exports still apply.
 
 Expected:

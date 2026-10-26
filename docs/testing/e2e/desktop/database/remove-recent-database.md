@@ -51,7 +51,7 @@ Expected:
 
 ### 1. Register both databases and open both at least once
 
-1. In the desktop app, register both databases (Databases page → Add database)
+1. In the desktop app, register both databases (Databases page (`sidebar-toggle-button`, then `sidebar-manage-databases`) → Add database (`add-database-button`))
    so they show up in `databases.toml`.
 2. Open each one at least once so both appear in **Recent databases**.
 
@@ -62,7 +62,7 @@ Expected:
 
 ### 2. Remove one of the recent entries
 
-1. Open the left sidebar.
+1. Open the left sidebar (`sidebar-toggle-button`).
 2. Click the trash / remove icon next to `db-a` in the Recent databases list.
 
 Expected:
@@ -87,7 +87,7 @@ Expected:
 
 1. Quit the desktop app.
 2. Start it again in the same terminal, so the exports from Prep still apply, with `bun run linux` from the repo root (or `macos` or `windows`, for the platform you are on).
-3. Open the left sidebar.
+3. Open the left sidebar (`sidebar-toggle-button`).
 
 Expected:
 - `db-a` is still gone from the Recent databases list.

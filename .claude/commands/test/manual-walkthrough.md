@@ -10,6 +10,7 @@ Take the human through `docs/testing/e2e/CHECKLIST.md`, one test at a time and o
 
 - Read `docs/testing/e2e/CHECKLIST.md` and `docs/testing/e2e/CHECKLIST-NOTES.md`.
 - If arguments were given (`$ARGUMENTS`), start at the section or test they name. Otherwise start at the first unticked test.
+- Take the human only through untested tests, marked `- [ ]`. Skip tests marked `- [x]` (passed) or `- [-]` (failed), unless the arguments ask for them.
 
 ## For each test
 
@@ -27,7 +28,7 @@ Take the human through `docs/testing/e2e/CHECKLIST.md`, one test at a time and o
         - `a` approve test
         - `f` fail test
         - `Note: xxx` add a note
-    - Then stop and wait for the human to say it is done or to say what happened. "d" means done: the step went as expected. "Note: xxx" means add xxx as a note under the current test in `CHECKLIST-NOTES.md`, word for word, then carry on with the same step. "s" means show the current step again. "a" means the current test is approved: tick it (`- [x]`) and move to the next test. "f" means the current test failed: mark it `- [-]` and move to the next test. If the human has not already given notes for the failure and the failure is plain from the session, write the notes yourself under that test, saying which step failed and what happened; otherwise expect the human to follow up with notes. "y" means run the current step's command yourself, exactly as shown, from the directory the test says, then show the human the command's full output in a code block, with a `>>-` line before the output and a `<<-` line after it inside the block (always for a `## Test` command; for Prep and Check commands, the lines that show the result), then the result against what was expected and move on as for "d" when it matches.
+    - Then stop and wait for the human to say it is done or to say what happened. "d" means done: the step went as expected. "Note: xxx" means add xxx as a note under the current test in `CHECKLIST-NOTES.md`, word for word, then carry on with the same step. "s" means show the current step again. "a" means the current test is approved: tick it (`- [x]`) and move to the next test. "f" means the current test failed: mark it `- [-]` and move to the next test. If the human has not already given notes for the failure and the failure is plain from the session, write the notes yourself under that test, saying which step failed and what happened; otherwise expect the human to follow up with notes. "y" means run the current step's command yourself, exactly as shown, from the directory the test says, then show the human the command's full output in a code block, with a `>>-` line before the output and a `<<-` line after it inside the block (always for a `## Test` command; for Prep and Check commands, the lines that show the result), then two labelled lists, **Result:** (what happened, one bullet per thing the step checks) and **Expected:** (the test file's expectations, word for word), then one line saying whether they match, naming each part that does not. Start that line with 🟢 when they match and 🔴 when they do not, for example `🟢 **Match:** yes` or `🔴 **Match:** no.` Show these for every step you run, UI steps included. Move on as for "d" only when they match; otherwise wait for the human.
     - Whenever a message is about anything other than moving on, end it by showing the current step again in full: the step number and title, the command and what to expect.
 5. When the human reports a result that differs from what was expected, record it as a note under that test in `CHECKLIST-NOTES.md`, in the human's words. Then carry on with the next step unless the human says otherwise.
 6. When every step has passed, tick the test in `CHECKLIST.md` (`- [x]`). When a step failed, mark it `- [-]` and say which step failed in the note. "a" and "f" from the human decide this whenever they are given.
@@ -37,7 +38,7 @@ Take the human through `docs/testing/e2e/CHECKLIST.md`, one test at a time and o
 When the human asks you to run desktop steps yourself, drive a test-hooks build of the app through its control connection, the way `apps/photosphere-smoke-tests` does.
 
 - Build it into the project's `tmp/`: `bun run --filter=ziggy bundle:ui`, then `zig build photosphere-linux -Dtest-hooks=true -p tmp/desktop-hooks/test`. Rebuild after any UI change.
-- Start it in the background with the test's own export block plus the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`, `PHOTOSPHERE_TEST_MODE=1`, `ZIGGY_TEST_MODE=1`, `ZIGGY_TEST_PORT_FILE`). Wrap it in `xvfb-run` for a hidden window; leave that out when the human needs to see the window.
+- Start it in the background with the test's own export block plus the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`, `PHOTOSPHERE_TEST_MODE=1`, `ZIGGY_TEST_MODE=1`, `ZIGGY_TEST_PORT_FILE`). When you are taking the human through a test, including a step they answer with "y", start it with a visible window. Only when you run tests on your own, without the human following along, wrap it in `xvfb-run` for a hidden window.
 - Send commands the way `control_command`, `send_command` and `read_value` in `apps/photosphere-smoke-tests/lib/common.sh` do: `click`, `type`, `navigate`, `menu`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot` and `quit`. Elements are found only by `data-id`, in `packages/user-interface/src`.
 - Queue `pick-answer` before clicking the button that opens a picker or a save dialog. Open an asset with `long-press-click` on `gallery-thumb`, and select one with `long-press`, since there is no hover command.
 - Exporting `XDG_DATA_HOME` also moves mise's data folder, so set `MISE_DATA_DIR` back to the normal one for your own `mise exec` commands.
@@ -48,7 +49,9 @@ When the human asks you to run desktop steps yourself, drive a test-hooks build 
 
 - This is testing only. We are not fixing problems unless the human decides to do that.
 - **Do not skip steps.** Run every step in the order the test writes it. Do not reorder, defer or merge steps, or decide one is not worth running. Only the human can ask for that. The one exception, which the human asked for, is the prep step in step 4.
-- Notes go only in `CHECKLIST-NOTES.md`, never in `CHECKLIST.md`. Use the same `##` section, `###` group and `####` test name headings as the checklist, adding a heading when it is missing.
+- **Do not skip prep.** Every command in a test's Prep goes into the prep step, read from every code block in the Prep section, and every one is run. A skipped prep command makes a test fail for no reason.
+- When a step fails, check that every prep command ran before calling it a failure.
+- Notes go only in `CHECKLIST-NOTES.md`, never in `CHECKLIST.md`. A note says what happened to the app or the test, never who did or decided something: no mention of "the human". Use the same `##` section, `###` group and `####` test name headings as the checklist, adding a heading when it is missing.
 - Commands given to the human never start with `mise exec --`.
 - Keep every message short: the step, the command, what to expect. No waffle.
 

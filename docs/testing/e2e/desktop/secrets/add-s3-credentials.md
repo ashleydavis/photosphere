@@ -50,14 +50,14 @@ Expected:
 ### 1. Add a new s3-credentials secret
 
 1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. Type `s3-creds-1` into the name field.
-4. Set the **Type** to `s3-credentials`.
+2. Click **Add secret** (`add-secret-button`).
+3. Type `s3-creds-1` into the name field (`secret-name-input`).
+4. Set the **Type** (`secret-type-select`) to `s3-credentials` (`secret-type-option-s3-credentials`).
 5. Fill the fields:
-   - **Region**: `us-east-1`
-   - **Access Key ID**: `AKIAOLD`
-   - **Secret Access Key**: `OLDSECRET`
-6. Click **Save**.
+   - **Region** (`secret-s3-region-input`): `us-east-1`
+   - **Access Key ID** (`secret-s3-access-key-input`): `AKIAOLD`
+   - **Secret Access Key** (`secret-s3-secret-key-input`): `OLDSECRET`
+6. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes.
@@ -67,7 +67,8 @@ Expected:
 
 ### 2. Confirm the value in the app and the CLI
 
-1. Click the **View secret** (eye) button on the `s3-creds-1` row.
+1. Click the **View secret** (eye) button (`view-secret-button`, the `s3-creds-1` row) on the `s3-creds-1` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Then run in the CLI terminal:
 
@@ -83,9 +84,9 @@ Expected:
 
 ### 3. Edit the region
 
-1. Click the **Edit** button on the `s3-creds-1` row.
-2. Change the **Region** field to `eu-west-1`.
-3. Click **Save**.
+1. Click the **Edit** button (`edit-secret-button`, the `s3-creds-1` row) on the `s3-creds-1` row.
+2. Change the **Region** field (`secret-s3-region-input`) to `eu-west-1`.
+3. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes without errors.
@@ -94,7 +95,8 @@ Expected:
 
 ### 4. Confirm the edit in the app and the CLI
 
-1. Click the **View secret** (eye) button on the `s3-creds-1` row.
+1. Click the **View secret** (eye) button (`view-secret-button`, the `s3-creds-1` row) on the `s3-creds-1` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Then run in the CLI terminal:
 

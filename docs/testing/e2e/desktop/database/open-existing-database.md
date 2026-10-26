@@ -51,18 +51,18 @@ Expected:
 
 ### 1. Open the database in the desktop app
 
-1. Click **Open database**. It is on the startup screen (when no database is
+1. Click **Open database** (`no-database-open-database` on the startup screen, `sidebar-toggle-button` then `sidebar-open-database` in the left side menu). It is on the startup screen (when no database is
    loaded), in the left side menu and in the **File > Open Database...** menu
    (Ctrl/Cmd+O). All of these open the **Open Database** dialog.
 2. The **Open Database** dialog lists databases you have already configured.
    Since this database was just created with the CLI, it will not be listed yet,
-   so click **Add database** to register it.
+   so click **Add database** (`open-database-modal-add-database`) to register it.
 3. In the **Add Database** dialog:
-   - **Name**: enter a name (for example `desktop-test`).
-   - **Type**: leave as **File system**.
-   - **Path**: click **Browse** and select `/tmp/psi-desktop-open-existing-database/source`, or
+   - **Name** (`database-name-input`): enter a name (for example `desktop-test`).
+   - **Type** (`database-storage-type-select`): leave as **File system**.
+   - **Path** (`database-path-input`): click **Browse** (`database-browse-button`) and select `/tmp/psi-desktop-open-existing-database/source`, or
      type the path directly.
-   - Click **Add**. This registers the database and opens it.
+   - Click **Add** (`add-database-confirm`). This registers the database and opens it.
 
 Expected:
 - The database opens and the gallery view appears, showing the previously-imported asset.

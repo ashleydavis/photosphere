@@ -57,30 +57,44 @@ Expected:
 
 ---
 
-### 2. Enable / start the MCP server from the app
+### 2. Check that the MCP server started with the app
 
-1. Use the app menu or Settings entry that toggles MCP on.
+The MCP server starts by itself when the app starts; there is no control to turn it on. Find its port in the app's log, in the CLI terminal:
+
+```bash
+grep -h "MCP server initialized" /tmp/psi-desktop-mcp-server/logs/logs/*.log
+```
 
 Expected:
-- The app reports the MCP server is listening (in a status indicator, log line, or notification).
+- One line, `MCP server initialized on port <port>`. Record `<port>`: the endpoint is `http://127.0.0.1:<port>/mcp`.
 
 ## Check
 
 ### 3. Connect with an MCP client
 
-Configure your client to talk to the desktop app's MCP endpoint and list the
-exposed resources.
+The server offers its features as MCP tools, not resources. In the CLI terminal, with the `<port>` from step 2, list the tools and then fetch an asset's metadata from the loaded fixture:
+
+```bash
+curl -s -X POST http://127.0.0.1:<port>/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+curl -s -X POST http://127.0.0.1:<port>/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_media_file_info","arguments":{"assetId":"63e9c63b-9164-6376-13e9-ef5500000000"}}}'
+```
 
 Expected:
-- The client lists Photosphere resources (database metadata and assets) without errors.
-- Fetching an asset's metadata returns the expected fields for an asset from the loaded fixture.
+- The tool list includes `list_databases`, `get_database_summary`, `list_media_files` and `get_media_file_info`, with no error.
+- `get_media_file_info` returns the asset's metadata without an error: `origFileName` `WWEFneQ5XAk.jpg`, `contentType` `image/jpeg`, `width` 5464, `height` 8192.
 
 ---
 
-### 4. Disable / stop the MCP server
+### 4. Check that the MCP server stops with the app
 
-1. Toggle MCP off in the app.
+The MCP server stops only when the app quits; there is no control to turn it off.
+
+1. Quit the desktop app.
+2. In the CLI terminal, try to connect to the endpoint, with the `<port>` from step 2:
+
+```bash
+curl -s -X POST http://127.0.0.1:<port>/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'; echo "exit $?"
+```
 
 Expected:
-- The endpoint stops accepting connections.
-- The next MCP client connection attempt fails (proving the server actually shut down).
+- The endpoint stops accepting connections: `curl` prints nothing and the last line is `exit 7` (could not connect), proving the server shut down.

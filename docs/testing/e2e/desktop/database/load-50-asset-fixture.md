@@ -42,18 +42,18 @@ Expected:
 
 ### 1. Open the fixture in the desktop app
 
-1. Click **Open database**. It is on the startup screen (when no database is
+1. Click **Open database** (`no-database-open-database` on the startup screen, `sidebar-toggle-button` then `sidebar-open-database` in the left side menu). It is on the startup screen (when no database is
    loaded), in the left side menu and in the **File > Open Database...** menu
    (Ctrl/Cmd+O). All of these open the **Open Database** dialog.
 2. The **Open Database** dialog lists databases you have already configured.
    - If `50-assets` is already listed, click it and skip to the expected result.
-   - Otherwise click **Add database** to register it first.
+   - Otherwise click **Add database** (`open-database-modal-add-database`) to register it first.
 3. In the **Add Database** dialog:
-   - **Name**: enter `50-assets`.
-   - **Type**: leave as **File system**.
-   - **Path**: click **Browse** and select `test/dbs/50-assets/` (relative to
+   - **Name** (`database-name-input`): enter `50-assets`.
+   - **Type** (`database-storage-type-select`): leave as **File system**.
+   - **Path** (`database-path-input`): click **Browse** (`database-browse-button`) and select `test/dbs/50-assets/` (relative to
      the repo root), or type the path directly.
-   - Click **Add**. This registers the database and opens it.
+   - Click **Add** (`add-database-confirm`). This registers the database and opens it.
 
 Expected:
 - The gallery loads and displays exactly 50 thumbnails.
@@ -64,7 +64,7 @@ Expected:
 ### 2. Spot-check that thumbnails and previews render
 
 - Scroll through the gallery and confirm the thumbnails are visible.
-- Click on any asset to open its detail view and confirm the larger preview renders.
+- Click on any asset (`gallery-thumb`) to open its detail view and confirm the larger preview renders.
 
 Expected:
 - All 50 thumbnails are visible (no broken-image placeholders).

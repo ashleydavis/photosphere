@@ -49,9 +49,9 @@ Expected:
 
 ### 1. Add the database to the app and open the Edit dialog
 
-1. Navigate to the **Manage Databases** page in the desktop app.
-2. Click **Add database**, enter `My Test DB` and `/tmp/psi-desktop-edit-database-origin/db`, then click **Add**.
-3. Click the **Edit** button for the row.
+1. Navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page in the desktop app.
+2. Click **Add database** (`add-database-button`), enter `My Test DB` (`database-name-input`) and `/tmp/psi-desktop-edit-database-origin/db` (`database-path-input`), then click **Add** (`add-database-confirm`).
+3. Click the **Edit** button (`edit-database-button`, the `My Test DB` row) for the row.
 
 Expected:
 - The Edit dialog opens with the current name, path and origin shown.
@@ -71,8 +71,8 @@ Expected:
 
 ### 3. Change the origin and save
 
-1. In the Edit dialog's **Origin** field, type `s3:my-bucket/origin-database`.
-2. Click **Save**.
+1. In the Edit dialog's **Origin** field (`database-origin-input`), type `s3:my-bucket/origin-database`.
+2. Click **Save** (`save-database-button`).
 
 Expected:
 - The dialog closes and the entry is updated.

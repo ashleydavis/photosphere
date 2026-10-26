@@ -48,12 +48,12 @@ Expected:
 ### 1. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **New database** from the File menu or the left side menu.
-3. Choose the following as the database directory:
+2. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+3. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-import-files/source
    ```
-4. Click **Create**.
+4. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -61,8 +61,8 @@ Expected: The app opens the new empty database with no assets shown.
 
 ### 2. Import a file
 
-1. Navigate to the **Import** page.
-2. Click **Import files**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import files** (`import-files-button`).
 3. Select `test/test.jpg` from the repo root.
 4. Wait for the import to complete.
 

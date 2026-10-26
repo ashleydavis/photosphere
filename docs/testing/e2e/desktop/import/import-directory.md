@@ -47,12 +47,12 @@ Expected:
 
 ### 1. Create a new database
 
-1. Click **New database** from the File menu or the left side menu.
-2. Choose the following as the database directory:
+1. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+2. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-import-directory/source
    ```
-3. Click **Create**.
+3. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -60,8 +60,8 @@ Expected: The app opens the new empty database with no assets shown.
 
 ### 2. Import a directory
 
-1. Navigate to the **Import** page.
-2. Click **Import directory**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import directory** (`import-directory-button`).
 3. Select the `test/multiple-files/` directory from the repo root.
 4. Wait for the import to complete.
 

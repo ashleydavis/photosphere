@@ -43,10 +43,10 @@ Expected:
 ### 1. Add a secret named `dup-secret`
 
 1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. Type `dup-secret` into the name field.
+2. Click **Add secret** (`add-secret-button`).
+3. Type `dup-secret` into the name field (`secret-name-input`).
 4. Fill in any valid value.
-5. Click **Save**.
+5. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The secret is added and `dup-secret` appears in the list.
@@ -55,10 +55,10 @@ Expected:
 
 ### 2. Try to add a second secret with the same name
 
-1. Click **Add secret** again.
-2. Type `dup-secret` into the name field.
+1. Click **Add secret** (`add-secret-button`) again.
+2. Type `dup-secret` into the name field (`secret-name-input`).
 3. Fill in a different value.
-4. Click **Save**.
+4. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - An error is shown (either as a toast or inline in the dialog) along the lines of "A secret named 'dup-secret' already exists".

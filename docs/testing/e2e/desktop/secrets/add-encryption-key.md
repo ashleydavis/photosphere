@@ -49,17 +49,17 @@ Expected:
 ### 1. Add a new encryption-key secret
 
 1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. Type `enc-key-1` into the name field.
-4. Set the **Type** to `encryption-key`.
-5. Paste the following into the **Private Key PEM** field:
+2. Click **Add secret** (`add-secret-button`).
+3. Type `enc-key-1` into the name field (`secret-name-input`).
+4. Set the **Type** (`secret-type-select`) to `encryption-key` (`secret-type-option-encryption-key`).
+5. Paste the following into the **Private Key PEM** field (`secret-private-key-input`):
 
    ```
    -----BEGIN PRIVATE KEY-----
    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQ
    -----END PRIVATE KEY-----
    ```
-6. Click **Save**.
+6. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes.
@@ -69,7 +69,8 @@ Expected:
 
 ### 2. Confirm the value in the app and the CLI
 
-1. Click the **View secret** (eye) button on the `enc-key-1` row.
+1. Click the **View secret** (eye) button (`view-secret-button`, the `enc-key-1` row) on the `enc-key-1` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Then run in the CLI terminal:
 
@@ -89,8 +90,8 @@ If you save without changing anything, the app may skip the write entirely, so
 the check below would prove nothing. So this step changes the PEM before
 saving, which guarantees the value is written again.
 
-1. Click the **Edit** button on the `enc-key-1` row.
-2. Clear the **Private Key PEM** field and paste this different key in its place:
+1. Click the **Edit** button (`edit-secret-button`, the `enc-key-1` row) on the `enc-key-1` row.
+2. Clear the **Private Key PEM** field (`secret-private-key-input`) and paste this different key in its place:
 
    ```
    -----BEGIN PRIVATE KEY-----
@@ -98,7 +99,7 @@ saving, which guarantees the value is written again.
    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAB
    -----END PRIVATE KEY-----
    ```
-3. Click **Save**.
+3. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - The dialog closes without errors.
@@ -110,7 +111,8 @@ Expected:
 The edit in step 3 forced a real write, so this confirms saving did not
 change the PEM value.
 
-1. Click the **View secret** (eye) button on the `enc-key-1` row.
+1. Click the **View secret** (eye) button (`view-secret-button`, the `enc-key-1` row) on the `enc-key-1` row.
+2. Click **Reveal** (`reveal-secret-button`) to show the value.
 
 Then run in the CLI terminal:
 

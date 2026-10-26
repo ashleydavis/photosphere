@@ -72,11 +72,11 @@ Expected:
 In the sender instance:
 
 1. Navigate to the **Manage Secrets** page.
-2. Click **Add secret**.
-3. In the dialog, type `test-secret` into the name field.
-4. Set the **Type** to `api-key`.
-5. Type `test-value` into the **API Key** field.
-6. Click **Save**.
+2. Click **Add secret** (`add-secret-button`).
+3. In the dialog, type `test-secret` into the name field (`secret-name-input`).
+4. Set the **Type** (`secret-type-select`) to `api-key` (`secret-type-option-api-key`).
+5. Type `test-value` into the **API Key** field (`secret-value-input`).
+6. Click **Save** (`add-secret-confirm`).
 
 Expected:
 - `test-secret` appears in the Secrets list.
@@ -85,21 +85,21 @@ Expected:
 
 ### 2. Start the share on the sender
 
-1. On the sender's **Manage Secrets** page, click **Share secret**.
-2. Click the **Send** button on the share dialog.
+1. On the sender's **Manage Secrets** page, click **Share secret** (`share-secret-button`, the `test-secret` row).
+2. Click the **Send** button (`share-secret-send-button`) on the share dialog.
 
 Expected:
 - A 4-digit pairing code is shown.
 
-Record that code as `<code>` for the next step.
+Record that code (`share-pairing-code`) as `<code>` for the next step.
 
 ---
 
 ### 3. Start the receive on the other instance
 
 1. In the receiver instance, navigate to the **Manage Secrets** page.
-2. Click **Receive secret**.
-3. Type the 4-digit pairing code `<code>` and click **Start**.
+2. Click **Receive secret** (`receive-secret-button`).
+3. Type the 4-digit pairing code `<code>` (`receive-secret-code-input`) and click **Start** (`receive-secret-start-button`).
 
 Expected:
 - After a brief "Waiting for sender..." message, the receiver shows the incoming secret's `Type: api-key` and a **Save as (name)** field.
@@ -108,8 +108,8 @@ Expected:
 
 ### 4. Save the secret on the receiver
 
-1. Type `test-secret` into the **Save as (name)** field.
-2. Click **Save**.
+1. Type `test-secret` into the **Save as (name)** field (`receive-secret-name-input`).
+2. Click **Save** (`receive-secret-save-button`).
 
 Expected:
 - A success message ("Secret imported successfully!") is shown.
@@ -119,8 +119,8 @@ Expected:
 
 ### 5. Verify the value came across
 
-1. On the receiver, click the **View secret** (eye) button on the `test-secret` row.
-2. Click the **Reveal** button to show the value.
+1. On the receiver, click the **View secret** (eye) button (`view-secret-button`, the `test-secret` row) on the `test-secret` row.
+2. Click the **Reveal** button (`reveal-secret-button`) to show the value.
 
 Expected:
 - The revealed value is `test-value` (matching the value seeded on the sender).

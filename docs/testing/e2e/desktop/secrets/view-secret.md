@@ -42,7 +42,7 @@ Expected:
 ### 1. Add a secret to view
 
 1. Navigate to the **Manage Secrets** page in the desktop app.
-2. Click **Add secret**, type `smoke-secret` and confirm.
+2. Click **Add secret** (`add-secret-button`), type `smoke-secret` (`secret-name-input`) and confirm (`add-secret-confirm`).
 
 Expected:
 - `smoke-secret` is listed.
@@ -51,7 +51,7 @@ Expected:
 
 ### 2. Open the View dialog
 
-1. Click the **View** button on the `smoke-secret` row.
+1. Click the **View** button (`view-secret-button`, the `smoke-secret` row) on the `smoke-secret` row.
 
 Expected:
 - The View secret dialog opens with the value initially hidden.
@@ -60,7 +60,7 @@ Expected:
 
 ### 3. Reveal the value
 
-1. Click **Reveal** (or the equivalent eye icon).
+1. Click **Reveal** (`reveal-secret-button`) (or the equivalent eye icon).
 
 Expected:
 - The secret value is shown.

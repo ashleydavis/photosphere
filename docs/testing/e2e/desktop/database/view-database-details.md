@@ -49,10 +49,10 @@ Expected:
 
 ### 1. Add a database entry in the desktop app
 
-1. Navigate to the **Manage Databases** page in the desktop app.
-2. Click **Add database**.
-3. Enter the name `My Test DB` and the path `/tmp/psi-desktop-view-database-details/db`.
-4. Click **Add**.
+1. Navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page in the desktop app.
+2. Click **Add database** (`add-database-button`).
+3. Enter the name `My Test DB` (`database-name-input`) and the path `/tmp/psi-desktop-view-database-details/db` (`database-path-input`).
+4. Click **Add** (`add-database-confirm`).
 
 Expected:
 - The new entry appears on the Databases page.
@@ -61,10 +61,9 @@ Expected:
 
 ### 2. View the database details
 
-1. From the row for `My Test DB`, click the **View** button.
+1. From the row for `My Test DB`, click the **View** button (`view-database-button`, the `My Test DB` row).
 
 Expected output contains all of:
 - The database name `My Test DB`.
 - The database path `/tmp/psi-desktop-view-database-details/db`.
-- An asset count (0 for a freshly-created database).
 - The configured secret ids (or "none" / equivalent if no secrets were attached).

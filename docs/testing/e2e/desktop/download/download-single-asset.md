@@ -51,13 +51,13 @@ Expected:
 ### 1. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **New database** from the File menu or the left side menu.
-3. Enter `source` as the database name.
-4. Choose the following as the database directory:
+2. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+3. Enter `source` (`database-name-input`) as the database name.
+4. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-download-single-asset/source
    ```
-5. Click **Create**.
+5. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -65,8 +65,8 @@ Expected: The app opens the new empty database with no assets shown.
 
 ### 2. Import a file
 
-1. Navigate to the **Import** page.
-2. Click **Import photos**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import files** (`import-files-button`).
 3. Select `test/test.jpg` from the repo root.
 4. Wait for the import to complete.
 
@@ -78,7 +78,7 @@ Expected:
 
 ### 3. Open the asset view
 
-1. In the gallery, click the imported `test.jpg` thumbnail.
+1. In the gallery, click the imported `test.jpg` thumbnail (`gallery-thumb`).
 
 Expected:
 - The asset view drawer slides open showing the full-resolution image.
@@ -87,7 +87,7 @@ Expected:
 
 ### 4. Download the asset
 
-1. In the asset view toolbar, click the **Download** icon (the down-arrow icon next to **Copy to clipboard**).
+1. In the asset view toolbar, click the **Download** icon (`download-asset-button`) (the down-arrow icon next to **Copy to clipboard**).
 2. In the save dialog, set the destination to the `downloads` folder created in Prep:
    - Press **Ctrl+L** to open the path entry field (plain typing triggers search within the current folder instead).
    - Type the full destination path including the filename and press Enter:

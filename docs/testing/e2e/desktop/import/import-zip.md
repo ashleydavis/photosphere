@@ -48,12 +48,13 @@ Expected:
 ### 1. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **New database** from the File menu or the left side menu.
-3. Choose the following as the database directory:
+2. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+3. Enter `source` (`database-name-input`) as the name.
+4. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-import-zip/source
    ```
-4. Click **Create**.
+5. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -61,13 +62,13 @@ Expected: The app opens the new empty database with no assets shown.
 
 ### 2. Import the zip archive
 
-1. Navigate to the **Import** page.
-2. Click **Import files**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import files** (`import-files-button`).
 3. Select `test/multiple-files/test-archive.zip` from the repo root.
 4. Wait for the import to complete.
 
 Expected:
-- All three assets from the zip (`test-1.jpeg`, `test-2.png`, `test.mp4`) appear in the gallery.
+- Both assets from the zip (`PXL_20260322_023611216.mp4` and `test-3.jpg`) appear in the gallery.
 - No error notifications are shown.
 
 ## Check
@@ -79,7 +80,7 @@ bun run start -- list --db /tmp/psi-desktop-import-zip/source
 ```
 
 Expected:
-- `test-1.jpeg`, `test-2.png` and `test.mp4` are each listed as separate assets.
+- `PXL_20260322_023611216.mp4` and `test-3.jpg` are each listed as separate assets, under those names.
 
 ---
 
