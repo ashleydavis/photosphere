@@ -5,19 +5,12 @@
 Test that `secrets add` writes a secret that subsequently appears in
 `secrets list`.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and point the CLI at empty config and vault directories:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
@@ -25,9 +18,11 @@ export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
----
+Expected: no output.
 
-### 2. Add a plain secret via CLI flags
+## Test
+
+### 1. Add a plain secret via CLI flags
 
 ```bash
 bun run start -- secrets add --yes --name test-secret --type plain --value hello123
@@ -35,15 +30,16 @@ bun run start -- secrets add --yes --name test-secret --type plain --value hello
 
 Expected:
 - The command exits successfully.
-- The file `/tmp/psi-test/vault/vault.json` exists and holds a `test-secret` key.
 
----
+## Check
 
-### 3. Confirm it shows up in the list
+### 2. Confirm it is in the vault file and the list
 
 ```bash
+jq 'keys' /tmp/psi-test/vault/vault.json
 bun run start -- secrets list
 ```
 
 Expected:
-- Output contains `test-secret`.
+- `/tmp/psi-test/vault/vault.json` holds a `test-secret` key.
+- The list output contains `test-secret`.

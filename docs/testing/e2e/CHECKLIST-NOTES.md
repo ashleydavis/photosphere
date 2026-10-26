@@ -10,17 +10,142 @@ Upcoming version: 0.0.9
 
 #### add-and-verify
 
+- The size of an added file is not recorded in its asset record. Adding `test/test.jpg` (2,049,800 bytes) printed `Total size: 0 Bytes` and `Average size: 0 Bytes`, and `list` shows `Size: Unknown` for it. `verify` counts 2.58 MiB on disk, so the files are stored; only the recorded size is missing.
+- The `0 Bytes` in the `add` summary is explained by `addPaths` in `packages/node-api/src/lib/import.ts`: `totalSize` starts at 0 and nothing adds to it. Why `list` shows `Size: Unknown` has not been checked.
+
+#### add-duplicate-content
+
+- Test step 1 expects the output to show both files processed, but it reports `Files considered: 1` for a directory holding two identical files. Dedupe itself works: `summary` shows `Files imported: 1` and verify passes. The duplicate is dropped from the counts because `import-assets.worker.ts` skips a file that duplicates one already queued in the same run without sending a message, so `addPaths` never counts it as added, already added or ignored. Its log line also prints `File ""` with no file name. Not decided yet whether the code is wrong and the test is right, or the code is fine and the test's expectation is wrong.
+
+#### add-multiple-files
+
+- Failed at Test step 1: expected `Files added: 3`, got `Files added: 5`; `check` then reported `Already added: 5` and `verify` reported `Files imported: 5`, against an expected 3. The test is wrong about the fixture: it says `test-archive.zip` holds the same files as the directory, so they dedupe, but the zip holds `PXL_20260322_023611216.mp4` and `test-3.jpg`, which differ from `test-1.jpeg`, `test-2.png` and `test.mp4`. The two files from the zip were imported under UUID names (`b459eba0-....jpg`, `484b07be-....mp4`) with a temporary path (`/tmp/photosphere/<uuid>/file-scanner`), not their names inside the zip.
+
 #### add-zip
 
 - **revist and confirm** This needs testing and needs a smoke test.
+- Failed at Test step 1 and Check step 2: expected `Files added: 3` and `test-1.jpeg`, `test-2.png` and `test.mp4` listed, got `Files added: 2`. The zip holds two files, `PXL_20260322_023611216.mp4` and `test-3.jpg`, so the test's expectation does not match the fixture. Both were listed under UUID file names (`a63c6d98-....jpg`, `f3f70f6d-....mp4`) with path `/tmp/photosphere/<uuid>/file-scanner`, not their names inside the zip, and both dated today (10/26/2026) although the zip entries are dated 2026-06-01. Verify passed with `Files imported: 2`.
+
+### Inspect
+
+#### list-paging
+
+- Failed at Test step 1: the 50-assets fixture holds 60 assets (`summary` shows `Files imported: 60`), but `list --page-size 20 --yes` showed only `--- Page 1 ---` with 20 files and then `End of results. Displayed 20 files total.` No second page and no "Press Enter" prompt. With `--page-size 100` it showed one page of 50 files and `Displayed 50 files total.`, so 10 assets never appear whatever the page size. In `apps/cli/src/cmd/list.ts`, `list` keeps only the first `pageSize` records of each page the database returns and moves on only when the database gives a `nextPageId`.
+
+### Verify
+
+#### verify-full
+
+- Failed at Test step 2: the output of `verify --full` is line for line the same as the quick `verify`, so nothing indicates that file hashes were checked, which the test expects. Every count passed (`New:`, `Modified:` and `Removed:` all 0).
+
+### Sync
+
+#### sync-copy-to-original
+
+- The test file's `cp -r ../../test/dbs/v6 /tmp/psi-test/original` failed with `cannot create directory '/tmp/psi-test/original': No such file or directory`, because the step before removes `/tmp/psi-test`. Added `mkdir -p /tmp/psi-test` to the prep of every test that copies the v6 fixture (all six sync tests and replicate-deleted-asset). With that, the test passed.
+- `sync` prints a raw JSON line, `Sync timings: {"filesCopied":3,...}`, in its normal output.
+
+#### sync-edit-field-copy
+
+- The test file used a `<bdb-cli>` placeholder. Replaced with `bun run ../bdb-cli/src/index.ts`, which is how the smoke tests run it from source.
 
 ### Move
 
 #### move-file-between-databases
 
 - **revist and confirm** This command doesn't exist yet.
+- Failed at Test step 1: `error: unknown command 'move'` (`Did you mean remove?`). The file stayed in the source database.
+
+### Replication
+
+#### replicate-deleted-asset
+
+- Passed, but proves little: the v6 fixture holds only one asset, so removing it leaves an empty database and the replica copied 0 files and 0 records.
+
+#### replicate-partial-copy
+
+- Failed at Check step 2: the replica's `list` shows `No files found in the database.`, while `verify` on the replica reports `Files imported: 1` and passes, and `origin` shows `/tmp/psi-test/source`. The replicate step reported `Total files copied: 0` and `Total records copied: 0`. The test file already marked this step "not currently working".
+
+#### replicate-unrelated-fails
+
+- Passed, but the refusal is printed as `An unknown error occurred` followed by a stack trace and a `psi bug` prompt, although it is an expected, explained refusal.
+
+### Upgrade
+
+#### add-file-after-upgrade
+
+- Passed, but the test never upgrades anything: it copies the v6 fixture, which is already the current version. Its title says "Freshly-Upgraded".
+
+### Databases (dbs)
+
+#### add-and-list
+
+- The CLI now reads `databases.toml`, but seven `dbs` tests (add-and-list, view, edit-rename, remove, clear, resolve-by-name, resolve-by-path) seeded `databases.json`, so as written they failed (`No database matching the given name or path was found.`) or passed without testing anything (clear). Rewrote their seeds as `databases.toml`, after which all of them passed. The no-match-fallback test was changed the same way.
+
+### LAN Share
+
+#### share-database
+
+- As written this test could not pass: it seeded `databases.json`, and `dbs send` without `--yes` stops at an interactive "Database name" field prompt. With stdin not a terminal, `dbs send` then exited with status 0 having sent nothing. With a `databases.toml` seed and `--yes` the share passed.
+- The test said `dbs send` and `secrets send` wait "60 seconds unless `--timeout <seconds>` says otherwise", but neither command has a `--timeout` option (`error: unknown option '--timeout'`). Removed from the test.
+
+### Misc
+
+#### config-timestamps
+
+- Failed: `.db/config.json` never contains `lastModifiedAt` or `lastSyncedAt` (it holds `{}` or just `origin`). Those values now live in the binary `.db/state.dat`, and no CLI command prints them, so the test cannot be run as written. Marked it out of date in the test file.
+- In its sync step, `sync` printed `Databases already in sync, nothing to do.` straight after `replicate`, so no sync timestamp would be written there anyway.
+
+#### mcp-server
+
+- The test said `psi mcp` was not implemented and used `mcp --db`, which fails with `error: unknown option '--db'`. The command exists and serves tools (`list_databases`, `open_database`, `list_media_files` and others), not resources. Rewrote the test to drive it over stdio, and it passed: `open_database` opened the test database and `list_media_files` returned `test.jpg`.
+- `psi mcp` does not exit when its stdin closes, so the test run hung until it was stopped. The rewritten test wraps it in `timeout 30`. An MCP client that closes stdin to end a session leaves the server running.
+
+#### info
+
+- Failed at Test step 1: `info ../../test/test.jpg` shows type, hash, size, the file's modified time and dimensions, but no EXIF date. The photo's date (`2025-05-27T09:54:16`) appears only in step 2, as `Photo date` in the database record.
+- Failed at Test step 3: `info` on a file that does not exist printed `Info for 0 item(s):` and `Displayed info for 0 item(s).` and exited 0, with no error.
+- In step 2 the asset's `Labels` are the folders of the path it was added from: `home, ash, projects, photosphere, photosphere, test`.
+
+#### bug
+
+- Failed at Test step 1: `bug --no-browser --yes` printed `✓ Bug report opened in browser!` and no issue link, so `--no-browser` was ignored and the browser was asked to open the GitHub new-issue page. Commander turns `--no-browser` into `options.browser = false`, but `apps/cli/src/cmd/bug.ts` checks `options.noBrowser`, which is never set.
+
+### Origin
+
+#### consolidate-unrelated-remote
+
+- Passed. Sync's refusal of the two unrelated databases in Test step 1 is printed as `An unknown error occurred` with two stack traces and a `psi bug` prompt.
+- `consolidate` printed `Failed to acquire write lock after 3 attempts. Lock is currently held by "<id>" since 3s ago` part way through, then completed and reported success.
+
+### S3
+
+#### s3-database
+
+- Passed. After creating a database on S3, `init` suggests `cd s3:photosphere-smoke-test/manual-test`, which is not a directory.
+
+### Vault (keychain)
+
+#### add-view-edit-delete
+
+- Not run. Both keychain tests add and remove secrets with fixed names in the real OS keychain of the machine running them, so they were left for the human to run.
+
+### General
+
+- Every command that fails prints `Temporary files retained for inspection: /tmp/photosphere/<uuid>`, so each failed command leaves a directory behind under `/tmp/photosphere`.
+- Every command against a fresh config directory prints the `📰 News:` block first, including `dbs add`.
 
 ## Desktop
+
+All desktop results below come from a test-hooks build of the app driven through its control connection on Linux, one isolated instance per test.
+
+### General
+
+- The "Import complete" toast never closes on its own (`duration: 0` in `main.tsx`), and it sits on top of later toasts, even after switching databases.
+- The navbar badge says "1 photos", and the import toast for a video says "View photo".
+- The Actions column on Manage Databases runs off the right edge of a 1200px window: the last icon is cut off and the Edit button is out of view.
+- The About page gives the MCP URL as the fixed `localhost:3475`, but in test mode the server picks a free port (51375 in this run).
+- Exporting `XDG_DATA_HOME` as the desktop tests' Prep says also moves mise's data folder, so in the CLI terminal `mise exec -- bun` failed with "bun couldn't exec". Anyone whose bun comes from mise hits this.
 
 ### Import
 
@@ -32,11 +157,46 @@ Upcoming version: 0.0.9
 
 #### import-video
 
-- **revist and confirm** Video imports, but doesn't play back.
+- Passed. Import, the video thumbnail with its play icon, `video/mp4` in the CLI list and verify all passed, and the human confirmed the video plays.
 
 #### import-zip
 
 - **revist and confirm** This will work but will have a similar problem as above.
+- Failed at Test step 2: expected `test-1.jpeg`, `test-2.png` and `test.mp4`, got "2 assets imported". The zip holds `PXL_20260322_023611216.mp4` and `test-3.jpg`, so the test's expectation does not match the fixture. The CLI lists them as `1a1283e9-….jpg` and `328eb970-….mp4`, so the names inside the zip are lost. The CLI checks passed.
+
+### Move
+
+#### move-file-between-databases
+
+- Failed at Test step 2: the test says to click "Import photos", but the Import page's button is "Import files". Every other step passed: the asset moved to the destination database.
+- After moving the selected asset, the navbar still says "1 selected".
+
+### Download
+
+#### download-single-asset
+
+- Failed at Test step 2: the test names an "Import photos" button that the Import page does not have ("Import files"). The download passed: `Downloaded "test.jpg"` with Open Folder, and the file is byte-identical to the original.
+
+#### download-multiple-assets
+
+- Failed at Test step 2: same "Import photos" button that does not exist. The download passed: "Downloaded 2 assets", both files byte-identical.
+
+### Replication
+
+#### replicate-full-copy
+
+- Failed at Test step 2: same "Import photos" button that does not exist. The full replica passed, with the right origin.
+
+#### replicate-partial-copy
+
+- Failed at Test step 2: same "Import photos" button that does not exist.
+- Failed at step 6: expected `test.jpg` in the replica, `list` printed "No files found in the database." Verify and origin passed.
+
+### Database
+
+#### view-database-details
+
+- Failed at Test step 2: the test expects an asset count, but the View Database dialog shows only Name, Description, Path, Origin and Linked Secrets.
 
 ### Secrets
 
@@ -44,17 +204,44 @@ Upcoming version: 0.0.9
 
 - **revist and confirm** This fails. Clicking Save has no effect for the duplicate secret, no error/toast is shown.
 - **revist and confirm** It would be good when typing in the duplicate secret name in the Add Secret modal if it shows you in the form that the name is duplicate.
+- Failed at Test step 2: no error appears in the UI and the dialog stays open. The error reaches only app.log: "Error: A secret named 'dup-secret' already exists." Step 3 passed: the vault still holds only the original value.
 
 #### add-api-key
 
 - **revist and confirm** Should not be able to save unless a value is entered. Blank values are useless and should not be allowed.
 - **revist and confirm** The should be a button that reveals the secret in the input while we are entering it.
+- Failed at Test steps 2 and 4: after the eye button, the value shows as `••••••••••` until Reveal is clicked, which the test does not mention. After Reveal the value and the CLI output were correct.
+
+#### add-encryption-key
+
+- Failed at Test steps 2 and 4: the value shows as `••••••••••` until Reveal is clicked, which the test does not mention. After Reveal the PEM and the CLI output were correct.
+
+#### add-s3-credentials
+
+- Failed at Test steps 2 and 4: the values show as `••••••••••` until Reveal is clicked, which the test does not mention. After Reveal every field and the CLI output were correct, with no `label` field.
+
+#### rename-secret
+
+- Failed at Test step 3: `secrets list` prints a table row `new-name  api-key  ****`, not the `Type: api-key` text the test names. `old-name` is gone, as expected.
+
+#### view-secret
+
+- Passed. "Add secret" with only a name filled in saves an `s3-credentials` secret with every field empty, and nothing checks for it.
 
 ### LAN Share
 
 #### share-database
 
 - **revist and confirm** When it tried to create db (with a fake path), the Create Database modal didn't dismiss automatically even though the new db appeared in the Manage Databases list.
+- Failed at Test step 5: the value shows as `••••••••••` until Reveal is clicked, which the test does not mention. After Reveal the key matched.
+- app.log has `[ERROR] Could not reach the database at …/sender/test-db` with `error:1E08010C:DECODER routines::unsupported`, caused by the test's made-up path and placeholder PEM.
+
+### MCP
+
+#### mcp-server
+
+- Failed at Test steps 2 and 4: the test says to turn MCP on and off, but the app has no control for it. The server starts with the app and stops only when the app quits.
+- Failed at Test step 3: `resources/list` returns "Method not found", because the server offers tools only. `get_media_file_info` returned correct metadata for a fixture asset.
 
 ## Mobile
 

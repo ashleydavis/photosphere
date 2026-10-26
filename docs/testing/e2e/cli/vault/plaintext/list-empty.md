@@ -4,19 +4,12 @@
 
 Test that `secrets list` reports an empty vault.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and point the CLI at empty config and vault directories:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
@@ -24,9 +17,11 @@ export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
----
+Expected: no output.
 
-### 2. List secrets
+## Test
+
+### 1. List secrets
 
 ```bash
 bun run start -- secrets list
@@ -34,3 +29,7 @@ bun run start -- secrets list
 
 Expected:
 - Output includes `No secrets`.
+
+## Check
+
+The list output in step 1 is the check.

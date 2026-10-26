@@ -63,6 +63,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Endpoint (optional)</FormLabel>
                         <Input
+                            data-id="create-secret-s3-endpoint-input"
                             value={form.s3Endpoint}
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
@@ -70,6 +71,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Region</FormLabel>
                         <Input
+                            data-id="create-secret-s3-region-input"
                             value={form.s3Region}
                             onChange={event => setForm(prev => ({ ...prev, s3Region: event.target.value }))}
                         />
@@ -77,6 +79,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Access Key ID</FormLabel>
                         <Input
+                            data-id="create-secret-s3-access-key-input"
                             value={form.s3AccessKeyId}
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
@@ -84,6 +87,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Secret Access Key</FormLabel>
                         <Input
+                            data-id="create-secret-s3-secret-key-input"
                             type="password"
                             value={form.s3SecretAccessKey}
                             onChange={event => setForm(prev => ({ ...prev, s3SecretAccessKey: event.target.value }))}
@@ -119,6 +123,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
             <FormControl sx={{ mb: 1 }}>
                 <FormLabel>API Key</FormLabel>
                 <Input
+                    data-id="create-secret-api-key-input"
                     type="password"
                     value={form.apiKey}
                     onChange={event => setForm(prev => ({ ...prev, apiKey: event.target.value }))}
@@ -140,6 +145,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
                 <FormControl sx={{ mb: 2 }}>
                     <FormLabel>Name</FormLabel>
                     <Input
+                        data-id="create-secret-name-input"
                         value={form.name}
                         onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
                     />
@@ -148,7 +154,7 @@ export function CreateSecretDialog({ open, secretType, defaultName, onClose, onS
             </DialogContent>
             <DialogActions>
                 <Button variant="plain" onClick={onClose}>Cancel</Button>
-                <Button onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
+                <Button data-id="create-secret-confirm" onClick={() => handleSave().catch(err => log.exception('Create secret error:', err as Error))}>Create</Button>
             </DialogActions>
         </ResponsiveDialog>
     );

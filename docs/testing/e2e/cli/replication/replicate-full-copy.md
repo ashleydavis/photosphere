@@ -4,72 +4,28 @@
 
 Test that a database can be created, populated, verified, and fully replicated to a new directory using the CLI source.
 
-## Prerequisites
+## Prep
 
-- Run all commands from `apps/cli/` (the `cd` at the start puts you there).
-
-Start by navigating to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create a database, import a file, list it and verify the source:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a new database
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
-```
-
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
-
----
-
-### 3. Import a file
-
-```bash
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source
-```
-
-Expected:
-- The file is reported as added.
-- No errors are shown.
-
----
-
-### 4. List files in the source database
-
-```bash
 bun run start -- list --db /tmp/psi-test/source
-```
-
-Expected:
-- `test.jpg` is listed.
-
----
-
-### 5. Check that the source database is ok
-
-```bash
 bun run start -- verify --db /tmp/psi-test/source
 ```
 
 Expected:
-- Verification completes without errors.
-- All files pass integrity checks.
+- Output confirms a new media file database was created in `/tmp/psi-test/source`.
+- The file is reported as added, with no errors.
+- `test.jpg` is listed.
+- Verification completes without errors and all files pass integrity checks.
 
----
+## Test
 
-### 6. Replicate a full copy to a new directory
+### 1. Replicate a full copy to a new directory
 
 ```bash
 bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --full --yes
@@ -79,9 +35,9 @@ Expected:
 - Replication results show files copied.
 - `✅ Replication completed successfully` is shown.
 
----
+## Check
 
-### 7. List files in the replica database
+### 2. List files in the replica database
 
 ```bash
 bun run start -- list --db /tmp/psi-test/replica
@@ -92,7 +48,7 @@ Expected:
 
 ---
 
-### 8. Check that the replica database is ok
+### 3. Check that the replica database is ok
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/replica
@@ -104,7 +60,7 @@ Expected:
 
 ---
 
-### 9. Check the origin of the replica
+### 4. Check the origin of the replica
 
 ```bash
 bun run start -- origin --db /tmp/psi-test/replica
@@ -112,4 +68,3 @@ bun run start -- origin --db /tmp/psi-test/replica
 
 Expected:
 - The origin is shown as `/tmp/psi-test/source`.
-

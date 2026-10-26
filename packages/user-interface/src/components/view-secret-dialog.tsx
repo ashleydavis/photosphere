@@ -158,17 +158,17 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         if (secret.type === 's3-credentials') {
             return (
                 <>
-                    <Field label="Endpoint" value={parsed?.endpoint ?? ''} />
+                    <Field label="Endpoint" value={parsed?.endpoint ?? ''} dataId="revealed-secret-endpoint" />
                     <Field label="Region" value={parsed?.region ?? ''} dataId="revealed-secret-region" />
-                    <Field label="Access Key ID" value={parsed?.accessKeyId ?? ''} />
-                    <Field label="Secret Access Key" value={parsed?.secretAccessKey ?? ''} />
+                    <Field label="Access Key ID" value={parsed?.accessKeyId ?? ''} dataId="revealed-secret-access-key-id" />
+                    <Field label="Secret Access Key" value={parsed?.secretAccessKey ?? ''} dataId="revealed-secret-secret-access-key" />
                 </>
             );
         }
         if (secret.type === 'encryption-key') {
-            return <Field label="Private Key PEM" value={parsed?.privateKeyPem ?? secretValue} multiline />;
+            return <Field label="Private Key PEM" value={parsed?.privateKeyPem ?? secretValue} multiline dataId="revealed-secret-private-key-pem" />;
         }
-        return <Field label="API Key" value={parsed?.apiKey ?? secretValue} />;
+        return <Field label="API Key" value={parsed?.apiKey ?? secretValue} dataId="revealed-secret-api-key" />;
     }
 
     //
@@ -193,15 +193,15 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
             >
                 <DialogTitle>View Secret</DialogTitle>
                 <DialogContent>
-                    <Typography level="body-md" sx={{ mb: 1 }}>
+                    <Typography data-id="view-secret-name" level="body-md" sx={{ mb: 1 }}>
                         <strong>Name:</strong> {secret.name}
                     </Typography>
-                    <Typography level="body-md" sx={{ mb: 2 }}>
+                    <Typography data-id="view-secret-type" level="body-md" sx={{ mb: 2 }}>
                         <strong>Type:</strong> {secret.type}
                     </Typography>
                     {!revealed
                         ? (
-                            <Typography sx={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+                            <Typography data-id="hidden-secret-value" sx={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>
                                 ••••••••••
                             </Typography>
                         )
@@ -209,7 +209,7 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
                     }
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Close</Button>
+                    <Button data-id="view-secret-close-button" variant="plain" onClick={onClose}>Close</Button>
                     {!revealed && (
                         <Button
                             data-id="reveal-secret-button"

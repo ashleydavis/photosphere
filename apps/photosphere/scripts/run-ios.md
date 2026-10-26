@@ -2,7 +2,7 @@
 
 Builds the app and runs it: on a connected iPhone or iPad when there is one, otherwise on an existing simulator (booting it if needed, with its output in the terminal), otherwise it fails with an error. It never creates or deletes a simulator.
 
-Run it with `bun run run:ziggy:ios`, on a Mac.
+Run it with `bun run ios`, on a Mac.
 
 A device build is signed by the development team of the account signed in to Xcode (Preferences, Accounts), installed with `ios-device.ts` through native-run's device library, and launched paused under the device's debugserver, which lldb then detaches from so the app runs on by itself. native-run supports devices up to iOS 16. The first time, iOS may refuse to open the app until the developer is trusted under Settings, General, VPN & Device Management.
 

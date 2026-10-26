@@ -13,10 +13,10 @@ bun run and    # Android
 bun run ios    # iOS
 ```
 
-The desktop app running on a machine on the same local network:
+The desktop app running on a machine on the same local network, started from the repo root with the script for its platform: `bun run linux`, `bun run macos` or `bun run windows`:
 
 ```bash
-bun run dev
+bun run linux
 ```
 
 The phone must be on Wi-Fi, not mobile data.

@@ -8,4 +8,10 @@ test areas.
 ## Tests
 
 - [config-timestamps.md](config-timestamps.md) - `.db/config.json` tracks `lastModifiedAt` and `lastSyncedAt`
-- [mcp-server.md](mcp-server.md) - `psi mcp` server starts and serves resources (placeholder — see warning at the top of the file)
+- [mcp-server.md](mcp-server.md) - `psi mcp` server starts and serves tools over stdio
+- [info.md](info.md) - `info` on a file on disk and on an asset by ID
+- [hash.md](hash.md) - `hash` matches the hash the database records
+- [tools.md](tools.md) - `tools` reports the media tools
+- [version.md](version.md) - `version` prints the versions
+- [news.md](news.md) - `news` shows every news item
+- [bug.md](bug.md) - `bug --no-browser` builds a bug report

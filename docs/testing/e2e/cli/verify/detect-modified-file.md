@@ -4,54 +4,26 @@
 
 Test that `verify` reports a tampered asset file as `Modified`.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create a database, add a file, then append data to its asset file (do not delete it):
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database and add a file
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
+ls /tmp/psi-test/source/asset
+echo "tampered" >> /tmp/psi-test/source/asset/$(ls /tmp/psi-test/source/asset)
 ```
 
 Expected:
 - Database created and the file is reported as added.
+- `ls` lists one UUID. The asset file is then larger and its content differs from the recorded hash.
 
----
+## Test
 
-### 3. Tamper with one of the asset files
-
-```bash
-ls /tmp/psi-test/source/asset
-```
-
-Note the UUID, then append data to it (do not delete):
-
-```bash
-echo "tampered" >> /tmp/psi-test/source/asset/<asset-id>
-```
-
-Expected:
-- The asset file is now larger and its content differs from the recorded hash.
-
----
-
-### 4. Run verify
+### 1. Run verify
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source
@@ -61,3 +33,7 @@ Expected:
 - The command reports that verification found issues.
 - `Modified:` reports `1`.
 - `Removed:` reports `0`.
+
+## Check
+
+The verify output in step 1 is the check.

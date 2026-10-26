@@ -2,39 +2,56 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test that a database can be created, populated, verified, and fully replicated to a new directory using the Photosphere desktop app.
+Test that a database can be created, populated, verified and fully replicated to a new directory using the Photosphere desktop app.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open two terminals at the repo root, one for the desktop app and one for the CLI.
+
+In either terminal, clean up any previous run of this test:
 
 ```bash
-bun run dev
+rm -rf /tmp/psi-desktop-replicate-full-copy
 ```
 
-CLI commands are run from `apps/cli/`:
+Run this in both terminals. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
+
+```bash
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-replicate-full-copy/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-replicate-full-copy/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-replicate-full-copy/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-replicate-full-copy/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-replicate-full-copy/data
+```
+
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-replicate-full-copy/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
+
+In the app's terminal, start the desktop app from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
+
+```bash
+bun run linux
+```
+
+In the CLI terminal, move into the CLI source directory:
 
 ```bash
 cd apps/cli/
 ```
 
-## Steps
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
 
-### 1. Clean up any previous test run
+## Test
 
-```bash
-rm -rf /tmp/psi-desktop-test
-```
-
----
-
-### 2. Create a new database
+### 1. Create a new database
 
 1. Open the Photosphere desktop app.
 2. Click **New database** from the File menu or the left side menu.
 3. Choose the following as the database directory:
    ```
-   /tmp/psi-desktop-test/source
+   /tmp/psi-desktop-replicate-full-copy/source
    ```
 4. Click **Create**.
 
@@ -42,7 +59,7 @@ Expected: The app opens the new empty database with no assets shown.
 
 ---
 
-### 3. Import a file
+### 2. Import a file
 
 1. Navigate to the **Import** page.
 2. Click **Import photos**.
@@ -55,10 +72,10 @@ Expected:
 
 ---
 
-### 4. List files in the source database
+### 3. List files in the source database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-test/source
+bun run start -- list --db /tmp/psi-desktop-replicate-full-copy/source
 ```
 
 Expected:
@@ -66,10 +83,10 @@ Expected:
 
 ---
 
-### 5. Check that the source database is ok
+### 4. Check that the source database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-test/source
+bun run start -- verify --db /tmp/psi-desktop-replicate-full-copy/source
 ```
 
 Expected:
@@ -78,13 +95,13 @@ Expected:
 
 ---
 
-### 6. Replicate a full copy to a new directory
+### 5. Replicate a full copy to a new directory
 
 1. Navigate to the **Manage Databases** page.
 2. Click the **Replicate database** button on the source database entry.
 3. When prompted for the destination, enter:
    ```
-   /tmp/psi-desktop-test/replica
+   /tmp/psi-desktop-replicate-full-copy/replica
    ```
 4. When prompted for replication mode, select **Full**.
 5. Click **Start replication** and wait for replication to complete.
@@ -93,12 +110,12 @@ Expected:
 - A progress indicator is shown during replication.
 - A success notification confirms replication completed.
 
----
+## Check
 
-### 7. List files in the replica database
+### 6. List files in the replica database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-test/replica
+bun run start -- list --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
@@ -106,10 +123,10 @@ Expected:
 
 ---
 
-### 8. Check that the replica database is ok
+### 7. Check that the replica database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-test/replica
+bun run start -- verify --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
@@ -118,14 +135,14 @@ Expected:
 
 ---
 
-### 9. Check the origin of the replica
+### 8. Check the origin of the replica
 
 ```bash
-bun run start -- origin --db /tmp/psi-desktop-test/replica
+bun run start -- origin --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
 - The origin is shown as:
   ```
-  /tmp/psi-desktop-test/source
+  /tmp/psi-desktop-replicate-full-copy/source
   ```

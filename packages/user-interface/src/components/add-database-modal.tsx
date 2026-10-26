@@ -272,6 +272,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                         <FormControl sx={{ mb: 2 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Switch
+                                    data-id="database-encrypted-switch"
                                     checked={form.encrypted}
                                     onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
                                 />
@@ -279,9 +280,9 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             </Box>
                         </FormControl>
 
-                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, undefined, 'select-encryption-button')}
+                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, 'chosen-encryption-secret', 'select-encryption-button')}
 
-                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button')}
+                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, 'chosen-geocoding-secret', 'select-geocoding-button')}
                     </DialogContent>
                     <DialogActions>
                         <Button data-id="add-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>

@@ -201,6 +201,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                             <FormControl>
                                 <FormLabel>Save as (name)</FormLabel>
                                 <Input
+                                    data-id="receive-secret-name-input"
                                     value={saveName}
                                     onChange={event => setSaveName(event.target.value)}
                                     placeholder="my-secret"
@@ -210,7 +211,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {step === "success" && (
-                        <Alert color="success">
+                        <Alert data-id="receive-secret-success" color="success">
                             Secret imported successfully!
                         </Alert>
                     )}

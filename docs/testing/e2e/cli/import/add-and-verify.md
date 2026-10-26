@@ -4,25 +4,20 @@
 
 Test that a database can be created, a file imported, and the database verified using the CLI source.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and clean up any previous test run:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
 ```
 
----
+Expected: no output.
 
-### 2. Create a new database
+## Test
+
+### 1. Create a new database
 
 ```bash
 bun run start -- init --db /tmp/psi-test/source --yes
@@ -32,7 +27,7 @@ Expected: Output confirms a new media file database was created in `/tmp/psi-tes
 
 ---
 
-### 3. Import a file
+### 2. Import a file
 
 ```bash
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source
@@ -42,9 +37,9 @@ Expected:
 - The file is reported as added.
 - No errors are shown.
 
----
+## Check
 
-### 4. List files in the database
+### 3. List files in the database
 
 ```bash
 bun run start -- list --db /tmp/psi-test/source
@@ -55,7 +50,7 @@ Expected:
 
 ---
 
-### 5. Check that the database is ok
+### 4. Check that the database is ok
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source

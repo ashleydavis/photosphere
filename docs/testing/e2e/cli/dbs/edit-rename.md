@@ -4,37 +4,30 @@
 
 Test that `dbs edit --new-name` renames a database entry.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, point the CLI at an empty config directory and seed a database entry:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at an empty config directory
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+cat > /tmp/psi-test/config/databases.toml <<'TOML'
+recent_database_names = []
+
+[[databases]]
+name = "edit-db"
+description = ""
+path = "/tmp/psi-test/edit-db"
+TOML
 ```
 
----
+Expected: no output.
 
-### 2. Seed a database entry
+## Test
 
-```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"edit-db","description":"","path":"/tmp/psi-test/edit-db"}]
-EOF
-```
-
----
-
-### 3. Rename it
+### 1. Rename it
 
 ```bash
 bun run start -- dbs edit --name edit-db --yes --new-name renamed-db
@@ -43,9 +36,9 @@ bun run start -- dbs edit --name edit-db --yes --new-name renamed-db
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 4. Confirm the new name is listed
+### 2. Confirm the new name is listed
 
 ```bash
 bun run start -- dbs list

@@ -4,39 +4,27 @@
 
 Test that `secrets view --yes` prints the full secret value.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and point the CLI at empty config and vault directories, then seed a secret:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-```
-
----
-
-### 2. Seed a secret
-
-```bash
-cat > /tmp/psi-test/vault/vault.json <<'EOF'
+cat > /tmp/psi-test/vault/vault.json <<'JSON'
 {"view-secret":{"name":"view-secret","type":"plain","value":"my-secret-value"}}
-EOF
+JSON
 ```
 
----
+Expected: no output.
 
-### 3. View the secret
+## Test
+
+### 1. View the secret
 
 ```bash
 bun run start -- secrets view --name view-secret --yes
@@ -46,3 +34,7 @@ Expected output contains all of:
 - `view-secret` (the name).
 - `plain` (the type).
 - `my-secret-value` (the value).
+
+## Check
+
+The view output in step 1 is the check.

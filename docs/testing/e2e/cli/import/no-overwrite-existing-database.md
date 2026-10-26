@@ -4,35 +4,21 @@
 
 Test that `init` refuses to overwrite an existing database directory.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run and create a new database:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a new database
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 ```
 
 Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
 
----
+## Test
 
-### 3. Attempt to create a second database in the same directory
+### 1. Attempt to create a second database in the same directory
 
 ```bash
 bun run start -- init --db /tmp/psi-test/source --yes
@@ -42,9 +28,9 @@ Expected:
 - The command exits with a non-zero status.
 - An error message indicates the database directory already contains a database.
 
----
+## Check
 
-### 4. Confirm the original database is intact
+### 2. Confirm the original database is intact
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source

@@ -84,6 +84,7 @@ export function NoDatabaseLoaded() {
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                         <Button
+                            data-id="no-database-new-database"
                             variant="solid"
                             color="primary"
                             size="lg"
@@ -94,6 +95,7 @@ export function NoDatabaseLoaded() {
                             New database
                         </Button>
                         <Button
+                            data-id="no-database-open-database"
                             variant="soft"
                             color="neutral"
                             size="lg"
@@ -104,6 +106,7 @@ export function NoDatabaseLoaded() {
                             Open database
                         </Button>
                         <Button
+                            data-id="no-database-add-database"
                             variant="soft"
                             color="neutral"
                             size="lg"

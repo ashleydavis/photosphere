@@ -5,35 +5,53 @@
 Test that news notifications appear on first sight and can be dismissed, and
 that dismissed items do not reappear on subsequent launches.
 
-## Prerequisites
+## Prep
 
 This test points the app at a local news YAML file using the
 `PHOTOSPHERE_NEWS_URL` environment variable, which must be set before the app
 launches.
 
-## Steps
+Open a terminal at the repo root for the desktop app. Every command below runs in that one terminal.
 
-### 1. Set up a local news feed
+Clean up any previous run of this test:
 
-Run the setup script to write the local news feed. From the repo root:
+```bash
+rm -rf /tmp/psi-desktop-news-notifications
+```
+
+Run the setup script to write the local news feed, then point the app at it. From the repo root:
 
 ```bash
 ./docs/testing/e2e/desktop/news/setup-news-feed.sh
 export PHOTOSPHERE_NEWS_URL="file:///tmp/photosphere-news.yaml"
 ```
 
-### 2. Start the desktop app
-
-In the same terminal as step 1 (so `PHOTOSPHERE_NEWS_URL` is still set), from the
-repo root:
+Run this in the same terminal. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
 
 ```bash
-bun run dev
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-news-notifications/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-news-notifications/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-news-notifications/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-news-notifications/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-news-notifications/data
 ```
 
----
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-news-notifications/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
 
-### 3. First startup shows the first news item
+Start the desktop app in the same terminal (so `PHOTOSPHERE_NEWS_URL` and the exports above are still set), from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`:
+
+```bash
+bun run linux
+```
+
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
+
+### 1. First startup shows the first news item
 
 After the app launches:
 
@@ -44,19 +62,19 @@ Expected:
 
 ---
 
-### 4. Dismiss the first item
+### 2. Dismiss the first item
 
 1. Click the dismiss button on the toast.
 
 Expected:
 - The toast disappears.
-- The app records the dismissal (the news state file now contains `smoke-test-001`).
+- The app records the dismissal (the news state file, `/tmp/psi-desktop-news-notifications/config/state.yaml`, now contains `smoke-test-001`).
 
----
+## Check
 
-### 5. Restart the app
+### 3. Restart the app
 
-Stop the app, ensure `PHOTOSPHERE_NEWS_URL` is still set, and re-start it.
+Stop the app and start it again in the same terminal, so `PHOTOSPHERE_NEWS_URL` and the other exports from Prep are still set.
 
 Expected:
 - A toast appears for `smoke-test-002` (the second, never-seen item).
@@ -64,10 +82,10 @@ Expected:
 
 ---
 
-### 6. Dismiss the second item and restart again
+### 4. Dismiss the second item and restart again
 
 1. Dismiss the second toast.
-2. Stop and re-start the app.
+2. Stop the app and start it again in the same terminal, so the exports still apply.
 
 Expected:
 - No news toasts appear (both items are now marked as shown).

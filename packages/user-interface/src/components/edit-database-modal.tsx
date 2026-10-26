@@ -229,12 +229,13 @@ export function EditDatabaseModal({
                 maxWidth={700}
                 onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                    <ModalClose />
+                    <ModalClose data-id="edit-database-close" />
                     <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>
                     <DialogContent>
                         <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
                             <FormLabel>Name</FormLabel>
                             <Input
+                                data-id="edit-database-name-input"
                                 value={form.name}
                                 onChange={event => {
                                     setForm(prev => ({ ...prev, name: event.target.value }));
@@ -251,6 +252,7 @@ export function EditDatabaseModal({
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Description</FormLabel>
                             <Input
+                                data-id="edit-database-description-input"
                                 value={form.description}
                                 onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                             />
@@ -260,11 +262,12 @@ export function EditDatabaseModal({
                             <FormLabel>Path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Input
+                                    data-id="edit-database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
-                                <Button variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
+                                <Button data-id="edit-database-browse-button" variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
                                     Browse
                                 </Button>
                             </Box>
@@ -309,17 +312,17 @@ export function EditDatabaseModal({
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Secrets</FormLabel>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                <Typography data-id="edit-database-secrets-summary" level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
                                     {summariseSecrets()}
                                 </Typography>
-                                <Button variant="outlined" size="sm" onClick={() => setSecretsModalOpen(true)}>
+                                <Button data-id="edit-database-configure-secrets-button" variant="outlined" size="sm" onClick={() => setSecretsModalOpen(true)}>
                                     Configure secrets…
                                 </Button>
                             </Box>
                         </FormControl>
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="edit-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="save-database-button"
                             onClick={logExceptions(handleSave, 'Save error')}

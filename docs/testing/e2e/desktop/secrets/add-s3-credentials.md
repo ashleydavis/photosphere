@@ -2,19 +2,50 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test that the **Add secret** dialog stores an `s3-credentials` secret, and that
-editing one field updates it, keeps the other fields, and does not add an extra
+Test that the **Add secret** dialog stores an `s3-credentials` secret and that
+editing one field updates it, keeps the other fields and does not add an extra
 `label` field.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open two terminals at the repo root, one for the desktop app and one for the CLI.
+
+In either terminal, clean up any previous run of this test:
 
 ```bash
-bun run dev
+rm -rf /tmp/psi-desktop-add-s3-credentials
 ```
 
-## Steps
+Run this in both terminals. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
+
+```bash
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-add-s3-credentials/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-add-s3-credentials/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-add-s3-credentials/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-add-s3-credentials/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-add-s3-credentials/data
+```
+
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-add-s3-credentials/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
+
+In the app's terminal, start the desktop app from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
+
+```bash
+bun run linux
+```
+
+In the CLI terminal, move into the CLI source directory:
+
+```bash
+cd apps/cli/
+```
+
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
 
 ### 1. Add a new s3-credentials secret
 
@@ -38,7 +69,7 @@ Expected:
 
 1. Click the **View secret** (eye) button on the `s3-creds-1` row.
 
-Then run from the repo root:
+Then run in the CLI terminal:
 
 ```bash
 bun run start -- secrets view --name s3-creds-1 --yes
@@ -59,13 +90,13 @@ Expected:
 Expected:
 - The dialog closes without errors.
 
----
+## Check
 
 ### 4. Confirm the edit in the app and the CLI
 
 1. Click the **View secret** (eye) button on the `s3-creds-1` row.
 
-Then run from the repo root:
+Then run in the CLI terminal:
 
 ```bash
 bun run start -- secrets view --name s3-creds-1 --yes

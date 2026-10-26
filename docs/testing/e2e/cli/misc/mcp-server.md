@@ -1,52 +1,60 @@
-# CLI Manual Test: MCP Server Starts And Serves Resources
+# CLI Manual Test: MCP Server Starts And Serves Tools
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-> **Warning:** The `psi mcp` command is not yet implemented. This walkthrough
-> is a placeholder so that the manual test exists once MCP support lands.
+Test that `psi mcp` starts an MCP server over stdio and that a client can open a database and list its media files through the server's tools.
 
-Test that the CLI can launch an MCP server and a compatible client can list
-its resources.
+The server does not exit when its stdin closes, so each step below wraps it in `timeout 30`. The server does not take `--db`. The client picks the database at runtime with the `open_database` tool. The steps below act as the client by writing MCP JSON-RPC messages to the server's stdin; an MCP client such as `mcp-inspector`, set up to launch `bun run index.ts mcp` from `apps/cli/`, can be used instead.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, and create a database holding one file:
 
 ```bash
 cd apps/cli/
-```
-
-You need an MCP client (for example, `mcp-inspector` or a Claude Code
-configuration entry) configured to launch the Photosphere CLI as an MCP
-process.
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
+mkdir -p /tmp/psi-test/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
 bun run start -- init --db /tmp/psi-test/db --yes
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/db --yes
 ```
 
----
+Expected:
+- The database is created and the file is reported as added.
 
-### 2. Start the MCP server
+## Test
+
+### 1. Start the server and list its tools
 
 ```bash
-bun run start -- mcp --db /tmp/psi-test/db
+{ printf '%s\n' \
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual-test","version":"0"}}}' \
+    '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'; sleep 6; } \
+    | timeout 30 bun run index.ts mcp 2>/dev/null | jq -c '{id, tools: [.result.tools[]?.name]}'
 ```
 
 Expected:
-- The CLI starts the MCP server and waits for client connections.
+- A reply with `id` 1 (the server's initialize response) and a reply with `id` 2.
+- The `id` 2 tools include `list_databases`, `open_database`, `list_media_files` and `get_media_file_info`.
 
 ---
 
-### 3. Connect with an MCP client
+### 2. Open the database and list its media files
 
-Configure the client to launch the same command. List the server's resources.
+```bash
+{ printf '%s\n' \
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual-test","version":"0"}}}' \
+    '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"open_database","arguments":{"path":"/tmp/psi-test/db"}}}'; sleep 6; \
+  printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_media_files","arguments":{}}}'; sleep 6; } \
+    | timeout 30 bun run index.ts mcp 2>/dev/null | jq -c 'select(.id==2 or .id==3) | {id, text: .result.content[0].text}'
+```
 
 Expected:
-- The client lists Photosphere resources (assets, database metadata) without errors.
-- Listing an asset's metadata returns the expected fields for the asset added in step 1.
+- The `id` 2 reply says `Opened database at /tmp/psi-test/db`.
+- The `id` 3 reply lists one media file with `origFileName` `test.jpg` and `contentType` `image/jpeg`.
+
+## Check
+
+The replies in steps 1 and 2 are the check.

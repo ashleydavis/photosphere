@@ -4,35 +4,21 @@
 
 Test that two files with identical content are imported as a single asset.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run and create a new database:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a new database
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 ```
 
 Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
 
----
+## Test
 
-### 3. Add a directory containing two identical images
+### 1. Add a directory containing two identical images
 
 The repo ships a `test/duplicate-images/` directory with `a.png` and `b.png` (same content, different file names).
 
@@ -43,9 +29,9 @@ bun run start -- add ../../test/duplicate-images/ --db /tmp/psi-test/source --ye
 Expected:
 - Output shows both files processed.
 
----
+## Check
 
-### 4. Check the database summary
+### 2. Check the database summary
 
 ```bash
 bun run start -- summary --db /tmp/psi-test/source
@@ -56,7 +42,7 @@ Expected:
 
 ---
 
-### 5. Verify the database
+### 3. Verify the database
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source

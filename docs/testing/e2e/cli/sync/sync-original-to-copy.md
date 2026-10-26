@@ -5,49 +5,26 @@
 Test that `sync` propagates new files added on the original side over to the
 copy.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then add a new file to the original:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
+mkdir -p /tmp/psi-test
 cp -r ../../test/dbs/v6 /tmp/psi-test/original
 bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
-```
-
-Expected:
-- Replication completes successfully.
-- Both databases have the same root hash (confirm with `bun run start -- root-hash` on each path if you wish).
-
----
-
-### 3. Add a new file to the original database
-
-```bash
 bun run start -- add ../../test/test.png --db /tmp/psi-test/original --yes
 ```
 
 Expected:
-- Output shows `Files added: 1`.
+- Replication completes successfully.
+- The `add` shows `Files added: 1`.
 
----
+## Test
 
-### 4. Confirm the root hashes now differ
+### 1. Confirm the root hashes now differ
 
 ```bash
 bun run start -- root-hash --db /tmp/psi-test/original
@@ -59,7 +36,7 @@ Expected:
 
 ---
 
-### 5. Sync original to copy
+### 2. Sync original to copy
 
 ```bash
 bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
@@ -68,9 +45,9 @@ bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --ye
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 6. Confirm the root hashes match again
+### 3. Confirm the root hashes match again
 
 ```bash
 bun run start -- root-hash --db /tmp/psi-test/original

@@ -40,142 +40,166 @@ Run the story player and check every story cycles through without failures, then
 ## CLI
 
 ### Import
-- [ ] [add-and-verify](cli/import/add-and-verify.md)
-- [ ] [add-duplicate-content](cli/import/add-duplicate-content.md)
-- [ ] [add-mp4](cli/import/add-mp4.md)
-- [ ] [add-multiple-files](cli/import/add-multiple-files.md)
-- [ ] [add-png](cli/import/add-png.md)
-- [ ] [add-same-file-twice](cli/import/add-same-file-twice.md)
-- [ ] [add-zip](cli/import/add-zip.md)
-- [ ] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
+- [x] [add-and-verify](cli/import/add-and-verify.md)
+- [x] [add-duplicate-content](cli/import/add-duplicate-content.md)
+- [x] [add-mp4](cli/import/add-mp4.md)
+- [-] [add-multiple-files](cli/import/add-multiple-files.md)
+- [x] [add-png](cli/import/add-png.md)
+- [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
+- [-] [add-zip](cli/import/add-zip.md)
+- [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
+- [x] [check-new-files](cli/import/check-new-files.md)
 
 ### Inspect
-- [ ] [database-summary](cli/inspect/database-summary.md)
-- [ ] [export-asset](cli/inspect/export-asset.md)
+- [x] [database-summary](cli/inspect/database-summary.md)
+- [x] [export-asset](cli/inspect/export-asset.md)
+- [x] [export-display-and-thumb](cli/inspect/export-display-and-thumb.md)
+- [-] [list-paging](cli/inspect/list-paging.md)
 
 ### Verify
-- [ ] [detect-deleted-file](cli/verify/detect-deleted-file.md)
-- [ ] [detect-modified-file](cli/verify/detect-modified-file.md)
-- [ ] [repair-clean-database](cli/verify/repair-clean-database.md)
-- [ ] [repair-damaged-database](cli/verify/repair-damaged-database.md)
-- [ ] [verify-full](cli/verify/verify-full.md)
+- [x] [detect-deleted-file](cli/verify/detect-deleted-file.md)
+- [x] [detect-modified-file](cli/verify/detect-modified-file.md)
+- [x] [repair-clean-database](cli/verify/repair-clean-database.md)
+- [x] [repair-damaged-database](cli/verify/repair-damaged-database.md)
+- [-] [verify-full](cli/verify/verify-full.md)
 
 ### Remove
-- [ ] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
+- [x] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
 
 ### Compare
-- [ ] [compare-after-changes](cli/compare/compare-after-changes.md)
-- [ ] [compare-identical](cli/compare/compare-identical.md)
+- [x] [compare-after-changes](cli/compare/compare-after-changes.md)
+- [x] [compare-identical](cli/compare/compare-identical.md)
 
 ### Sync
-- [ ] [sync-copy-to-original](cli/sync/sync-copy-to-original.md)
-- [ ] [sync-delete-asset-copy](cli/sync/sync-delete-asset-copy.md)
-- [ ] [sync-delete-asset-original](cli/sync/sync-delete-asset-original.md)
-- [ ] [sync-edit-field-copy](cli/sync/sync-edit-field-copy.md)
-- [ ] [sync-edit-field-original](cli/sync/sync-edit-field-original.md)
-- [ ] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
+- [x] [sync-copy-to-original](cli/sync/sync-copy-to-original.md)
+- [x] [sync-delete-asset-copy](cli/sync/sync-delete-asset-copy.md)
+- [x] [sync-delete-asset-original](cli/sync/sync-delete-asset-original.md)
+- [x] [sync-edit-field-copy](cli/sync/sync-edit-field-copy.md)
+- [x] [sync-edit-field-original](cli/sync/sync-edit-field-original.md)
+- [x] [sync-original-to-copy](cli/sync/sync-original-to-copy.md)
 
 ### Move
-- [ ] [move-file-between-databases](cli/move/move-file-between-databases.md)
+- [-] [move-file-between-databases](cli/move/move-file-between-databases.md)
 
 ### Replication
-- [ ] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
-- [ ] [replicate-full-copy](cli/replication/replicate-full-copy.md)
-- [ ] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
-- [ ] [replicate-no-changes](cli/replication/replicate-no-changes.md)
-- [ ] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
-- [ ] [replicate-unrelated-fails](cli/replication/replicate-unrelated-fails.md)
+- [x] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
+- [x] [replicate-full-copy](cli/replication/replicate-full-copy.md)
+- [x] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
+- [x] [replicate-no-changes](cli/replication/replicate-no-changes.md)
+- [-] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
+- [x] [replicate-unrelated-fails](cli/replication/replicate-unrelated-fails.md)
 
 ### Upgrade
-- [ ] [add-file-after-upgrade](cli/upgrade/add-file-after-upgrade.md)
-- [ ] [upgrade-v2-to-v6](cli/upgrade/upgrade-v2-to-v6.md)
-- [ ] [upgrade-v3-to-v6](cli/upgrade/upgrade-v3-to-v6.md)
-- [ ] [upgrade-v4-to-v6](cli/upgrade/upgrade-v4-to-v6.md)
-- [ ] [upgrade-v5-to-v6](cli/upgrade/upgrade-v5-to-v6.md)
-- [ ] [v2-readonly](cli/upgrade/v2-readonly.md)
-- [ ] [v2-write-fails](cli/upgrade/v2-write-fails.md)
-- [ ] [v6-upgrade-noop](cli/upgrade/v6-upgrade-noop.md)
+- [x] [add-file-after-upgrade](cli/upgrade/add-file-after-upgrade.md)
+- [x] [upgrade-v2-to-v6](cli/upgrade/upgrade-v2-to-v6.md)
+- [x] [upgrade-v3-to-v6](cli/upgrade/upgrade-v3-to-v6.md)
+- [x] [upgrade-v4-to-v6](cli/upgrade/upgrade-v4-to-v6.md)
+- [x] [upgrade-v5-to-v6](cli/upgrade/upgrade-v5-to-v6.md)
+- [x] [v2-readonly](cli/upgrade/v2-readonly.md)
+- [x] [v2-write-fails](cli/upgrade/v2-write-fails.md)
+- [x] [v6-upgrade-noop](cli/upgrade/v6-upgrade-noop.md)
 
 ### Databases (dbs)
-- [ ] [add-and-list](cli/dbs/add-and-list.md)
-- [ ] [add-duplicate-fails](cli/dbs/add-duplicate-fails.md)
-- [ ] [add-via-flags](cli/dbs/add-via-flags.md)
-- [ ] [clear](cli/dbs/clear.md)
-- [ ] [edit-rename](cli/dbs/edit-rename.md)
-- [ ] [list-empty](cli/dbs/list-empty.md)
-- [ ] [no-match-fallback](cli/dbs/no-match-fallback.md)
-- [ ] [remove](cli/dbs/remove.md)
-- [ ] [resolve-by-name](cli/dbs/resolve-by-name.md)
-- [ ] [resolve-by-path](cli/dbs/resolve-by-path.md)
-- [ ] [view](cli/dbs/view.md)
+- [x] [add-and-list](cli/dbs/add-and-list.md)
+- [x] [add-duplicate-fails](cli/dbs/add-duplicate-fails.md)
+- [x] [add-via-flags](cli/dbs/add-via-flags.md)
+- [x] [clear](cli/dbs/clear.md)
+- [x] [edit-rename](cli/dbs/edit-rename.md)
+- [x] [list-empty](cli/dbs/list-empty.md)
+- [x] [no-match-fallback](cli/dbs/no-match-fallback.md)
+- [x] [remove](cli/dbs/remove.md)
+- [x] [resolve-by-name](cli/dbs/resolve-by-name.md)
+- [x] [resolve-by-path](cli/dbs/resolve-by-path.md)
+- [x] [view](cli/dbs/view.md)
 
 ### Vault (plaintext)
-- [ ] [add-duplicate-fails](cli/vault/plaintext/add-duplicate-fails.md)
-- [ ] [add-secret](cli/vault/plaintext/add-secret.md)
-- [ ] [clear](cli/vault/plaintext/clear.md)
-- [ ] [delete-secret](cli/vault/plaintext/delete-secret.md)
-- [ ] [edit-secret](cli/vault/plaintext/edit-secret.md)
-- [ ] [import-pem](cli/vault/plaintext/import-pem.md)
-- [ ] [list-empty](cli/vault/plaintext/list-empty.md)
-- [ ] [list-shared](cli/vault/plaintext/list-shared.md)
-- [ ] [view-secret](cli/vault/plaintext/view-secret.md)
+- [x] [add-duplicate-fails](cli/vault/plaintext/add-duplicate-fails.md)
+- [x] [add-secret](cli/vault/plaintext/add-secret.md)
+- [x] [clear](cli/vault/plaintext/clear.md)
+- [x] [delete-secret](cli/vault/plaintext/delete-secret.md)
+- [x] [edit-secret](cli/vault/plaintext/edit-secret.md)
+- [x] [import-pem](cli/vault/plaintext/import-pem.md)
+- [x] [list-empty](cli/vault/plaintext/list-empty.md)
+- [x] [list-shared](cli/vault/plaintext/list-shared.md)
+- [x] [view-secret](cli/vault/plaintext/view-secret.md)
 
 ### Vault (keychain)
 - [ ] [add-view-edit-delete](cli/vault/keychain/add-view-edit-delete.md)
 - [ ] [list-multiple](cli/vault/keychain/list-multiple.md)
 
 ### LAN Share
-- [ ] [share-database](cli/lan-share/share-database.md)
-- [ ] [share-secret](cli/lan-share/share-secret.md)
+- [x] [share-database](cli/lan-share/share-database.md)
+- [x] [share-secret](cli/lan-share/share-secret.md)
+
+### Encryption
+- [x] [encrypt-in-place](cli/encryption/encrypt-in-place.md)
+- [x] [decrypt-in-place](cli/encryption/decrypt-in-place.md)
+- [x] [replicate-encrypted](cli/encryption/replicate-encrypted.md)
+- [x] [sync-encrypted](cli/encryption/sync-encrypted.md)
+
+### S3
+- [x] [s3-database](cli/s3/s3-database.md)
+- [x] [s3-replicate-and-sync](cli/s3/s3-replicate-and-sync.md)
+
+### Origin
+- [x] [set-origin](cli/origin/set-origin.md)
+- [x] [consolidate-new-remote](cli/origin/consolidate-new-remote.md)
+- [x] [consolidate-unrelated-remote](cli/origin/consolidate-unrelated-remote.md)
 
 ### Misc
-- [ ] [config-timestamps](cli/misc/config-timestamps.md)
-- [ ] [mcp-server](cli/misc/mcp-server.md)
+- [-] [config-timestamps](cli/misc/config-timestamps.md)
+- [x] [mcp-server](cli/misc/mcp-server.md)
+- [-] [info](cli/misc/info.md)
+- [x] [hash](cli/misc/hash.md)
+- [x] [tools](cli/misc/tools.md)
+- [x] [version](cli/misc/version.md)
+- [x] [news](cli/misc/news.md)
+- [-] [bug](cli/misc/bug.md)
 
 ## Desktop
 
 ### Import
-- [ ] [import-directory](desktop/import/import-directory.md)
-- [ ] [import-files](desktop/import/import-files.md)
-- [ ] [import-video](desktop/import/import-video.md)
-- [ ] [import-zip](desktop/import/import-zip.md)
+- [x] [import-directory](desktop/import/import-directory.md)
+- [x] [import-files](desktop/import/import-files.md)
+- [x] [import-video](desktop/import/import-video.md)
+- [-] [import-zip](desktop/import/import-zip.md)
 
 ### Move
-- [ ] [move-file-between-databases](desktop/move/move-file-between-databases.md)
+- [-] [move-file-between-databases](desktop/move/move-file-between-databases.md)
 
 ### Download
-- [ ] [download-multiple-assets](desktop/download/download-multiple-assets.md)
-- [ ] [download-single-asset](desktop/download/download-single-asset.md)
+- [-] [download-multiple-assets](desktop/download/download-multiple-assets.md)
+- [-] [download-single-asset](desktop/download/download-single-asset.md)
 
 ### Replication
-- [ ] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
-- [ ] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
+- [-] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
+- [-] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
 
 ### Database
-- [ ] [edit-database-origin](desktop/database/edit-database-origin.md)
-- [ ] [load-50-asset-fixture](desktop/database/load-50-asset-fixture.md)
-- [ ] [open-existing-database](desktop/database/open-existing-database.md)
-- [ ] [remove-recent-database](desktop/database/remove-recent-database.md)
-- [ ] [view-database-details](desktop/database/view-database-details.md)
-- [ ] [view-database-secret](desktop/database/view-database-secret.md)
+- [x] [edit-database-origin](desktop/database/edit-database-origin.md)
+- [x] [load-50-asset-fixture](desktop/database/load-50-asset-fixture.md)
+- [x] [open-existing-database](desktop/database/open-existing-database.md)
+- [x] [remove-recent-database](desktop/database/remove-recent-database.md)
+- [-] [view-database-details](desktop/database/view-database-details.md)
+- [x] [view-database-secret](desktop/database/view-database-secret.md)
 
 ### Secrets
-- [ ] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
-- [ ] [add-api-key](desktop/secrets/add-api-key.md)
-- [ ] [add-encryption-key](desktop/secrets/add-encryption-key.md)
-- [ ] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
-- [ ] [rename-secret](desktop/secrets/rename-secret.md)
-- [ ] [view-secret](desktop/secrets/view-secret.md)
+- [-] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
+- [-] [add-api-key](desktop/secrets/add-api-key.md)
+- [-] [add-encryption-key](desktop/secrets/add-encryption-key.md)
+- [-] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
+- [-] [rename-secret](desktop/secrets/rename-secret.md)
+- [x] [view-secret](desktop/secrets/view-secret.md)
 
 ### LAN Share
-- [ ] [share-database](desktop/lan-share/share-database.md)
-- [ ] [share-secret](desktop/lan-share/share-secret.md)
+- [-] [share-database](desktop/lan-share/share-database.md)
+- [x] [share-secret](desktop/lan-share/share-secret.md)
 
 ### News
-- [ ] [news-notifications](desktop/news/news-notifications.md)
+- [x] [news-notifications](desktop/news/news-notifications.md)
 
 ### MCP
-- [ ] [mcp-server](desktop/mcp/mcp-server.md)
+- [-] [mcp-server](desktop/mcp/mcp-server.md)
 
 ## Mobile
 

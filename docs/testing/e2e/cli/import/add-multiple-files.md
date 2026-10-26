@@ -4,35 +4,21 @@
 
 Test that multiple files can be imported in a single `add` command.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run and create a new database:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a new database
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 ```
 
 Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
 
----
+## Test
 
-### 3. Add a directory containing multiple files
+### 1. Add a directory containing multiple files
 
 The repo ships a `test/multiple-files/` directory holding `test-1.jpeg`, `test-2.png`, `test.mp4`, and a `test-archive.zip`. The zip contains the same files, so they are skipped as duplicates.
 
@@ -43,9 +29,9 @@ bun run start -- add ../../test/multiple-files/ --db /tmp/psi-test/source --yes
 Expected:
 - Output shows `Files added: 3` and `Files failed: 0`.
 
----
+## Check
 
-### 4. Confirm all files are now in the database
+### 2. Confirm all files are now in the database
 
 ```bash
 bun run start -- check ../../test/multiple-files/ --db /tmp/psi-test/source --yes
@@ -56,7 +42,7 @@ Expected:
 
 ---
 
-### 5. Verify the database
+### 3. Verify the database
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source

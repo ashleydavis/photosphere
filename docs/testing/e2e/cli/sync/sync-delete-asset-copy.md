@@ -5,27 +5,14 @@
 Test that deleting an asset on the **copy** removes it from the original after
 `sync`.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture and replicate it to a copy:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
+mkdir -p /tmp/psi-test
 cp -r ../../test/dbs/v6 /tmp/psi-test/original
 bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
 ```
@@ -33,9 +20,9 @@ bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy
 Expected:
 - Replication completes successfully.
 
----
+## Test
 
-### 3. Remove an asset from the **copy**
+### 1. Remove an asset from the **copy**
 
 ```bash
 bun run start -- remove --db /tmp/psi-test/copy 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
@@ -48,7 +35,7 @@ Expected:
 
 ---
 
-### 4. Sync
+### 2. Sync
 
 ```bash
 bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
@@ -57,14 +44,16 @@ bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --ye
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 5. Confirm the asset is gone from the original
+### 3. Confirm the asset is gone from the original
 
 ```bash
 ls /tmp/psi-test/original/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
+bun run start -- root-hash --db /tmp/psi-test/original
+bun run start -- root-hash --db /tmp/psi-test/copy
 ```
 
 Expected:
-- The command produces no output (the asset has been removed from the original).
-- `bun run start -- root-hash --db /tmp/psi-test/original` and `... --db /tmp/psi-test/copy` produce the same value.
+- The `ls | grep` produces no output (the asset has been removed from the original).
+- The two root hashes are identical.

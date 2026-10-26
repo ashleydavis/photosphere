@@ -5,16 +5,11 @@
 Test that `dbs send` and `dbs receive` transfer a database configuration plus
 its linked secrets from one CLI to another.
 
-## Prerequisites
+Two terminals are needed, each running the CLI from `apps/cli/`, both on the same LAN.
 
-- Two terminals open. Each terminal will run the CLI from `apps/cli/`.
-- Both must be on the same LAN.
+## Prep
 
-## Steps
-
-### 1. Set up the sender with a database entry and linked secrets
-
-In terminal A:
+In terminal A, set up the sender with a database entry and a linked secret:
 
 ```bash
 cd apps/cli/
@@ -23,21 +18,21 @@ mkdir -p /tmp/psi-sender/config /tmp/psi-sender/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-sender/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-
 cat > /tmp/psi-sender/vault/vault.json <<'EOF'
 {"test-s3-key":{"name":"test-s3-key","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}}
 EOF
+cat > /tmp/psi-sender/config/databases.toml <<'EOF'
+recent_database_names = []
 
-cat > /tmp/psi-sender/config/databases.json <<'EOF'
-[{"name":"test-db","description":"","path":"/tmp/psi-sender/test-db","s3Key":"test-s3-key"}]
+[[databases]]
+name = "test-db"
+description = ""
+path = "/tmp/psi-sender/test-db"
+s3_key = "test-s3-key"
 EOF
 ```
 
----
-
-### 2. Set up the receiver
-
-In terminal B:
+In terminal B, set up the receiver:
 
 ```bash
 cd apps/cli/
@@ -48,24 +43,26 @@ export PHOTOSPHERE_VAULT_DIR=/tmp/psi-receiver/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
----
+Expected: no output in either terminal.
 
-### 3. Start the sender
+## Test
+
+### 1. Start the sender
 
 In terminal A:
 
 ```bash
-bun run start -- dbs send --name test-db
+bun run start -- dbs send --name test-db --yes
 ```
 
 Expected:
-- The command prints a 4-digit pairing code and waits for the receiver, for 60 seconds unless `--timeout <seconds>` says otherwise.
+- The command shows the database to send, prints a 4-digit pairing code and waits for the receiver.
 
 Record the pairing code as `<code>` for the next step.
 
 ---
 
-### 4. Start the receiver
+### 2. Start the receiver
 
 In terminal B:
 
@@ -78,9 +75,9 @@ Expected:
   linked secret.
 - Terminal A reports that the share succeeded.
 
----
+## Check
 
-### 5. Confirm the database entry and secret arrived
+### 3. Confirm the database entry and secret arrived
 
 In terminal B:
 

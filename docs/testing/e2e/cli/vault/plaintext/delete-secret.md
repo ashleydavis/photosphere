@@ -5,42 +5,30 @@
 Test that `secrets remove --yes` deletes a secret while leaving the rest of
 the vault intact.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and point the CLI at empty config and vault directories, then seed two secrets:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-```
-
----
-
-### 2. Seed two secrets
-
-```bash
-cat > /tmp/psi-test/vault/vault.json <<'EOF'
+cat > /tmp/psi-test/vault/vault.json <<'JSON'
 {
   "keep-secret": {"name":"keep-secret","type":"plain","value":"keep-me"},
   "delete-secret": {"name":"delete-secret","type":"plain","value":"delete-me"}
 }
-EOF
+JSON
 ```
 
----
+Expected: no output.
 
-### 3. Delete one of them
+## Test
+
+### 1. Delete one of them
 
 ```bash
 bun run start -- secrets remove --name delete-secret --yes
@@ -49,15 +37,15 @@ bun run start -- secrets remove --name delete-secret --yes
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 4. Confirm the list
+### 2. Confirm the list and the vault file
 
 ```bash
 bun run start -- secrets list
+jq 'keys' /tmp/psi-test/vault/vault.json
 ```
 
 Expected:
-- Output contains `keep-secret`.
-- Output does not contain `delete-secret`.
+- The list contains `keep-secret` and does not contain `delete-secret`.
 - `/tmp/psi-test/vault/vault.json` no longer holds a `delete-secret` key, and still holds `keep-secret`.

@@ -5,63 +5,30 @@
 Test that `repair` restores deleted and modified files using a replica as the
 source of truth.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create a database, add a file, replicate it, take a working copy, then damage the working copy by deleting its asset file:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database, add a file, replicate it, then take a working copy
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
 bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
 cp -r /tmp/psi-test/source /tmp/psi-test/damaged
+ls /tmp/psi-test/damaged/asset
+rm /tmp/psi-test/damaged/asset/$(ls /tmp/psi-test/damaged/asset)
 ```
 
 Expected:
 - Database created, file added, replica completed, and the `damaged/` copy exists.
+- `ls` lists one UUID, and that asset file is then deleted from the working copy.
 
----
+If the database contains more than one asset, also corrupt another one with `echo "CORRUPTED" > /tmp/psi-test/damaged/asset/<other-asset-id>`. With the one asset this test adds, there is nothing else to corrupt.
 
-### 3. Damage the working copy
+## Test
 
-Delete one asset file and corrupt another (note: in a database with only one
-asset the same file is both deleted and corrupted in alternate runs; below we
-delete one and tamper with the merkle data file).
-
-```bash
-ls /tmp/psi-test/damaged/asset
-```
-
-Note an asset UUID, then:
-
-```bash
-rm /tmp/psi-test/damaged/asset/<asset-id>
-```
-
-If the database contains more than one asset, also corrupt one with:
-
-```bash
-echo "CORRUPTED" > /tmp/psi-test/damaged/asset/<other-asset-id>
-```
-
----
-
-### 4. Verify the damage
+### 1. Confirm verify detects the damage
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/damaged --full
@@ -72,7 +39,7 @@ Expected:
 
 ---
 
-### 5. Repair the damaged database from the replica
+### 2. Repair the damaged database from the replica
 
 ```bash
 bun run start -- repair --db /tmp/psi-test/damaged --source /tmp/psi-test/replica --yes --full
@@ -82,9 +49,9 @@ Expected:
 - Output includes `Database repair completed successfully`.
 - `Repaired:` reports a value greater than `0`.
 
----
+## Check
 
-### 6. Verify the repaired database
+### 3. Verify the repaired database
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/damaged

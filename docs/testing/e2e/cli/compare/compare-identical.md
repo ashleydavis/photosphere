@@ -4,27 +4,13 @@
 
 Test that `compare` reports no differences for two identical databases.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create a database, add a file and replicate it:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database, add a file, and replicate it
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
 bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
@@ -33,9 +19,9 @@ bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replic
 Expected:
 - Replica is reported as completed successfully.
 
----
+## Test
 
-### 3. Compare source and replica
+### 1. Compare source and replica
 
 ```bash
 bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
@@ -46,7 +32,7 @@ Expected:
 
 ---
 
-### 4. Compare a database with itself
+### 2. Compare a database with itself
 
 ```bash
 bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/source --yes
@@ -54,3 +40,7 @@ bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/source -
 
 Expected:
 - Output includes `No differences detected`.
+
+## Check
+
+The compare output in steps 1 and 2 is the check.

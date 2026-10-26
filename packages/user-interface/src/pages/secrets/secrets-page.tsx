@@ -416,6 +416,7 @@ export function SecretsPage() {
                                     <Edit fontSize="small" />
                                 </IconButton>
                                 <IconButton
+                                    data-id="delete-secret-button"
                                     size="sm"
                                     variant="plain"
                                     color="danger"
@@ -439,7 +440,7 @@ export function SecretsPage() {
                 maxWidth={700}
                 onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                <ModalClose />
+                <ModalClose data-id="add-secret-close" />
                 <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
                 <DialogContent>
                     <FormControl sx={{ mb: 1 }}>
@@ -468,7 +469,7 @@ export function SecretsPage() {
                     {renderTypeFields()}
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button data-id="add-secret-cancel" variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
                     <Button
                         data-id="add-secret-confirm"
                         onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}

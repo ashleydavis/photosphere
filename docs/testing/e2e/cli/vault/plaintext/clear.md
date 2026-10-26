@@ -4,42 +4,30 @@
 
 Test that `secrets clear --yes` empties the vault entirely.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and point the CLI at empty config and vault directories, then seed two secrets:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-```
-
----
-
-### 2. Seed multiple secrets
-
-```bash
-cat > /tmp/psi-test/vault/vault.json <<'EOF'
+cat > /tmp/psi-test/vault/vault.json <<'JSON'
 {
   "clear-secret-one": {"name":"clear-secret-one","type":"plain","value":"value-one"},
   "clear-secret-two": {"name":"clear-secret-two","type":"plain","value":"value-two"}
 }
-EOF
+JSON
 ```
 
----
+Expected: no output.
 
-### 3. Clear all secrets
+## Test
+
+### 1. Clear all secrets
 
 ```bash
 bun run start -- secrets clear --yes
@@ -48,9 +36,9 @@ bun run start -- secrets clear --yes
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 4. Confirm the vault is empty
+### 2. Confirm the vault is empty
 
 ```bash
 bun run start -- secrets list

@@ -181,7 +181,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
             <DialogActions>
                 {step === "confirm" && (
                     <>
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="share-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                         <Button data-id="share-secret-send-button" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
@@ -189,7 +189,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 )}
 
                 {step === "searching" && (
-                    <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {step === "showing-code" && (
@@ -197,7 +197,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 )}
 
                 {(step === "success" || step === "error") && (
-                    <Button onClick={onClose}>Close</Button>
+                    <Button data-id="share-secret-close-button" onClick={onClose}>Close</Button>
                 )}
             </DialogActions>
         </ResponsiveDialog>

@@ -4,43 +4,31 @@
 
 Test that adding an entry makes it appear in the listing.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, point the CLI at an empty config directory and add a database entry by seeding `databases.toml` directly (the smoke-test runner does the same with a `seed_databases_config` helper):
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at an empty config directory
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-```
+cat > /tmp/psi-test/config/databases.toml <<'TOML'
+recent_database_names = []
 
----
-
-### 2. Add a database entry by directly seeding `databases.json`
-
-The smoke-test runner uses a `seed_databases_config` helper. The manual
-equivalent is to write the file directly:
-
-```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"smoke-db","description":"Smoke test database","path":"/tmp/psi-test/smoke-db"}]
-EOF
+[[databases]]
+name = "smoke-db"
+description = "Smoke test database"
+path = "/tmp/psi-test/smoke-db"
+TOML
 ```
 
 Expected:
-- The file exists and contains the JSON above.
+- The file exists and contains the entry above.
 
----
+## Test
 
-### 3. List databases
+### 1. List databases
 
 ```bash
 bun run start -- dbs list
@@ -49,3 +37,7 @@ bun run start -- dbs list
 Expected:
 - Output contains `smoke-db`.
 - Output contains `/tmp/psi-test/smoke-db`.
+
+## Check
+
+The list output in step 1 is the check.

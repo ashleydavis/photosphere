@@ -13,16 +13,16 @@ It works the same on every platform because the value is baked into the frontend
 Photosphere App desktop (use `linux`, `windows` or `macos` for the operating system you are on):
 
 ```
-PHOTOSPHERE_THEME=dark bun run run:ziggy:linux
+PHOTOSPHERE_THEME=dark bun run linux
 ```
 
 Mobile (the run scripts build the frontend, so the same variable applies):
 
 ```
 # Android
-PHOTOSPHERE_THEME=dark bun run run:ziggy:android
+PHOTOSPHERE_THEME=dark bun run android
 # iOS
-PHOTOSPHERE_THEME=dark bun run run:ziggy:ios
+PHOTOSPHERE_THEME=dark bun run ios
 ```
 
 Because the theme is baked in at build time, changing `PHOTOSPHERE_THEME` requires a rebuild (re-run the command).

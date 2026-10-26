@@ -5,33 +5,23 @@
 Test that running `upgrade` on a v6 database reports that no upgrade is needed
 and leaves the database unchanged.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run and copy the v6 fixture to a working directory:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Copy the v6 fixture to a working directory
-
-```bash
+mkdir -p /tmp/psi-test
 cp -r ../../test/dbs/v6 /tmp/psi-test/upgrade
 ```
 
----
+Expected:
+- The fixture is copied to `/tmp/psi-test/upgrade`.
 
-### 3. Run upgrade
+## Test
+
+### 1. Run upgrade
 
 ```bash
 bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
@@ -40,9 +30,9 @@ bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
 Expected:
 - Output includes `Database is already at the latest version (6)`.
 
----
+## Check
 
-### 4. Confirm version and integrity
+### 2. Confirm version and integrity
 
 ```bash
 bun run start -- summary --db /tmp/psi-test/upgrade --yes

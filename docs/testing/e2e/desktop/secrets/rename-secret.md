@@ -5,15 +5,46 @@
 Test that renaming a secret stores it under the new name, so it is found by the
 new name and no longer by the old one, with its value preserved.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open two terminals at the repo root, one for the desktop app and one for the CLI.
+
+In either terminal, clean up any previous run of this test:
 
 ```bash
-bun run dev
+rm -rf /tmp/psi-desktop-rename-secret
 ```
 
-## Steps
+Run this in both terminals. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
+
+```bash
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-rename-secret/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-rename-secret/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-rename-secret/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-rename-secret/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-rename-secret/data
+```
+
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-rename-secret/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
+
+In the app's terminal, start the desktop app from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
+
+```bash
+bun run linux
+```
+
+In the CLI terminal, move into the CLI source directory:
+
+```bash
+cd apps/cli/
+```
+
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
 
 ### 1. Add a secret named `old-name`
 
@@ -39,7 +70,7 @@ Expected:
 Expected:
 - The dialog closes.
 
----
+## Check
 
 ### 3. Confirm the secret was renamed
 
@@ -47,11 +78,11 @@ In the app:
 - The **Manage Secrets** page lists `new-name`.
 - `old-name` no longer appears.
 
-With the CLI, run from the repo root:
+With the CLI, run in the CLI terminal:
 
 ```bash
 bun run start -- secrets list
 ```
 
 Expected:
-- `secrets list` shows `new-name` with `Type: api-key`, and does not show `old-name`.
+- `secrets list` shows `new-name` with `Type: api-key` and does not show `old-name`.

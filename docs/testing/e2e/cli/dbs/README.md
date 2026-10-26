@@ -14,6 +14,6 @@ Manual test scripts for the `psi dbs` database-list commands.
 - [add-duplicate-fails.md](add-duplicate-fails.md) - Adding a database with a duplicate name fails
 - [remove.md](remove.md) - `dbs remove --yes` removes an entry
 - [clear.md](clear.md) - `dbs clear --yes` removes all entries
-- [resolve-by-name.md](resolve-by-name.md) - Resolve a database by name through `databases.json`
-- [resolve-by-path.md](resolve-by-path.md) - Resolve a database by path through `databases.json`
+- [resolve-by-name.md](resolve-by-name.md) - Resolve a database by name through `databases.toml`
+- [resolve-by-path.md](resolve-by-path.md) - Resolve a database by path through `databases.toml`
 - [no-match-fallback.md](no-match-fallback.md) - No-match fallback to the existing manual config flow

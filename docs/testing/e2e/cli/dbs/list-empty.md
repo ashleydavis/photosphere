@@ -5,34 +5,27 @@
 Test that `psi dbs list` shows an empty-state message when no databases are
 configured.
 
-## Prerequisites
-
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-Each `dbs` test isolates the user's databases.json by overriding
+Each `dbs` test isolates the user's `databases.toml` by overriding
 `PHOTOSPHERE_CONFIG_DIR`. The smoke-test infrastructure does this with an
 auto-cleared temp dir. Use the same approach below.
 
-## Steps
+## Prep
 
-### 1. Point the CLI at an empty config directory
+Move into the CLI source directory and point the CLI at an empty config directory:
 
 ```bash
+cd apps/cli/
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
 ```
 
 Expected:
-- `/tmp/psi-test/config` exists and contains no `databases.json` file.
+- `/tmp/psi-test/config` exists and contains no `databases.toml` file.
 
----
+## Test
 
-### 2. List databases
+### 1. List databases
 
 ```bash
 bun run start -- dbs list
@@ -40,3 +33,7 @@ bun run start -- dbs list
 
 Expected:
 - Output includes `No databases`.
+
+## Check
+
+The list output in step 1 is the check.

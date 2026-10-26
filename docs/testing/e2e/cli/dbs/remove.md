@@ -5,37 +5,35 @@
 Test that `dbs remove --yes` removes a database entry from the list and leaves
 the other entries untouched.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, point the CLI at an empty config directory and seed two database entries:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at an empty config directory
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+cat > /tmp/psi-test/config/databases.toml <<'TOML'
+recent_database_names = []
+
+[[databases]]
+name = "keep-db"
+description = ""
+path = "/tmp/psi-test/keep-db"
+
+[[databases]]
+name = "remove-db"
+description = ""
+path = "/tmp/psi-test/remove-db"
+TOML
 ```
 
----
+Expected: no output.
 
-### 2. Seed two database entries
+## Test
 
-```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"keep-db","description":"","path":"/tmp/psi-test/keep-db"},{"name":"remove-db","description":"","path":"/tmp/psi-test/remove-db"}]
-EOF
-```
-
----
-
-### 3. Remove one entry
+### 1. Remove one entry
 
 ```bash
 bun run start -- dbs remove --name remove-db --yes
@@ -44,9 +42,9 @@ bun run start -- dbs remove --name remove-db --yes
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 4. Confirm the listing
+### 2. Confirm the listing
 
 ```bash
 bun run start -- dbs list

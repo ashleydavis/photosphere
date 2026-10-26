@@ -469,6 +469,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <FormControl sx={{ mb: 1 }}>
                                 <FormLabel>Name</FormLabel>
                                 <Input
+                                    data-id="receive-database-name-input"
                                     value={editedName}
                                     onChange={event => setEditedName(event.target.value)}
                                 />
@@ -477,6 +478,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <FormControl sx={{ mb: 1 }}>
                                 <FormLabel>Description</FormLabel>
                                 <Input
+                                    data-id="receive-database-description-input"
                                     value={editedDescription}
                                     onChange={event => setEditedDescription(event.target.value)}
                                 />
@@ -485,6 +487,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <FormControl sx={{ mb: 2 }}>
                                 <FormLabel>Path</FormLabel>
                                 <Input
+                                    data-id="receive-database-path-input"
                                     value={editedPath}
                                     onChange={event => setEditedPath(event.target.value)}
                                 />
@@ -492,6 +495,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.s3Credentials && (
                                 <Checkbox
+                                    data-id="receive-database-import-s3-checkbox"
                                     label={`Import S3 credentials (${payload.s3Credentials.name})`}
                                     checked={importS3}
                                     onChange={event => setImportS3(event.target.checked)}
@@ -501,6 +505,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.encryptionKey && (
                                 <Checkbox
+                                    data-id="receive-database-import-encryption-checkbox"
                                     label={`Import encryption key (${payload.encryptionKey.name})`}
                                     checked={importEncryption}
                                     onChange={event => setImportEncryption(event.target.checked)}
@@ -510,6 +515,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.geocodingKey && (
                                 <Checkbox
+                                    data-id="receive-database-import-geocoding-checkbox"
                                     label={`Import geocoding key (${payload.geocodingKey.name})`}
                                     checked={importGeocoding}
                                     onChange={event => setImportGeocoding(event.target.checked)}
@@ -595,7 +601,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
 
                     {step === "success" && (
-                        <Alert color="success">
+                        <Alert data-id="receive-database-success" color="success">
                             Database imported successfully!
                         </Alert>
                     )}
@@ -609,7 +615,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                 <DialogActions>
                     {step === "enter-code" && (
                         <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button data-id="receive-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-database-start-button"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
@@ -626,7 +632,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                     {step === "review" && (
                         <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button data-id="receive-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-database-save-button"
                                 disabled={!editedName || !editedPath}

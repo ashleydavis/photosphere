@@ -4,48 +4,27 @@
 
 Test that a database upgraded from an older format accepts new file imports.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, copy the v6 fixture to a working directory and record its starting file count:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Copy the v6 fixture to a working directory
-
-```bash
+mkdir -p /tmp/psi-test
 cp -r ../../test/dbs/v6 /tmp/psi-test/upgrade
-```
-
-(For deeper coverage, repeat the test against the v2-v5 fixtures by also running
-`bun run start -- upgrade --db /tmp/psi-test/upgrade --yes` between steps 2
-and 3.)
-
----
-
-### 3. Record the starting asset count
-
-```bash
 bun run start -- summary --db /tmp/psi-test/upgrade --yes | grep "Total files:"
 ```
 
+(For deeper coverage, repeat the test against the v2-v5 fixtures by also running
+`bun run start -- upgrade --db /tmp/psi-test/upgrade --yes` after the copy.)
+
 Expected:
-- A non-zero starting value. Record it as the baseline.
+- A non-zero `Total files:` value. Record it as the baseline.
 
----
+## Test
 
-### 4. Add a new file
+### 1. Add a new file
 
 ```bash
 bun run start -- add ../../test/test.png --db /tmp/psi-test/upgrade --yes
@@ -54,9 +33,9 @@ bun run start -- add ../../test/test.png --db /tmp/psi-test/upgrade --yes
 Expected:
 - Output reports the file as added.
 
----
+## Check
 
-### 5. Confirm the asset count increased
+### 2. Confirm the file count increased
 
 ```bash
 bun run start -- summary --db /tmp/psi-test/upgrade --yes | grep "Total files:"
@@ -67,7 +46,7 @@ Expected:
 
 ---
 
-### 6. Verify the database
+### 3. Verify the database
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/upgrade --yes

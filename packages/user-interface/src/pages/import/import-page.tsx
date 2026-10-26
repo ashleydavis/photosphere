@@ -427,6 +427,7 @@ export function ImportPage() {
                                     </Button>
                                     {platform.supportsDragAndDropImport && (
                                         <Button
+                                            data-id="import-directory-button"
                                             variant="soft"
                                             color="neutral"
                                             size="lg"

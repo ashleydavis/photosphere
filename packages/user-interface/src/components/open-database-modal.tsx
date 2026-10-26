@@ -159,7 +159,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                     {/* The four actions do not fit one row at phone width, so they wrap instead of
                         squeezing until their labels break mid-button. */}
                     <DialogActions sx={{ flexWrap: 'wrap' }}>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="open-database-modal-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                         <IconButton
                             variant="outlined"
                             disabled={refreshing}
@@ -177,6 +177,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             />
                         </IconButton>
                         <Button
+                            data-id="open-database-modal-add-database"
                             variant="outlined"
                             sx={{ whiteSpace: 'nowrap' }}
                             onClick={() => setAddModalOpen(true)}
@@ -184,6 +185,7 @@ export function OpenDatabaseModal({ open, onClose }: IOpenDatabaseModalProps) {
                             Add database
                         </Button>
                         <Button
+                            data-id="open-database-modal-manage-databases"
                             variant="outlined"
                             sx={{ whiteSpace: 'nowrap' }}
                             onClick={handleManageDatabases}

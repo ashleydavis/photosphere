@@ -4,48 +4,48 @@
 
 Test that `dbs clear --yes` empties the database list entirely.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, point the CLI at an empty config directory, seed two database entries and confirm both are listed:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at an empty config directory
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+cat > /tmp/psi-test/config/databases.toml <<'TOML'
+recent_database_names = []
+
+[[databases]]
+name = "db-one"
+description = ""
+path = "/tmp/psi-test/db-one"
+
+[[databases]]
+name = "db-two"
+description = ""
+path = "/tmp/psi-test/db-two"
+TOML
+bun run start -- dbs list
 ```
 
----
+Expected:
+- The list shows `db-one` and `db-two`, so the clear below has something to remove.
 
-### 2. Seed multiple database entries
+## Test
 
-```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"db-one","description":"","path":"/tmp/psi-test/db-one"},{"name":"db-two","description":"","path":"/tmp/psi-test/db-two"}]
-EOF
-```
-
----
-
-### 3. Clear all entries
+### 1. Clear all entries
 
 ```bash
 bun run start -- dbs clear --yes
 ```
 
 Expected:
-- The command exits successfully.
+- The command exits successfully and reports that 2 databases were removed.
 
----
+## Check
 
-### 4. Confirm the list is empty
+### 2. Confirm the list is empty
 
 ```bash
 bun run start -- dbs list

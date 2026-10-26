@@ -177,6 +177,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     {databasePath && (
                         <NavLink
                             to="/import"
+                            data-id="sidebar-import"
                             onClick={() => setSidebarOpen(false)}
                             >
                             {({ isActive }) => (
@@ -350,6 +351,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                 <List sx={{ pl: "15px" }}>
                     <NavLink
                         to="/databases"
+                        data-id="sidebar-manage-databases"
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (

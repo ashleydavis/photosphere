@@ -389,7 +389,7 @@ export function RightSidebar({ sidebarOpen, setSidebarOpen }: IRightSidebarProps
                 </div>
 
                 {databasePath && selectedItemsCount > 0 &&
-                    <div className="flex flex-col">
+                    <div data-id="right-sidebar-selection-section" className="flex flex-col">
                         <Divider />
                         <CollapsibleSection configKey="right-sidebar-collapsed-selection" label="Selection" style={{ paddingLeft: "15px" }}>
                             <List sx={listSx}>

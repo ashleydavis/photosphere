@@ -5,20 +5,11 @@
 Test that `secrets send` and `secrets receive` transfer a secret between two
 machines (or two terminals on the same machine).
 
-## Prerequisites
+Two terminals are needed, each running the CLI from `apps/cli/`, both on the same LAN. The sender and receiver each get an isolated vault through their own `PHOTOSPHERE_VAULT_DIR` and `PHOTOSPHERE_CONFIG_DIR`.
 
-- Two terminals open. Each terminal will run the CLI from `apps/cli/`.
-- Both must be on the same LAN.
+## Prep
 
-The sender and receiver each need an isolated vault. The walkthrough below
-points each terminal at a different `PHOTOSPHERE_VAULT_DIR` and
-`PHOTOSPHERE_CONFIG_DIR`.
-
-## Steps
-
-### 1. Set up the sender
-
-In terminal A:
+In terminal A, set up the sender:
 
 ```bash
 cd apps/cli/
@@ -27,17 +18,12 @@ mkdir -p /tmp/psi-sender/config /tmp/psi-sender/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
 export PHOTOSPHERE_VAULT_DIR=/tmp/psi-sender/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-
 cat > /tmp/psi-sender/vault/vault.json <<'EOF'
 {"test-secret":{"name":"test-secret","type":"api-key","value":"TESTAPIKEY123"}}
 EOF
 ```
 
----
-
-### 2. Set up the receiver
-
-In terminal B:
+In terminal B, set up the receiver:
 
 ```bash
 cd apps/cli/
@@ -48,9 +34,11 @@ export PHOTOSPHERE_VAULT_DIR=/tmp/psi-receiver/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
----
+Expected: no output in either terminal.
 
-### 3. Start the sender
+## Test
+
+### 1. Start the sender
 
 In terminal A:
 
@@ -59,13 +47,13 @@ bun run start -- secrets send --name test-secret
 ```
 
 Expected:
-- The command prints a 4-digit pairing code and waits for the receiver to connect, for 60 seconds unless `--timeout <seconds>` says otherwise.
+- The command prints a 4-digit pairing code and waits for the receiver to connect.
 
 Record that 4-digit code as `<code>` in the next step.
 
 ---
 
-### 4. Start the receiver
+### 2. Start the receiver
 
 In terminal B:
 
@@ -78,9 +66,9 @@ Expected:
 - The transfer completes without errors.
 - Terminal A reports the share succeeded.
 
----
+## Check
 
-### 5. Confirm the secret arrived
+### 3. Confirm the secret arrived
 
 In terminal B:
 

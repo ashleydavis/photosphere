@@ -35,9 +35,9 @@ export interface IViewDatabaseDialogProps {
 //
 // A labelled read-only row rendered inside the dialog content.
 //
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, dataId }: { label: string; value: string; dataId: string }) {
     return (
-        <Typography level="body-md" sx={{ mb: 1 }}>
+        <Typography data-id={dataId} level="body-md" sx={{ mb: 1 }}>
             <strong>{label}:</strong> {value}
         </Typography>
     );
@@ -63,7 +63,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
                 {found !== undefined
                     ? (
                         <>
-                            <Typography level="body-md" sx={{ flexGrow: 1 }}>{found.name}</Typography>
+                            <Typography data-id={`linked-secret-name-${found.name}`} level="body-md" sx={{ flexGrow: 1 }}>{found.name}</Typography>
                             <Button
                                 data-id={buttonDataId}
                                 variant="outlined"
@@ -75,7 +75,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
                         </>
                     )
                     : (
-                        <Typography level="body-md" color="neutral">None</Typography>
+                        <Typography data-id={`${buttonDataId}-none`} level="body-md" color="neutral">None</Typography>
                     )
                 }
             </Box>
@@ -94,10 +94,10 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
                 <ModalClose />
                 <DialogTitle>View Database</DialogTitle>
                 <DialogContent>
-                    <InfoRow label="Name" value={entry.name} />
-                    <InfoRow label="Description" value={entry.description} />
-                    <InfoRow label="Path" value={entry.path} />
-                    <InfoRow label="Origin" value={entry.origin ?? ''} />
+                    <InfoRow label="Name" value={entry.name} dataId="view-database-name" />
+                    <InfoRow label="Description" value={entry.description} dataId="view-database-description" />
+                    <InfoRow label="Path" value={entry.path} dataId="view-database-path" />
+                    <InfoRow label="Origin" value={entry.origin ?? ''} dataId="view-database-origin" />
 
                     <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Linked Secrets</Typography>
 
@@ -106,7 +106,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
                     {renderLinkedSecret('Geocoding API Key', entry.geocodingKey, 'view-secret-geocoding-button')}
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Close</Button>
+                    <Button data-id="view-database-close-button" variant="plain" onClick={onClose}>Close</Button>
                 </DialogActions>
             </ResponsiveDialog>
 

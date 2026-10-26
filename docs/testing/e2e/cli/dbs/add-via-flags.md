@@ -5,27 +5,22 @@
 Test that `dbs add` can register a database non-interactively using `--name`
 and `--path`.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory and point the CLI at an empty config directory:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at an empty config directory
-
-```bash
 rm -rf /tmp/psi-test
 mkdir -p /tmp/psi-test/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
 ```
 
----
+Expected: no output.
 
-### 2. Add a database entry via CLI flags
+## Test
+
+### 1. Add a database entry via CLI flags
 
 ```bash
 bun run start -- dbs add --yes --name cli-db --path /tmp/psi-test/cli-db-path
@@ -34,9 +29,9 @@ bun run start -- dbs add --yes --name cli-db --path /tmp/psi-test/cli-db-path
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 3. Confirm the new entry is listed
+### 2. Confirm the new entry is listed
 
 ```bash
 bun run start -- dbs list

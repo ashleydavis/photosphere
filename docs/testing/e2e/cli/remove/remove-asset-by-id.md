@@ -4,48 +4,25 @@
 
 Test that `remove` deletes an asset from the database and from on-disk storage.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create a database, add a file and read its asset ID:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database and add a file
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-```
-
-Expected:
-- Database created and the file is reported as added.
-
----
-
-### 3. Read the asset ID from disk
-
-```bash
 ls /tmp/psi-test/source/asset
 ```
 
 Expected:
-- One UUID-named file is listed. Record that UUID and use it as `<asset-id>` below.
+- Database created and the file is reported as added.
+- `ls` lists one UUID-named file. Record that UUID and use it as `<asset-id>` below.
 
----
+## Test
 
-### 4. Remove the asset
+### 1. Remove the asset
 
 ```bash
 bun run start -- remove --db /tmp/psi-test/source <asset-id> --verbose --yes
@@ -54,9 +31,9 @@ bun run start -- remove --db /tmp/psi-test/source <asset-id> --verbose --yes
 Expected:
 - Output includes `Successfully removed asset`.
 
----
+## Check
 
-### 5. Confirm the asset files are gone from storage
+### 2. Confirm the asset files are gone from storage
 
 ```bash
 ls /tmp/psi-test/source/asset
@@ -69,7 +46,7 @@ Expected:
 
 ---
 
-### 6. Confirm the database listing no longer shows the asset
+### 3. Confirm the database listing no longer shows the asset
 
 ```bash
 bun run start -- list --db /tmp/psi-test/source
@@ -80,7 +57,7 @@ Expected:
 
 ---
 
-### 7. Verify the database
+### 4. Verify the database
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source

@@ -5,49 +5,26 @@
 Test that re-replicating after adding files to the source copies just the new
 files.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create a database, add a file, replicate it, then add a new file to the source:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database, add a file, and replicate it
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
 bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
-```
-
-Expected:
-- Replication completes successfully.
-
----
-
-### 3. Add a new file to the source
-
-```bash
 bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
 ```
 
 Expected:
-- Output shows `Files added: 1`.
+- Replication completes successfully.
+- The second `add` shows `Files added: 1`.
 
----
+## Test
 
-### 4. Re-replicate
+### 1. Re-replicate
 
 ```bash
 bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
@@ -55,16 +32,18 @@ bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replic
 
 Expected:
 - Output includes `Replication completed successfully`.
-- `Total files copied:` reports a small non-zero value (typically `3` — original, display, and thumb for the one new asset).
+- `Total files copied:` reports a small non-zero value (typically `3`: original, display, and thumb for the one new asset).
 
----
+## Check
 
-### 5. Confirm the databases are equivalent again
+### 2. Confirm the databases are equivalent again
 
 ```bash
 bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
+bun run start -- root-hash --db /tmp/psi-test/source
+bun run start -- root-hash --db /tmp/psi-test/replica
 ```
 
 Expected:
-- Output includes `No differences detected`.
+- `compare` reports `No differences detected`.
 - The root hashes for source and replica match.

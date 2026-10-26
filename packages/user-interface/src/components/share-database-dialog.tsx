@@ -303,7 +303,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
             <DialogActions>
                 {step === "review" && (
                     <>
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="share-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                         <Button data-id="share-database-send-button" onClick={() => { handleStartSend(); }}>
                             Send
                         </Button>
@@ -311,7 +311,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 )}
 
                 {step === "searching" && (
-                    <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                    <Button data-id="share-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                 )}
 
                 {step === "showing-code" && (
@@ -319,7 +319,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 )}
 
                 {(step === "success" || step === "error") && (
-                    <Button onClick={onClose}>Close</Button>
+                    <Button data-id="share-database-close-button" onClick={onClose}>Close</Button>
                 )}
             </DialogActions>
         </ResponsiveDialog>

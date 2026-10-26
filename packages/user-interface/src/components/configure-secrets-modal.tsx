@@ -111,11 +111,16 @@ export function ConfigureSecretsModal({
     //
     const [quickCreateType, setQuickCreateType] = useState<string | undefined>(undefined);
 
+    //
+    // Keyed on `open` alone: a caller may build initialValue afresh on every render, and a quick-created secret refreshes the
+    // secret lists, which re-renders the caller, so resetting on initialValue would throw away the secret just picked.
+    //
     useEffect(() => {
         if (open) {
             setWorking(initialValue);
         }
-    }, [open, initialValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     //
     // Handles the user picking a newly created secret. Auto-selects it for the matching field.

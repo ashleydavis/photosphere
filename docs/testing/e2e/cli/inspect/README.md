@@ -9,3 +9,5 @@ Manual test scripts for inspecting and exporting database contents via the
 
 - [database-summary.md](database-summary.md) - `summary` output for a populated database
 - [export-asset.md](export-asset.md) - Export an asset by ID to a chosen destination
+- [export-display-and-thumb.md](export-display-and-thumb.md) - Export the display and thumbnail versions of an asset
+- [list-paging.md](list-paging.md) - `list` splits a database larger than the page size into pages

@@ -5,48 +5,26 @@
 Test that `sync` is bidirectional: a file added on the copy side flows back to
 the original through the same `sync` command.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then add a new file to the **copy**:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
+mkdir -p /tmp/psi-test
 cp -r ../../test/dbs/v6 /tmp/psi-test/original
 bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
-```
-
-Expected:
-- Replication completes successfully.
-
----
-
-### 3. Add a new file to the **copy** database
-
-```bash
 bun run start -- add ../../test/test.png --db /tmp/psi-test/copy --yes
 ```
 
 Expected:
-- Output shows `Files added: 1`.
+- Replication completes successfully.
+- The `add` shows `Files added: 1`.
 
----
+## Test
 
-### 4. Sync the two databases
+### 1. Sync the two databases
 
 ```bash
 bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
@@ -55,9 +33,9 @@ bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --ye
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 5. Confirm the root hashes match
+### 2. Confirm the root hashes match
 
 ```bash
 bun run start -- root-hash --db /tmp/psi-test/original

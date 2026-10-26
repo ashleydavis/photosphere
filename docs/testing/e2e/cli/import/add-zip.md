@@ -4,35 +4,21 @@
 
 Test that a zip archive containing images and a video can be imported into a database using the CLI source. The zip contents should be extracted and each media file imported individually.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run and create a new database:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a new database
-
-```bash
 bun run start -- init --db /tmp/psi-test/source --yes
 ```
 
 Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
 
----
+## Test
 
-### 3. Add the zip archive
+### 1. Add the zip archive
 
 ```bash
 bun run start -- add ../../test/multiple-files/test-archive.zip --db /tmp/psi-test/source --yes
@@ -42,9 +28,9 @@ Expected:
 - Output shows `Files added: 3` and `Files failed: 0`.
 - No errors are shown.
 
----
+## Check
 
-### 4. List files in the database
+### 2. List files in the database
 
 ```bash
 bun run start -- list --db /tmp/psi-test/source
@@ -55,7 +41,7 @@ Expected:
 
 ---
 
-### 5. Check that the database is ok
+### 3. Check that the database is ok
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/source

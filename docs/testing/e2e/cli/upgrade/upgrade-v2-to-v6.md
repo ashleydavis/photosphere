@@ -4,36 +4,23 @@
 
 Test that `upgrade` brings a v2 database to the current schema version (6).
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+Move into the CLI source directory, clean up any previous test run and copy the v2 fixture to a working directory:
 
 ```bash
 cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
-
-```bash
 rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Copy the v2 fixture to a working directory
-
-```bash
+mkdir -p /tmp/psi-test
 cp -r ../../test/dbs/v2 /tmp/psi-test/upgrade
 ```
 
 Expected:
 - The fixture is copied to `/tmp/psi-test/upgrade`.
 
----
+## Test
 
-### 3. Run upgrade
+### 1. Run upgrade
 
 ```bash
 bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
@@ -42,9 +29,9 @@ bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
 Expected:
 - Output includes `Database upgraded successfully to version 6`.
 
----
+## Check
 
-### 4. Confirm the database is now version 6
+### 2. Confirm the database is now version 6
 
 ```bash
 bun run start -- summary --db /tmp/psi-test/upgrade --yes
@@ -55,7 +42,7 @@ Expected:
 
 ---
 
-### 5. Verify the upgraded database
+### 3. Verify the upgraded database
 
 ```bash
 bun run start -- verify --db /tmp/psi-test/upgrade --yes

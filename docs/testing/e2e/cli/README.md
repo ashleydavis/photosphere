@@ -18,4 +18,7 @@ Manual test scripts for the `psi` CLI tool.
 - [dbs/](dbs/) - Tests covering the `psi dbs` database-list commands
 - [vault/](vault/) - Tests covering the `psi secrets` vault commands
 - [lan-share/](lan-share/) - Tests covering LAN-share of secrets and database entries
-- [misc/](misc/) - Other CLI tests (config timestamps, MCP server)
+- [encryption/](encryption/) - Tests covering encrypting, decrypting, replicating and syncing encrypted databases
+- [s3/](s3/) - Tests covering databases stored on S3, against a local MinIO server
+- [origin/](origin/) - Tests covering `set-origin` and `consolidate`
+- [misc/](misc/) - Other CLI tests (config timestamps, MCP server, utility commands)

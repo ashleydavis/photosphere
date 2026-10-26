@@ -179,7 +179,7 @@ That is what the import performance test needs, since it measures an import star
 
 Anything reached by `adb connect` counts as a real device and is protected the same way. Only a local `emulator-<port>` target is wiped without asking.
 
-`bun run run:ziggy:android` never wipes anything: it installs over the top and leaves the app's data alone, so it is the way to put a new build on a phone whose database you want to keep. The fixture variants (`run:ziggy:android:50`, `run:ziggy:android:1`, `run:ziggy:android:0`) also copy that one fixture database onto the device over any earlier copy and register it in the app's `databases.toml`. Nothing else is touched.
+`bun run android` never wipes anything: it installs over the top and leaves the app's data alone, so it is the way to put a new build on a phone whose database you want to keep. The fixture variants (`android:50`, `android:1`, `android:0`) also copy that one fixture database onto the device over any earlier copy and register it in the app's `databases.toml`. Nothing else is touched.
 
 Tests are dispatched in the order they are numbered, and nothing reorders or serialises them: there are no scheduling markers, so any test may run beside any other. The LAN-share tests are safe in company because discovery is disambiguated by the pairing code rather than by scheduling. See [apps/smoke-tests/tests/README.md](../../apps/smoke-tests/tests/README.md).
 

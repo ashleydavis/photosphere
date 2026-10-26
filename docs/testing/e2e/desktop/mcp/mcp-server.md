@@ -8,19 +8,44 @@
 Test that the desktop app can expose an MCP server and a compatible client can
 list its resources.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open a terminal at the repo root for the desktop app.
+
+Clean up any previous run of this test:
 
 ```bash
-bun run dev
+rm -rf /tmp/psi-desktop-mcp-server
+```
+
+Run this in the same terminal. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
+
+```bash
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-mcp-server/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-mcp-server/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-mcp-server/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-mcp-server/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-mcp-server/data
+```
+
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-mcp-server/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
+
+Start the desktop app in the same terminal, from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
+
+```bash
+bun run linux
 ```
 
 You need an MCP client (for example `mcp-inspector` or a Claude Code
 configuration entry) configured to connect to the Photosphere desktop MCP
 endpoint.
 
-## Steps
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
 
 ### 1. Open an existing database in the app
 
@@ -39,7 +64,7 @@ Expected:
 Expected:
 - The app reports the MCP server is listening (in a status indicator, log line, or notification).
 
----
+## Check
 
 ### 3. Connect with an MCP client
 

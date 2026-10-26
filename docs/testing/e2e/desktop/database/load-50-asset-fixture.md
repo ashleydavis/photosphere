@@ -5,20 +5,45 @@
 Test that the desktop app loads the repo's pre-populated 50-asset database and
 renders the gallery with all assets visible.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open a terminal at the repo root for the desktop app.
+
+Clean up any previous run of this test:
 
 ```bash
-bun run dev
+rm -rf /tmp/psi-desktop-load-50-asset-fixture
 ```
 
-## Steps
+Run this in the same terminal. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
+
+```bash
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-load-50-asset-fixture/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-load-50-asset-fixture/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-load-50-asset-fixture/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-load-50-asset-fixture/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-load-50-asset-fixture/data
+```
+
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-load-50-asset-fixture/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
+
+Start the desktop app in the same terminal, from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
+
+```bash
+bun run linux
+```
+
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
 
 ### 1. Open the fixture in the desktop app
 
 1. Click **Open database**. It is on the startup screen (when no database is
-   loaded), in the left side menu, and in the **File > Open Database...** menu
+   loaded), in the left side menu and in the **File > Open Database...** menu
    (Ctrl/Cmd+O). All of these open the **Open Database** dialog.
 2. The **Open Database** dialog lists databases you have already configured.
    - If `50-assets` is already listed, click it and skip to the expected result.
@@ -34,7 +59,7 @@ Expected:
 - The gallery loads and displays exactly 50 thumbnails.
 - No error toasts are shown.
 
----
+## Check
 
 ### 2. Spot-check that thumbnails and previews render
 
