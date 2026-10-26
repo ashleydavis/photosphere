@@ -607,6 +607,10 @@ replace_db_path() {
 
     debug_output="${debug_output//"$db_path"/<db>}"
     debug_output="${debug_output//"$resolved_db_path"/<db>}"
+    # A file in the database is printed with the platform's separator, so on Windows the backslash after
+    # the database's path is taken with it, and "<db>/<file>" is the same on every platform. Without
+    # this "Find hash collisions" failed in the Windows release run on "Output file: <db>\collisions.json".
+    debug_output="${debug_output//"$backslash_db_path\\"/<db>/}"
     debug_output="${debug_output//"$backslash_db_path"/<db>}"
     printf '%s' "$debug_output"
 }
