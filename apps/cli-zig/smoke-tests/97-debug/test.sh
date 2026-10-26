@@ -647,8 +647,11 @@ native_path() {
 #
 # Prints the expected merkle tree text with its placeholders filled in: the aggregate root hash, the
 # directory the test files were imported from (as the JSON of a record writes it) and the size of
-# each shard. A shard's size grows by two bytes for each character of that directory, for each record
-# it holds.
+# each shard. A record holds the directory twice: as origPath, and as labels, one per part of it, each
+# costing its length and 3 bytes. So a shard's size grows by two bytes for each character of that
+# directory and two for each part of it, for each record it holds. Counting characters alone held on a
+# checkout nine parts deep and failed this test on the Linux release runner, whose checkout is six
+# parts deep ("Total Size: 4079 bytes" expected, 4067 written).
 #
 fill_debug_placeholders() {
     local expected_text="$1"
@@ -658,10 +661,14 @@ fill_debug_placeholders() {
     test_files_dir="$(native_path "$(cd "$TEST_FILES_DIR" && pwd)")"
     local json_test_files_dir="${test_files_dir//\\/\\\\}"
 
+    # The parts are split as the importer splits them, on either separator, skipping empty ones.
+    local test_files_dir_parts
+    test_files_dir_parts="$(printf '%s' "$test_files_dir" | tr '\\' '/' | tr '/' '\n' | grep -c .)"
+
     expected_text="${expected_text//<aggregate-root-hash>/$aggregate_root_hash}"
     expected_text="${expected_text//<test-files-dir>/$json_test_files_dir}"
-    expected_text="${expected_text//<shard-59-size>/$((3895 + 4 * ${#test_files_dir}))}"
-    expected_text="${expected_text//<shard-72-size>/$((761 + 2 * ${#test_files_dir}))}"
+    expected_text="${expected_text//<shard-59-size>/$((3859 + 4 * ${#test_files_dir} + 4 * test_files_dir_parts))}"
+    expected_text="${expected_text//<shard-72-size>/$((743 + 2 * ${#test_files_dir} + 2 * test_files_dir_parts))}"
     printf '%s' "$expected_text"
 }
 
