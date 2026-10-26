@@ -156,7 +156,12 @@ test_hash_cache() {
     local database_cache_id
     database_cache_id="$(basename "$(dirname "$cache_dir_on_disk")")"
     local cache_dir
-    expect_hash_cache_output "Print the cache directory" "dir --db \"$db_dir\"" 0 "$(native_path "$PHOTOSPHERE_CACHE_DIR/$database_cache_id/hash-cache")" "cache_dir"
+    # The CLI prints the directory resolved, with runs of slashes collapsed. macOS's TMPDIR ends in a
+    # slash, so PHOTOSPHERE_CACHE_DIR holds "T//photosphere-tests", and expecting it as it stands failed
+    # "Print the cache directory" in the macOS arm64 release run, which printed "T/photosphere-tests".
+    local resolved_cache_dir
+    resolved_cache_dir="$(printf '%s' "$PHOTOSPHERE_CACHE_DIR/$database_cache_id/hash-cache" | tr -s '/')"
+    expect_hash_cache_output "Print the cache directory" "dir --db \"$db_dir\"" 0 "$(native_path "$resolved_cache_dir")" "cache_dir"
     expect_output_string "$cache_dir" "[/\\][0-9a-f]\{16\}[/\\]hash-cache$" "The cache is in a directory of the database's own"
     expect_value "$(basename "$(dirname "$cache_dir_on_disk")")" "$(basename "$(dirname "${cache_dir//\\//}")")" "The printed directory is the one the import wrote"
 
