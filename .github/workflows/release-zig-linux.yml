@@ -282,11 +282,8 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
-      - name: Install tree (Linux)
-        uses: ./.github/actions/install-apt-packages
-        with:
-          packages: tree
-          verify: tree
+      # No apt install here. tree, the only apt package the tests still used, is on the runner image. With nothing to
+      # install, install-apt-packages failed its cache-key step, as it did for zig-unit-tests in Zig CI.
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
         shell: bash

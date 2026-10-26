@@ -174,11 +174,8 @@ jobs:
         with:
           run: bun install
 
-      - name: Install tree (Linux)
-        uses: ./.github/actions/install-apt-packages
-        with:
-          packages: tree
-          verify: tree
+      # No apt install here. tree, the only apt package the tests still used, is on the runner image. With nothing to
+      # install, install-apt-packages failed its cache-key step and zig-unit-tests stopped with exit code 1.
 
       # The libraries the build jobs built, restored from the cache for the Zig build to link.
       - name: Restore the third-party libraries
