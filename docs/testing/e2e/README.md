@@ -6,6 +6,8 @@
 
 Manual end-to-end test scripts for Photosphere interfaces.
 
+This directory is "the testing manual". When the human says "the testing manual", they mean these test scripts, the checklist and its notes, run with the commands below.
+
 ## Structure
 
 - [cli/](cli/) - Test scripts for the `psi` CLI
