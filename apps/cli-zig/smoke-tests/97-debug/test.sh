@@ -671,7 +671,10 @@ fill_debug_placeholders() {
     local record_directory_size=$((${#json_test_files_dir} + test_files_dir_label_characters + 3 * test_files_dir_parts))
 
     expected_text="${expected_text//<aggregate-root-hash>/$aggregate_root_hash}"
-    expected_text="${expected_text//<test-files-dir>/$json_test_files_dir}"
+    # The replacement is quoted so it is taken as written. Unquoted, bash 5.2 reads its backslashes as
+    # escapes, and on Windows "D:\\a\\photosphere" became "D:\a\photosphere", failing "Show the merkle
+    # trees with their records" in the Windows release run.
+    expected_text="${expected_text//<test-files-dir>/"$json_test_files_dir"}"
     expected_text="${expected_text//<shard-59-size>/$((3859 + 2 * record_directory_size))}"
     expected_text="${expected_text//<shard-72-size>/$((743 + record_directory_size))}"
     printf '%s' "$expected_text"
