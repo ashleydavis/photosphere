@@ -649,6 +649,29 @@ native_path() {
 }
 
 #
+# Replaces every occurrence of the pattern in the named variable with the replacement, both taken exactly
+# as written. ${text//pattern/replacement} cannot do this on every platform: bash 5.2 reads backslashes in
+# an unquoted replacement as escapes, which halved the backslashes of a Windows path in the JSON of
+# test 97's records ("Show the merkle trees with their records" in the Windows release run), and bash
+# 3.2 keeps the quotes of a quoted one, which put quotes around the same path in the macOS release run.
+# The variable is set in place, because command substitution would drop the text's trailing newlines.
+# Usage: replace_literally <variable name> <pattern> <replacement>
+#
+replace_literally() {
+    local variable_name="$1"
+    local pattern="$2"
+    local replacement="$3"
+
+    local text="${!variable_name}"
+    local result=""
+    while [[ "$text" == *"$pattern"* ]]; do
+        result="$result${text%%"$pattern"*}$replacement"
+        text="${text#*"$pattern"}"
+    done
+    printf -v "$variable_name" '%s' "$result$text"
+}
+
+#
 # Prints the expected merkle tree text with its placeholders filled in: the aggregate root hash, the
 # directory the test files were imported from (as the JSON of a record writes it) and the size of
 # each shard. A shard's size is the length of its records' JSON, and a record holds the directory twice:
@@ -675,10 +698,7 @@ fill_debug_placeholders() {
     local record_directory_size=$((${#json_test_files_dir} + test_files_dir_label_characters + 3 * test_files_dir_parts))
 
     expected_text="${expected_text//<aggregate-root-hash>/$aggregate_root_hash}"
-    # The replacement is quoted so it is taken as written. Unquoted, bash 5.2 reads its backslashes as
-    # escapes, and on Windows "D:\\a\\photosphere" became "D:\a\photosphere", failing "Show the merkle
-    # trees with their records" in the Windows release run.
-    expected_text="${expected_text//<test-files-dir>/"$json_test_files_dir"}"
+    replace_literally expected_text "<test-files-dir>" "$json_test_files_dir"
     expected_text="${expected_text//<shard-59-size>/$((3859 + 2 * record_directory_size))}"
     expected_text="${expected_text//<shard-72-size>/$((743 + record_directory_size))}"
     printf '%s' "$expected_text"
