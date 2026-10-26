@@ -5,7 +5,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/android-common.sh"
-source "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/scripts/emulator-config.sh"
+source "$PHOTOSPHERE_ANDROID_SCRIPTS_DIR/android-emulator/emulator-config.sh"
 
 adb_command="$ANDROID_HOME/platform-tools/adb"
 

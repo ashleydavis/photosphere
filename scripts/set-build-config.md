@@ -6,8 +6,6 @@ It stamps the same values into the Zig config files, `packages-zig/config-zig/sr
 
 The checked-in files say `dev`, which is what a build made on your machine reports. A build handed to anyone else replaces it: a tagged release reports the version from its tag (the release workflows strip the platform prefix, so `linux-v1.2.3` reports `1.2.3`), and anything else reports `dev-nightly.<UTC timestamp>`, which is how the release workflow versions its nightly builds.
 
-`apps/android-frontend/scripts/distribute-android.sh` uses it so a tester build carries a real version instead of `dev`, and puts the checked-in file back when the build is done.
-
 ## Using it
 
 ```

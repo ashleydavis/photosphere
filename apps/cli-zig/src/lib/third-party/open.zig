@@ -122,10 +122,10 @@ pub fn open(allocator: std.mem.Allocator, io: std.Io, target: []const u8) !void 
 // a process that cannot be assigned (this process is in a job that forbids it) is left to run, with the failure
 // logged with --verbose. Returns the job the process was put in, or null when it was not.
 //
-// TODO: the TypeScript `psi bug` (apps/cli/src/cmd/bug.ts) exits straight after `open()`, and the `open` package
+// TODO: `psi bug` exits straight after `open()`, and the `open` package
 // starts PowerShell on Windows without `detached`, so PowerShell is killed as psi exits, usually before it has
-// started the browser: on Windows `psi bug` opens no browser. This mirrors that TypeScript bug on purpose, to stay
-// faithful to it. Fix it in both (start the opener detached, or wait for it) once the TypeScript is fixed.
+// started the browser: on Windows `psi bug` opens no browser. This is ported unchanged from the TypeScript implementation.
+// The fix is to start the opener detached, or to wait for it.
 //
 pub fn startAttachedToThisProcess(allocator: std.mem.Allocator, process: windows.HANDLE) ?windows.HANDLE {
     const job = killOnCloseJob() orelse {

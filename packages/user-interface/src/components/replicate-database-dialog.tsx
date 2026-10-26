@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { log } from 'utils';
 import { useUuidGenerator } from '../context/uuid-generator-context';
-import { replicateDatabase } from 'node-api/src/lib/replicate-database';
+import { replicateDatabase } from 'api';
 import type { IReplicateDatabaseData } from 'api/src/lib/replicate-database.types';
 import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';

@@ -10,7 +10,7 @@ At the end of it: photos arrive in the app without anybody importing them, and t
 - **A bucket.** S3, or any S3-compatible service such as DigitalOcean Spaces, with its endpoint, region, access key id and secret access key.
 - **A computer with the Photosphere CLI**, on the same Wi-Fi network as the phone. The phone cannot create a database in a bucket, and typing an access key on a phone keyboard is the slowest thing in this guide, so the computer does both and hands the result over the local network.
 
-Commands are written as `psi`. From a source checkout, run them from `apps/cli/` as `bun run start -- <command>` instead.
+Commands are written as `psi`. From a source checkout, build it with `zig build` at the repository root and run `zig-out/bin/psi <command>` instead.
 
 ## Which pathway you are on
 

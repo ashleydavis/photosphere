@@ -290,7 +290,7 @@ photosphere_platform_is_running() {
 }
 
 #
-# Clears everything the app has stored on the simulator, as the mobile suite's ios_reset_app_state does: uninstalling the app removes
+# Clears everything the app has stored on the simulator: uninstalling the app removes
 # its container (Documents, Library and the web view's storage), and the simulator's keychain, which holds items outside the container,
 # is reset. The app is then installed again, so its empty container is there for a scenario to seed before its start, as the reset on
 # Android leaves the app installed with its data cleared. An app that is not installed has no container to remove. The photo permission

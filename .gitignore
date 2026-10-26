@@ -14,7 +14,6 @@ packages/defs/build
 deprecated/upload/log
 .turbo
 deprecated/backup/build
-packages/storage/build
 deprecated/backup/backup
 deprecated/backup/log
 deprecated/database/log/
@@ -28,22 +27,9 @@ deprecated/database/storage-test
 # Local Netlify folder
 .netlify
 tsconfig.tsbuildinfo
-apps/cli/psi
-apps/cli/bin/
-apps/mk-cli/bin/
-apps/bdb-cli/bin/
-# apps/cli/test/db
 tools/upload/log.*
-apps/cli/test-db
 .photosphere.json
 .photosphere
-packages/tools/build/
-apps/cli/test/test-db-replica/
-apps/cli/keys
-packages/serialization/build/
-# Generated mobile worker bundle. Built by `bun --filter=mobile-worker build:bundle` and copied into
-# the native projects by `copy:bundle` (both run by each mobile app's `sync`). Never committed.
-packages/mobile-worker/worker.bundle.js
 packages/adb/src/test/perf/results/
 # Where what-changed keeps its state: baseline.json, the tree it last saw pass, and cache/, which is
 # only a speed-up. Must stay ignored: it enumerates untracked files too, so an un-ignored baseline
@@ -53,13 +39,8 @@ packages/adb/src/test/perf/results/
 tmp/
 bundle/
 release/
-apps/desktop/test-results
-apps/cli/test/tmp-encrypted/
-apps/cli/test/tmp-lan-share/
-tmp-cli-desktop-lan-share/
 stories-tmp/
 stories-screenshots/
-apps/desktop/screenshots/out/
 ux-review/
 # Cached MinIO binary downloaded on demand by scripts/s3-emulator.sh for the S3 smoke tests.
 .s3-emulator-cache/
@@ -73,14 +54,12 @@ ux-review/
 
 # Local Claude Code settings for this checkout. Per-machine and per-person, so it is never shared.
 .claude/settings.local.json
-apps/android-frontend/firebase-debug.log
 
 # Zig build outputs
 zig-out/
 .zig-cache/
 zig-pkg/
 apps/cli-zig/bin/
-apps/cli/test/tmp-zig/
 
 # The Photosphere App built on Ziggy: the WebView2 SDK and the WiX Toolset its setup-windows script fetches, the
 # build its package-windows script packages, what its package scripts produce and the page build in progress

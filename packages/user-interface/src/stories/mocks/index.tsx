@@ -171,9 +171,18 @@ function mockUuidGenerator(): IUuidGenerator {
 export function mockPlatform(): IPlatformContext {
     const noUnsubscribe: Unsubscribe = () => {};
     const emptyToolsStatus: IToolsStatus = {
-        magick: { available: true },
-        ffprobe: { available: true },
-        ffmpeg: { available: true },
+        magick: {
+            available: true,
+            version: "7.1.2-33",
+        },
+        ffprobe: {
+            available: true,
+            version: "9.0.2",
+        },
+        ffmpeg: {
+            available: true,
+            version: "9.0.2",
+        },
         allAvailable: true,
         missingTools: [],
     };

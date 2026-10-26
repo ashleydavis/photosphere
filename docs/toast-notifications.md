@@ -19,11 +19,11 @@ addToast({
 ## Architecture
 
 ```
-Electron main process  (or worker via sendNotification)
-    │  mainWindow.webContents.send('show-notification', payload)
+Photosphere core, on the main thread or in a task
+    │  events.sendShowNotification(sink, io, arena, notification)
     ▼
-platform-provider-electron.tsx
-    │  electronAPI.onMessage('show-notification', handler)
+platform-provider-ziggy.tsx
+    │  messages.onEvent('show-notification', handler)
     │  dispatches to registered callbacks
     ▼
 IPlatformContext.onShowNotification(callback)
@@ -34,7 +34,7 @@ useToast().addToast(...)
 ToastContainer (rendered inside Main)
 ```
 
-For events that originate entirely in the renderer (e.g. a button click) you can skip the IPC layer and call `addToast` directly from any component.
+For events that originate entirely in the page (e.g. a button click) you can skip the core and call `addToast` directly from any component.
 
 ## Adding a notification from a React component
 
@@ -71,59 +71,37 @@ No wiring needed — `ToastContextProvider` is already in the tree inside `Main`
 | `link`     | `{ label: string; url: string }`                  | no       | (none)  | Inline anchor rendered below the message; opens in a new tab |
 | `onDismiss` | `() => void`                                     | no       | —       | Called when the user clicks the close button. Not fired on auto-dismiss timer. Used by news/update toasts to persist their "seen" state only on explicit close. |
 
-## Sending a notification from the main process
+## Sending a notification from the core
 
-Send `show-notification` from any `ipcMain` handler or menu click in [main.ts](../apps/desktop/src/main.ts):
+Call `sendShowNotification` in [events.zig](../packages-zig/photosphere-core/src/lib/events.zig) from anywhere in the core that has a sink, for example `onTaskEnd` in [main-process.zig](../packages-zig/photosphere-core/src/lib/main-process.zig):
 
-```ts
-mainWindow.webContents.send('show-notification', {
-    message: 'Sync complete',
-    color: 'success',       // primary | success | warning | danger | neutral
-    duration: 5000,         // optional, defaults to 5000
-    folderPath: '/some/dir',                                // optional, adds an "Open Folder" button
-    link: { label: 'Read more', url: 'https://...' },       // optional inline anchor in the body
-    action: { label: 'What\'s new', url: 'https://...' }    // optional CTA button (URL form)
+```zig
+try events.sendShowNotification(services, io, arena, .{
+    .message = "Sync complete",
+    .color = "success", // primary | success | warning | danger | neutral
+    .duration = 5000, // optional, defaults to 5000
+    .folderPath = "/some/dir", // optional, adds an "Open Folder" button
+    .link = .{ .label = "Read more", .url = "https://..." }, // optional inline anchor in the body
+    .action = .{ .label = "What's new", .url = "https://..." }, // optional CTA button (URL form)
 });
 ```
 
-The payload is typed as `IShowNotificationData` in [platform-context.tsx](../packages/user-interface/src/context/platform-context.tsx). The renderer translates the payload as follows:
+The payload is `IShowNotification` in `events.zig`, and `IShowNotificationData` in [platform-context.tsx](../packages/user-interface/src/context/platform-context.tsx) on the page. The page translates the payload as follows:
 
 - `link` is passed straight through as an inline anchor inside the toast body.
-- `action` (URL form) becomes a CTA button that opens the URL via `window.open(..., '_blank', 'noopener')`. External URLs are routed through `shell.openExternal` by the existing `setWindowOpenHandler` in [main.ts](../apps/desktop/src/main.ts).
+- `action` (URL form) becomes a CTA button that opens the URL via `window.open(..., '_blank', 'noopener')`.
 - `folderPath` (when `action` is absent) becomes an "Open Folder" button that opens the folder in the system file manager.
 
 `action` wins over `folderPath` when both are set.
 
-## Sending a notification from a worker
+## Sending a notification from a task
 
-Workers cannot access `mainWindow` directly. Instead, queue a background task that **returns** a result object, then handle it in `onTaskComplete` inside `initWorkers()` in [main.ts](../apps/desktop/src/main.ts):
-
-```ts
-// In the task handler (packages/api/src/lib/my-task.worker.ts)
-export async function myTaskHandler(data: IMyTaskData, _context: ITaskContext): Promise<IMyTaskResult> {
-    // ... do work ...
-    return { succeeded: true, folderPath: data.folderPath };
-}
-
-// In initWorkers() in main.ts
-taskQueue.onTaskComplete<ITask<any>, any>((task, result) => {
-    if (task.type === "my-task" && mainWindow) {
-        const { succeeded, folderPath } = result.outputs as IMyTaskResult;
-        mainWindow.webContents.send('show-notification', {
-            message: succeeded ? 'Task complete' : 'Task failed',
-            color: succeeded ? 'success' : 'danger',
-            folderPath: succeeded ? folderPath : undefined,
-        });
-    }
-});
-```
-
-Remember to register the handler in [task-handlers.ts](../packages/api/src/lib/task-handlers.ts).
+A task never reaches the main thread's state. Pass the task's services as the sink: `sendEvent` then sends the event as a task event of type `APP_EVENT_TYPE`, and the main thread sends it on to the page (see `events.zig`). A task can also return its result and leave the main thread to decide, in `onTaskEnd` in `main-process.zig`, as the import and replication notifications do.
 
 ## Existing notifications
 
 | Source                  | Task / event            | Notification                                          |
 |-------------------------|-------------------------|-------------------------------------------------------|
-| `onTaskComplete`        | `save-asset`            | Green on success with Open Folder; red on failure     |
-| `onTaskComplete`        | `save-assets-batch`     | Green/yellow/red summary with Open Folder on success  |
-| `checkForNews()` on startup | `did-finish-load`   | Oldest unseen item from `news.yaml`; optional inline link and URL CTA |
+| `onTaskEnd`             | `import-assets`         | Red on failure                                        |
+| `onTaskEnd`             | `replicate-database`    | Green on success; red on failure                      |
+| `checkForNews()` once the page has loaded | `check-for-news` | Oldest unseen item from `news.yaml`; optional inline link and URL CTA |

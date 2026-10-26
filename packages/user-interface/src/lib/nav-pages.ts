@@ -1,4 +1,5 @@
 import type { ElementType } from "react";
+import Build from "@mui/icons-material/Build";
 import Info from "@mui/icons-material/Info";
 import Newspaper from "@mui/icons-material/Newspaper";
 import Storage from "@mui/icons-material/Storage";
@@ -47,6 +48,11 @@ export const navPages: INavPage[] = [
         path: "/about",
         label: "About",
         icon: Info,
+    },
+    {
+        path: "/tools",
+        label: "Tools",
+        icon: Build,
     },
     {
         path: "/news",

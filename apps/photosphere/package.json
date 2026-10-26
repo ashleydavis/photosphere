@@ -44,9 +44,20 @@
     "setup:ios": "bash ./scripts/setup-ios.sh",
     "setup:windows": "bash ./scripts/setup-windows.sh",
     "fetch:webview2": "bash ./scripts/fetch-webview2.sh",
-    "fetch:wix": "bash ./scripts/fetch-wix.sh"
+    "fetch:wix": "bash ./scripts/fetch-wix.sh",
+    "emu:up": "bash ./scripts/android-emulator/emulator.sh up",
+    "emu:pool:up": "bash ./scripts/android-emulator/emulator.sh pool-up",
+    "emu:pool:down": "bash ./scripts/android-emulator/emulator.sh pool-down",
+    "emu:pool:restart": "bash ./scripts/android-emulator/emulator.sh pool-restart",
+    "emu:pool:repair": "bash ./scripts/android-emulator/emulator.sh pool-repair",
+    "emu:pool:diagnose": "bash ./scripts/android-emulator/emulator.sh pool-diagnose",
+    "emu:down": "bash ./scripts/android-emulator/emulator.sh down",
+    "emu:restart": "bash ./scripts/android-emulator/emulator.sh restart",
+    "emu:status": "bash ./scripts/android-emulator/emulator.sh status",
+    "emu:pool:monitor": "bash ./scripts/android-emulator/emulator-pool-monitor.sh"
   },
   "devDependencies": {
-    "native-run": "^2.0.0"
+    "native-run": "^2.0.0",
+    "smol-toml": "^1.3.4"
   }
 }

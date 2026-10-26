@@ -15,7 +15,8 @@ export type {
 
 //
 // Represents a database configuration entry with vault key references,
-// used as input to resolveDatabaseSharePayload and output of importDatabasePayload.
+// used as input to resolveDatabaseSharePayload and output of importDatabasePayload (both in
+// packages-zig/api-zig/src/lib/lan-share).
 //
 export interface IShareDatabaseConfig {
     // Human-readable display name.

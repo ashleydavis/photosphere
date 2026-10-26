@@ -14,7 +14,3 @@ The vendored source is never edited, except for FFmpeg's command line programs, 
 ## Phones
 
 On Android the libraries are built into `libphotosphere.so` by the core build, and on iOS into the core static library, so the app projects hold no copy of them and carry no ImageMagick or FFmpegKit dependency. ImageMagick has the JPEG, PNG and WebP delegates on every platform, so a WebP picture is read the same way everywhere (no system decoder is used).
-
-## Old mobile apps (deprecated)
-
-The Capacitor apps are updated with `scripts/update-mobile-media-tools.sh`, which is kept until they are removed.

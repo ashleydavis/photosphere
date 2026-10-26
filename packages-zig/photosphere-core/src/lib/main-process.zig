@@ -197,8 +197,7 @@ pub fn mainCommandHandler(services: HandlerServices, timers: Timers, io: std.Io,
     }
     else if (std.mem.eql(u8, command, "cancel-tasks")) {
         // The page's cancel. Cancelling in the worker pool drops the source's queued tasks, tells the workers running its tasks, and
-        // tells the task queues of the source, which stop awaiting them, as the original app's worker pool does
-        // (apps/desktop/src/lib/worker-pool-electron-main.ts cancelTasks, apps/desktop/src/worker.ts "cancel-tasks").
+        // tells the task queues of the source, which stop awaiting them.
         const source = json.getString(payload, "source") orelse {
             return utils.errors.throwError("main-command cancel-tasks needs the source of the tasks to cancel.", .{});
         };

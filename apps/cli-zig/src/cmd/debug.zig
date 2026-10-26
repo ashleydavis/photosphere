@@ -984,3 +984,228 @@ pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info("");
     exit(io, 0);
 }
+
+//
+// Options of the debug record command.
+// The base options are in `base`.
+//
+pub const IDebugRecordCommandOptions = struct {
+    // The options shared by every command.
+    base: IBaseCommandOptions = .{},
+
+    // Shows every field of the record, without truncating long strings.
+    all: ?bool = null,
+};
+
+//
+// Command that prints one record of a collection of the database as JSON, so a test can read what a command
+// wrote. Long strings and records with many fields are shortened unless --all is given.
+//
+pub fn debugRecordCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, collectionName: []const u8, recordId: []const u8, options: *IDebugRecordCommandOptions) !void {
+    std.debug.assert(collectionName.len > 0);
+    std.debug.assert(recordId.len > 0);
+    const dbDir = try resolveDbDir(allocator, io, &options.base);
+    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+    const collection = try loaded.bsonDatabase.collection(collectionName);
+    const record = try collection.getOne(io, recordId) orelse {
+        log.info(try pc.yellow(allocator, "Record not found."));
+        exit(io, 0);
+    };
+    const recordValue: BsonValue = .{
+        .document = record,
+    };
+    const recordToDisplay = if (options.all orelse false) recordValue else try truncateLongStrings(allocator, recordValue, 100, 5, false);
+    log.info(try js_value.jsonStringifyIndented(allocator, recordToDisplay));
+    exit(io, 0);
+}
+
+//
+// Parses the value given to the debug edit command into the BSON value of its type. A date is stored as its ISO
+// string and a string array is the value split at commas, each item trimmed and the empty ones left out.
+//
+pub fn parseFieldValue(allocator: std.mem.Allocator, value: []const u8, fieldType: []const u8) !BsonValue {
+    const lowerType = try std.ascii.allocLowerString(allocator, fieldType);
+    if (std.mem.eql(u8, lowerType, "number")) {
+        const number = utils.js_number.stringToNumber(value);
+        if (std.math.isNan(number)) {
+            return throwError("Invalid number value: {s}", .{value});
+        }
+        return .{
+            .number = number,
+        };
+    }
+    if (std.mem.eql(u8, lowerType, "string")) {
+        return .{
+            .string = value,
+        };
+    }
+    if (std.mem.eql(u8, lowerType, "date")) {
+        const time = utils.js_date.parseDate(value);
+        if (std.math.isNan(time)) {
+            return throwError("Invalid date value: {s}", .{value});
+        }
+        var text: std.Io.Writer.Allocating = .init(allocator);
+        try writeIsoString(&text.writer, @intFromFloat(time));
+        return .{
+            .string = text.written(),
+        };
+    }
+    if (std.mem.eql(u8, lowerType, "boolean")) {
+        const lowerValue = try std.ascii.allocLowerString(allocator, value);
+        if (std.mem.eql(u8, lowerValue, "true") or std.mem.eql(u8, lowerValue, "1") or std.mem.eql(u8, lowerValue, "yes")) {
+            return .{
+                .boolean = true,
+            };
+        }
+        if (std.mem.eql(u8, lowerValue, "false") or std.mem.eql(u8, lowerValue, "0") or std.mem.eql(u8, lowerValue, "no")) {
+            return .{
+                .boolean = false,
+            };
+        }
+        return throwError("Invalid boolean value: {s}. Expected true/false, 1/0, or yes/no", .{value});
+    }
+    if (std.mem.eql(u8, lowerType, "string-array")) {
+        var items: std.ArrayList(BsonValue) = .empty;
+        var parts = std.mem.splitScalar(u8, value, ',');
+        while (parts.next()) |part| {
+            const item = std.mem.trim(u8, part, " \t\r\n");
+            if (item.len > 0) {
+                try items.append(allocator, .{
+                    .string = item,
+                });
+            }
+        }
+        return .{
+            .array = items.items,
+        };
+    }
+    if (std.mem.eql(u8, lowerType, "json")) {
+        return jsonParse(allocator, value) catch {
+            return throwError("Invalid JSON value: {s}", .{value});
+        };
+    }
+    return throwError("Unknown field type: {s}. Supported types: number, string, date, boolean, string-array, json", .{fieldType});
+}
+
+//
+// Sets a field of a document by its dot path ("user.name" sets name inside user), making each document on the
+// way that is missing and replacing any value on the way that is not a document.
+//
+pub fn setNestedField(allocator: std.mem.Allocator, document: *BsonDocument, fieldPath: []const u8, value: BsonValue) !void {
+    std.debug.assert(fieldPath.len > 0);
+    var current = document;
+    var parts = std.mem.splitScalar(u8, fieldPath, '.');
+    var part = parts.next().?;
+    while (parts.next()) |nextPart| {
+        const existing = current.getPtr(part);
+        if (existing == null or existing.?.* != .document) {
+            try current.put(allocator, part, .{
+                .document = .empty,
+            });
+        }
+        current = &current.getPtr(part).?.document;
+        part = nextPart;
+    }
+    try current.put(allocator, part, value);
+}
+
+//
+// Command that sets one field of a record of the database and commits the database, so the change is in its
+// merkle tree the way an edit made by the app is. Tests use it to make the change a sync then carries.
+//
+pub fn debugEditCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, edit: IDebugEditArguments, options: *IBaseCommandOptions) !void {
+    std.debug.assert(edit.collectionName.len > 0);
+    std.debug.assert(edit.recordId.len > 0);
+    const dbDir = try resolveDbDir(allocator, io, options);
+    const loaded = try loadDatabase(allocator, io, dbDir, options, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+    const collection = try loaded.bsonDatabase.collection(edit.collectionName);
+    if (try collection.getOne(io, edit.recordId) == null) {
+        return throwError("Record '{s}' not found in collection '{s}'.", .{ edit.recordId, edit.collectionName });
+    }
+
+    const parsedValue = try parseFieldValue(allocator, edit.fieldValue, edit.fieldType);
+    var updates: BsonDocument = .empty;
+    try setNestedField(allocator, &updates, edit.fieldName, parsedValue);
+    if (!try collection.updateOne(io, edit.recordId, updates, .{})) {
+        return throwError("Failed to update record '{s}'.", .{edit.recordId});
+    }
+    try loaded.bsonDatabase.commit(io);
+
+    log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Successfully updated field '{s}' in record '{s}'.", .{ edit.fieldName, edit.recordId })));
+    exit(io, 0);
+}
+
+//
+// What the debug edit command changes: the record, the field and the value with its type. A struct because the
+// five are all strings and easy to pass in the wrong order.
+//
+pub const IDebugEditArguments = struct {
+    // The collection the record is in.
+    collectionName: []const u8,
+
+    // The ID of the record to change.
+    recordId: []const u8,
+
+    // The field to set, as a dot path for a nested field.
+    fieldName: []const u8,
+
+    // The type the value is parsed as (see parseFieldValue).
+    fieldType: []const u8,
+
+    // The value, as text.
+    fieldValue: []const u8,
+};
+
+//
+// Returns the index of the first name that sorts before the one ahead of it, in the order the tree is built in,
+// or null when every name is in order.
+//
+pub fn findFirstUnsortedName(names: []const []const u8) ?usize {
+    var index: usize = 1;
+    while (index < names.len) : (index += 1) {
+        if (merkle_tree.compareNames(names[index - 1], names[index]) > 0) {
+            return index;
+        }
+    }
+    return null;
+}
+
+//
+// Command that checks the leaves of the files tree of the database (.db/files.dat), in both its sort tree and its
+// merkle tree, are in sorted order, and exits with 1 when they are not, because an unsorted tree breaks comparison
+// and sync. Tests run it after every command that rewrites the tree.
+//
+pub fn debugMerkleCheckCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IBaseCommandOptions) !void {
+    const dbDir = try resolveDbDir(allocator, io, options);
+    const loaded = try loadDatabase(allocator, io, dbDir, options, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+    const tree = try loadMerkleTree(allocator, io, loaded.assetStorage) orelse {
+        return throwError("The database at {s} has no files tree.", .{loaded.databaseDir});
+    };
+    const sortRoot = tree.sort orelse {
+        return throwError("The files tree of {s} has no sort tree.", .{loaded.databaseDir});
+    };
+    const merkleRoot = tree.merkle orelse {
+        return throwError("The files tree of {s} has no merkle tree.", .{loaded.databaseDir});
+    };
+
+    var sortNames: std.ArrayList([]const u8) = .empty;
+    var sortLeaves = iterateLeaves(merkle_tree.SortNode, allocator, sortRoot);
+    while (try sortLeaves.next()) |leaf| {
+        try sortNames.append(allocator, leaf.name orelse "");
+    }
+    if (findFirstUnsortedName(sortNames.items)) |index| {
+        return throwError("Sort tree leaf nodes are not in sorted order: {s} comes after {s}.", .{ sortNames.items[index], sortNames.items[index - 1] });
+    }
+
+    var merkleNames: std.ArrayList([]const u8) = .empty;
+    var merkleLeaves = iterateLeaves(MerkleNode, allocator, merkleRoot);
+    while (try merkleLeaves.next()) |leaf| {
+        try merkleNames.append(allocator, leaf.name orelse "");
+    }
+    if (findFirstUnsortedName(merkleNames.items)) |index| {
+        return throwError("Merkle tree leaf nodes are not in sorted order: {s} comes after {s}.", .{ merkleNames.items[index], merkleNames.items[index - 1] });
+    }
+
+    log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Leaf nodes are in sorted order (sort tree: {d}, merkle tree: {d} nodes).", .{ sortNames.items.len, merkleNames.items.len })));
+    exit(io, 0);
+}

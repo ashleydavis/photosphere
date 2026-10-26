@@ -74,7 +74,7 @@ log_info "Second pairing code: $second_code"
 case "$PLATFORM" in
     ios|android)
         log_info "Receiving the secret on the host CLI..."
-        run_zig_cli "$TMP_DIR" secrets receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
+        run_cli "$TMP_DIR" secrets receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
             log_error "The CLI receiver failed. Its output: $TMP_DIR/receiver.log"
             exit 1
         }

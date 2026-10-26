@@ -50,10 +50,6 @@ Neither library prints to the process's standard error. What they say goes back 
 
 The ImageMagick and FFmpeg files for the iOS targets are not checked in: they come from the SDK of the Mac doing the build. Make them with the two `generate-config.sh` scripts (`aarch64-ios` for a device, `aarch64-ios-simulator` for the simulator on an arm64 Mac), then build each library in its `third-party` directory for the target (`zig build -Dtarget=aarch64-ios.14.0`). The iOS scripts (`apps/photosphere/scripts/sync-ios.sh`, and so `build-ios.sh`, `package-ios.sh` and `open-ios.sh`) link what those builds installed. The iOS release workflow does both through the library build actions.
 
-## The old mobile apps (deprecated)
-
-The Capacitor apps (`apps/android-frontend`, `apps/ios-frontend`) still use prebuilt ImageMagick libraries and the FFmpegKit forks described in `scripts/fetch-mobile-media-tools.sh` and `apps/ios-frontend/ios/build-imagemagick.sh`. They are removed later and are not changed by the work above.
-
 ## Licensing
 
 See `THIRD-PARTY-NOTICES.md` and the README.

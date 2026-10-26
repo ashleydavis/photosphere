@@ -8,22 +8,20 @@ The stories browser lets developers view, exercise, and visually compare each UI
 
 Playing the stories is the only thing that catches a broken story. There is no unit test that mounts them: the project does not unit-test React components, so a story that throws (say, a dialog whose context provider is missing from the mocks) will not fail `bun run test`. Play the stories after changing a page, component, or the mock provider stack.
 
-Because the same stories render in the web, Electron, Android, and iOS builds, running them on a phone-sized screen is the quickest way to find pages that do not fit on mobile.
+Because the same stories render in the Photosphere App on every platform, running them on a phone-sized screen is the quickest way to find pages that do not fit on mobile.
 
 ## Entry points
 
 The browser is deliberately not exposed to end users. The ways in:
 
-- **Web (dev-frontend):** type `#/stories` directly into the address bar. Default dev URL: `http://localhost:8080/#/stories`. To open a specific story, append `?id=<story-id>` after the hash route, e.g. `http://localhost:8080/#/stories?id=spinner/visible`.
-- **Electron desktop app:** open the **Developer** menu and click **Stories**. The Developer menu already groups developer-facing actions (Reload / Force Reload / Toggle Developer Tools); ordinary users rarely open it. There is no keyboard shortcut, no sidebar link, and no toolbar button.
-- **Android / iOS app:** open the hidden **Developer** screen and tap **Stories**. There is no other in-app affordance.
+- **Photosphere App, any platform:** turn on developer mode by tapping the version label on the About page four times in quick succession, then open **Developer** from the sidebar and tap **Stories**. There is no other in-app affordance.
 - **Any platform, automated:** the story player drives the live app through the whole registry from the command line. See [Running the stories](#running-the-stories).
 
 A **Back to app** link in the sidebar navigates back to `/`.
 
 ## Play on automatic
 
-The sidebar has a **▶ Play on automatic** button that walks every story in order, dwelling briefly on each, and reports how many passed or failed at the end. By default it shows each story in **light and then dark**; when `PHOTOSPHERE_THEME` forces a single theme (the screenshot passes) it walks only that theme. During playback the only control is **Cancel**; the completion screen has a **Back to browser** button. Under the hood this just sets the `?cycle=1` query param the cycle reads, so it works identically in the web and Electron builds.
+The sidebar has a **▶ Play on automatic** button that walks every story in order, dwelling briefly on each, and reports how many passed or failed at the end. By default it shows each story in **light and then dark**; when `PHOTOSPHERE_THEME` forces a single theme (the screenshot passes) it walks only that theme. During playback the only control is **Cancel**; the completion screen has a **Back to browser** button. Under the hood this just sets the `?cycle=1` query param the cycle reads, so it works identically on every platform.
 
 ## Theming
 
@@ -62,10 +60,10 @@ Because Android and iOS run at phone resolution, `bun run stories:ziggy:and` is 
 
 ### How it works on each platform
 
-The three shells differ only in how the app is built, launched, and screenshotted. Each already has a test harness exposing the same HTTP command surface (`/ready`, `/navigate`, `/screenshot`, `/cycle-advance`, `/quit`), so the player drives them identically:
+The platforms differ only in how the app is built, launched, and screenshotted. Every one is driven through the Photosphere App smoke tests' harness (`apps/photosphere-smoke-tests/lib/common.sh`), which exposes the same command surface (ready, navigate, screenshot, cycle-advance, quit) over Ziggy's test control connection, so the player drives them identically:
 
-- **Electron** uses the in-app test control server (`apps/desktop/src/lib/test-control-server.ts`) and the desktop smoke-test helpers (`apps/desktop/smoke-tests/lib/common.sh`). Screenshots come from Electron itself. On Linux it runs headless under `xvfb-run` unless `SHOW_UI=1`.
-- **Android / iOS** have no in-process server, so they use the host control bridge (`apps/smoke-tests/lib/control-bridge.ts`) and the mobile helpers (`apps/smoke-tests/lib/common.sh`). The bridge relays commands to the app over a WebSocket and captures the screen host-side with `adb exec-out screencap` (Android) or `xcrun simctl io screenshot` (iOS). The player boots the emulator/simulator, builds, and installs the app first.
+- **Host operating system:** the app writes each screenshot itself.
+- **Android / iOS:** the app cannot write to a host path, so the harness captures the screen host-side with `adb exec-out screencap` (Android) or `xcrun simctl io screenshot` (iOS). The player builds and installs the app first.
 
 The cycle itself lives in `stories-page.tsx` (`StoriesCycle`): it renders each story, emits `STORIES CYCLE READY: <theme>|<category>|<id>` once the story has settled, and advances when the player posts `/cycle-advance` (or when the dwell timer expires). It ends with `STORIES CYCLE COMPLETE: N passed, M failed`, which is what the player reports.
 

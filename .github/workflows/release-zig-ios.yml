@@ -218,12 +218,11 @@ jobs:
         with:
           run: bun install
 
-      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
-      - name: Install media processing tools
+      - name: Install tree and rsync
         uses: ./.github/actions/retry-install
         with:
-          run: brew install imagemagick ffmpeg tree rsync
-          verify: magick|convert ffmpeg ffprobe
+          run: brew install tree rsync
+          verify: tree rsync
 
       - name: Check the iOS toolchain
         run: bun run --filter=ziggy setup:ios

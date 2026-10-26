@@ -102,11 +102,11 @@ log_info "Second pairing code: $second_code"
 case "$PLATFORM" in
     ios|android)
         log_info "Receiving the database on the host CLI..."
-        run_zig_cli "$TMP_DIR" dbs receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
+        run_cli "$TMP_DIR" dbs receive --yes --code "$second_code" > "$TMP_DIR/receiver.log" 2>&1 || {
             log_error "The CLI receiver failed. Its output: $TMP_DIR/receiver.log"
             exit 1
         }
-        if ! run_zig_cli "$TMP_DIR" dbs list | grep -q 'test-db'; then
+        if ! run_cli "$TMP_DIR" dbs list | grep -q 'test-db'; then
             log_error "The CLI receiver's database list does not contain the database sent by the restarted share"
             exit 1
         fi

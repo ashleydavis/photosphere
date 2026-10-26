@@ -9,8 +9,8 @@ import { RandomUuidGenerator } from "utils";
 const ASSET_SERVER_SOURCE = "asset-server";
 
 //
-// The message the asset-server task streams once it has bound a port. Declared locally so this
-// package does not depend on node-api just for the message shape.
+// The message the asset-server task streams once it has bound a port. Declared locally because the
+// task's handler is Zig (packages-zig/node-api-zig).
 //
 interface IAssetServerReadyEvent {
     //
@@ -86,8 +86,8 @@ function startAssetServer(): void {
 // port nothing is listening on. Consumers wait for the url instead.
 //
 // The hook dispatches a task through whatever queue backend the host installed, so it carries no
-// platform-specific code: the `asset-server` handler is registered by the mobile embedded worker and
-// by node-api alike.
+// platform-specific code: the `asset-server` handler is registered by the core on every platform
+// (packages-zig/node-api-zig/src/lib/task-handlers.zig).
 //
 export function useAssetServer(): string | undefined {
     const [restApiUrl, setRestApiUrl] = useState<string | undefined>(assetServerUrl);

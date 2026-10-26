@@ -11,10 +11,8 @@
 # The credentials reach S3 through the vault secret named by the databases entry the dialog writes, so this also covers the vault
 # credential path.
 #
-# The path is typed in the plain `s3:bucket/prefix` form. The dialog's own Browse S3 button produces the `s3:bucket:/prefix` form
-# instead, and that form cannot be opened at all: nothing in the storage layer understands the `bucket:` segment (see
-# apps/cli/smoke-tests/72-s3-paths, whose final section is left failing on that). Using the working form here keeps this test about the
-# lifecycle.
+# The path is typed in the `s3:bucket/prefix` form, the only form the storage layer opens (see apps/cli-zig/smoke-tests/72-s3-paths).
+# Typing it rather than browsing for it keeps this test about the lifecycle.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"

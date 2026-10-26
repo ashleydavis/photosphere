@@ -6,8 +6,8 @@ export default {
     // on it. `waitForElement waits
     // for the nth element when several share a data-id` was killed at 5s in that state; it drives a
     // hand-wound clock and takes 5ms on an idle machine, so the budget was measuring the process's
-    // share of the machine rather than the test. Raised package-wide, as packages/node-api and
-    // packages/encryption already do for the same reason.
+    // share of the machine rather than the test. Raised package-wide, so every test here has the
+    // same budget.
     testTimeout: 30000,
     //
     // This would allow the image tests to work, except jsdom depends on

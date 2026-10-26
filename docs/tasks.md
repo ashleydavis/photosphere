@@ -113,7 +113,7 @@ Priority and cancelling work as Ziggy's guide describes (see [Tasks](https://git
 
 ### The CLI
 
-The CLI runs the same node-api task handlers on its own worker pool, `WorkerPoolBun` (`apps/cli-zig/src/lib/worker-pool.zig`). A command makes a `TaskQueue` and waits in `awaitTask` or `awaitAllTasks`. See [Threads](threads.md#the-zig-cli) for how the pool runs and times out its tasks.
+The CLI runs the same node-api-zig task handlers on its own worker pool, `WorkerPoolBun` (`apps/cli-zig/src/lib/worker-pool.zig`). A command makes a `TaskQueue` and waits in `awaitTask` or `awaitAllTasks`. See [Threads](threads.md#the-zig-cli) for how the pool runs and times out its tasks.
 
 ## The frontend (TypeScript)
 
@@ -267,7 +267,7 @@ A task that only the Photosphere App runs and that needs the task services (a na
 | `packages-zig/node-api-zig/src/lib/task-handlers.zig` | Every task queue handler by task type and `taskEntries`, which makes them Ziggy task types |
 | `packages-zig/node-api-zig/src/lib/*.worker.zig` | The task handlers |
 | `packages-zig/node-api-zig/src/lib/open-storage.zig` | Opens a database's storage with its credentials and encryption |
-| `apps/photosphere/core/src/app.zig` | The app's declaration: its own task types, keep-alive kinds and the node-api tasks added to them |
+| `apps/photosphere/core/src/app.zig` | The app's declaration: its own task types, keep-alive kinds and the node-api-zig tasks added to them |
 | `packages-zig/photosphere-core/src/lib/main-state.zig` | The main thread's timers that queue sync, import and the background passes |
 | `packages-zig/photosphere-core/src/lib/main-process.zig` | `onTaskEnd`, `onTaskEvent` and the `cancel-tasks` main command |
 | `apps/cli-zig/src/lib/worker-pool.zig` | The CLI's worker pool |

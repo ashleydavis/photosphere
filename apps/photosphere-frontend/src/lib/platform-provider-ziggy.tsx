@@ -8,7 +8,7 @@ import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { ISaveAssetItem, IConflictResolution } from "api";
-import type { ISecret } from "vault";
+import type { ISecret } from "api";
 import type { IJsonValue, IMenuEvent, IPlatformInfo, ITaskCompletedEvent, IZiggyBridge } from "ziggy";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
 import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";
@@ -654,18 +654,8 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy, platform.platformKind]);
 
     const checkTools = useCallback(async (): Promise<IToolsStatus> => {
-        if (platform.platformKind !== "desktop") {
-            // ImageMagick and ffmpeg are bundled inside the phone app, so they are available.
-            return {
-                magick: { available: true },
-                ffprobe: { available: true },
-                ffmpeg: { available: true },
-                allAvailable: true,
-                missingTools: [],
-            };
-        }
         return await messages.invoke<IToolsStatus>('check-tools', null);
-    }, [ziggy, platform.platformKind]);
+    }, [ziggy]);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         taskEventCallbacksRef.current.add(handler);

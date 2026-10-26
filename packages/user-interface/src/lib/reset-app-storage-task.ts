@@ -6,9 +6,9 @@ import type { IResetAppStorageOutcome } from "./reset-device";
 // Runs the reset-app-storage task and reports what it removed.
 //
 // The task empties the app's own config and cache directories, and on a phone the app's data
-// directory too, so this is what takes the databases off a device. It is registered by every platform that
-// runs tasks (desktop, the CLI and the dev server through initTaskHandlers, mobile through
-// mobile-worker-entry), which is why the reset needs no platform-specific code and no new method on
+// directory too, so this is what takes the databases off a device. Its handler is registered by the core on
+// every platform (packages-zig/node-api-zig/src/lib/task-handlers.zig),
+// which is why the reset needs no platform-specific code and no new method on
 // the platform context.
 //
 // The task is given no path, deliberately: the handler reads the directories it may empty for

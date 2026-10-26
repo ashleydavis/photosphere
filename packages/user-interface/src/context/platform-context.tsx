@@ -239,14 +239,17 @@ export interface IImportSession {
 }
 
 //
-// Status of a single required external tool (ImageMagick, ffmpeg, ffprobe).
+// Status of one of the media tools built into Photosphere (ImageMagick, ffmpeg, ffprobe).
 //
 export interface IToolStatus {
-    // Whether the tool is available on PATH.
+    // Whether the built-in tool ran.
     available: boolean;
 
     // Version string returned by the tool, if available.
     version?: string;
+
+    // Why the tool did not run, when it did not.
+    error?: string;
 }
 
 //
@@ -271,16 +274,16 @@ export interface IPickFolderOptions {
 }
 
 //
-// Aggregated availability of all tools required for importing photos and videos.
+// Status of every built-in media tool needed for importing photos and videos.
 //
 export interface IToolsStatus {
-    // Status of the ImageMagick `magick` command.
+    // Status of the built-in ImageMagick.
     magick: IToolStatus;
 
-    // Status of the `ffprobe` command.
+    // Status of the built-in ffprobe.
     ffprobe: IToolStatus;
 
-    // Status of the `ffmpeg` command.
+    // Status of the built-in ffmpeg.
     ffmpeg: IToolStatus;
 
     // True when all three tools are available.
@@ -466,8 +469,8 @@ export interface IPlatformContext {
     supportsDragAndDropImport: boolean;
 
     //
-    // Checks whether ImageMagick and FFmpeg are available on PATH.
-    // On web (no-op platform), returns allAvailable: true.
+    // Asks the media tools built into Photosphere (ImageMagick, ffprobe and ffmpeg) whether they
+    // run, and for their versions.
     //
     checkTools: () => Promise<IToolsStatus>;
 

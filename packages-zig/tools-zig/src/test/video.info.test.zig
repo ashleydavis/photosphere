@@ -60,18 +60,6 @@ fn expectTestMp4Info(info: tools.types.AssetInfo) !void {
 }
 
 //
-// Runs a command and returns what it printed, failing the test when it fails.
-//
-fn runTool(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
-    const result = try std.process.run(allocator, std.testing.io, .{ .argv = argv });
-    if (result.term != .exited or result.term.exited != 0) {
-        std.debug.print("{s} failed:\n{s}\n{s}\n", .{ argv[0], result.stdout, result.stderr });
-        return error.TestUnexpectedResult;
-    }
-    return std.mem.trimEnd(u8, result.stdout, "\r\n");
-}
-
-//
 // Runs the ffmpeg built into the program with the arguments, which do not include the tool's name, failing the test when it
 // fails. It runs the same FFmpeg as Video, so the expected bytes come from the same version of it.
 //
@@ -149,7 +137,9 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
     // A JPEG of one full size frame of the 1280x720 video.
     const screenshot = try readFile(allocator, screenshotPath);
     try std.testing.expect(std.mem.startsWith(u8, screenshot, &.{ 0xFF, 0xD8, 0xFF }));
-    try std.testing.expectEqualStrings("1280,720", try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "stream=width,height", "-of", "csv=p=0", screenshotPath }));
+    const probed = try runner.run(runner.context, std.testing.io, allocator, "ffprobe", &.{ "-v", "quiet", "-show_entries", "stream=width,height", "-of", "csv=p=0", screenshotPath });
+    try std.testing.expectEqual(@as(i32, 0), probed.exit_code);
+    try std.testing.expectEqualStrings("1280,720", std.mem.trimEnd(u8, probed.output, "\r\n"));
 
     // The same bytes as the command built with the default quality of 85:
     // `ffmpeg -i "<file>" -ss <time> -vframes 1 -q:v 2 -y "<output>"` (Math.round((100 - 85) / 10) is 2).
@@ -207,14 +197,9 @@ test "getInfo reads the creation time of a silent video" {
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     try requireFfmpeg(allocator, runner);
-    const dir = try makeTempDir(allocator, "creation-time");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
 
     // A tenth of a second of 32x16 video at 10 frames a second, with no audio and a creation_time tag.
-    const videoPath = try std.fs.path.join(allocator, &.{ dir, "silent.mp4" });
-    _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "color=c=red:s=32x16:r=10:d=0.1", "-metadata", "creation_time=2024-01-02T03:04:05.000000Z", "-pix_fmt", "yuv420p", "-y", videoPath });
-
-    var video = Video.init(videoPath);
+    var video = Video.init("../test/video/silent-with-creation-time.mp4");
     const info = try video.getInfo(allocator, std.testing.io, runner);
     try std.testing.expectEqual(@as(f64, 32), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 16), info.dimensions.height);
@@ -236,12 +221,9 @@ test "getInfo fails for a file with no video stream" {
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
     try requireFfmpeg(allocator, runner);
-    const dir = try makeTempDir(allocator, "audio-only");
-    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
-    const audioPath = try std.fs.path.join(allocator, &.{ dir, "audio.m4a" });
-    _ = try runTool(allocator, &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.1", "-y", audioPath });
 
-    var video = Video.init(audioPath);
+    // A tenth of a second of a 440 Hz tone, with no video stream.
+    var video = Video.init("../test/video/audio-only.m4a");
     try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io, runner));
     try std.testing.expectEqualStrings("Failed to get video info: Error: No video stream found in file", utils.errors.lastErrorMessage());
 }

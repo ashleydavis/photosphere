@@ -12,6 +12,7 @@ import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle } from "@
 import { useIsMobile } from "../../lib/use-is-mobile";
 import type { IImportItem } from "../../context/import-context";
 import { ImportProgress } from "../../components/import-progress";
+import { Link } from "react-router-dom";
 
 //
 // Shown when no database is loaded.
@@ -26,89 +27,6 @@ function NoDatabaseLoaded() {
     );
 }
 
-//
-// Panel shown when required tools are missing, with platform-specific install instructions.
-//
-function ToolsMissingPanel({ toolsStatus, onCheckAgain }: { toolsStatus: IToolsStatus; onCheckAgain: () => void }) {
-    const missingList = toolsStatus.missingTools.join(' and ');
-    const isMac = typeof process !== 'undefined' && process.platform === 'darwin';
-    const isWin = typeof process !== 'undefined' && process.platform === 'win32';
-
-    return (
-        <Box sx={{ maxWidth: 600, mx: "auto", p: 3 }}>
-            <Typography level="h4" sx={{ mb: 2, color: "warning.plainColor" }}>
-                Required tools are not installed
-            </Typography>
-            <Typography level="body-md" sx={{ mb: 3 }}>
-                {missingList} {toolsStatus.missingTools.length === 1 ? 'is' : 'are'} required to import photos and videos.
-            </Typography>
-
-            {isMac && (
-                <Box sx={{ mb: 3 }}>
-                    <Typography level="title-sm" sx={{ mb: 1 }}>macOS — Using Homebrew (recommended):</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        brew install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>macOS — Manual download:</Typography>
-                    <Typography level="body-sm">
-                        ImageMagick: <a href="https://imagemagick.org/script/download.php#macosx" target="_blank" rel="noreferrer">imagemagick.org</a>
-                        {' '}&nbsp;·&nbsp;{' '}
-                        ffmpeg: <a href="https://evermeet.cx/ffmpeg/" target="_blank" rel="noreferrer">evermeet.cx/ffmpeg</a>
-                    </Typography>
-                </Box>
-            )}
-
-            {isWin && (
-                <Box sx={{ mb: 3 }}>
-                    <Typography level="title-sm" sx={{ mb: 1 }}>Windows — Using Chocolatey (recommended):</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        choco install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Windows — Using Scoop:</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        scoop install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Windows — Manual download:</Typography>
-                    <Typography level="body-sm">
-                        ImageMagick: <a href="https://imagemagick.org/script/download.php#windows" target="_blank" rel="noreferrer">imagemagick.org</a>
-                        {' '}&nbsp;·&nbsp;{' '}
-                        ffmpeg: <a href="https://www.gyan.dev/ffmpeg/builds/" target="_blank" rel="noreferrer">gyan.dev/ffmpeg</a>
-                    </Typography>
-                </Box>
-            )}
-
-            {!isMac && !isWin && (
-                <Box sx={{ mb: 3 }}>
-                    <Typography level="title-sm" sx={{ mb: 1 }}>Linux — Ubuntu/Debian:</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        sudo apt update && sudo apt install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Other distributions:</Typography>
-                    <Typography level="body-sm">
-                        Fedora/RHEL: <code>dnf install ImageMagick ffmpeg</code>
-                        {' '}&nbsp;·&nbsp;{' '}
-                        Arch: <code>pacman -S imagemagick ffmpeg</code>
-                    </Typography>
-                </Box>
-            )}
-
-            <Typography level="body-sm" sx={{ mb: 3 }}>
-                For full instructions see:{' '}
-                <a href="https://github.com/ashleydavis/photosphere/wiki/Required-Tools" target="_blank" rel="noreferrer">
-                    Required Tools documentation
-                </a>
-            </Typography>
-
-            <Typography level="body-sm" sx={{ mb: 2 }}>
-                After installing, click the button below to re-check.
-            </Typography>
-
-            <Button variant="soft" color="neutral" onClick={onCheckAgain}>
-                Check again
-            </Button>
-        </Box>
-    );
-}
 
 //
 // Status icon for a single import item row.
@@ -443,7 +361,17 @@ export function ImportPage() {
                         )}
 
                         {!isCheckingTools && toolsStatus !== null && !toolsStatus.allAvailable && (
-                            <ToolsMissingPanel toolsStatus={toolsStatus} onCheckAgain={runToolCheck} />
+                            <Box data-id="tools-missing-panel" sx={{ maxWidth: 600, mx: "auto", p: 3 }}>
+                                <Typography level="h4" sx={{ mb: 2, color: "danger.plainColor" }}>
+                                    The built-in media tools did not run
+                                </Typography>
+                                <Typography level="body-md" sx={{ mb: 3 }}>
+                                    Photosphere cannot import photos and videos until they do. The <Link to="/tools">tools page</Link> shows the error each one gave.
+                                </Typography>
+                                <Button variant="soft" color="neutral" onClick={runToolCheck}>
+                                    Check again
+                                </Button>
+                            </Box>
                         )}
                     </Box>
                 )}

@@ -4,8 +4,7 @@
 #   source "$TEST_DIR/../lib/common.sh"
 #
 # A scenario starts the app in test mode, drives it through the test control connection (see "Test hooks" in the Ziggy architecture
-# document) and checks what it logs and what the page shows. The helpers keep the names and arguments the desktop and mobile suites
-# of the apps they replace use, so a scenario reads the same whichever app it was written for.
+# document) and checks what it logs and what the page shows.
 #
 # The platform library chosen by the runner (lib/<platform>.sh) implements:
 #
@@ -234,8 +233,8 @@ cleanup_apps() {
 }
 
 #
-# Waits until the page answers commands, which means it has loaded and the bridge works. The relaunch the Electron suite did when its
-# control server bound but the page never came up has no counterpart here: a page that does not answer fails the scenario.
+# Waits until the page answers commands, which means it has loaded and the bridge works. A page that does not answer fails the
+# scenario.
 # Usage: wait_for_ready <port>
 #
 wait_for_ready() {
@@ -502,7 +501,7 @@ wait_for_value_gone() {
     local answer
     local deadline=$((SECONDS + timeout))
     while [ "$SECONDS" -lt "$deadline" ]; do
-        # The answer itself is what must be non-empty, as in the Electron suite whose reply was always a JSON body: an element that
+        # The answer itself is what must be non-empty: an element that
         # has gone reads as an empty value in an answer that says ok, whereas a dead app gives no answer.
         answer="$(control_command "$port" "$(jq -cn --arg dataId "$data_id" '{command: "get-value", dataId: $dataId}')" || true)"
         response="$(printf '%s' "$answer" | jq -r '.value // empty' 2>/dev/null)"
@@ -787,9 +786,9 @@ write_vault_secret_from_file() {
 }
 
 #
-# Creates a database at the given path through the CLI, importing any image files passed after the path. Every CLI call is checked and
-# its output printed on failure, so a failed import is reported where it happens and not as an empty gallery later. A phone seeds the
-# result onto the device with ${PLATFORM}_seed_database.
+# Creates a database at the given path with the Zig psi the runner built, importing any image files passed after the path. Every
+# CLI call is checked and its output printed on failure, so a failed import is reported where it happens and not as an empty
+# gallery later. A phone seeds the result onto the device with ${PLATFORM}_seed_database.
 # Usage: create_database <db_path> [image ...]
 #
 create_database() {
@@ -797,7 +796,7 @@ create_database() {
     shift
 
     local cli_output
-    if ! cli_output="$( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$db_path" --yes 2>&1 )"; then
+    if ! cli_output="$(run_with_timeout 90 "$PHOTOSPHERE_ZIG_CLI" init --db "$db_path" --yes 2>&1 </dev/null)"; then
         log_error "Creating the database at $db_path failed. The CLI said:"
         echo "$cli_output" | sed 's/^/  /'
         exit 1
@@ -805,7 +804,7 @@ create_database() {
 
     local image
     for image in "$@"; do
-        if ! cli_output="$( cd "$REPO_DIR/apps/cli" && bun run start -- add "$image" --db "$db_path" --yes 2>&1 )"; then
+        if ! cli_output="$(run_with_timeout 90 "$PHOTOSPHERE_ZIG_CLI" add "$image" --db "$db_path" --yes 2>&1 </dev/null)"; then
             log_error "Adding $image to the database at $db_path failed. The CLI said:"
             echo "$cli_output" | sed 's/^/  /'
             exit 1
@@ -881,30 +880,13 @@ run_with_timeout() {
 }
 
 #
-# Runs the psi CLI from source against a vault and config isolated under the test's own tmp dir, so a test never reads or writes the
-# developer's real OS keychain or database list. Both variables are required for isolation: PHOTOSPHERE_VAULT_DIR alone still selects
-# the keychain vault unless PHOTOSPHERE_VAULT_TYPE says otherwise. stdin is closed so an unexpected interactive prompt aborts instead of
-# hanging the run, and NO_COLOR keeps the output greppable.
+# Runs the psi CLI built from the Zig source (by run.sh, at PHOTOSPHERE_ZIG_CLI) against a vault and config isolated under the test's
+# own tmp dir, so a test never reads or writes the developer's real OS keychain or database list. Both variables are required for
+# isolation: PHOTOSPHERE_VAULT_DIR alone still selects the keychain vault unless PHOTOSPHERE_VAULT_TYPE says otherwise. stdin is
+# closed so an unexpected interactive prompt aborts instead of hanging the run, and NO_COLOR keeps the output greppable.
 # Usage: run_cli <tmp_dir> <cli args...>
 #
 run_cli() {
-    local tmp_dir="$1"
-    shift
-    (
-        cd "$REPO_DIR/apps/cli" && \
-        NO_COLOR=1 \
-        PHOTOSPHERE_VAULT_TYPE="plaintext" \
-        PHOTOSPHERE_VAULT_DIR="$tmp_dir/cli-vault" \
-        PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
-        run_with_timeout 90 bun run start -- "$@" </dev/null
-    )
-}
-
-#
-# Runs the psi CLI built from the Zig source (by run.sh, at PHOTOSPHERE_ZIG_CLI), isolated the same way as run_cli.
-# Usage: run_zig_cli <tmp_dir> <cli args...>
-#
-run_zig_cli() {
     local tmp_dir="$1"
     shift
     NO_COLOR=1 \

@@ -10,65 +10,42 @@ The Photosphere App (`apps/photosphere`) is the app for Windows, macOS, Linux, A
 
 - photosphere/
     - apps/
-        - android-frontend (deprecated) - Capacitor Android app
-        - bdb-cli (deprecated) - BSON database CLI tool (for testing and debugging)
-        - cli (deprecated) - Main CLI tool (psi)
-        - cli-zig - Zig port of the main CLI tool (psi)
-        - desktop (deprecated) - Electron desktop application
-        - desktop-frontend (deprecated) - React UI for the Electron app
-        - dev-frontend (deprecated) - Development web frontend
-        - dev-server (deprecated) - WebSocket development server
-        - ios-frontend (deprecated) - Capacitor iOS app
-        - mk-cli (deprecated) - Merkle tree CLI tool (for testing and debugging)
+        - cli-zig - The main CLI tool (psi), built with `zig build`
         - photosphere - Photosphere App: the Ziggy native apps for each platform and the scripts that build and run them
         - photosphere-frontend - The frontend of the Photosphere App
         - photosphere-smoke-tests - Smoke tests for the Photosphere App on every platform
-        - smoke-tests (deprecated) - Host-driven UI smoke tests for the mobile apps
     - packages/
-        - api (deprecated) - Core API for database operations
-        - bdb (deprecated) - BSON database implementation
+        - api (deprecated) - The types and plain functions the shared UI uses
         - config (deprecated) - Shared configuration values such as the application version
-        - encryption (deprecated) - Encryption primitives (AES-256-CBC + RSA hybrid, key management, streaming)
-        - fuzzy-match (deprecated) - Fuzzy string matching based on Levenshtein edit distance
         - lan-share-core (deprecated) - Local-network sharing of database configs and secrets between devices: the core
-        - lan-share-network (deprecated) - Local-network sharing of database configs and secrets between devices: discovery and transport
-        - merkle-tree (deprecated) - Merkle tree data structure
-        - mobile-frontend (deprecated) - Shared mobile TypeScript (queue backend, JsEngine plugin, platform provider)
-        - mobile-worker (deprecated) - Embedded mobile worker runtime and its bundle
-        - node-api (deprecated) - Node.js API for database operations
         - node-utils (deprecated) - Node.js utility functions
-        - rest-api (deprecated) - REST API server (used by the desktop app to serve local photos)
-        - serialization (deprecated) - Serialization utilities
-        - storage (deprecated) - Storage abstraction layer
-        - task-queue (deprecated) - Task queue system
-        - tools (deprecated) - Tool management and media processing (ffmpeg, ffprobe, ImageMagick)
+        - task-queue (deprecated) - The `TaskQueue`, the queue backend registry and the task types
         - user-interface - Shared React UI components
         - utils (deprecated) - General utility functions
-        - vault (deprecated) - Cross-platform secrets management with multiple vault backends
     - packages-zig/ - The Zig packages, built and tested by the `build.zig` at the root of the repository
         - api-zig - Zig port of api
-        - bdb-zig - Zig port of bdb
+        - bdb-zig - The BSON database
         - config-zig - Zig port of config (the version and build metadata)
         - encryption-zig - Zig port of encryption
-        - fuzzy-match-zig - Zig port of fuzzy-match
+        - fuzzy-match-zig - Fuzzy string matching based on Levenshtein edit distance
         - lan-share-core-zig - Zig port of the core of lan-share
-        - lan-share-network-zig - Zig port of the network side of lan-share
+        - lan-share-network-zig - Local-network sharing of database configs and secrets between devices: discovery and transport
         - mcp-zig - The MCP server (JSON-RPC protocol, tool input schemas and the Streamable HTTP transport) that the `psi mcp` command and the desktop app both run
         - mobile-worker-zig - The planning task handlers the phone runs
         - media-tools-zig - ImageMagick and FFmpeg (with their libjpeg, libpng, libwebp and zlib delegates), built from source and called in process by both the Photosphere App and the Zig CLI
         - merkle-tree-zig - Zig port of merkle-tree
-        - node-api-zig - Zig port of node-api
+        - node-api-zig - Database operations and the background task handlers
         - node-utils-zig - Zig port of node-utils (also the HTTP server glue the asset server runs on). The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
-        - rest-api-zig - Zig port of rest-api (the asset server)
+        - rest-api-zig - The asset server
         - serialization-zig - Zig port of serialization
         - storage-zig - Zig port of storage
-        - tools-zig - Zig port of tools
+        - tools-zig - Tool management and media processing (ffmpeg, ffprobe, ImageMagick)
         - utils-zig - Zig port of utils. The helpers Ziggy's task queue shares with it are exported from Ziggy (see [Photosphere on Ziggy](photosphere-on-ziggy.md))
-        - vault-zig - Zig port of vault
+        - vault-zig - Cross-platform secrets management with multiple vault backends
         - photosphere-core - The Zig library the Photosphere App's native apps link: Photosphere's message handler, task handlers and asset server, built on Ziggy's core (`@import("ziggy")`, from the `ziggy` dependency in `build.zig.zon`)
     - test - Data for testing.
 
-"(deprecated)" marks an app or package that is going to be superseded by the Zig port (the Zig packages in `packages-zig`, the Zig CLI, and the Photosphere App on Ziggy) and removed once the port fully replaces it.
+"(deprecated)" marks a TypeScript app or package that has a Zig port (the Zig packages in `packages-zig`, the Zig CLI and the Photosphere App on Ziggy) and is kept only for what still uses it.
 
 ## Setup
 
@@ -104,7 +81,7 @@ Install the pinned toolchain (`bun`, `node`, `jq`, `what-changed`) with [mise](h
 mise install
 ```
 
-The Photosphere App and the Zig CLI need no ImageMagick or ffmpeg installed, because both are built into them. The tests still do: the smoke test scripts and some unit test helpers run installed `magick`, `ffmpeg` and `ffprobe` to make and check fixtures, so a developer machine that runs the tests needs ImageMagick and FFmpeg installed and on the PATH.
+The Photosphere App, the Zig CLI and their tests need no ImageMagick or ffmpeg installed, because both are built into them.
 
 Everything below is run from the repo root.
 
@@ -122,8 +99,6 @@ Everything below is run from the repo root.
 | `bun run clean` | Remove build artifacts. |
 
 The commands that run the app rebuild it first, so what you are running is always built from the current source.
-
-To run the CLI, the dev-server, or the dev-frontend on their own, see [apps/cli](../apps/cli/README.md), [apps/dev-server](../apps/dev-server/README.md), and [apps/dev-frontend](../apps/dev-frontend/README.md).
 
 ## Automatic import
 

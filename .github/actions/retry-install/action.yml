@@ -19,12 +19,7 @@ inputs:
       nothing. Chocolatey exits 0 when its feed errors on one of several packages, so the exit code
       alone would not have caught the failure above. Leave empty to retry on the exit code only.
 
-      An entry may offer alternatives separated by "|", satisfied when any one of them resolves. This
-      exists because the same package provides differently named commands on different platforms:
-      apt's imagemagick is ImageMagick 6, which has convert and identify but no magick, while
-      Homebrew's and Chocolatey's are ImageMagick 7, which has magick. The code handles both the same
-      way (packages/tools/src/lib/image.ts tries magick and falls back to convert/identify), so the
-      check here has to accept whichever the platform provides rather than insisting on one.
+      An entry may offer alternatives separated by "|", satisfied when any one of them resolves, for a package that provides differently named commands on different platforms.
     required: false
     default: ""
 

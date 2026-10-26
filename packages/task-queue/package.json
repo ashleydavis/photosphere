@@ -20,11 +20,11 @@
   "author": "ashley@codecapers.com.au",
   "license": "MIT",
   "dependencies": {
-    "serialize-error": "^12.0.0",
     "utils": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.4.0",
+    "node-utils": "workspace:*",
     "@types/node": "^22.9.1",
     "@types/bun": "latest",
     "jest": "^29.0.1",

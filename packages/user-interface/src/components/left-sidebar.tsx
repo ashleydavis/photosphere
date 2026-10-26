@@ -88,7 +88,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     const navigate = useNavigate();
     // The current location, used to show a temporary sidebar entry for pages
     // that have no permanent sidebar link.
-    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets", "/about"]);
+    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets", "/about", "/tools"]);
     const TemporaryNavPageIcon = temporaryNavPage?.icon;
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
@@ -341,6 +341,19 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                 <ListItemButton>
                                     <ListItemDecorator><i className="fa-solid fa-circle-info" /></ListItemDecorator>
                                     <ListItemContent>About</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
+                    <NavLink
+                        to="/tools"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                <ListItemButton>
+                                    <ListItemDecorator><i className="fa-solid fa-screwdriver-wrench" /></ListItemDecorator>
+                                    <ListItemContent>Tools</ListItemContent>
                                 </ListItemButton>
                             </ListItem>
                         )}

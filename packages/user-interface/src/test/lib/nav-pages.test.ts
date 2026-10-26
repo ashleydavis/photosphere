@@ -16,6 +16,7 @@ describe("findTemporaryNavPage", () => {
         expect(findTemporaryNavPage("/about", NAVBAR_PERMANENT)?.label).toBe("About");
         expect(findTemporaryNavPage("/news", NAVBAR_PERMANENT)?.label).toBe("News");
         expect(findTemporaryNavPage("/database-summary", NAVBAR_PERMANENT)?.label).toBe("Database Info");
+        expect(findTemporaryNavPage("/tools", NAVBAR_PERMANENT)?.label).toBe("Tools");
     });
 
     test("matches a page with a trailing sub-path", () => {

@@ -18,7 +18,7 @@ What it moves is decided by comparing the two merkle trees name by name, rather 
 
 Everything in this section was measured on a Pixel 6 against a partial replica of a database of 8,231 photos and 24,260 files, over Wi-Fi to an S3 origin. The numbers and the log lines behind them are in [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md).
 
-**A sync between a partial replica and its origin does nothing at all, and that is not the partial filter.** `copyFile` in `packages/node-api/src/lib/sync.ts` will copy thumbnails and root-level files into a partial target, and skip originals and display copies. But at this scale that code is never reached, because the early-out below fires first.
+**A sync between a partial replica and its origin does nothing at all, and that is not the partial filter.** `copyFile` in `packages-zig/node-api-zig/src/lib/sync.zig` copies thumbnails and root-level files into a partial target, and skips originals and display copies. But at this scale that code is never reached, because the early-out below fires first.
 
 The early-out compares the two content hashes, and a content hash is of the merkle tree. A partial replica made by `psi replicate --partial` has the whole tree, so its content hash equals the origin's from the moment it is made. **Files it is missing do not change it.** Both sides therefore say they are identical, and every pass returns in about a seventh of a second having moved nothing.
 
@@ -180,7 +180,7 @@ What differs between the platforms is only what keeps the loop alive:
 | Fills a partial replica in | Yes, in a loop of its own beside the sync, until nothing is left to fetch | While the app is on screen, and otherwise when the system chooses |
 | What the user sees | The one ongoing notification automatic import already posts | Nothing |
 
-**On Android** the sync loop runs on its own thread inside `AutoImportService`, the foreground service automatic import already uses, and so does the prefetch loop: three threads, one service. There is deliberately not a service each: a second service means a second ongoing notification for one feature, which is a visible product change nobody asked for. The loops start and stop with the service, under the one notification and the one wake lock, and the lock is reference counted because their passes overlap, each taking a hold for its own pass; it is held only while a pass is actually running, because a lock held all night flattens the phone.
+**On Android** the core holds the app running in one foreground service while any of the background work is switched on, and the sync and prefetch passes run under it beside the import passes. Each pass is a task in the core (`packages-zig/photosphere-core/src/lib/background-work.zig`), started by the core's timer. There is deliberately not a service each: a second service means a second ongoing notification for one feature, which is a visible product change nobody asked for. The loops start and stop with the service, under the one notification and the one wake lock, and the lock is reference counted because their passes overlap, each taking a hold for its own pass; it is held only while a pass is actually running, because a lock held all night flattens the phone.
 
 The prefetch loop differs from the other two in one way: it ends itself when a pass finds the replica filled in, and the service starts it again on the next request, which is what opening a database produces. That start is deliberately placed before the check that returns early when the import loop is already running, because the moment the prefetch loop most needs starting again is exactly when the import loop is alive.
 
@@ -198,7 +198,7 @@ The two loops did once take a single lock around a whole pass, so a sync skipped
 
 What the two contend on is the database write lock, and neither holds it for a whole pass. `import-assets` takes it per batch of imported assets and releases it in a `finally`, and `syncDatabases` takes it around the pull and again around the push. A sync that finds the lock held retries for a few seconds and then fails that pass with the reason in the log; the loop waits its usual gap and asks again, and the pass after that lands in one of the gaps between the import's batches. Neither loop can be starved by the other for good, because neither holds the lock for anything like the length of a pass.
 
-Engine slots are not contended either. A sync pass queues one `sync-database` task and that task queues no children, so it occupies one slot of `EnginePool.POOL_SIZE` for its own length and cannot exhaust the pool underneath an import. See [Mobile background tasks](mobile-background-tasks.md) for what a slot is and why running out is a hang rather than a slowdown.
+Workers are not contended either. A sync pass queues one `sync-database` task and that task queues no children, so it holds one worker for its own length and cannot exhaust the pool underneath an import. See [Threads](threads.md) for the worker pool.
 
 ## What each platform can do
 
@@ -212,7 +212,7 @@ Engine slots are not contended either. A sync pass queues one `sync-database` ta
 | Refuse over cellular | No connection type is reported | No connection type is reported | Yes |
 | Consolidate an unrelated remote | Yes | Yes | No |
 
-The sync engine itself is platform-neutral: `syncDatabases` in `packages/node-api/src/lib/sync.ts`, reached on every platform through the `sync-database` background task. What differs per platform is only what decides to run one.
+The sync engine itself is platform-neutral: `syncDatabases` in `packages-zig/node-api-zig/src/lib/sync.zig`, reached on every platform through the `sync-database` background task. What differs per platform is only what decides to run one.
 
 ## What the app shows while it is happening
 
@@ -227,15 +227,13 @@ Unit tests sit beside the code under `src/test/`.
 | Test | What it covers |
 |---|---|
 | `packages/api/src/test/lib/sync-gate.test.ts` | The rule that decides an automatic sync is permitted: the two settings, offline, and each connection type. |
-| `packages/node-api/src/test/lib/sync-database.worker.test.ts` | The `sync-database` task itself, which is what every platform queues. |
-| `packages/node-api/src/test/lib/sync-early-out.test.ts` | A sync doing nothing, cheaply, when both sides already hold the same content. |
-| `packages/node-api/src/test/lib/sync-metadata-edit.test.ts` | An edit reaching the origin. |
-| `packages/mobile-worker/src/test/lib/plan-sync.worker.test.ts` | What the background loop is told to do: every way a sync is refused, and the way it runs. Including the wait for a working prefetch, and that a stuck, finished, unreported or unrecognised one does not wait. |
-| `packages/mobile-worker/src/test/lib/plan-prefetch.worker.test.ts` | What the background prefetch loop is told to do: every way a pass is refused, and the step and job tag it hands back when one runs. |
-| `packages/mobile-worker/src/test/shims/network-status.test.ts` | The connection type crossing from native into that rule, and an unrecognised one becoming "unknown" rather than stopping syncing. |
-| `packages/mobile-frontend/src/test/mobile-edit-sync.test.ts` | The sync an edit starts, and that it still asks whether syncing is permitted. |
-| `apps/android-frontend/android/app/src/test/java/au/com/codecapers/photosphere/jsengine/SyncDriverTest.java` | The Android loop's decisions on the JVM, with no device: a plan saying stop ends it, a failed pass does not, a second pass cannot start while one is in flight, and a sync pass runs while an import pass is held open. |
-| `apps/ios-frontend/ios/App/AppTests/` | The same decisions for the iOS driver, and the connection-type reporting. |
+| `packages-zig/node-api-zig/src/test/sync-database.worker.test.zig` | The `sync-database` task itself, which is what every platform queues. |
+| `packages-zig/node-api-zig/src/test/sync-early-out.test.zig` | A sync doing nothing, cheaply, when both sides already hold the same content. |
+| `packages-zig/node-api-zig/src/test/sync-metadata-edit.test.zig` | An edit reaching the origin. |
+| `packages-zig/mobile-worker-zig/src/test/plan-sync.worker.test.zig` | What the background loop is told to do: every way a sync is refused, and the way it runs. Including the wait for a working prefetch, and that a stuck, finished, unreported or unrecognised one does not wait. |
+| `packages-zig/mobile-worker-zig/src/test/plan-prefetch.worker.test.zig` | What the background prefetch loop is told to do: every way a pass is refused, and the step and job tag it hands back when one runs. |
+| `packages-zig/mobile-worker-zig/src/test/network-status.test.zig` | The connection type crossing from native into that rule, and an unrecognised one becoming "unknown" rather than stopping syncing. |
+| `packages-zig/photosphere-core/src/test/background-work.test.zig` | The decisions of the background passes with no core and no phone: a plan saying stop finishes the work, a failed step does not, a sync pass tells the plan what the prefetch is doing, and a prefetch pass is working or stalled by what it fetched. |
 
 End to end:
 
@@ -244,9 +242,9 @@ End to end:
 | `84-watch-sync-evict` (CLI) | Imports reach the origin once `psi sync` pushes them, and the local originals stay. |
 | `85-consolidate` (CLI) | Sync working after consolidation where it refused before. |
 | `86-multi-device` (CLI) | Two databases connected to one remote each end up with the other's photos. |
-| `bun run test:cli:sync` | Several processes syncing one database at once. |
-| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to the `sync` section of `config.yaml`. |
-| `36-consolidate-database` (Electron) | Consolidating through the UI leaves ordinary sync working. |
+| `136-sync-parallel` (CLI) | Several processes syncing one database at once. |
+| `24-sync-settings` (Photosphere App) | Each toggle recomputes whether syncing is permitted and pushes that to the host, and both values persist to the `sync` section of `config.yaml`. |
+| `36-consolidate-database` (Photosphere App) | Consolidating through the UI leaves ordinary sync working. |
 | `45-s3-share-replica-sync` (mobile, Android) | An edit made on the phone reaching an encrypted S3 origin, and the early-out firing when there is nothing to sync. |
 | `50-background-sync` (mobile, Android) | A photo imported while the app is backgrounded, and again while the screen is off, reaching an S3 origin without the app being opened. With **Enable syncing** switched off nothing reaches the origin while the app and its service are still running; switched back on, the same photo arrives. Everything is measured by reading the bucket, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. |
 | `56-large-asset-push` (mobile, Android) | A photo imported on the device reaching an encrypted S3 origin as an object, read back out of the bucket from the host and compared byte for byte. Its fixture is generated rather than committed and is larger than one upload part, so the multi-part path is the one exercised. This is the test that would have caught every upload from an encrypted database failing inside the SDK. |
@@ -260,7 +258,7 @@ A phone showing its lock screen cannot run the test at all, and it says so rathe
 
 The **Only sync over Wi-Fi** restriction is not covered end to end. Driving it means changing the device's connection type to cellular, and reconfiguring a pool emulator's radios is forbidden: the emulators are shared with every other test run on the machine. The rule itself is covered by unit tests on both sides of the bridge, including the cellular case, which is where the decision is actually made.
 
-The background tests are Android only. Each of `50-background-sync`, `57-prefetch-retries`, `58-sync-waits-for-prefetch` and `59-prefetch-encrypted-replica` has an `IOS-NOT-COVERED.md` beside it saying what iOS cannot cover and why: a `BGProcessingTask` is scheduled by the system, and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2.
+`50-background-sync` skips on iOS, and its own comment says why: a `BGProcessingTask` is scheduled by the system, and the only way to force one is an lldb command against a running app.
 
 `59-prefetch-encrypted-replica` is separate from `57-prefetch-retries` rather than being it, because the encryption key cannot be seeded into the device keychain from the host and so only a real LAN share puts it there, and a run that declares it has no bridge would then lose every bit of coverage of the loop instead of just the encrypted half.
 
@@ -270,5 +268,4 @@ The background tests are Android only. Each of `50-background-sync`, `57-prefetc
 
 - [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md) - what all of this actually costs on a Pixel 6 against a database of 8,231 photos, and what does not work at that size.
 - [Automatic photo backup](automatic-photo-backup.md) - what puts the photos in the database in the first place, and the loop this one is modelled on.
-- [Mobile background tasks](mobile-background-tasks.md) - the engine pool both background loops run on.
 - [Tasks](tasks.md) - adding a new task type and wiring it up on every platform.

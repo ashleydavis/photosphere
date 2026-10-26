@@ -107,7 +107,7 @@ The watched paths as they stand:
 | --- | --- | --- |
 | `compile` | `packages`, `apps` | any |
 | `test` | `packages`, `apps` | any |
-| `test:cli:zig` | `apps/cli`, `apps/cli-zig`, `packages`, `packages-zig`, `third-party`, `build.zig`, `build.zig.zon` | any |
+| `test:cli:zig` | `apps/cli-zig`, `packages`, `packages-zig`, `third-party`, `build.zig`, `build.zig.zon` | any |
 | `test:ziggy` | `apps/photosphere`, `apps/photosphere-frontend`, `apps/photosphere-smoke-tests`, `packages`, `packages-zig`, `third-party`, `build.zig`, `build.zig.zon` | any |
 | `test:ziggy:and` | the same as `test:ziggy` | Linux |
 | `test:ziggy:ios` | the same as `test:ziggy` | macOS |
@@ -117,7 +117,7 @@ Every target also watches `always`: `package.json`, `bun.lock`, `mise.toml`, `wh
 
 `ignore` is `.md`, `.txt` and `.log`. Files of those types are left out of the file list entirely, so a documentation change runs nothing and never appears in `what-changed changes`. That drops the watched set from about 2195 files to about 1970.
 
-The umbrella `packages` entry is deliberate. Narrowing a target to the packages it actually depends on is a config edit with no code change, but a wrong narrowing silently skips a suite that should have run, so the config does not guess. What it already buys is real: a change confined to `docs/`, `apps/cli/`, `apps/desktop/` or `.claude/` no longer runs the mobile suites, and a docs-only or plan-only change runs nothing at all.
+The umbrella `packages` entry is deliberate. Narrowing a target to the packages it actually depends on is a config edit with no code change, but a wrong narrowing silently skips a suite that should have run, so the config does not guess. What it already buys is real: a change confined to `docs/`, `apps/cli-zig/` or `.claude/` no longer runs the mobile suites, and a docs-only or plan-only change runs nothing at all.
 
 **A failing script records nothing.** Each script's capture runs only after that script has passed, so a broken tree is never marked as tested. The runner kills the remaining lanes at the first failure, so a script cancelled part way records nothing and runs again next time, while a script that had already passed in that run keeps the baseline it recorded.
 

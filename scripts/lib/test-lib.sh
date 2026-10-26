@@ -31,7 +31,7 @@ PHOTOSPHERE_TEST_TEMP_ROOT="${TMPDIR:-/tmp}/photosphere-tests"
 # the string it sent and failed. Worse, a path bash writes into a file is not an argument and is not
 # rewritten, so the registry seeded by test 49 held the POSIX form while the database sat at the
 # Windows one, and resolving the name found nothing. Holding the native form means there is nothing
-# left to rewrite and both sides read the same string. `pwd -W` is how apps/cli/smoke-tests.sh
+# left to rewrite and both sides read the same string. `pwd -W` is how apps/cli-zig/smoke-tests.sh
 # already does this for its own directory. Unchanged on Linux and macOS.
 if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
     mkdir -p "$PHOTOSPHERE_TEST_TEMP_ROOT"

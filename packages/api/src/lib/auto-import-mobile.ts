@@ -8,9 +8,9 @@ import {
 //
 // What the mobile app should do about automatic import, worked out from its settings alone.
 //
-// This mirrors the desktop planner (packages/node-api/src/lib/auto-import-desktop.ts): the decisions
-// live here as plain functions so they can be unit tested, and the caller is left with the parts
-// that need the app (creating the database, starting the task, asking for the permission).
+// The decisions live here as plain functions so they can be unit tested, and the caller is left
+// with the parts that need the app (creating the database, starting the task, asking for the
+// permission).
 //
 // It lives in this package rather than in the mobile frontend because the native background import
 // asks for the same plan, through a worker task, and the worker cannot reach the frontend's React

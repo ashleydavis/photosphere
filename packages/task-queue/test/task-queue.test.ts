@@ -1,6 +1,6 @@
 import { TaskQueue } from "../src/lib/task-queue";
 import { TaskPriority, TaskStatus, ITaskResult } from "../src/lib/types";
-import { registerHandler } from "../src/lib/worker";
+import { registerHandler } from "./test-handlers";
 import { setQueueBackend } from "../src/lib/queue-backend";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 import { MockWorkerPool } from "./mock-worker-pool";

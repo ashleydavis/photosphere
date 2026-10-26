@@ -9,6 +9,7 @@ import { stories as importPageStories } from "./pages/import.stories";
 import { stories as mapPageStories } from "./pages/map.stories";
 import { stories as newsPageStories } from "./pages/news.stories";
 import { stories as secretsPageStories } from "./pages/secrets.stories";
+import { stories as toolsPageStories } from "./pages/tools.stories";
 
 import { stories as addDatabaseModalStories } from "./modals/add-database-modal.stories";
 import { stories as clusterModalStories } from "./modals/cluster-modal.stories";
@@ -75,6 +76,7 @@ export const stories: IStory[] = [
     ...mapPageStories,
     ...newsPageStories,
     ...secretsPageStories,
+    ...toolsPageStories,
 
     ...addDatabaseModalStories,
     ...clusterModalStories,

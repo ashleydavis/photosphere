@@ -2,19 +2,13 @@
 
 ```mermaid
 flowchart LR
-    lanshare["lan-share<br/>LAN credential sharing"]
-    api["api<br/>Platform-agnostic Photosphere API"]
-    nodeapi["node-api<br/>Node.js-specific Photosphere API"]
-    restapi["rest-api<br/>REST API"]
+    lanshare["lan-share-core<br/>LAN credential sharing"]
+    taskqueue["task-queue<br/>TaskQueue and queue backends"]
+    api["api<br/>Types and plain functions the UI uses"]
     ui["user-interface<br/>Frontend UI"]
-    cli["cli<br/>CLI"]
-    desktop["desktop<br/>Electron main"]
-    desktopfe["desktop-frontend<br/>Electron renderer"]
+    frontend["photosphere-frontend<br/>Photosphere App frontend"]
 
-    nodeapi --> api
-    restapi --> api & nodeapi
-    ui --> api & nodeapi
-    cli --> api & nodeapi & lanshare
-    desktop --> api & nodeapi & lanshare & restapi & desktopfe
-    desktopfe --> ui
+    api --> lanshare & taskqueue
+    ui --> api & taskqueue
+    frontend --> ui & taskqueue
 ```

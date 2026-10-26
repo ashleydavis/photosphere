@@ -9,8 +9,8 @@ import { Storage, Photo, Folder, Save, CloudSync } from "@mui/icons-material";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useUuidGenerator } from "../context/uuid-generator-context";
 import { formatBytes, getStorageType } from "../lib/database-summary-format";
-import type { IDatabaseSummary } from "node-api";
-import type { IGetDatabaseSummaryData } from "node-api";
+import type { IDatabaseSummary } from "api";
+import type { IGetDatabaseSummaryData } from "api";
 import Button from "@mui/joy/Button";
 import { ConsolidateDatabaseDialog } from "./consolidate-database-dialog";
 

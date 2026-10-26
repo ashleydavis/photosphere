@@ -226,8 +226,8 @@ jobs:
           ls -la bin/x64/mac/psi
           file bin/x64/mac/psi
 
-      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
-      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      # The binary is renamed to the name the release publishes it under, so the downloads of several
+      # platforms can sit in one directory without overwriting one another.
       - name: Collect the Zig CLI binary
         shell: bash
         run: |
@@ -250,7 +250,7 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   cli-smoke-tests:
-    # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs between
+    # The Zig CLI smoke suites, because the output the tests expect (gzip OS byte, paths, file times) differs between
     # platforms. The unit tests are in the Zig CI workflow, so a failure in one is not reported as a failure of the other.
     # The binary is not built here: build-zig-macos-x64 builds it and this job downloads it, so the Zig CLI is
     # compiled once and both this job and the release use it.
@@ -265,10 +265,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
@@ -291,11 +287,11 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
-      - name: Install media processing tools (macOS)
+      - name: Install tree (macOS)
         uses: ./.github/actions/retry-install
         with:
-          run: brew install imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
+          run: brew install tree
+          verify: tree
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
         shell: bash
@@ -308,7 +304,7 @@ jobs:
           platform: macos-x64
           build-args: -Dtarget=x86_64-macos.11.0
 
-      # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads.
+      # The binary the release ships, run by the version check below. The smoke suite builds its own Zig CLI for its run.
       - name: Download the Zig CLI built for this platform
         uses: actions/download-artifact@v4
         with:
@@ -325,11 +321,11 @@ jobs:
           ls -la zig-out/bin
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 30
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
-        run: ./smoke-tests-zig.sh --binary
+        run: ./smoke-tests.sh
       - name: Test the Zig version command
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: |
           echo "Testing version command after building..."
@@ -384,13 +380,6 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
-
-      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
-      - name: Install media processing tools (macOS)
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
 
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries

@@ -6,9 +6,9 @@
 import type { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "../src/lib/types";
 import type { IQueueBackend } from "../src/lib/queue-backend";
 import { TaskStatus } from "../src/lib/types";
-import { insertTaskByPriority, resolveTaskPriority } from "../src/lib/pending-task-queue";
+import { insertTaskByPriority, resolveTaskPriority } from "./pending-task-queue";
 import type { ITaskContext } from "../src/lib/types";
-import { executeTaskHandler } from "../src/lib/worker";
+import { executeTaskHandler } from "./test-handlers";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
 
 //

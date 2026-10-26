@@ -155,11 +155,11 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
     defer temp_dirs.removeTempDir(io, tempDir);
     var generator = try TestUuidGenerator.init(allocator);
 
-    // A QuickTime file keeps a location tag as written, and has no date of its own. The first place the location
-    // matches /([+-]\d+\.\d+)([+-]\d+\.\d+)/ is "+1.5-2.5".
+    // A QuickTime file keeps a location tag as written, and has no date of its own. The fixture's location tag is
+    // "+5 +5. -1.5x +1.5-2.5/", and the first place it matches /([+-]\d+\.\d+)([+-]\d+\.\d+)/ is "+1.5-2.5". It is
+    // copied into the temporary directory so the JSON file can be written beside it.
     const videoPath = try std.fs.path.join(allocator, &.{ tempDir, "video.mov" });
-    const made = try std.process.run(allocator, io, .{ .argv = &.{ "ffmpeg", "-v", "quiet", "-f", "lavfi", "-i", "color=c=red:s=32x16:r=10:d=1", "-metadata", "location=+5 +5. -1.5x +1.5-2.5/", "-pix_fmt", "yuv420p", "-y", videoPath } });
-    try std.testing.expect(made.term == .exited and made.term.exited == 0);
+    try std.Io.Dir.cwd().copyFile("../test/video/location-tag.mov", std.Io.Dir.cwd(), videoPath, io, .{});
     const jsonPath = try std.mem.concat(allocator, u8, &.{ videoPath, ".json" });
 
     const cases = [_]IJsonDateCase{

@@ -7,11 +7,9 @@ PHOTOSPHERE_APP_DIR="$(cd "$PHOTOSPHERE_ANDROID_SCRIPTS_DIR/.." && pwd)"
 PHOTOSPHERE_REPO_ROOT="$(cd "$PHOTOSPHERE_APP_DIR/../.." && pwd)"
 PHOTOSPHERE_ANDROID_PROJECT_DIR="$PHOTOSPHERE_APP_DIR/native/android"
 PHOTOSPHERE_ANDROID_APP_ID="au.com.codecapers.photosphere.ziggy"
-PHOTOSPHERE_CAPACITOR_ANDROID_DIR="$PHOTOSPHERE_REPO_ROOT/apps/android-frontend"
 
-# Resolves JAVA_HOME (a JDK 17) and ANDROID_HOME, the same way the Capacitor Android app (apps/android-frontend) does. It exits with a message
-# when either is missing.
-source "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/scripts/android-env.sh"
+# Resolves JAVA_HOME (a JDK 17) and ANDROID_HOME. It exits with a message when either is missing.
+source "$PHOTOSPHERE_ANDROID_SCRIPTS_DIR/android-emulator/android-env.sh"
 
 #
 # Fails with a message unless every named command is on the PATH. Usage: photosphere_android_require_commands <command...>
@@ -27,23 +25,23 @@ photosphere_android_require_commands() {
 }
 
 #
-# Prints the NDK version the Capacitor Android app (apps/android-frontend) pins, which this project uses too.
+# Prints the NDK version Photosphere's Android project builds with, from its root build file.
 #
 photosphere_android_ndk_version() {
     local version
-    version="$(sed -n 's/^ *ndkVersion "\(.*\)".*$/\1/p' "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/android/app/build.gradle")"
+    version="$(sed -n 's/^ *ext\.ndkVersion = "\(.*\)".*$/\1/p' "$PHOTOSPHERE_ANDROID_PROJECT_DIR/build.gradle")"
     if [ -z "$version" ]; then
-        echo "ERROR: no ndkVersion found in $PHOTOSPHERE_CAPACITOR_ANDROID_DIR/android/app/build.gradle" >&2
+        echo "ERROR: no ext.ndkVersion found in $PHOTOSPHERE_ANDROID_PROJECT_DIR/build.gradle" >&2
         return 1
     fi
     printf '%s\n' "$version"
 }
 
 #
-# Prints the minimum SDK level, from the variables the Capacitor Android app (apps/android-frontend) and this project share.
+# Prints the minimum SDK level, from the variables Photosphere's Android project builds with.
 #
 photosphere_android_min_sdk() {
-    sed -n 's/^ *minSdkVersion = \([0-9]*\).*$/\1/p' "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/android/variables.gradle"
+    sed -n 's/^ *minSdkVersion = \([0-9]*\).*$/\1/p' "$PHOTOSPHERE_ANDROID_PROJECT_DIR/variables.gradle"
 }
 
 #

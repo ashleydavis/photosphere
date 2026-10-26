@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Mobile-only test, because the desktop suite has no prefetch test.
-# Exercises the prefetch-database handler registered in mobile-worker-entry.ts: replicates a
+# Exercises the prefetch-database handler registered in packages-zig/node-api-zig/src/lib/task-handlers.zig: replicates a
 # database partially (a partial replica copies only the merkle trees, not thumbnails), opens the
 # partial replica so load-assets fire-and-forget queues a prefetch-database task, and asserts the
 # prefetch copied the missing thumbnails into the local replica on device. Without the handler the

@@ -562,24 +562,6 @@ summarise_failure() {
     tail -60 "$log_file" | sed 's/^/  /'
 }
 
-# Copies the per-test log files the mobile smoke suite writes under its own tmp dirs. The runner
-# clears those before each test, so without this they are gone the moment the next run starts.
-snapshot_suite_logs() {
-    local destination="$1"
-    local found=0
-    local log_file relative_path target_dir
-
-    while IFS= read -r log_file; do
-        relative_path="${log_file#"$ROOT"/}"
-        target_dir="$destination/$(dirname "$relative_path")"
-        mkdir -p "$target_dir"
-        cp "$log_file" "$target_dir/"
-        found=1
-    done < <(find "$ROOT/apps/smoke-tests/tests" "$ROOT/apps/desktop/smoke-tests" -path '*/tmp/*' -name '*.log' -type f 2>/dev/null)
-
-    return $((1 - found))
-}
-
 #
 # Reports whether every attached Android emulator is still answering, printing a reason and returning
 # non-zero for the first one that is not. Says nothing about how many devices there are, which is the
@@ -662,7 +644,7 @@ check_devices_healthy() {
 # Whatever comes back may be a different size to what went away, so the count is re-baselined here
 # rather than held to the old number: an operator restarting a pool may well bring up fewer or more
 # emulators than before, and holding out for the old number would wait forever. The Android suite
-# discovers its devices at the start of every run (apps/smoke-tests/run.sh), so a smaller pool means
+# finds its devices again for every scenario (apps/photosphere-smoke-tests/lib/android.sh), so a smaller pool means
 # the same tests spread over fewer devices, not tests queueing for devices that are never coming.
 #
 # Like the check itself, this only ever reads. Restarting emulators is a person's job.
@@ -1055,11 +1037,6 @@ run_streak() {
             echo
             capture_machine_state
         } > "$REPORT"
-
-        SUITE_LOGS="$run_dir/suite-logs-run-$run_label"
-        if snapshot_suite_logs "$SUITE_LOGS"; then
-            echo "suite logs:     $SUITE_LOGS" >> "$REPORT"
-        fi
 
         cat "$REPORT"
         echo

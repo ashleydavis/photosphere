@@ -59,7 +59,8 @@ if ! photosphere_platform_prepare "$RUN_DIR"; then
     exit 1
 fi
 
-# The psi CLI the scenarios run on this host as the other side of a LAN share, built from the Zig source.
+# The psi CLI the scenarios run on this host, to create their fixture databases and as the other side of a LAN share, built from the
+# Zig source.
 echo "Building the psi CLI..."
 if ! (cd "$REPO_ROOT" && zig build -p "$RUN_DIR/psi"); then
     echo "FAILED: could not build the psi CLI." >&2

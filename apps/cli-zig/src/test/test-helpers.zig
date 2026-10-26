@@ -217,10 +217,10 @@ pub const CliResult = struct {
 };
 
 //
-// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory.
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run from.
 //
 pub fn runCli(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map) !CliResult {
-    const cliDir = try std.Io.Dir.cwd().openDir(std.testing.io, "../cli", .{});
+    const cliDir = try std.Io.Dir.cwd().openDir(std.testing.io, ".", .{});
     defer cliDir.close(std.testing.io);
     const result = try std.process.run(allocator, std.testing.io, .{
         .argv = argv,
@@ -290,12 +290,12 @@ pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
 pub const psi_path = buildPath(cli_test_options.psi_path);
 
 //
-// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, with its
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run from, with its
 // stdout written to a file (as `psi ... > file` does) rather than a pipe. Returns what the file holds as stdout.
 //
 pub fn runCliToFile(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map, outputPath: []const u8) !CliResult {
     const io = std.testing.io;
-    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
     defer cliDir.close(io);
     const outputFile = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
     var child = try std.process.spawn(io, .{
@@ -327,12 +327,12 @@ fn writeAndClose(stdinFile: std.Io.File, input: []const u8) void {
 }
 
 //
-// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, writing the
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run from, writing the
 // input to its stdin (a pipe) and then closing it, as `printf '...' | psi ...` does.
 //
 pub fn runCliWithInput(allocator: std.mem.Allocator, argv: []const []const u8, input: []const u8, environment: *const std.process.Environ.Map) !CliResult {
     const io = std.testing.io;
-    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
     defer cliDir.close(io);
     var child = try std.process.spawn(io, .{
         .argv = argv,
@@ -377,14 +377,14 @@ pub fn runCliWithInput(allocator: std.mem.Allocator, argv: []const []const u8, i
 }
 
 //
-// Starts a CLI command line (argv[0] is the program) with the environment, from the apps/cli directory, and returns
+// Starts a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run from, and returns
 // once its stdout shows the text, leaving it running: the other device of a share test, which the test then talks to
 // with a second command. The caller ends it with `child.kill(io)`, so a failed assertion still stops it. Fails when
 // the text does not appear (a program waiting for something that will never come would otherwise hang the test).
 //
 pub fn startCliAndWaitFor(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map, waitFor: []const u8) !std.process.Child {
     const io = std.testing.io;
-    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
     defer cliDir.close(io);
     var child = try std.process.spawn(io, .{
         .argv = argv,
@@ -546,7 +546,7 @@ pub fn runPsiWithPrompts(allocator: std.mem.Allocator, environment: *const std.p
 }
 
 //
-// Runs the built psi with the arguments from the apps/cli directory, as runCli does.
+// Runs the built psi with the arguments from the apps/cli-zig directory the tests run from, as runCli does.
 //
 pub fn runPsi(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8) !CliResult {
     var argv: std.ArrayList([]const u8) = .empty;

@@ -245,13 +245,6 @@ jobs:
         with:
           run: bun install
 
-      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
-      - name: Install media processing tools
-        uses: ./.github/actions/install-apt-packages
-        with:
-          packages: imagemagick ffmpeg
-          verify: magick|convert ffmpeg ffprobe
-
       # The runner comes with NDKs the app does not use, and with them, the NDK it does and the system image installed, too little
       # disk is left for the emulator's userdata partition: it stops at once with "Not enough space to create userdata partition".
       - name: Uninstall the NDKs the app does not use (Android)
@@ -311,7 +304,7 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
-          # Emulator 36.6.11, the build the local emulator scripts pin (EMULATOR_BUILD in apps/android-frontend/scripts/emulator-config.sh,
+          # Emulator 36.6.11, the build the local emulator scripts pin (EMULATOR_BUILD in apps/photosphere/scripts/android-emulator/emulator-config.sh,
           # which says why): the newest emulator never gives back the memory of an app it has stopped, and this suite starts the app
           # many times.
           emulator-build: 15507667

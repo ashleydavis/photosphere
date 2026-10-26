@@ -32,8 +32,8 @@ const log = &utils.log.log;
 const LATEST_RELEASE_URL = "https://api.github.com/repos/ashleydavis/photosphere/releases/latest";
 
 //
-// URL of the news feed published in the Photosphere GitHub repo. Overridable via PHOTOSPHERE_NEWS_URL for the local demo script
-// (apps/desktop/demo-news.sh) and for the smoke tests, which point it at a checked-in test yaml file.
+// URL of the news feed published in the Photosphere GitHub repo. Overridable via PHOTOSPHERE_NEWS_URL for the smoke tests,
+// which point it at a checked-in test yaml file.
 //
 const DEFAULT_NEWS_URL = "https://raw.githubusercontent.com/ashleydavis/photosphere/main/news.yaml";
 

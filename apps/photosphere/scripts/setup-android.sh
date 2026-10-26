@@ -7,7 +7,7 @@ set -euo pipefail
 scripts_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The install runs first, because android-common.sh stops when the JDK 17 or the Android SDK it installs is missing.
-bash "$scripts_dir/../../android-frontend/scripts/install-android-sdk.sh" --install
+bash "$scripts_dir/android-emulator/install-android-sdk.sh" --install
 
 source "$scripts_dir/android-common.sh"
 

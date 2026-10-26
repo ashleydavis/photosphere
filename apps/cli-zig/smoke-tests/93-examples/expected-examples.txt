@@ -1,0 +1,74 @@
+📖 Photosphere CLI Examples
+
+Below are usage examples for all available commands:
+
+Database Management:
+
+  init:
+    psi init --db .                  Creates a database in current directory.
+    psi init --db ./photos           Creates a database in ./photos directory.
+
+  add:
+    psi add --db ./photos ~/Pictures Adds all files from ~/Pictures to the database.
+    psi add --db ./photos image.jpg video.mp4 Adds specific files to the database.
+    psi add --db ./photos ~/Downloads/photos Adds a directory recursively.
+
+  check:
+    psi check --db ./photos ~/Pictures Checks which files from ~/Pictures are already in database.
+    psi check --db ./photos image.jpg Checks if the specific file is already in database.
+    psi check --db ./photos ~/Downloads Checks the directory to see what's already been added.
+
+  summary:
+    psi summary --db .               Shows a summary for the database in current directory.
+    psi summary --db ./photos        Shows summary for the database in the ./photos directory.
+
+  verify:
+    psi verify --db .                Verifies a database in the current directory.
+    psi verify --db ./photos         Verifies a database in the ./photos directory.
+    psi verify --db ./photos --full  Forces full verification of all files.
+
+  find-orphans:
+    psi find-orphans --db .          Finds orphaned files in the current directory database.
+    psi find-orphans --db ./photos   Finds orphaned files in the ./photos database.
+
+  remove-orphans:
+    psi remove-orphans --db .        Removes orphaned files from the current directory database.
+    psi remove-orphans --db ./photos Removes orphaned files from the ./photos database.
+    psi remove-orphans --db ./photos --yes Removes orphaned files without confirmation prompt.
+
+Backup and syncrhonization:
+
+  replicate:
+    psi replicate --db ./photos --dest ./backup Replicates a database to a backup location.
+    psi replicate --db . --dest s3:bucket/photos Replicates the current database to S3.
+
+  compare:
+    psi compare --db ./photos --dest ./backup Compares an original database with a backup.
+    psi compare --db . --dest s3:bucket/photos Compares a local database with an S3 replica.
+    psi compare --db ./photos --dest ./backup --full Shows all differences without truncation.
+    psi compare --db ./photos --dest ./backup --max 20 Shows up to 20 items in each category.
+
+Configuration:
+
+  tools:
+    psi tools                        Checks the status of all required media processing tools.
+
+File Analysis:
+
+  info:
+    psi info photo.jpg               Shows detailed information about a photo.
+    psi info photo1.jpg photo2.jpg   Analyzes multiple specific files.
+    psi info ~/Pictures              Analyzes all media files in a directory.
+    psi info --db ./photos <asset-id> Shows database metadata for an asset by ID.
+    psi info --db ./photos <hash>    Shows database metadata for asset(s) with the given hash.
+
+Help and Support:
+
+  examples:
+    psi examples                     Shows all usage examples categorized by command.
+
+  bug:
+    psi bug                          Generates a bug report and opens it in the browser.
+    psi bug --no-browser             Generates a bug report without opening a browser.
+
+💡 Tip: Use "psi <command> --help" to see detailed help for any specific command.

@@ -220,8 +220,8 @@ jobs:
           ls -la bin/x64/linux/psi
           file bin/x64/linux/psi
 
-      # The binary is renamed to say which CLI it is, because the TypeScript CLI is also called psi and
-      # unpacking both releases into one directory would otherwise overwrite one with the other.
+      # The binary is renamed to the name the release publishes it under, so the downloads of several
+      # platforms can sit in one directory without overwriting one another.
       - name: Collect the Zig CLI binary
         shell: bash
         run: |
@@ -244,7 +244,7 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
 
   cli-smoke-tests:
-    # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
+    # The Zig CLI smoke suites, because the output the tests expect (gzip OS byte, paths, file times) differs
     # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
     # reported as a failure of the other.
     # The binary is not built here: build-zig-linux-x64 builds it and this job downloads it, so the Zig CLI
@@ -260,10 +260,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
       - name: Setup Zig (version from mise.toml)
         uses: jdx/mise-action@v2
         with:
@@ -286,11 +282,11 @@ jobs:
         uses: ./.github/actions/retry-install
         with:
           run: bun install
-      - name: Install media processing tools (Linux)
+      - name: Install tree (Linux)
         uses: ./.github/actions/install-apt-packages
         with:
-          packages: imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
+          packages: tree
+          verify: tree
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
         shell: bash
@@ -304,7 +300,7 @@ jobs:
         with:
           platform: linux-x64
 
-      # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads.
+      # The binary the release ships, run by the version check below. The smoke suite builds its own Zig CLI for its run.
       - name: Download the Zig CLI built for this platform
         uses: actions/download-artifact@v4
         with:
@@ -321,11 +317,11 @@ jobs:
           ls -la zig-out/bin
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 30
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
-        run: ./smoke-tests-zig.sh --binary
+        run: ./smoke-tests.sh
       - name: Test the Zig version command
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: |
           echo "Testing version command after building..."
@@ -380,12 +376,11 @@ jobs:
           run: bun install
 
       # The app's runtime libraries (as in package-release), and xvfb, which lib/linux.sh runs the app under.
-      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
-      - name: Install the runtime libraries, xvfb and media processing tools (Linux)
+      - name: Install the runtime libraries and xvfb (Linux)
         uses: ./.github/actions/install-apt-packages
         with:
-          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb imagemagick ffmpeg
-          verify: xvfb-run magick|convert ffmpeg ffprobe
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav xvfb
+          verify: xvfb-run
 
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries

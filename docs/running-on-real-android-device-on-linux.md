@@ -8,9 +8,9 @@ trips people up (cables, USB mode, and `adb` on your PATH).
 
 - The Android SDK present (typically at `~/Android/Sdk`), which provides `adb`.
   You can install the full Android Studio, or install just the command-line
-  toolchain with `bun run setup` (see the android-frontend README).
+  toolchain with `bun run setup` (see `apps/photosphere/scripts/setup-android.md`).
   Deploying to a device from the terminal with
-  `bun run run` does not need the IDE; only opening the project in the Studio
+  `bun run run:ziggy:android` does not need the IDE; only opening the project in the Studio
   GUI (step 6 below) does.
 - A **data-capable** USB cable. Many cables are charge-only and will silently
   fail to connect — this is the single most common cause of "device not
@@ -110,13 +110,10 @@ With the device showing as `device` in `adb devices`, you can build and deploy
 without opening Android Studio:
 
 ```bash
-cd apps/android-frontend
-bun run run
+bun run run:ziggy:android
 ```
 
-A plugged-in, USB-debugging-authorised device is chosen as the target like any
-other. To load a test database at the same time, use `bun run and50`,
-`bun run and1` or `bun run and0` (see the android-frontend README).
+A plugged-in, USB-debugging-authorised device is chosen ahead of any emulator. To load a test database at the same time, use `bun run run:ziggy:android:50`, `run:ziggy:android:1` or `run:ziggy:android:0` (see `apps/photosphere/scripts/run-android.md`).
 
 ## Troubleshooting
 

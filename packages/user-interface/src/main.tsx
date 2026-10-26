@@ -18,6 +18,7 @@ import { DatabaseSummaryDialog } from "./components/database-summary-dialog";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
+import { ToolsPage } from "./pages/tools";
 import { DeveloperPage } from "./pages/developer";
 import { NewsPage } from "./pages/news";
 import { MapPage } from "./pages/map/map-page";
@@ -400,6 +401,11 @@ function __Main({ initialTheme }: IMainProps) {
                         <Route
                             path="/about"
                             element={<AboutPage />}
+                            />
+
+                        <Route
+                            path="/tools"
+                            element={<ToolsPage />}
                             />
 
                         <Route

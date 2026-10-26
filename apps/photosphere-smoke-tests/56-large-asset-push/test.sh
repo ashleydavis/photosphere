@@ -14,7 +14,7 @@
 # reads the bucket from the host instead.
 #
 # The fixture is generated rather than committed, so the repository does not grow a binary. It is
-# random noise, so JPEG cannot compress it away, and big enough to be more than one 5 MiB part: a
+# padded with random bytes, so nothing can compress it away, and big enough to be more than one 5 MiB part: a
 # single-part upload and a multi-part one take different code inside the SDK and only the second one
 # is exercised by a file this size.
 #
@@ -50,23 +50,10 @@ mkdir -p "$TMP_DIR/import-images"
 
 # --- 1. Generate the photo the whole test is about. ---
 
-# 3000x3000 of random noise comes out around 6.5 MB as a JPEG, which is more than one upload part.
-# ImageMagick 7 calls it `magick` and ImageMagick 6 calls it `convert`; the repository's own Image
-# class tries them in that order and the Release workflow verifies `magick|convert`, so both are
-# expected to exist in the wild and this picks whichever does.
-if command -v magick >/dev/null 2>&1; then
-    IMAGE_MAGICK="magick"
-elif command -v convert >/dev/null 2>&1; then
-    IMAGE_MAGICK="convert"
-else
-    log_error "Neither 'magick' nor 'convert' is on PATH, so the test photo cannot be generated."
-    log_error "ImageMagick is required by the CLI's own import as well; install it and run this again."
-    exit 1
-fi
-
-if ! MAGICK_OUTPUT="$($IMAGE_MAGICK -size 3000x3000 xc:gray +noise Random -quality 92 "$FIXTURE_PATH" 2>&1)"; then
-    log_error "Could not generate the test photo with $IMAGE_MAGICK. It said:"
-    echo "$MAGICK_OUTPUT" | sed 's/^/  /'
+# The fixture photo test/test.jpg followed by 7 MiB of random bytes, which a JPEG reader ignores
+# after the image's end marker, comes out around 9 MB: more than one upload part.
+if ! cp "$REPO_DIR/test/test.jpg" "$FIXTURE_PATH" || ! head -c 7340032 /dev/urandom >> "$FIXTURE_PATH"; then
+    log_error "Could not generate the test photo at $FIXTURE_PATH."
     exit 1
 fi
 
@@ -110,7 +97,7 @@ cli_expect_success() {
 }
 
 # jq builds the JSON so the credentials are never hand-quoted. The field names are the ones
-# resolveDatabaseSharePayload reads out of the secret (packages/api/src/lan-share/lan-share-resolve.ts).
+# resolveDatabaseSharePayload reads out of the secret (packages-zig/api-zig/src/lib/lan-share/lan-share-resolve.zig).
 S3_SECRET_JSON="$(jq -nc \
     --arg region "us-east-1" \
     --arg accessKeyId "$S3_EMULATOR_ACCESS_KEY" \

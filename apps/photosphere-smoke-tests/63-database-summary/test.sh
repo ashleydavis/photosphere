@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Mobile-only test (25+; the 0-24 range mirrors the desktop suite, which has no database-summary
-# test). Exercises the get-database-summary handler registered in mobile-worker-entry.ts: opens a
+# test). Exercises the get-database-summary handler registered in packages-zig/node-api-zig/src/lib/task-handlers.zig: opens a
 # seeded database, taps the sidebar "Database Info" link (the mobile entry point for
 # /database-summary, since mobile has no native menu), and asserts the page loads via the handler
 # rather than failing with a handler-registry error. Proven by the page's "Database summary loaded"

@@ -2068,7 +2068,7 @@ fn runZigWithInput(allocator: std.mem.Allocator, environment: *const std.process
     var argv: std.ArrayList([]const u8) = .empty;
     try argv.append(allocator, try zigCliPath(allocator));
     try argv.appendSlice(allocator, args);
-    const cliDir = try std.Io.Dir.cwd().openDir(io, "../cli", .{});
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
     defer cliDir.close(io);
     var child = try std.process.spawn(io, .{
         .argv = argv.items,
@@ -3303,7 +3303,7 @@ test "hash-cache hash-file and add hash a file" {
     const environment = try hashCacheEnvironment(allocator, root);
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
-    // The SHA-256 hash of test/test.png. The CLI runs in apps/cli.
+    // The SHA-256 hash of test/test.png. The CLI runs in apps/cli-zig.
     const pngHash = "3d9d6f073e60a13e6706bec322b47615f76b594b17bd64495614996b995908d9";
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "hash-file", "../../test/test.png" }), pngHash ++ "\n", "", 0);
     try expectResult(try runZig(allocator, environment, &.{ "hash-cache", "count", "--db", db }), "0\n", "", 0);

@@ -12,16 +12,16 @@
 # The core writes its log to a file in the app's private files directory, and the scenario reads app.log on the host, so a stream
 # started on the host (adb exec-out run-as ... tail -f) copies the log file into app.log as the core writes it.
 #
-# The device is chosen the way the repository's mobile suite chooses one (see apps/smoke-tests/lib/android.sh): the device named in
-# PHOTOSPHERE_ANDROID_DEVICES, else a pool emulator, else a plugged-in device. It is claimed under the same per-device lock the mobile
-# suite and the pool repair take, for as long as the scenario's shell runs: the lock is a file descriptor of that shell, so it is let
+# The device is chosen the way the emulator pool expects (see apps/photosphere/scripts/android-emulator/CLAUDE.md): the device named in
+# PHOTOSPHERE_ANDROID_DEVICES, else a pool emulator, else a plugged-in device. It is claimed under the same per-device lock the
+# pool repair takes, for as long as the scenario's shell runs: the lock is a file descriptor of that shell, so it is let
 # go when the scenario ends, and not between a stop and the restart that follows it, which must find the same install and data.
 
 ANDROID_SCRIPTS_DIR="$PHOTOSPHERE_SMOKE_REPO_ROOT/apps/photosphere/scripts"
 # JAVA_HOME and ANDROID_HOME, and the helpers that build the app.
 source "$ANDROID_SCRIPTS_DIR/android-common.sh"
 # The pool's AVD prefix and the device lock path, from the file that defines them.
-source "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/scripts/emulator-config.sh"
+source "$PHOTOSPHERE_ANDROID_SCRIPTS_DIR/android-emulator/emulator-config.sh"
 
 # The application id of the app.
 ANDROID_APP_ID="$PHOTOSPHERE_ANDROID_APP_ID"
@@ -29,7 +29,7 @@ ANDROID_APP_ID="$PHOTOSPHERE_ANDROID_APP_ID"
 # Where the app writes its control port, inside its private files directory (the Intent extra carries the full path).
 ANDROID_PORT_FILE_DEVICE_PATH="/data/data/$ANDROID_APP_ID/files/ziggy-control-port.txt"
 
-# Seconds a scenario waits for a free device before giving up. The mobile suite's own variable and default.
+# Seconds a scenario waits for a free device before giving up.
 ANDROID_DEVICE_CLAIM_TIMEOUT="${PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT:-1800}"
 
 # The claimed device's serial and the file descriptors holding its locks, Photosphere's and Ziggy's, set by photosphere_android_claim_device.
@@ -228,7 +228,7 @@ photosphere_android_claim_device() {
 }
 
 #
-# Refuses to wipe the app's data on a real phone unless the run was told it may, the way the mobile suite does: an emulator holds
+# Refuses to wipe the app's data on a real phone unless the run was told it may: an emulator holds
 # nothing but what a test put there, and a phone holds whatever its owner imported. Set PHOTOSPHERE_ALLOW_DEVICE_WIPE=1 to say the
 # phone is yours to wipe.
 #

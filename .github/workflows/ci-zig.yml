@@ -174,11 +174,11 @@ jobs:
         with:
           run: bun install
 
-      - name: Install media processing tools (Linux)
+      - name: Install tree (Linux)
         uses: ./.github/actions/install-apt-packages
         with:
-          packages: imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
+          packages: tree
+          verify: tree
 
       # The libraries the build jobs built, restored from the cache for the Zig build to link.
       - name: Restore the third-party libraries

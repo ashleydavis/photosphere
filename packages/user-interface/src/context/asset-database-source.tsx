@@ -3,7 +3,7 @@ import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "api";
 import type { ISaveAssetItem } from "api";
-import type { IMoveAssetsData } from "node-api";
+import type { IMoveAssetsData } from "api";
 import { log, retry } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
@@ -123,8 +123,8 @@ export interface IAssetDatabaseProviderProps {
 }
 
 //
-// Shape of the check-database-exists task result payload. Declared locally because user-interface does
-// not depend on node-api's worker types; the result is read structurally.
+// Shape of the check-database-exists task result payload. Declared locally because the task's
+// handler is Zig (packages-zig/node-api-zig); the result is read structurally.
 //
 interface ICheckDatabaseExistsOutputs {
     // True when a real database is accessible at the probed path.

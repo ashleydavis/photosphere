@@ -1,0 +1,21 @@
+Usage: psi list|ls [options]
+
+Lists all files in the database sorted by date (newest first) with pagination.
+
+Options:
+  --db <path>          The directory that contains the media file database
+  -k, --key <keyfile>  Path to the private key file for encryption.
+  -v, --verbose        Enables verbose logging. (default: false)
+  -y, --yes            Non-interactive mode. Use command line arguments and
+                       defaults. (default: false)
+  --cwd <path>         Set the current working directory for directory selection
+                       prompts. Defaults to the current directory from your
+                       shell/terminal. This is mostly for testing/debugging.
+  --page-size <size>   Number of files to display per page (default: 20)
+                       (default: "20")
+  -h, --help           display help for command
+
+Examples:
+  psi list --db .                  Lists all files in the current directory database.
+  psi list --db ./photos           Lists all files in the ./photos database.
+  psi list --db ./photos --page-size 10 Lists files with 10 files per page.

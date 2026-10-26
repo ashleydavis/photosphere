@@ -8,7 +8,7 @@
 
 import { TaskQueue } from "task-queue";
 import type { IUuidGenerator } from "utils";
-import type { ITestJobData } from "node-api/src/lib/test-job.worker";
+import type { ITestJobData } from "api";
 
 //
 // The shortest and longest a synthetic task runs for.
