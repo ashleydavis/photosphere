@@ -17,7 +17,6 @@ pub const app = withNodeApiTasks(ziggy.core.App(.{
         .@"fps-measurement" = core.logging.fpsMeasurementHandler,
         .@"main-command" = core.main_process.mainCommandHandler,
         .@"notify-database-edited" = core.main_process.notifyDatabaseEditedHandler,
-        .@"renderer-log" = core.logging.rendererLogHandler,
         .@"mcp-tool-response" = core.mcp_server.mcpToolResponseHandler,
         .@"open-database" = core.pickers.openDatabaseMessageHandler,
         .@"remove-database-entry" = core.databases.removeDatabaseEntryMessageHandler,

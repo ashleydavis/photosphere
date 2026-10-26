@@ -1,85 +1,23 @@
 //
-// The logging messages: renderer-log, get-log-details and fps-measurement.
+// The logging messages: get-log-details and fps-measurement. The page's own log lines reach the log files through Ziggy's
+// `window.ziggy.log`, which writes them tagged Frontend.
 //
-// The log they use is the one installed with utils.log.setLog, which the app makes a FileLogger (file-logger.zig) at startup.
-// renderer-log does what it does only when that log is a FileLogger.
-//
-// renderer-log is a message handled on the main thread, whose log the FileLogger is, and which writes the line to the log file.
-// get-log-details reads the log file, so it is a task type, given the path of the main thread's log file.
+// The log is Ziggy's file log, which Ziggy starts when the app starts. get-log-details reads its log file, so it is
+// a task type, given the path of the main thread's log file.
 //
 
 const std = @import("std");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const file_logger = @import("file-logger.zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
 const TaskServices = ziggy.task_runner.TaskServices;
 const HandlerServices = ziggy.core.HandlerServices;
 const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
-const FileLogger = file_logger.FileLogger;
+const FileLog = utils.file_log.FileLog;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
-
-//
-// The output of a tool, in a renderer-log message.
-//
-pub const ToolDataRequest = struct {
-    // What the tool wrote to its standard output, or null.
-    stdout: ?[]const u8 = null,
-    // What the tool wrote to its standard error, or null.
-    stderr: ?[]const u8 = null,
-};
-
-//
-// The data of renderer-log, an IRendererLogMessage.
-//
-pub const RendererLogRequest = struct {
-    // The level, one of info, verbose, error, exception, warn, debug, tool or event.
-    level: []const u8,
-    // The text of the message.
-    message: []const u8,
-    // The text of the error the message is about, or null.
-    @"error": ?[]const u8 = null,
-    // The output of the tool the message is about, or null.
-    toolData: ?ToolDataRequest = null,
-};
-
-//
-// renderer-log: written to the log as the message of a worker is, with the source "Renderer". The response is null. When the log is
-// not a FileLogger the message is dropped.
-//
-// Data that is not laid out as an IRendererLogMessage is refused by Ziggy as InvalidMessageData. A level that is not one of the
-// eight is an error reply that says so, because the level has to be one of them to be read into the log's level type, and nothing
-// is dropped without being said, which is what the repository requires. The check happens before the test for a file logger, so a
-// bad message is reported even when there is no file logger.
-//
-pub fn rendererLogHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: RendererLogRequest) !void {
-    _ = services;
-    _ = timers;
-    _ = io;
-    _ = allocator;
-    const level = std.meta.stringToEnum(file_logger.WorkerLogLevel, request.level) orelse {
-        return utils.errors.throwError("The log message has the level \"{s}\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", .{request.level});
-    };
-    var tool_data: ?utils.log.IToolOutput = null;
-    if (request.toolData) |tool_data_request| {
-        tool_data = .{
-            .stdout = tool_data_request.stdout,
-            .stderr = tool_data_request.stderr,
-        };
-    }
-    const logger = FileLogger.fromILog(utils.log.currentLog()) orelse {
-        return;
-    };
-    try logger.handleWorkerLogMessage(.{
-        .level = level,
-        .message = request.message,
-        .@"error" = request.@"error",
-        .tool_data = tool_data,
-    }, "Renderer");
-}
 
 //
 // get-log-details: no payload. The reply is {logFilePath, logHeader} of the active log: the path of the log file and the header of
@@ -95,7 +33,7 @@ fn getLogDetails(services: TaskServices, timers: Timers, io: std.Io, allocator: 
     const log_file = given.logFilePath orelse {
         return try std.json.Stringify.valueAlloc(allocator, utils.log.noLogDetails, .{});
     };
-    const details = try file_logger.readLogDetails(allocator, io, log_file);
+    const details = try utils.file_log.readLogDetails(allocator, io, log_file);
     return try std.json.Stringify.valueAlloc(allocator, details, .{});
 }
 
@@ -135,9 +73,24 @@ pub fn fpsMeasurementHandler(services: HandlerServices, timers: Timers, io: std.
     try rows.writer.print("{d},", .{std.Io.Clock.real.now(io).toMilliseconds()});
     try utils.js_number.writeNumber(&rows.writer, fps);
     try rows.writer.writeAll("\n");
-    file_logger.appendToFile(io, fps_path, rows.written()) catch |err| {
+    appendToFile(io, fps_path, rows.written()) catch |err| {
         return utils.errors.throwError("The frame rate could not be written to {s}: {s}", .{ fps_path, @errorName(err) });
     };
+}
+
+//
+// Appends text to the end of a file, creating it when it is not there.
+//
+fn appendToFile(io: std.Io, file_path: []const u8, content: []const u8) !void {
+    // Opened for reading as well, because file.length needs read access on Windows, where Zig opens a file with GENERIC_WRITE alone
+    // and the size query is refused.
+    const file = try std.Io.Dir.cwd().createFile(io, file_path, .{
+        .truncate = false,
+        .read = true,
+    });
+    defer file.close(io);
+    const length = try file.length(io);
+    try file.writePositionalAll(io, content, length);
 }
 
 //
@@ -172,7 +125,7 @@ pub fn getLogDetailsMessageHandler(services: HandlerServices, timers: Timers, io
     _ = timers;
     _ = io;
     _ = request;
-    const logger = FileLogger.fromILog(utils.log.currentLog());
+    const logger = FileLog.fromILog(utils.log.currentLog());
     return .{
         .task = .{
             .task_type = "get-log-details",

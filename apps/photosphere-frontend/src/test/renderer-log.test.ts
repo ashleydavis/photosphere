@@ -1,4 +1,4 @@
-import { createRendererLog, errorLogText, rendererLogMessageToJson } from '../lib/renderer-log';
+import { createRendererLog, errorLogText } from '../lib/renderer-log';
 import { FakeZiggy } from './fake-ziggy';
 
 describe("createRendererLog", () => {
@@ -26,7 +26,7 @@ describe("createRendererLog", () => {
         log.info("hello");
 
         expect(consoleLog).toHaveBeenCalledWith("hello");
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'info', message: "hello" } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'info', message: "hello" } }]);
     });
 
     // The whole point of the flag: test mode patches the console to forward to the core, so a
@@ -39,7 +39,7 @@ describe("createRendererLog", () => {
         log.info("hello");
 
         expect(consoleLog).not.toHaveBeenCalled();
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'info', message: "hello" } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'info', message: "hello" } }]);
     });
 
     test("forwards an event without writing it to the console when the console is already forwarded", () => {
@@ -49,7 +49,7 @@ describe("createRendererLog", () => {
         log.event("Source cleanup counted");
 
         expect(consoleLog).not.toHaveBeenCalled();
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'event', message: "Source cleanup counted" } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'event', message: "Source cleanup counted" } }]);
     });
 
     test("keeps errors and warnings off the console when the console is already forwarded", () => {
@@ -62,8 +62,8 @@ describe("createRendererLog", () => {
         expect(consoleError).not.toHaveBeenCalled();
         expect(consoleWarn).not.toHaveBeenCalled();
         expect(ziggy.sent).toEqual([
-            { name: 'renderer-log', data: { level: 'error', message: "went wrong" } },
-            { name: 'renderer-log', data: { level: 'warn', message: "careful" } },
+            { name: 'log', data: { level: 'error', message: "went wrong" } },
+            { name: 'log', data: { level: 'warn', message: "careful" } },
         ]);
     });
 
@@ -74,7 +74,7 @@ describe("createRendererLog", () => {
 
         log.exception("it failed", error);
 
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'exception', message: "it failed", error: error.stack } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'exception', message: "it failed", error: error.stack } }]);
     });
 
     test("forwards tool output", () => {
@@ -83,7 +83,7 @@ describe("createRendererLog", () => {
 
         log.tool("magick", { stdout: "out" });
 
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'tool', message: "magick", toolData: { stdout: "out" } } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'tool', message: "magick", toolData: { stdout: "out" } } }]);
     });
 
     test("writes both streams of tool output to the console when nothing else forwards the console", () => {
@@ -94,7 +94,7 @@ describe("createRendererLog", () => {
 
         expect(consoleLog).toHaveBeenCalledWith("== magick stdout ==\nout");
         expect(consoleLog).toHaveBeenCalledWith("== magick stderr ==\nerr");
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'tool', message: "magick", toolData: { stdout: "out", stderr: "err" } } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'tool', message: "magick", toolData: { stdout: "out", stderr: "err" } } }]);
     });
 
     test("writes a debug message to the console and forwards it", () => {
@@ -106,7 +106,7 @@ describe("createRendererLog", () => {
             log.debug("details");
 
             expect(consoleDebug).toHaveBeenCalledWith("details");
-            expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'debug', message: "details" } }]);
+            expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'debug', message: "details" } }]);
         }
         finally {
             consoleDebug.mockRestore();
@@ -131,20 +131,6 @@ describe("createRendererLog", () => {
 
         expect(details).toEqual({ logFilePath: "/logs/photosphere.log", logHeader: "header" });
         expect(ziggy.invoked).toEqual([{ name: 'get-log-details', data: null }]);
-    });
-});
-
-describe("rendererLogMessageToJson", () => {
-    test("leaves out the fields that have no value", () => {
-        expect(rendererLogMessageToJson({ level: 'info', message: "hello" })).toEqual({ level: 'info', message: "hello" });
-    });
-
-    test("keeps the error text of an exception", () => {
-        expect(rendererLogMessageToJson({ level: 'exception', message: "failed", error: "stack" })).toEqual({ level: 'exception', message: "failed", error: "stack" });
-    });
-
-    test("keeps the tool output, leaving out the stream that has none", () => {
-        expect(rendererLogMessageToJson({ level: 'tool', message: "ffmpeg", toolData: { stderr: "warning" } })).toEqual({ level: 'tool', message: "ffmpeg", toolData: { stderr: "warning" } });
     });
 });
 

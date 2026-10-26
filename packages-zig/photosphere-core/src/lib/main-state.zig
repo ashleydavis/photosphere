@@ -17,6 +17,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
+const log = &utils.log.log;
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
 const media_tools = @import("media-tools-zig");
@@ -24,7 +25,7 @@ const node_utils = @import("node-utils-zig");
 const storage = @import("storage-zig");
 const config = @import("config-zig");
 const environment = @import("environment.zig");
-const file_logger = @import("file-logger.zig");
+const tools = @import("tools-zig");
 const background_work = @import("background-work.zig");
 const mcp_server = @import("mcp-server.zig");
 const single_instance = @import("single-instance.zig");
@@ -178,40 +179,31 @@ pub const MainState = struct {
     stopping: bool,
     // The environment read from the process, which this thread reads, or null when the thread already had one. Owned.
     environment: ?*std.process.Environ.Map,
-    // The tools built into the program (ImageMagick and FFmpeg), started before the file logger and stopped after it. Owned.
+    // The tools built into the program (ImageMagick and FFmpeg). Owned.
     media_tools: *media_tools.MediaTools,
-    // The file logger (`fileLogger`), made first when the state is made and closed last when the core is destroyed. It is the main
-    // thread's log. Owned.
-    logger: *file_logger.FileLogger,
 
     //
     // Makes the state and starts the periodic sync, which runs for the life of the app. It runs in onCreate, on the main thread, before
-    // any message or task can reach the app, and logs to the file logger meanwhile. The allocator is the state's own (see
+    // any message or task can reach the app, and logs to the file log Ziggy started meanwhile. The allocator is the state's own (see
     // stateAllocator), because the state lives for as long as the main thread.
     //
     pub fn create(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!*MainState {
         // A core a native app hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig).
         const process_environment = try environment.adoptProcessEnvironment(allocator);
         errdefer freeEnvironment(allocator, process_environment);
-        // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (each makes its own runner of them)
-        // and for the file logger's header, which requests their versions.
+        try logStarting(allocator);
+        // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (each makes its own runner of them).
         const media = try allocator.create(media_tools.MediaTools);
         errdefer allocator.destroy(media);
         media.* = try media_tools.MediaTools.init();
         errdefer media.deinit();
-        // The file logger is made first so everything after it is logged. It is the main thread's log, which startFileLogger sets.
-        const logger = try startFileLogger(allocator, io, media.runner());
-        errdefer {
-            utils.log.setLog(null);
-            logger.deinit();
-        }
+        try logToolVersions(allocator, io, media.runner());
         utils.console.log("Worker pool initialized");
         const state = try allocator.create(MainState);
         errdefer allocator.destroy(state);
         state.* = .{
             .environment = process_environment,
             .media_tools = media,
-            .logger = logger,
             .is_database_open = false,
             .current_database_path = null,
             .sync_allowed = false,
@@ -285,14 +277,7 @@ pub const MainState = struct {
             services.cancelTasks(io, allocator, node_api.auto_import_desktop.AUTO_IMPORT_TASK_SOURCE);
         }
         clearTimer(timers, &self.sync_debounce_timer);
-        self.logger.handleWorkerLogMessage(.{
-            .level = .info,
-            .message = "Photosphere Desktop shutting down...",
-            .@"error" = null,
-            .tool_data = null,
-        }, "Main") catch |err| {
-            utils.log.log.exception("Could not log that the app is shutting down", err);
-        };
+        log.info("Photosphere Desktop shutting down...");
     }
 
     //
@@ -360,7 +345,7 @@ pub const MainState = struct {
             .context = &self.background_pass_targets[index],
             .function = backgroundPassDue,
         }, gap_ms) catch |err| {
-            utils.log.log.exception("Error setting the timer of a background pass", err);
+            log.exception("Error setting the timer of a background pass", err);
             return;
         };
     }
@@ -376,7 +361,7 @@ pub const MainState = struct {
             return;
         }
         self.queueBackgroundPass(services, io, allocator, pass) catch |err| {
-            utils.log.log.exception("Error queuing a background pass", err);
+            log.exception("Error queuing a background pass", err);
             self.scheduleBackgroundPass(timers, io, pass, background_work.FALLBACK_PAUSE_MS);
             return;
         };
@@ -435,8 +420,8 @@ pub const MainState = struct {
     }
 
     //
-    // Releases everything the state owns, after the workers have stopped, with the allocator it was made with. The file logger is closed
-    // last to capture all shutdown logs.
+    // Releases everything the state owns, after the workers have stopped, with the allocator it was made with. Ziggy stops the file log
+    // after this, so the lines logged here are in it.
     //
     pub fn destroy(self: *MainState, io: std.Io, allocator: std.mem.Allocator) void {
         freeOwned(allocator, &self.current_database_path);
@@ -454,9 +439,6 @@ pub const MainState = struct {
         if (self.single_instance) |*instance| {
             instance.release(io);
         }
-        // The file logger is the main thread's log, so the main thread is given its console back before the logger goes.
-        utils.log.setLog(null);
-        self.logger.deinit();
         self.media_tools.deinit();
         allocator.destroy(self.media_tools);
         freeEnvironment(allocator, self.environment);
@@ -494,7 +476,7 @@ pub const MainState = struct {
     // Schedules a debounced sync after the last edit notification. Resets the debounce timer if called again before it fires.
     //
     pub fn scheduleSync(self: *MainState, timers: Timers, io: std.Io) !void {
-        utils.log.log.info("Sync debounce triggered");
+        log.info("Sync debounce triggered");
         clearTimer(timers, &self.sync_debounce_timer);
         self.sync_debounce_timer = try timers.setTimeout(io, .{
             .context = self,
@@ -544,7 +526,7 @@ pub const MainState = struct {
         const database_path = try arena.dupe(u8, self.current_database_path.?);
         self.is_sync_running = true;
         errdefer self.syncStopped();
-        utils.log.log.info(try std.fmt.allocPrint(arena, "Queuing sync task for \"{s}\"", .{database_path}));
+        log.info(try std.fmt.allocPrint(arena, "Queuing sync task for \"{s}\"", .{database_path}));
         // No cancel source: the page lists this job but must not be able to stop it, because syncing is switched off from Settings and
         // a sync cancelled from a list would start again on the next timer anyway.
         const job_id = try std.mem.concat(arena, u8, &.{ "sync:", database_path });
@@ -583,7 +565,7 @@ pub const MainState = struct {
             return utils.errors.throwError("REST API failed to start: {s}", .{utils.errors.errorMessage(err)});
         };
         self.asset_server = server;
-        utils.log.log.info(try std.fmt.allocPrint(arena, "REST API initialized on port {d}", .{server.port}));
+        log.info(try std.fmt.allocPrint(arena, "REST API initialized on port {d}", .{server.port}));
         return server.port;
     }
 
@@ -614,7 +596,7 @@ pub const MainState = struct {
                 .denied => {
                     var arena_state = std.heap.ArenaAllocator.init(allocator);
                     defer arena_state.deinit();
-                    utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock denied (pid={d}, packaged={s}); quitting", .{ pid, packaged }));
+                    log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock denied (pid={d}, packaged={s}); quitting", .{ pid, packaged }));
                     services.quit(io, arena_state.allocator());
                     return;
                 },
@@ -622,7 +604,7 @@ pub const MainState = struct {
         }
         var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
-        utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock acquired (pid={d}, packaged={s})", .{ pid, packaged }));
+        log.event(try std.fmt.allocPrint(arena_state.allocator(), "Single instance lock acquired (pid={d}, packaged={s})", .{ pid, packaged }));
     }
 
     //
@@ -638,7 +620,7 @@ pub const MainState = struct {
         }
         var arena_state = std.heap.ArenaAllocator.init(allocator);
         defer arena_state.deinit();
-        utils.log.log.event(try std.fmt.allocPrint(arena_state.allocator(), "Second-instance signal received by pid={d}", .{storage.storage.processId()}));
+        log.event(try std.fmt.allocPrint(arena_state.allocator(), "Second-instance signal received by pid={d}", .{storage.storage.processId()}));
         services.menuAction(io, arena_state.allocator(), "focus-window");
     }
 
@@ -697,14 +679,14 @@ pub const MainState = struct {
             .context = self,
             .function = autoImportCheckDue,
         }, self.auto_import_check_ms);
-        utils.log.log.event("Main window created");
+        log.event("Main window created");
         // Automatic import picks up where it left off, so a machine that was backing photos up before it was shut down carries on
         // without the user having to open anything.
         try self.enqueueEnsureAutoImportTask(services, io, allocator, false);
         // A phone has no MCP server. A server that cannot start is not worth stopping the app for, so the app carries on without it.
         if (builtin.os.tag != .ios and !builtin.abi.isAndroid()) {
             self.startMcpServer(services, io, allocator) catch |err| {
-                utils.log.log.exception("MCP server failed to start, continuing without it", err);
+                log.exception("MCP server failed to start, continuing without it", err);
             };
         }
     }
@@ -819,7 +801,7 @@ fn syncDebounceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Ti
     const state: *MainState = @ptrCast(@alignCast(context.?));
     state.sync_debounce_timer = null;
     state.enqueueSyncTask(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
-        utils.log.log.exception("Error queuing a sync task", err);
+        log.exception("Error queuing a sync task", err);
     };
 }
 
@@ -829,7 +811,7 @@ fn syncDebounceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Ti
 fn syncTimerDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
     state.enqueueSyncTask(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
-        utils.log.log.exception("Error queuing a sync task", err);
+        log.exception("Error queuing a sync task", err);
     };
 }
 
@@ -839,7 +821,7 @@ fn syncTimerDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timer
 fn autoImportCheckDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
     state.enqueueEnsureAutoImportTask(ziggy.core.handlerServicesOf(services), io, stateAllocator(), true) catch |err| {
-        utils.log.log.exception("Error queuing the check that automatic import is running", err);
+        log.exception("Error queuing the check that automatic import is running", err);
     };
 }
 
@@ -849,7 +831,7 @@ fn autoImportCheckDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _:
 fn singleInstanceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
     state.checkSecondInstance(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
-        utils.log.log.exception("Error looking for a second instance of the app", err);
+        log.exception("Error looking for a second instance of the app", err);
     };
 }
 //
@@ -875,7 +857,7 @@ pub fn registerMediaSources(context: ziggy.task_queue.types.ITaskContext) anyerr
 
 //
 // Makes the main process's state when Ziggy creates the core, on the core's main thread, before any message or task can reach the app.
-// The file logger is the main thread's log from then on. The state is made with the state's allocator, not the arena Ziggy gives.
+// Ziggy has started the file log by then. The state is made with the state's allocator, not the arena Ziggy gives.
 //
 pub fn onCreate(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!void {
     _ = allocator;
@@ -903,37 +885,56 @@ pub fn onDestroy(services: HandlerServices, timers: Timers, io: std.Io, allocato
 }
 
 //
-// Makes the file logger and installs it as the log of the calling thread, then logs that the app is starting. The
-// logs are in the `logs` folder of PHOTOSPHERE_LOG_DIR, or of `photosphere` in the operating system's temporary folder when it is not
-// set.
+// Logs, as the first lines of the run, that the app is starting and which instance this is. A build that has been given a version is
+// the packaged one.
 //
-// A build that has been given a version is the packaged one.
-//
-fn startFileLogger(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) !*file_logger.FileLogger {
-    var log_root: []const u8 = "";
-    if (node_utils.process_env.getEnv("PHOTOSPHERE_LOG_DIR")) |directory| {
-        log_root = directory;
-    }
-    var tmp_root: ?[]const u8 = null;
-    defer if (tmp_root) |text| allocator.free(text);
-    if (log_root.len == 0) {
-        tmp_root = try std.fs.path.join(allocator, &.{ try node_utils.fs.osTmpDir(allocator), "photosphere" });
-        log_root = tmp_root.?;
-    }
-    const logs_dir = try std.fs.path.join(allocator, &.{ log_root, "logs" });
-    defer allocator.free(logs_dir);
-    const logger = try file_logger.FileLogger.init(allocator, io, tool_runner, logs_dir, config.version);
-    errdefer logger.deinit();
-    utils.log.setLog(logger.ilog());
-    try logger.handleWorkerLogMessage(.{
-        .level = .info,
-        .message = "Photosphere Desktop starting...",
-        .@"error" = null,
-        .tool_data = null,
-    }, "Main");
+fn logStarting(allocator: std.mem.Allocator) !void {
+    log.info("Photosphere Desktop starting...");
     const packaged = !std.mem.eql(u8, config.version, "dev");
     const started = try std.fmt.allocPrint(allocator, "Instance started (pid={d}, packaged={s})", .{ storage.storage.processId(), if (packaged) "true" else "false" });
     defer allocator.free(started);
-    utils.log.log.event(started);
-    return logger;
+    log.event(started);
+}
+
+//
+// Logs the versions of the tools built into the program (ImageMagick, FFmpeg and FFprobe), each on a line of its own.
+//
+fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) !void {
+    var arena_state = std.heap.ArenaAllocator.init(allocator);
+    defer arena_state.deinit();
+    for (try toolVersionLines(arena_state.allocator(), io, tool_runner)) |line| {
+        log.info(line);
+    }
+}
+
+//
+// The lines the log gives for the tools the app runs: ImageMagick, FFmpeg and FFprobe, each with its version, or "not
+// found". ImageMagick's check failing is written into its line rather than stopping the app. Allocated with the arena.
+//
+fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const []const u8 {
+    const image_magick_line = blk: {
+        const status = tools.Image.verifyImageMagick(arena, io, tool_runner) catch {
+            break :blk "ImageMagick: error checking version";
+        };
+        if (!status.available) {
+            break :blk "ImageMagick: not found";
+        }
+        break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
+    };
+    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, tool_runner);
+    const ffmpeg_line = if (ffmpeg_status.available)
+        try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
+    else
+        "FFmpeg: not found";
+    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, tool_runner);
+    const ffprobe_line = if (ffprobe_status.available)
+        try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
+    else
+        "FFprobe: not found";
+    return try arena.dupe([]const u8, &.{
+        "--- Tool Versions ---",
+        image_magick_line,
+        ffmpeg_line,
+        ffprobe_line,
+    });
 }

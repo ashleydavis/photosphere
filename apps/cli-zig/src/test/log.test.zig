@@ -4,7 +4,8 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
 const helpers = @import("test-helpers.zig");
-const Log = cli.log.Log;
+const ConsoleLog = utils.log.ConsoleLog;
+const FileLog = utils.file_log.FileLog;
 
 //
 // Captured console output.
@@ -17,7 +18,7 @@ const Capture = struct {
     stderr: std.Io.Writer.Allocating,
 };
 
-test "Log writes each kind of message to the right stream" {
+test "the CLI's console log writes each kind of message to the right stream" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -25,7 +26,12 @@ test "Log writes each kind of message to the right stream" {
     utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
     defer utils.console.setCapture(null, null);
 
-    var quiet = Log.init(.{});
+    var quietLog: ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
+    const quiet = quietLog.ilog();
     quiet.info("info");
     quiet.verbose("verbose");
     quiet.debug("debug");
@@ -39,7 +45,12 @@ test "Log writes each kind of message to the right stream" {
 
     capture.stdout.clearRetainingCapacity();
     capture.stderr.clearRetainingCapacity();
-    var loud = Log.init(.{ .verbose = true, .debug = true, .tools = true });
+    var loudLog: ConsoleLog = .{
+        .verbose_enabled = true,
+        .debug_enabled = true,
+        .tools_enabled = true,
+    };
+    const loud = loudLog.ilog();
     loud.verbose("verbose");
     loud.debug("debug");
     loud.tool("magick", .{ .stdout = "out", .stderr = "err" });
@@ -47,11 +58,11 @@ test "Log writes each kind of message to the right stream" {
     try std.testing.expect(loud.verboseEnabled());
     try std.testing.expectEqualStrings("verbose\n== magick stdout ==\nout\n== magick stderr ==\nerr\n", capture.stdout.written());
     try std.testing.expectEqualStrings("debug\nSomething failed\nError: Cause\n", capture.stderr.written());
-    const details = try loud.ilog().getLogDetails(allocator, std.testing.io);
+    const details = try loud.getLogDetails(allocator, std.testing.io);
     try std.testing.expect(details.logFilePath == null);
 }
 
-test "Log writes a long tool output, event and error chain whole, as the template strings do" {
+test "the CLI's console log writes a long tool output, event and error chain whole, as the template strings do" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -61,7 +72,12 @@ test "Log writes a long tool output, event and error chain whole, as the templat
 
     const longText = try allocator.alloc(u8, 20000);
     @memset(longText, 'x');
-    var loud = Log.init(.{ .tools = true });
+    var loudLog: ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = true,
+    };
+    const loud = loudLog.ilog();
     loud.tool("ffprobe", .{ .stdout = longText, .stderr = null });
     loud.event(longText);
     try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "== ffprobe stdout ==\n", longText, "\n[EVENT] ", longText, "\n" }), capture.stdout.written());
@@ -101,10 +117,11 @@ test "configureLog installs the file logger unless file logging is disabled" {
     try std.testing.expect(details.logFilePath == null);
 
     try cli.log.configureLog(allocator, io, mediaTools.runner(), .{ .verbose = true });
-    const fileLogger = cli.log.getFileLogger().?;
+    const fileLogger = FileLog.fromILog(utils.log.currentLog()).?;
     utils.log.log.info("to both");
     try std.testing.expect(utils.log.log.verboseEnabled());
-    fileLogger.close();
+    try fileLogger.close(io);
+    try std.testing.expect(std.mem.startsWith(u8, std.fs.path.basename(fileLogger.getLogFilePath()), "psi-"));
     const content = try std.Io.Dir.cwd().readFileAlloc(io, fileLogger.getLogFilePath(), allocator, .unlimited);
     try std.testing.expect(std.mem.indexOf(u8, content, "\nCommand: unknown\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, content, "] [INFO] to both\n") != null);

@@ -133,7 +133,7 @@ fn throwRootCause() errors.ThrownError!void {
     return errors.throwError("root cause", .{});
 }
 
-test "default log writes info and event to stdout and error, warn and exception to stderr" {
+test "default log writes info and event to stdout, error, warn and exception to stderr and leaves out verbose, debug and tool lines" {
     var stdout_capture = std.Io.Writer.Allocating.init(std.testing.allocator);
     defer stdout_capture.deinit();
     var stderr_capture = std.Io.Writer.Allocating.init(std.testing.allocator);
@@ -153,7 +153,7 @@ test "default log writes info and event to stdout and error, warn and exception 
         log.exception("Failed.", err);
     };
 
-    try std.testing.expectEqualStrings("info message\ndebug message\n[EVENT] something happened\n", stdout_capture.written());
+    try std.testing.expectEqualStrings("info message\n[EVENT] something happened\n", stdout_capture.written());
     try std.testing.expectEqualStrings("error message\nwarn message\nFailed.\nError: root cause\n", stderr_capture.written());
     try std.testing.expect(!log.verboseEnabled());
 }
@@ -199,7 +199,11 @@ test "ilog of a console log gives a log that writes to the console" {
     defer stdout_capture.deinit();
     console.setCapture(&stdout_capture.writer, null);
     defer console.setCapture(null, null);
-    var consoleLog: utils.log.ConsoleLog = .{ .verbose_enabled = false };
+    var consoleLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     const log = consoleLog.ilog();
     log.info("from ilog");
     try std.testing.expectEqualStrings("from ilog\n", stdout_capture.written());

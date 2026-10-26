@@ -5,7 +5,7 @@
 // Shared rather than derived where it is needed, because several things turn on it and they have to
 // agree: main.tsx patches the console to forward page output to the core, and the renderer log stops
 // writing to the console when it does, so that a message forwarded by the patch is not also sent on
-// the renderer-log channel and written to app.log twice.
+// Ziggy's log and written to app.log twice.
 //
 export function isTestMode(): boolean {
     return typeof window !== 'undefined'

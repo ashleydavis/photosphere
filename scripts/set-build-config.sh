@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Writes packages/config/src/index.ts, the file the app reads its version and build metadata from, and
 # stamps the same values into the two Zig config files (packages-zig/config-zig/src/index.zig and
-# apps/cli-zig/src/lib/config.zig).
+# apps/cli-zig/src/lib/config.zig), and the version into app.zon.
 # The version is compiled into every frontend at build time, so this runs before a build, not after.
 #
 # The checked-in file says "dev", which is what a local build reports. A build meant for anyone else
@@ -112,6 +112,16 @@ stamp_zig_config() {
 for ZIG_CONFIG_FILE in "${ZIG_CONFIG_FILES[@]}"; do
     stamp_zig_config "$ZIG_CONFIG_FILE"
 done
+
+# The version of app.zon, which Ziggy writes in the app's log files. Only its version line is rewritten, through a temporary file as
+# above, and the script fails when it is not there afterwards.
+APP_ZON_FILE="$REPO_DIR/app.zon"
+sed -e 's|^    \.version = ".*",$|    .version = "'"$VERSION"'",|' "$APP_ZON_FILE" > "$APP_ZON_FILE.stamp"
+mv "$APP_ZON_FILE.stamp" "$APP_ZON_FILE"
+if ! grep -qxF -- '    .version = "'"$VERSION"'",' "$APP_ZON_FILE"; then
+    echo "ERROR: $APP_ZON_FILE has no .version line for $VERSION after stamping." >&2
+    exit 1
+fi
 
 echo "Build config set to version $VERSION, commit $COMMIT_HASH, nightly $IS_NIGHTLY." >&2
 

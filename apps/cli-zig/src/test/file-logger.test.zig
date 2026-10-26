@@ -40,7 +40,11 @@ test "the file logger writes the headers, entries and footers" {
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog = cli.log.Log.init(.{});
+    var consoleLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify --db x");
     defer node_utils.termination.clearTerminationCallbacks();
 
@@ -116,7 +120,11 @@ test "the error log footer is only written when errors were logged" {
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog = cli.log.Log.init(.{ .verbose = true });
+    var consoleLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = true,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "unknown");
     defer node_utils.termination.clearTerminationCallbacks();
     try std.testing.expect(logger.verboseEnabled());
@@ -147,7 +155,11 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog = cli.log.Log.init(.{});
+    var consoleLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     defer logger.close();
@@ -178,7 +190,11 @@ test "the log directory is joined as path.join joins it, and a long exception is
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog = cli.log.Log.init(.{});
+    var consoleLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     try std.testing.expect(std.mem.startsWith(u8, logger.getLogFilePath(), try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "logs", "psi-" })));
@@ -225,7 +241,11 @@ test "the log header names the versions of the ImageMagick and FFmpeg built into
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog = cli.log.Log.init(.{});
+    var consoleLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     logger.close();

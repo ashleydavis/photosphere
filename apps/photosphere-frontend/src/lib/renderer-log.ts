@@ -1,8 +1,8 @@
 import type { ILog, ILogDetails } from "utils";
-import type { IJsonObject, IZiggyBridge } from "ziggy";
+import type { IZiggyBridge } from "ziggy";
 
 //
-// Log levels the core's renderer-log channel accepts.
+// Log levels Ziggy's log accepts.
 //
 export type LogLevel = 'info' | 'verbose' | 'error' | 'exception' | 'warn' | 'debug' | 'tool' | 'event';
 
@@ -18,7 +18,7 @@ export interface IRendererLogToolData {
 }
 
 //
-// A log message the page sends to the core on the renderer-log channel.
+// A log message the page sends to the core's log.
 //
 export interface IRendererLogMessage {
     // The log level.
@@ -32,30 +32,6 @@ export interface IRendererLogMessage {
 
     // External tool output, populated for the 'tool' level.
     toolData?: IRendererLogToolData;
-}
-
-//
-// Converts a log message to the JSON object the bridge sends, leaving out every field that has no value.
-//
-export function rendererLogMessageToJson(logMessage: IRendererLogMessage): IJsonObject {
-    const json: IJsonObject = {
-        level: logMessage.level,
-        message: logMessage.message,
-    };
-    if (logMessage.error !== undefined) {
-        json.error = logMessage.error;
-    }
-    if (logMessage.toolData !== undefined) {
-        const toolData: IJsonObject = {};
-        if (logMessage.toolData.stdout !== undefined) {
-            toolData.stdout = logMessage.toolData.stdout;
-        }
-        if (logMessage.toolData.stderr !== undefined) {
-            toolData.stderr = logMessage.toolData.stderr;
-        }
-        json.toolData = toolData;
-    }
-    return json;
 }
 
 //
@@ -75,10 +51,10 @@ export function errorLogText(error: Error): string {
 }
 
 //
-// Sends a log message to the core, which writes it to the log file.
+// Sends a log message to the core with Ziggy's log, which writes it to the log files tagged Frontend.
 //
 export function sendRendererLog(ziggy: IZiggyBridge, logMessage: IRendererLogMessage): void {
-    ziggy.send("renderer-log", rendererLogMessageToJson(logMessage));
+    ziggy.log(logMessage.level, logMessage.message, logMessage.error, logMessage.toolData);
 }
 
 //

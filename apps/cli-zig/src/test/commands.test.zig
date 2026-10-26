@@ -754,7 +754,7 @@ test "repair without a source or an origin fails" {
     result.stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
     try std.testing.expect(std.mem.startsWith(u8, result.stderr, "Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>).\n"));
-    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "\nErrors, warnings and exceptions were logged to: "));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
 }
 
@@ -946,7 +946,7 @@ const upgrade_warnings_posix =
 // Removes the line naming the error log (its name has the time in it).
 //
 fn withoutErrorLogLine(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
-    const marker = "Errors, warnings, and exceptions were logged to: ";
+    const marker = "Errors, warnings and exceptions were logged to: ";
     const start = std.mem.indexOf(u8, text, marker) orelse return text;
     const end = (std.mem.indexOfScalarPos(u8, text, start, '\n') orelse text.len - 1) + 1;
     return std.mem.concat(allocator, u8, &.{ text[0..start], text[end..] });
@@ -1086,7 +1086,7 @@ test "sync refuses an encrypted destination without a key" {
         \\    psi sync --dest-key <full or relative path to key> --dest <root>/dest
         \\
     , result.stderr);
-    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/dest\n\n\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/dest\n\n\nErrors, warnings and exceptions were logged to: "));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
 }
 
@@ -1138,7 +1138,7 @@ test "sync refuses databases that are not related" {
         \\The databases are not related to each other.
         \\
     , result.stderr);
-    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/other\n\n\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "Starting database sync operation...\n  Source:    <root>/db\n  Target:    <root>/other\n\n\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n\nErrors, warnings and exceptions were logged to: "));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
 }
 
@@ -1248,6 +1248,9 @@ test "consolidate joins an unrelated remote" {
     // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it.
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, other, "--yes" }), root, "<root>");
     result.stderr = try maskLockHolder(allocator, result.stderr);
+    // The worker's warning is written to the error log file too, so the run ends naming it, after a blank line.
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\n\nErrors, warnings and exceptions were logged to: <root>/tmp/photosphere/logs/psi-") != null);
+    result.stdout = try withoutErrorLogLine(allocator, result.stdout);
     try expectResult(result, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "other"),
         \\The remote holds a different database, so the two are being consolidated.
         \\Content the remote already has is not pushed a second time.
@@ -1261,6 +1264,7 @@ test "consolidate joins an unrelated remote" {
         \\Next steps:
         \\    # Bring down everything the remote has that this database does not
         \\    psi sync --db <root>/db
+        \\
         \\
     }), "[W1:<task>] Failed to acquire write lock after 3 attempts. Lock is currently held by <holder>).\n", 0);
 
@@ -1313,7 +1317,7 @@ test "consolidate reports a remote it cannot lock" {
         \\
         \\[W1:<task>] Consolidating "<root>/db" into "<root>/locked".
         \\
-        \\Errors, warnings, and exceptions were logged to: 
+        \\Errors, warnings and exceptions were logged to: 
     });
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, expectedStart));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
@@ -1775,7 +1779,7 @@ fn expectEncryptFailure(allocator: std.mem.Allocator, result: helpers.CliResult,
     const stdout = try maskRetainedSessionDir(allocator, result.stdout);
     try std.testing.expectEqualStrings(expectedStderr, result.stderr);
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
-    try std.testing.expect(std.mem.startsWith(u8, stdout, "Temporary files retained for inspection: <session dir>\n\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.startsWith(u8, stdout, "Temporary files retained for inspection: <session dir>\n\nErrors, warnings and exceptions were logged to: "));
     try std.testing.expect(std.mem.endsWith(u8, stdout, "-errors.log\n"));
 }
 

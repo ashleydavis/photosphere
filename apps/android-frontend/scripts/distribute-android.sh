@@ -57,13 +57,14 @@ fi
 RELEASE_NOTES="$(cd "$REPO_DIR" && bash ./scripts/release-notes.sh --limit 20)"
 
 # The version the app reports lives in tracked files that a local build leaves saying "dev" (the
-# TypeScript config and the two Zig configs that set-build-config.sh also stamps), so they are
+# TypeScript config, the two Zig configs and app.zon, which set-build-config.sh also stamps), so they are
 # rewritten for the build and put back afterwards, however the build ends. The backup names are
 # unique so a second distribute running beside this one cannot restore the wrong contents.
 BUILD_CONFIGS=(
     "$REPO_DIR/packages/config/src/index.ts"
     "$REPO_DIR/packages-zig/config-zig/src/index.zig"
     "$REPO_DIR/apps/cli-zig/src/lib/config.zig"
+    "$REPO_DIR/app.zon"
 )
 BUILD_CONFIG_BACKUPS=()
 mkdir -p "$REPO_DIR/tmp"

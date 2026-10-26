@@ -178,7 +178,11 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
         var stderr_capture = std.Io.Writer.Allocating.init(allocator);
         var stdout_capture = std.Io.Writer.Allocating.init(allocator);
         console_capture.captureConsole(&stdout_capture.writer, &stderr_capture.writer);
-        var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
+        var verboseLog: utils.log.ConsoleLog = .{
+            .verbose_enabled = true,
+            .debug_enabled = false,
+            .tools_enabled = false,
+        };
         var verboseVtable = verboseLog.ilog().vtable.*;
         verboseVtable.verbose = verboseToStdout;
         const previousLog = utils.log.currentLog();

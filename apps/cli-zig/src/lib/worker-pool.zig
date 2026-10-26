@@ -558,10 +558,13 @@ pub const WorkerPoolBun = struct {
         const arena = arena_state.allocator();
         // The worker gets a copy of this thread's environment as its own, as a Bun worker is given process.env.
         const environment: ?std.json.Value = if (ziggy.task_queue.utils.process_env.getEnvironMap()) |map| try ziggy.worker.environmentJson(arena, map) else null;
+        // A file log writes every line, whatever its console shows, so with one on this thread the worker sends its verbose and tool
+        // lines too, and the file log's console options decide what the console shows.
+        const fileLogInstalled = ziggy.task_queue.utils.file_log.FileLog.fromILog(ziggy.task_queue.utils.log.currentLog()) != null;
         const options: ziggy.worker.IWorkerOptions = .{
             .workerId = workerId,
-            .verbose = self.workerOptions.verbose orelse false,
-            .tools = self.workerOptions.tools orelse false,
+            .verbose = fileLogInstalled or (self.workerOptions.verbose orelse false),
+            .tools = fileLogInstalled or (self.workerOptions.tools orelse false),
             .sessionId = self.workerOptions.sessionId orelse "",
             .maxConcurrentChildTasks = MAX_CONCURRENT_CHILD_TASKS,
             .environment = environment,
@@ -895,36 +898,16 @@ pub const WorkerPoolBun = struct {
     }
 
     //
-    // Writes a worker's log line to the output, prefixed with the worker and the task it is running, as WorkerLogBun writes it. The
-    // worker leaves out the verbose and tool lines its options turn off. The text is the worker's log message (IWorkerLogMessage), and
-    // the task id is that of the task the worker is running, or null when it is between tasks.
+    // Writes a worker's log line to the main thread's log with Ziggy's `worker_pool.writeLog`, tagged with the worker and the task it is
+    // running (`W<id>:<task id>`, or `W<id>` between tasks), as WorkerLogBun prefixes it. The main thread's log decides what reaches
+    // the console, and a file log writes every line to its files. The text is the worker's log message (IWorkerLogMessage).
     //
     pub fn writeWorkerLog(arena: std.mem.Allocator, workerId: u32, taskId: ?[]const u8, text: []const u8) void {
-        const message = worker_messages.decode(worker_messages.IWorkerLogMessage, arena, text) catch |err| {
-            std.debug.panic("could not read a worker's log message ({s}): {s}", .{ @errorName(err), text });
-        };
-        switch (message.level) {
-            .verbose, .info => writeOutputLine(prefixMessage(arena, workerId, taskId, message.message)),
-            .@"error", .warn => writeErrorLine(prefixMessage(arena, workerId, taskId, message.message)),
-            .exception => {
-                writeErrorLine(prefixMessage(arena, workerId, taskId, message.message));
-                if (message.@"error") |chain| {
-                    writeErrorLine(chain);
-                }
-            },
-            .debug => {},
-            .tool => {
-                const data = message.toolData orelse return;
-                // An empty output is not written (TypeScript: `if (data.stdout)`, which an empty string fails).
-                if (data.stdout) |stdout| if (stdout.len > 0) {
-                    writeOutputLine(prefixMessage(arena, workerId, taskId, std.fmt.allocPrint(arena, "== {s} stdout ==\n{s}", .{ message.message, stdout }) catch @panic("out of memory writing a log line")));
-                };
-                if (data.stderr) |stderr| if (stderr.len > 0) {
-                    writeOutputLine(prefixMessage(arena, workerId, taskId, std.fmt.allocPrint(arena, "== {s} stderr ==\n{s}", .{ message.message, stderr }) catch @panic("out of memory writing a log line")));
-                };
-            },
-            .event => writeOutputLine(prefixMessage(arena, workerId, taskId, std.fmt.allocPrint(arena, "[EVENT] {s}", .{message.message}) catch @panic("out of memory writing a log line"))),
-        }
+        const source = if (taskId) |id|
+            std.fmt.allocPrint(arena, "W{d}:{s}", .{ workerId, id }) catch @panic("out of memory writing a log line")
+        else
+            std.fmt.allocPrint(arena, "W{d}", .{workerId}) catch @panic("out of memory writing a log line");
+        ziggy.worker_pool.writeLog(arena, source, text);
     }
 
     //

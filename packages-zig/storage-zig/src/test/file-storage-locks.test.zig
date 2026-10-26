@@ -231,6 +231,14 @@ const LockAttempt = struct {
 };
 
 //
+// ILog.verbose for a log that asks for verbose lines and writes none of them.
+//
+fn ignoreVerbose(ptr: *anyopaque, message: []const u8) void {
+    _ = ptr;
+    _ = message;
+}
+
+//
 // Runs every attempt at once, each on a thread of its own with its own storage instance of the directory, and records whether each
 // won.
 //
@@ -710,9 +718,18 @@ test "every step of taking a lock is written to the verbose log, and a lock that
     const io = std.testing.io;
 
     // A log that asks for the [LOCK] lines and writes nothing.
-    var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
+    var verboseLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = true,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
+    var quietVtable = verboseLog.ilog().vtable.*;
+    quietVtable.verbose = ignoreVerbose;
     const previousLog = utils.log.currentLog();
-    utils.log.setLog(verboseLog.ilog());
+    utils.log.setLog(.{
+        .ptr = &verboseLog,
+        .vtable = &quietVtable,
+    });
     defer utils.log.setLog(previousLog);
 
     // Taken, then refused while held.

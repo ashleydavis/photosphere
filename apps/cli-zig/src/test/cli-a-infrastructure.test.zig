@@ -192,7 +192,12 @@ test "the console log writes no tool output for an empty string" {
     startCapture(arena.allocator(), &capture);
     defer utils.console.setCapture(null, null);
 
-    var log = cli.log.Log.init(.{ .tools = true });
+    var toolsLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = true,
+    };
+    const log = toolsLog.ilog();
     log.tool("magick", .{ .stdout = "", .stderr = "" });
     log.tool("magick", .{ .stdout = null, .stderr = null });
 

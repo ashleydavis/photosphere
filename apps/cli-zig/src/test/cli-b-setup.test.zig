@@ -78,6 +78,9 @@ const ILogEnvironment = struct {
     // The logger under test.
     logger: *FileLogger,
 
+    // The console log the logger passes every line on to, kept here because the logger holds a pointer to it.
+    console_log: utils.log.ConsoleLog,
+
     // The ImageMagick and FFmpeg built into the program, whose versions the logger's headers give. The environment does
     // not move once made, so their runner stays valid.
     mediaTools: media_tools.MediaTools,
@@ -97,9 +100,13 @@ const ILogEnvironment = struct {
         self.capture = undefined;
         startCapture(&self.capture, allocator);
         cli.process_argv.setArgv(&.{ "psi", "verify", "--db", "x" });
-        var console_log = cli.log.Log.init(.{});
+        self.console_log = .{
+            .verbose_enabled = false,
+            .debug_enabled = false,
+            .tools_enabled = false,
+        };
         self.mediaTools = try media_tools.MediaTools.init();
-        self.logger = try FileLogger.create(allocator, io, self.mediaTools.runner(), console_log.ilog(), "verify --db x");
+        self.logger = try FileLogger.create(allocator, io, self.mediaTools.runner(), self.console_log.ilog(), "verify --db x");
     }
 
     //

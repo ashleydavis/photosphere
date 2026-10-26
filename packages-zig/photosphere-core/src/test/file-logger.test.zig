@@ -359,7 +359,11 @@ test "verboseEnabled is false, and fromILog finds the logger behind its ILog onl
     defer logger.deinit();
     try std.testing.expect(!logger.ilog().verboseEnabled());
     try std.testing.expect(FileLogger.fromILog(logger.ilog()).? == logger);
-    var console_log: utils.log.ConsoleLog = .{ .verbose_enabled = false };
+    var console_log: utils.log.ConsoleLog = .{
+        .verbose_enabled = false,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
     try std.testing.expect(FileLogger.fromILog(console_log.ilog()) == null);
 }
 

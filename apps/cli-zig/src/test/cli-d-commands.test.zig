@@ -389,7 +389,7 @@ test "replicate refuses an encrypted destination whose key is not in the vault" 
 
     try std.testing.expectEqual(@as(u8, 1), result.exitCode);
     try std.testing.expectEqualStrings(replicate_missing_key_error, result.stderr);
-    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "\nErrors, warnings, and exceptions were logged to: "));
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "\nErrors, warnings and exceptions were logged to: "));
     try std.testing.expect(std.mem.endsWith(u8, result.stdout, "-errors.log\nTemporary files retained for inspection: <session dir>\n"));
 }
 

@@ -43,6 +43,14 @@ var shared_storage: CloudStorage = undefined;
 var shared_location: ?[]const u8 = null;
 
 //
+// ILog.verbose for a log that asks for verbose lines and writes none of them.
+//
+fn ignoreVerbose(ptr: *anyopaque, message: []const u8) void {
+    _ = ptr;
+    _ = message;
+}
+
+//
 // Checks the environment and creates the storage, once per test binary. The prefix
 // is unique to this run (the time and a random number), so runs never see each other's files.
 //
@@ -951,9 +959,18 @@ test "CloudStorage Zig: a lock older than the timeout is broken and taken, and t
     const location = try setUp();
 
     // Every [LOCK] line is asked for, and the console log that gets them writes nothing.
-    var verboseLog: utils.log.ConsoleLog = .{ .verbose_enabled = true };
+    var verboseLog: utils.log.ConsoleLog = .{
+        .verbose_enabled = true,
+        .debug_enabled = false,
+        .tools_enabled = false,
+    };
+    var quietVtable = verboseLog.ilog().vtable.*;
+    quietVtable.verbose = ignoreVerbose;
     const previousLog = utils.log.currentLog();
-    utils.log.setLog(verboseLog.ilog());
+    utils.log.setLog(.{
+        .ptr = &verboseLog,
+        .vtable = &quietVtable,
+    });
     defer utils.log.setLog(previousLog);
 
     const lockFile = try pathOf(allocator, &.{ location, "zig-locks", "stale.lock" });

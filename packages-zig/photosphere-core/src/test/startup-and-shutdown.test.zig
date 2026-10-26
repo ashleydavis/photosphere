@@ -3,7 +3,6 @@ const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const support = @import("test-support.zig");
 const main_state = @import("photosphere-core").main_state;
-const file_logger = @import("photosphere-core").file_logger;
 const main_process = @import("photosphere-core").main_process;
 
 const TestApp = support.TestApp;
@@ -59,8 +58,8 @@ test "the core starts a log file in the logs folder of PHOTOSPHERE_LOG_DIR, and 
     const text = try waitForLogLine(std.testing.allocator, &app, "Photosphere Desktop starting...");
     defer std.testing.allocator.free(text);
 
-    try std.testing.expect(std.mem.indexOf(u8, text, "Photosphere Desktop Log") != null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "[Main] Photosphere Desktop starting...") != null);
+    try std.testing.expect(std.mem.startsWith(u8, text, "=" ** 80 ++ "\nPhotosphere\n"));
+    try std.testing.expect(std.mem.indexOf(u8, text, "] [INFO] Photosphere Desktop starting...\n") != null);
 }
 
 test "the core logs that the instance started, with its process id" {
@@ -98,7 +97,7 @@ test "the log is the file logger on the main thread while the core runs" {
 
     try app.onState(@as(u8, 0), struct {
         fn check(_: u8, _: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            try std.testing.expect(file_logger.FileLogger.fromILog(utils.log.currentLog()) != null);
+            try std.testing.expect(utils.file_log.FileLog.fromILog(utils.log.currentLog()) != null);
         }
     }.check);
 }
@@ -120,7 +119,7 @@ test "destroying the core logs that the app is shutting down and ends the log fi
     try std.testing.expect(utils.log.currentLog().vtable == earlier_log.vtable);
     const text = (try readLogFile(std.testing.allocator, &app)).?;
     defer std.testing.allocator.free(text);
-    try std.testing.expect(std.mem.indexOf(u8, text, "[Main] Photosphere Desktop shutting down...") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "] [INFO] Photosphere Desktop shutting down...\n") != null);
     // The footer is the last thing written, after the shutting down line, because the logger is closed last.
     const shutting_down = std.mem.indexOf(u8, text, "Photosphere Desktop shutting down...").?;
     try std.testing.expect(std.mem.indexOf(u8, text[shutting_down..], "--- Log End ---") != null);
@@ -158,4 +157,21 @@ test "a sync that found both sides identical is logged as having nothing to sync
     defer std.testing.allocator.free(text);
 
     try std.testing.expect(std.mem.indexOf(u8, text, "Sync completed: changes synced") == null);
+}
+
+test "the log is headed with Photosphere's title and version from its app.zon, and gives the versions of the tools built into the program after its header" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+
+    const text = try waitForLogLine(std.testing.allocator, &app, "] [INFO] FFprobe: ");
+    defer std.testing.allocator.free(text);
+
+    try std.testing.expect(std.mem.startsWith(u8, text, "=" ** 80 ++ "\nPhotosphere\n"));
+    const start = std.mem.indexOf(u8, text, "--- Log Start ---") orelse return error.NoLogStart;
+    try std.testing.expect(std.mem.indexOf(u8, text[0..start], "\nVersion: ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text[start..], "] [INFO] --- Tool Versions ---\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text[start..], "] [INFO] ImageMagick: ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text[start..], "] [INFO] FFmpeg: ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text[start..], "] [INFO] FFprobe: ") != null);
 }

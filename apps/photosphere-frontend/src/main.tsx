@@ -63,7 +63,7 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 //
-// In test mode, patch console to forward output to the core on the renderer-log channel
+// In test mode, patch console to forward output to the core with Ziggy's log
 // so raw page console output appears in app.log.
 //
 if (testMode) {

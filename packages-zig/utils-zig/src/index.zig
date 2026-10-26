@@ -14,6 +14,7 @@ pub const test_uuid_generator = ziggy_utils.test_uuid_generator;
 pub const wrapped_error = ziggy_utils.wrapped_error;
 pub const fatal_error = @import("lib/fatal-error.zig");
 pub const log = ziggy_utils.log;
+pub const file_log = ziggy_utils.file_log;
 pub const timestamp_provider = ziggy_utils.timestamp_provider;
 pub const errors = ziggy_utils.errors;
 pub const console = ziggy_utils.console;

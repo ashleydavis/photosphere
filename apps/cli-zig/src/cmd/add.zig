@@ -21,7 +21,7 @@ const loadDatabase = init_cmd.loadDatabase;
 const resolveGeocodingApiKey = init_cmd.resolveGeocodingApiKey;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
-const getFileLogger = @import("../lib/log.zig").getFileLogger;
+const FileLog = utils.file_log.FileLog;
 const formatBytes = format.formatBytes;
 const defaultFormatBytesOptions = format.defaultFormatBytesOptions;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
@@ -238,7 +238,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
 
     // If there were failures, tell the user to check the log file
     if (addSummary.filesFailed > 0) {
-        if (getFileLogger()) |fileLogger| {
+        if (FileLog.fromILog(utils.log.currentLog())) |fileLogger| {
             const logFilePath = fileLogger.getLogFilePath();
             log.info("");
             log.info(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F}  {d} file{s} failed. Check the log file for details:", .{ addSummary.filesFailed, if (addSummary.filesFailed == 1) "" else "s" })));

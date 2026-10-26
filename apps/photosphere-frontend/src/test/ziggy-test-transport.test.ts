@@ -138,13 +138,13 @@ describe('createZiggyTestTransport', () => {
         ]);
     });
 
-    test('forwards the driver log lines to the renderer-log message', () => {
+    test('forwards the driver log lines to the log message', () => {
         const ziggy = new FakeZiggy();
         const transport = createZiggyTestTransport(ziggy);
 
         transport.sendLog('warn', 'careful');
 
-        expect(ziggy.sent).toEqual([{ name: 'renderer-log', data: { level: 'warn', message: 'careful' } }]);
+        expect(ziggy.sent).toEqual([{ name: 'log', data: { level: 'warn', message: 'careful' } }]);
     });
 });
 

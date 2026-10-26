@@ -1,12 +1,11 @@
 const std = @import("std");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const file_logger = @import("photosphere-core").file_logger;
 const main_state = @import("photosphere-core").main_state;
 const support = @import("test-support.zig");
 
 const TestApp = support.TestApp;
-const FileLogger = file_logger.FileLogger;
+const FileLogger = utils.file_log.FileLog;
 
 //
 // The file logger a test installs as the main thread's log, and the log it replaced, which the main thread keeps as its own: made,
@@ -65,10 +64,19 @@ const InstalledLogger = struct {
     // state's tools are: ImageMagick keeps one set of state for the whole program, so the logger runs the tools the app already holds.
     //
     fn install(logs_dir: []const u8, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!ILoggerPaths {
-        const logger = try FileLogger.init(main_state.stateAllocator(), main_io, main_state.current().media_tools.runner(), logs_dir, "1.2.3");
-        main_thread_logger = logger;
         main_thread_previous_log = utils.log.currentLog();
-        utils.log.setLog(logger.ilog());
+        const logger = try FileLogger.start(main_state.stateAllocator(), main_io, .{
+            .file_prefix = "photosphere",
+            .title = "Photosphere Desktop Log",
+            .logs_dir = logs_dir,
+            .command = null,
+            .version = "1.2.3",
+            .header_lines = &.{},
+            .verbose = false,
+            .debug = false,
+            .tools = false,
+        });
+        main_thread_logger = logger;
         return .{
             .logFilePath = logger.getLogFilePath(),
             .errorLogFilePath = logger.getErrorLogFilePath(),
@@ -78,13 +86,13 @@ const InstalledLogger = struct {
     //
     // Puts the main thread's log back, closes the logger, frees it and returns whether it logged an error. Runs on the main thread.
     //
-    fn close(_: u8, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io, _: std.mem.Allocator) anyerror!bool {
+    fn close(_: u8, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!bool {
         const logger = main_thread_logger.?;
         main_thread_logger = null;
         utils.log.setLog(main_thread_previous_log);
         main_thread_previous_log = null;
-        defer logger.deinit();
-        try logger.close();
+        defer logger.stop(main_state.stateAllocator(), main_io);
+        try logger.close(main_io);
         return logger.hasLoggedErrors();
     }
 
@@ -108,95 +116,7 @@ const InstalledLogger = struct {
         std.testing.allocator.free(self.log_file_path);
         std.testing.allocator.free(self.error_log_file_path);
     }
-
-    //
-    // Takes the logger out, closes it and reads the log file. The caller frees it.
-    //
-    fn closeAndReadLog(self: *InstalledLogger) ![]u8 {
-        try self.uninstall();
-        return std.Io.Dir.cwd().readFileAlloc(std.testing.io, self.log_file_path, std.testing.allocator, .limited(1024 * 1024));
-    }
 };
-
-test "renderer-log writes the message to the log with the source Renderer, and replies null" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    var installed: InstalledLogger = undefined;
-    try installed.start(&app);
-    defer installed.stop();
-    const allocator = std.testing.allocator;
-    const reply = try app.requestOk("renderer-log", "{\"level\":\"info\",\"message\":\"page says hello\"}");
-    defer allocator.free(reply);
-    try std.testing.expectEqualStrings("null", reply);
-    allocator.free(try app.requestOk("renderer-log", "{\"level\":\"warn\",\"message\":\"page warns\"}"));
-    allocator.free(try app.requestOk("renderer-log", "{\"level\":\"event\",\"message\":\"page event\"}"));
-    const log_text = try installed.closeAndReadLog();
-    defer allocator.free(log_text);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "] [INFO] [Renderer] page says hello\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "] [WARN] [Renderer] page warns\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "] [EVENT] [Renderer] page event\n") != null);
-    try std.testing.expect(installed.logged_errors);
-}
-
-test "renderer-log writes an exception with its stack, and a tool's output" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    var installed: InstalledLogger = undefined;
-    try installed.start(&app);
-    defer installed.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestOk("renderer-log", "{\"level\":\"exception\",\"message\":\"it broke\",\"error\":\"Error: boom\\n    at page.js:1\"}"));
-    allocator.free(try app.requestOk("renderer-log", "{\"level\":\"tool\",\"message\":\"magick\",\"toolData\":{\"stdout\":\"made it\",\"stderr\":\"\"}}"));
-    const log_text = try installed.closeAndReadLog();
-    defer allocator.free(log_text);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "] [EXCEPTION] [Renderer] it broke\nError: boom\n    at page.js:1\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "] [TOOL] [Renderer] == magick stdout ==\nmade it\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "magick stderr") == null);
-    const error_text = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, installed.error_log_file_path, allocator, .limited(1024 * 1024));
-    defer allocator.free(error_text);
-    try std.testing.expect(std.mem.indexOf(u8, error_text, "] [EXCEPTION] [Renderer] it broke\nError: boom\n") != null);
-}
-
-test "renderer-log with no file logger installed writes nothing and replies null" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    // The core installs its file logger as the main thread's log when it starts, so the main thread is given the console log to
-    // test the app with no file logger.
-    try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, _: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            utils.log.setLog(null);
-        }
-    }.check);
-    const reply = try app.requestOk("renderer-log", "{\"level\":\"info\",\"message\":\"nobody is listening\"}");
-    defer std.testing.allocator.free(reply);
-    try std.testing.expectEqualStrings("null", reply);
-    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "nobody is listening") == null);
-}
-
-test "renderer-log with a bad message is an error reply that says what is wrong" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    const allocator = std.testing.allocator;
-    const not_object = try app.requestError("renderer-log", "\"just text\"");
-    defer allocator.free(not_object);
-    try std.testing.expectEqualStrings("InvalidMessageData: the data is not an object", not_object);
-    const no_level = try app.requestError("renderer-log", "{\"message\":\"x\"}");
-    defer allocator.free(no_level);
-    try std.testing.expectEqualStrings("InvalidMessageData: the field \"level\" is missing", no_level);
-    const bad_level = try app.requestError("renderer-log", "{\"level\":\"shout\",\"message\":\"x\"}");
-    defer allocator.free(bad_level);
-    try std.testing.expectEqualStrings("The log message has the level \"shout\", which is not one of info, verbose, error, exception, warn, debug, tool or event.", bad_level);
-    const no_message = try app.requestError("renderer-log", "{\"level\":\"info\"}");
-    defer allocator.free(no_message);
-    try std.testing.expectEqualStrings("InvalidMessageData: the field \"message\" is missing", no_message);
-    const bad_tool_data = try app.requestError("renderer-log", "{\"level\":\"tool\",\"message\":\"x\",\"toolData\":5}");
-    defer allocator.free(bad_tool_data);
-    try std.testing.expectEqualStrings("InvalidMessageData: the field \"toolData\" does not fit (UnexpectedToken)", bad_tool_data);
-}
 
 test "get-log-details replies with the path of the log file and its header" {
     var app: TestApp = undefined;
@@ -218,7 +138,7 @@ test "get-log-details replies with the path of the log file and its header" {
     try std.testing.expectEqualStrings(installed.log_file_path, parsed.value.object.get("logFilePath").?.string);
     const header = parsed.value.object.get("logHeader").?.string;
     try std.testing.expect(std.mem.startsWith(u8, header, "=" ** 80 ++ "\nPhotosphere Desktop Log\n"));
-    try std.testing.expect(std.mem.indexOf(u8, header, "Photosphere Version: 1.2.3") != null);
+    try std.testing.expect(std.mem.indexOf(u8, header, "\nVersion: 1.2.3\n") != null);
     try std.testing.expect(std.mem.endsWith(u8, header, "\n--- Log Start ---"));
     try std.testing.expect(std.mem.indexOf(u8, header, "logged after the header") == null);
 }
@@ -336,20 +256,4 @@ test "fps-measurement is an error reply that names the file when it cannot be wr
     const reply = try app.requestError("fps-measurement", "60");
     defer std.testing.allocator.free(reply);
     try std.testing.expect(std.mem.indexOf(u8, reply, "photosphere-fps.csv") != null);
-}
-
-test "renderer-log treats a null toolData and a null error as absent" {
-    var app: TestApp = undefined;
-    try app.start();
-    defer app.stop();
-    var installed: InstalledLogger = undefined;
-    try installed.start(&app);
-    defer installed.stop();
-    const allocator = std.testing.allocator;
-    allocator.free(try app.requestOk("renderer-log", "{\"level\":\"tool\",\"message\":\"magick\",\"toolData\":null}"));
-    allocator.free(try app.requestOk("renderer-log", "{\"level\":\"exception\",\"message\":\"it broke\",\"error\":null,\"toolData\":null}"));
-    const log_text = try installed.closeAndReadLog();
-    defer allocator.free(log_text);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "magick") == null);
-    try std.testing.expect(std.mem.indexOf(u8, log_text, "] [EXCEPTION] [Renderer] it broke\n") != null);
 }

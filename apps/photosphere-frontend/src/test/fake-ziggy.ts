@@ -1,4 +1,4 @@
-import type { IAddTask, ICoreErrorEvent, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IZiggyBridge } from "ziggy";
+import type { IAddTask, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
 
 //
 // A message the page sent with send or invoke, or one of Ziggy's own calls that sends a message.
@@ -124,6 +124,24 @@ export class FakeZiggy implements IZiggyBridge {
         this.sent.push({
             name: "test-ui-ready",
             data: null,
+        });
+    }
+
+    // Records the line as the "log" message, with the error text and the tool output only when they were given.
+    log(level: LogLevel, message: string, errorText?: string, toolOutput?: IToolOutput): void {
+        const data: IJsonObject = {
+            level,
+            message,
+        };
+        if (errorText !== undefined) {
+            data.error = errorText;
+        }
+        if (toolOutput !== undefined) {
+            data.toolData = toolOutput as IJsonObject;
+        }
+        this.sent.push({
+            name: "log",
+            data,
         });
     }
 
