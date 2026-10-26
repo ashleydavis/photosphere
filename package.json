@@ -88,6 +88,9 @@
     "emu:and:pool:monitor": "bash ./apps/photosphere/scripts/android-emulator/emulator-pool-monitor.sh",
     "perf": "bun --filter '*' perf"
   },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "3.1016.0"
+  },
   "workspaces": [
     "apps/*",
     "packages/*",
