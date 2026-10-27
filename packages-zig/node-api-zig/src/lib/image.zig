@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
@@ -27,7 +28,6 @@ const MICRO_MIN_SIZE = media_file_database.MICRO_MIN_SIZE;
 const MICRO_QUALITY = media_file_database.MICRO_QUALITY;
 const THUMBNAIL_MIN_SIZE = media_file_database.THUMBNAIL_MIN_SIZE;
 const THUMBNAIL_QUALITY = media_file_database.THUMBNAIL_QUALITY;
-const log = &utils.log.log;
 const errors = utils.errors;
 
 //
@@ -153,13 +153,13 @@ fn dateNow(io: std.Io) f64 {
 //
 // Gets the details of an image.
 //
-pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     var imagePath = filePath;
 
     const metadataStartedAt = dateNow(io);
-    const imageMetadata = try getImageMetadata(allocator, io, imagePath, contentType);
+    const imageMetadata = try getImageMetadata(allocator, io, log, imagePath, contentType);
     const metadataMs = dateNow(io) - metadataStartedAt;
     const tags: ?BsonDocument = if (imageMetadata.metadata) |metadata| metadata.document else null;
     var imageTransformation = try getImageTransformation(allocator, tags);
@@ -169,7 +169,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
     // EXIF Orientation of a HEIC is only informative), so the EXIF's turn is not applied on top of it.
     if (tools.heic.isHeicContentType(contentType)) {
         const decodedPath = try std.fs.path.join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_heic_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
-        try tools.heic.decodeHeic(allocator, io, toolRunner, imagePath, decodedPath);
+        try tools.heic.decodeHeic(allocator, io, log, toolRunner, imagePath, decodedPath);
         imagePath = decodedPath;
         imageTransformation = null;
     }
@@ -187,7 +187,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
     }
     else {
         const probedContentType = if (tools.heic.isHeicContentType(contentType)) "image/jpeg" else contentType;
-        const assetInfo = try getFileInfo(allocator, io, toolRunner, imagePath, probedContentType) orelse {
+        const assetInfo = try getFileInfo(allocator, io, log, toolRunner, imagePath, probedContentType) orelse {
             return errors.throwError("Unsupported file type: {s}", .{contentType});
         };
         resolution = .{ .width = assetInfo.dimensions.width, .height = assetInfo.dimensions.height };
@@ -196,7 +196,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
 
     if (imageTransformation) |transformation| {
         // Flips orientation depending on exif data.
-        imagePath = try transformImage(allocator, io, toolRunner, imagePath, tempDir, transformation, uuidGenerator);
+        imagePath = try transformImage(allocator, io, log, toolRunner, imagePath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
             // A copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.
             const unswapped = resolution;
@@ -209,15 +209,15 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
 
     // Produced largest first, each from the one before it rather than from the full size original.
     const displayStartedAt = dateNow(io);
-    const displayPath = try resizeImage(allocator, io, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const displayPath = try resizeImage(allocator, io, log, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
     const displayMs = dateNow(io) - displayStartedAt;
 
     const thumbnailStartedAt = dateNow(io);
-    const thumbnailPath = try resizeImage(allocator, io, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailPath = try resizeImage(allocator, io, log, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
     const microMs = dateNow(io) - microStartedAt;
 
     return .{
@@ -307,7 +307,7 @@ fn isTruthy(value: ?BsonValue) bool {
 //
 // The body of the try block of getImageMetadata.
 //
-fn readImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IImageMetadata {
+fn readImageMetadata(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IImageMetadata {
     // Only the head of the file, not the whole photo.
     //
     // EXIF lives in the APP1 segment near the start of a JPEG. A photo whose EXIF does not fit in the
@@ -320,26 +320,26 @@ fn readImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const
         fileData = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         exif = try parseExif(allocator, fileData);
     }
-    return metadataFromExif(allocator, exif, filePath);
+    return metadataFromExif(log, allocator, exif, filePath);
 }
 
 //
 // The body of the try block of getImageMetadata for a HEIC, whose EXIF is an item of the file rather than a JPEG segment. A HEIC with
 // no EXIF item has no metadata.
 //
-fn readHeicMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IImageMetadata {
+fn readHeicMetadata(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IImageMetadata {
     const fileData = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
     const exifJpeg = try heic_exif.exifAsJpeg(allocator, fileData) orelse {
         return .{};
     };
-    return metadataFromExif(allocator, try parseExif(allocator, exifJpeg), filePath);
+    return metadataFromExif(log, allocator, try parseExif(allocator, exifJpeg), filePath);
 }
 
 //
 // What a photo's parsed EXIF says: every tag, where it was taken when that is a real position, when it was taken, and its size when
 // the parser found the JPEG frame header that gives it.
 //
-fn metadataFromExif(allocator: std.mem.Allocator, exif: exif_parser.ExifResult, filePath: []const u8) !IImageMetadata {
+fn metadataFromExif(log: ILog, allocator: std.mem.Allocator, exif: exif_parser.ExifResult, filePath: []const u8) !IImageMetadata {
     var coordinates: ?ILocation = null;
     if (isTruthy(exif.tags.get("GPSLatitude")) and isTruthy(exif.tags.get("GPSLongitude"))) {
         coordinates = try convertExifCoordinates(exif.tags);
@@ -387,16 +387,16 @@ fn writeJsonNumber(writer: *std.Io.Writer, number: f64) !void {
 //
 // Gets the metadata from the image.
 //
-pub fn getImageMetadata(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: []const u8) !IImageMetadata {
+pub fn getImageMetadata(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, contentType: []const u8) !IImageMetadata {
     if (std.mem.eql(u8, contentType, "image/jpeg") or std.mem.eql(u8, contentType, "image/jpg")) {
-        return readImageMetadata(allocator, io, filePath) catch |err| {
+        return readImageMetadata(allocator, io, log, filePath) catch |err| {
             log.exception(try std.fmt.allocPrint(allocator, "Failed to get exif data from {s}", .{filePath}), err);
 
             return .{};
         };
     }
     else if (tools.heic.isHeicContentType(contentType)) {
-        return readHeicMetadata(allocator, io, filePath) catch |err| {
+        return readHeicMetadata(allocator, io, log, filePath) catch |err| {
             log.exception(try std.fmt.allocPrint(allocator, "Failed to get exif data from {s}", .{filePath}), err);
 
             return .{};
@@ -417,7 +417,7 @@ fn jsRound(value: f64) f64 {
 //
 // Resize an image.
 //
-pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
+pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
 
     var width: f64 = undefined;
     var height: f64 = undefined;
@@ -432,13 +432,13 @@ pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProce
     }
 
     var image = Image.init(inputPath);
-    return image.resize(allocator, io, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
+    return image.resize(allocator, io, log, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
 }
 
 //
 // Transforms an image.
 //
-pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
+pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
     var image = Image.init(inputPath);
-    return image.transform(allocator, io, toolRunner, options, tempDir, uuidGenerator);
+    return image.transform(allocator, io, log, toolRunner, options, tempDir, uuidGenerator);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -10,7 +11,6 @@ const init_cmd = @import("../lib/init-cmd.zig");
 const ensure_tools = @import("../lib/ensure-tools.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const loadDatabase = init_cmd.loadDatabase;
@@ -151,9 +151,9 @@ const ScanState = struct {
 //
 // Analyzes each scanned file.
 //
-fn visitScannedFile(context: ?*anyopaque, fileResult: FileScannedResult) anyerror!void {
+fn visitScannedFile(context: ?*anyopaque, log: ILog, fileResult: FileScannedResult) anyerror!void {
     const state: *ScanState = @ptrCast(@alignCast(context.?));
-    const analysis = analyzeFile(state.allocator, state.io, state.toolRunner, fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath) catch |err| {
+    const analysis = analyzeFile(state.allocator, state.io, log, state.toolRunner, fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath) catch |err| {
         try state.results.append(state.allocator, .{
             .path = fileResult.filePath,
             .fileStat = fileResult.fileStat,
@@ -170,11 +170,11 @@ fn visitScannedFile(context: ?*anyopaque, fileResult: FileScannedResult) anyerro
 //
 // Shows scan progress.
 //
-fn scanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, scannerState: *const ScannerState) void {
+fn scanProgress(context: ?*anyopaque, log: ILog, currentlyScanning: ?[]const u8, scannerState: *const ScannerState) void {
     _ = scannerState;
     const state: *ScanState = @ptrCast(@alignCast(context.?));
     const message = progressMessage(state.allocator, state.fileCount, currentlyScanning) catch return;
-    writeProgress(message);
+    writeProgress(log, message);
 }
 
 //
@@ -193,13 +193,13 @@ fn progressMessage(allocator: std.mem.Allocator, fileCount: usize, currentlyScan
 //
 // Command that displays detailed information about media files, or about assets in the database by ID or hash.
 //
-pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, inputs: []const []const u8, options: *IInfoCommandOptions) !void {
+pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, inputs: []const []const u8, options: *IInfoCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionTempDir = context.sessionTempDir;
     const sessionId = context.sessionId;
 
-    try ensureMediaProcessingTools(allocator, io, context.toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log, context.toolRunner);
 
     var pathInputs: std.ArrayList([]const u8) = .empty;
     var dbInputs: std.ArrayList([]const u8) = .empty;
@@ -213,7 +213,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     var results: std.ArrayList(FileAnalysis) = .empty;
 
     if (pathInputs.items.len > 0) {
-        writeProgress("Searching for files...");
+        writeProgress(log, "Searching for files...");
         var state: ScanState = .{
             .allocator = allocator,
             .io = io,
@@ -224,6 +224,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         try scanPaths(
             allocator,
             io,
+            log,
             pathInputs.items,
             .{ .context = &state, .function = visitScannedFile },
             .{ .context = &state, .function = scanProgress },
@@ -231,16 +232,16 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
             sessionTempDir,
             uuidGenerator,
         );
-        clearProgressMessage();
+        clearProgressMessage(log);
     }
 
     if (dbInputs.items.len > 0) {
-        const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+        const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
         const metadataCollection = try loaded.bsonDatabase.collection("metadata");
         for (dbInputs.items) |input| {
             const kind = classifyInput(input);
             if (kind == .assetId) {
-                if (try metadataCollection.getOne(io, input)) |asset| {
+                if (try metadataCollection.getOne(io, log, input)) |asset| {
                     try results.append(allocator, try assetToFileAnalysis(allocator, asset, input));
                 }
                 else {
@@ -252,7 +253,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
                 }
             }
             else {
-                const assets = try (try metadataCollection.sortIndex("hash", .asc)).findByValue(io, .{ .string = input }, null);
+                const assets = try (try metadataCollection.sortIndex("hash", .asc)).findByValue(io, log, .{ .string = input }, null);
                 if (assets.len == 0) {
                     try results.append(allocator, .{
                         .path = "",
@@ -278,14 +279,14 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     log.info(try std.fmt.allocPrint(allocator, "\nInfo for {d} item(s):\n", .{totalCount}));
 
     for (results.items) |result| {
-        try displayFileInfo(allocator, result, options);
+        try displayFileInfo(log, allocator, result, options);
         log.info("");
     }
 
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\nDisplayed info for {d} item(s).", .{totalCount})));
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -328,7 +329,7 @@ fn assetToFileAnalysis(allocator: std.mem.Allocator, asset: IAsset, logicalPath:
 //
 // Hashes a file and reads its media information with the tools toolRunner runs.
 //
-fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileInfo: IFileStat, logicalPath: []const u8) !FileAnalysis {
+fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileInfo: IFileStat, logicalPath: []const u8) !FileAnalysis {
     // filePath is either the temporary unpacked file path or the original source file path
     var fileAnalysis: FileAnalysis = .{
         .path = filePath,
@@ -346,7 +347,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRu
 
     // Analyze file content using the unified getFileInfo function
     // Files are already unpacked, so we can use the file path directly
-    if (getFileInfo(allocator, io, toolRunner, filePath, contentType)) |maybeAssetInfo| {
+    if (getFileInfo(allocator, io, log, toolRunner, filePath, contentType)) |maybeAssetInfo| {
         if (maybeAssetInfo) |assetInfo| {
             fileAnalysis.assetInfo = assetInfo;
         }
@@ -372,7 +373,7 @@ fn hashFile(io: std.Io, filePath: []const u8) ![32]u8 {
 //
 // Displays the information about one input.
 //
-fn displayFileInfo(allocator: std.mem.Allocator, analysis: FileAnalysis, options: *IInfoCommandOptions) !void {
+fn displayFileInfo(log: ILog, allocator: std.mem.Allocator, analysis: FileAnalysis, options: *IInfoCommandOptions) !void {
     _ = options;
 
     log.info(try pc.bold(allocator, try pc.blue(allocator, try std.fmt.allocPrint(allocator, "\u{1F4C1} {s}", .{analysis.logicalPath}))));
@@ -385,7 +386,7 @@ fn displayFileInfo(allocator: std.mem.Allocator, analysis: FileAnalysis, options
     }
 
     if (analysis.asset) |asset| {
-        try displayAssetInfo(allocator, asset);
+        try displayAssetInfo(log, allocator, asset);
         return;
     }
 
@@ -421,7 +422,7 @@ fn displayFileInfo(allocator: std.mem.Allocator, analysis: FileAnalysis, options
 //
 // Displays an asset found in the database.
 //
-fn displayAssetInfo(allocator: std.mem.Allocator, asset: IAsset) !void {
+fn displayAssetInfo(log: ILog, allocator: std.mem.Allocator, asset: IAsset) !void {
     log.info(try std.fmt.allocPrint(allocator, "   Asset ID: {s}", .{try js_value.toString(allocator, field(asset, "_id"))}));
     log.info(try std.fmt.allocPrint(allocator, "   Original file: {s}", .{try js_value.toString(allocator, field(asset, "origFileName"))}));
     if (isTruthy(field(asset, "origPath"))) {

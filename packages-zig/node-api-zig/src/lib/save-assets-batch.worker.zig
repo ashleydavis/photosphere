@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -18,8 +19,8 @@ const streamAsset = media_file_database.streamAsset;
 // (A cache of these would need a global variable, which this repository avoids, and a task handler is a plain function with
 // no state of its own to keep a cache in. A new storage is made for every call, which is once per task here.)
 //
-fn getAssetStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !IStorage {
-    return createLazyDatabaseStorage(allocator, io, databasePath, null, null, host);
+fn getAssetStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !IStorage {
+    return createLazyDatabaseStorage(allocator, io, log, databasePath, null, null, host);
 }
 
 //
@@ -81,9 +82,9 @@ pub const ISaveAssetsBatchResult = struct {
 // Saves one asset into the folder: the body of the try block of the loop in saveAssetsBatchHandler.
 // (Zig needs it as a function to catch the error it fails with.)
 //
-fn saveAsset(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, folderPath: []const u8, asset: ISaveAssetItem) !void {
+fn saveAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, folderPath: []const u8, asset: ISaveAssetItem) !void {
     const destPath = try node_utils.path.join(allocator, &.{ folderPath, asset.filename });
-    const assetStream = try streamAsset(allocator, io, storage, asset.assetId, asset.assetType);
+    const assetStream = try streamAsset(allocator, io, log, storage, asset.assetId, asset.assetType);
     defer assetStream.destroy(io);
     const outputFile = try std.Io.Dir.cwd().createFile(io, destPath, .{});
     defer outputFile.close(io);
@@ -105,6 +106,7 @@ pub fn saveAssetsBatchHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -113,12 +115,12 @@ pub fn saveAssetsBatchHandler(
     }) catch {
         return errors.throwError("The save-assets-batch task data is not valid: assets must be a list of items with assetId, assetType and filename, and folderPath and databasePath must be strings", .{});
     };
-    const storage = try getAssetStorage(allocator, io, data.databasePath, context.nativeCaller);
+    const storage = try getAssetStorage(allocator, io, log, data.databasePath, context.nativeCaller);
     var succeededFiles: std.ArrayList([]const u8) = .empty;
     var failedFiles: std.ArrayList(ISaveAssetsBatchFailure) = .empty;
 
     for (data.assets) |asset| {
-        saveAsset(allocator, io, storage, data.folderPath, asset) catch |err| {
+        saveAsset(allocator, io, log, storage, data.folderPath, asset) catch |err| {
             try failedFiles.append(allocator, .{
                 .filename = asset.filename,
                 .@"error" = try allocator.dupe(u8, errors.errorMessage(err)),

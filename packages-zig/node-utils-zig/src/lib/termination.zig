@@ -11,6 +11,7 @@ const EXIT_UNCAUGHT_EXCEPTION = exit_codes.EXIT_UNCAUGHT_EXCEPTION;
 const EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED = exit_codes.EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED;
 const EXIT_UNHANDLED_REJECTION = exit_codes.EXIT_UNHANDLED_REJECTION;
 const EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED = exit_codes.EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
+const ILog = utils.log.ILog;
 
 //
 // Set to true after the termination handlers have been initialized.
@@ -27,7 +28,7 @@ pub const TerminationCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, log: ILog, exitCode: u8) anyerror!void,
 };
 
 //
@@ -39,22 +40,22 @@ var terminationCallbacks: std.ArrayListUnmanaged(TerminationCallback) = .empty;
 //
 // Invokes all registered termination callbacks with the given exit code.
 //
-pub fn invokeTerminationCallbacks(io: std.Io, exitCode: u8) !void {
+pub fn invokeTerminationCallbacks(io: std.Io, log: ILog, exitCode: u8) !void {
     for (terminationCallbacks.items) |callback| {
-        try callback.function(callback.context, io, exitCode);
+        try callback.function(callback.context, io, log, exitCode);
     }
 }
 
 //
-// Ends the process with the exit code: once the termination handlers are initialized, the exit code is logged first.
+// Ends the process with the exit code: once the termination handlers are initialized, the exit code is logged first, to the log given.
 //
-fn exitProcess(code: u8) noreturn {
+fn exitProcess(log: ILog, code: u8) noreturn {
     if (terminationCallbacksInitialized) {
         var buffer: [64]u8 = undefined;
         const message = std.fmt.bufPrint(&buffer, "Process exiting with code: {d}", .{code}) catch |err| {
             std.debug.panic("Formatting the exit message failed: {s}", .{@errorName(err)});
         };
-        utils.log.log.verbose(message);
+        log.verbose(message);
     }
     std.process.exit(code);
 }
@@ -63,18 +64,19 @@ fn exitProcess(code: u8) noreturn {
 // Trigger program termination with a specific exit code.
 // Invokes the termination callbacks registered with `registerTerminationCallback`.
 //
-pub fn exit(io: std.Io, code: u8) noreturn {
-    invokeTerminationCallbacks(io, code) catch |err| {
-        utils.log.log.exception("Error during exit termination callbacks.", err);
-        exitProcess(EXIT_TERMINATION_CALLBACKS_THREW);
+pub fn exit(io: std.Io, log: ILog, code: u8) noreturn {
+    invokeTerminationCallbacks(io, log, code) catch |err| {
+        log.exception("Error during exit termination callbacks.", err);
+        exitProcess(log, EXIT_TERMINATION_CALLBACKS_THREW);
     };
 
-    exitProcess(code);
+    exitProcess(log, code);
 }
 
 //
 // Register a callback function to be called when the process is about to exit.
-// `io` is used to run the callbacks when the process receives SIGTERM or SIGINT.
+// `io` is used to run the callbacks when the process receives SIGTERM or SIGINT, and what that shutdown logs goes to `log`. Both are
+// kept from the first registration, for the signal watcher thread, which nothing else can give them to.
 //
 pub fn registerTerminationCallback(io: std.Io, callback: TerminationCallback) !void {
     try initializeTerminationHandlers(io);
@@ -151,17 +153,17 @@ fn handleConsoleCtrl(ctrlType: std.os.windows.DWORD) callconv(.winapi) std.os.wi
 //
 // Handles a termination signal (SIGTERM or SIGINT).
 //
-fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) noreturn {
-    utils.log.log.verbose(if (std.mem.eql(u8, signalName, "SIGTERM")) "SIGTERM received. Shutting down gracefully..." else "SIGINT received. Shutting down...");
+fn shutdownOnSignal(io: std.Io, log: ILog, signalName: []const u8, cleanupFailedCode: u8) noreturn {
+    log.verbose(if (std.mem.eql(u8, signalName, "SIGTERM")) "SIGTERM received. Shutting down gracefully..." else "SIGINT received. Shutting down...");
 
-    invokeTerminationCallbacks(io, EXIT_SUCCESS) catch |err| {
-        utils.log.log.exception(if (std.mem.eql(u8, signalName, "SIGTERM")) "Error during SIGTERM shutdown." else "Error during SIGINT shutdown.", err);
-        invokeTerminationCallbacks(io, EXIT_FAILURE) catch |cleanupErr| {
-            shutdownOnUnhandledRejection(io, cleanupErr);
+    invokeTerminationCallbacks(io, log, EXIT_SUCCESS) catch |err| {
+        log.exception(if (std.mem.eql(u8, signalName, "SIGTERM")) "Error during SIGTERM shutdown." else "Error during SIGINT shutdown.", err);
+        invokeTerminationCallbacks(io, log, EXIT_FAILURE) catch |cleanupErr| {
+            shutdownOnUnhandledRejection(io, log, cleanupErr);
         };
-        exitProcess(cleanupFailedCode);
+        exitProcess(log, cleanupFailedCode);
     };
-    exitProcess(EXIT_SUCCESS);
+    exitProcess(log, EXIT_SUCCESS);
 }
 
 //
@@ -170,7 +172,7 @@ fn shutdownOnSignal(io: std.Io, signalName: []const u8, cleanupFailedCode: u8) n
 // the process exits with EXIT_UNCAUGHT_EXCEPTION (EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED when they throw). Before
 // that it prints the error to stderr and exits with 1.
 //
-pub fn shutdownOnUncaughtException(io: std.Io, err: anyerror) noreturn {
+pub fn shutdownOnUncaughtException(io: std.Io, log: ILog, err: anyerror) noreturn {
     if (!terminationCallbacksInitialized) {
         var buffer: [16 * 1024]u8 = undefined;
         var fixedWriter = std.Io.Writer.fixed(&buffer);
@@ -179,34 +181,34 @@ pub fn shutdownOnUncaughtException(io: std.Io, err: anyerror) noreturn {
         std.process.exit(1);
     }
 
-    utils.log.log.exception("Uncaught exception.", err);
+    log.exception("Uncaught exception.", err);
 
     var exitCode = EXIT_UNCAUGHT_EXCEPTION;
-    invokeTerminationCallbacks(io, EXIT_UNCAUGHT_EXCEPTION) catch |cleanupErr| {
-        utils.log.log.exception("Error during uncaught exception shutdown.", cleanupErr);
+    invokeTerminationCallbacks(io, log, EXIT_UNCAUGHT_EXCEPTION) catch |cleanupErr| {
+        log.exception("Error during uncaught exception shutdown.", cleanupErr);
         exitCode = EXIT_UNCAUGHT_EXCEPTION_CLEANUP_FAILED;
     };
-    exitProcess(exitCode);
+    exitProcess(log, exitCode);
 }
 
 //
 // Handles an error thrown out of a signal handler: logs it, runs the termination callbacks and exits.
 //
-fn shutdownOnUnhandledRejection(io: std.Io, err: anyerror) noreturn {
+fn shutdownOnUnhandledRejection(io: std.Io, log: ILog, err: anyerror) noreturn {
     // The reason is the error the signal handler threw, as "<name>: <message>". The message is copied out first
     // since recording the new error overwrites it.
     var reasonBuffer: [4096]u8 = undefined;
     const reasonName = if (err == error.Thrown or err == error.FatalError) utils.errors.lastErrorName() else "Error";
     const reason = std.fmt.bufPrint(&reasonBuffer, "{s}: {s}", .{ reasonName, utils.errors.errorMessage(err) }) catch reasonBuffer[0..];
     utils.errors.recordError("Error", "{s}", .{reason});
-    utils.log.log.exception("Unhandled promise rejection.", error.Thrown);
+    log.exception("Unhandled promise rejection.", error.Thrown);
 
     var exitCode = EXIT_UNHANDLED_REJECTION;
-    invokeTerminationCallbacks(io, EXIT_UNHANDLED_REJECTION) catch |cleanupErr| {
-        utils.log.log.exception("Error during unhandled rejection shutdown.", cleanupErr);
+    invokeTerminationCallbacks(io, log, EXIT_UNHANDLED_REJECTION) catch |cleanupErr| {
+        log.exception("Error during unhandled rejection shutdown.", cleanupErr);
         exitCode = EXIT_UNHANDLED_REJECTION_CLEANUP_FAILED;
     };
-    exitProcess(exitCode);
+    exitProcess(log, exitCode);
 }
 
 //
@@ -232,16 +234,18 @@ fn waitForSignal() !void {
 }
 
 //
-// Waits for a termination signal recorded by handleSignal and shuts the process down.
+// Waits for a termination signal recorded by handleSignal and shuts the process down. The signal watcher thread has no log handed to it,
+// so it makes its own, the console log, as it starts.
 //
 fn watchSignals() void {
+    const log = utils.log.ConsoleLog.init();
     while (true) {
         const signal = pendingSignal.load(.acquire);
         if (signal == @intFromEnum(std.posix.SIG.TERM)) {
-            shutdownOnSignal(signalIo, "SIGTERM", EXIT_SIGTERM_CLEANUP_FAILED);
+            shutdownOnSignal(signalIo, log, "SIGTERM", EXIT_SIGTERM_CLEANUP_FAILED);
         }
         if (signal == @intFromEnum(std.posix.SIG.INT)) {
-            shutdownOnSignal(signalIo, "SIGINT", EXIT_SIGINT_CLEANUP_FAILED);
+            shutdownOnSignal(signalIo, log, "SIGINT", EXIT_SIGINT_CLEANUP_FAILED);
         }
         waitForSignal() catch |err| {
             std.debug.panic("Waiting for a termination signal failed: {s}", .{@errorName(err)});

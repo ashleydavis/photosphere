@@ -149,10 +149,10 @@ pub fn readDatabasesConfigHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
-    context: ITaskContext,
+    _: ITaskContext,
 ) anyerror!std.json.Value {
-    _ = context;
     // (Zig: reading the task data into the typed struct fails when configPath is not a string.
     // The failure is reported as a sentence, not a bare parser error name.)
     const data = std.json.parseFromValueLeaky(IReadDatabasesConfigData, allocator, taskData, .{
@@ -169,7 +169,7 @@ pub fn readDatabasesConfigHandler(
         return readResultToJson(allocator, &.{}, &.{}, null);
     }
 
-    const contents = try storage.read(allocator, io, data.configPath) orelse {
+    const contents = try storage.read(allocator, io, log, data.configPath) orelse {
         return readResultToJson(allocator, &.{}, &.{}, null);
     };
 
@@ -205,9 +205,11 @@ pub fn writeDatabasesConfigHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
+    _ = log;
     _ = context;
     // (Zig: reading the task data into the typed struct fails when a field has the wrong type or is missing.
     // The failure is reported as a sentence, not a bare parser error name.)

@@ -6,6 +6,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const hash = @import("hash.zig");
@@ -35,7 +36,7 @@ pub fn InfoOperation(comptime sourceText: []const u8) type {
         //
         // Gets the file information.
         //
-        pub fn run(self: *@This(), io: std.Io) !?IFileInfo {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !?IFileInfo {
             return self.storage.info(self.allocator, io, self.fileName);
         }
     };
@@ -61,8 +62,8 @@ pub fn ReadOperation(comptime sourceText: []const u8) type {
         //
         // Reads the file.
         //
-        pub fn run(self: *@This(), io: std.Io) !?[]u8 {
-            return self.storage.read(self.allocator, io, self.fileName);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?[]u8 {
+            return self.storage.read(self.allocator, io, log, self.fileName);
         }
     };
 }
@@ -93,7 +94,7 @@ pub fn WriteOperation(comptime sourceText: []const u8) type {
         //
         // Writes the file.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
             return self.storage.write(self.allocator, io, self.fileName, self.contentType, self.data);
         }
     };
@@ -119,8 +120,8 @@ pub fn ComputeStorageHashOperation(comptime sourceText: []const u8) type {
         //
         // Streams the file from storage and hashes it.
         //
-        pub fn run(self: *@This(), io: std.Io) ![Sha256.digest_length]u8 {
-            const readStream = try self.storage.readStream(self.allocator, io, self.fileName);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) ![Sha256.digest_length]u8 {
+            const readStream = try self.storage.readStream(self.allocator, io, log, self.fileName);
             defer readStream.destroy(io);
             return hash.computeHash(readStream.reader());
         }
@@ -153,8 +154,8 @@ pub fn CopyStreamOperation(comptime sourceText: []const u8) type {
         //
         // Streams the file from the source storage to the destination storage.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            const readStream = try self.sourceStorage.readStream(self.allocator, io, self.fileName);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            const readStream = try self.sourceStorage.readStream(self.allocator, io, log, self.fileName);
             defer readStream.destroy(io);
             try self.destStorage.writeStream(self.allocator, io, self.fileName, self.contentType, readStream.reader(), null);
         }
@@ -190,8 +191,8 @@ pub fn CopyStreamWithLengthOperation(comptime sourceText: []const u8) type {
         //
         // Streams the file from the source storage to the destination storage.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            const readStream = try self.sourceStorage.readStream(self.allocator, io, self.fileName);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            const readStream = try self.sourceStorage.readStream(self.allocator, io, log, self.fileName);
             defer readStream.destroy(io);
             try self.destStorage.writeStream(self.allocator, io, self.fileName, self.contentType, readStream.reader(), self.contentLength);
         }
@@ -215,7 +216,7 @@ pub fn MerkleTreeExistsOperation(comptime sourceText: []const u8) type {
         //
         // Checks whether the files tree exists.
         //
-        pub fn run(self: *@This(), io: std.Io) !bool {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !bool {
             return tree.merkleTreeExists(self.allocator, io, self.storage);
         }
     };
@@ -238,8 +239,8 @@ pub fn LoadMerkleTreeOperation(comptime sourceText: []const u8) type {
         //
         // Loads the files tree.
         //
-        pub fn run(self: *@This(), io: std.Io) !?IMerkleTree {
-            return tree.loadMerkleTree(self.allocator, io, self.storage);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?IMerkleTree {
+            return tree.loadMerkleTree(self.allocator, io, log, self.storage);
         }
     };
 }
@@ -264,8 +265,8 @@ pub fn SaveMerkleTreeOperation(comptime sourceText: []const u8) type {
         //
         // Saves the files tree.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            return tree.saveMerkleTree(self.allocator, io, self.merkleTree, self.storage);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            return tree.saveMerkleTree(self.allocator, io, log, self.merkleTree, self.storage);
         }
     };
 }
@@ -290,7 +291,7 @@ pub fn DeleteFileOperation(comptime sourceText: []const u8) type {
         //
         // Deletes the file.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
             try self.storage.deleteFile(self.allocator, io, self.filePath);
         }
     };
@@ -325,7 +326,7 @@ pub fn WriteStreamOperation(comptime sourceText: []const u8) type {
         //
         // Writes the stream to the file.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
             return self.storage.writeStream(self.allocator, io, self.fileName, self.contentType, self.inputStream, self.contentLength);
         }
     };
@@ -354,8 +355,8 @@ pub fn ComputeAssetHashOperation(comptime sourceText: []const u8) type {
         //
         // Streams the file and hashes it.
         //
-        pub fn run(self: *@This(), io: std.Io) !merkle_tree_zig.merkle_tree.IHashedData {
-            const readStream = try self.storage.readStream(self.allocator, io, self.fileName);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !merkle_tree_zig.merkle_tree.IHashedData {
+            const readStream = try self.storage.readStream(self.allocator, io, log, self.fileName);
             defer readStream.destroy(io);
             return hash.computeAssetHash(self.allocator, readStream.reader(), .{
                 .contentType = self.fileInfo.contentType,

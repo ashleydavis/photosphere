@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -10,7 +11,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
-const log = &utils.log.log;
 const errorMessage = utils.errors.errorMessage;
 const throwError = utils.errors.throwError;
 const exit = node_utils.termination.exit;
@@ -178,11 +178,11 @@ fn repeat(allocator: std.mem.Allocator, character: u8, count: usize) ![]const u8
 //
 // Command to visualize all merkle trees in a media file database.
 //
-pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDebugMerkleTreeCommandOptions) !void {
+pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IDebugMerkleTreeCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const bsonDatabase = loaded.bsonDatabase;
 
@@ -191,7 +191,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
     log.info("");
 
     // Get and display the aggregate root hash
-    const summary = try getDatabaseSummary(allocator, io, assetStorage);
+    const summary = try getDatabaseSummary(allocator, io, log, assetStorage);
     log.info(try pc.cyan(allocator, "Aggregate Root Hash:"));
     log.info(try repeat(allocator, '=', 60));
     log.info(try pc.white(allocator, summary.fullHash));
@@ -200,7 +200,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
     // Show files merkle tree
     log.info(try pc.cyan(allocator, "Files Merkle Tree (.db/files.dat):"));
     log.info(try repeat(allocator, '=', 60));
-    const filesTree = try loadMerkleTree(allocator, io, assetStorage);
+    const filesTree = try loadMerkleTree(allocator, io, log, assetStorage);
     if (filesTree) |tree| {
         const filesVisualization = try visualizeTree(allocator, &tree);
         log.info(filesVisualization);
@@ -210,7 +210,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
     }
 
     // Show BSON database merkle tree if it exists (v6: .db/bson)
-    const databaseTree = try loadDatabaseMerkleTree(allocator, io, assetStorage, ".db/bson");
+    const databaseTree = try loadDatabaseMerkleTree(allocator, io, log, assetStorage, ".db/bson");
 
     if (databaseTree) |tree| {
         log.info("");
@@ -231,7 +231,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
         }
         else {
             for (collections) |collectionName| {
-                const collectionTree = try loadCollectionMerkleTree(allocator, io, assetStorage, ".db/bson", collectionName);
+                const collectionTree = try loadCollectionMerkleTree(allocator, io, log, assetStorage, ".db/bson", collectionName);
                 if (collectionTree) |loadedCollectionTree| {
                     log.info("");
                     log.info(try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "Collection: {s}", .{collectionName})));
@@ -250,7 +250,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
                 // Show all shard trees for this collection
                 const shardIds = try listShards(allocator, io, assetStorage, ".db/bson", collectionName);
                 for (shardIds) |shardId| {
-                    const shardTree = try loadShardMerkleTree(allocator, io, assetStorage, ".db/bson", collectionName, shardId);
+                    const shardTree = try loadShardMerkleTree(allocator, io, log, assetStorage, ".db/bson", collectionName, shardId);
                     if (shardTree) |loadedShardTree| {
                         log.info("");
                         log.info(try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "  Shard: {s}", .{shardId})));
@@ -269,7 +269,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
                     if (options.records orelse false) {
                         const shard = try collection.shard(shardId);
 
-                        const shardRecords = try shard.records(io);
+                        const shardRecords = try shard.records(io, log);
                         if (shardRecords.count() > 0) {
                             log.info("");
                             log.info(try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "    Records in shard {s}:", .{shardId})));
@@ -326,7 +326,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, context:
 
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -479,28 +479,28 @@ fn property(value: BsonValue, name: []const u8, description: []const u8) !BsonVa
 // Resolves the database directory of the collision commands: --db, or the directory picked for an existing
 // database.
 //
-fn resolveDbDir(allocator: std.mem.Allocator, io: std.Io, options: *const IBaseCommandOptions) ![]const u8 {
+fn resolveDbDir(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: *const IBaseCommandOptions) ![]const u8 {
     const nonInteractive = options.yes orelse false;
 
     if (options.db) |db| {
         return db;
     }
     const cwd = if (options.cwd != null and options.cwd.?.len > 0) options.cwd.? else try std.process.currentPathAlloc(io, allocator);
-    return getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+    return getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
 }
 
 //
 // Command that finds hash collisions (same hash, different asset IDs).
 //
-pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDebugFindCollisionsCommandOptions) !void {
+pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IDebugFindCollisionsCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const dbDir = try resolveDbDir(allocator, io, &options.base);
+    const dbDir = try resolveDbDir(allocator, io, log, &options.base);
 
     // Load the database
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const dbDirResolved = loaded.databaseDir;
 
@@ -510,16 +510,16 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info("");
 
     // Load merkle tree from the database
-    writeProgress("Loading merkle tree...");
-    const merkleTree = try loadMerkleTree(allocator, io, assetStorage);
+    writeProgress(log, "Loading merkle tree...");
+    const merkleTree = try loadMerkleTree(allocator, io, log, assetStorage);
     if (merkleTree == null or merkleTree.?.merkle == null) {
-        clearProgressMessage();
+        clearProgressMessage(log);
         log.info(try pc.red(allocator, "Error: Failed to load database merkle tree"));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     // Collect all leaf nodes from asset subdirectory and group by hash
-    writeProgress("Walking merkle tree to find collisions...");
+    writeProgress(log, "Walking merkle tree to find collisions...");
     var hashMap: std.StringArrayHashMapUnmanaged(std.ArrayList([]const u8)) = .empty; // hash -> array of asset IDs
 
     const merkleRoot = merkleTree.?.merkle.?;
@@ -548,7 +548,7 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
         try assetIds.value_ptr.append(allocator, assetId);
     }
 
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     // Find collisions (hashes with more than one asset ID)
     var collisions: std.ArrayList(IHashAssetIds) = .empty;
@@ -644,7 +644,7 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info(try std.fmt.allocPrint(allocator, "Output file: {s}", .{try pc.cyan(allocator, outputPath)}));
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -661,15 +661,15 @@ const ISizeGroup = struct {
 //
 // Command that finds duplicate assets by comparing file content.
 //
-pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDebugFindDuplicatesCommandOptions) !void {
+pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IDebugFindDuplicatesCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
     // Load the database first to get the directory for default paths
-    const dbDir = try resolveDbDir(allocator, io, &options.base);
+    const dbDir = try resolveDbDir(allocator, io, log, &options.base);
 
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const dbDirResolved = loaded.databaseDir;
 
     // Get input file path (default to collisions.json in database directory)
@@ -679,7 +679,7 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, cont
         .parsed => |parsed| parsed,
         .failure => |message| {
             log.info(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: {s}", .{ inputPath, message })));
-            exit(io, 1);
+            exit(io, log, 1);
         },
     };
 
@@ -693,7 +693,7 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, cont
     var duplicatesData: BsonDocument = .empty;
     const hashes = try expectObject(collisionsData, "A collisions file");
 
-    writeProgress("Grouping files by size...");
+    writeProgress(log, "Grouping files by size...");
     for (hashes) |hashField| {
         const files = try expectArray(hashField.value, "A collisions entry");
         var sizeGroups: std.ArrayList(ISizeGroup) = .empty; // size -> asset IDs[]
@@ -743,7 +743,7 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, cont
             .array = contentGroups.items,
         });
     }
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     // Write JSON file (default to duplicates.json in database directory if relative path)
     const outputPath = try resolveDatabaseFilePath(allocator, options.output, dbDirResolved, "duplicates.json");
@@ -776,21 +776,21 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info(try std.fmt.allocPrint(allocator, "Output file: {s}", .{try pc.cyan(allocator, outputPath)}));
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command that removes duplicate assets based on content comparison results.
 //
-pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDebugRemoveDuplicatesCommandOptions) !void {
+pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IDebugRemoveDuplicatesCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
     // Load the database first to get the directory for default paths
-    const dbDir = try resolveDbDir(allocator, io, &options.base);
+    const dbDir = try resolveDbDir(allocator, io, log, &options.base);
 
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const dbDirResolved = loaded.databaseDir;
 
     // Get input file path (default to duplicates.json in database directory)
@@ -801,7 +801,7 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
         .parsed => |parsed| parsed,
         .failure => |message| {
             log.info(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Error: Failed to read input file {s}: {s}", .{ inputPath, message })));
-            exit(io, 1);
+            exit(io, log, 1);
         },
     };
 
@@ -815,7 +815,7 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
     var assetIdsToRemove: std.ArrayList([]const u8) = .empty;
     const hashes = try expectObject(duplicatesData, "A duplicates file");
 
-    writeProgress("Analyzing duplicates...");
+    writeProgress(log, "Analyzing duplicates...");
     for (hashes) |hashField| {
         const contentGroups = try expectArray(hashField.value, "A duplicates entry");
         for (contentGroups) |group| {
@@ -831,12 +831,12 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
             }
         }
     }
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     if (assetIdsToRemove.items.len == 0) {
         log.info(try pc.green(allocator, "No duplicate assets to remove."));
         log.info("");
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     const plural = if (assetIdsToRemove.items.len == 1) "" else "s";
@@ -844,15 +844,15 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
     log.info("");
 
     // Remove each duplicate asset
-    writeProgress("Removing duplicate assets...");
+    writeProgress(log, "Removing duplicate assets...");
     var removed: usize = 0;
     var errorCount: usize = 0;
 
     for (assetIdsToRemove.items, 0..) |assetId, index| {
-        if (removeAsset(allocator, io, loaded.assetStorage, loaded.rawAssetStorage, sessionId, loaded.bsonDatabase, loaded.metadataCollection, assetId, false)) {
+        if (removeAsset(allocator, io, log, loaded.assetStorage, loaded.rawAssetStorage, sessionId, loaded.bsonDatabase, loaded.metadataCollection, assetId, false)) {
             removed += 1;
             if ((index + 1) % 10 == 0) {
-                writeProgress(try std.fmt.allocPrint(allocator, "Removing duplicate assets... ({d}/{d})", .{ index + 1, assetIdsToRemove.items.len }));
+                writeProgress(log, try std.fmt.allocPrint(allocator, "Removing duplicate assets... ({d}/{d})", .{ index + 1, assetIdsToRemove.items.len }));
             }
         }
         else |err| {
@@ -860,7 +860,7 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
             log.verbose(try std.fmt.allocPrint(allocator, "Failed to remove asset {s}: {s}", .{ assetId, errorMessage(err) }));
         }
     }
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     log.info("");
     log.info(try pc.bold(allocator, try pc.blue(allocator, "\u{1F4CA} Summary")));
@@ -870,17 +870,17 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, co
     }
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command that deletes all sort indexes and rebuilds them completely.
 //
-pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IBaseCommandOptions) !void {
+pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IBaseCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const metadataCollection = loaded.metadataCollection;
     const databaseDir = loaded.databaseDir;
 
@@ -890,9 +890,9 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info("");
 
     // List all existing sort indexes
-    writeProgress("Listing existing sort indexes...");
+    writeProgress(log, "Listing existing sort indexes...");
     const existingIndexes = try metadataCollection.sortIndexes(io);
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     if (existingIndexes.len > 0) {
         const existingPlural = if (existingIndexes.len == 1) "" else "es";
@@ -903,7 +903,7 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
         log.info("");
 
         // Delete all existing sort indexes
-        writeProgress("Deleting existing sort indexes...");
+        writeProgress(log, "Deleting existing sort indexes...");
         var deletedCount: usize = 0;
         for (existingIndexes) |index| {
             const sortIndex = try metadataCollection.sortIndex(index.fieldName, index.direction);
@@ -912,7 +912,7 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
                 deletedCount += 1;
             }
         }
-        clearProgressMessage();
+        clearProgressMessage(log);
 
         const deletedPlural = if (deletedCount == 1) "" else "es";
         log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Deleted {d} sort index{s}.", .{ deletedCount, deletedPlural })));
@@ -927,9 +927,9 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info(try pc.cyan(allocator, "Rebuilding sort indexes..."));
     log.info("");
 
-    writeProgress("Rebuilding hash index (asc)...");
-    try ensureSortIndex(io, metadataCollection);
-    clearProgressMessage();
+    writeProgress(log, "Rebuilding hash index (asc)...");
+    try ensureSortIndex(io, log, metadataCollection);
+    clearProgressMessage(log);
 
     log.info(try pc.green(allocator, "\u{2705} Sort indexes rebuilt successfully."));
     log.info("");
@@ -938,18 +938,17 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info("  - photoDate (desc, date)");
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
-// Writes the progress of buildFilesTree every 50 files.
+// Writes the progress of buildFilesTree every 50 files, to the log.
 //
-fn onFilesHashed(context: ?*anyopaque, count: u64) void {
-    _ = context;
+fn onFilesHashed(_: ?*anyopaque, log: ILog, count: u64) void {
     if (count % 50 == 0) {
         var buffer: [64]u8 = undefined;
         const message = std.fmt.bufPrint(&buffer, "Hashed {d} files...", .{count}) catch unreachable;
-        writeProgress(message);
+        writeProgress(log, message);
     }
 }
 
@@ -959,14 +958,14 @@ fn onFilesHashed(context: ?*anyopaque, count: u64) void {
 // a new tree with logical hash, length, and lastModified per file. This is the single
 // source of truth for "rebuild tree from files".
 //
-pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IBaseCommandOptions) !void {
+pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IBaseCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const dbDir = try resolveDbDir(allocator, io, options);
+    const dbDir = try resolveDbDir(allocator, io, log, options);
 
-    const loaded = try loadDatabase(allocator, io, dbDir, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const dbDirResolved = loaded.databaseDir;
 
     log.info("");
@@ -974,13 +973,13 @@ pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, cont
     log.info(try std.fmt.allocPrint(allocator, "  Database: {s}", .{try pc.cyan(allocator, dbDirResolved)}));
     log.info("");
 
-    const result = try buildFilesTree(allocator, io, loaded.assetStorage, .{
+    const result = try buildFilesTree(allocator, io, log, loaded.assetStorage, .{
         .context = null,
         .function = onFilesHashed,
     }, uuidGenerator);
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Rebuilt files merkle tree: {d} files.", .{result.fileCount})));
     log.info("");
-    exit(io, 0);
+    exit(io, log, 0);
 }

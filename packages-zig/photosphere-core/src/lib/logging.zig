@@ -16,7 +16,6 @@ const TaskServices = ziggy.task_runner.TaskServices;
 const HandlerServices = ziggy.core.HandlerServices;
 const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
-const FileLog = utils.file_log.FileLog;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
@@ -121,16 +120,14 @@ pub const NoRequest = struct {};
 // get-log-details: answered by the get-log-details task. The response is the path of the log file and its header.
 //
 pub fn getLogDetailsMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, request: NoRequest) !ziggy.core.Response(utils.log.ILogDetails) {
-    _ = services;
     _ = timers;
     _ = io;
     _ = request;
-    const logger = FileLog.fromILog(utils.log.currentLog());
     return .{
         .task = .{
             .task_type = "get-log-details",
             .data = try json.stringify(allocator, ILogDetailsData{
-                .logFilePath = if (logger) |file_log| file_log.getLogFilePath() else null,
+                .logFilePath = services.log.logFilePath(),
             }),
         },
     };

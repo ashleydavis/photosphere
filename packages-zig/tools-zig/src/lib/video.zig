@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
 const exec = node_utils.exec.exec;
@@ -52,8 +53,8 @@ pub const Video = struct {
     //
     // Verify that ffprobe is available. It runs `ffprobe -version` through the runner on every call.
     //
-    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !VideoToolStatus {
-        const result = exec(allocator, io, tools, "ffprobe -version") catch |err| {
+    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !VideoToolStatus {
+        const result = exec(allocator, io, log, tools, "ffprobe -version") catch |err| {
             return .{
                 .available = false,
                 .@"error" = try std.fmt.allocPrint(allocator, "The ffprobe built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -70,8 +71,8 @@ pub const Video = struct {
     //
     // Verify that ffmpeg is available. It runs `ffmpeg -version` through the runner on every call.
     //
-    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !VideoToolStatus {
-        const result = exec(allocator, io, tools, "ffmpeg -version") catch |err| {
+    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !VideoToolStatus {
+        const result = exec(allocator, io, log, tools, "ffmpeg -version") catch |err| {
             return .{
                 .available = false,
                 .@"error" = try std.fmt.allocPrint(allocator, "The ffmpeg built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -88,7 +89,7 @@ pub const Video = struct {
     //
     // Reads the information about the video with ffprobe.
     //
-    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !AssetInfo {
+    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
         if (self._info) |info| {
             return info;
         }
@@ -97,7 +98,7 @@ pub const Video = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        self._info = self.getVideoInfoInner(allocator, io, tools) catch |err| {
+        self._info = self.getVideoInfoInner(allocator, io, log, tools) catch |err| {
             return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return self._info.?;
@@ -106,11 +107,11 @@ pub const Video = struct {
     //
     // The body of the try block of getVideoInfo.
     //
-    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !AssetInfo {
+    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
 
         // Run ffprobe to get video information in JSON format
         const command = try std.fmt.allocPrint(allocator, "ffprobe -v quiet -print_format json -show_format -show_streams \"{s}\"", .{self.filePath});
-        const result = try exec(allocator, io, tools, command);
+        const result = try exec(allocator, io, log, tools, command);
 
         const probeData = switch (try jsonParse(allocator, result.stdout)) {
             .document => |document| document,
@@ -185,15 +186,15 @@ pub const Video = struct {
     //
     // Gets the information about the video.
     //
-    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !AssetInfo {
-        return self.getVideoInfo(allocator, io, tools);
+    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
+        return self.getVideoInfo(allocator, io, log, tools);
     }
 
     //
     // Gets the width and height of the video.
     //
-    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner) !Dimensions {
-        const info = try self.getVideoInfo(allocator, io, tools);
+    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !Dimensions {
+        const info = try self.getVideoInfo(allocator, io, log, tools);
         return info.dimensions;
     }
 
@@ -201,7 +202,7 @@ pub const Video = struct {
     // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are used (no
     // scaling, quality 85), which is how getVideoDetails calls it.
     //
-    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
+    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
@@ -220,7 +221,7 @@ pub const Video = struct {
         // Force overwrite and specify output
         try command.writer.print(" -y \"{s}\"", .{outputPath});
 
-        _ = exec(allocator, io, tools, command.written()) catch |err| {
+        _ = exec(allocator, io, log, tools, command.written()) catch |err| {
             return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;

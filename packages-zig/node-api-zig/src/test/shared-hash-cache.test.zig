@@ -1,4 +1,6 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const ILog = @import("utils-zig").log.ILog;
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const hash_cache = node_api.hash_cache;
@@ -14,11 +16,11 @@ const forgetSharedHashCaches = hash_cache.forgetSharedHashCaches;
 //
 // Writes one entry into the cache on disk, as a separate writer would.
 //
-fn writeAnEntry(cacheDir: []const u8, key: []const u8, length: u64) !void {
+fn writeAnEntry(log: ILog, cacheDir: []const u8, key: []const u8, length: u64) !void {
     const io = std.testing.io;
     var writable = try HashCache.init(cacheDir, false);
     defer writable.deinit();
-    _ = try writable.load(io);
+    _ = try writable.load(io, log);
     var randomHash: [32]u8 = undefined;
     io.random(&randomHash);
     try writable.addHash(key, .{
@@ -26,7 +28,7 @@ fn writeAnEntry(cacheDir: []const u8, key: []const u8, length: u64) !void {
         .length = length,
         .lastModified = 1700000000000,
     });
-    try writable.save(io);
+    try writable.save(io, log);
 }
 
 //
@@ -59,30 +61,32 @@ const SharedCacheTest = struct {
 };
 
 test "two readers of an unchanged cache get the same one" {
+    const log = MuteLog.init();
     var context: SharedCacheTest = undefined;
     try context.init();
     defer context.deinit();
     const io = std.testing.io;
-    try writeAnEntry(context.cacheDir, "photo-1.jpg", 100);
+    try writeAnEntry(log, context.cacheDir, "photo-1.jpg", 100);
 
-    const first = try loadSharedHashCache(io, context.cacheDir);
-    const second = try loadSharedHashCache(io, context.cacheDir);
+    const first = try loadSharedHashCache(io, log, context.cacheDir);
+    const second = try loadSharedHashCache(io, log, context.cacheDir);
 
     try std.testing.expect(second == first);
 }
 
 test "a cache that has been written since is read again" {
+    const log = MuteLog.init();
     var context: SharedCacheTest = undefined;
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    try writeAnEntry(context.cacheDir, "photo-1.jpg", 100);
-    const first = try loadSharedHashCache(io, context.cacheDir);
+    try writeAnEntry(log, context.cacheDir, "photo-1.jpg", 100);
+    const first = try loadSharedHashCache(io, log, context.cacheDir);
     const firstEntryCount = first.getEntryCount();
 
-    try writeAnEntry(context.cacheDir, "photo-2.jpg", 200);
-    const second = try loadSharedHashCache(io, context.cacheDir);
+    try writeAnEntry(log, context.cacheDir, "photo-2.jpg", 200);
+    const second = try loadSharedHashCache(io, log, context.cacheDir);
 
     // (The replaced cache is freed, and a new one can be allocated at the same address, so the cache is told
     // apart by what it holds rather than by its identity.)
@@ -92,21 +96,23 @@ test "a cache that has been written since is read again" {
 }
 
 test "a cache that is not there yet is read once it appears" {
+    const log = MuteLog.init();
     var context: SharedCacheTest = undefined;
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    const before = try loadSharedHashCache(io, context.cacheDir);
+    const before = try loadSharedHashCache(io, log, context.cacheDir);
     try std.testing.expect(try before.getHash(allocator, "photo-1.jpg") == null);
 
-    try writeAnEntry(context.cacheDir, "photo-1.jpg", 100);
+    try writeAnEntry(log, context.cacheDir, "photo-1.jpg", 100);
 
-    const after = try loadSharedHashCache(io, context.cacheDir);
+    const after = try loadSharedHashCache(io, log, context.cacheDir);
     try std.testing.expect(try after.getHash(allocator, "photo-1.jpg") != null);
 }
 
 test "caches in different directories are kept apart" {
+    const log = MuteLog.init();
     var context: SharedCacheTest = undefined;
     try context.init();
     defer context.deinit();
@@ -114,10 +120,10 @@ test "caches in different directories are kept apart" {
     const io = std.testing.io;
     const otherDir = try temp_dirs.makeTempDir(allocator, io, "shared-hash-cache-other-test");
     defer temp_dirs.removeTempDir(io, otherDir);
-    try writeAnEntry(context.cacheDir, "photo-1.jpg", 100);
+    try writeAnEntry(log, context.cacheDir, "photo-1.jpg", 100);
 
-    const here = try loadSharedHashCache(io, context.cacheDir);
-    const there = try loadSharedHashCache(io, otherDir);
+    const here = try loadSharedHashCache(io, log, context.cacheDir);
+    const there = try loadSharedHashCache(io, log, otherDir);
 
     try std.testing.expect(there != here);
     try std.testing.expect(try there.getHash(allocator, "photo-1.jpg") == null);

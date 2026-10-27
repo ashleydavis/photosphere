@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const in_process_tools = node_utils.in_process_tools;
@@ -29,7 +30,7 @@ const RecordingRunner = struct {
         return !std.mem.eql(u8, tool, self.refused_tool);
     }
 
-    fn run(context: ?*anyopaque, _: std.Io, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
+    fn run(context: ?*anyopaque, _: std.Io, _: ILog, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
         const self: *RecordingRunner = @ptrCast(@alignCast(context.?));
         self.tool = tool;
         self.arguments = arguments;
@@ -111,12 +112,13 @@ test "splitCommand keeps the character after a backslash and fails on a backslas
 }
 
 test "exec gives a magick command to the runner with its arguments and returns the output" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var runner = newRunner(0, "800 600");
     const tools = runner.runner();
 
-    const result = try exec(arena.allocator(), std.testing.io, tools, "magick identify -format \"%w %h\" \"/tmp/a b.jpg\"");
+    const result = try exec(arena.allocator(), std.testing.io, log, tools, "magick identify -format \"%w %h\" \"/tmp/a b.jpg\"");
     try std.testing.expectEqualStrings("800 600", result.stdout);
     try std.testing.expectEqual(@as(u32, 1), runner.calls);
     try std.testing.expectEqualStrings("magick", runner.tool);
@@ -127,46 +129,50 @@ test "exec gives a magick command to the runner with its arguments and returns t
 }
 
 test "exec gives ffprobe and ffmpeg commands to the runner" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var runner = newRunner(0, "{}");
     const tools = runner.runner();
 
-    _ = try exec(arena.allocator(), std.testing.io, tools, "ffprobe -version");
+    _ = try exec(arena.allocator(), std.testing.io, log, tools, "ffprobe -version");
     try std.testing.expectEqualStrings("ffprobe", runner.tool);
-    _ = try exec(arena.allocator(), std.testing.io, tools, "ffmpeg -i \"x.mp4\" -y \"y.jpg\"");
+    _ = try exec(arena.allocator(), std.testing.io, log, tools, "ffmpeg -i \"x.mp4\" -y \"y.jpg\"");
     try std.testing.expectEqualStrings("ffmpeg", runner.tool);
     try std.testing.expectEqual(@as(u32, 2), runner.calls);
 }
 
 test "exec fails with the output when the runner's tool ends with a non-zero code" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var runner = newRunner(1, "no decode delegate");
     const tools = runner.runner();
 
-    try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, tools, "magick \"x.heic\" -resize 10x10 \"y.jpg\""));
+    try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, log, tools, "magick \"x.heic\" -resize 10x10 \"y.jpg\""));
 }
 
 test "exec leaves a command for another program to the shell even with a runner" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var runner = newRunner(0, "");
     const tools = runner.runner();
 
-    const result = try exec(arena.allocator(), std.testing.io, tools, "echo hello");
+    const result = try exec(arena.allocator(), std.testing.io, log, tools, "echo hello");
     try std.testing.expect(std.mem.startsWith(u8, result.stdout, "hello"));
     try std.testing.expectEqual(@as(u32, 0), runner.calls);
 }
 
 test "tryRun leaves a command for a tool the runner does not handle to the caller" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var recorder = newRunner(0, "ignored");
     recorder.refused_tool = "ffmpeg";
-    try std.testing.expect((try in_process_tools.tryRun(arena.allocator(), std.testing.io, recorder.runner(), "ffmpeg -version")) == null);
+    try std.testing.expect((try in_process_tools.tryRun(arena.allocator(), std.testing.io, log, recorder.runner(), "ffmpeg -version")) == null);
     try std.testing.expectEqual(@as(u32, 0), recorder.calls);
-    const result = (try in_process_tools.tryRun(arena.allocator(), std.testing.io, recorder.runner(), "magick -version")).?;
+    const result = (try in_process_tools.tryRun(arena.allocator(), std.testing.io, log, recorder.runner(), "magick -version")).?;
     try std.testing.expectEqualStrings("ignored", result.stdout);
     try std.testing.expectEqual(@as(u32, 1), recorder.calls);
 }

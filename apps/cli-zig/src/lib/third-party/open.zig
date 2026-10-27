@@ -5,10 +5,10 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const log = &utils.log.log;
 const getEnv = node_utils.process_env.getEnv;
 const windows = std.os.windows;
 
@@ -80,7 +80,7 @@ pub fn openCommand(allocator: std.mem.Allocator, target: []const u8) !IOpenComma
 // `windowsVerbatimArguments`, so PowerShell is started attached, with pipes for its standard streams (see
 // `startAttachedToThisProcess`). Fails only when the command cannot be built.
 //
-pub fn open(allocator: std.mem.Allocator, io: std.Io, target: []const u8) !void {
+pub fn open(allocator: std.mem.Allocator, io: std.Io, log: ILog, target: []const u8) !void {
     const openerCommand = try openCommand(allocator, target);
     var argv: std.ArrayList([]const u8) = .empty;
     try argv.append(allocator, openerCommand.command);
@@ -127,7 +127,7 @@ pub fn open(allocator: std.mem.Allocator, io: std.Io, target: []const u8) !void 
 // started the browser: on Windows `psi bug` opens no browser. This mirrors that TypeScript bug on purpose, to stay
 // faithful to it. Fix it in both (start the opener detached, or wait for it) once the TypeScript is fixed.
 //
-pub fn startAttachedToThisProcess(allocator: std.mem.Allocator, process: windows.HANDLE) ?windows.HANDLE {
+pub fn startAttachedToThisProcess(log: ILog, allocator: std.mem.Allocator, process: windows.HANDLE) ?windows.HANDLE {
     const job = killOnCloseJob() orelse {
         log.verbose(std.fmt.allocPrint(allocator, "Failed to create the job object of the opener: error {d}", .{@intFromEnum(windows.GetLastError())}) catch return null);
         return null;

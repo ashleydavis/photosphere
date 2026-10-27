@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const INewsItem = node_api.news_fetcher.INewsItem;
@@ -23,9 +24,9 @@ fn NEWS_URL() []const u8 {
 //
 // The body of checkForNews inside its try block (errors become undefined).
 //
-fn checkForNewsUnsafe(allocator: std.mem.Allocator, io: std.Io) !?INewsItem {
+fn checkForNewsUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog) !?INewsItem {
     const items = try fetchNews(allocator, io, NEWS_URL());
-    const shownIds = try getShownNewsIds(allocator, io);
+    const shownIds = try getShownNewsIds(allocator, io, log);
     var nextItem: ?INewsItem = null;
     for (items) |item| {
         var shown = false;
@@ -50,8 +51,8 @@ fn checkForNewsUnsafe(allocator: std.mem.Allocator, io: std.Io) !?INewsItem {
 // install. Marks the returned item as shown so it is not returned again. Returns undefined
 // when all items have already been seen, or when the fetch or parse step fails.
 //
-pub fn checkForNews(allocator: std.mem.Allocator, io: std.Io) ?INewsItem {
-    return checkForNewsUnsafe(allocator, io) catch null;
+pub fn checkForNews(allocator: std.mem.Allocator, io: std.Io, log: ILog) ?INewsItem {
+    return checkForNewsUnsafe(allocator, io, log) catch null;
 }
 
 //
@@ -74,9 +75,9 @@ pub const INewsItemWithState = struct {
 //
 // The body of getAllNews inside its try block (errors become an empty array).
 //
-fn getAllNewsUnsafe(allocator: std.mem.Allocator, io: std.Io) ![]const INewsItemWithState {
+fn getAllNewsUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog) ![]const INewsItemWithState {
     const items = try fetchNews(allocator, io, NEWS_URL());
-    const shownIds = try getShownNewsIds(allocator, io);
+    const shownIds = try getShownNewsIds(allocator, io, log);
     const result = try allocator.alloc(INewsItemWithState, items.len);
     for (items, 0..) |item, index| {
         var seen = false;
@@ -99,8 +100,8 @@ fn getAllNewsUnsafe(allocator: std.mem.Allocator, io: std.Io) ![]const INewsItem
 // `seen` flag derived from the locally-persisted shown_news_ids list. Returns an
 // empty array on fetch or parse failure so callers can render gracefully when offline.
 //
-pub fn getAllNews(allocator: std.mem.Allocator, io: std.Io) []const INewsItemWithState {
-    return getAllNewsUnsafe(allocator, io) catch &.{};
+pub fn getAllNews(allocator: std.mem.Allocator, io: std.Io, log: ILog) []const INewsItemWithState {
+    return getAllNewsUnsafe(allocator, io, log) catch &.{};
 }
 
 //

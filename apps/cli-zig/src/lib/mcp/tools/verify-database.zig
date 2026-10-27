@@ -44,6 +44,7 @@ pub fn registerVerifyDatabaseTool(server: *McpServer, allocator: std.mem.Allocat
 fn verifyDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     _ = arguments;
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
@@ -54,9 +55,9 @@ fn verifyDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io
         .databasePath = database.databasePath,
         .encryptionKey = database.encryptionKey,
     };
-    const dbFileResult = try verifyDatabaseFiles(toolContext.allocator, io, database.assetStorage, null);
+    const dbFileResult = try verifyDatabaseFiles(toolContext.allocator, io, log, database.assetStorage, null);
     var timer_list = TimerList.init();
-    const verifyResult = try verify(toolContext.allocator, io, timer_list.interface(), storageDescriptor, database.assetStorage, toolContext.uuidGenerator, database.metadataCollection, null, null);
+    const verifyResult = try verify(toolContext.allocator, io, log, timer_list.interface(), storageDescriptor, database.assetStorage, toolContext.uuidGenerator, database.metadataCollection, null, null);
     var response: BsonDocument = .empty;
     try response.put(allocator, "databaseFiles", try toJsValue(allocator, dbFileResult));
     try response.put(allocator, "assets", try toJsValue(allocator, verifyResult));

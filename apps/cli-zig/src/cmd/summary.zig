@@ -1,11 +1,11 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const format = @import("../lib/format.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
@@ -24,15 +24,15 @@ pub const ISummaryCommandOptions = struct {
 //
 // Command that displays a summary of the Photosphere media file database.
 //
-pub fn summaryCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *ISummaryCommandOptions) !void {
+pub fn summaryCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *ISummaryCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const databaseDir = loaded.databaseDir;
 
-    const summary = try getDatabaseSummary(allocator, io, assetStorage);
+    const summary = try getDatabaseSummary(allocator, io, log, assetStorage);
 
     log.info("");
     log.info(try pc.bold(allocator, try pc.blue(allocator, "\u{1F4CA} Database Summary")));
@@ -65,5 +65,5 @@ pub fn summaryCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     log.info("    # Synchronize changes between two databases that have been independently changed");
     log.info(try std.fmt.allocPrint(allocator, "    psi sync --db {s} --dest <path>", .{databaseDir}));
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

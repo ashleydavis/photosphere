@@ -31,6 +31,7 @@ pub fn getDatabaseSummaryHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -45,8 +46,8 @@ pub fn getDatabaseSummaryHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
-    const summary = try getDatabaseSummary(allocator, io, opened.storage);
+    const opened = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const summary = try getDatabaseSummary(allocator, io, log, opened.storage);
     const text = try std.json.Stringify.valueAlloc(allocator, summary, .{
         .emit_null_optional_fields = false,
     });

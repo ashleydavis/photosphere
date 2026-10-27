@@ -9,6 +9,7 @@ const HandlerServices = @import("ziggy").core.HandlerServices;
 const Timers = @import("ziggy").timers.Timers;
 
 test "mark-update-shown records the version as the last one shown" {
+    const log = ziggy.task_queue.utils.mute_log.MuteLog.init();
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -18,7 +19,7 @@ test "mark-update-shown records the version as the last one shown" {
     try std.testing.expectEqualStrings("null", reply);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const shown = (try node_api.news_state.getLastShownUpdateVersion(arena.allocator(), std.testing.io)).?;
+    const shown = (try node_api.news_state.getLastShownUpdateVersion(arena.allocator(), std.testing.io, log)).?;
     try std.testing.expectEqualStrings("1.2.3", shown);
     try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Marked update notification as shown: v1.2.3") != null);
 }
@@ -33,6 +34,7 @@ test "mark-update-shown without a version is an error reply" {
 }
 
 test "mark-news-shown adds the id to the news items shown, once" {
+    const log = ziggy.task_queue.utils.mute_log.MuteLog.init();
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -42,7 +44,7 @@ test "mark-news-shown adds the id to the news items shown, once" {
     allocator.free(try app.requestOk("mark-news-shown", "\"news-one\""));
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const shown = try node_api.news_state.getShownNewsIds(arena.allocator(), std.testing.io);
+    const shown = try node_api.news_state.getShownNewsIds(arena.allocator(), std.testing.io, log);
     try std.testing.expectEqual(@as(usize, 2), shown.len);
     try std.testing.expectEqualStrings("news-one", shown[0]);
     try std.testing.expectEqualStrings("news-two", shown[1]);
@@ -74,9 +76,10 @@ test "a failing mark-shown request logs the error with the message of its handle
 fn checkNewsOnMain(app: *TestApp) !void {
     const Call = struct {
         fn run(_: u8, services: HandlerServices, _: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!void {
+            const log = services.log;
             var arena = std.heap.ArenaAllocator.init(allocator);
             defer arena.deinit();
-            try update_and_news.checkForNews(services, arena.allocator(), io);
+            try update_and_news.checkForNews(services, arena.allocator(), io, log);
         }
     };
     try app.onMainThread(@as(u8, 0), Call.run);
@@ -88,9 +91,10 @@ fn checkNewsOnMain(app: *TestApp) !void {
 fn checkUpdateOnMain(app: *TestApp, comptime version: []const u8) !void {
     const Call = struct {
         fn run(_: u8, services: HandlerServices, _: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!void {
+            const log = services.log;
             var arena = std.heap.ArenaAllocator.init(allocator);
             defer arena.deinit();
-            try update_and_news.checkForUpdate(services, arena.allocator(), io, version);
+            try update_and_news.checkForUpdate(services, arena.allocator(), io, log, version);
         }
     };
     try app.onMainThread(@as(u8, 0), Call.run);

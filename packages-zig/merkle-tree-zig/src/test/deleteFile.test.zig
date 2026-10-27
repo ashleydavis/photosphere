@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const errors = @import("utils-zig").errors;
@@ -88,6 +89,7 @@ test "should handle deleting a non-existent file" {
 }
 
 test "should persist deletion when saving and loading the tree" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -101,10 +103,10 @@ test "should persist deletion when saving and loading the tree" {
 
     // Save the tree (in memory instead of a temporary file)
     var storage = memory_storage.MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, std.testing.io, "merkle-tree-delete-test.bin", &tree, storage.asStorage(), "FTRE");
+    try merkle_tree.saveTree(allocator, std.testing.io, log, "merkle-tree-delete-test.bin", &tree, storage.asStorage(), "FTRE");
 
     // Load the tree back
-    const loadedTree = (try merkle_tree.loadTree(allocator, std.testing.io, "merkle-tree-delete-test.bin", storage.asStorage(), "FTRE")).?;
+    const loadedTree = (try merkle_tree.loadTree(allocator, std.testing.io, log, "merkle-tree-delete-test.bin", storage.asStorage(), "FTRE")).?;
 
     // Verify the file is completely gone
     try std.testing.expect((merkle_tree.findItemInTree(loadedTree.sort, fileToDelete)) == null);
@@ -276,6 +278,7 @@ test "deleteItems should handle deleting the only file in a tree" {
 }
 
 test "deleteItems should persist hard deletion when saving and loading the tree" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -290,10 +293,10 @@ test "deleteItems should persist hard deletion when saving and loading the tree"
 
     // Save the tree (in memory instead of a temporary file)
     var storage = memory_storage.MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, std.testing.io, "merkle-tree-hard-delete-test.bin", &tree, storage.asStorage(), "FTRE");
+    try merkle_tree.saveTree(allocator, std.testing.io, log, "merkle-tree-hard-delete-test.bin", &tree, storage.asStorage(), "FTRE");
 
     // Load the tree back
-    const loadedTree = (try merkle_tree.loadTree(allocator, std.testing.io, "merkle-tree-hard-delete-test.bin", storage.asStorage(), "FTRE")).?;
+    const loadedTree = (try merkle_tree.loadTree(allocator, std.testing.io, log, "merkle-tree-hard-delete-test.bin", storage.asStorage(), "FTRE")).?;
 
     // Verify the file is completely gone
     try std.testing.expect(!hasItem(&loadedTree, fileToDelete));

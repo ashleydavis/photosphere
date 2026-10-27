@@ -52,6 +52,7 @@ test "plan-sync runs on Ziggy's runner and refuses when syncing is switched off,
 }
 
 test "plan-sync asks the phone for the connection type when syncing is switched on, and a phone that cannot answer is an error that says so" {
+    const log = utils.mute_log.MuteLog.init();
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -60,7 +61,7 @@ test "plan-sync asks the phone for the connection type when syncing is switched 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const config_path = try node_api.config_file.getConfigPath(arena.allocator());
-    var config = (try node_api.config_worker.readConfigFromStorage(arena.allocator(), std.testing.io, config_path)).config;
+    var config = (try node_api.config_worker.readConfigFromStorage(arena.allocator(), std.testing.io, log, config_path)).config;
     config.sync.settings.enabled = true;
     const yaml = try node_api.config_worker.buildConfigYaml(arena.allocator(), config, null);
     try std.Io.Dir.cwd().createDirPath(std.testing.io, std.fs.path.dirname(config_path).?);

@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const cli = @import("cli-zig");
 const helpers = @import("test-helpers.zig");
 const directory_picker = cli.directory_picker;
@@ -49,17 +50,18 @@ test "validateExistingDatabase explains why a directory is not a database" {
 }
 
 test "getDirectoryForCommand returns the current directory when it is a database" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const database = try makeDatabase(allocator, "picker-current");
     defer std.Io.Dir.cwd().deleteTree(io, database) catch {};
-    try std.testing.expectEqualStrings(database, try directory_picker.getDirectoryForCommand(allocator, io, .existing, true, database));
+    try std.testing.expectEqualStrings(database, try directory_picker.getDirectoryForCommand(allocator, io, log, .existing, true, database));
 
     const empty = try helpers.makeTempDir(allocator, "picker-init");
     defer std.Io.Dir.cwd().deleteTree(io, empty) catch {};
-    try std.testing.expectEqualStrings(empty, try directory_picker.getDirectoryForCommand(allocator, io, .init, true, empty));
+    try std.testing.expectEqualStrings(empty, try directory_picker.getDirectoryForCommand(allocator, io, log, .init, true, empty));
 }
 
 test "getDirectoryForCommand lets the user enter the path of a database" {

@@ -27,6 +27,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -123,9 +124,11 @@ pub fn resetAppStorageHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
+    _ = log;
     _ = taskData;
     _ = context;
 

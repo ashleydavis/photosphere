@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
@@ -65,12 +66,13 @@ pub const IOpenStorageResult = struct {
 pub fn openStorage(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
     host: ?INativeCaller,
 ) !IOpenStorageResult {
-    const credentials = try resolveStorageCredentials(allocator, io, databasePath, encryptionKey, s3Key, host);
+    const credentials = try resolveStorageCredentials(allocator, io, log, databasePath, encryptionKey, s3Key, host);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const storageOptions = loadedKeys.options;
     const created = try createStorage(allocator, io, databasePath, credentials.s3Config, storageOptions);

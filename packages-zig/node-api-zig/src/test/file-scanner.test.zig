@@ -1,11 +1,11 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const string_lists = @import("string-lists.zig");
 const zip_fixture = @import("zip-fixture.zig");
 const buildZip = zip_fixture.buildZip;
@@ -79,7 +79,7 @@ const Scanned = struct {
     //
     // Records one file.
     //
-    fn visit(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
+    fn visit(context: ?*anyopaque, _: ILog, result: FileScannedResult) anyerror!void {
         const self: *Scanned = @ptrCast(@alignCast(context.?));
         var copy = result;
         copy.filePath = try self.allocator.dupe(u8, result.filePath);
@@ -141,7 +141,7 @@ const Progress = struct {
     //
     // Records one report.
     //
-    fn record(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
+    fn record(context: ?*anyopaque, _: ILog, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
         const self: *Progress = @ptrCast(@alignCast(context.?));
         self.reported = true;
         self.currentPath = if (currentlyScanning) |scanning| (self.allocator.dupe(u8, scanning) catch |err| {
@@ -200,11 +200,11 @@ const ScannerTest = struct {
     //
     // Clean up test directory.
     //
-    fn deinit(self: *ScannerTest) void {
+    fn deinit(self: *ScannerTest, log: ILog) void {
         temp_dirs.removeTempDir(std.testing.io, self.testDir);
         temp_dirs.removeTempDir(std.testing.io, self.sessionTempDir);
         self.arena.deinit();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
@@ -228,11 +228,11 @@ const ScannerTest = struct {
     //
     // Scans one path.
     //
-    fn scan(self: *ScannerTest, filePath: []const u8, options: ScannerOptions, recorder: ?*Progress) !Scanned {
+    fn scan(self: *ScannerTest, log: ILog, filePath: []const u8, options: ScannerOptions, recorder: ?*Progress) !Scanned {
         var scanned: Scanned = .{
             .allocator = self.arena.allocator(),
         };
-        try scanPath(self.arena.allocator(), std.testing.io, filePath, .{
+        try scanPath(self.arena.allocator(), std.testing.io, log, filePath, .{
             .context = &scanned,
             .function = Scanned.visit,
         }, if (recorder) |progressRecorder| .{
@@ -245,11 +245,11 @@ const ScannerTest = struct {
     //
     // Scans several paths.
     //
-    fn scanMany(self: *ScannerTest, paths: []const []const u8) !Scanned {
+    fn scanMany(self: *ScannerTest, log: ILog, paths: []const []const u8) !Scanned {
         var scanned: Scanned = .{
             .allocator = self.arena.allocator(),
         };
-        try scanPaths(self.arena.allocator(), std.testing.io, paths, .{
+        try scanPaths(self.arena.allocator(), std.testing.io, log, paths, .{
             .context = &scanned,
             .function = Scanned.visit,
         }, null, defaultScannerOptions, self.sessionTempDir, self.generator.uuidGenerator());
@@ -299,12 +299,13 @@ fn expectNotContains(strings: []const []const u8, unexpected: []const u8) !void 
 }
 
 test "should scan a single PNG file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.png", &MINIMAL_PNG);
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqualStrings(filePath, scanned.files.items[0].filePath);
@@ -314,12 +315,13 @@ test "should scan a single PNG file" {
 }
 
 test "should scan a single JPEG file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.jpg", &MINIMAL_JPEG);
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqualStrings(filePath, scanned.files.items[0].filePath);
@@ -327,12 +329,13 @@ test "should scan a single JPEG file" {
 }
 
 test "should scan a single MP4 file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.mp4", &MINIMAL_MP4);
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqualStrings(filePath, scanned.files.items[0].filePath);
@@ -340,56 +343,61 @@ test "should scan a single MP4 file" {
 }
 
 test "should ignore file with unknown content type" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.unknown", "some content");
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should ignore SVG files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.svg", "<svg></svg>");
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should ignore TypeScript files (video/mp2t)" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.ts", "export const test = 1;");
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should handle non-existent file gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try path.join(context.arena.allocator(), &.{ context.testDir, "nonexistent.png" });
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should include file metadata" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.png", &MINIMAL_PNG);
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(u64, MINIMAL_PNG.len), scanned.files.items[0].fileStat.length);
     try std.testing.expect(scanned.files.items[0].fileStat.lastModified > 0);
@@ -397,9 +405,10 @@ test "should include file metadata" {
 }
 
 test "a modified time before 1970 is truncated to whole milliseconds" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const io = std.testing.io;
     const filePath = try context.write("old.png", &MINIMAL_PNG);
     // Half a millisecond past -1001ms, which truncates towards zero to -1000.
@@ -411,20 +420,21 @@ test "a modified time before 1970 is truncated to whole milliseconds" {
         .modify_timestamp = .{ .new = oldTime },
     });
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(i64, -1000), scanned.files.items[0].fileStat.lastModified);
 }
 
 test "should scan directory with multiple image files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("images/image1.png", &MINIMAL_PNG);
     _ = try context.write("images/image2.jpg", &MINIMAL_JPEG);
     _ = try context.write("images/image3.png", &MINIMAL_PNG);
 
-    var scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    var scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.files.items.len >= 3);
     const fileNames = try scanned.baseNames();
@@ -434,13 +444,14 @@ test "should scan directory with multiple image files" {
 }
 
 test "should scan nested directories" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("level1/level2/nested.png", &MINIMAL_PNG);
     _ = try context.write("root.png", &MINIMAL_PNG);
 
-    var scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    var scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.files.items.len >= 2);
     try std.testing.expect(scanned.anyContains("nested.png", false));
@@ -448,13 +459,14 @@ test "should scan nested directories" {
 }
 
 test "should ignore files matching ignore patterns" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("data/image.png", &MINIMAL_PNG);
     _ = try context.write("data/data.db", "database content");
 
-    var scanned = try context.scan(context.testDir, .{
+    var scanned = try context.scan(log, context.testDir, .{
         .ignorePatterns = &.{".db"},
     }, null);
 
@@ -464,41 +476,44 @@ test "should ignore files matching ignore patterns" {
 }
 
 test "should ignore node_modules by default" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("node_modules/package.png", &MINIMAL_PNG);
     _ = try context.write("root.png", &MINIMAL_PNG);
 
-    var scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    var scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.anyContains("root.png", false));
     try std.testing.expect(!scanned.anyContains("node_modules", false));
 }
 
 test "should ignore .git directory by default" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write(".git/config.png", &MINIMAL_PNG);
     _ = try context.write("root.png", &MINIMAL_PNG);
 
-    var scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    var scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.anyContains("root.png", false));
     try std.testing.expect(!scanned.anyContains(".git", false));
 }
 
 test "should yield files in alphanumeric order" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // Create files in non-alphabetical order
     _ = try context.write("ordered/z.png", &MINIMAL_PNG);
     _ = try context.write("ordered/a.png", &MINIMAL_PNG);
     _ = try context.write("ordered/m.png", &MINIMAL_PNG);
 
-    var scanned = try context.scan(try path.join(context.arena.allocator(), &.{ context.testDir, "ordered" }), defaultScannerOptions, null);
+    var scanned = try context.scan(log, try path.join(context.arena.allocator(), &.{ context.testDir, "ordered" }), defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 3), scanned.files.items.len);
     const fileNames = try scanned.baseNames();
@@ -508,9 +523,10 @@ test "should yield files in alphanumeric order" {
 }
 
 test "should scan zip file containing images" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const zipPath = try context.write("images.zip", try buildZip(allocator, &.{
         .{
@@ -527,7 +543,7 @@ test "should scan zip file containing images" {
         },
     }));
 
-    var scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    var scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len); // Only images, not readme.txt
     // Files from zips are extracted to temp files, so check logicalPath instead
@@ -542,9 +558,10 @@ test "should scan zip file containing images" {
 }
 
 test "should scan nested zip files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // Create inner zip
     const innerZipBuffer = try buildZip(allocator, &.{.{
@@ -564,7 +581,7 @@ test "should scan nested zip files" {
         },
     }));
 
-    var scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    var scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     // The outer.png should always be found
     try std.testing.expect(scanned.files.items.len >= 1);
@@ -581,9 +598,10 @@ test "should scan nested zip files" {
 }
 
 test "should handle deeply nested zip files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // Create level 3 zip
     const level3Buffer = try buildZip(allocator, &.{.{
@@ -615,7 +633,7 @@ test "should handle deeply nested zip files" {
         },
     }));
 
-    var scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    var scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     // At minimum, level1.png should be found
     try std.testing.expect(scanned.files.items.len >= 1);
@@ -629,20 +647,18 @@ test "should handle deeply nested zip files" {
 }
 
 test "should handle invalid zip file gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // The scan logs the failure; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     // (A scan's state is gone when it returns, so the zip sits in a folder with a photo after it, and the
     // progress reported for the photo carries the count.)
     _ = try context.write("invalid.zip", "This is not a valid zip file");
     _ = try context.write("z.png", &MINIMAL_PNG);
     var progress = context.progress();
 
-    const scanned = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    const scanned = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     // Nothing came out of the zip; the photo after it is the only file found.
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
@@ -651,9 +667,10 @@ test "should handle invalid zip file gracefully" {
 }
 
 test "should ignore non-media files in zip" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const zipPath = try context.write("mixed.zip", try buildZip(allocator, &.{
         .{
@@ -670,7 +687,7 @@ test "should ignore non-media files in zip" {
         },
     }));
 
-    const scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     // Files from zips are extracted to temp files, so check logicalPath instead
@@ -679,9 +696,10 @@ test "should ignore non-media files in zip" {
 }
 
 test "should preserve relative paths within zip" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const zipPath = try context.write("structured.zip", try buildZip(allocator, &.{
         .{
@@ -698,7 +716,7 @@ test "should preserve relative paths within zip" {
         },
     }));
 
-    var scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    var scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 3), scanned.files.items.len);
     // Files from zips are extracted to temp files, so check logicalPath instead
@@ -708,15 +726,16 @@ test "should preserve relative paths within zip" {
 }
 
 test "scans a zip whose entries are compressed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // (The checked in test archive is compressed with DEFLATE, the method the zips a camera or a phone writes
     // use, so the scan inflates each entry.)
     const zipPath = try context.write("test-archive.zip", try test_files.readFile(allocator, std.testing.io, "../test/multiple-files/test-archive.zip"));
 
-    const scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.files.items.len > 0);
     for (scanned.files.items) |file| {
@@ -727,13 +746,14 @@ test "scans a zip whose entries are compressed" {
 }
 
 test "should scan multiple file paths" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const file1 = try context.write("file1.png", &MINIMAL_PNG);
     const file2 = try context.write("file2.jpg", &MINIMAL_JPEG);
 
-    var scanned = try context.scanMany(&.{ file1, file2 });
+    var scanned = try context.scanMany(log, &.{ file1, file2 });
 
     try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len);
     const fileNames = try scanned.baseNames();
@@ -742,56 +762,60 @@ test "should scan multiple file paths" {
 }
 
 test "should scan multiple directories" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const dir1 = try context.makeDir("dir1");
     const dir2 = try context.makeDir("dir2");
     _ = try context.write("dir1/image1.png", &MINIMAL_PNG);
     _ = try context.write("dir2/image2.png", &MINIMAL_PNG);
 
-    const scanned = try context.scanMany(&.{ dir1, dir2 });
+    const scanned = try context.scanMany(log, &.{ dir1, dir2 });
 
     try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len);
 }
 
 test "should scan mix of files and directories" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const file1 = try context.write("file1.png", &MINIMAL_PNG);
     const dir1 = try context.makeDir("dir1");
     _ = try context.write("dir1/image1.png", &MINIMAL_PNG);
 
-    const scanned = try context.scanMany(&.{ file1, dir1 });
+    const scanned = try context.scanMany(log, &.{ file1, dir1 });
 
     try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len);
 }
 
 test "should handle non-existent paths gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const file1 = try context.write("file1.png", &MINIMAL_PNG);
     const nonexistent = try path.join(context.arena.allocator(), &.{ context.testDir, "nonexistent.png" });
 
-    const scanned = try context.scanMany(&.{ file1, nonexistent });
+    const scanned = try context.scanMany(log, &.{ file1, nonexistent });
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqualStrings(file1, scanned.files.items[0].filePath);
 }
 
 test "scanPath with relative file path yields absolute filePath in callback" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const absoluteFilePath = try context.write("rel-file.png", &MINIMAL_PNG);
 
     const relativePath = try context.relativeToCwd(absoluteFilePath);
     try std.testing.expect(!std.mem.eql(u8, relativePath, absoluteFilePath));
     try std.testing.expect(!std.fs.path.isAbsolute(relativePath));
 
-    const scanned = try context.scan(relativePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, relativePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expect(std.fs.path.isAbsolute(scanned.files.items[0].filePath));
@@ -800,16 +824,17 @@ test "scanPath with relative file path yields absolute filePath in callback" {
 }
 
 test "scanPath with relative directory path yields absolute filePaths in callback" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const subDir = try context.makeDir("subdir");
     _ = try context.write("subdir/image.png", &MINIMAL_PNG);
 
     const relativePath = try context.relativeToCwd(subDir);
     try std.testing.expect(!std.fs.path.isAbsolute(relativePath));
 
-    const scanned = try context.scan(relativePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, relativePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expect(std.fs.path.isAbsolute(scanned.files.items[0].filePath));
@@ -817,9 +842,10 @@ test "scanPath with relative directory path yields absolute filePaths in callbac
 }
 
 test "scanPaths with relative paths yields absolute filePaths in callbacks" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const file1 = try context.write("r1.png", &MINIMAL_PNG);
     const file2 = try context.write("r2.jpg", &MINIMAL_JPEG);
 
@@ -828,7 +854,7 @@ test "scanPaths with relative paths yields absolute filePaths in callbacks" {
     try std.testing.expect(!std.fs.path.isAbsolute(rel1));
     try std.testing.expect(!std.fs.path.isAbsolute(rel2));
 
-    const scanned = try context.scanMany(&.{ rel1, rel2 });
+    const scanned = try context.scanMany(log, &.{ rel1, rel2 });
 
     try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len);
     const resolved = try context.arena.allocator().alloc([]const u8, 2);
@@ -842,21 +868,23 @@ test "scanPaths with relative paths yields absolute filePaths in callbacks" {
 }
 
 test "should call progress callback when scanning directory" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("subdir/image.png", &MINIMAL_PNG);
     var progress = context.progress();
 
-    _ = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    _ = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     try std.testing.expect(progress.updates.items.len > 0);
 }
 
 test "should call progress callback when scanning zip file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const zipPath = try context.write("test.zip", try buildZip(allocator, &.{.{
         .name = "image.png",
@@ -864,7 +892,7 @@ test "should call progress callback when scanning zip file" {
     }}));
     var progress = context.progress();
 
-    _ = try context.scan(zipPath, defaultScannerOptions, &progress);
+    _ = try context.scan(log, zipPath, defaultScannerOptions, &progress);
 
     try std.testing.expect(progress.updates.items.len > 0);
     var found = false;
@@ -877,9 +905,10 @@ test "should call progress callback when scanning zip file" {
 }
 
 test "a zip name cut through a character outside the Basic Multilingual Plane is reported with U+FFFD" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // 49 letters and an emoji, which is two UTF-16 code units, so cutting to 50 units keeps only its high
     // surrogate, and a lone surrogate is written out as U+FFFD.
@@ -890,15 +919,16 @@ test "a zip name cut through a character outside the Basic Multilingual Plane is
     }}));
     var progress = context.progress();
 
-    _ = try context.scan(zipPath, defaultScannerOptions, &progress);
+    _ = try context.scan(log, zipPath, defaultScannerOptions, &progress);
 
     try std.testing.expectEqualStrings("a" ** 49 ++ "\u{FFFD}", progress.updates.items[0]);
 }
 
 test "should track ignored files count" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // (A photo after the ignored file, so a progress report comes after it; see "should handle invalid zip
     // file gracefully".)
     _ = try context.write("file1.png", &MINIMAL_PNG);
@@ -906,37 +936,36 @@ test "should track ignored files count" {
     _ = try context.write("file3.png", &MINIMAL_PNG);
     var progress = context.progress();
 
-    _ = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    _ = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     try std.testing.expect(progress.numFilesIgnored > 0);
 }
 
 test "should track failed files count" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // The scan logs the failure; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     // (See "should handle invalid zip file gracefully".)
     _ = try context.write("invalid.zip", "not a zip");
     _ = try context.write("z.png", &MINIMAL_PNG);
     var progress = context.progress();
 
-    _ = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    _ = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     try std.testing.expectEqual(@as(u64, 1), progress.numFilesFailed);
 }
 
 test "should track currently scanning path through progress callback" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("subdir/image.png", &MINIMAL_PNG);
     var progress = context.progress();
 
-    _ = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    _ = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     // Should have been set during scanning
     try std.testing.expect(progress.currentPath != null);
@@ -945,81 +974,88 @@ test "should track currently scanning path through progress callback" {
 }
 
 test "should include image files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.png", &MINIMAL_PNG);
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expect(std.mem.startsWith(u8, scanned.files.items[0].contentType, "image/"));
 }
 
 test "should include video files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.mp4", &MINIMAL_MP4);
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expect(std.mem.startsWith(u8, scanned.files.items[0].contentType, "video/"));
 }
 
 test "should exclude SVG files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.svg", "<svg></svg>");
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should exclude PSD files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("test.psd", "PSD content");
 
-    const scanned = try context.scan(filePath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, filePath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should handle empty directory" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
 
-    const scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    const scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should handle empty zip file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const zipPath = try context.write("empty.zip", try buildZip(context.arena.allocator(), &.{}));
 
-    const scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
 
 test "should handle zip file with only directories" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const zipPath = try context.write("dirs-only.zip", try buildZip(context.arena.allocator(), &.{.{
         .name = "subfolder/",
     }}));
 
-    const scanned = try context.scan(zipPath, defaultScannerOptions, null);
+    const scanned = try context.scan(log, zipPath, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 0), scanned.files.items.len);
 }
@@ -1041,16 +1077,17 @@ fn replaceFileWithDirectory(filePath: []const u8) void {
 }
 
 test "should handle file that becomes directory during scan" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // This is a theoretical edge case - in practice, this shouldn't happen
     // But we test that the scanner handles it gracefully
     const filePath = try context.write("test.png", &MINIMAL_PNG);
 
     // Start scanning, then delete file and create directory with same name
     const changer = try std.Thread.spawn(.{}, replaceFileWithDirectory, .{filePath});
-    const scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    const scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
     changer.join();
 
     // Should have handled gracefully
@@ -1058,9 +1095,10 @@ test "should handle file that becomes directory during scan" {
 }
 
 test "should handle very long file paths" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     var deepPath: []const u8 = "";
     var level: usize = 0;
@@ -1069,33 +1107,35 @@ test "should handle very long file paths" {
     }
     const filePath = try context.write(try std.fs.path.join(allocator, &.{ deepPath, "image.png" }), &MINIMAL_PNG);
 
-    const scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    const scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqualStrings(filePath, scanned.files.items[0].filePath);
 }
 
 test "should handle files with special characters in names" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const filePath = try context.write("image with spaces.png", &MINIMAL_PNG);
 
-    const scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    const scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqualStrings(filePath, scanned.files.items[0].filePath);
 }
 
 test "should respect custom ignore patterns" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("custom/image.png", &MINIMAL_PNG);
     _ = try context.write("custom/temp.tmp", &MINIMAL_PNG);
     _ = try context.write("custom/backup.bak", &MINIMAL_PNG);
 
-    var scanned = try context.scan(context.testDir, .{
+    var scanned = try context.scan(log, context.testDir, .{
         .ignorePatterns = &.{ ".tmp", ".bak" },
     }, null);
 
@@ -1106,13 +1146,14 @@ test "should respect custom ignore patterns" {
 }
 
 test "should use default ignore patterns when none provided" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("default/image.png", &MINIMAL_PNG);
     _ = try context.write("node_modules/package.png", &MINIMAL_PNG);
 
-    var scanned = try context.scan(context.testDir, defaultScannerOptions, null);
+    var scanned = try context.scan(log, context.testDir, defaultScannerOptions, null);
 
     try std.testing.expect(scanned.anyContains("image.png", false));
     try std.testing.expect(!scanned.anyContains("node_modules", false));
@@ -1161,13 +1202,11 @@ test "should handle Windows-style paths" {
 }
 
 test "counts empty files and empty nested zips in a zip as failed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // The scan logs the skipped files; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const allocator = context.arena.allocator();
     // (A file after the zip, so the progress reported for it includes the zip's counts.)
     _ = try context.write("z.png", &MINIMAL_PNG);
@@ -1187,7 +1226,7 @@ test "counts empty files and empty nested zips in a zip as failed" {
     }));
     var progress = context.progress();
 
-    var scanned = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    var scanned = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     try std.testing.expectEqual(@as(usize, 2), scanned.files.items.len);
     try std.testing.expect(scanned.anyContains("image.png", true));
@@ -1195,14 +1234,15 @@ test "counts empty files and empty nested zips in a zip as failed" {
 }
 
 test "should ignore FastBid sheet files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     _ = try context.write("sheet.fbs", "not an image");
     _ = try context.write("z.png", &MINIMAL_PNG);
     var progress = context.progress();
 
-    const scanned = try context.scan(context.testDir, defaultScannerOptions, &progress);
+    const scanned = try context.scan(log, context.testDir, defaultScannerOptions, &progress);
 
     try std.testing.expectEqual(@as(usize, 1), scanned.files.items.len);
     try std.testing.expectEqual(@as(u64, 1), progress.numFilesIgnored);

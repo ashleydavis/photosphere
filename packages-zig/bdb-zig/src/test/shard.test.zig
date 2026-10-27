@@ -157,56 +157,62 @@ test "BsonShard markClean clears dirty flag" {
 }
 
 test "BsonShard load with missing file leaves empty records map" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     var shard = newTestShard(arena.allocator(), "s1", &storage);
-    try shard.load(io);
-    try std.testing.expectEqual(@as(usize, 0), (try shard.records(io)).count());
+    try shard.load(io, log);
+    try std.testing.expectEqual(@as(usize, 0), (try shard.records(io, log)).count());
 }
 
 test "BsonShard load is idempotent - second call does not reset records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.load(io); // should be a no-op because _records is already set
-    try std.testing.expectEqual(@as(usize, 1), (try shard.records(io)).count());
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.load(io, log); // should be a no-op because _records is already set
+    try std.testing.expectEqual(@as(usize, 1), (try shard.records(io, log)).count());
 }
 
 test "BsonShard setRecord marks shard dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
     try std.testing.expect(!shard.dirty());
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
     try std.testing.expect(shard.dirty());
 }
 
 test "BsonShard record returns undefined for unknown id" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     var shard = newTestShard(arena.allocator(), "s1", &storage);
-    try std.testing.expect((try shard.record(io, recordId1)) == null);
+    try std.testing.expect((try shard.record(io, log, recordId1)) == null);
 }
 
 test "BsonShard setRecord and record round-trip" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
     const rec = try makeRecord(allocator, recordId1, "a");
-    try shard.setRecord(io, recordId1, rec);
-    try expectRecordEqual(rec, try shard.record(io, recordId1));
+    try shard.setRecord(io, log, recordId1, rec);
+    try expectRecordEqual(rec, try shard.record(io, log, recordId1));
 }
 
 test "BsonShard setRecord stores multiple records independently" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -214,34 +220,37 @@ test "BsonShard setRecord stores multiple records independently" {
     var shard = newTestShard(allocator, "s1", &storage);
     const rec1 = try makeRecord(allocator, recordId1, "a");
     const rec2 = try makeRecord(allocator, recordId2, "b");
-    try shard.setRecord(io, recordId1, rec1);
-    try shard.setRecord(io, recordId2, rec2);
-    try std.testing.expectEqual(@as(usize, 2), (try shard.records(io)).count());
-    try expectRecordEqual(rec1, try shard.record(io, recordId1));
-    try expectRecordEqual(rec2, try shard.record(io, recordId2));
+    try shard.setRecord(io, log, recordId1, rec1);
+    try shard.setRecord(io, log, recordId2, rec2);
+    try std.testing.expectEqual(@as(usize, 2), (try shard.records(io, log)).count());
+    try expectRecordEqual(rec1, try shard.record(io, log, recordId1));
+    try expectRecordEqual(rec2, try shard.record(io, log, recordId2));
 }
 
 test "BsonShard deleteRecord removes the record and keeps dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.deleteRecord(io, recordId1);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.deleteRecord(io, log, recordId1);
     try std.testing.expect(shard.dirty());
-    try std.testing.expect((try shard.record(io, recordId1)) == null);
+    try std.testing.expect((try shard.record(io, log, recordId1)) == null);
 }
 
 test "BsonShard deleteRecord on nonexistent id does not throw" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     var shard = newTestShard(arena.allocator(), "s1", &storage);
-    try shard.deleteRecord(io, recordId1);
+    try shard.deleteRecord(io, log, recordId1);
 }
 
 test "BsonShard deleteRecord leaves other records intact" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -249,14 +258,15 @@ test "BsonShard deleteRecord leaves other records intact" {
     var shard = newTestShard(allocator, "s1", &storage);
     const rec1 = try makeRecord(allocator, recordId1, "a");
     const rec2 = try makeRecord(allocator, recordId2, "b");
-    try shard.setRecord(io, recordId1, rec1);
-    try shard.setRecord(io, recordId2, rec2);
-    try shard.deleteRecord(io, recordId1);
-    try std.testing.expect((try shard.record(io, recordId1)) == null);
-    try expectRecordEqual(rec2, try shard.record(io, recordId2));
+    try shard.setRecord(io, log, recordId1, rec1);
+    try shard.setRecord(io, log, recordId2, rec2);
+    try shard.deleteRecord(io, log, recordId1);
+    try std.testing.expect((try shard.record(io, log, recordId1)) == null);
+    try expectRecordEqual(rec2, try shard.record(io, log, recordId2));
 }
 
 test "BsonShard setRecord getRecord deleteRecord use normalized ids" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -264,73 +274,79 @@ test "BsonShard setRecord getRecord deleteRecord use normalized ids" {
     var shard = newTestShard(allocator, "s1", &storage);
     const record = try makeRecord(allocator, recordId1, "a");
     try std.testing.expect(!shard.dirty());
-    try shard.setRecord(io, recordId1, record);
+    try shard.setRecord(io, log, recordId1, record);
     try std.testing.expect(shard.dirty());
-    try expectRecordEqual(record, try shard.record(io, recordId1));
-    try shard.deleteRecord(io, recordId1);
+    try expectRecordEqual(record, try shard.record(io, log, recordId1));
+    try shard.deleteRecord(io, log, recordId1);
     try std.testing.expect(shard.dirty());
-    try std.testing.expect((try shard.record(io, recordId1)) == null);
+    try std.testing.expect((try shard.record(io, log, recordId1)) == null);
 }
 
 test "BsonShard setRecord builds merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "0", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    const tree = try (try shard.merkleTree()).get(io);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    const tree = try (try shard.merkleTree()).get(io, log);
     try std.testing.expect(tree != null);
     try std.testing.expect(tree.?.sort != null);
 }
 
 test "BsonShard deleteRecord drops merkle tree when the last record is removed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "0", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.deleteRecord(io, recordId1);
-    try std.testing.expect((try (try shard.merkleTree()).get(io)) == null);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.deleteRecord(io, log, recordId1);
+    try std.testing.expect((try (try shard.merkleTree()).get(io, log)) == null);
 }
 
 test "BsonShard merkle tree is not undefined when one record remains after delete" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "0", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.setRecord(io, recordId2, try makeRecord(allocator, recordId2, "b"));
-    try shard.deleteRecord(io, recordId1);
-    try std.testing.expect((try (try shard.merkleTree()).get(io)) != null);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.setRecord(io, log, recordId2, try makeRecord(allocator, recordId2, "b"));
+    try shard.deleteRecord(io, log, recordId1);
+    try std.testing.expect((try (try shard.merkleTree()).get(io, log)) != null);
 }
 
 test "BsonShard commit is a no-op when not dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     var shard = newTestShard(arena.allocator(), "s1", &storage);
-    try shard.commit(io); // should not throw or write anything
+    try shard.commit(io, log); // should not throw or write anything
     try std.testing.expect(!shard.dirty());
     try std.testing.expectEqual(@as(usize, 0), storage.files.count());
 }
 
 test "BsonShard commit persists records and clears dirty flag" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "hello"));
-    try shard.commit(io);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "hello"));
+    try shard.commit(io, log);
     try std.testing.expect(!shard.dirty());
     try std.testing.expect(storage.getFile("collections/test/shards/s1") != null);
     try std.testing.expect(storage.getFile("collections/test/shards/s1.dat") != null);
 }
 
 test "BsonShard commit refuses to write a record whose id is not 16 bytes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -338,9 +354,9 @@ test "BsonShard commit refuses to write a record whose id is not 16 bytes" {
     var shard = newTestShard(allocator, "s1", &storage);
 
     // The map handed out by records() can be written to directly, which skips the id check that setRecord makes.
-    try (try shard.records(io)).put(allocator, "not-valid", try makeRecord(allocator, "not-valid", "hello"));
+    try (try shard.records(io, log)).put(allocator, "not-valid", try makeRecord(allocator, "not-valid", "hello"));
     shard.markDirty();
-    try std.testing.expectError(error.Thrown, shard.commit(io));
+    try std.testing.expectError(error.Thrown, shard.commit(io, log));
     try std.testing.expectEqualStrings("Invalid record ID not-valid with length 0", errors.lastErrorMessage());
 }
 
@@ -349,35 +365,38 @@ test "BsonShard commit refuses to write a record whose id is not 16 bytes" {
 // written, even when it was stored under a valid key.
 //
 test "BsonShard commit throws for a record whose _id is not a record id" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, "not-a-record-id", "hello"));
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, "not-a-record-id", "hello"));
 
-    try std.testing.expectError(error.Thrown, shard.commit(io));
+    try std.testing.expectError(error.Thrown, shard.commit(io, log));
     try std.testing.expectEqualStrings("Invalid record ID not-a-record-id with length 0", errors.lastErrorMessage());
 }
 
 test "BsonShard commit round-trips records through storage" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
     const rec = try makeRecord(allocator, recordId1, "hello");
-    try shard.setRecord(io, recordId1, rec);
-    try shard.commit(io);
+    try shard.setRecord(io, log, recordId1, rec);
+    try shard.commit(io, log);
 
     // Load a fresh shard from the same storage
     var shard2 = newTestShard(allocator, "s1", &storage);
-    try shard2.load(io);
-    try std.testing.expectEqual(@as(usize, 1), (try shard2.records(io)).count());
-    try expectRecordEqual(rec, try shard2.record(io, recordId1));
+    try shard2.load(io, log);
+    try std.testing.expectEqual(@as(usize, 1), (try shard2.records(io, log)).count());
+    try expectRecordEqual(rec, try shard2.record(io, log, recordId1));
 }
 
 test "BsonShard commit round-trips multiple records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -386,103 +405,109 @@ test "BsonShard commit round-trips multiple records" {
     const rec1 = try makeRecord(allocator, recordId1, "a");
     const rec2 = try makeRecord(allocator, recordId2, "b");
     const rec3 = try makeRecord(allocator, recordId3, "c");
-    try shard.setRecord(io, recordId1, rec1);
-    try shard.setRecord(io, recordId2, rec2);
-    try shard.setRecord(io, recordId3, rec3);
-    try shard.commit(io);
+    try shard.setRecord(io, log, recordId1, rec1);
+    try shard.setRecord(io, log, recordId2, rec2);
+    try shard.setRecord(io, log, recordId3, rec3);
+    try shard.commit(io, log);
 
     var shard2 = newTestShard(allocator, "s1", &storage);
-    try shard2.load(io);
-    try std.testing.expectEqual(@as(usize, 3), (try shard2.records(io)).count());
-    try expectRecordEqual(rec1, try shard2.record(io, recordId1));
-    try expectRecordEqual(rec2, try shard2.record(io, recordId2));
-    try expectRecordEqual(rec3, try shard2.record(io, recordId3));
+    try shard2.load(io, log);
+    try std.testing.expectEqual(@as(usize, 3), (try shard2.records(io, log)).count());
+    try expectRecordEqual(rec1, try shard2.record(io, log, recordId1));
+    try expectRecordEqual(rec2, try shard2.record(io, log, recordId2));
+    try expectRecordEqual(rec3, try shard2.record(io, log, recordId3));
 
     // Records are written sorted by id (localeCompare), so they load in that order.
-    const loadedIds = (try shard2.records(io)).values();
+    const loadedIds = (try shard2.records(io, log)).values();
     try std.testing.expectEqualStrings(recordId3, loadedIds[0]._id);
     try std.testing.expectEqualStrings(recordId1, loadedIds[1]._id);
     try std.testing.expectEqualStrings(recordId2, loadedIds[2]._id);
 }
 
 test "BsonShard commit deletes file when all records are removed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.commit(io);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.commit(io, log);
 
-    try shard.deleteRecord(io, recordId1);
-    try shard.commit(io);
+    try shard.deleteRecord(io, log, recordId1);
+    try shard.commit(io, log);
     try std.testing.expect(!shard.dirty());
     try std.testing.expect(storage.getFile("collections/test/shards/s1") == null);
     try std.testing.expect(storage.getFile("collections/test/shards/s1.dat") == null);
 
     // A fresh shard should see no records
     var shard2 = newTestShard(allocator, "s1", &storage);
-    try shard2.load(io);
-    try std.testing.expectEqual(@as(usize, 0), (try shard2.records(io)).count());
+    try shard2.load(io, log);
+    try std.testing.expectEqual(@as(usize, 0), (try shard2.records(io, log)).count());
 }
 
 test "BsonShard flush throws when dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
     try std.testing.expectError(error.Thrown, shard.flush());
     try std.testing.expectEqualStrings("Shard s1 is dirty, can't flush the cache.", errors.lastErrorMessage());
 }
 
 test "BsonShard flush clears in-memory records after commit" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.commit(io);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.commit(io, log);
     try shard.flush();
     // After flush, records should be reloaded lazily from storage
-    try std.testing.expectEqual(@as(usize, 1), (try shard.records(io)).count());
+    try std.testing.expectEqual(@as(usize, 1), (try shard.records(io, log)).count());
 }
 
 test "BsonShard flush followed by setRecord reloads from storage first" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var shard = newTestShard(allocator, "s1", &storage);
-    try shard.setRecord(io, recordId1, try makeRecord(allocator, recordId1, "a"));
-    try shard.commit(io);
+    try shard.setRecord(io, log, recordId1, try makeRecord(allocator, recordId1, "a"));
+    try shard.commit(io, log);
     try shard.flush();
 
     // Adding a second record after flush should not lose the first
-    try shard.setRecord(io, recordId2, try makeRecord(allocator, recordId2, "b"));
-    try std.testing.expectEqual(@as(usize, 2), (try shard.records(io)).count());
+    try shard.setRecord(io, log, recordId2, try makeRecord(allocator, recordId2, "b"));
+    try std.testing.expectEqual(@as(usize, 2), (try shard.records(io, log)).count());
 }
 
 test "BsonShard loads a stored version 1 shard file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("collections/test/shards/v1", try fixtures.readFixture(allocator, io, "shard-v1.bin"));
     var shard = newTestShard(allocator, "v1", &storage);
-    const records = try shard.records(io);
+    const records = try shard.records(io, log);
     try std.testing.expectEqual(@as(usize, 2), records.count());
-    const first = (try shard.record(io, "0f8fad5b-d9cb-469f-a165-70867728950e")).?;
+    const first = (try shard.record(io, log, "0f8fad5b-d9cb-469f-a165-70867728950e")).?;
     try std.testing.expectEqualStrings("0f8fad5b-d9cb-469f-a165-70867728950e", first._id);
     try std.testing.expectEqualStrings("abc", first.fields.get("hash").?.string);
     try std.testing.expectEqual(@as(usize, 0), first.metadata.count());
-    const second = (try shard.record(io, "123e4567-e89b-12d3-a456-426614174000")).?;
+    const second = (try shard.record(io, log, "123e4567-e89b-12d3-a456-426614174000")).?;
     try std.testing.expectEqual(@as(i64, 1609545600000), second.fields.get("photoDate").?.date);
 }
 
 test "BsonShard writes the same shard payload as the test database records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -497,15 +522,15 @@ test "BsonShard writes the same shard payload as the test database records" {
         const shardId = filePath["db/collections/metadata/shards/".len..];
         var sourceShard = BsonShard.init(allocator, shardId, source.asStorage(), "db", "metadata", test_uuid_generator.uuidGenerator());
         var destinationShard = BsonShard.init(allocator, shardId, destination.asStorage(), "db", "metadata", test_uuid_generator.uuidGenerator());
-        const records = try sourceShard.records(io);
+        const records = try sourceShard.records(io, log);
         // Insert in reverse order to prove the file is sorted by id on write.
         var recordIndex = records.count();
         while (recordIndex > 0) {
             recordIndex -= 1;
             const record = records.values()[recordIndex];
-            try destinationShard.setRecord(io, record._id, record);
+            try destinationShard.setRecord(io, log, record._id, record);
         }
-        try destinationShard.commit(io);
+        try destinationShard.commit(io, log);
 
         // Some checked in files use the legacy framing [version][payload][checksum]; the current one adds the type
         // code [version]["SHAR"][payload][checksum]. Current files are identical, legacy ones have the same payload.
@@ -521,8 +546,8 @@ test "BsonShard writes the same shard payload as the test database records" {
         }
 
         // The record hashes equal the hashes stored in the shard merkle tree.
-        const sourceTree = (try (try sourceShard.merkleTree()).get(io)).?;
-        const destinationTree = (try (try destinationShard.merkleTree()).get(io)).?;
+        const sourceTree = (try (try sourceShard.merkleTree()).get(io, log)).?;
+        const destinationTree = (try (try destinationShard.merkleTree()).get(io, log)).?;
         try std.testing.expectEqualSlices(u8, sourceTree.merkle.?.hash, destinationTree.merkle.?.hash);
         compared += 1;
     }

@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -50,7 +51,7 @@ fn makeUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, emai
 //
 // Inserts the three users the tests create, with ids chosen to hash to different shards.
 //
-fn insertUsers(allocator: std.mem.Allocator, collection: *BsonCollection) !usize {
+fn insertUsers(log: ILog, allocator: std.mem.Allocator, collection: *BsonCollection) !usize {
     var users = [_]BsonDocument{
         try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "User 1", "user1@example.com", 30, "user"),
         try makeUser(allocator, "223e4567-e89b-12d3-a456-426614174002", "User 2", "user2@example.com", 35, "admin"),
@@ -59,12 +60,13 @@ fn insertUsers(allocator: std.mem.Allocator, collection: *BsonCollection) !usize
 
     // Insert all users
     for (&users) |*user| {
-        try collection.insertOne(io, user, null);
+        try collection.insertOne(io, log, user, null);
     }
     return users.len;
 }
 
 test "should iterate through empty collection shards" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -73,7 +75,7 @@ test "should iterate through empty collection shards" {
 
     var shardCount: usize = 0;
     var shards = collection.iterateShards();
-    while (try shards.next(io)) |_| {
+    while (try shards.next(io, log)) |_| {
         shardCount += 1;
     }
 
@@ -81,6 +83,7 @@ test "should iterate through empty collection shards" {
 }
 
 test "should iterate through collection shards" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -88,13 +91,13 @@ test "should iterate through collection shards" {
     const collection = try newCollection(allocator, &storage);
 
     // Create test users - choose IDs that will hash to different shards
-    const userCount = try insertUsers(allocator, collection);
+    const userCount = try insertUsers(log, allocator, collection);
 
     // Collect all shards from the iterator
     var shardCount: usize = 0;
     var totalRecords: usize = 0;
     var shards = collection.iterateShards();
-    while (try shards.next(io)) |shardRecords| {
+    while (try shards.next(io, log)) |shardRecords| {
         shardCount += 1;
 
         // Count total number of records across all shards
@@ -109,6 +112,7 @@ test "should iterate through collection shards" {
 }
 
 test "should process shards independently" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -116,13 +120,13 @@ test "should process shards independently" {
     const collection = try newCollection(allocator, &storage);
 
     // Create users in different roles to test shard-based processing
-    const userCount = try insertUsers(allocator, collection);
+    const userCount = try insertUsers(log, allocator, collection);
 
     // Process shards to compute shard-level statistics
     var nonEmptyShards: usize = 0;
     var totalRecords: usize = 0;
     var shards = collection.iterateShards();
-    while (try shards.next(io)) |shardRecords| {
+    while (try shards.next(io, log)) |shardRecords| {
         // Calculate average age per shard
         var totalAge: f64 = 0;
         for (shardRecords) |record| {

@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -11,7 +12,6 @@ const api = @import("api-zig");
 const tree = @import("tree.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const batchGenerator = utils.batch_generator.batchGenerator;
 const IStorage = storage_zig.storage.IStorage;
@@ -33,13 +33,13 @@ pub const IDecryptProgress = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, message: []const u8) void,
+    function: *const fn (context: ?*anyopaque, log: ILog, message: []const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: IDecryptProgress, message: []const u8) void {
-        self.function(self.context, message);
+    pub fn call(self: IDecryptProgress, log: ILog, message: []const u8) void {
+        self.function(self.context, log, message);
     }
 };
 
@@ -62,6 +62,7 @@ pub const IDecryptResult = struct {
 pub fn decryptFile(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     fileName: []const u8,
     readStorage: IStorage,
     writeStorage: IStorage,
@@ -73,11 +74,11 @@ pub fn decryptFile(
         .storage = readStorage,
         .fileName = fileName,
     };
-    const srcFileInfo = try retry(io, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const srcFileInfo = try retry(io, log, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Source file \"{s}\" does not exist.", .{fileName});
     };
 
-    const header = try readEncryptionHeader(allocator, io, rawReadStorage, fileName);
+    const header = try readEncryptionHeader(allocator, io, log, rawReadStorage, fileName);
 
     // Whether the two storages are the same object.
     const sameStorage = readStorage.ptr == writeStorage.ptr and readStorage.vtable == writeStorage.vtable;
@@ -93,7 +94,7 @@ pub fn decryptFile(
             .contentType = srcFileInfo.contentType,
             .contentLength = srcFileInfo.length,
         };
-        try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+        try retry(io, log, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
 
         if (!std.mem.startsWith(u8, fileName, ".db/")) {
             const existing = try getItemInfo(merkleTree, fileName);
@@ -103,7 +104,7 @@ pub fn decryptFile(
                     .storage = writeStorage,
                     .fileName = fileName,
                 };
-                const updatedInfo = try retry(io, &updatedInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+                const updatedInfo = try retry(io, log, &updatedInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
                     return errors.throwError("Written file \"{s}\" has no info.", .{fileName});
                 };
                 _ = try updateItem(merkleTree, .{
@@ -135,8 +136,8 @@ pub const DecryptableFilesIterator = struct {
     //
     // Returns the next file to decrypt, or null when the walk is done.
     //
-    pub fn next(self: *DecryptableFilesIterator) !?[]const u8 {
-        while (try self.walker.next()) |file| {
+    pub fn next(self: *DecryptableFilesIterator, log: ILog) !?[]const u8 {
+        while (try self.walker.next(log)) |file| {
             const fileName = file.fileName;
             if (!std.mem.eql(u8, fileName, ".db/files.dat") and !std.mem.eql(u8, fileName, ".db/encryption.pub") and !std.mem.eql(u8, fileName, ".db/config.json") and !std.mem.eql(u8, fileName, "README.md")) {
                 return fileName;
@@ -164,6 +165,7 @@ pub fn decryptableFiles(allocator: std.mem.Allocator, io: std.Io, readStorage: I
 pub fn decrypt(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     readStorage: IStorage,
     writeStorage: IStorage,
     progressCallback: IDecryptProgress,
@@ -173,7 +175,7 @@ pub fn decrypt(
         .allocator = allocator,
         .storage = readStorage,
     };
-    var merkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var merkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load merkle tree.", .{});
     };
 
@@ -183,19 +185,19 @@ pub fn decrypt(
 
     var files = try decryptableFiles(allocator, io, readStorage);
     var batches = batchGenerator([]const u8, allocator, &files, BATCH_SIZE);
-    while (try batches.next()) |batch| {
+    while (try batches.next(log)) |batch| {
         // The files of a batch are decrypted one after another, on the task's own thread.
         for (batch) |fileName| {
             var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
             defer arena.deinit();
-            if (try decryptFile(arena.allocator(), io, fileName, readStorage, writeStorage, rawReadStorage, &merkleTree)) {
+            if (try decryptFile(arena.allocator(), io, log, fileName, readStorage, writeStorage, rawReadStorage, &merkleTree)) {
                 decrypted += 1;
             }
             else {
                 skipped += 1;
             }
         }
-        progressCallback.call(try std.fmt.allocPrint(allocator, "Decrypted {d} files, skipped {d} already plain", .{ decrypted, skipped }));
+        progressCallback.call(log, try std.fmt.allocPrint(allocator, "Decrypted {d} files, skipped {d} already plain", .{ decrypted, skipped }));
     }
 
     var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, writeStorage)") = .{
@@ -203,9 +205,9 @@ pub fn decrypt(
         .merkleTree = &merkleTree,
         .storage = writeStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
 
-    progressCallback.call(try std.fmt.allocPrint(allocator, "Decrypted {d} files, skipped {d} already plain, saved merkle tree", .{ decrypted, skipped }));
+    progressCallback.call(log, try std.fmt.allocPrint(allocator, "Decrypted {d} files, skipped {d} already plain, saved merkle tree", .{ decrypted, skipped }));
     return .{
         .decrypted = decrypted,
         .skipped = skipped,

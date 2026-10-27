@@ -641,15 +641,16 @@ fn isStoppedOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator) bo
 // pass's report vanish, so the message goes to the app's own log with the reason.
 //
 fn sendBackgroundLog(services: TaskServices, io: std.Io, allocator: std.mem.Allocator, timers: Timers, message: []const u8, is_error: bool) void {
+    const log = services.log;
     const request = json.stringify(allocator, .{
         .@"error" = is_error,
         .message = message,
     }) catch {
-        utils.log.log.@"error"(message);
+        log.@"error"(message);
         return;
     };
     _ = callNativeApp(services, io, allocator, timers, "backgroundLog", request) catch |err| {
-        utils.log.log.@"error"(std.fmt.allocPrint(allocator, "The background work could not tell the system log \"{s}\": {s}", .{ message, utils.errors.errorMessage(err) }) catch message);
+        log.@"error"(std.fmt.allocPrint(allocator, "The background work could not tell the system log \"{s}\": {s}", .{ message, utils.errors.errorMessage(err) }) catch message);
     };
 }
 

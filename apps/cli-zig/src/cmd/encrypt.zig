@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
@@ -15,7 +16,6 @@ const storage_helper = @import("../lib/storage-helper.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const prompts = @import("../lib/clack/prompts.zig");
-const log = &utils.log.log;
 const exportPublicKeyToPem = encryption.key_utils.exportPublicKeyToPem;
 const loadEncryptionKeysFromPem = encryption.key_utils.loadEncryptionKeysFromPem;
 const generateKeyPair = encryption.key_utils.generateKeyPair;
@@ -24,7 +24,6 @@ const exit = node_utils.termination.exit;
 const getDirectoryForCommand = directory_picker.getDirectoryForCommand;
 const resolveKeyPemsWithPrompt = init_cmd.resolveKeyPemsWithPrompt;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
-const ICommandContext = init_cmd.ICommandContext;
 const promptForEncryption = init_cmd.promptForEncryption;
 const selectEncryptionKey = init_cmd.selectEncryptionKey;
 const configureS3IfNeeded = init_cmd.configureS3IfNeeded;
@@ -38,7 +37,6 @@ const isCancel = prompts.isCancel;
 const merkleTreeExists = node_api.tree.merkleTreeExists;
 const apiEncrypt = node_api.encrypt.encrypt;
 const IEncryptProgress = node_api.encrypt.IEncryptProgress;
-const configureLog = @import("../lib/log.zig").configureLog;
 
 //
 // Options of the encrypt command.
@@ -56,38 +54,33 @@ pub const IEncryptCommandOptions = struct {
 };
 
 //
-// Writes an encrypt progress message.
+// Writes a progress message to the log.
 //
-fn onEncryptProgress(context: ?*anyopaque, message: []const u8) void {
-    _ = context;
-    writeProgress(message);
+fn onEncryptProgress(_: ?*anyopaque, log: ILog, message: []const u8) void {
+    writeProgress(log, message);
 }
 
 //
 // Encrypts the database at --db in place (plain → encrypted, re-encrypt, or old → new format).
 //
-pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IEncryptCommandOptions) !void {
-    const verbose = options.base.verbose;
+pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: *IEncryptCommandOptions) !void {
     const yes = options.base.yes;
     const cwd = options.base.cwd;
     const nonInteractive = yes orelse false;
 
-    try configureLog(allocator, io, context.toolRunner, .{
-        .verbose = verbose,
-    });
 
     var dbDir: ?[]const u8 = options.base.db;
     if (dbDir == null) {
-        dbDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd orelse try std.process.currentPathAlloc(io, allocator));
+        dbDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd orelse try std.process.currentPathAlloc(io, allocator));
     }
     if (dbDir == null or dbDir.?.len == 0) {
         log.@"error"(try pc.red(allocator, "\u{2717} Database directory is required (--db)."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
     const databaseDir = dbDir.?;
 
     if (std.mem.startsWith(u8, databaseDir, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
     }
 
     //
@@ -97,12 +90,12 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     //   prompt the user for a key path (mirroring init behavior).
     //
     if (!nonInteractive and (options.base.key == null or options.base.key.?.len == 0)) {
-        const result = try promptForEncryption(allocator, io, "Select the encryption key to use:");
+        const result = try promptForEncryption(allocator, io, log, "Select the encryption key to use:");
         if (result.keyName != null and result.keyName.?.len > 0) {
             options.base.key = result.keyName;
         }
         else {
-            const selectedKey = try selectEncryptionKey(allocator, io, "Select an encryption key:");
+            const selectedKey = try selectEncryptionKey(allocator, io, log, "Select an encryption key:");
             options.base.key = selectedKey;
         }
     }
@@ -127,21 +120,21 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     const keyPems = try resolveKeyPemsWithPrompt(allocator, io, options.base.key, nonInteractive, true);
     if (keyPems.len == 0) {
         log.@"error"(try pc.red(allocator, "\u{2717} Encryption requires --key."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     const loaded = try loadEncryptionKeysFromPem(allocator, keyPems);
     const writeStorageOptions = loaded.options;
     if (!loaded.isEncrypted) {
         log.@"error"(try pc.red(allocator, "\u{2717} Failed to load encryption key."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     const rawStorage = (try createStorageForPath(allocator, io, databaseDir, null)).storage;
     const hasTree = try merkleTreeExists(allocator, io, rawStorage);
     if (!hasTree) {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} No database found at: {s}", .{try pc.cyan(allocator, databaseDir)})));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     const readStorage = (try createStorageForPath(allocator, io, databaseDir, writeStorageOptions)).storage;
@@ -150,7 +143,7 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     if (nonInteractive) {
         if (!(yes orelse false)) {
             log.@"error"(try pc.red(allocator, "\u{2717} Non interactive encryption requires --yes to proceed."));
-            exit(io, 1);
+            exit(io, log, 1);
         }
     }
     else {
@@ -165,19 +158,19 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
         });
         if (isCancel(confirmed) or !confirmed.value) {
             log.info("Encryption cancelled.");
-            exit(io, 0);
+            exit(io, log, 0);
         }
     }
 
-    writeProgress("Encrypting files...");
+    writeProgress(log, "Encrypting files...");
 
     const progressCallback: IEncryptProgress = .{
         .context = null,
         .function = onEncryptProgress,
     };
-    const result = try apiEncrypt(allocator, io, readStorage, writeStorage, progressCallback, writeStorageOptions.encryptionPublicKey.?, rawStorage);
+    const result = try apiEncrypt(allocator, io, log, readStorage, writeStorage, progressCallback, writeStorageOptions.encryptionPublicKey.?, rawStorage);
 
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     // Only after the entire database has been re-encrypted: write the public key to .db/encryption.pub.
     const publicKeyPem = try exportPublicKeyToPem(allocator, writeStorageOptions.encryptionPublicKey.?);
@@ -185,5 +178,5 @@ pub fn encryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
 
     log.info("");
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2705} Encrypted {d} files, {d} were already encrypted.", .{ result.encrypted, result.skipped })));
-    exit(io, 0);
+    exit(io, log, 0);
 }

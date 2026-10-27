@@ -11,7 +11,7 @@
 //
 
 const std = @import("std");
-const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
@@ -65,29 +65,46 @@ fn concat(allocator: std.mem.Allocator, first: []const []const u8, second: []con
 }
 
 //
+// The lines of the text that start with the prefix.
+//
+fn linesStartingWith(allocator: std.mem.Allocator, text: []const u8, prefix: []const u8) ![]const []const u8 {
+    var lines: std.ArrayList([]const u8) = .empty;
+    var iterator = std.mem.splitScalar(u8, text, '\n');
+    while (iterator.next()) |line| {
+        if (std.mem.startsWith(u8, line, prefix)) {
+            try lines.append(allocator, line);
+        }
+    }
+    return lines.items;
+}
+
+//
 // The leaves a push walks and does not copy are what the counter sat at zero through, and on a
 // real library they are nearly all of them: an origin holding 8,481 photos was missing a handful.
 //
 test "the leaves a push walks without copying say nothing, and the end says it once" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var capture: sync_helpers.Capture = undefined;
-    capture.start(allocator);
-    defer capture.stop();
 
     const fileNames = try namesFrom(allocator, 40, "asset/same-", ".jpg", false);
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames), &.{});
+    try sync_helpers.fillDatabase(allocator, io, memory.log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames), &.{});
 
     // Every file but the last, so most leaves are walked and matched before anything is copied.
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames[0 .. fileNames.len - 1]), &.{});
+    try sync_helpers.fillDatabase(allocator, io, memory.log, target.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames[0 .. fileNames.len - 1]), &.{});
 
-    try pushFiles(allocator, io, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
+    try pushFiles(allocator, io, memory.log, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
 
-    const timingLines = try capture.linesStartingWith(allocator, "Sync timings:");
+    const timingLines = try linesStartingWith(allocator, memory.stdout(), "Sync timings:");
     try std.testing.expectEqual(@as(usize, 1), timingLines.len);
     try std.testing.expect(std.mem.indexOf(u8, timingLines[0], "\"filesCopied\":1") != null);
 }
@@ -98,13 +115,16 @@ test "the leaves a push walks without copying say nothing, and the end says it o
 // after it. On a Pixel 6 that was five identical lines in a row with the count stuck at sixty.
 //
 test "a run of leaves that copy nothing after the twentieth file says nothing more" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var capture: sync_helpers.Capture = undefined;
-    capture.start(allocator);
-    defer capture.stop();
 
     // Twenty files to copy, named so they sort first, and then a long run of leaves the push
     // walks and copies nothing for because their assets are deleted. That is the count resting on
@@ -114,35 +134,38 @@ test "a run of leaves that copy nothing after the twentieth file says nothing mo
     const deleted = try deletedAssetIds(allocator, 50);
 
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try concat(allocator, toCopy, try assetPaths(allocator, deleted))), deleted);
+    try sync_helpers.fillDatabase(allocator, io, memory.log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try concat(allocator, toCopy, try assetPaths(allocator, deleted))), deleted);
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, &.{}, &.{});
+    try sync_helpers.fillDatabase(allocator, io, memory.log, target.asStorage(), dbId, &.{}, &.{});
 
-    try pushFiles(allocator, io, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
+    try pushFiles(allocator, io, memory.log, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
 
     // The twentieth file's line, and the one at the end of the push.
-    try std.testing.expectEqual(@as(usize, 2), (try capture.linesStartingWith(allocator, "Sync timings:")).len);
+    try std.testing.expectEqual(@as(usize, 2), (try linesStartingWith(allocator, memory.stdout(), "Sync timings:")).len);
 }
 
 test "a push that copies files says it while it works and again at the end" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var capture: sync_helpers.Capture = undefined;
-    capture.start(allocator);
-    defer capture.stop();
 
     const fileNames = try namesFrom(allocator, 45, "asset/new-", ".jpg", false);
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames), &.{});
+    try sync_helpers.fillDatabase(allocator, io, memory.log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames), &.{});
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, &.{}, &.{});
+    try sync_helpers.fillDatabase(allocator, io, memory.log, target.asStorage(), dbId, &.{}, &.{});
 
-    try pushFiles(allocator, io, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
+    try pushFiles(allocator, io, memory.log, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
 
     // Twenty and forty files in, then the one at the end.
-    const timingLines = try capture.linesStartingWith(allocator, "Sync timings:");
+    const timingLines = try linesStartingWith(allocator, memory.stdout(), "Sync timings:");
     try std.testing.expectEqual(@as(usize, 3), timingLines.len);
     try std.testing.expect(std.mem.indexOf(u8, timingLines[timingLines.len - 1], "\"filesCopied\":45") != null);
 }

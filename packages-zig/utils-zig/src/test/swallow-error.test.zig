@@ -26,7 +26,7 @@ fn MockOperation(comptime ValueT: type) type {
         //
         // Runs the operation.
         //
-        pub fn run(self: *@This(), operationIo: std.Io) !ValueT {
+        pub fn run(self: *@This(), operationIo: std.Io, _: utils.log.ILog) !ValueT {
             _ = operationIo;
             self.calls += 1;
             if (self.fails) {
@@ -46,84 +46,78 @@ const KeyValue = struct {
 };
 
 test "should return result on success" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation([]const u8) = .{ .value = "success" };
 
-    const result = swallowError(io, &operation);
+    const result = swallowError(io, log, &operation);
 
     try std.testing.expectEqualStrings("success", result.?);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should return undefined and not log error on failure" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation([]const u8) = .{ .value = "", .fails = true };
 
-    const result = swallowError(io, &operation);
+    const result = swallowError(io, log, &operation);
 
     try std.testing.expect(result == null);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should work with different return types" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var stringOperation: MockOperation([]const u8) = .{ .value = "string result" };
     var numberOperation: MockOperation(u32) = .{ .value = 42 };
     var objectOperation: MockOperation(KeyValue) = .{ .value = .{ .key = "value" } };
 
-    try std.testing.expectEqualStrings("string result", swallowError(io, &stringOperation).?);
-    try std.testing.expectEqual(@as(u32, 42), swallowError(io, &numberOperation).?);
-    try std.testing.expectEqualStrings("value", swallowError(io, &objectOperation).?.key);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqualStrings("string result", swallowError(io, log, &stringOperation).?);
+    try std.testing.expectEqual(@as(u32, 42), swallowError(io, log, &numberOperation).?);
+    try std.testing.expectEqualStrings("value", swallowError(io, log, &objectOperation).?.key);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should handle operations that return undefined" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
 
     // (An operation that resolves with undefined returns void, and a succeeded void operation is not null.)
     var operation: MockOperation(void) = .{ .value = {} };
 
-    const result = swallowError(io, &operation);
+    const result = swallowError(io, log, &operation);
 
     try std.testing.expect(result != null);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should handle operations that return null" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation(?[]const u8) = .{ .value = null };
 
-    const result = swallowError(io, &operation);
+    const result = swallowError(io, log, &operation);
 
     try std.testing.expect(result != null);
     try std.testing.expect(result.? == null);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should handle different error types without logging" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation([]const u8) = .{ .value = "", .fails = true, .failureMessage = "Custom error message" };
 
-    const result = swallowError(io, &operation);
+    const result = swallowError(io, log, &operation);
 
     try std.testing.expect(result == null);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 //
@@ -134,7 +128,7 @@ const NonErrorOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *NonErrorOperation, operationIo: std.Io) ![]const u8 {
+    pub fn run(self: *NonErrorOperation, operationIo: std.Io, _: utils.log.ILog) ![]const u8 {
         _ = self;
         _ = operationIo;
         return error.StringError;
@@ -142,45 +136,42 @@ const NonErrorOperation = struct {
 };
 
 test "should handle non-Error objects thrown without logging" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: NonErrorOperation = .{};
 
-    const result = swallowError(io, &operation);
+    const result = swallowError(io, log, &operation);
 
     try std.testing.expect(result == null);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should not throw errors" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation([]const u8) = .{ .value = "", .fails = true, .failureMessage = "This should not be thrown" };
 
     // swallowError returns an optional, not an error union: it cannot throw.
-    const result: ?[]const u8 = swallowError(io, &operation);
+    const result: ?[]const u8 = swallowError(io, log, &operation);
 
     try std.testing.expect(result == null);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }
 
 test "should silently handle multiple consecutive failures" {
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation([]const u8) = .{ .value = "", .fails = true };
 
     const results = [_]?[]const u8{
-        swallowError(io, &operation),
-        swallowError(io, &operation),
-        swallowError(io, &operation),
+        swallowError(io, log, &operation),
+        swallowError(io, log, &operation),
+        swallowError(io, log, &operation),
     };
 
     for (results) |result| {
         try std.testing.expect(result == null);
     }
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
 }

@@ -3,10 +3,10 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const pc = @import("../lib/picocolors.zig");
 const examples = @import("../examples.zig");
-const log = &utils.log.log;
 const COMMAND_EXAMPLES = examples.COMMAND_EXAMPLES;
 const formatExamplesForHelp = examples.formatExamplesForHelp;
 
@@ -62,7 +62,7 @@ fn findExamples(commandName: []const u8) ?[]const examples.ICommandExample {
 //
 // Command to display all examples categorized by command
 //
-pub fn examplesCommand(allocator: std.mem.Allocator) !void {
+pub fn examplesCommand(log: ILog, allocator: std.mem.Allocator) !void {
     log.info(try pc.bold(allocator, try pc.blue(allocator, "📖 Photosphere CLI Examples")));
     log.info("");
     log.info("Below are usage examples for all available commands:");

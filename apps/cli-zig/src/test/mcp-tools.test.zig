@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -39,8 +40,8 @@ const IToolsTestEnvironment = struct {
     // What the tools write to stdout (nothing, unless something goes wrong).
     stdout_capture: std.Io.Writer.Allocating,
 
-    // The log the test replaces (initContext configures a log of its own).
-    previous_log: @TypeOf(utils.log.log),
+    // The command's log, which initContext configures.
+    log: utils.log.ILog,
 
     // The state of the tools.
     toolContext: *IMcpToolContext,
@@ -55,11 +56,12 @@ const IToolsTestEnvironment = struct {
     //
     // Sets up the environment, the command context and the server.
     //
-    fn init(self: *IToolsTestEnvironment, name: []const u8) !void {
+    fn init(self: *IToolsTestEnvironment, log: ILog, name: []const u8) !void {
+        const console_log = utils.mute_log.MuteLog.init();
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         self.mediaTools = try media_tools.MediaTools.init();
-        const status = try tools.verifyTools(allocator, io, self.mediaTools.runner());
+        const status = try tools.verifyTools(allocator, io, log, self.mediaTools.runner());
         if (!status.allAvailable) {
             std.debug.print("The built-in media tools did not run. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
             return error.RequiredToolsMissing;
@@ -88,14 +90,15 @@ const IToolsTestEnvironment = struct {
 
         self.stdout_capture = std.Io.Writer.Allocating.init(allocator);
         utils.console.setCapture(&self.stdout_capture.writer, &self.stdout_capture.writer);
-        self.previous_log = utils.log.currentLog();
+        self.log = console_log;
 
-        const context = try init_cmd.initContext(allocator, io, &self.mediaTools, .{ .yes = true, .workers = "2" });
+        const context = try init_cmd.initContext(allocator, io, self.log, &self.mediaTools, .{ .yes = true, .workers = "2" });
         self.toolContext = try allocator.create(IMcpToolContext);
         self.toolContext.* = .{
             .uuidGenerator = context.uuidGenerator,
             .timestampProvider = context.timestampProvider,
             .toolRunner = context.toolRunner,
+            .log = self.log,
             .sessionId = context.sessionId,
             .options = .{ .yes = true },
             .allocator = allocator,
@@ -107,12 +110,11 @@ const IToolsTestEnvironment = struct {
     // Shuts the worker pool down, restores the process state and deletes the test's directory.
     //
     fn deinit(self: *IToolsTestEnvironment) void {
-        node_utils.termination.invokeTerminationCallbacks(io, 0) catch |err| {
+        node_utils.termination.invokeTerminationCallbacks(io, self.log, 0) catch |err| {
             std.debug.print("The termination callbacks failed: {t}\n", .{err});
         };
         node_utils.termination.clearTerminationCallbacks();
         task_queue.queue_backend.setQueueBackend(null);
-        utils.log.setLog(self.previous_log);
         utils.console.setCapture(null, null);
         node_utils.process_env.setEnvironMap(null);
         std.Io.Dir.cwd().deleteTree(io, self.root) catch {};
@@ -195,8 +197,9 @@ const IToolText = struct {
 };
 
 test "list_databases lists the databases of databases.toml, or says that there are none" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-list-databases");
+    try environment.init(log, "mcp-list-databases");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -211,8 +214,9 @@ test "list_databases lists the databases of databases.toml, or says that there a
 }
 
 test "open_database opens a database by path or by name, and close_database closes it" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-open-database");
+    try environment.init(log, "mcp-open-database");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -231,8 +235,9 @@ test "open_database opens a database by path or by name, and close_database clos
 }
 
 test "the tools that work on a database say that none is open" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-no-database");
+    try environment.init(log, "mcp-no-database");
     defer environment.deinit();
 
     const noDatabase = "No database is currently open. Use list_databases / open_database first.";
@@ -246,8 +251,9 @@ test "the tools that work on a database say that none is open" {
 }
 
 test "get_database_summary returns the summary of the open database" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-summary");
+    try environment.init(log, "mcp-summary");
     defer environment.deinit();
 
     try environment.openDatabase();
@@ -267,8 +273,9 @@ test "get_database_summary returns the summary of the open database" {
 }
 
 test "list_media_files returns a page of summaries of the media files, newest first" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-list-media-files");
+    try environment.init(log, "mcp-list-media-files");
     defer environment.deinit();
 
     try environment.openDatabase();
@@ -300,8 +307,9 @@ test "list_media_files returns a page of summaries of the media files, newest fi
 }
 
 test "get_media_file_info returns the record of a media file, or says that it is not found" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-media-file-info");
+    try environment.init(log, "mcp-media-file-info");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -327,8 +335,9 @@ test "get_media_file_info returns the record of a media file, or says that it is
 }
 
 test "search_media_files filters the media files by name, content type and date" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-search-media-files");
+    try environment.init(log, "mcp-search-media-files");
     defer environment.deinit();
 
     try environment.openDatabase();
@@ -356,8 +365,9 @@ test "search_media_files filters the media files by name, content type and date"
 }
 
 test "save_media_file writes the original, display or thumbnail file of a media file" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-save-media-file");
+    try environment.init(log, "mcp-save-media-file");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -394,8 +404,9 @@ test "save_media_file writes the original, display or thumbnail file of a media 
 }
 
 test "verify_database verifies the files of the open database" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-verify-database");
+    try environment.init(log, "mcp-verify-database");
     defer environment.deinit();
 
     try environment.openDatabase();
@@ -426,8 +437,9 @@ test "verify_database verifies the files of the open database" {
 }
 
 test "import_media_files imports files into the open database, or previews the import" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: IToolsTestEnvironment = undefined;
-    try environment.init("mcp-import-media-files");
+    try environment.init(log, "mcp-import-media-files");
     defer environment.deinit();
 
     try environment.openDatabase();

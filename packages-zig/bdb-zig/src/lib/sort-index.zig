@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
@@ -395,24 +396,24 @@ pub const SortIndex = struct {
     //
     // Loads from disk on first access; subsequent calls are no-ops.
     //
-    fn tryLoad(self: *SortIndex, io: std.Io) !void {
+    fn tryLoad(self: *SortIndex, io: std.Io, log: ILog) !void {
         if (self._loadAttempted or self.loaded) {
             return;
         }
         self._loadAttempted = true;
-        _ = try self.load(io);
+        _ = try self.load(io, log);
     }
 
     //
     // Ensures the index is loaded; builds it from collection data if it does not exist on disk.
     //
-    pub fn ensure(self: *SortIndex, io: std.Io, collection: *IBsonCollection, sortDataType: SortDataType) !void {
+    pub fn ensure(self: *SortIndex, io: std.Io, log: ILog, collection: *IBsonCollection, sortDataType: SortDataType) !void {
         if (self.loaded) {
             return;
         }
         self.type = sortDataType;
-        if (!try self.load(io)) {
-            try self.build(io, collection);
+        if (!try self.load(io, log)) {
+            try self.build(io, log, collection);
         }
     }
 
@@ -502,7 +503,7 @@ pub const SortIndex = struct {
     // Loads the sort index metadata and tree nodes from disk.
     // Returns false if the sort index is not built.
     //
-    pub fn load(self: *SortIndex, io: std.Io) !bool {
+    pub fn load(self: *SortIndex, io: std.Io, log: ILog) !bool {
         if (self.loaded) {
             return true; // Already loaded
         }
@@ -511,6 +512,7 @@ pub const SortIndex = struct {
             ITreeData,
             self.allocator,
             io,
+            log,
             self.storage,
             self.treeFilePath,
             "IDXT",
@@ -736,8 +738,8 @@ pub const SortIndex = struct {
     }
 
     // Load checkpoint for incremental builds
-    fn loadCheckpoint(self: *SortIndex, io: std.Io) !?IBuildCheckpoint {
-        const buffer = try self.storage.read(self.allocator, io, self.checkpointFilePath) orelse {
+    fn loadCheckpoint(self: *SortIndex, io: std.Io, log: ILog) !?IBuildCheckpoint {
+        const buffer = try self.storage.read(self.allocator, io, log, self.checkpointFilePath) orelse {
             return null;
         };
         return std.json.parseFromSliceLeaky(IBuildCheckpoint, self.allocator, buffer, .{ .ignore_unknown_fields = true }) catch {
@@ -789,7 +791,7 @@ pub const SortIndex = struct {
     }
 
     // Helper function to add a record with batching
-    fn addRecordBatched(self: *SortIndex, io: std.Io, state: *BuildState, record: IInternalRecord) !void {
+    fn addRecordBatched(self: *SortIndex, io: std.Io, log: ILog, state: *BuildState, record: IInternalRecord) !void {
         const recordId = record._id;
         const fieldValue = getFieldValue(record.fields, self.fieldName) orelse {
             return;
@@ -821,7 +823,7 @@ pub const SortIndex = struct {
             leafRecords = cached;
         }
         else {
-            if (try self.loadLeafRecords(io, leafId)) |loaded| {
+            if (try self.loadLeafRecords(io, log, leafId)) |loaded| {
                 leafRecords = loaded;
             }
             else {
@@ -895,9 +897,9 @@ pub const SortIndex = struct {
     //
     // Builds the sort index by directly inserting records from the collection.
     //
-    pub fn build(self: *SortIndex, io: std.Io, collection: *IBsonCollection) !void {
+    pub fn build(self: *SortIndex, io: std.Io, log: ILog, collection: *IBsonCollection) !void {
         // Load checkpoint if it exists (incremental build)
-        var loadedCheckpoint = try self.loadCheckpoint(io);
+        var loadedCheckpoint = try self.loadCheckpoint(io, log);
 
         // If no checkpoint and index is already loaded, return early
         if (loadedCheckpoint == null and self.loaded) {
@@ -907,7 +909,7 @@ pub const SortIndex = struct {
         // Initialize or load index
         if (!self.loaded) {
             // Try to load existing index first (in case we're resuming from checkpoint)
-            const loaded = try self.load(io);
+            const loaded = try self.load(io, log);
 
             if (!loaded) {
                 // No existing index - if checkpoint exists, it's stale (e.g., after rebuild)
@@ -970,7 +972,7 @@ pub const SortIndex = struct {
         // Iterate through shards and process records with checkpoint support
         var shardIndex: u32 = 0;
         var shards = collection.iterateShards();
-        while (try shards.next(io)) |shardRecords| {
+        while (try shards.next(io, log)) |shardRecords| {
             // Skip if shard is already completed
             if (isShardCompleted(&checkpoint, shardIndex)) {
                 shardIndex += 1;
@@ -991,7 +993,7 @@ pub const SortIndex = struct {
                 }
 
                 // Process record
-                try self.addRecordBatched(io, &state, shardRecord);
+                try self.addRecordBatched(io, log, &state, shardRecord);
 
                 // Save checkpoint every 1000 records (not every progress interval to avoid excessive I/O)
                 if (state.recordsAdded % 1000 == 0) {
@@ -1032,7 +1034,7 @@ pub const SortIndex = struct {
         self.markDirty();
 
         // Flush all deferred writes to storage
-        try self.commit(io);
+        try self.commit(io, log);
 
         // Delete checkpoint on successful completion
         self.deleteCheckpoint(io);
@@ -1258,7 +1260,7 @@ pub const SortIndex = struct {
     //
     // Loads leaf records: from cache if present, else from storage (and caches the result).
     //
-    fn loadLeafRecords(self: *SortIndex, io: std.Io, pageId: []const u8) !?*LeafRecords {
+    fn loadLeafRecords(self: *SortIndex, io: std.Io, log: ILog, pageId: []const u8) !?*LeafRecords {
         if (self.leafCache.get(pageId)) |cached| {
             return cached.records;
         }
@@ -1267,6 +1269,7 @@ pub const SortIndex = struct {
             *LeafRecords,
             self.allocator,
             io,
+            log,
             self.storage,
             filePath,
             "IDXP",
@@ -1301,7 +1304,7 @@ pub const SortIndex = struct {
     // Writes all dirty leaves and tree to storage, deletes marked leaves.
     // Dirty flags are cleared; the leaf cache remains populated for fast subsequent reads.
     //
-    pub fn commit(self: *SortIndex, io: std.Io) !void {
+    pub fn commit(self: *SortIndex, io: std.Io, log: ILog) !void {
         const rootPageId = self.rootPageId orelse {
             return errors.throwError("Root page ID is not set. Cannot save tree.", .{});
         };
@@ -1326,6 +1329,7 @@ pub const SortIndex = struct {
                     try serialization.save(
                         self.allocator,
                         io,
+                        log,
                         self.storage,
                         try storage_zig.storage_factory.pathJoin(self.allocator, &.{ self.indexDirectory, leafId }),
                         entry.records,
@@ -1356,6 +1360,7 @@ pub const SortIndex = struct {
         try serialization.save(
             self.allocator,
             io,
+            log,
             self.storage,
             self.treeFilePath,
             treeData,
@@ -1389,8 +1394,8 @@ pub const SortIndex = struct {
     //
     // Get a page of records from the collection using the sort index.
     //
-    pub fn getPage(self: *SortIndex, io: std.Io, pageIdOption: ?[]const u8) !ISortIndexResult {
-        try self.tryLoad(io);
+    pub fn getPage(self: *SortIndex, io: std.Io, log: ILog, pageIdOption: ?[]const u8) !ISortIndexResult {
+        try self.tryLoad(io, log);
         if (!self.loaded) {
             return .{ .records = &.{}, .totalRecords = 0, .currentPageId = "", .totalPages = 0 };
         }
@@ -1428,7 +1433,7 @@ pub const SortIndex = struct {
         const node = maybeNode.?;
 
         // Get the records from the leaf records file
-        const leafRecords = try self.loadLeafRecords(io, pageId) orelse {
+        const leafRecords = try self.loadLeafRecords(io, log, pageId) orelse {
             return .{
                 .records = &.{},
                 .totalRecords = self.totalEntries,
@@ -1484,8 +1489,8 @@ pub const SortIndex = struct {
     // Updates a record in the index without rebuilding the entire index
     // If the indexed field value has changed, the record will be removed and added again
     //
-    pub fn updateRecord(self: *SortIndex, io: std.Io, record: IInternalRecord, oldRecord: ?IInternalRecord) !void {
-        try self.tryLoad(io);
+    pub fn updateRecord(self: *SortIndex, io: std.Io, log: ILog, record: IInternalRecord, oldRecord: ?IInternalRecord) !void {
+        try self.tryLoad(io, log);
         if (!self.loaded) {
             return;
         }
@@ -1503,7 +1508,7 @@ pub const SortIndex = struct {
             // First try to quickly find the specific leaf
             if (try self.findLeafForValue(oldValue)) |leafId| {
                 const leafNode = self.getNode(leafId);
-                const leafRecords = try self.loadLeafRecords(io, leafId);
+                const leafRecords = try self.loadLeafRecords(io, log, leafId);
 
                 if (leafNode != null and leafNode.?.children.items.len == 0 and leafRecords != null) {
                     // Find the entry with matching ID
@@ -1584,7 +1589,7 @@ pub const SortIndex = struct {
             if (!recordRemoved) {
                 // We need to find the pages that might contain records with this value
                 // First, get all records with this value
-                const matchingValues = try self.findByValue(io, oldValue, oldField.?.identity);
+                const matchingValues = try self.findByValue(io, log, oldValue, oldField.?.identity);
                 if (matchingValues.len > 0) {
                     // Start with the leftmost leaf and traverse the chain
                     var currentId = self.findLeftmostLeaf() orelse {
@@ -1597,7 +1602,7 @@ pub const SortIndex = struct {
 
                     while (currentNode != null) {
                         if (currentNode.?.children.items.len == 0) {
-                            const leafRecords = try self.loadLeafRecords(io, currentId);
+                            const leafRecords = try self.loadLeafRecords(io, log, currentId);
                             if (leafRecords != null) {
                                 // Find the entry with matching ID
                                 const entryIndex = findEntryIndex(leafRecords.?, recordId);
@@ -1661,7 +1666,7 @@ pub const SortIndex = struct {
         }
 
         // Now add the record with the new value
-        try self.addRecord(io, record);
+        try self.addRecord(io, log, record);
     }
 
     //
@@ -1669,8 +1674,8 @@ pub const SortIndex = struct {
     // @param recordId The ID of the record to delete
     // @param value The value of the indexed field, used to help locate the record
     //
-    pub fn deleteRecord(self: *SortIndex, io: std.Io, recordId: []const u8, oldRecord: IInternalRecord) !void {
-        try self.tryLoad(io);
+    pub fn deleteRecord(self: *SortIndex, io: std.Io, log: ILog, recordId: []const u8, oldRecord: IInternalRecord) !void {
+        try self.tryLoad(io, log);
         if (!self.loaded) {
             return;
         }
@@ -1686,7 +1691,7 @@ pub const SortIndex = struct {
         // First try to find the record in the expected leaf
         if (try self.findLeafForValue(value)) |leafId| {
             const leafNode = self.getNode(leafId);
-            const leafRecords = try self.loadLeafRecords(io, leafId);
+            const leafRecords = try self.loadLeafRecords(io, log, leafId);
 
             if (leafNode != null and leafNode.?.children.items.len == 0 and leafRecords != null) {
                 // Find the entry with matching ID
@@ -1772,7 +1777,7 @@ pub const SortIndex = struct {
         // If we didn't find the record in the expected leaf, try other leaves with matching values
         if (!recordDeleted) {
             // First, get all records with this value
-            const matchingValues = try self.findByValue(io, value, field.identity);
+            const matchingValues = try self.findByValue(io, log, value, field.identity);
 
             // If there are records with this value, we need to search through the leaves
             if (matchingValues.len > 0) {
@@ -1788,7 +1793,7 @@ pub const SortIndex = struct {
 
                 while (currentNode != null) {
                     if (currentNode.?.children.items.len == 0) {
-                        const leafRecords = try self.loadLeafRecords(io, currentId);
+                        const leafRecords = try self.loadLeafRecords(io, log, currentId);
                         if (leafRecords != null) {
                             // Find the entry with matching ID
                             const entryIndex = findEntryIndex(leafRecords.?, recordId);
@@ -1945,8 +1950,8 @@ pub const SortIndex = struct {
     //
     // Adds a new record to the index without rebuilding the entire index
     //
-    pub fn addRecord(self: *SortIndex, io: std.Io, record: IInternalRecord) !void {
-        try self.tryLoad(io);
+    pub fn addRecord(self: *SortIndex, io: std.Io, log: ILog, record: IInternalRecord) !void {
+        try self.tryLoad(io, log);
         if (!self.loaded) {
             return;
         }
@@ -1981,7 +1986,7 @@ pub const SortIndex = struct {
 
         // Get the leaf records
         var leafRecords: *LeafRecords = undefined;
-        if (try self.loadLeafRecords(io, leafId)) |loaded| {
+        if (try self.loadLeafRecords(io, log, leafId)) |loaded| {
             leafRecords = loaded;
         }
         else {
@@ -2197,8 +2202,8 @@ pub const SortIndex = struct {
 
     // Find records by exact value using binary search on the sorted index
     // (Zig: valueIdentity is the identity of the value when it is a JS object (see strictEqualsValue), or null.)
-    pub fn findByValue(self: *SortIndex, io: std.Io, value: BsonValue, valueIdentity: ?*const BsonValue) ![]ISortIndexRecord {
-        try self.tryLoad(io);
+    pub fn findByValue(self: *SortIndex, io: std.Io, log: ILog, value: BsonValue, valueIdentity: ?*const BsonValue) ![]ISortIndexRecord {
+        try self.tryLoad(io, log);
         if (!self.loaded) {
             return &.{};
         }
@@ -2213,7 +2218,7 @@ pub const SortIndex = struct {
 
         // Process the initial leaf node
         const maybeLeafNode = self.getNode(leafId);
-        const maybeLeafRecords = try self.loadLeafRecords(io, leafId);
+        const maybeLeafRecords = try self.loadLeafRecords(io, log, leafId);
 
         if (maybeLeafNode != null and maybeLeafNode.?.children.items.len == 0 and maybeLeafRecords != null) {
             const leafNode = maybeLeafNode.?;
@@ -2234,7 +2239,7 @@ pub const SortIndex = struct {
                         break;
                     }
 
-                    const nextRecords = try self.loadLeafRecords(io, nextId.?) orelse {
+                    const nextRecords = try self.loadLeafRecords(io, log, nextId.?) orelse {
                         break;
                     };
                     if (nextRecords.items.len == 0) {
@@ -2263,7 +2268,7 @@ pub const SortIndex = struct {
                         break;
                     }
 
-                    const prevRecords = try self.loadLeafRecords(io, prevId.?) orelse {
+                    const prevRecords = try self.loadLeafRecords(io, log, prevId.?) orelse {
                         break;
                     };
                     if (prevRecords.items.len == 0) {
@@ -2298,7 +2303,7 @@ pub const SortIndex = struct {
                     break;
                 }
 
-                const currentRecords = try self.loadLeafRecords(io, currentId.?) orelse {
+                const currentRecords = try self.loadLeafRecords(io, log, currentId.?) orelse {
                     if (!isSet(currentNode.nextLeaf)) {
                         break;
                     }

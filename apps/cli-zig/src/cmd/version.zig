@@ -1,11 +1,11 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const merkle_tree = @import("merkle-tree-zig");
 const pc = @import("../lib/picocolors.zig");
 const config = @import("../lib/config.zig");
-const log = &utils.log.log;
 const verifyTools = tools.verifyTools;
 const version = config.version;
 const buildMetadata = config.buildMetadata;
@@ -27,7 +27,7 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 // Command that displays version information for psi and its dependencies.
 // toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions are shown.
 //
-pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) !void {
+pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !void {
 
     log.info("");
     log.info(try pc.bold(allocator, "📋 Version Information\n"));
@@ -50,7 +50,7 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InPr
     }
 
     // Get tool versions
-    const toolsStatus = try verifyTools(allocator, io, toolRunner);
+    const toolsStatus = try verifyTools(allocator, io, log, toolRunner);
     const imageMagickName = "ImageMagick (magick)";
 
     // Display dependency versions

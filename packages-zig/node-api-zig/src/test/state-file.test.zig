@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
@@ -38,8 +39,9 @@ fn desktopJson(allocator: std.mem.Allocator, state: state_format.IStateFile) ![]
 // section's own defaults, so an install that has never run the app reads as empty rather than throwing.
 //
 test "loadStateFile returns the defaults when the state file does not exist" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -61,8 +63,9 @@ test "loadStateFile returns the defaults when the state file does not exist" {
 // its own defaults rather than taking the rest of the document down with it.
 //
 test "loadStateFile reads the sections of the file and keeps a malformed section out of the way" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -94,8 +97,9 @@ test "loadStateFile reads the sections of the file and keeps a malformed section
 // empty array is one, because every element of it is a string.
 //
 test "isUiStateValue takes booleans, numbers, strings and arrays of strings, and nothing else" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -152,8 +156,9 @@ test "isUiStateValue takes booleans, numbers, strings and arrays of strings, and
 // a list of numbers left in the file by an older build does not reach the interface.
 //
 test "yamlToStateFile keeps the interface keys it can hold and drops the ones it cannot" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

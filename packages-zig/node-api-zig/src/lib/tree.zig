@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
@@ -50,7 +51,7 @@ pub fn isDatabaseEncrypted(allocator: std.mem.Allocator, io: std.Io, assetStorag
 // Saves the merkle tree to disk.
 // The tree's database metadata is the BSON document described by IDatabaseMetadata.
 //
-pub fn saveMerkleTree(allocator: std.mem.Allocator, io: std.Io, merkleTree: ?*IMerkleTree, assetStorage: IStorage) !void {
+pub fn saveMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, merkleTree: ?*IMerkleTree, assetStorage: IStorage) !void {
     const tree = merkleTree orelse {
         return errors.throwError("Cannot save database. No merkle tree provided.", .{});
     };
@@ -60,22 +61,22 @@ pub fn saveMerkleTree(allocator: std.mem.Allocator, io: std.Io, merkleTree: ?*IM
         tree.dirty = false;
     }
 
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, tree, assetStorage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, tree, assetStorage, "FTRE");
 }
 
 //
 // Loads the merkle tree from disk.
 //
-pub fn loadMerkleTree(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !?IMerkleTree {
-    return try merkle_tree.loadTree(allocator, io, FILES_TREE_PATH, assetStorage, "FTRE");
+pub fn loadMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage) !?IMerkleTree {
+    return try merkle_tree.loadTree(allocator, io, log, FILES_TREE_PATH, assetStorage, "FTRE");
 }
 
 //
 // Gets the root hash for the files merkle tree.
 // Returns undefined if the merkle tree doesn't exist or has no root hash.
 //
-pub fn getFilesRootHash(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !?[]const u8 {
-    const tree = try loadMerkleTree(allocator, io, assetStorage) orelse {
+pub fn getFilesRootHash(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage) !?[]const u8 {
+    const tree = try loadMerkleTree(allocator, io, log, assetStorage) orelse {
         return null;
     };
     const merkle = tree.merkle orelse {
@@ -94,11 +95,11 @@ const BSON_DB_PATH = ".db/bson";
 // Two databases with the same content hash are identical. Returns undefined if either root is unavailable
 // (e.g. an empty database), in which case callers skip the content-hash based sync early-out.
 //
-pub fn getDatabaseContentHash(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !?[]const u8 {
-    const filesRootHash = try getFilesRootHash(allocator, io, assetStorage) orelse {
+pub fn getDatabaseContentHash(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage) !?[]const u8 {
+    const filesRootHash = try getFilesRootHash(allocator, io, log, assetStorage) orelse {
         return null;
     };
-    const bsonRootHash = try bdb.merkle_tree.getDatabaseRootHash(allocator, io, assetStorage, BSON_DB_PATH) orelse {
+    const bsonRootHash = try bdb.merkle_tree.getDatabaseRootHash(allocator, io, log, assetStorage, BSON_DB_PATH) orelse {
         return null;
     };
     const combined = merkle_tree.combineHashes(filesRootHash, bsonRootHash);
@@ -109,9 +110,9 @@ pub fn getDatabaseContentHash(allocator: std.mem.Allocator, io: std.Io, assetSto
 // Builds the state-file partial for a stamp: the given fields plus the database's current content hash
 // (only when both merkle trees are available, so an empty database does not clear an existing hash).
 //
-fn buildStampPartial(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, extra: IDatabaseState) !IDatabaseState {
+fn buildStampPartial(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, extra: IDatabaseState) !IDatabaseState {
     var partial: IDatabaseState = extra;
-    const contentHash = try getDatabaseContentHash(allocator, io, assetStorage);
+    const contentHash = try getDatabaseContentHash(allocator, io, log, assetStorage);
     if (contentHash) |hash| {
         partial.contentHash = hash;
     }
@@ -125,18 +126,18 @@ fn buildStampPartial(allocator: std.mem.Allocator, io: std.Io, assetStorage: ISt
 // between persisting the trees and this call leaves the previous content hash, which only causes an extra
 // full sync (which self-heals the state file), never data loss.
 //
-pub fn stampDatabaseState(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage, extra: IDatabaseState) !void {
-    try api.database_state.mergeDatabaseState(allocator, io, rawStorage, try buildStampPartial(allocator, io, assetStorage, extra));
+pub fn stampDatabaseState(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, rawStorage: IStorage, extra: IDatabaseState) !void {
+    try api.database_state.mergeDatabaseState(allocator, io, log, rawStorage, try buildStampPartial(allocator, io, log, assetStorage, extra));
 }
 
 //
 // Records that the database was modified locally: stamps lastModifiedAt and refreshes the content hash.
 // Lock-free: the caller must already hold the database write lock.
 //
-pub fn stampDatabaseModified(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage) !void {
+pub fn stampDatabaseModified(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, rawStorage: IStorage) !void {
     var lastModifiedAt: std.Io.Writer.Allocating = .init(allocator);
     try js_date.writeIsoString(&lastModifiedAt.writer, std.Io.Clock.real.now(io).toMilliseconds());
-    try stampDatabaseState(allocator, io, assetStorage, rawStorage, .{
+    try stampDatabaseState(allocator, io, log, assetStorage, rawStorage, .{
         .lastModifiedAt = lastModifiedAt.written(),
     });
 }
@@ -146,8 +147,8 @@ pub fn stampDatabaseModified(allocator: std.mem.Allocator, io: std.Io, assetStor
 // lastReplicatedAt), acquiring the write lock for the duration. For callers that do not already hold the
 // lock (replicate, repair). Does nothing if the lock cannot be acquired.
 //
-pub fn stampDatabaseStateLocked(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage, sessionId: []const u8, extra: IDatabaseState) !void {
-    try api.database_state.updateDatabaseStateLocked(allocator, io, rawStorage, sessionId, try buildStampPartial(allocator, io, assetStorage, extra));
+pub fn stampDatabaseStateLocked(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, rawStorage: IStorage, sessionId: []const u8, extra: IDatabaseState) !void {
+    try api.database_state.updateDatabaseStateLocked(allocator, io, log, rawStorage, sessionId, try buildStampPartial(allocator, io, log, assetStorage, extra));
 }
 
 //
@@ -156,10 +157,11 @@ pub fn stampDatabaseStateLocked(allocator: std.mem.Allocator, io: std.Io, assetS
 pub fn loadCollectionMerkleTree(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: IStorage,
     collectionName: []const u8,
 ) !?IMerkleTree {
-    return bdb.merkle_tree.loadCollectionMerkleTree(allocator, io, storage, ".db/bson", collectionName);
+    return bdb.merkle_tree.loadCollectionMerkleTree(allocator, io, log, storage, ".db/bson", collectionName);
 }
 
 //
@@ -168,11 +170,12 @@ pub fn loadCollectionMerkleTree(
 pub fn loadShardMerkleTree(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: IStorage,
     collectionName: []const u8,
     shardId: []const u8,
 ) !?IMerkleTree {
-    return bdb.merkle_tree.loadShardMerkleTree(allocator, io, storage, ".db/bson", collectionName, shardId);
+    return bdb.merkle_tree.loadShardMerkleTree(allocator, io, log, storage, ".db/bson", collectionName, shardId);
 }
 
 //
@@ -194,13 +197,13 @@ pub const IBuildFilesTreeProgress = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, fileCount: u64) void,
+    function: *const fn (context: ?*anyopaque, log: ILog, fileCount: u64) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: IBuildFilesTreeProgress, fileCount: u64) void {
-        self.function(self.context, fileCount);
+    pub fn call(self: IBuildFilesTreeProgress, log: ILog, fileCount: u64) void {
+        self.function(self.context, log, fileCount);
     }
 };
 
@@ -231,13 +234,13 @@ const IReadAndHashResult = struct {
 //
 // Gets a file's info and hashes it.
 //
-fn readAndHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileName: []const u8) !IReadAndHashResult {
+fn readAndHash(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, fileName: []const u8) !IReadAndHashResult {
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{
         .allocator = allocator,
         .storage = storage,
         .fileName = fileName,
     };
-    const info = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const info = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("No info for file listed in storage: {s}", .{fileName});
     };
     var hashOperation: retry_operations.ComputeStorageHashOperation("async () => computeHash(await storage.readStream(fileName))") = .{
@@ -245,7 +248,7 @@ fn readAndHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, file
         .storage = storage,
         .fileName = fileName,
     };
-    const hash = try retry(io, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to hash file {s}", .{fileName}));
+    const hash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to hash file {s}", .{fileName}));
     return .{
         .fileName = fileName,
         .hash = hash,
@@ -276,10 +279,10 @@ const ReadAndHashTask = struct {
     //
     // Reads and hashes the file, recording the error when it fails.
     //
-    fn run(self: *ReadAndHashTask, io: std.Io) void {
+    fn run(self: *ReadAndHashTask, io: std.Io, log: ILog) void {
         var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer arena.deinit();
-        if (readAndHash(arena.allocator(), io, self.storage, self.fileName)) |result| {
+        if (readAndHash(arena.allocator(), io, log, self.storage, self.fileName)) |result| {
             self.result = result;
         }
         else |err| {
@@ -298,6 +301,7 @@ const ReadAndHashTask = struct {
 pub fn buildFilesTree(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: IStorage,
     progressCallback: IBuildFilesTreeProgress,
     uuidGenerator: IUuidGenerator,
@@ -306,7 +310,7 @@ pub fn buildFilesTree(
         .allocator = allocator,
         .storage = storage,
     };
-    const existingTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null);
+    const existingTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null);
     const newTreeId = if (existingTree) |existing| existing.id else try uuidGenerator.generate(allocator, io);
     var merkleTree = merkle_tree.createTree(newTreeId);
     var databaseMetadata: BsonDocument = undefined;
@@ -323,7 +327,7 @@ pub fn buildFilesTree(
     const ignorePatterns = [_]walk_directory.IgnorePattern{matchesDbDirectory};
     var files = try walk_directory.walkDirectory(allocator, io, storage, "", &ignorePatterns);
     var batches = batchGenerator(IOrderedFile, allocator, &files, BATCH_SIZE);
-    while (try batches.next()) |batch| {
+    while (try batches.next(log)) |batch| {
         const tasks = try allocator.alloc(ReadAndHashTask, batch.len);
         for (batch, tasks) |file, *task| {
             task.* = .{
@@ -334,7 +338,7 @@ pub fn buildFilesTree(
 
         // The files of a batch are read and hashed one after another, on the task's own thread.
         for (tasks) |*task| {
-            task.run(io);
+            task.run(io, log);
         }
 
         for (tasks) |*task| {
@@ -356,7 +360,7 @@ pub fn buildFilesTree(
             if (std.mem.startsWith(u8, result.fileName, "asset/")) {
                 filesImported += 1;
             }
-            progressCallback.call(fileCount);
+            progressCallback.call(log, fileCount);
         }
     }
 
@@ -367,7 +371,7 @@ pub fn buildFilesTree(
         .merkleTree = &merkleTree,
         .storage = storage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
     return .{
         .merkleTree = merkleTree,
         .fileCount = fileCount,

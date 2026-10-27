@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -8,7 +9,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const clearProgressMessage = terminal_utils.clearProgressMessage;
 const writeProgress = terminal_utils.writeProgress;
@@ -71,15 +71,14 @@ fn isSet(value: ?[]const u8) bool {
 }
 
 //
-// Writes each verification progress message.
+// Writes each verification progress message to the log.
 //
-fn onProgress(context: ?*anyopaque, io: std.Io, progress: ?[]const u8) void {
+fn onProgress(_: ?*anyopaque, io: std.Io, log: ILog, progress: ?[]const u8) void {
     _ = io;
-    _ = context;
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const message = std.fmt.allocPrint(arena.allocator(), "\u{1F50D} {s}", .{progress orelse "undefined"}) catch @panic("out of memory writing the progress line");
-    writeProgress(message);
+    writeProgress(log, message);
 }
 
 //
@@ -92,11 +91,11 @@ fn countText(allocator: std.mem.Allocator, count: u64) ![]const u8 {
 //
 // Command that verifies the integrity of the Photosphere media file database.
 //
-pub fn verifyCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IVerifyCommandOptions) !void {
+pub fn verifyCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IVerifyCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
     const databaseDir = loaded.databaseDir;
     const metadataCollection = loaded.metadataCollection;
@@ -113,22 +112,22 @@ pub fn verifyCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     //
     var dbFileResult: ?IDatabaseFileVerifyResult = null;
     if (!isSet(options.path)) {
-        writeProgress("\u{1F5C4}\u{FE0F}  Verifying database files...");
-        dbFileResult = try verifyDatabaseFiles(allocator, io, assetStorage, progressCallback);
+        writeProgress(log, "\u{1F5C4}\u{FE0F}  Verifying database files...");
+        dbFileResult = try verifyDatabaseFiles(allocator, io, log, assetStorage, progressCallback);
     }
 
     //
     // Then, verify asset files.
     //
-    writeProgress("Verifying assets...");
+    writeProgress(log, "Verifying assets...");
 
     var timer_list = TimerList.init();
-    const result = try verify(allocator, io, timer_list.interface(), storageDescriptor, assetStorage, context.uuidGenerator, metadataCollection, .{
+    const result = try verify(allocator, io, log, timer_list.interface(), storageDescriptor, assetStorage, context.uuidGenerator, metadataCollection, .{
         .full = options.full,
         .pathFilter = options.path,
     }, progressCallback);
 
-    clearProgressMessage(); // Flush the progress message.
+    clearProgressMessage(log); // Flush the progress message.
 
     log.info(if (isSet(options.path))
         try std.fmt.allocPrint(allocator, "Verified files matching: {s}", .{options.path.?})
@@ -259,5 +258,5 @@ pub fn verifyCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     // fine while the command was printing that 180 assets had no record: measured against a real
     // 2,292 asset library synced from a phone, where exactly that happened and the run reported a
     // pass.
-    exit(io, if (hasProblems) 1 else 0);
+    exit(io, log, if (hasProblems) 1 else 0);
 }

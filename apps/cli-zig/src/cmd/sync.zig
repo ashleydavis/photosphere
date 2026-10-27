@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
@@ -9,7 +10,6 @@ const init_cmd = @import("../lib/init-cmd.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const storage_helper = @import("../lib/storage-helper.zig");
 const sync_watch = @import("../lib/sync-watch.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 const loadDatabase = init_cmd.loadDatabase;
@@ -115,9 +115,9 @@ const ISyncWatchState = struct {
     //
     // Runs one sync.
     //
-    fn syncOnce(context: ?*anyopaque, io: std.Io) anyerror!bool {
+    fn syncOnce(context: ?*anyopaque, io: std.Io, log: ILog) anyerror!bool {
         const self: *ISyncWatchState = @ptrCast(@alignCast(context.?));
-        const result = try syncDatabases(self.allocator, io, self.source.assetStorage, self.source.rawAssetStorage, self.source.bsonDatabase, self.target.assetStorage, self.target.rawAssetStorage, self.target.bsonDatabase, self.sessionId, null);
+        const result = try syncDatabases(self.allocator, io, log, self.source.assetStorage, self.source.rawAssetStorage, self.source.bsonDatabase, self.target.assetStorage, self.target.rawAssetStorage, self.target.bsonDatabase, self.sessionId, null);
         return result.synced;
     }
 
@@ -132,7 +132,7 @@ const ISyncWatchState = struct {
     //
     // Stops the watch when the process is told to terminate.
     //
-    fn stop(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
+    fn stop(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror!void {
         _ = io;
         _ = exitCode;
         const self: *ISyncWatchState = @ptrCast(@alignCast(context.?));
@@ -143,7 +143,7 @@ const ISyncWatchState = struct {
 //
 // Sync command implementation - synchronizes databases according to the sync specification.
 //
-pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *ISyncCommandOptions) !void {
+pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *ISyncCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
@@ -157,15 +157,15 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         .verbose = options.base.verbose,
         .yes = options.base.yes,
     };
-    const source = try loadDatabase(allocator, io, options.base.db, &sourceOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const source = try loadDatabase(allocator, io, log, options.base.db, &sourceOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
 
     var destPathOption = options.dest;
     if (destPathOption == null) {
-        const config = try loadDatabaseConfig(allocator, io, source.rawAssetStorage);
+        const config = try loadDatabaseConfig(allocator, io, log, source.rawAssetStorage);
         destPathOption = configOrigin(config);
         if (destPathOption == null) {
             const cwd = if (isSet(options.base.cwd)) options.base.cwd.? else try std.process.currentPathAlloc(io, allocator);
-            destPathOption = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+            destPathOption = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
         }
     }
     const destPath = destPathOption.?;
@@ -177,7 +177,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
 
     // Check if destination database exists and handle encryption (storage scoped to db root, paths use .db/...)
     if (std.mem.startsWith(u8, destPath, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
     }
 
     const destMetadataStorage = (try createStorageForPath(allocator, io, destPath, null)).storage;
@@ -197,14 +197,14 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
                     log.@"error"("Example:");
                     log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi sync --dest-key my-photos.key --dest {s}", .{destPath}))}));
                     log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi sync --dest-key <full or relative path to key> --dest {s}", .{destPath}))}));
-                    exit(io, 1);
+                    exit(io, log, 1);
                 }
                 else {
                     // Interactive mode - show key selection menu
                     log.info(try pc.yellow(allocator, "The destination database is encrypted and requires a private key to access."));
 
                     // Show menu of available keys
-                    const selectedKey = try selectEncryptionKey(allocator, io, "Select the encryption key for the destination database:");
+                    const selectedKey = try selectEncryptionKey(allocator, io, log, "Select the encryption key for the destination database:");
                     options.destKey = selectedKey;
                 }
             }
@@ -217,12 +217,12 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
                 if (similarKeyNames.len > 0) {
                     log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try similarNamesList(allocator, similarKeyNames)}));
                 }
-                exit(io, 1);
+                exit(io, log, 1);
             }
             _ = loadEncryptionKeysFromPem(allocator, destKeyPems) catch |err| {
                 log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Failed to load encryption key: {s}", .{utils.errors.errorMessage(err)})));
                 log.@"error"(try pc.red(allocator, "  Please check that the key exists. Use \"psi secrets list\" to see available keys."));
-                exit(io, 1);
+                exit(io, log, 1);
             };
         }
         else {
@@ -230,7 +230,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
             if (isSet(options.destKey)) {
                 log.@"error"(try pc.red(allocator, "\u{2717} You specified an encryption key, but the destination database is not encrypted."));
                 log.@"error"(try pc.red(allocator, "  Either remove the --dest-key option, or sync to a different location."));
-                exit(io, 1);
+                exit(io, log, 1);
             }
         }
     }
@@ -239,7 +239,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     var targetOptions: IBaseCommandOptions = options.base;
     targetOptions.db = destPath;
     targetOptions.key = options.destKey; // Use destKey for target database
-    const target = try loadDatabase(allocator, io, targetOptions.db, &targetOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const target = try loadDatabase(allocator, io, log, targetOptions.db, &targetOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
 
     if (options.watch orelse false) {
         // Run the same sync over and over as the database changes, rather than once. Paired with
@@ -257,7 +257,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
             .function = ISyncWatchState.stop,
         });
 
-        try runSyncWatch(allocator, io, .{
+        try runSyncWatch(allocator, io, log, .{
             .intervalSeconds = try parseWatchInterval(options.interval),
             .context = state,
             .syncOnce = ISyncWatchState.syncOnce,
@@ -267,7 +267,7 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     }
 
     // syncDatabases records lastSyncedAt and the content hash in both state files when it runs.
-    const result = try syncDatabases(allocator, io, source.assetStorage, source.rawAssetStorage, source.bsonDatabase, target.assetStorage, target.rawAssetStorage, target.bsonDatabase, sessionId, null);
+    const result = try syncDatabases(allocator, io, log, source.assetStorage, source.rawAssetStorage, source.bsonDatabase, target.assetStorage, target.rawAssetStorage, target.bsonDatabase, sessionId, null);
 
     if (result.synced) {
         log.info("Sync completed successfully!");
@@ -276,5 +276,5 @@ pub fn syncCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         log.info("Databases already in sync, nothing to do.");
     }
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

@@ -171,7 +171,7 @@ pub const FileLogger = struct {
     //
     // The termination callback: closes the log.
     //
-    fn closeCallback(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
+    fn closeCallback(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror!void {
         _ = io;
         _ = exitCode;
         const self: *FileLogger = @ptrCast(@alignCast(context.?));
@@ -182,7 +182,7 @@ pub const FileLogger = struct {
     // Creates the log files under <tmp>/photosphere/logs, writes their headers and returns the logger.
     // toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions the headers give.
     //
-    pub fn create(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, consoleLogger: ILog, command: []const u8) !*FileLogger {
+    pub fn create(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, consoleLogger: ILog, command: []const u8) !*FileLogger {
         const startTime = Date{ .epochMilliseconds = std.Io.Clock.real.now(io).toMilliseconds() };
 
         // Create logs directory in Photosphere temp.
@@ -213,8 +213,8 @@ pub const FileLogger = struct {
         try logger.init(allocator, io, toolRunner, consoleLogger, command, logFile, errorLogFile, startTime);
 
         // Write initial log headers for both files
-        try logger.writeLogHeader();
-        try logger.writeErrorLogHeader();
+        try logger.writeLogHeader(log);
+        try logger.writeErrorLogHeader(log);
 
         return logger;
     }
@@ -222,7 +222,7 @@ pub const FileLogger = struct {
     //
     // Writes the lines shared by both headers, from the first separator to the tool versions.
     //
-    fn writeCommonHeader(self: *FileLogger, writer: *std.Io.Writer, title: []const u8) !void {
+    fn writeCommonHeader(self: *FileLogger, log: ILog, writer: *std.Io.Writer, title: []const u8) !void {
         const allocator = self.allocator;
         try writer.print("{s}\n", .{separator});
         try writer.print("{s}\n", .{title});
@@ -244,19 +244,19 @@ pub const FileLogger = struct {
         try writer.print("Nightly Build: {}\n", .{config.buildMetadata.isNightly});
         try writer.writeAll("\n");
         try writer.writeAll("--- Tool Versions ---\n");
-        try writer.print("{s}\n", .{try self.getImageMagickVersion()});
-        try writer.print("{s}\n", .{try self.getFFmpegVersion()});
-        try writer.print("{s}\n", .{try self.getFFprobeVersion()});
+        try writer.print("{s}\n", .{try self.getImageMagickVersion(log)});
+        try writer.print("{s}\n", .{try self.getFFmpegVersion(log)});
+        try writer.print("{s}\n", .{try self.getFFprobeVersion(log)});
         try writer.writeAll("\n");
     }
 
     //
     // Writes the header of the log file.
     //
-    fn writeLogHeader(self: *FileLogger) !void {
+    fn writeLogHeader(self: *FileLogger, log: ILog) !void {
         var allocating_writer = std.Io.Writer.Allocating.init(self.allocator);
         const writer = &allocating_writer.writer;
-        try self.writeCommonHeader(writer, "Photosphere CLI Log");
+        try self.writeCommonHeader(log, writer, "Photosphere CLI Log");
         try writer.writeAll("--- Command ---\n");
         const argv = process_argv.getArgv();
         try writer.print("{s}\n", .{try std.mem.join(self.allocator, " ", argv)});
@@ -268,10 +268,10 @@ pub const FileLogger = struct {
     //
     // Writes the header of the error log file.
     //
-    fn writeErrorLogHeader(self: *FileLogger) !void {
+    fn writeErrorLogHeader(self: *FileLogger, log: ILog) !void {
         var allocating_writer = std.Io.Writer.Allocating.init(self.allocator);
         const writer = &allocating_writer.writer;
-        try self.writeCommonHeader(writer, "Photosphere CLI Error Log");
+        try self.writeCommonHeader(log, writer, "Photosphere CLI Error Log");
         try writer.writeAll("If this file contains nothing below, it means there were no errors.\n");
         try writer.writeAll("\n");
         try writer.writeAll("--- Error Log Start ---\n");
@@ -283,8 +283,8 @@ pub const FileLogger = struct {
     //
     // Gets the ImageMagick line of the header.
     //
-    fn getImageMagickVersion(self: *FileLogger) ![]const u8 {
-        const result = try Image.verifyImageMagick(self.allocator, self.io, self.toolRunner);
+    fn getImageMagickVersion(self: *FileLogger, log: ILog) ![]const u8 {
+        const result = try Image.verifyImageMagick(self.allocator, self.io, log, self.toolRunner);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "ImageMagick: {s}", .{result.version orelse "undefined"});
         }
@@ -296,8 +296,8 @@ pub const FileLogger = struct {
     //
     // Gets the FFmpeg line of the header.
     //
-    fn getFFmpegVersion(self: *FileLogger) ![]const u8 {
-        const result = try Video.verifyFfmpeg(self.allocator, self.io, self.toolRunner);
+    fn getFFmpegVersion(self: *FileLogger, log: ILog) ![]const u8 {
+        const result = try Video.verifyFfmpeg(self.allocator, self.io, log, self.toolRunner);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFmpeg: {s}", .{result.version orelse "undefined"});
         }
@@ -309,8 +309,8 @@ pub const FileLogger = struct {
     //
     // Gets the FFprobe line of the header.
     //
-    fn getFFprobeVersion(self: *FileLogger) ![]const u8 {
-        const result = try Video.verifyFfprobe(self.allocator, self.io, self.toolRunner);
+    fn getFFprobeVersion(self: *FileLogger, log: ILog) ![]const u8 {
+        const result = try Video.verifyFfprobe(self.allocator, self.io, log, self.toolRunner);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFprobe: {s}", .{result.version orelse "undefined"});
         }
@@ -385,6 +385,7 @@ pub const FileLogger = struct {
         .event = eventErased,
         .verboseEnabled = verboseEnabledErased,
         .getLogDetails = getLogDetailsErased,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -655,5 +656,13 @@ pub const FileLogger = struct {
     fn getLogDetailsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!ILogDetails {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
         return self.getLogDetails(allocator, io);
+    }
+
+    //
+    // The path of the log file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        const self: *FileLogger = @ptrCast(@alignCast(ptr));
+        return self.getLogFilePath();
     }
 };

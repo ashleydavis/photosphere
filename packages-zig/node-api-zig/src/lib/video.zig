@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
@@ -8,7 +9,6 @@ const tools = @import("tools-zig");
 const media_file_database = @import("media-file-database.zig");
 const image = @import("image.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const ILocation = utils.reverse_geocode.ILocation;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const getVideoTransformation = utils.image.getVideoTransformation;
@@ -59,13 +59,13 @@ fn toISOString(allocator: std.mem.Allocator, time: f64, invalidMessage: []const 
 //
 // Gets the details of a video.
 //
-pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     const videoPath = filePath;
 
     const metadataStartedAt = dateNow(io);
-    const assetInfo = try getFileInfo(allocator, io, toolRunner, videoPath, contentType) orelse {
+    const assetInfo = try getFileInfo(allocator, io, log, toolRunner, videoPath, contentType) orelse {
         return errors.throwError("Unsupported file type: {s}", .{contentType});
     };
     const metadataMs = dateNow(io) - metadataStartedAt;
@@ -76,7 +76,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
     const duration = assetInfo.duration;
     const screenshotTime = @min(if (duration != null and isTruthy(duration.?)) duration.? / 2 else 1, 300); // Max 5 minutes
     const screenshotStartedAt = dateNow(io);
-    _ = try video.extractScreenshot(allocator, io, toolRunner, screenshotPath, screenshotTime);
+    _ = try video.extractScreenshot(allocator, io, log, toolRunner, screenshotPath, screenshotTime);
     const screenshotMs = dateNow(io) - screenshotStartedAt;
 
     var resolution: IResolution = .{
@@ -84,13 +84,13 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
         .height = assetInfo.dimensions.height,
     };
     const thumbnailStartedAt = dateNow(io);
-    var thumbnailPath = try resizeImage(allocator, io, toolRunner, screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, 90);
+    var thumbnailPath = try resizeImage(allocator, io, log, toolRunner, screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, 90);
 
     const metadataDocument: ?BsonDocument = if (assetInfo.metadata) |metadata| (if (metadata == .document) metadata.document else null) else null;
     const imageTransformation = try getVideoTransformation(allocator, metadataDocument);
     if (imageTransformation) |transformation| {
         // Flips orientation depending on exif data.
-        thumbnailPath = try transformImage(allocator, io, toolRunner, thumbnailPath, tempDir, transformation, uuidGenerator);
+        thumbnailPath = try transformImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
             // A copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.
             const unswapped = resolution;
@@ -104,7 +104,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, toolRunner: InP
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
     const microMs = dateNow(io) - microStartedAt;
 
     var photoDate: ?[]const u8 = if (assetInfo.createdAt) |createdAt| try toISOString(allocator, createdAt, "Invalid time value") else null;

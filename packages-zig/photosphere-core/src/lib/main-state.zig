@@ -14,10 +14,10 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const log = &utils.log.log;
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
 const media_tools = @import("media-tools-zig");
@@ -188,16 +188,17 @@ pub const MainState = struct {
     // stateAllocator), because the state lives for as long as the main thread.
     //
     pub fn create(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!*MainState {
+        const log = services.log;
         // A core a native app hosts has no `main` to hand it the environment, so it is read from the process (see environment.zig).
         const process_environment = try environment.adoptProcessEnvironment(allocator);
         errdefer freeEnvironment(allocator, process_environment);
-        try logStarting(allocator);
+        try logStarting(log, allocator);
         // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (each makes its own runner of them).
         const media = try allocator.create(media_tools.MediaTools);
         errdefer allocator.destroy(media);
         media.* = try media_tools.MediaTools.init();
         errdefer media.deinit();
-        try logToolVersions(allocator, io, media.runner());
+        try logToolVersions(allocator, io, log, media.runner());
         utils.console.log("Worker pool initialized");
         const state = try allocator.create(MainState);
         errdefer allocator.destroy(state);
@@ -261,6 +262,7 @@ pub const MainState = struct {
     // one is running, clears the debounce, and logs that the app is shutting down. Ziggy clears the timers after this.
     //
     pub fn stop(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) void {
+        const log = services.log;
         // Set first, so that nothing the stopping tasks do restarts anything.
         self.stopping = true;
         self.stopMcpServer(io, allocator);
@@ -312,6 +314,7 @@ pub const MainState = struct {
     // the work is on the app is held running, so the passes go on with the app off screen.
     //
     pub fn switchOnBackgroundPass(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass) void {
+        const log = services.log;
         const index = @intFromEnum(pass);
         if (self.background_passes_on[index]) {
             return;
@@ -320,7 +323,7 @@ pub const MainState = struct {
         if (pass == .sync) {
             self.first_sync_pass = true;
         }
-        self.scheduleBackgroundPass(timers, io, pass, 0);
+        self.scheduleBackgroundPass(timers, io, log, pass, 0);
         services.holdKeepAlive(io, allocator, true);
     }
 
@@ -338,7 +341,7 @@ pub const MainState = struct {
     //
     // Sets the timer that queues a pass after the gap.
     //
-    fn scheduleBackgroundPass(self: *MainState, timers: Timers, io: std.Io, pass: background_work.Pass, gap_ms: u64) void {
+    fn scheduleBackgroundPass(self: *MainState, timers: Timers, io: std.Io, log: ILog, pass: background_work.Pass, gap_ms: u64) void {
         const index = @intFromEnum(pass);
         clearTimer(timers, &self.background_pass_timers[index]);
         self.background_pass_timers[index] = timers.setTimeout(io, .{
@@ -355,6 +358,7 @@ pub const MainState = struct {
     // and tried again after the fallback gap.
     //
     pub fn queueDueBackgroundPass(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass) void {
+        const log = services.log;
         const index = @intFromEnum(pass);
         self.background_pass_timers[index] = null;
         if (!self.background_passes_on[index] or self.background_passes_running[index]) {
@@ -362,7 +366,7 @@ pub const MainState = struct {
         }
         self.queueBackgroundPass(services, io, allocator, pass) catch |err| {
             log.exception("Error queuing a background pass", err);
-            self.scheduleBackgroundPass(timers, io, pass, background_work.FALLBACK_PAUSE_MS);
+            self.scheduleBackgroundPass(timers, io, log, pass, background_work.FALLBACK_PAUSE_MS);
             return;
         };
         self.background_passes_running[index] = true;
@@ -393,6 +397,7 @@ pub const MainState = struct {
     // A pass that failed is tried again after the fallback gap.
     //
     pub fn backgroundPassEnded(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, pass: background_work.Pass, result: ?background_work.IPassTaskResult) void {
+        const log = services.log;
         const index = @intFromEnum(pass);
         self.background_passes_running[index] = false;
         const ended = result orelse background_work.IPassTaskResult{
@@ -407,7 +412,7 @@ pub const MainState = struct {
             return;
         }
         if (!ended.finished) {
-            self.scheduleBackgroundPass(timers, io, pass, ended.gapMs);
+            self.scheduleBackgroundPass(timers, io, log, pass, ended.gapMs);
             return;
         }
         self.background_passes_on[index] = false;
@@ -475,7 +480,7 @@ pub const MainState = struct {
     //
     // Schedules a debounced sync after the last edit notification. Resets the debounce timer if called again before it fires.
     //
-    pub fn scheduleSync(self: *MainState, timers: Timers, io: std.Io) !void {
+    pub fn scheduleSync(self: *MainState, timers: Timers, io: std.Io, log: ILog) !void {
         log.info("Sync debounce triggered");
         clearTimer(timers, &self.sync_debounce_timer);
         self.sync_debounce_timer = try timers.setTimeout(io, .{
@@ -515,6 +520,7 @@ pub const MainState = struct {
     // set and no sync would ever run again.
     //
     pub fn enqueueSyncTask(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
+        const log = services.log;
         // Never auto-sync unless the page's decision permits it (sync enabled, online, and the Wi-Fi restriction satisfied).
         // (`!currentDatabasePath` is true for an empty path as well as for none.)
         if (!self.sync_allowed or self.current_database_path == null or self.current_database_path.?.len == 0 or self.is_sync_running) {
@@ -548,6 +554,7 @@ pub const MainState = struct {
     // port 0.
     //
     pub fn startAssetServer(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !u16 {
+        const log = services.log;
         if (self.asset_server) |server| {
             return server.port;
         }
@@ -558,7 +565,7 @@ pub const MainState = struct {
             return utils.errors.throwError("REST API failed to start: {s}", .{utils.errors.errorMessage(err)});
         };
         const session_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
-        const server = node_api.asset_server.AssetServer.start(allocator, io, listener, .{
+        const server = node_api.asset_server.AssetServer.start(allocator, io, log, listener, .{
             .sessionId = session_id,
             .nativeCallbacks = services.nativeCallbacks(),
         }) catch |err| {
@@ -582,6 +589,7 @@ pub const MainState = struct {
     // Does what applySingleInstanceRule does once it has decided whether the rule applies to this copy.
     //
     pub fn enforceSingleInstance(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, rule_applies: bool) !void {
+        const log = services.log;
         const pid = storage.storage.processId();
         const packaged: []const u8 = if (single_instance.isUnpackaged()) "false" else "true";
         if (rule_applies) {
@@ -612,6 +620,7 @@ pub const MainState = struct {
     // there. The native app does the bringing to the front, as the `focus-window` action.
     //
     pub fn checkSecondInstance(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
+        const log = services.log;
         const instance = if (self.single_instance) |*held| held else {
             return;
         };
@@ -671,6 +680,7 @@ pub const MainState = struct {
     // first call does anything, because these steps run once and a window made again later does not repeat them.
     //
     pub fn mainWindowCreated(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) !void {
+        const log = services.log;
         if (self.main_window_created) {
             return;
         }
@@ -716,10 +726,11 @@ pub const MainState = struct {
     // Starts the MCP server, unless it is already running. It is a server of its own, not a task, so it holds no worker.
     //
     pub fn startMcpServer(self: *MainState, services: HandlerServices, io: std.Io, allocator: std.mem.Allocator) !void {
+        const log = services.log;
         if (self.mcp_server != null) {
             return;
         }
-        self.mcp_server = try mcp_server.startMcpServer(allocator, io, services.nativeCallbacks());
+        self.mcp_server = try mcp_server.startMcpServer(allocator, io, log, services.nativeCallbacks());
     }
 
     //
@@ -799,6 +810,7 @@ fn backgroundPassDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, tim
 //
 fn syncDebounceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
+    const log = ziggy.core.handlerServicesOf(services).log;
     state.sync_debounce_timer = null;
     state.enqueueSyncTask(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
         log.exception("Error queuing a sync task", err);
@@ -810,6 +822,7 @@ fn syncDebounceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Ti
 //
 fn syncTimerDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
+    const log = ziggy.core.handlerServicesOf(services).log;
     state.enqueueSyncTask(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
         log.exception("Error queuing a sync task", err);
     };
@@ -820,6 +833,7 @@ fn syncTimerDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timer
 //
 fn autoImportCheckDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
+    const log = ziggy.core.handlerServicesOf(services).log;
     state.enqueueEnsureAutoImportTask(ziggy.core.handlerServicesOf(services), io, stateAllocator(), true) catch |err| {
         log.exception("Error queuing the check that automatic import is running", err);
     };
@@ -830,6 +844,7 @@ fn autoImportCheckDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _:
 //
 fn singleInstanceDue(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, services: ?*const anyopaque) void {
     const state: *MainState = @ptrCast(@alignCast(context.?));
+    const log = ziggy.core.handlerServicesOf(services).log;
     state.checkSecondInstance(ziggy.core.handlerServicesOf(services), io, stateAllocator()) catch |err| {
         log.exception("Error looking for a second instance of the app", err);
     };
@@ -857,12 +872,38 @@ pub fn registerMediaSources(context: ziggy.task_queue.types.ITaskContext) anyerr
 
 //
 // Makes the main process's state when Ziggy creates the core, on the core's main thread, before any message or task can reach the app.
-// Ziggy has started the file log by then. The state is made with the state's allocator, not the arena Ziggy gives.
+// Ziggy has started the file log by then, and the log is configured first, from the options on the app's command line. The state is
+// made with the state's allocator, not the arena Ziggy gives.
 //
-pub fn onCreate(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!void {
+pub fn onCreate(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, arguments: []const []const u8) anyerror!void {
     _ = allocator;
+    try services.configureLog(logOptions(arguments));
     const state = try MainState.create(services, timers, io, stateAllocator());
     main_state = state;
+}
+
+//
+// The log options on the app's command line: --verbose, --debug and --tools each turn on their lines, as the CLI's do. Every other
+// argument is left to whatever else reads the command line.
+//
+pub fn logOptions(arguments: []const []const u8) ziggy.task_queue.utils.log.ILogOptions {
+    var options: ziggy.task_queue.utils.log.ILogOptions = .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    };
+    for (arguments) |argument| {
+        if (std.mem.eql(u8, argument, "--verbose")) {
+            options.verbose = true;
+        }
+        else if (std.mem.eql(u8, argument, "--debug")) {
+            options.debug = true;
+        }
+        else if (std.mem.eql(u8, argument, "--tools")) {
+            options.tools = true;
+        }
+    }
+    return options;
 }
 
 //
@@ -888,7 +929,7 @@ pub fn onDestroy(services: HandlerServices, timers: Timers, io: std.Io, allocato
 // Logs, as the first lines of the run, that the app is starting and which instance this is. A build that has been given a version is
 // the packaged one.
 //
-fn logStarting(allocator: std.mem.Allocator) !void {
+fn logStarting(log: ILog, allocator: std.mem.Allocator) !void {
     log.info("Photosphere Desktop starting...");
     const packaged = !std.mem.eql(u8, config.version, "dev");
     const started = try std.fmt.allocPrint(allocator, "Instance started (pid={d}, packaged={s})", .{ storage.storage.processId(), if (packaged) "true" else "false" });
@@ -899,10 +940,10 @@ fn logStarting(allocator: std.mem.Allocator) !void {
 //
 // Logs the versions of the tools built into the program (ImageMagick, FFmpeg and FFprobe), each on a line of its own.
 //
-fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) !void {
+fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool_runner: node_utils.in_process_tools.InProcessRunner) !void {
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
-    for (try toolVersionLines(arena_state.allocator(), io, tool_runner)) |line| {
+    for (try toolVersionLines(arena_state.allocator(), io, log, tool_runner)) |line| {
         log.info(line);
     }
 }
@@ -911,9 +952,9 @@ fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_u
 // The lines the log gives for the tools the app runs: ImageMagick, FFmpeg and FFprobe, each with its version, or "not
 // found". ImageMagick's check failing is written into its line rather than stopping the app. Allocated with the arena.
 //
-fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const []const u8 {
+fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, log: ILog, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const []const u8 {
     const image_magick_line = blk: {
-        const status = tools.Image.verifyImageMagick(arena, io, tool_runner) catch {
+        const status = tools.Image.verifyImageMagick(arena, io, log, tool_runner) catch {
             break :blk "ImageMagick: error checking version";
         };
         if (!status.available) {
@@ -921,12 +962,12 @@ fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, tool_runner: node_util
         }
         break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
     };
-    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, tool_runner);
+    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, log, tool_runner);
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, tool_runner);
+    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, log, tool_runner);
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

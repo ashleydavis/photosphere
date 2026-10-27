@@ -5,6 +5,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const api = @import("api-zig");
@@ -37,10 +38,10 @@ const CoreFixture = struct {
     //
     // Starts the io, makes the database and the core.
     //
-    fn init(fixture: *CoreFixture, allocator: std.mem.Allocator, name: []const u8) !void {
+    fn init(fixture: *CoreFixture, log: ILog, allocator: std.mem.Allocator, name: []const u8) !void {
         fixture.virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
         const io = fixture.virtual_time.io();
-        try fixture.database.init(allocator, io, name);
+        try fixture.database.init(allocator, io, log, name);
         fixture.core = try asset_server_core.createAssetServerCore(std.testing.allocator, .{
             .uuidGenerator = fixture.database.uuidGenerator.uuidGenerator(),
             .timestampProvider = fixture.database.timestampProvider.timestampProvider(),
@@ -52,79 +53,82 @@ const CoreFixture = struct {
     //
     // Frees the core, the database and the io.
     //
-    fn deinit(fixture: *CoreFixture) void {
+    fn deinit(fixture: *CoreFixture, log: ILog) void {
         const io = fixture.virtual_time.io();
         fixture.core.deinit(std.testing.allocator);
-        fixture.database.deinit(io);
+        fixture.database.deinit(io, log);
         fixture.virtual_time.deinit();
     }
 
     //
     // Writes four bytes into the database as an asset of the type.
     //
-    fn putAsset(fixture: *CoreFixture, allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8) !void {
+    fn putAsset(fixture: *CoreFixture, log: ILog, allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8) !void {
         var stream = std.Io.Reader.fixed("abcd");
         const io = fixture.virtual_time.io();
-        try media_file_database.writeAssetStream(allocator, io, fixture.database.database.assetStorage, fixture.database.rawStorage, "putter", assetId, assetType, "image/jpeg", &stream, 4);
+        try media_file_database.writeAssetStream(allocator, io, log, fixture.database.database.assetStorage, fixture.database.rawStorage, "putter", assetId, assetType, "image/jpeg", &stream, 4);
     }
 
     //
     // Reads what the core serves for an asset. The allocator, the test's, is also what the core keeps its cache in, as a connection
     // thread's arena is.
     //
-    fn served(fixture: *CoreFixture, allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8, databasePath: []const u8) ![]u8 {
+    fn served(fixture: *CoreFixture, log: ILog, allocator: std.mem.Allocator, assetId: []const u8, assetType: []const u8, databasePath: []const u8) ![]u8 {
         const io = fixture.virtual_time.io();
-        const stream = try fixture.core.assetServerCore().serveAsset(allocator, allocator, io, assetId, assetType, databasePath);
+        const stream = try fixture.core.assetServerCore().serveAsset(allocator, allocator, io, log, assetId, assetType, databasePath);
         defer stream.destroy(io);
         return stream.reader().allocRemaining(allocator, .unlimited);
     }
 };
 
 test "serveAsset streams the asset bytes for the given id/type/db" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-serve");
-    defer fixture.deinit();
-    try fixture.putAsset(allocator, "asset-1", "thumb");
+    try fixture.init(log, allocator, "core-serve");
+    defer fixture.deinit(log);
+    try fixture.putAsset(log, allocator, "asset-1", "thumb");
 
-    const bytes = try fixture.served(allocator, "asset-1", "thumb", fixture.database.dir);
+    const bytes = try fixture.served(log, allocator, "asset-1", "thumb", fixture.database.dir);
 
     try std.testing.expectEqualStrings("abcd", bytes);
 }
 
 test "serveAsset serves each asset type from the same storage" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-types");
-    defer fixture.deinit();
+    try fixture.init(log, allocator, "core-types");
+    defer fixture.deinit(log);
     for ([_][]const u8{ "thumb", "display", "asset" }) |assetType| {
-        try fixture.putAsset(allocator, "asset-1", assetType);
+        try fixture.putAsset(log, allocator, "asset-1", assetType);
     }
 
     for ([_][]const u8{ "thumb", "display", "asset" }) |assetType| {
-        const bytes = try fixture.served(allocator, "asset-1", assetType, fixture.database.dir);
+        const bytes = try fixture.served(log, allocator, "asset-1", assetType, fixture.database.dir);
         try std.testing.expectEqualStrings("abcd", bytes);
     }
     try std.testing.expectEqual(@as(u32, 1), fixture.core.storageCache.count());
 }
 
 test "serveAsset caches storage per database path" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-cache");
-    defer fixture.deinit();
-    try fixture.putAsset(allocator, "asset-1", "thumb");
-    try fixture.putAsset(allocator, "asset-2", "thumb");
+    try fixture.init(log, allocator, "core-cache");
+    defer fixture.deinit(log);
+    try fixture.putAsset(log, allocator, "asset-1", "thumb");
+    try fixture.putAsset(log, allocator, "asset-2", "thumb");
 
-    _ = try fixture.served(allocator, "asset-1", "thumb", fixture.database.dir);
+    _ = try fixture.served(log, allocator, "asset-1", "thumb", fixture.database.dir);
     const first = fixture.core.storageCache.get(fixture.database.dir).?;
-    _ = try fixture.served(allocator, "asset-2", "thumb", fixture.database.dir);
+    _ = try fixture.served(log, allocator, "asset-2", "thumb", fixture.database.dir);
     const second = fixture.core.storageCache.get(fixture.database.dir).?;
 
     // Storage is only created once for the same database path.
@@ -133,21 +137,22 @@ test "serveAsset caches storage per database path" {
 }
 
 test "serveAsset creates separate storage for different database paths" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-paths-one");
-    defer fixture.deinit();
+    try fixture.init(log, allocator, "core-paths-one");
+    defer fixture.deinit(log);
     var other: DatabaseFixture = undefined;
-    try other.init(allocator, fixture.virtual_time.io(), "core-paths-two");
-    defer other.deinit(fixture.virtual_time.io());
-    try fixture.putAsset(allocator, "asset-1", "thumb");
+    try other.init(allocator, fixture.virtual_time.io(), log, "core-paths-two");
+    defer other.deinit(fixture.virtual_time.io(), log);
+    try fixture.putAsset(log, allocator, "asset-1", "thumb");
     var stream = std.Io.Reader.fixed("wxyz");
-    try media_file_database.writeAssetStream(allocator, fixture.virtual_time.io(), other.database.assetStorage, other.rawStorage, "putter", "asset-1", "thumb", "image/jpeg", &stream, 4);
+    try media_file_database.writeAssetStream(allocator, fixture.virtual_time.io(), log, other.database.assetStorage, other.rawStorage, "putter", "asset-1", "thumb", "image/jpeg", &stream, 4);
 
-    const one = try fixture.served(allocator, "asset-1", "thumb", fixture.database.dir);
-    const two = try fixture.served(allocator, "asset-1", "thumb", other.dir);
+    const one = try fixture.served(log, allocator, "asset-1", "thumb", fixture.database.dir);
+    const two = try fixture.served(log, allocator, "asset-1", "thumb", other.dir);
 
     try std.testing.expectEqual(@as(u32, 2), fixture.core.storageCache.count());
     try std.testing.expectEqualStrings("abcd", one);
@@ -155,14 +160,15 @@ test "serveAsset creates separate storage for different database paths" {
 }
 
 test "serveAsset propagates a missing-asset error" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-missing");
-    defer fixture.deinit();
+    try fixture.init(log, allocator, "core-missing");
+    defer fixture.deinit(log);
 
-    try std.testing.expect(std.meta.isError(fixture.served(allocator, "missing", "thumb", fixture.database.dir)));
+    try std.testing.expect(std.meta.isError(fixture.served(log, allocator, "missing", "thumb", fixture.database.dir)));
 }
 
 //
@@ -228,16 +234,17 @@ const LockSpyStream = struct {
 };
 
 test "writeAsset writes the stream via writeAssetStream with the session id" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-write");
-    defer fixture.deinit();
+    try fixture.init(log, allocator, "core-write");
+    defer fixture.deinit(log);
     const io = fixture.virtual_time.io();
     var spy = LockSpyStream.init(fixture.database.rawStorage, io, allocator);
 
-    try fixture.core.assetServerCore().writeAsset(allocator, io, "asset-1", "display", fixture.database.dir, "image/jpeg", &spy.interface, 4);
+    try fixture.core.assetServerCore().writeAsset(allocator, io, log, "asset-1", "display", fixture.database.dir, "image/jpeg", &spy.interface, 4);
 
     // The bytes are in the database at the asset's path, and the core held the write lock under its session id while it wrote.
     const written = try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ fixture.database.dir, "display", "asset-1" }));
@@ -247,22 +254,23 @@ test "writeAsset writes the stream via writeAssetStream with the session id" {
 }
 
 test "applyDatabaseOps delegates to the apply-database-ops library with context identity" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: CoreFixture = undefined;
-    try fixture.init(allocator, "core-apply");
-    defer fixture.deinit();
+    try fixture.init(log, allocator, "core-apply");
+    defer fixture.deinit(log);
     const io = fixture.virtual_time.io();
     const databasePathJson = try utils.json.stringify(allocator, fixture.database.dir);
     const opText = try std.fmt.allocPrint(allocator, "{{\"databaseId\":{s},\"collectionName\":\"metadata\",\"recordId\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"op\":{{\"type\":\"set\",\"fields\":{{\"origFileName\":\"x.jpg\"}}}}}}", .{databasePathJson});
     const op = try api.database_op.databaseOpFromJson(try std.json.parseFromSliceLeaky(std.json.Value, allocator, opText, .{}));
 
-    try fixture.core.assetServerCore().applyDatabaseOps(allocator, io, &.{op});
+    try fixture.core.assetServerCore().applyDatabaseOps(allocator, io, log, &.{op});
 
-    const reopened = try node_api.open_storage.openStorage(allocator, io, fixture.database.dir, null, null, null);
+    const reopened = try node_api.open_storage.openStorage(allocator, io, log, fixture.database.dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, reopened.storage, fixture.database.uuidGenerator.uuidGenerator(), fixture.database.timestampProvider.timestampProvider());
-    const loaded = (try database.metadataCollection.getOne(io, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")).?;
+    const loaded = (try database.metadataCollection.getOne(io, log, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")).?;
     try std.testing.expectEqualStrings("x.jpg", loaded.get("origFileName").?.string);
     try std.testing.expect((try fixture.database.rawStorage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }

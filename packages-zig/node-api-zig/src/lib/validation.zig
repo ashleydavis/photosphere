@@ -1,10 +1,10 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const tools = @import("tools-zig");
 const node_utils = @import("node-utils-zig");
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const file_scanner = @import("file-scanner.zig");
-const log = &utils.log.log;
 const getFileInfo = tools.getFileInfo;
 const IFileStat = file_scanner.IFileStat;
 
@@ -12,7 +12,7 @@ const IFileStat = file_scanner.IFileStat;
 // Validates that a file is good before allowing it to be added to the merkle tree.
 // filePath must be a path to a locally extracted file (not a zip file path).
 //
-pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileStat: IFileStat) !bool {
+pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileStat: IFileStat) !bool {
     // Check that it's not a zero-byte file.
     if (fileStat.length == 0) {
         log.@"error"(try std.fmt.allocPrint(allocator, "Invalid file {s} - zero-byte file", .{filePath}));
@@ -25,10 +25,10 @@ pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProc
     }
 
     if (std.mem.startsWith(u8, contentType, "image")) {
-        return try validateImage(allocator, io, toolRunner, filePath, contentType);
+        return try validateImage(allocator, io, log, toolRunner, filePath, contentType);
     }
     else if (std.mem.startsWith(u8, contentType, "video")) {
-        return try validateVideo(allocator, io, toolRunner, filePath, contentType);
+        return try validateVideo(allocator, io, log, toolRunner, filePath, contentType);
     }
 
     return true;
@@ -38,8 +38,8 @@ pub fn validateFile(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProc
 // Validates an image file by checking if it has valid dimensions
 // filePath must be a path to a locally extracted file.
 //
-fn validateImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
-    const fileInfo = getFileInfo(allocator, io, toolRunner, filePath, contentType) catch |err| {
+fn validateImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
+    const fileInfo = getFileInfo(allocator, io, log, toolRunner, filePath, contentType) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Invalid image {s} - analysis failed", .{filePath}), err);
         return false;
     } orelse {
@@ -61,8 +61,8 @@ fn validateImage(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcess
 // Validates a video file by checking if it has valid dimensions
 // filePath must be a path to a locally extracted file.
 //
-fn validateVideo(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
-    const fileInfo = getFileInfo(allocator, io, toolRunner, filePath, contentType) catch |err| {
+fn validateVideo(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8) !bool {
+    const fileInfo = getFileInfo(allocator, io, log, toolRunner, filePath, contentType) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Invalid video {s} - analysis failed", .{filePath}), err);
         return false;
     } orelse {

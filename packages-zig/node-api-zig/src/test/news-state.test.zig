@@ -1,10 +1,10 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const node_api = @import("node-api-zig");
 const node_utils = @import("node-utils-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const news_state = node_api.news_state;
 const state_file = node_api.state_file;
 
@@ -43,8 +43,9 @@ fn stateJson(allocator: std.mem.Allocator, state: news_state.INewsState) ![]cons
 }
 
 test "is the state file, not a news.yaml of its own" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -56,105 +57,110 @@ test "is the state file, not a news.yaml of its own" {
 }
 
 test "returns empty state when the file does not exist" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     _ = try freshConfigDir(allocator, io, "news-missing");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expectEqualStrings("{\"shownNewsIds\":[],\"feed\":[]}", try stateJson(allocator, state));
 }
 
 test "returns empty state when the state file has no news section" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-no-section");
     try writeState(allocator, io, configDir, "theme: dark\n");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expectEqualStrings("{\"shownNewsIds\":[],\"feed\":[]}", try stateJson(allocator, state));
 }
 
 test "returns empty state when the news section is malformed" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-malformed-section");
     try writeState(allocator, io, configDir, "news: not a section\n");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expectEqual(@as(usize, 0), state.shownNewsIds.len);
 }
 
 test "parses shown_news_ids from the news section" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-ids");
     try writeState(allocator, io, configDir, "news:\n  shown_news_ids:\n    - a\n    - b\n");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"a\",\"b\"],\"feed\":[]}", try stateJson(allocator, state));
     try std.testing.expect(state.lastShownUpdateVersion == null);
 }
 
 test "parses last_shown_update_version from the news section" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-version");
     try writeState(allocator, io, configDir, "news:\n  shown_news_ids: []\n  last_shown_update_version: 1.2.3\n");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expectEqualStrings("1.2.3", state.lastShownUpdateVersion.?);
 }
 
 test "omits last_shown_update_version when empty string" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-version-empty");
     try writeState(allocator, io, configDir, "news:\n  last_shown_update_version: ''\n");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expect(state.lastShownUpdateVersion == null);
 }
 
 test "returns empty state when the state file cannot be read at all" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-unreadable");
     // Loading logs that the state could not be read; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
 
     // Not YAML at all, so reading it throws.
     try writeState(allocator, io, configDir, "news: [unclosed");
-    const state = try news_state.loadNewsState(allocator, io);
+    const state = try news_state.loadNewsState(allocator, io, log);
     try std.testing.expectEqualStrings("{\"shownNewsIds\":[],\"feed\":[]}", try stateJson(allocator, state));
 }
 
 test "writes shown_news_ids in snake_case under the news section" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -168,8 +174,9 @@ test "writes shown_news_ids in snake_case under the news section" {
 }
 
 test "writes last_shown_update_version when set" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -184,8 +191,9 @@ test "writes last_shown_update_version when set" {
 }
 
 test "leaves every other section of the state file alone" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -203,8 +211,9 @@ test "leaves every other section of the state file alone" {
 }
 
 test "is a no-op for empty input" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -215,8 +224,9 @@ test "is a no-op for empty input" {
 }
 
 test "appends new ids to the existing list" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -228,8 +238,9 @@ test "appends new ids to the existing list" {
 }
 
 test "dedupes ids preserving first-seen order" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -241,8 +252,9 @@ test "dedupes ids preserving first-seen order" {
 }
 
 test "preserves last_shown_update_version when only news ids are added" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -254,32 +266,35 @@ test "preserves last_shown_update_version when only news ids are added" {
 }
 
 test "getLastShownUpdateVersion returns undefined when unset" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-get-version-unset");
     try writeState(allocator, io, configDir, "news:\n  shown_news_ids: []\n");
-    try std.testing.expect(try news_state.getLastShownUpdateVersion(allocator, io) == null);
+    try std.testing.expect(try news_state.getLastShownUpdateVersion(allocator, io, log) == null);
 }
 
 test "getLastShownUpdateVersion returns the stored version" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-get-version");
     try writeState(allocator, io, configDir, "news:\n  last_shown_update_version: 1.2.3\n");
-    try std.testing.expectEqualStrings("1.2.3", (try news_state.getLastShownUpdateVersion(allocator, io)).?);
+    try std.testing.expectEqualStrings("1.2.3", (try news_state.getLastShownUpdateVersion(allocator, io, log)).?);
 }
 
 test "setLastShownUpdateVersion overwrites the previous value" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -291,8 +306,9 @@ test "setLastShownUpdateVersion overwrites the previous value" {
 }
 
 test "setLastShownUpdateVersion preserves existing shown news ids" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -304,34 +320,37 @@ test "setLastShownUpdateVersion preserves existing shown news ids" {
 }
 
 test "returns the stored list" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const configDir = try freshConfigDir(allocator, io, "news-get-ids");
     try writeState(allocator, io, configDir, "news:\n  shown_news_ids:\n    - a\n    - b\n");
-    const result = try news_state.getShownNewsIds(allocator, io);
+    const result = try news_state.getShownNewsIds(allocator, io, log);
     try std.testing.expectEqual(@as(usize, 2), result.len);
     try std.testing.expectEqualStrings("a", result[0]);
     try std.testing.expectEqualStrings("b", result[1]);
 }
 
 test "returns [] when the file does not exist" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     _ = try freshConfigDir(allocator, io, "news-get-ids-missing");
-    try std.testing.expectEqual(@as(usize, 0), (try news_state.getShownNewsIds(allocator, io)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try news_state.getShownNewsIds(allocator, io, log)).len);
 }
 
 test "news changes keep every other section of a state file the desktop app wrote" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -355,5 +374,5 @@ test "news changes keep every other section of a state file the desktop app wrot
     );
 
     // And what loadNewsState reads back from it.
-    try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"first-1\",\"first-2\",\"second-1\"],\"lastShownUpdateVersion\":\"9.9.9\",\"feed\":[{\"id\":\"f1\",\"message\":\"Hello: world\",\"color\":\"primary\",\"duration\":5000},{\"id\":\"f2\",\"message\":\"bad colour\"}]}", try stateJson(allocator, try news_state.loadNewsState(allocator, io)));
+    try std.testing.expectEqualStrings("{\"shownNewsIds\":[\"first-1\",\"first-2\",\"second-1\"],\"lastShownUpdateVersion\":\"9.9.9\",\"feed\":[{\"id\":\"f1\",\"message\":\"Hello: world\",\"color\":\"primary\",\"duration\":5000},{\"id\":\"f2\",\"message\":\"bad colour\"}]}", try stateJson(allocator, try news_state.loadNewsState(allocator, io, log)));
 }

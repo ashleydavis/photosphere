@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -134,10 +135,11 @@ pub fn planAutoImportHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: ILog,
     data: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
-    const read = try readConfigFromStorage(allocator, io, try node_api.config_file.getConfigPath(allocator));
+    const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
     const contents = read.config.autoImport;
     var plan = try planMobileAutoImport(allocator, try autoImportSettingsToJson(allocator, contents.settings), contents.defaultDatabasePath);
     // Where the default database is made is a folder of the app's data directory when the caller names one. A caller whose working

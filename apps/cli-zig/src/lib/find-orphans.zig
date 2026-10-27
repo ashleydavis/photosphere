@@ -3,10 +3,10 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
-const log = &utils.log.log;
 const IStorage = storage_zig.storage.IStorage;
 const IgnorePattern = storage_zig.walk_directory.IgnorePattern;
 const walkDirectory = storage_zig.walk_directory.walkDirectory;
@@ -59,7 +59,7 @@ const IMerkleFileNames = struct {
 //
 // Adds the name of a node to the set (the callback given to traverseTreeAsync).
 //
-fn addNodeName(merkleFileNames: *IMerkleFileNames, node: *SortNode) anyerror!bool {
+fn addNodeName(merkleFileNames: *IMerkleFileNames, _: ILog, node: *SortNode) anyerror!bool {
     if (node.name) |name| {
         try merkleFileNames.names.put(merkleFileNames.allocator, name, {});
     }
@@ -70,7 +70,7 @@ fn addNodeName(merkleFileNames: *IMerkleFileNames, node: *SortNode) anyerror!boo
 // Finds files that exist in storage but are no longer in the merkle tree.
 // Returns an array of orphaned file paths.
 //
-pub fn findOrphans(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, merkleTree: *const IMerkleTree) ![]const []const u8 {
+pub fn findOrphans(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, merkleTree: *const IMerkleTree) ![]const []const u8 {
     var orphans: std.ArrayList([]const u8) = .empty;
 
     // Collect all file names from the merkle tree
@@ -80,7 +80,7 @@ pub fn findOrphans(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStor
     };
 
     if (merkleTree.sort) |sort| {
-        try traverseTreeAsync(SortNode, sort, &merkleFileNames, addNodeName);
+        try traverseTreeAsync(SortNode, sort, log, &merkleFileNames, addNodeName);
     }
 
     log.verbose(try std.fmt.allocPrint(allocator, "Found {d} files in merkle tree", .{merkleFileNames.names.count()}));
@@ -90,7 +90,7 @@ pub fn findOrphans(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStor
     const ignorePatterns = [_]IgnorePattern{ matchesDb, matchesMetadata, matchesDsStore };
 
     var walker = try walkDirectory(allocator, io, assetStorage, "/", &ignorePatterns);
-    while (try walker.next()) |file| {
+    while (try walker.next(log)) |file| {
         // Normalize path: remove leading slash to match merkle tree format
         const fileName = withoutLeadingSlash(file.fileName);
 

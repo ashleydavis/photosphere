@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const lan_share = @import("lan-share-network-zig");
 
 const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
@@ -31,7 +32,9 @@ pub const ReceiveThread = struct {
     // The receive thread.
     //
     fn run(self: *ReceiveThread) void {
-        self.result = self.receiver.receive();
+        // The thread's own log, which writes to the console.
+        const log = MuteLog.init();
+        self.result = self.receiver.receive(log);
     }
 
     //

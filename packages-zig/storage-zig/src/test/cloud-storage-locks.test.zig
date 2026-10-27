@@ -175,6 +175,14 @@ const RecordingLog = struct {
     }
 
     //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
+
+    //
     // The vtable that forwards to this log.
     //
     const vtable: utils.log.ILog.VTable = .{
@@ -188,6 +196,7 @@ const RecordingLog = struct {
         .event = ignoreMessage,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 };
 
@@ -214,13 +223,14 @@ fn liveLockHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutput {
 }
 
 test "refuses the lock while another owner holds a live one" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var sender: Sender = undefined;
     var storage = createStorage(arena.allocator(), &sender, liveLockHandler);
     defer storage.s3.deinit();
 
-    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
     try std.testing.expect(!sender.wasSent("DeleteObjectCommand"));
 }
 
@@ -241,13 +251,14 @@ fn absentOnReadHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutp
 // lock and breaking it put three processes in the critical section at once.
 //
 test "refuses the lock when it is there but reads back as absent" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var sender: Sender = undefined;
     var storage = createStorage(arena.allocator(), &sender, absentOnReadHandler);
     defer storage.s3.deinit();
 
-    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
     try std.testing.expect(!sender.wasSent("DeleteObjectCommand"));
 }
 
@@ -269,13 +280,14 @@ fn staleLockHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutput 
 }
 
 test "still breaks a lock that has aged past the timeout and takes it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var sender: Sender = undefined;
     var storage = createStorage(arena.allocator(), &sender, staleLockHandler);
     defer storage.s3.deinit();
 
-    try std.testing.expectEqual(true, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectEqual(true, try storage.acquireWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
     try std.testing.expect(sender.wasSent("DeleteObjectCommand"));
 }
 
@@ -308,11 +320,9 @@ test "a lock taken after breaking a stale one is logged as taken after the timeo
         .messages = std.Io.Writer.Allocating.init(arena.allocator()),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
 
-    try std.testing.expectEqual(true, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectEqual(true, try storage.acquireWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
 
     const messages = recordingLog.messages.written();
     try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_ATTEMPT") != null);
@@ -331,11 +341,9 @@ test "a lock refused while a live one is held is logged with its age and owner" 
         .messages = std.Io.Writer.Allocating.init(arena.allocator()),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
 
-    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectEqual(false, try storage.acquireWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
 
     const messages = recordingLog.messages.written();
     try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_FAILED_EXISTS") != null);
@@ -354,26 +362,28 @@ fn ownLockHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutput {
 }
 
 test "refreshWriteLock writes the lock again, unconditionally, when the owner holds it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var sender: Sender = undefined;
     var storage = createStorage(arena.allocator(), &sender, ownLockHandler);
     defer storage.s3.deinit();
 
-    try storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-a");
+    try storage.refreshWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-a");
 
     try std.testing.expect(sender.wasSent("GetObjectCommand"));
     try std.testing.expect(sender.wasSent("PutObjectCommand"));
 }
 
 test "refreshWriteLock fails, and writes nothing, when another owner holds the lock" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var sender: Sender = undefined;
     var storage = createStorage(arena.allocator(), &sender, ownLockHandler);
     defer storage.s3.deinit();
 
-    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
     try std.testing.expectEqualStrings("Cannot refresh write lock: lock is owned by owner-a, not owner-b for test-bucket/db/.db/write.lock", utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(!sender.wasSent("PutObjectCommand"));
 }
@@ -388,13 +398,14 @@ fn noLockHandler(sender: *Sender, name: []const u8) anyerror!S3CommandOutput {
 }
 
 test "refreshWriteLock fails when there is no lock" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var sender: Sender = undefined;
     var storage = createStorage(arena.allocator(), &sender, noLockHandler);
     defer storage.s3.deinit();
 
-    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-a"));
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-a"));
     try std.testing.expectEqualStrings("Cannot refresh write lock: lock does not exist for test-bucket/db/.db/write.lock", utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(!sender.wasSent("PutObjectCommand"));
 }
@@ -413,12 +424,10 @@ test "refreshWriteLock logs the attempt, the success and the failure" {
         .messages = std.Io.Writer.Allocating.init(arena.allocator()),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
 
-    try storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-a");
-    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, lockPath, "owner-b"));
+    try storage.refreshWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-a");
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(arena.allocator(), std.testing.io, log, lockPath, "owner-b"));
 
     const messages = recordingLog.messages.written();
     try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_ATTEMPT") != null);

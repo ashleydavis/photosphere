@@ -38,9 +38,11 @@ pub fn getImportRecordHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
+    _ = log;
     _ = context;
     // (Zig: reading the task data into the typed struct fails when databasePath is not a string.
     // The failure is reported as a sentence, not a bare parser error name.)

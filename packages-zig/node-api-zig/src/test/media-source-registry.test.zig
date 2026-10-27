@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -54,7 +55,8 @@ const ListMediaSource = struct {
     //
     // Lists the page of items that follows the cursor, which is the source id of the last item of the page before.
     //
-    fn listPage(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPage(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+        _ = log;
         _ = io;
         const self: *ListMediaSource = @ptrCast(@alignCast(ptr));
         var items: std.ArrayList(IMediaItem) = .empty;
@@ -178,12 +180,12 @@ fn albumBuilder(allocator: std.mem.Allocator, sources: []const IAutoImportSource
 //
 // Drains every page of a source into one list.
 //
-fn listAll(allocator: std.mem.Allocator, source: IMediaSource, pageSize: usize) ![]IMediaItem {
+fn listAll(log: ILog, allocator: std.mem.Allocator, source: IMediaSource, pageSize: usize) ![]IMediaItem {
     var items: std.ArrayList(IMediaItem) = .empty;
     var cursor: ?[]const u8 = null;
     var pages: usize = 0;
     while (true) {
-        const page = try source.listPage(allocator, std.testing.io, cursor, pageSize);
+        const page = try source.listPage(allocator, std.testing.io, log, cursor, pageSize);
         try items.appendSlice(allocator, page.items);
         cursor = page.nextCursor;
         pages += 1;
@@ -282,6 +284,7 @@ test "every source of one type is handed to that type's builder at once" {
 }
 
 test "two types are presented as one composite source" {
+    const log = utils.mute_log.MuteLog.init();
     registry.clearMediaSourceBuilders();
     defer registry.clearMediaSourceBuilders();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -305,7 +308,7 @@ test "two types are presented as one composite source" {
 
     try std.testing.expect(source.ptr != @as(*anyopaque, @ptrCast(&folderSource)));
     try std.testing.expect(source.ptr != @as(*anyopaque, @ptrCast(&albumSource)));
-    const items = try listAll(arena.allocator(), source, 10);
+    const items = try listAll(log, arena.allocator(), source, 10);
     try std.testing.expectEqual(@as(usize, 2), items.len);
     try std.testing.expectEqualStrings("0#folder/a.jpg", items[0].sourceId);
     try std.testing.expectEqualStrings("1#album/b.jpg", items[1].sourceId);
@@ -332,6 +335,7 @@ test "the options are passed through to the builder" {
 }
 
 test "composite lists both children, one after the other" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -344,7 +348,7 @@ test "composite lists both children, one after the other" {
     };
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
 
-    const items = try listAll(arena.allocator(), composite.mediaSource(), 10);
+    const items = try listAll(log, arena.allocator(), composite.mediaSource(), 10);
 
     try std.testing.expectEqual(@as(usize, 3), items.len);
     try std.testing.expectEqualStrings("a.jpg", items[0].displayName);
@@ -353,6 +357,7 @@ test "composite lists both children, one after the other" {
 }
 
 test "composite pages across the boundary between children" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -365,7 +370,7 @@ test "composite pages across the boundary between children" {
     };
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
 
-    const items = try listAll(arena.allocator(), composite.mediaSource(), 2);
+    const items = try listAll(log, arena.allocator(), composite.mediaSource(), 2);
 
     const expected = [_][]const u8{ "a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg" };
     try std.testing.expectEqual(expected.len, items.len);
@@ -375,6 +380,7 @@ test "composite pages across the boundary between children" {
 }
 
 test "composite: an empty child does not end the listing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var empty: ListMediaSource = .{
@@ -386,13 +392,14 @@ test "composite: an empty child does not end the listing" {
     };
     var composite = registry.CompositeMediaSource.init(&.{ empty.mediaSource(), second.mediaSource() });
 
-    const items = try listAll(arena.allocator(), composite.mediaSource(), 10);
+    const items = try listAll(log, arena.allocator(), composite.mediaSource(), 10);
 
     try std.testing.expectEqual(@as(usize, 1), items.len);
     try std.testing.expectEqualStrings("a.jpg", items[0].displayName);
 }
 
 test "a composite of empty children lists nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var one: ListMediaSource = .{
@@ -403,12 +410,13 @@ test "a composite of empty children lists nothing" {
     };
     var composite = registry.CompositeMediaSource.init(&.{ one.mediaSource(), two.mediaSource() });
 
-    const items = try listAll(arena.allocator(), composite.mediaSource(), 10);
+    const items = try listAll(log, arena.allocator(), composite.mediaSource(), 10);
 
     try std.testing.expectEqual(@as(usize, 0), items.len);
 }
 
 test "each item says which child it came from" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -421,13 +429,14 @@ test "each item says which child it came from" {
     };
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
 
-    const items = try listAll(arena.allocator(), composite.mediaSource(), 10);
+    const items = try listAll(log, arena.allocator(), composite.mediaSource(), 10);
 
     try std.testing.expectEqualStrings("0#first/a.jpg", items[0].sourceId);
     try std.testing.expectEqualStrings("1#second/b.jpg", items[1].sourceId);
 }
 
 test "exporting goes to the child the item came from, with the stamp removed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -441,7 +450,7 @@ test "exporting goes to the child the item came from, with the stamp removed" {
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
     const source = composite.mediaSource();
 
-    const items = try listAll(arena.allocator(), source, 10);
+    const items = try listAll(log, arena.allocator(), source, 10);
     _ = try source.openItem(arena.allocator(), std.testing.io, items[1]);
 
     try std.testing.expectEqual(@as(usize, 0), first.exported.items.len);
@@ -450,6 +459,7 @@ test "exporting goes to the child the item came from, with the stamp removed" {
 }
 
 test "releasing goes to the child the item came from" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -463,7 +473,7 @@ test "releasing goes to the child the item came from" {
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
     const source = composite.mediaSource();
 
-    const items = try listAll(arena.allocator(), source, 10);
+    const items = try listAll(log, arena.allocator(), source, 10);
     try source.closeItem(arena.allocator(), std.testing.io, items[0]);
 
     try std.testing.expectEqual(@as(usize, 1), first.released.items.len);
@@ -472,6 +482,7 @@ test "releasing goes to the child the item came from" {
 }
 
 test "each child is asked to delete only its own ids" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -485,7 +496,7 @@ test "each child is asked to delete only its own ids" {
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
     const source = composite.mediaSource();
 
-    const items = try listAll(arena.allocator(), source, 10);
+    const items = try listAll(log, arena.allocator(), source, 10);
     try source.deleteItems(arena.allocator(), std.testing.io, &.{ items[0].sourceId, items[1].sourceId });
 
     try std.testing.expectEqual(@as(usize, 1), first.deleteRequests.items.len);
@@ -497,6 +508,7 @@ test "each child is asked to delete only its own ids" {
 }
 
 test "a child with nothing to delete is not asked" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -510,7 +522,7 @@ test "a child with nothing to delete is not asked" {
     var composite = registry.CompositeMediaSource.init(&.{ first.mediaSource(), second.mediaSource() });
     const source = composite.mediaSource();
 
-    const items = try listAll(arena.allocator(), source, 10);
+    const items = try listAll(log, arena.allocator(), source, 10);
     try source.deleteItems(arena.allocator(), std.testing.io, &.{items[0].sourceId});
 
     try std.testing.expectEqual(@as(usize, 1), first.deleteRequests.items.len);
@@ -545,6 +557,7 @@ test "an id naming a child that does not exist is refused" {
 }
 
 test "a malformed cursor is refused rather than silently starting over" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var first: ListMediaSource = .{
@@ -553,6 +566,6 @@ test "a malformed cursor is refused rather than silently starting over" {
     };
     var composite = registry.CompositeMediaSource.init(&.{first.mediaSource()});
 
-    try std.testing.expectError(error.Thrown, composite.mediaSource().listPage(arena.allocator(), std.testing.io, "not-a-cursor", 10));
+    try std.testing.expectError(error.Thrown, composite.mediaSource().listPage(arena.allocator(), std.testing.io, log, "not-a-cursor", 10));
     try std.testing.expect(std.ascii.indexOfIgnoreCase(errors.lastErrorMessage(), "malformed composite") != null);
 }

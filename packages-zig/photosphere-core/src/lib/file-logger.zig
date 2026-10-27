@@ -8,9 +8,9 @@
 // The caller passes the directory to log in and the app's version as parameters of init, because this file has no way
 // to find them out itself.
 //
-// How it is created: `const file_logger = try FileLogger.init(allocator, io, tool_runner, logs_dir, app_version);` then
-// `utils.log.setLog(file_logger.ilog());` on the thread that logs to it. At shutdown call `try file_logger.close();` (which writes the
-// footers) and then `file_logger.deinit();`. The logger must outlive every use of the installed ILog.
+// How it is created: `const file_logger = try FileLogger.init(allocator, io, tool_runner, logs_dir, app_version);`,
+// and `file_logger.ilog()` is the log passed down the thread that logs to it. At shutdown call `try file_logger.close();` (which writes the
+// footers) and then `file_logger.deinit();`. The logger must outlive every use of that ILog.
 //
 
 const std = @import("std");
@@ -103,7 +103,7 @@ pub const FileLogger = struct {
     // versions of the tools the app uses, and the version of Zig this was built with and `app_version`. Nothing is rotated or
     // cleaned up. `tool_runner` runs the ImageMagick, ffmpeg and ffprobe built into the program, in its own process.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner, logs_dir: []const u8, app_version: []const u8) !*FileLogger {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool_runner: node_utils.in_process_tools.InProcessRunner, logs_dir: []const u8, app_version: []const u8) !*FileLogger {
         const start_ms = std.Io.Clock.real.now(io).toMilliseconds();
         try node_utils.fs.ensureDir(io, logs_dir);
         const start_iso = try (utils.timestamp_provider.Date{ .epochMilliseconds = start_ms }).toISOString(allocator);
@@ -139,7 +139,7 @@ pub const FileLogger = struct {
         defer arena_state.deinit();
         const arena = arena_state.allocator();
         const system_information = try buildSystemInformation(arena, io, app_version);
-        const tool_versions = try buildToolVersions(arena, io, tool_runner);
+        const tool_versions = try buildToolVersions(arena, io, log, tool_runner);
         const header = try std.mem.join(arena, "\n", &.{
             rule_line,
             "Photosphere Desktop Log",
@@ -201,16 +201,6 @@ pub const FileLogger = struct {
             .ptr = self,
             .vtable = &vtable,
         };
-    }
-
-    //
-    // Gives the logger behind an ILog, or null when the ILog is some other log (the console log, say).
-    //
-    pub fn fromILog(log: ILog) ?*FileLogger {
-        if (log.vtable != &vtable) {
-            return null;
-        }
-        return @ptrCast(@alignCast(log.ptr));
     }
 
     //
@@ -473,6 +463,7 @@ pub const FileLogger = struct {
         .event = vtableEvent,
         .verboseEnabled = vtableVerboseEnabled,
         .getLogDetails = vtableGetLogDetails,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -588,6 +579,14 @@ pub const FileLogger = struct {
         const self: *FileLogger = @ptrCast(@alignCast(ptr));
         return readLogDetails(allocator, io, self.log_file);
     }
+
+    //
+    // The path of the log file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        const self: *FileLogger = @ptrCast(@alignCast(ptr));
+        return self.getLogFilePath();
+    }
 };
 
 //
@@ -682,9 +681,9 @@ fn buildSystemInformation(arena: std.mem.Allocator, io: std.Io, app_version: []c
 // says "unknown". A tool that does not run is reported as not found. The checks of FFmpeg and FFprobe fail only when the
 // message cannot be made, which ends the header, so the "error checking version" line exists for ImageMagick only.
 //
-fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const u8 {
+fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, log: ILog, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const u8 {
     const image_magick_line = blk: {
-        const status = tools.Image.verifyImageMagick(arena, io, tool_runner) catch {
+        const status = tools.Image.verifyImageMagick(arena, io, log, tool_runner) catch {
             break :blk "ImageMagick: error checking version";
         };
         if (!status.available) {
@@ -692,12 +691,12 @@ fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, tool_runner: node_uti
         }
         break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
     };
-    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, tool_runner);
+    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, log, tool_runner);
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, tool_runner);
+    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, log, tool_runner);
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

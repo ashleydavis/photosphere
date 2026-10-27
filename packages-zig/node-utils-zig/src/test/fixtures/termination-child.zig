@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
 const utils = @import("utils-zig");
 const termination = node_utils.termination;
@@ -21,7 +22,7 @@ const termination = node_utils.termination;
 var stdoutIo: std.Io = undefined;
 
 //
-// The functions of the log, with verbose replaced by writeVerbose ("exit-verbose" only) or exception replaced by
+// The functions of the log termination is given, with verbose replaced by writeVerbose ("exit-verbose" only) or exception replaced by
 // writeException ("fail-always-logged" only).
 //
 var verboseVtable: utils.log.ILog.VTable = undefined;
@@ -64,20 +65,10 @@ var callbackMode: []const u8 = "succeed";
 var callbackCalls: usize = 0;
 
 //
-// The log that writes the exceptions to stdout, or null when the mode does not write them. A log is the calling thread's own, and a
-// signal runs the callback on the signal watcher thread, so the callback gives that thread this log too, for what termination logs
-// after it.
-//
-var exceptionLog: ?utils.log.ILog = null;
-
-//
 // The termination callback: reports its exit code on stdout and throws as the mode says.
 //
-fn reportExitCode(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
+fn reportExitCode(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror!void {
     _ = context;
-    if (exceptionLog) |log| {
-        utils.log.setLog(log);
-    }
     callbackCalls += 1;
     var buffer: [32]u8 = undefined;
     const line = try std.fmt.bufPrint(&buffer, "callback {d}\n", .{exitCode});
@@ -89,7 +80,8 @@ fn reportExitCode(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void 
 }
 
 //
-// Registers the callback, reports that it is ready and waits to be terminated.
+// Registers the callback, reports that it is ready and waits to be terminated. The log termination is given writes verbose messages
+// ("exit-verbose") or exceptions (the modes that log them) to stdout, and is otherwise the console log.
 //
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -98,8 +90,22 @@ pub fn main(init: std.process.Init) !void {
         return error.ExpectedOneArgument;
     }
     callbackMode = arguments[1];
+    stdoutIo = io;
+    const base = utils.log.ConsoleLog.init();
+    verboseVtable = base.vtable.*;
+    const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
+    if (std.mem.eql(u8, callbackMode, "exit-verbose")) {
+        verboseVtable.verbose = writeVerbose;
+    }
+    if (logsExceptions) {
+        verboseVtable.exception = writeException;
+    }
+    const log: utils.log.ILog = .{
+        .ptr = base.ptr,
+        .vtable = &verboseVtable,
+    };
     if (std.mem.eql(u8, callbackMode, "uncaught-uninitialized")) {
-        termination.shutdownOnUncaughtException(io, utils.errors.throwError("Boom", .{}));
+        termination.shutdownOnUncaughtException(io, log, utils.errors.throwError("Boom", .{}));
     }
     try termination.registerTerminationCallback(io, .{ .context = null, .function = reportExitCode });
     if (std.mem.eql(u8, callbackMode, "register-twice")) {
@@ -108,34 +114,11 @@ pub fn main(init: std.process.Init) !void {
             .function = reportExitCode,
         });
     }
-    if (std.mem.eql(u8, callbackMode, "exit-verbose")) {
-        stdoutIo = io;
-        const base = utils.log.currentLog();
-        verboseVtable = base.vtable.*;
-        verboseVtable.verbose = writeVerbose;
-        utils.log.setLog(.{
-            .ptr = base.ptr,
-            .vtable = &verboseVtable,
-        });
-        termination.exit(io, 7);
-    }
-    const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
-    if (logsExceptions) {
-        stdoutIo = io;
-        const base = utils.log.currentLog();
-        verboseVtable = base.vtable.*;
-        verboseVtable.exception = writeException;
-        exceptionLog = .{
-            .ptr = base.ptr,
-            .vtable = &verboseVtable,
-        };
-        utils.log.setLog(exceptionLog);
-    }
-    if (std.mem.eql(u8, callbackMode, "exit-fail")) {
-        termination.exit(io, 7);
+    if (std.mem.eql(u8, callbackMode, "exit-verbose") or std.mem.eql(u8, callbackMode, "exit-fail")) {
+        termination.exit(io, log, 7);
     }
     if (std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail")) {
-        termination.shutdownOnUncaughtException(io, utils.errors.throwError("Boom", .{}));
+        termination.shutdownOnUncaughtException(io, log, utils.errors.throwError("Boom", .{}));
     }
     try std.Io.File.stdout().writeStreamingAll(io, "ready\n");
     while (true) {

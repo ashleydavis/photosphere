@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const node_api = @import("node-api-zig");
 const media_tools = @import("media-tools-zig");
@@ -44,9 +45,9 @@ pub const ProductionQueueBackend = struct {
     // Puts the test environment's pool back as the test thread's queue backend, waits for the tasks, stops the workers and releases
     // everything.
     //
-    pub fn stop(self: *ProductionQueueBackend, allocator: std.mem.Allocator) void {
+    pub fn stop(self: *ProductionQueueBackend, log: ILog, allocator: std.mem.Allocator) void {
         test_environment.restoreQueueBackend();
-        self.pool.deinit(std.testing.io, allocator, test_timers.timers());
+        self.pool.deinit(std.testing.io, allocator, test_timers.timers(), log);
         self.mediaTools.deinit();
     }
 };

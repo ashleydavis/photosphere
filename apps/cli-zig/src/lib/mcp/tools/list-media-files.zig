@@ -57,6 +57,7 @@ pub fn registerListMediaFilesTool(server: *McpServer, allocator: std.mem.Allocat
 //
 fn listMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
@@ -65,7 +66,7 @@ fn listMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io
     };
     const limit: usize = @intFromFloat(arguments.get("limit").?.number);
     const pageId: ?[]const u8 = if (arguments.get("pageId")) |value| value.string else null;
-    const page = try listAssetPage(io, database.bsonDatabase, limit, pageId);
+    const page = try listAssetPage(io, log, database.bsonDatabase, limit, pageId);
     const mediaFiles = try allocator.alloc(BsonValue, page.assets.len);
     for (page.assets, 0..) |asset, assetIndex| {
         mediaFiles[assetIndex] = try toAssetSummary(allocator, asset);

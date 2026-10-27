@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -12,7 +13,6 @@ const media_source = @import("media-source.zig");
 const media_source_registry = @import("media-source-registry.zig");
 const create_auto_import_scanner = @import("create-auto-import-scanner.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const swallowError = utils.swallow_error.swallowError;
 const path = node_utils.path;
 const ensureDir = node_utils.fs.ensureDir;
@@ -120,7 +120,7 @@ const RemoveSessionTempDirOperation = struct {
     //
     // Removes the directory.
     //
-    pub fn run(self: *RemoveSessionTempDirOperation, io: std.Io) !void {
+    pub fn run(self: *RemoveSessionTempDirOperation, io: std.Io, _: ILog) !void {
         try remove(io, self.dirPath);
     }
 };
@@ -130,7 +130,7 @@ const RemoveSessionTempDirOperation = struct {
 // hashed it. All three parts of the entry have to agree, because a photo library may reuse the
 // id of an item that has been deleted, and deleting the wrong photo is not recoverable.
 //
-fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, localHashCache: *HashCache, metadataCollection: *IBsonCollection, item: IMediaItem) !bool {
+fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, localHashCache: *HashCache, metadataCollection: *IBsonCollection, item: IMediaItem) !bool {
     const cacheEntry = try localHashCache.getHash(allocator, item.sourceId) orelse {
         return false;
     };
@@ -143,7 +143,7 @@ fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, localHashCache: *Ha
     // user's only copy of a photo. An id in the cache is good enough to skip an import; it is
     // not good enough to delete anything.
     const hashIndex = try metadataCollection.sortIndex("hash", .asc);
-    const existingRecords = try hashIndex.findByValue(io, .{
+    const existingRecords = try hashIndex.findByValue(io, log, .{
         .string = try std.fmt.allocPrint(allocator, "{x}", .{cacheEntry.hash}),
     }, null);
     return existingRecords.len > 0;
@@ -153,7 +153,7 @@ fn isInTheDatabase(allocator: std.mem.Allocator, io: std.Io, localHashCache: *Ha
 // Deletes the photos the device still holds that the database already has.
 // (Zig: the task data and output are JSON values holding ICleanupSourcesData and ICleanupSourcesResult.)
 //
-pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     const data = try std.json.parseFromValueLeaky(ICleanupSourcesData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -165,7 +165,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
     const sessionTempDir = try path.join(allocator, &.{ try getProcessTmpDir(allocator, io), "photosphere", try context.uuidGenerator.generate(allocator, io) });
     try ensureDir(io, sessionTempDir);
 
-    const credentials = try resolveStorageCredentials(allocator, io, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const credentials = try resolveStorageCredentials(allocator, io, log, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
     const bsonDatabase = try BsonDatabase.init(allocator, created.storage, ".db/bson", context.uuidGenerator, context.timestampProvider);
@@ -173,7 +173,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
 
     var localHashCache = try HashCache.init(try getHashCacheDir(allocator, data.storageDescriptor.databasePath), true);
     defer localHashCache.deinit();
-    _ = try localHashCache.load(io);
+    _ = try localHashCache.load(io, log);
 
     const source = try buildMediaSource(allocator, settings.sources, .{
         .sessionTempDir = sessionTempDir,
@@ -185,7 +185,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
         var removeOperation: RemoveSessionTempDirOperation = .{
             .dirPath = sessionTempDir,
         };
-        _ = swallowError(io, &removeOperation);
+        _ = swallowError(io, log, &removeOperation);
     }
 
     var deletableSourceIds: std.ArrayList([]const u8) = .empty;
@@ -193,10 +193,10 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
     var cursor: ?[]const u8 = null;
 
     while (true) {
-        const page = try source.listPage(allocator, io, cursor, CLEANUP_PAGE_SIZE);
+        const page = try source.listPage(allocator, io, log, cursor, CLEANUP_PAGE_SIZE);
         for (page.items) |item| {
             considered += 1;
-            if (try isInTheDatabase(allocator, io, &localHashCache, metadataCollection, item)) {
+            if (try isInTheDatabase(allocator, io, log, &localHashCache, metadataCollection, item)) {
                 try deletableSourceIds.append(allocator, item.sourceId);
             }
         }

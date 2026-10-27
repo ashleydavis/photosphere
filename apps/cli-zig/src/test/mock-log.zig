@@ -52,9 +52,6 @@ pub const MockLog = struct {
     // Every call, in the order made.
     calls: std.ArrayList(IMockLogCall) = .empty,
 
-    // The log that was active before this one was installed.
-    previousLog: ?log.ILog = null,
-
     //
     // Creates a mock log that records with the allocator.
     //
@@ -72,23 +69,6 @@ pub const MockLog = struct {
             self.allocator.free(call.message);
         }
         self.calls.deinit(self.allocator);
-    }
-
-    //
-    // Makes this the global log.
-    //
-    pub fn install(self: *MockLog) void {
-        self.previousLog = log.currentLog();
-        log.setLog(self.ilog());
-    }
-
-    //
-    // Restores the log that was active before install.
-    //
-    pub fn uninstall(self: *MockLog) void {
-        if (self.previousLog) |previous| {
-            log.setLog(previous);
-        }
     }
 
     //
@@ -152,6 +132,7 @@ pub const MockLog = struct {
         .event = event,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -240,5 +221,13 @@ pub const MockLog = struct {
         _ = allocator;
         _ = io;
         return log.noLogDetails;
+    }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
     }
 };

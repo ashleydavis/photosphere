@@ -1,4 +1,5 @@
 const std = @import("std");
+const ConsoleLog = @import("utils-zig").log.ConsoleLog;
 const cli = @import("cli-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");

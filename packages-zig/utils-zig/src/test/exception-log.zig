@@ -15,26 +15,6 @@ pub const ExceptionLog = struct {
     // The error of the last call to exception.
     lastError: ?anyerror = null,
 
-    // The log that was active before this one was installed.
-    previousLog: ?log.ILog = null,
-
-    //
-    // Makes this the global log.
-    //
-    pub fn install(self: *ExceptionLog) void {
-        self.previousLog = log.currentLog();
-        log.setLog(self.ilog());
-    }
-
-    //
-    // Restores the log that was active before install.
-    //
-    pub fn uninstall(self: *ExceptionLog) void {
-        if (self.previousLog) |previous| {
-            log.setLog(previous);
-        }
-    }
-
     //
     // Gets the ILog interface for this log.
     //
@@ -56,6 +36,7 @@ pub const ExceptionLog = struct {
         .event = ignoreMessage,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -101,5 +82,13 @@ pub const ExceptionLog = struct {
         _ = allocator;
         _ = io;
         return log.noLogDetails;
+    }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
     }
 };

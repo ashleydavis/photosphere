@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -9,7 +10,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
-const log = &utils.log.log;
 const sleep = utils.sleep.sleep;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const exit = node_utils.termination.exit;
@@ -21,7 +21,6 @@ const loadDatabase = init_cmd.loadDatabase;
 const resolveGeocodingApiKey = init_cmd.resolveGeocodingApiKey;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
-const FileLog = utils.file_log.FileLog;
 const formatBytes = format.formatBytes;
 const defaultFormatBytesOptions = format.defaultFormatBytesOptions;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
@@ -82,7 +81,7 @@ pub const ProgressState = struct {
     //
     // Writes the progress line.
     //
-    fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
+    fn onProgress(context: ?*anyopaque, log: ILog, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
         const self: *ProgressState = @ptrCast(@alignCast(context.?));
         var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
         defer arena.deinit();
@@ -90,7 +89,7 @@ pub const ProgressState = struct {
             log.exception("Failed to write the progress message", err);
             return;
         };
-        writeProgress(message);
+        writeProgress(log, message);
     }
 
     //
@@ -131,7 +130,7 @@ pub const ProgressState = struct {
 //
 // Command that adds files and directories to the Photosphere media file database.
 //
-pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, paths: []const []const u8, options: *IAddCommandOptions) !void {
+pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, paths: []const []const u8, options: *IAddCommandOptions) !void {
     const sessionId = context.sessionId;
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
@@ -143,11 +142,11 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
             log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Path does not exist: {s}", .{try pc.cyan(allocator, filePath)})));
             log.@"error"(try pc.red(allocator, "  Please verify the path is correct and try again."));
             log.@"error"("");
-            exit(io, 1);
+            exit(io, log, 1);
         }
     }
 
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const databaseDir = loaded.databaseDir;
     const googleApiKey = try resolveGeocodingApiKey(allocator, io, loaded.geocodingKeyName);
 
@@ -171,7 +170,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         log.info(try pc.bold(allocator, "Watching for new media. Press Ctrl-C to stop."));
     }
 
-    writeProgress("Searching for files...");
+    writeProgress(log, "Searching for files...");
 
     var progressState: ProgressState = .{
         .options = options,
@@ -191,6 +190,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         addSummary = try addPaths(
             allocator,
             io,
+            log,
             timer_list.interface(),
             uuidGenerator,
             storageDescriptor,
@@ -207,7 +207,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         try sleep(io, WATCH_RESTART_INTERVAL_MS);
     }
 
-    clearProgressMessage(); // Flush the progress message.
+    clearProgressMessage(log); // Flush the progress message.
 
     if (options.cleanup orelse false) {
         // After the import rather than during it, and as one walk rather than per file. The CLI has
@@ -215,7 +215,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         // only what triggers this differs between the two, and it differs because only a phone puts
         // a system prompt in front of it.
         log.info(try pc.dim(allocator, "Looking for source files the database already holds..."));
-        _ = try cleanUpImportedSources(allocator, io, uuidGenerator, storageDescriptor, try watchSettings(allocator, io, paths), sessionId);
+        _ = try cleanUpImportedSources(allocator, io, log, uuidGenerator, storageDescriptor, try watchSettings(allocator, io, paths), sessionId);
         // The number of source files deleted is not written after "Source files deleted: ".
         log.info("Source files deleted: ");
     }
@@ -238,8 +238,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
 
     // If there were failures, tell the user to check the log file
     if (addSummary.filesFailed > 0) {
-        if (FileLog.fromILog(utils.log.currentLog())) |fileLogger| {
-            const logFilePath = fileLogger.getLogFilePath();
+        if (log.logFilePath()) |logFilePath| {
             log.info("");
             log.info(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F}  {d} file{s} failed. Check the log file for details:", .{ addSummary.filesFailed, if (addSummary.filesFailed == 1) "" else "s" })));
             log.info(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, logFilePath)}));
@@ -265,10 +264,10 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
     // it was asked. The counts above say so on screen, but a script or a scheduled backup only reads
     // the exit code, and reporting success there is how an incomplete import goes unnoticed.
     if (addSummary.filesFailed > 0) {
-        exit(io, 1);
+        exit(io, log, 1);
     }
     else {
-        exit(io, 0);
+        exit(io, log, 0);
     }
 }
 
@@ -302,6 +301,7 @@ pub fn watchSettings(allocator: std.mem.Allocator, io: std.Io, folders: []const 
 fn cleanUpImportedSources(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     uuidGenerator: IUuidGenerator,
     storageDescriptor: IDatabaseDescriptor,
     settings: IAutoImportSettings,
@@ -309,8 +309,8 @@ fn cleanUpImportedSources(
 ) !usize {
     const queue = try TaskQueue.init(allocator, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "cleanup-", sessionId }));
     var timer_list = TimerList.init();
-    defer queue.deinit(io, allocator);
-    defer queue.shutdown(io, allocator);
+    defer queue.deinit(io, allocator, log);
+    defer queue.shutdown(io, allocator, log);
 
     var taskData: std.json.ObjectMap = .empty;
     var descriptor: std.json.ObjectMap = .empty;
@@ -321,8 +321,8 @@ fn cleanUpImportedSources(
     try taskData.put(allocator, "storageDescriptor", .{ .object = descriptor });
     try taskData.put(allocator, "settings", try autoImportSettingsToJson(allocator, settings));
     try taskData.put(allocator, "dryRun", .{ .bool = false });
-    const taskId = try queue.addTask(io, allocator, "cleanup-sources", .{ .object = taskData }, null, null);
-    const taskResult = try queue.awaitTask(io, allocator, timer_list.interface(), taskId);
+    const taskId = try queue.addTask(io, allocator, log, "cleanup-sources", .{ .object = taskData }, null, null);
+    const taskResult = try queue.awaitTask(io, allocator, timer_list.interface(), log, taskId);
     const outputs = if (taskResult) |result| result.outputs orelse std.json.Value.null else std.json.Value.null;
     if (outputs == .null) {
         return 0;

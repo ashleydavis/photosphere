@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const config = @import("../lib/config.zig");
@@ -71,7 +72,7 @@ pub fn createMcpServer(allocator: std.mem.Allocator, toolContext: *IMcpToolConte
 // When stdin closes the process ends through exit(), which runs the termination callbacks, so the worker pool
 // is shut down and the session's temporary directory is removed.
 //
-pub fn mcpCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IMcpCommandOptions) !void {
+pub fn mcpCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IMcpCommandOptions) !void {
     //
     // No database is open at startup; the MCP client opens one via the open_database tool.
     //
@@ -81,6 +82,7 @@ pub fn mcpCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
         .uuidGenerator = context.uuidGenerator,
         .timestampProvider = context.timestampProvider,
         .toolRunner = context.toolRunner,
+        .log = log,
         .sessionId = context.sessionId,
         .options = options.base,
         .allocator = allocator,
@@ -100,5 +102,5 @@ pub fn mcpCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCon
     //
     try server.serve(io, &stdinReader.interface);
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

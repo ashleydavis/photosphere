@@ -45,6 +45,7 @@ const Fixture = struct {
 };
 
 test "storage() exposes the location and forwards to the FileStorage methods" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-interface");
     defer fixture.deinit();
@@ -52,7 +53,7 @@ test "storage() exposes the location and forwards to the FileStorage methods" {
     const storage = fixture.fileStorage.storage();
     try std.testing.expectEqualStrings("fs:", storage.location);
     try storage.write(allocator, std.testing.io, try fixture.path("a.txt"), null, "hello");
-    try std.testing.expectEqualStrings("hello", (try storage.read(allocator, std.testing.io, try fixture.path("a.txt"))).?);
+    try std.testing.expectEqualStrings("hello", (try storage.read(allocator, std.testing.io, log, try fixture.path("a.txt"))).?);
 }
 
 test "isEmpty returns true for a missing or empty directory and false otherwise" {
@@ -162,17 +163,19 @@ test "info returns the length and last modified time of a file, and null for dir
 }
 
 test "read returns the file contents or null when missing" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-read");
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
     try test_files.writeFile(io, try fixture.path("file.bin"), "contents");
-    try std.testing.expectEqualStrings("contents", (try fixture.fileStorage.read(allocator, io, try fixture.path("file.bin"))).?);
-    try std.testing.expect((try fixture.fileStorage.read(allocator, io, try fixture.path("missing"))) == null);
+    try std.testing.expectEqualStrings("contents", (try fixture.fileStorage.read(allocator, io, log, try fixture.path("file.bin"))).?);
+    try std.testing.expect((try fixture.fileStorage.read(allocator, io, log, try fixture.path("missing"))) == null);
 }
 
 test "write creates the directory, replaces the file and leaves no .tmp file" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-write");
     defer fixture.deinit();
@@ -181,13 +184,14 @@ test "write creates the directory, replaces the file and leaves no .tmp file" {
     const filePath = try fixture.path("nested/deeper/file.bin");
     try fixture.fileStorage.write(allocator, io, filePath, "application/octet-stream", "first");
     try fixture.fileStorage.write(allocator, io, filePath, null, "second");
-    try std.testing.expectEqualStrings("second", (try fixture.fileStorage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualStrings("second", (try fixture.fileStorage.read(allocator, io, log, filePath)).?);
     const names = (try fixture.fileStorage.listFiles(allocator, io, try fixture.path("nested/deeper"), 1000, null)).names;
     try std.testing.expectEqual(@as(usize, 1), names.len);
     try std.testing.expectEqualStrings("file.bin", names[0]);
 }
 
 test "readStream streams the file contents" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-read-stream");
     defer fixture.deinit();
@@ -195,22 +199,24 @@ test "readStream streams the file contents" {
     const io = std.testing.io;
     const data = try test_files.makeData(allocator, 300 * 1024);
     try test_files.writeFile(io, try fixture.path("big.bin"), data);
-    const stream = try fixture.fileStorage.readStream(allocator, io, try fixture.path("big.bin"));
+    const stream = try fixture.fileStorage.readStream(allocator, io, log, try fixture.path("big.bin"));
     defer stream.destroy(io);
     try std.testing.expectEqualSlices(u8, data, try test_files.readAll(allocator, stream.reader()));
 }
 
 test "readStream fails with the ENOENT message for a missing file" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-read-stream-missing");
     defer fixture.deinit();
     const missingPath = try fixture.path("missing.bin");
-    try std.testing.expectError(error.Thrown, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, missingPath));
+    try std.testing.expectError(error.Thrown, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, log, missingPath));
     const expected = try std.fmt.allocPrint(fixture.arena.allocator(), "ENOENT: no such file or directory, open '{s}'", .{missingPath});
     try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
 }
 
 test "writeStream writes the stream to the file and leaves no .tmp file" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-write-stream");
     defer fixture.deinit();
@@ -220,11 +226,12 @@ test "writeStream writes the stream to the file and leaves no .tmp file" {
     var input = std.Io.Reader.fixed(data);
     const filePath = try fixture.path("out/file.bin");
     try fixture.fileStorage.writeStream(allocator, io, filePath, null, &input, null);
-    try std.testing.expectEqualSlices(u8, data, (try fixture.fileStorage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualSlices(u8, data, (try fixture.fileStorage.read(allocator, io, log, filePath)).?);
     try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("out/file.bin.tmp")));
 }
 
 test "writeStream replaces the file its input stream is reading, because the stream closes the file at its end" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-write-stream-over-source");
     defer fixture.deinit();
@@ -237,10 +244,10 @@ test "writeStream replaces the file its input stream is reading, because the str
     // Node's fs.createReadStream closes the file once it has read the end, so a copy onto the file's own path
     // (as encrypt and decrypt do) replaces it with nothing still holding it open. Windows refuses to replace an
     // open file.
-    const stream = try fixture.fileStorage.readStream(allocator, io, filePath);
+    const stream = try fixture.fileStorage.readStream(allocator, io, log, filePath);
     defer stream.destroy(io);
     try fixture.fileStorage.writeStream(allocator, io, filePath, null, stream.reader(), null);
-    try std.testing.expectEqualSlices(u8, data, (try fixture.fileStorage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualSlices(u8, data, (try fixture.fileStorage.read(allocator, io, log, filePath)).?);
     try std.testing.expect(!try fixture.fileStorage.fileExists(allocator, io, try fixture.path("file.bin.tmp")));
 }
 
@@ -269,6 +276,7 @@ test "deleteDir deletes a directory tree and ignores a missing directory" {
 }
 
 test "copyTo copies a file and creates the destination directory" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-copy-to");
     defer fixture.deinit();
@@ -276,7 +284,7 @@ test "copyTo copies a file and creates the destination directory" {
     const io = std.testing.io;
     try test_files.writeFile(io, try fixture.path("source.bin"), "copied");
     try fixture.fileStorage.copyTo(allocator, io, try fixture.path("source.bin"), try fixture.path("dest/copy.bin"));
-    try std.testing.expectEqualStrings("copied", (try fixture.fileStorage.read(allocator, io, try fixture.path("dest/copy.bin"))).?);
+    try std.testing.expectEqualStrings("copied", (try fixture.fileStorage.read(allocator, io, log, try fixture.path("dest/copy.bin"))).?);
 }
 
 //
@@ -295,6 +303,7 @@ test "readableLength is the length in the info, because a file hands out what it
 // What writeStreamHashed and storedHash do for a file on disk is pinned here.
 //
 test "writeStreamHashed writes the stream and says the filesystem did not check the hash" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-write-stream-hashed");
     defer fixture.deinit();
@@ -303,7 +312,7 @@ test "writeStreamHashed writes the stream and says the filesystem did not check 
     var input = std.Io.Reader.fixed("hashed");
     const hash = [_]u8{7} ** 32;
     try std.testing.expectEqual(false, try fixture.fileStorage.writeStreamHashed(allocator, io, try fixture.path("dir/hashed.bin"), null, &input, 6, &hash));
-    try std.testing.expectEqualStrings("hashed", (try fixture.fileStorage.read(allocator, io, try fixture.path("dir/hashed.bin"))).?);
+    try std.testing.expectEqualStrings("hashed", (try fixture.fileStorage.read(allocator, io, log, try fixture.path("dir/hashed.bin"))).?);
 }
 
 test "storedHash is undefined, because a filesystem keeps no hash" {
@@ -317,6 +326,7 @@ test "storedHash is undefined, because a filesystem keeps no hash" {
 }
 
 test "readStream passes on an error other than a missing file" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-read-stream-not-dir");
     defer fixture.deinit();
@@ -332,7 +342,7 @@ test "readStream passes on an error other than a missing file" {
         try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
     }
     else {
-        try std.testing.expectError(error.NotDir, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, underFilePath));
+        try std.testing.expectError(error.NotDir, fixture.fileStorage.readStream(fixture.arena.allocator(), std.testing.io, log, underFilePath));
     }
 }
 
@@ -347,6 +357,7 @@ fn nextHandle(io: std.Io, filePath: []const u8) !std.Io.File.Handle {
 }
 
 test "readStream closes the file and frees what it made when it runs out of memory setting the stream up" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init("file-storage-read-stream-no-memory");
     defer fixture.deinit();
@@ -361,11 +372,11 @@ test "readStream closes the file and frees what it made when it runs out of memo
     var refuseStream = std.testing.FailingAllocator.init(std.testing.allocator, .{
         .fail_index = 0,
     });
-    try std.testing.expectError(error.OutOfMemory, fixture.fileStorage.readStream(refuseStream.allocator(), io, filePath));
+    try std.testing.expectError(error.OutOfMemory, fixture.fileStorage.readStream(refuseStream.allocator(), io, log, filePath));
     var refuseBuffer = std.testing.FailingAllocator.init(std.testing.allocator, .{
         .fail_index = 1,
     });
-    try std.testing.expectError(error.OutOfMemory, fixture.fileStorage.readStream(refuseBuffer.allocator(), io, filePath));
+    try std.testing.expectError(error.OutOfMemory, fixture.fileStorage.readStream(refuseBuffer.allocator(), io, log, filePath));
     if (builtin.os.tag != .windows) {
         try std.testing.expectEqual(handleBefore, try nextHandle(io, filePath));
     }

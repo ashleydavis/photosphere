@@ -84,6 +84,7 @@ fn optionalString(arguments: BsonDocument, name: []const u8) ?[]const u8 {
 //
 fn searchMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
@@ -93,6 +94,7 @@ fn searchMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.
     const assets = try searchAssets(
         allocator,
         io,
+        log,
         database.bsonDatabase,
         arguments.get("query").?.string,
         optionalString(arguments, "contentType"),

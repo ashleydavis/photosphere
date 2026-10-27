@@ -315,6 +315,7 @@ fn expectFailure(result: anytype, expectedMessage: []const u8, expectedCauseName
 }
 
 test "an S3 error response without a body is thrown as the SDK throws it, Unknown with the message UnknownError" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -325,7 +326,7 @@ test "an S3 error response without a body is thrown as the SDK throws it, Unknow
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
     try expectFailure(storage.info(allocator, io, "dir/file.txt"), "Failed to get info for dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
     try expectFailure(storage.write(allocator, io, "dir/file.txt", "text/plain", "data"), "Failed to write to dir/file.txt: UnknownError: UnknownError", "Unknown", 400);
     try expectFailure(storage.listFiles(allocator, io, "dir", 10, null), "Failed to list files in dir: UnknownError: UnknownError", "Unknown", 400);
@@ -336,6 +337,7 @@ test "an S3 error response without a body is thrown as the SDK throws it, Unknow
 }
 
 test "an S3 404 without a body is NotFound, so info and fileExists report a missing file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -348,10 +350,11 @@ test "an S3 404 without a body is NotFound, so info and fileExists report a miss
 
     try std.testing.expectEqual(null, try storage.info(allocator, io, "dir/file.txt"));
     try std.testing.expect(!try storage.fileExists(allocator, io, "dir/file.txt"));
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "NotFound", 404);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "NotFound", 404);
 }
 
 test "an S3 error response is thrown with the Code and Message of its body" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -362,7 +365,7 @@ test "an S3 error response is thrown with the Code and Message of its body" {
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Access & Denied: Access & Denied", "AccessDenied", 403);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: Access & Denied: Access & Denied", "AccessDenied", 403);
     try expectFailure(storage.write(allocator, io, "dir/file.txt", "text/plain", "data"), "Failed to write to dir/file.txt: Access & Denied: Access & Denied", "AccessDenied", 403);
     try expectFailure(storage.listFiles(allocator, io, "dir", 10, null), "Failed to list files in dir: Access & Denied: Access & Denied", "AccessDenied", 403);
 
@@ -371,6 +374,7 @@ test "an S3 error response is thrown with the Code and Message of its body" {
 }
 
 test "an S3 error response without a Message is thrown with the message UnknownError" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -381,10 +385,11 @@ test "an S3 error response without a Message is thrown with the message UnknownE
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "AccessDenied", 403);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: UnknownError: UnknownError", "AccessDenied", 403);
 }
 
 test "an S3 error response without a Code is thrown as Unknown with its Message" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -395,7 +400,7 @@ test "an S3 error response without a Code is thrown as Unknown with its Message"
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Bad thing.: Bad thing.", "Unknown", 400);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: Bad thing.: Bad thing.", "Unknown", 400);
 }
 
 //
@@ -404,6 +409,7 @@ test "an S3 error response without a Code is thrown as Unknown with its Message"
 // retry (see s3-client.zig, throwResultError), so the SDK's own error is thrown for them.
 //
 test "an S3 500 or 503 fails with the error aws-c-s3 gives it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -419,7 +425,7 @@ test "an S3 500 or 503 fails with the error aws-c-s3 gives it" {
     var slowDownStorage = try storageOf(&slowDownServer, allocator);
     defer slowDownStorage.s3.deinit();
 
-    try expectFailure(internalErrorStorage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Response code indicates internal server error: Response code indicates internal server error", "AWS_ERROR_S3_INTERNAL_ERROR", 0);
+    try expectFailure(internalErrorStorage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: Response code indicates internal server error: Response code indicates internal server error", "AWS_ERROR_S3_INTERNAL_ERROR", 0);
     try expectFailure(internalErrorStorage.write(allocator, io, "dir/file.txt", "text/plain", "data"), "Failed to write to dir/file.txt: Response code indicates internal server error: Response code indicates internal server error", "AWS_ERROR_S3_INTERNAL_ERROR", 0);
     try expectFailure(slowDownStorage.listFiles(allocator, io, "dir", 10, null), "Failed to list files in dir: Response code indicates throttling: Response code indicates throttling", "AWS_ERROR_S3_SLOW_DOWN", 0);
 }
@@ -510,6 +516,7 @@ test "a storage given no region, where the environment has none either, fails wi
 }
 
 test "a storage given no credentials uses those of the environment, session token included, like the SDK" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -530,7 +537,7 @@ test "a storage given no credentials uses those of the environment, session toke
     defer storage.s3.deinit();
 
     // The request was signed and sent, so the server's answer is the error.
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: Access Denied: Access Denied", "AccessDenied", 403);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: Access Denied: Access Denied", "AccessDenied", 403);
     try std.testing.expectEqualStrings("/dir/file.txt", try server.lastTarget(io, allocator));
 }
 
@@ -576,6 +583,7 @@ test "endpointHref gives the WHATWG URL href: a path of / for a special scheme w
 }
 
 test "an S3 error is named by its Code even when the client does not list the Code" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -586,7 +594,7 @@ test "an S3 error is named by its Code even when the client does not list the Co
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try expectFailure(storage.read(allocator, io, "dir/file.txt"), "Failed to read dir/file.txt: A conflicting operation is in progress.: A conflicting operation is in progress.", "OperationAborted", 409);
+    try expectFailure(storage.read(allocator, io, log, "dir/file.txt"), "Failed to read dir/file.txt: A conflicting operation is in progress.: A conflicting operation is in progress.", "OperationAborted", 409);
 }
 
 test "staticErrorName keeps one copy of each code, and names the codes past its limit S3ServiceException" {
@@ -816,6 +824,7 @@ const RecordingLog = struct {
         .event = ignore,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -869,6 +878,14 @@ const RecordingLog = struct {
         _ = io;
         return error.NoLogFile;
     }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
 };
 
 //
@@ -892,9 +909,7 @@ test "a lock is taken, released, and refused when the server fails, and the verb
         .allocator = allocator,
         .lines = .empty,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
     var server: CannedServer = undefined;
     try server.start(io, .ok, "");
     defer server.stop(io);
@@ -906,18 +921,18 @@ test "a lock is taken, released, and refused when the server fails, and the verb
     var failingStorage = try storageOf(&failingServer, allocator);
     defer failingStorage.s3.deinit();
 
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, "bucket//dir/file.lock", "owner"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, "bucket//dir/file.lock", "owner"));
     try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(io, allocator));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_SUCCESS,"));
     try std.testing.expectEqual(null, try storage.checkWriteLock(allocator, io, "bucket//dir/file.lock"));
     try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(io, allocator));
-    try storage.releaseWriteLock(allocator, io, "bucket//dir/file.lock");
+    try storage.releaseWriteLock(allocator, io, log, "bucket//dir/file.lock");
     try std.testing.expectEqualStrings("/bucket/dir/file.lock", try server.lastTarget(io, allocator));
     try std.testing.expect(recordingLog.logged(",RELEASE_SUCCESS,"));
 
-    try expectFailure(failingStorage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"), "Failed to acquire write lock for bucket/dir/file.lock: Access Denied: Access Denied", "AccessDenied", 403);
+    try expectFailure(failingStorage.acquireWriteLock(allocator, io, log, "bucket/dir/file.lock", "owner"), "Failed to acquire write lock for bucket/dir/file.lock: Access Denied: Access Denied", "AccessDenied", 403);
     try std.testing.expect(recordingLog.logged(",ACQUIRE_FAILED_ERROR,"));
-    try failingStorage.releaseWriteLock(allocator, io, "bucket/dir/file.lock");
+    try failingStorage.releaseWriteLock(allocator, io, log, "bucket/dir/file.lock");
     try std.testing.expect(recordingLog.logged(",RELEASE_FAILED,"));
 }
 
@@ -930,9 +945,7 @@ test "a lock that exists but reads back as nothing is refused, not broken" {
         .allocator = allocator,
         .lines = .empty,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
     const answers = [_]ICannedAnswer{
         .{
             .method = .PUT,
@@ -953,7 +966,7 @@ test "a lock that exists but reads back as nothing is refused, not broken" {
     var storage = try storageOf(&server, allocator);
     defer storage.s3.deinit();
 
-    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"));
+    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, log, "bucket/dir/file.lock", "owner"));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_FAILED_UNREADABLE,"));
 }
 
@@ -966,9 +979,7 @@ test "a stale lock that cannot be deleted, or cannot be written again once delet
         .allocator = allocator,
         .lines = .empty,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
     const lock = try staleLock(allocator);
     const undeletableAnswers = [_]ICannedAnswer{
         .{
@@ -1021,13 +1032,13 @@ test "a stale lock that cannot be deleted, or cannot be written again once delet
     var unwritableStorage = try storageOf(&unwritableServer, allocator);
     defer unwritableStorage.s3.deinit();
 
-    try std.testing.expect(!try undeletableStorage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"));
+    try std.testing.expect(!try undeletableStorage.acquireWriteLock(allocator, io, log, "bucket/dir/file.lock", "owner"));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_TIMEOUT_BREAK,"));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_FAILED_RETRY,"));
     try std.testing.expectEqualStrings("/bucket/dir/file.lock", try undeletableServer.lastTarget(io, allocator));
 
     recordingLog.lines.clearRetainingCapacity();
-    try std.testing.expect(!try unwritableStorage.acquireWriteLock(allocator, io, "bucket/dir/file.lock", "owner"));
+    try std.testing.expect(!try unwritableStorage.acquireWriteLock(allocator, io, log, "bucket/dir/file.lock", "owner"));
     try std.testing.expect(recordingLog.logged(",ACQUIRE_FAILED_RETRY,"));
     try std.testing.expect(!recordingLog.logged(",ACQUIRE_SUCCESS_AFTER_TIMEOUT,"));
 }

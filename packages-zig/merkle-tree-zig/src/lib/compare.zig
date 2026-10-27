@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const merkle_tree = @import("merkle-tree.zig");
 const IMerkleTree = merkle_tree.IMerkleTree;
 const SortNode = merkle_tree.SortNode;
@@ -26,13 +27,13 @@ pub const CompareProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, progress: []const u8) void,
+    function: *const fn (context: ?*anyopaque, log: ILog, progress: []const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: CompareProgressCallback, progress: []const u8) void {
-        self.function(self.context, progress);
+    pub fn call(self: CompareProgressCallback, log: ILog, progress: []const u8) void {
+        self.function(self.context, log, progress);
     }
 };
 
@@ -51,9 +52,9 @@ pub const CompareProgressCallback = struct {
 // and a few hundred thousand names at the most, which is milliseconds. Trees whose roots hash the same
 // are identical and are not walked at all.
 //
-pub fn compareTrees(allocator: std.mem.Allocator, treeA: *const IMerkleTree, treeB: *const IMerkleTree, progressCallback: ?CompareProgressCallback) !ICompareResult {
+pub fn compareTrees(allocator: std.mem.Allocator, log: ILog, treeA: *const IMerkleTree, treeB: *const IMerkleTree, progressCallback: ?CompareProgressCallback) !ICompareResult {
     if (progressCallback) |callback| {
-        callback.call("Comparing merkle trees...");
+        callback.call(log, "Comparing merkle trees...");
     }
 
     var onlyInA: std.ArrayList([]const u8) = .empty;

@@ -52,14 +52,13 @@ test "checkForNews returns oldest unseen item and marks it shown" {
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    const result = checkForNews(allocator, std.testing.io).?;
+    const result = checkForNews(allocator, std.testing.io, log).?;
 
     try std.testing.expectEqualStrings("a", result.id);
     try std.testing.expectEqualStrings("first", result.message);
-    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io);
+    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log);
     try std.testing.expectEqual(@as(usize, 1), shownIds.len);
     try std.testing.expectEqualStrings("a", shownIds[0]);
 }
@@ -73,15 +72,14 @@ test "checkForNews skips items already in the shown set" {
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     markNewsAsShown(allocator, std.testing.io, &.{"a"});
 
-    const result = checkForNews(allocator, std.testing.io).?;
+    const result = checkForNews(allocator, std.testing.io, log).?;
 
     try std.testing.expectEqualStrings("b", result.id);
     try std.testing.expectEqualStrings("second", result.message);
-    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io);
+    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log);
     try std.testing.expectEqual(@as(usize, 2), shownIds.len);
     try std.testing.expectEqualStrings("a", shownIds[0]);
     try std.testing.expectEqualStrings("b", shownIds[1]);
@@ -101,12 +99,11 @@ test "checkForNews returns undefined when there are no unseen items" {
     );
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     markNewsAsShown(allocator, std.testing.io, &.{"a"});
     const stateBefore = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try statePath(allocator, root), allocator, .unlimited);
 
-    const result = checkForNews(allocator, std.testing.io);
+    const result = checkForNews(allocator, std.testing.io, log);
 
     try std.testing.expect(result == null);
     const stateAfter = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try statePath(allocator, root), allocator, .unlimited);
@@ -122,10 +119,9 @@ test "checkForNews returns undefined when the feed is empty" {
     try setup(allocator, root, "items: []\n");
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    const result = checkForNews(allocator, std.testing.io);
+    const result = checkForNews(allocator, std.testing.io, log);
 
     try std.testing.expect(result == null);
     try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try statePath(allocator, root)));
@@ -140,12 +136,11 @@ test "checkForNews returns undefined and swallows errors when fetchNews throws" 
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
     // The feed file is removed, so reading it fails (the network being down).
     try std.Io.Dir.cwd().deleteFile(std.testing.io, try std.fs.path.join(allocator, &.{ root, "news.yaml" }));
-    const result = checkForNews(allocator, std.testing.io);
+    const result = checkForNews(allocator, std.testing.io, log);
 
     try std.testing.expect(result == null);
     try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try statePath(allocator, root)));
@@ -160,11 +155,10 @@ test "getAllNews returns all items with seen state derived from shown ids" {
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     markNewsAsShown(allocator, std.testing.io, &.{ "a", "c" });
 
-    const result = getAllNews(allocator, std.testing.io);
+    const result = getAllNews(allocator, std.testing.io, log);
 
     try std.testing.expectEqual(@as(usize, 3), result.len);
     try std.testing.expectEqualStrings("a", result[0].item.id);
@@ -187,10 +181,9 @@ test "getAllNews does not mark anything as shown" {
     try setup(allocator, root, "items:\n  - id: a\n    message: first\n");
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    _ = getAllNews(allocator, std.testing.io);
+    _ = getAllNews(allocator, std.testing.io, log);
 
     try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try statePath(allocator, root)));
 }
@@ -204,11 +197,10 @@ test "getAllNews returns empty array on fetch failure" {
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
     try std.Io.Dir.cwd().deleteFile(std.testing.io, try std.fs.path.join(allocator, &.{ root, "news.yaml" }));
-    const result = getAllNews(allocator, std.testing.io);
+    const result = getAllNews(allocator, std.testing.io, log);
 
     try std.testing.expectEqual(@as(usize, 0), result.len);
 }
@@ -222,12 +214,11 @@ test "markNewsAsShown records the supplied ids" {
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
     markNewsAsShown(allocator, std.testing.io, &.{ "a", "b" });
 
-    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io);
+    const shownIds = try node_api.news_state.getShownNewsIds(allocator, std.testing.io, log);
     try std.testing.expectEqual(@as(usize, 2), shownIds.len);
     try std.testing.expectEqualStrings("a", shownIds[0]);
     try std.testing.expectEqualStrings("b", shownIds[1]);
@@ -241,9 +232,6 @@ test "markNewsAsShown is a no-op when given an empty array" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
-    var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
 
     markNewsAsShown(allocator, std.testing.io, &.{});
 
@@ -258,9 +246,6 @@ test "markNewsAsShown swallows persistence errors" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
-    var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
 
     // A file where the config dir should be, so the state file cannot be written (as when the disk is full).
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = try std.fs.path.join(allocator, &.{ root, "config" }), .data = "not a directory" });

@@ -1,15 +1,15 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
-const log = @import("../lib/log.zig");
+const log_setup = @import("../lib/log.zig");
 const file_logger = @import("../lib/file-logger.zig");
 const pc = @import("../lib/picocolors.zig");
 const prompts = @import("../lib/clack/prompts.zig");
 const commander = @import("../lib/commander.zig");
 const config = @import("../lib/config.zig");
-const configureLog = log.configureLog;
 const exit = node_utils.termination.exit;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
 const text = prompts.text;
@@ -165,28 +165,22 @@ fn validateActualBehavior(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 
 //
 // Ends the bug report when a prompt was cancelled.
 //
-fn cancelled(io: std.Io) noreturn {
+fn cancelled(io: std.Io, log: ILog) noreturn {
     outro(io, "Bug report cancelled.", .{}) catch {};
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command that generates a bug report for GitHub
 // toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions the report gives.
 //
-pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, options: *const IBugReportCommandOptions) !void {
-
-    try configureLog(allocator, io, toolRunner, .{
-        .verbose = options.verbose,
-        .tools = options.tools,
-        .disableFileLogging = true,
-    });
+pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, options: *const IBugReportCommandOptions) !void {
 
     try intro(io, try pc.blue(allocator, "\u{1F41B} Photosphere Bug Report\n"), .{});
 
     // Get system information
     const systemInfo = try getSystemInfo(allocator, io);
-    const toolVersions = try getToolVersions(allocator, io, toolRunner);
+    const toolVersions = try getToolVersions(allocator, io, log, toolRunner);
 
     // Get latest log file and header
     const latestLogFile = getLatestLogFile(allocator, io);
@@ -204,7 +198,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
         });
 
         if (isCancel(title)) {
-            cancelled(io);
+            cancelled(io, log);
         }
 
         const description = try text(allocator, io, .{
@@ -214,7 +208,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
         });
 
         if (isCancel(description)) {
-            cancelled(io);
+            cancelled(io, log);
         }
 
         // Steps to reproduce
@@ -230,7 +224,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
             });
 
             if (isCancel(step)) {
-                cancelled(io);
+                cancelled(io, log);
             }
 
             const stepText = utils.js_string.trim(step.value);
@@ -253,7 +247,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
         });
 
         if (isCancel(expectedBehavior)) {
-            cancelled(io);
+            cancelled(io, log);
         }
 
         const actualBehavior = try text(allocator, io, .{
@@ -263,7 +257,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
         });
 
         if (isCancel(actualBehavior)) {
-            cancelled(io);
+            cancelled(io, log);
         }
 
         bugInfo = .{
@@ -317,7 +311,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
         }), .{});
     }
     else {
-        if (open(allocator, io, githubUrl)) {
+        if (open(allocator, io, log, githubUrl)) {
             try outro(io, try std.fmt.allocPrint(allocator, "{s}\n\n{s}{s}", .{ try pc.green(allocator, "\u{2713} Bug report opened in browser!"), summaryInfo, logInfo }), .{});
         }
         else |_| {
@@ -332,7 +326,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: In
         }
     }
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -352,24 +346,24 @@ pub fn getSystemInfo(allocator: std.mem.Allocator, io: std.Io) !ISystemInfo {
 // Gets the versions of the ImageMagick and FFmpeg built into the program, run through toolRunner ("Not available"
 // for a tool that cannot be run).
 //
-pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) !IToolVersions {
+pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !IToolVersions {
     var versions: IToolVersions = .{
         .imagemagick = "Not available",
         .ffmpeg = "Not available",
         .ffprobe = "Not available",
     };
 
-    const imageMagickStatus = try Image.verifyImageMagick(allocator, io, toolRunner);
+    const imageMagickStatus = try Image.verifyImageMagick(allocator, io, log, toolRunner);
     if (imageMagickStatus.available and imageMagickStatus.version != null) {
         versions.imagemagick = try std.fmt.allocPrint(allocator, "ImageMagick v{s}", .{imageMagickStatus.version.?});
     }
 
-    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, toolRunner);
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log, toolRunner);
     if (ffmpegStatus.available and ffmpegStatus.version != null) {
         versions.ffmpeg = try std.fmt.allocPrint(allocator, "ffmpeg v{s}", .{ffmpegStatus.version.?});
     }
 
-    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, toolRunner);
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log, toolRunner);
     if (ffprobeStatus.available and ffprobeStatus.version != null) {
         versions.ffprobe = try std.fmt.allocPrint(allocator, "ffprobe v{s}", .{ffprobeStatus.version.?});
     }

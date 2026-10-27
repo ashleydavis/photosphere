@@ -9,6 +9,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const serialization_zig = @import("serialization-zig");
@@ -308,28 +309,28 @@ fn expectSummary(expected: TreeSummary, actual: TreeSummary) !void {
 //
 // Loads a tree file from disk through the in-memory storage.
 //
-fn loadTreeFile(allocator: std.mem.Allocator, filePath: []const u8, typeCode: []const u8) !IMerkleTree {
+fn loadTreeFile(log: ILog, allocator: std.mem.Allocator, filePath: []const u8, typeCode: []const u8) !IMerkleTree {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("tree.dat", bytes);
-    return (try merkle_tree.loadTree(allocator, io, "tree.dat", storage.asStorage(), typeCode)).?;
+    return (try merkle_tree.loadTree(allocator, io, log, "tree.dat", storage.asStorage(), typeCode)).?;
 }
 
 //
 // Loads a tree from the bytes of a tree file through the in-memory storage.
 //
-fn loadTreeBytes(allocator: std.mem.Allocator, bytes: []const u8, typeCode: []const u8) !IMerkleTree {
+fn loadTreeBytes(log: ILog, allocator: std.mem.Allocator, bytes: []const u8, typeCode: []const u8) !IMerkleTree {
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("tree.dat", bytes);
-    return (try merkle_tree.loadTree(allocator, io, "tree.dat", storage.asStorage(), typeCode)).?;
+    return (try merkle_tree.loadTree(allocator, io, log, "tree.dat", storage.asStorage(), typeCode)).?;
 }
 
 //
 // Saves a tree and returns the bytes of the file.
 //
-fn saveTreeBytes(allocator: std.mem.Allocator, tree: *const IMerkleTree, typeCode: []const u8) ![]const u8 {
+fn saveTreeBytes(log: ILog, allocator: std.mem.Allocator, tree: *const IMerkleTree, typeCode: []const u8) ![]const u8 {
     var storage = MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, io, "tree.dat", tree, storage.asStorage(), typeCode);
+    try merkle_tree.saveTree(allocator, io, log, "tree.dat", tree, storage.asStorage(), typeCode);
     return storage.getFile("tree.dat").?;
 }
 
@@ -453,6 +454,7 @@ test "compareNames matches localeCompare for generated names" {
 }
 
 test "loads every tree in test/dbs v2 to v6 like the fixture" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -461,7 +463,7 @@ test "loads every tree in test/dbs v2 to v6 like the fixture" {
     try std.testing.expectEqual(@as(usize, 14), fixture.trees.len);
     for (fixture.trees) |testDbTree| {
         const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
-        const tree = try loadTreeFile(allocator, filePath, testDbTree.typeCode);
+        const tree = try loadTreeFile(log, allocator, filePath, testDbTree.typeCode);
         expectSummary(testDbTree.summary, try summarizeTree(allocator, &tree)) catch |err| {
             std.debug.print("Tree differs from the fixture: {s}\n", .{testDbTree.file});
             return err;
@@ -470,6 +472,7 @@ test "loads every tree in test/dbs v2 to v6 like the fixture" {
 }
 
 test "loadTreeVersion reads the version of every tree in test/dbs" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -480,16 +483,17 @@ test "loadTreeVersion reads the version of every tree in test/dbs" {
         const bytes = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
         var storage = MemoryStorage.init(allocator);
         try storage.putFile("tree.dat", bytes);
-        try std.testing.expectEqual(@as(?u32, testDbTree.summary.version), merkle_tree.loadTreeVersion(allocator, io, "tree.dat", storage.asStorage()));
+        try std.testing.expectEqual(@as(?u32, testDbTree.summary.version), merkle_tree.loadTreeVersion(allocator, io, log, "tree.dat", storage.asStorage()));
     }
 }
 
 test "getItemInfo finds every file of the v6 files tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const tree = try loadTreeFile(allocator, TEST_DBS_DIR ++ "/v6/.db/files.dat", "FTRE");
+    const tree = try loadTreeFile(log, allocator, TEST_DBS_DIR ++ "/v6/.db/files.dat", "FTRE");
     var leaves = merkle_tree.iterateLeaves(SortNode, allocator, tree.sort);
     var leafCount: usize = 0;
     while (try leaves.next()) |leaf| {
@@ -505,6 +509,7 @@ test "getItemInfo finds every file of the v6 files tree" {
 }
 
 test "loadTree rejects a v6 tree with the wrong type code" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -512,7 +517,7 @@ test "loadTree rejects a v6 tree with the wrong type code" {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, TEST_DBS_DIR ++ "/v6/.db/bson/db.dat", allocator, .unlimited);
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("db.dat", bytes);
-    try std.testing.expectError(error.Thrown, merkle_tree.loadTree(allocator, io, "db.dat", storage.asStorage(), "COLT"));
+    try std.testing.expectError(error.Thrown, merkle_tree.loadTree(allocator, io, log, "db.dat", storage.asStorage(), "COLT"));
 }
 
 test "replays the fixture scenarios with the same results and trees" {
@@ -539,6 +544,7 @@ test "replays the fixture scenarios with the same results and trees" {
 }
 
 test "loads the saved fixture trees identically" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -546,7 +552,7 @@ test "loads the saved fixture trees identically" {
     const fixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
     for (fixture.scenarios) |scenario| {
         const filePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, try std.mem.concat(allocator, u8, &.{ "scenario-", scenario.name, ".dat" }) });
-        const tree = try loadTreeFile(allocator, filePath, "FTRE");
+        const tree = try loadTreeFile(log, allocator, filePath, "FTRE");
         var expected = scenario.checkpoints[scenario.checkpoints.len - 1];
 
         // A tree saved without metadata loads with an empty document.
@@ -561,6 +567,7 @@ test "loads the saved fixture trees identically" {
 }
 
 test "trees Zig saves load back exactly like the fixture trees" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -570,8 +577,8 @@ test "trees Zig saves load back exactly like the fixture trees" {
     const testDbFixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
     for (testDbFixture.trees) |testDbTree| {
         const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
-        const tree = try loadTreeFile(allocator, filePath, testDbTree.typeCode);
-        const reloaded = try loadTreeBytes(allocator, try saveTreeBytes(allocator, &tree, testDbTree.typeCode), testDbTree.typeCode);
+        const tree = try loadTreeFile(log, allocator, filePath, testDbTree.typeCode);
+        const reloaded = try loadTreeBytes(log, allocator, try saveTreeBytes(log, allocator, &tree, testDbTree.typeCode), testDbTree.typeCode);
         var expected = testDbTree.summary;
         expected.version = merkle_tree.CURRENT_DATABASE_VERSION;
 
@@ -587,6 +594,7 @@ test "trees Zig saves load back exactly like the fixture trees" {
 }
 
 test "saves the replayed scenario trees byte-identical to the saved fixture trees" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -596,7 +604,7 @@ test "saves the replayed scenario trees byte-identical to the saved fixture tree
         const replay = try replayScenario(allocator, scenario);
         const filePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, try std.mem.concat(allocator, u8, &.{ "scenario-", scenario.name, ".dat" }) });
         const expected = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
-        const actual = try saveTreeBytes(allocator, &replay.tree, "FTRE");
+        const actual = try saveTreeBytes(log, allocator, &replay.tree, "FTRE");
         saved_file.expectSavedFileMatches(expected, actual) catch |err| {
             std.debug.print("Zig-saved scenario tree differs from the fixture: {s}\n", .{scenario.name});
             return err;

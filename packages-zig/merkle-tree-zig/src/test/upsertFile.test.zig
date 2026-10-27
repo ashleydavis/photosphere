@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
@@ -30,7 +31,7 @@ const HashRecorder = struct {
     //
     // The traversal callback.
     //
-    fn record(self: *HashRecorder, currentNode: *MerkleNode) anyerror!bool {
+    fn record(self: *HashRecorder, _: utils.log.ILog, currentNode: *MerkleNode) anyerror!bool {
         try self.hashes.append(self.allocator, currentNode.hash);
         return true; // Continue traversal
     }
@@ -99,6 +100,7 @@ test "maintains tree structure when updating files" {
 }
 
 test "propagates hash changes up the tree when updating" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -113,7 +115,7 @@ test "propagates hash changes up the tree when updating" {
 
     // Record original node hashes using depth-first traversal
     var originalHashes: HashRecorder = .{ .allocator = allocator, .hashes = .empty };
-    try traverse.traverseTreeAsync(MerkleNode, tree.merkle, &originalHashes, HashRecorder.record);
+    try traverse.traverseTreeAsync(MerkleNode, tree.merkle, console_log, &originalHashes, HashRecorder.record);
 
     // Update one file
     const updatedFileC = try createHashedItem(allocator, "C.txt", "updated content C");
@@ -129,7 +131,7 @@ test "propagates hash changes up the tree when updating" {
     //   /  \      /  \
     //  A(2) B(3) C(5) D(6)
     var newHashes: HashRecorder = .{ .allocator = allocator, .hashes = .empty };
-    try traverse.traverseTreeAsync(MerkleNode, tree.merkle, &newHashes, HashRecorder.record);
+    try traverse.traverseTreeAsync(MerkleNode, tree.merkle, console_log, &newHashes, HashRecorder.record);
 
     const original = originalHashes.hashes.items;
     const updated = newHashes.hashes.items;

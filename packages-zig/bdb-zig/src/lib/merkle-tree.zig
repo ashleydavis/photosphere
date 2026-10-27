@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
@@ -58,7 +59,7 @@ pub fn buildShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, records: [
 //
 // Saves a shard merkle tree next to the shard file.
 //
-pub fn saveShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, shardId: []const u8, tree: *IMerkleTree) !void {
+pub fn saveShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, shardId: []const u8, tree: *IMerkleTree) !void {
 
     if (tree.dirty) {
         tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
@@ -67,7 +68,7 @@ pub fn saveShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IS
 
     const shardFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "shards", shardId });
     const treeFilePath = try std.mem.concat(allocator, u8, &.{ shardFilePath, ".dat" });
-    try merkle_tree.saveTree(allocator, io, treeFilePath, tree, storage, "COLT");
+    try merkle_tree.saveTree(allocator, io, log, treeFilePath, tree, storage, "COLT");
 }
 
 //
@@ -82,10 +83,10 @@ pub fn deleteShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: 
 //
 // Loads a shard merkle tree.
 //
-pub fn loadShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, shardId: []const u8) !?IMerkleTree {
+pub fn loadShardMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, shardId: []const u8) !?IMerkleTree {
     const shardFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "shards", shardId });
     const treeFilePath = try std.mem.concat(allocator, u8, &.{ shardFilePath, ".dat" });
-    return merkle_tree.loadTree(allocator, io, treeFilePath, storage, "COLT");
+    return merkle_tree.loadTree(allocator, io, log, treeFilePath, storage, "COLT");
 }
 
 //
@@ -137,6 +138,7 @@ fn ignoreDirty(context: *anyopaque) void {
 pub fn buildCollectionMerkleTree(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: IStorage,
     bsonDbPath: []const u8,
     collectionName: []const u8,
@@ -161,7 +163,7 @@ pub fn buildCollectionMerkleTree(
             timestampProvider.timestampProvider(),
             .{ .context = collection, .function = ignoreDirty },
         );
-        const records = try (try collection.shard(shardId)).records(io);
+        const records = try (try collection.shard(shardId)).records(io, log);
         var shardTree: ?IMerkleTree = null;
 
         if (records.count() == 0) {
@@ -170,14 +172,14 @@ pub fn buildCollectionMerkleTree(
         }
         else if (rebuild) {
             shardTree = try buildShardMerkleTree(allocator, io, records.values(), uuidGenerator);
-            try saveShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId, &shardTree.?);
+            try saveShardMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, shardId, &shardTree.?);
         }
         else {
-            shardTree = try loadShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId);
+            shardTree = try loadShardMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, shardId);
             if (shardTree == null) {
                 // Shard tree doesn't exist, build it.
                 shardTree = try buildShardMerkleTree(allocator, io, records.values(), uuidGenerator);
-                try saveShardMerkleTree(allocator, io, storage, bsonDbPath, collectionName, shardId, &shardTree.?);
+                try saveShardMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, shardId, &shardTree.?);
             }
         }
 
@@ -199,7 +201,7 @@ pub fn buildCollectionMerkleTree(
 //
 // Saves a collection merkle tree in the collection directory.
 //
-pub fn saveCollectionMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, tree: *IMerkleTree) !void {
+pub fn saveCollectionMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8, tree: *IMerkleTree) !void {
 
     if (tree.dirty) {
         tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
@@ -207,15 +209,15 @@ pub fn saveCollectionMerkleTree(allocator: std.mem.Allocator, io: std.Io, storag
     }
 
     const treeFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "collection.dat" });
-    try merkle_tree.saveTree(allocator, io, treeFilePath, tree, storage, "COLT");
+    try merkle_tree.saveTree(allocator, io, log, treeFilePath, tree, storage, "COLT");
 }
 
 //
 // Loads a collection merkle tree.
 //
-pub fn loadCollectionMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8) !?IMerkleTree {
+pub fn loadCollectionMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8, collectionName: []const u8) !?IMerkleTree {
     const treeFilePath = try pathJoin(allocator, &.{ bsonDbPath, "collections", collectionName, "collection.dat" });
-    return merkle_tree.loadTree(allocator, io, treeFilePath, storage, "COLT");
+    return merkle_tree.loadTree(allocator, io, log, treeFilePath, storage, "COLT");
 }
 
 //
@@ -253,6 +255,7 @@ fn listCollections(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, 
 pub fn buildDatabaseMerkleTree(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: IStorage,
     bsonDbPath: []const u8,
     uuidGenerator: IUuidGenerator,
@@ -273,29 +276,29 @@ pub fn buildDatabaseMerkleTree(
         }
         else if (rebuild) {
             // Rebuild the collection tree.
-            collectionTree = try buildCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, uuidGenerator, rebuild);
+            collectionTree = try buildCollectionMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, uuidGenerator, rebuild);
             if (collectionTree.?.sort == null) {
                 // Collection tree is empty, delete it.
                 collectionTree = null;
                 try deleteCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName);
             }
             else {
-                try saveCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, &collectionTree.?);
+                try saveCollectionMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, &collectionTree.?);
             }
         }
         else {
             // Load the collection tree.
-            collectionTree = try loadCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName);
+            collectionTree = try loadCollectionMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName);
             if (collectionTree == null) {
                 // Collection tree doesn't exist, build it.
-                collectionTree = try buildCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, uuidGenerator, rebuild);
+                collectionTree = try buildCollectionMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, uuidGenerator, rebuild);
                 if (collectionTree.?.sort == null) {
                     // Collection tree is empty, delete it.
                     collectionTree = null;
                     try deleteCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName);
                 }
                 else {
-                    try saveCollectionMerkleTree(allocator, io, storage, bsonDbPath, collectionName, &collectionTree.?);
+                    try saveCollectionMerkleTree(allocator, io, log, storage, bsonDbPath, collectionName, &collectionTree.?);
                 }
             }
         }
@@ -317,7 +320,7 @@ pub fn buildDatabaseMerkleTree(
 //
 // Saves a database merkle tree.
 //
-pub fn saveDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8, tree: *IMerkleTree) !void {
+pub fn saveDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8, tree: *IMerkleTree) !void {
 
     if (tree.dirty) {
         tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
@@ -325,15 +328,15 @@ pub fn saveDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage:
     }
 
     const treeFilePath = try pathJoin(allocator, &.{ bsonDbPath, "db.dat" });
-    try merkle_tree.saveTree(allocator, io, treeFilePath, tree, storage, "BDBT");
+    try merkle_tree.saveTree(allocator, io, log, treeFilePath, tree, storage, "BDBT");
 }
 
 //
 // Loads a database merkle tree. path is the storage prefix under which the tree file is stored.
 //
-pub fn loadDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8) !?IMerkleTree {
+pub fn loadDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8) !?IMerkleTree {
     const treeFilePath = try pathJoin(allocator, &.{ bsonDbPath, "db.dat" });
-    return merkle_tree.loadTree(allocator, io, treeFilePath, storage, "BDBT");
+    return merkle_tree.loadTree(allocator, io, log, treeFilePath, storage, "BDBT");
 }
 
 //
@@ -348,8 +351,8 @@ pub fn deleteDatabaseMerkleTree(allocator: std.mem.Allocator, io: std.Io, storag
 // Gets the root hash for the database from its merkle tree.
 // Returns undefined if the database merkle tree doesn't exist or has no root hash.
 //
-pub fn getDatabaseRootHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, bsonDbPath: []const u8) !?[]const u8 {
-    const tree = try loadDatabaseMerkleTree(allocator, io, storage, bsonDbPath) orelse {
+pub fn getDatabaseRootHash(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, bsonDbPath: []const u8) !?[]const u8 {
+    const tree = try loadDatabaseMerkleTree(allocator, io, log, storage, bsonDbPath) orelse {
         return null;
     };
     const merkle = tree.merkle orelse {

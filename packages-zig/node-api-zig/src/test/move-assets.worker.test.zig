@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -34,25 +35,14 @@ const LoadCountingLog = struct {
     // How many "Loaded existing media file database" messages were logged.
     loadedCount: usize = 0,
 
-    // The log that was active before this one was installed.
-    previousLog: ?utils.log.ILog = null,
-
     //
-    // Makes this the global log.
+    // Gets the ILog interface for this log.
     //
-    fn install(self: *LoadCountingLog) void {
-        self.previousLog = utils.log.currentLog();
-        utils.log.setLog(.{
+    fn ilog(self: *LoadCountingLog) utils.log.ILog {
+        return .{
             .ptr = self,
             .vtable = &vtable,
-        });
-    }
-
-    //
-    // Restores the log that was active before install.
-    //
-    fn uninstall(self: *LoadCountingLog) void {
-        utils.log.setLog(self.previousLog.?);
+        };
     }
 
     //
@@ -69,6 +59,7 @@ const LoadCountingLog = struct {
         .event = ignoreMessage,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = logDetails,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -120,6 +111,14 @@ const LoadCountingLog = struct {
         _ = io;
         return utils.log.noLogDetails;
     }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
 };
 
 //
@@ -141,9 +140,9 @@ const World = struct {
     //
     // Creates the databases. The handler is given the new ids in order.
     //
-    fn init(world: *World, allocator: std.mem.Allocator, io: std.Io, newIds: []const []const u8) !void {
-        try world.source.init(allocator, io, "move-assets-source");
-        try world.dest.init(allocator, io, "move-assets-dest");
+    fn init(world: *World, allocator: std.mem.Allocator, io: std.Io, log: ILog, newIds: []const []const u8) !void {
+        try world.source.init(allocator, io, log, "move-assets-source");
+        try world.dest.init(allocator, io, log, "move-assets-dest");
         world.newIds = .{
             .ids = newIds,
         };
@@ -153,34 +152,34 @@ const World = struct {
     //
     // Deletes the directories.
     //
-    fn deinit(world: *World, io: std.Io) void {
-        world.source.deinit(io);
-        world.dest.deinit(io);
+    fn deinit(world: *World, io: std.Io, log: ILog) void {
+        world.source.deinit(io, log);
+        world.dest.deinit(io, log);
     }
 
     //
     // Puts an asset's metadata record in the source database.
     //
-    fn addSourceMetadata(world: *World, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8) !void {
+    fn addSourceMetadata(world: *World, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8) !void {
         var record: BsonDocument = .empty;
         try record.put(allocator, "_id", .{ .string = assetId });
         try record.put(allocator, "hash", .{ .string = "abc123" });
         try record.put(allocator, "photoDate", .{ .string = "2024-01-01" });
-        try world.source.database.metadataCollection.insertOne(io, &record, null);
-        try world.source.database.bsonDatabase.commit(io);
+        try world.source.database.metadataCollection.insertOne(io, log, &record, null);
+        try world.source.database.bsonDatabase.commit(io, log);
     }
 
     //
     // Puts an asset file in the source database, recorded in its merkle tree.
     //
-    fn addSourceFile(world: *World, allocator: std.mem.Allocator, io: std.Io, assetType: []const u8, assetId: []const u8, content: []const u8) !void {
-        try media_file_database.writeAsset(allocator, io, world.source.database.assetStorage, world.source.rawStorage, "test-session", assetId, assetType, null, content);
+    fn addSourceFile(world: *World, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetType: []const u8, assetId: []const u8, content: []const u8) !void {
+        try media_file_database.writeAsset(allocator, io, log, world.source.database.assetStorage, world.source.rawStorage, "test-session", assetId, assetType, null, content);
     }
 
     //
     // Runs the handler for the asset ids.
     //
-    fn run(world: *World, allocator: std.mem.Allocator, io: std.Io, assetIds: []const []const u8) !IMoveAssetsResult {
+    fn run(world: *World, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetIds: []const []const u8) !IMoveAssetsResult {
         var items: std.json.Array = .init(allocator);
         for (assetIds) |assetId| {
             try items.append(.{ .string = assetId });
@@ -189,7 +188,7 @@ const World = struct {
         try object.put(allocator, "sourceDatabasePath", .{ .string = world.source.dir });
         try object.put(allocator, "destDatabasePath", .{ .string = world.dest.dir });
         try object.put(allocator, "assetIds", .{ .array = items });
-        const output = try moveAssetsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext());
+        const output = try moveAssetsHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, world.testContext.context.taskContext());
         return std.json.parseFromValueLeaky(IMoveAssetsResult, allocator, output, .{});
     }
 
@@ -203,66 +202,68 @@ const World = struct {
 };
 
 test "opens source storage with sourceDatabasePath" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     // The record that was in the source database is no longer there, so the handler read and emptied that one.
     const sourceDb = try World.reopen(&world.source, allocator, world.source.uuidGenerator.uuidGenerator());
-    try std.testing.expect(try sourceDb.metadataCollection.getOne(io, ASSET_ONE) == null);
+    try std.testing.expect(try sourceDb.metadataCollection.getOne(io, log, ASSET_ONE) == null);
 }
 
 test "opens dest storage with destDatabasePath" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     const destDb = try World.reopen(&world.dest, allocator, world.dest.uuidGenerator.uuidGenerator());
-    try std.testing.expect(try destDb.metadataCollection.getOne(io, NEW_ASSET_ID) != null);
+    try std.testing.expect(try destDb.metadataCollection.getOne(io, log, NEW_ASSET_ID) != null);
 }
 
 test "calls loadSortIndexes for both source and dest" {
+    var countingLog: LoadCountingLog = .{};
+    const log = countingLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
-    var countingLog: LoadCountingLog = .{};
-    countingLog.install();
-    defer countingLog.uninstall();
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     try std.testing.expectEqual(@as(usize, 2), countingLog.loadedCount);
 }
 
 test "throws when asset is not found in source" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
 
-    try std.testing.expectError(error.Thrown, world.run(allocator, io, &.{ASSET_ONE}));
+    try std.testing.expectError(error.Thrown, world.run(allocator, io, log, &.{ASSET_ONE}));
     try std.testing.expectEqualStrings(
         try std.fmt.allocPrint(allocator, "Asset \"" ++ ASSET_ONE ++ "\" not found in source database \"{s}\".", .{world.source.dir}),
         errors.lastErrorMessage(),
@@ -270,16 +271,17 @@ test "throws when asset is not found in source" {
 }
 
 test "skips writing binary file when it does not exist in source" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     const destStorage = world.dest.database.assetStorage;
     try std.testing.expect(!try destStorage.fileExists(allocator, io, "thumb/" ++ NEW_ASSET_ID));
@@ -288,136 +290,143 @@ test "skips writing binary file when it does not exist in source" {
 }
 
 test "copies existing binary files to destination via writeAssetStreamVerified" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
-    try world.addSourceFile(allocator, io, "thumb", ASSET_ONE, "the thumbnail bytes");
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
+    try world.addSourceFile(allocator, io, log, "thumb", ASSET_ONE, "the thumbnail bytes");
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     const destStorage = world.dest.database.assetStorage;
-    const copied = (try destStorage.read(allocator, io, "thumb/" ++ NEW_ASSET_ID)).?;
+    const copied = (try destStorage.read(allocator, io, log, "thumb/" ++ NEW_ASSET_ID)).?;
     try std.testing.expectEqualStrings("the thumbnail bytes", copied);
     try std.testing.expect(!try destStorage.fileExists(allocator, io, "asset/" ++ NEW_ASSET_ID));
 }
 
 test "copies the thumbnail, the display copy and the original" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
-    try world.addSourceFile(allocator, io, "thumb", ASSET_ONE, "thumb bytes");
-    try world.addSourceFile(allocator, io, "display", ASSET_ONE, "display bytes");
-    try world.addSourceFile(allocator, io, "asset", ASSET_ONE, "original bytes");
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
+    try world.addSourceFile(allocator, io, log, "thumb", ASSET_ONE, "thumb bytes");
+    try world.addSourceFile(allocator, io, log, "display", ASSET_ONE, "display bytes");
+    try world.addSourceFile(allocator, io, log, "asset", ASSET_ONE, "original bytes");
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     const destStorage = world.dest.database.assetStorage;
-    try std.testing.expectEqualStrings("thumb bytes", (try destStorage.read(allocator, io, "thumb/" ++ NEW_ASSET_ID)).?);
-    try std.testing.expectEqualStrings("display bytes", (try destStorage.read(allocator, io, "display/" ++ NEW_ASSET_ID)).?);
-    try std.testing.expectEqualStrings("original bytes", (try destStorage.read(allocator, io, "asset/" ++ NEW_ASSET_ID)).?);
+    try std.testing.expectEqualStrings("thumb bytes", (try destStorage.read(allocator, io, log, "thumb/" ++ NEW_ASSET_ID)).?);
+    try std.testing.expectEqualStrings("display bytes", (try destStorage.read(allocator, io, log, "display/" ++ NEW_ASSET_ID)).?);
+    try std.testing.expectEqualStrings("original bytes", (try destStorage.read(allocator, io, log, "asset/" ++ NEW_ASSET_ID)).?);
 }
 
 test "writes metadata to destination with new asset ID" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     const destDb = try World.reopen(&world.dest, allocator, world.dest.uuidGenerator.uuidGenerator());
-    const record = (try destDb.metadataCollection.getOne(io, NEW_ASSET_ID)).?;
+    const record = (try destDb.metadataCollection.getOne(io, log, NEW_ASSET_ID)).?;
     try std.testing.expectEqualStrings(NEW_ASSET_ID, record.get("_id").?.string);
     try std.testing.expectEqualStrings("abc123", record.get("hash").?.string);
     try std.testing.expectEqualStrings("2024-01-01", record.get("photoDate").?.string);
-    try std.testing.expect(try destDb.metadataCollection.getOne(io, ASSET_ONE) == null);
+    try std.testing.expect(try destDb.metadataCollection.getOne(io, log, ASSET_ONE) == null);
 }
 
 test "commits the dest bsonDatabase after writing metadata" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     // A database opened afresh reads only what was committed to disk.
     const destDb = try World.reopen(&world.dest, allocator, world.dest.uuidGenerator.uuidGenerator());
-    try std.testing.expect(try destDb.metadataCollection.getOne(io, NEW_ASSET_ID) != null);
+    try std.testing.expect(try destDb.metadataCollection.getOne(io, log, NEW_ASSET_ID) != null);
 }
 
 test "hard-deletes the original asset from source after copying" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
-    try world.addSourceFile(allocator, io, "thumb", ASSET_ONE, "the thumbnail bytes");
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
+    try world.addSourceFile(allocator, io, log, "thumb", ASSET_ONE, "the thumbnail bytes");
 
-    _ = try world.run(allocator, io, &.{ASSET_ONE});
+    _ = try world.run(allocator, io, log, &.{ASSET_ONE});
 
     const sourceStorage = world.source.database.assetStorage;
     try std.testing.expect(!try sourceStorage.fileExists(allocator, io, "thumb/" ++ ASSET_ONE));
     const sourceDb = try World.reopen(&world.source, allocator, world.source.uuidGenerator.uuidGenerator());
-    try std.testing.expect(try sourceDb.metadataCollection.getOne(io, ASSET_ONE) == null);
+    try std.testing.expect(try sourceDb.metadataCollection.getOne(io, log, ASSET_ONE) == null);
     // The id is recorded as deleted, because the handler removes the asset with recordDeleted set.
-    const sourceTree = (try node_api.tree.loadMerkleTree(allocator, io, sourceStorage)).?;
+    const sourceTree = (try node_api.tree.loadMerkleTree(allocator, io, log, sourceStorage)).?;
     const deletedAssetIds = sourceTree.databaseMetadata.?.get("deletedAssetIds").?.array;
     try std.testing.expectEqual(@as(usize, 1), deletedAssetIds.len);
     try std.testing.expectEqualStrings(ASSET_ONE, deletedAssetIds[0].string);
 }
 
 test "returns movedCount equal to the number of asset IDs" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{ NEW_ONE, NEW_TWO });
-    defer world.deinit(io);
-    try world.addSourceMetadata(allocator, io, ASSET_ONE);
-    try world.addSourceMetadata(allocator, io, ASSET_TWO);
+    try world.init(allocator, io, log, &.{ NEW_ONE, NEW_TWO });
+    defer world.deinit(io, log);
+    try world.addSourceMetadata(allocator, io, log, ASSET_ONE);
+    try world.addSourceMetadata(allocator, io, log, ASSET_TWO);
 
-    const result = try world.run(allocator, io, &.{ ASSET_ONE, ASSET_TWO });
+    const result = try world.run(allocator, io, log, &.{ ASSET_ONE, ASSET_TWO });
 
     try std.testing.expectEqual(@as(u64, 2), result.movedCount);
     const destDb = try World.reopen(&world.dest, allocator, world.dest.uuidGenerator.uuidGenerator());
-    try std.testing.expect(try destDb.metadataCollection.getOne(io, NEW_ONE) != null);
-    try std.testing.expect(try destDb.metadataCollection.getOne(io, NEW_TWO) != null);
+    try std.testing.expect(try destDb.metadataCollection.getOne(io, log, NEW_ONE) != null);
+    try std.testing.expect(try destDb.metadataCollection.getOne(io, log, NEW_TWO) != null);
 }
 
 test "throws a descriptive error when the task data is not valid" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io, &.{NEW_ASSET_ID});
-    defer world.deinit(io);
+    try world.init(allocator, io, log, &.{NEW_ASSET_ID});
+    defer world.deinit(io, log);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "sourceDatabasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, moveAssetsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, moveAssetsHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The move-assets task data is not valid: sourceDatabasePath and destDatabasePath must be strings, and assetIds must be a list of strings", errors.lastErrorMessage());
 }

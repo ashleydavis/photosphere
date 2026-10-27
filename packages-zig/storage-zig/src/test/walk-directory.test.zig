@@ -1,5 +1,6 @@
 const test_files = @import("test-files.zig");
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
 
@@ -18,23 +19,24 @@ fn matchesDbDirectory(fullPath: []const u8) bool {
 //
 // Walks a directory and returns the file names in order.
 //
-fn walkAll(allocator: std.mem.Allocator, storage: storage_zig.storage.IStorage, dirPath: []const u8, ignorePatterns: []const walk_directory.IgnorePattern) ![]const []const u8 {
-    return walkAllOn(allocator, std.testing.io, storage, dirPath, ignorePatterns);
+fn walkAll(log: ILog, allocator: std.mem.Allocator, storage: storage_zig.storage.IStorage, dirPath: []const u8, ignorePatterns: []const walk_directory.IgnorePattern) ![]const []const u8 {
+    return walkAllOn(allocator, std.testing.io, log, storage, dirPath, ignorePatterns);
 }
 
 //
 // Walks a directory on the given Io and returns the file names in order.
 //
-fn walkAllOn(allocator: std.mem.Allocator, io: std.Io, storage: storage_zig.storage.IStorage, dirPath: []const u8, ignorePatterns: []const walk_directory.IgnorePattern) ![]const []const u8 {
+fn walkAllOn(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: storage_zig.storage.IStorage, dirPath: []const u8, ignorePatterns: []const walk_directory.IgnorePattern) ![]const []const u8 {
     var walker = try walk_directory.walkDirectory(allocator, io, storage, dirPath, ignorePatterns);
     var fileNames: std.ArrayList([]const u8) = .empty;
-    while (try walker.next()) |orderedFile| {
+    while (try walker.next(log)) |orderedFile| {
         try fileNames.append(allocator, orderedFile.fileName);
     }
     return fileNames.items;
 }
 
 test "walkDirectory yields the files of a directory before the files of its subdirectories, in sorted order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -48,31 +50,32 @@ test "walkDirectory yields the files of a directory before the files of its subd
     var fileStorage = FileStorage.init("fs:");
     var wrapper = try StoragePrefixWrapper.init(allocator, fileStorage.storage(), tempDir);
 
-    const withDefaults = try walkAll(allocator, wrapper.storage(), "", &walk_directory.default_ignore_patterns);
+    const withDefaults = try walkAll(log, allocator, wrapper.storage(), "", &walk_directory.default_ignore_patterns);
     const expectedWithDefaults = [_][]const u8{ "a.txt", "b.txt", ".db/tree.dat", ".db/bson/db.dat", "asset/2", "asset/10", "asset/deep/x", "display/1" };
     try std.testing.expectEqual(expectedWithDefaults.len, withDefaults.len);
     for (expectedWithDefaults, withDefaults) |expectedName, actualName| {
         try std.testing.expectEqualStrings(expectedName, actualName);
     }
 
-    const withoutDb = try walkAll(allocator, wrapper.storage(), "", &.{ matchesDbDirectory, walk_directory.matchesGit, walk_directory.matchesNodeModules });
+    const withoutDb = try walkAll(log, allocator, wrapper.storage(), "", &.{ matchesDbDirectory, walk_directory.matchesGit, walk_directory.matchesNodeModules });
     const expectedWithoutDb = [_][]const u8{ "a.txt", "b.txt", "asset/2", "asset/10", "asset/deep/x", "display/1", "sub/.DS_Store" };
     try std.testing.expectEqual(expectedWithoutDb.len, withoutDb.len);
     for (expectedWithoutDb, withoutDb) |expectedName, actualName| {
         try std.testing.expectEqualStrings(expectedName, actualName);
     }
 
-    const bsonOnly = try walkAll(allocator, wrapper.storage(), ".db/bson", &.{});
+    const bsonOnly = try walkAll(log, allocator, wrapper.storage(), ".db/bson", &.{});
     try std.testing.expectEqual(@as(usize, 1), bsonOnly.len);
     try std.testing.expectEqualStrings(".db/bson/db.dat", bsonOnly[0]);
 }
 
 test "walkDirectory yields nothing for a missing directory" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fileStorage = FileStorage.init("fs:");
-    const fileNames = try walkAll(allocator, fileStorage.storage(), "/definitely/missing/directory", &walk_directory.default_ignore_patterns);
+    const fileNames = try walkAll(log, allocator, fileStorage.storage(), "/definitely/missing/directory", &walk_directory.default_ignore_patterns);
     try std.testing.expectEqual(@as(usize, 0), fileNames.len);
 }
 
@@ -121,6 +124,7 @@ fn listDirsWithEmptyToken(ptr: *anyopaque, allocator: std.mem.Allocator, io: std
 // An empty continuation token ends the listing loop, like a missing one.
 //
 test "walkDirectory stops listing on an empty continuation token" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -134,7 +138,7 @@ test "walkDirectory stops listing on an empty continuation token" {
         .location = "rec:",
     };
     emptyTokenListingCount = 0;
-    const fileNames = try walkAll(allocator, storage, "dir", &.{});
+    const fileNames = try walkAll(log, allocator, storage, "dir", &.{});
     try std.testing.expectEqual(@as(usize, 1), fileNames.len);
     try std.testing.expectEqualStrings("dir/only-file", fileNames[0]);
     try std.testing.expectEqual(@as(usize, 1), emptyTokenListingCount);
@@ -190,6 +194,7 @@ fn noDirsListDirs(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, pat
 // answer has no token.
 //
 test "walkDirectory follows a listing across pages" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -203,7 +208,7 @@ test "walkDirectory follows a listing across pages" {
         .location = "rec:",
     };
     pageListingsAnswered = 0;
-    const fileNames = try walkAll(allocator, storage, "dir", &.{});
+    const fileNames = try walkAll(log, allocator, storage, "dir", &.{});
     try std.testing.expectEqual(@as(usize, 2), fileNames.len);
     try std.testing.expectEqualStrings("dir/first-page", fileNames[0]);
     try std.testing.expectEqualStrings("dir/second-page", fileNames[1]);
@@ -215,6 +220,7 @@ test "walkDirectory follows a listing across pages" {
 // next page rather than ending.
 //
 test "walkDirectory skips an ignored name and carries on to the next page" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -246,7 +252,7 @@ test "walkDirectory skips an ignored name and carries on to the next page" {
         .vtable = &vtable,
         .location = "rec:",
     };
-    const fileNames = try walkAll(allocator, storage, "dir", &walk_directory.default_ignore_patterns);
+    const fileNames = try walkAll(log, allocator, storage, "dir", &walk_directory.default_ignore_patterns);
     try std.testing.expectEqual(@as(usize, 1), fileNames.len);
     try std.testing.expectEqualStrings("dir/kept", fileNames[0]);
 }
@@ -255,6 +261,7 @@ test "walkDirectory skips an ignored name and carries on to the next page" {
 // A listing that keeps failing is retried and then given up on, rather than walking on as if it were empty.
 //
 test "walkDirectory gives up when the listing keeps failing" {
+    const log = utils.mute_log.MuteLog.init();
     var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
@@ -280,14 +287,14 @@ test "walkDirectory gives up when the listing keeps failing" {
         .location = "rec:",
     };
 
-    // Keep retry's warnings and the final error out of the test output.
+    // Keep retry's final error, which it writes straight to the console, out of the test output.
     var captured: std.Io.Writer.Allocating = .init(allocator);
     utils.console.setCapture(null, &captured.writer);
     defer utils.console.setCapture(null, null);
 
     // The retry gives up on the third attempt and throws a WrappedError naming what it was listing, as
     // retry's errorContext asks it to.
-    try std.testing.expectError(error.Thrown, walkAllOn(allocator, backoff_time.io(), storage, "dir", &.{}));
+    try std.testing.expectError(error.Thrown, walkAllOn(allocator, backoff_time.io(), log, storage, "dir", &.{}));
     try std.testing.expectEqualStrings("WrappedError", utils.errors.lastErrorName());
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "Failed to list the files in dir") != null);
 }

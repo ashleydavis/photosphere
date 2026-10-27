@@ -6,6 +6,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const memory_storage = @import("memory-storage.zig");
@@ -42,18 +43,18 @@ fn readFixture(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
 //
 // Loads a tree from bytes through the in-memory storage.
 //
-fn loadTreeBytes(allocator: std.mem.Allocator, bytes: []const u8, typeCode: []const u8) !IMerkleTree {
+fn loadTreeBytes(log: ILog, allocator: std.mem.Allocator, bytes: []const u8, typeCode: []const u8) !IMerkleTree {
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("tree.dat", bytes);
-    return (try merkle_tree.loadTree(allocator, io, "tree.dat", storage.asStorage(), typeCode)).?;
+    return (try merkle_tree.loadTree(allocator, io, log, "tree.dat", storage.asStorage(), typeCode)).?;
 }
 
 //
 // Saves a tree and returns the bytes of the file.
 //
-fn saveTreeBytes(allocator: std.mem.Allocator, tree: *const IMerkleTree, typeCode: []const u8) ![]const u8 {
+fn saveTreeBytes(log: ILog, allocator: std.mem.Allocator, tree: *const IMerkleTree, typeCode: []const u8) ![]const u8 {
     var storage = MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, io, "tree.dat", tree, storage.asStorage(), typeCode);
+    try merkle_tree.saveTree(allocator, io, log, "tree.dat", tree, storage.asStorage(), typeCode);
     return storage.getFile("tree.dat").?;
 }
 
@@ -133,6 +134,7 @@ const CollisionTree = struct {
 };
 
 test "saves every tree in test/dbs byte-identical to the saved fixture" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -149,8 +151,8 @@ test "saves every tree in test/dbs byte-identical to the saved fixture" {
 
         const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, relativePath });
         const original = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
-        const tree = try loadTreeBytes(allocator, original, typeCode);
-        const actual = try saveTreeBytes(allocator, &tree, typeCode);
+        const tree = try loadTreeBytes(log, allocator, original, typeCode);
+        const actual = try saveTreeBytes(log, allocator, &tree, typeCode);
         if (saved_file.findSavedFileDifference(expected, actual)) |difference| {
             std.debug.print("Saved tree differs from the fixture: {s} ({s})\n", .{ relativePath, difference });
             return error.TestExpectedEqual;
@@ -160,14 +162,15 @@ test "saves every tree in test/dbs byte-identical to the saved fixture" {
 }
 
 test "saves the trees of the scenarios byte-identical to the saved fixtures" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     for ([_][]const u8{ "empty", "files", "names", "records", "shards" }) |name| {
         const expected = try readFixture(allocator, try std.mem.concat(allocator, u8, &.{ "scenario-", name, ".dat" }));
-        const tree = try loadTreeBytes(allocator, expected, "FTRE");
-        saved_file.expectSavedFileMatches(expected, try saveTreeBytes(allocator, &tree, "FTRE")) catch |err| {
+        const tree = try loadTreeBytes(log, allocator, expected, "FTRE");
+        saved_file.expectSavedFileMatches(expected, try saveTreeBytes(log, allocator, &tree, "FTRE")) catch |err| {
             std.debug.print("Saved scenario tree differs from the fixture: {s}\n", .{name});
             return err;
         };
@@ -217,6 +220,7 @@ test "BufferSet and BufferMap iterate hashes that share XOR buckets in the fixtu
 }
 
 test "saves a tree whose content hashes share XOR buckets byte-identical to the fixture" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -236,9 +240,9 @@ test "saves a tree whose content hashes share XOR buckets byte-identical to the 
     }
     tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
     tree.dirty = false;
-    try saved_file.expectSavedFileMatches(expected, try saveTreeBytes(allocator, &tree, "FTRE"));
+    try saved_file.expectSavedFileMatches(expected, try saveTreeBytes(log, allocator, &tree, "FTRE"));
 
     // Loading the fixture file and saving it again gives the same bytes.
-    const loaded = try loadTreeBytes(allocator, expected, "FTRE");
-    try saved_file.expectSavedFileMatches(expected, try saveTreeBytes(allocator, &loaded, "FTRE"));
+    const loaded = try loadTreeBytes(log, allocator, expected, "FTRE");
+    try saved_file.expectSavedFileMatches(expected, try saveTreeBytes(log, allocator, &loaded, "FTRE"));
 }

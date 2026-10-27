@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -25,7 +26,7 @@ const Pushed = struct {
     //
     // Records one file.
     //
-    fn visit(context: ?*anyopaque, result: IScannedImportFile) anyerror!void {
+    fn visit(context: ?*anyopaque, _: ILog, result: IScannedImportFile) anyerror!void {
         const self: *Pushed = @ptrCast(@alignCast(context.?));
         var copy = result;
         copy.filePath = try self.allocator.dupe(u8, result.filePath);
@@ -37,7 +38,7 @@ const Pushed = struct {
 //
 // Nothing watching progress here.
 //
-fn ignoreProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
+fn ignoreProgress(context: ?*anyopaque, _: ILog, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
     _ = context;
     _ = currentlyScanning;
     _ = state;
@@ -46,7 +47,7 @@ fn ignoreProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *
 //
 // Runs a scanner over the given paths and returns what it pushed.
 //
-fn scanFiles(allocator: std.mem.Allocator, paths: []const []const u8, sessionTempDir: []const u8) ![]IScannedImportFile {
+fn scanFiles(log: ILog, allocator: std.mem.Allocator, paths: []const []const u8, sessionTempDir: []const u8) ![]IScannedImportFile {
     var generator: RandomUuidGenerator = .{};
     var scanner = ManualImportScanner.init(paths, .{
         .ignorePatterns = &.{".db"},
@@ -54,7 +55,7 @@ fn scanFiles(allocator: std.mem.Allocator, paths: []const []const u8, sessionTem
     var pushed: Pushed = .{
         .allocator = allocator,
     };
-    try scanner.importScanner().scan(allocator, std.testing.io, test_timers.timers(), .{
+    try scanner.importScanner().scan(allocator, std.testing.io, log, test_timers.timers(), .{
         .context = &pushed,
         .function = Pushed.visit,
     }, .{
@@ -107,6 +108,7 @@ const ScannerTest = struct {
 };
 
 test "pushes every file the scan finds and then returns" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -114,7 +116,7 @@ test "pushes every file the scan finds and then returns" {
     _ = try context.writePhoto("a.jpg", "one");
     _ = try context.writePhoto("b.jpg", "two");
 
-    const pushed = try scanFiles(allocator, &.{context.photosDir}, context.tempDir);
+    const pushed = try scanFiles(log, allocator, &.{context.photosDir}, context.tempDir);
 
     const names = try allocator.alloc([]const u8, pushed.len);
     for (pushed, 0..) |file, index| {
@@ -127,39 +129,43 @@ test "pushes every file the scan finds and then returns" {
 }
 
 test "returns without pushing anything when there is nothing to import" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
 
-    const pushed = try scanFiles(context.arena.allocator(), &.{context.photosDir}, context.tempDir);
+    const pushed = try scanFiles(log, context.arena.allocator(), &.{context.photosDir}, context.tempDir);
 
     try std.testing.expectEqual(@as(usize, 0), pushed.len);
 }
 
 test "returns without pushing anything when given no paths at all" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
 
-    const pushed = try scanFiles(context.arena.allocator(), &.{}, context.tempDir);
+    const pushed = try scanFiles(log, context.arena.allocator(), &.{}, context.tempDir);
 
     try std.testing.expectEqual(@as(usize, 0), pushed.len);
 }
 
 test "gives every file the size and modified time it actually has" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
     const filePath = try context.writePhoto("a.jpg", "one");
     const fileStat = try std.Io.Dir.cwd().statFile(std.testing.io, filePath, .{});
 
-    const pushed = try scanFiles(context.arena.allocator(), &.{context.photosDir}, context.tempDir);
+    const pushed = try scanFiles(log, context.arena.allocator(), &.{context.photosDir}, context.tempDir);
 
     try std.testing.expectEqual(fileStat.size, pushed[0].fileStat.length);
     try std.testing.expectEqual(@as(i64, @intCast(@divFloor(fileStat.mtime.nanoseconds, std.time.ns_per_ms))), pushed[0].fileStat.lastModified);
 }
 
 test "identifies a file the user picked by nothing but its own path" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -167,7 +173,7 @@ test "identifies a file the user picked by nothing but its own path" {
     // else to file its hash under. Only a photo library item needs an identity of its own.
     _ = try context.writePhoto("a.jpg", "one");
 
-    const pushed = try scanFiles(context.arena.allocator(), &.{context.photosDir}, context.tempDir);
+    const pushed = try scanFiles(log, context.arena.allocator(), &.{context.photosDir}, context.tempDir);
 
     try std.testing.expect(pushed[0].cacheIdentity == null);
 }

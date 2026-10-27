@@ -20,6 +20,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -29,7 +30,6 @@ const api = @import("api-zig");
 const config_format = @import("config-format.zig");
 const app_config_format = @import("app-config-format.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const yaml = node_utils.yaml;
 const FileStorage = storage_zig.file_storage.FileStorage;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -157,7 +157,7 @@ pub const IConfigRead = struct {
 // take the settings card that could fix it down with it. The parse failure is logged so it is not
 // silent.
 //
-pub fn readConfigFromStorage(allocator: std.mem.Allocator, io: std.Io, configPath: []const u8) !IConfigRead {
+pub fn readConfigFromStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, configPath: []const u8) !IConfigRead {
     var storage = FileStorage.init("fs:");
     const absent: IConfigRead = .{
         .config = try defaultConfigFile(allocator),
@@ -168,7 +168,7 @@ pub fn readConfigFromStorage(allocator: std.mem.Allocator, io: std.Io, configPat
         return absent;
     }
 
-    const contents = try storage.read(allocator, io, configPath) orelse {
+    const contents = try storage.read(allocator, io, log, configPath) orelse {
         return absent;
     };
 
@@ -305,10 +305,10 @@ pub fn readConfigHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
-    context: ITaskContext,
+    _: ITaskContext,
 ) anyerror!std.json.Value {
-    _ = context;
     // (Zig: reading the task data into the typed struct fails when configPath is not a string.
     // The failure is reported as a sentence, not a bare parser error name.)
     const data = std.json.parseFromValueLeaky(IReadConfigData, allocator, taskData, .{
@@ -320,7 +320,7 @@ pub fn readConfigHandler(
         return errors.throwError("configPath is required", .{});
     }
 
-    const contents = try readConfigFromStorage(allocator, io, data.configPath);
+    const contents = try readConfigFromStorage(allocator, io, log, data.configPath);
 
     var settingsObject: std.json.ObjectMap = .empty;
     var settings = try appConfigSettings(allocator, try yamlToAppConfig(allocator, contents.document));
@@ -359,10 +359,10 @@ pub fn writeConfigHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
-    context: ITaskContext,
+    _: ITaskContext,
 ) anyerror!std.json.Value {
-    _ = context;
     // (Zig: reading the task data into the typed struct fails when a field has the wrong type.
     // The failure is reported as a sentence, not a bare parser error name.)
     const data = std.json.parseFromValueLeaky(IWriteConfigData, allocator, taskData, .{
@@ -378,7 +378,7 @@ pub fn writeConfigHandler(
     }
 
     var storage = FileStorage.init("fs:");
-    const contents = try readConfigFromStorage(allocator, io, data.configPath);
+    const contents = try readConfigFromStorage(allocator, io, log, data.configPath);
     var current = contents.config;
     const present = contents.present;
 

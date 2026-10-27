@@ -105,37 +105,40 @@ fn albumSource(album_id: []const u8) IAutoImportSource {
 }
 
 test "DeviceMediaSource: an empty album list covers the whole library" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     var source = try DeviceMediaSource.init(arena.allocator(), &.{}, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
     try std.testing.expectEqual(@as(usize, 2), page.items.len);
     try std.testing.expectEqualStrings("{\"cursor\":\"\",\"pageSize\":50}", native_caller.last_request);
     try std.testing.expectEqualStrings("mediaLibraryList", native_caller.last_method);
 }
 
 test "DeviceMediaSource: the reserved all album covers the whole library" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     var source = try DeviceMediaSource.init(arena.allocator(), &.{ albumSource("cam"), albumSource("all") }, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
     try std.testing.expectEqual(@as(usize, 2), page.items.len);
 }
 
 test "DeviceMediaSource: named albums keep only their items and the page still yields its cursor" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("nothing-here")}, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, "2", 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, "2", 50);
     try std.testing.expectEqual(@as(usize, 0), page.items.len);
     try std.testing.expectEqualStrings("2", page.nextCursor.?);
     try std.testing.expectEqualStrings("{\"cursor\":\"2\",\"pageSize\":50}", native_caller.last_request);
 
     var camera_source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("cam")}, native_caller.nativeCaller());
-    const camera_page = try camera_source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const camera_page = try camera_source.listPage(arena.allocator(), std.testing.io, log, null, 50);
     try std.testing.expectEqual(@as(usize, 1), camera_page.items.len);
     try std.testing.expectEqualStrings("1", camera_page.items[0].sourceId);
     try std.testing.expectEqualStrings("a.jpg", camera_page.items[0].displayName);
@@ -146,42 +149,46 @@ test "DeviceMediaSource: named albums keep only their items and the page still y
 }
 
 test "DeviceMediaSource: the last page has no cursor" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[]}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{}, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, "9", 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, "9", 50);
     try std.testing.expect(page.nextCursor == null);
 }
 
 test "DeviceMediaSource: an unreadable list answer is an error" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "not json";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{}, native_caller.nativeCaller());
-    try std.testing.expectError(error.Thrown, source.listPage(arena.allocator(), std.testing.io, null, 50));
+    try std.testing.expectError(error.Thrown, source.listPage(arena.allocator(), std.testing.io, log, null, 50));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "mediaLibraryList") != null);
 }
 
 test "DeviceMediaSource: openItem returns the path the shell copied the item to" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     var source = try DeviceMediaSource.init(arena.allocator(), &.{}, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
     const path = try source.openItem(arena.allocator(), std.testing.io, page.items[0]);
     try std.testing.expectEqualStrings("/cache/.media-tmp/1.jpg", path);
     try std.testing.expectEqualStrings("{\"itemId\":\"1\"}", native_caller.last_request);
 }
 
 test "DeviceMediaSource: closeItem asks the shell to remove the copy" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     var source = try DeviceMediaSource.init(arena.allocator(), &.{}, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
     try source.closeItem(arena.allocator(), std.testing.io, page.items[1]);
     try std.testing.expectEqualStrings("mediaLibraryClose", native_caller.last_method);
     try std.testing.expectEqualStrings("{\"itemId\":\"2\"}", native_caller.last_request);
@@ -223,13 +230,14 @@ test "buildDeviceMediaSource: without a host requester it is an error naming the
 }
 
 test "maps a library page into media items" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[{\"id\":\"one\",\"displayName\":\"one.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1700000000000,\"albumId\":\"camera\"}],\"nextCursor\":\"10\"}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("all")}, native_caller.nativeCaller());
 
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
 
     try std.testing.expectEqualStrings("10", page.nextCursor.?);
     try std.testing.expectEqual(@as(usize, 1), page.items.len);
@@ -244,13 +252,14 @@ test "maps a library page into media items" {
 }
 
 test "the reserved everything album takes the whole library rather than filtering by it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[{\"id\":\"one\",\"displayName\":\"one.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1,\"albumId\":\"camera\"},{\"id\":\"two\",\"displayName\":\"two.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1,\"albumId\":\"screenshots\"}]}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("all")}, native_caller.nativeCaller());
 
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
 
     try std.testing.expectEqual(@as(usize, 2), page.items.len);
     try std.testing.expectEqualStrings("one", page.items[0].sourceId);
@@ -258,13 +267,14 @@ test "the reserved everything album takes the whole library rather than filterin
 }
 
 test "keeps only the items in the named albums" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[{\"id\":\"one\",\"displayName\":\"one.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1,\"albumId\":\"camera\"},{\"id\":\"two\",\"displayName\":\"two.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1,\"albumId\":\"screenshots\"},{\"id\":\"three\",\"displayName\":\"three.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1,\"albumId\":\"camera\"}]}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("camera")}, native_caller.nativeCaller());
 
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
 
     try std.testing.expectEqual(@as(usize, 2), page.items.len);
     try std.testing.expectEqualStrings("one", page.items[0].sourceId);
@@ -272,38 +282,41 @@ test "keeps only the items in the named albums" {
 }
 
 test "a page the album filter empties still yields its cursor so the walk carries on" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[{\"id\":\"one\",\"displayName\":\"one.jpg\",\"mimeType\":\"image/jpeg\",\"size\":1024,\"createdAtMs\":1,\"albumId\":\"screenshots\"}],\"nextCursor\":\"10\"}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("camera")}, native_caller.nativeCaller());
 
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
 
     try std.testing.expectEqual(@as(usize, 0), page.items.len);
     try std.testing.expectEqualStrings("10", page.nextCursor.?);
 }
 
 test "a missing cursor crosses the bridge as an empty string, which starts at the beginning" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[]}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("all")}, native_caller.nativeCaller());
 
-    _ = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    _ = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
 
     try std.testing.expectEqualStrings("{\"cursor\":\"\",\"pageSize\":50}", native_caller.last_request);
 }
 
 test "a cursor is passed through unchanged" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.list_reply = "{\"items\":[]}";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{albumSource("all")}, native_caller.nativeCaller());
 
-    _ = try source.listPage(arena.allocator(), std.testing.io, "42", 50);
+    _ = try source.listPage(arena.allocator(), std.testing.io, log, "42", 50);
 
     try std.testing.expectEqualStrings("{\"cursor\":\"42\",\"pageSize\":50}", native_caller.last_request);
 }
@@ -364,6 +377,7 @@ test "a delete the library refused names the items that are still on the device"
 
 // The import task reaches the library only through IMediaSource, so the source the builder makes is driven through it here.
 test "buildDeviceMediaSource: the source it builds lists, opens, closes and deletes through the media source interface" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -375,7 +389,7 @@ test "buildDeviceMediaSource: the source it builds lists, opens, closes and dele
         .nativeCaller = native_caller.nativeCaller(),
     });
 
-    const page = try source.listPage(allocator, std.testing.io, null, 50);
+    const page = try source.listPage(allocator, std.testing.io, log, null, 50);
     try std.testing.expectEqual(@as(usize, 1), page.items.len);
     try std.testing.expectEqualStrings("1", page.items[0].sourceId);
     try std.testing.expectEqualStrings("mediaLibraryList", native_caller.last_method);
@@ -392,12 +406,13 @@ test "buildDeviceMediaSource: the source it builds lists, opens, closes and dele
 }
 
 test "DeviceMediaSource: an unreadable open answer is an error naming the request" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var native_caller = newNativeCaller(arena.allocator());
     native_caller.open_reply = "not json";
     var source = try DeviceMediaSource.init(arena.allocator(), &.{}, native_caller.nativeCaller());
-    const page = try source.listPage(arena.allocator(), std.testing.io, null, 50);
+    const page = try source.listPage(arena.allocator(), std.testing.io, log, null, 50);
     try std.testing.expectError(error.Thrown, source.openItem(arena.allocator(), std.testing.io, page.items[0]));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "mediaLibraryOpen") != null);
 }

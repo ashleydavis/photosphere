@@ -1,10 +1,10 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
 const jszip = @import("third-party/jszip/index.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const path = node_utils.path;
 const pathExists = node_utils.fs.pathExists;
@@ -51,13 +51,13 @@ pub const ScanProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void,
+    function: *const fn (context: ?*anyopaque, log: ILog, currentlyScanning: ?[]const u8, state: *const ScannerState) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: ScanProgressCallback, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
-        self.function(self.context, currentlyScanning, state);
+    pub fn call(self: ScanProgressCallback, log: ILog, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
+        self.function(self.context, log, currentlyScanning, state);
     }
 };
 
@@ -90,13 +90,13 @@ pub const SimpleFileCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, result: FileScannedResult) anyerror!void,
+    function: *const fn (context: ?*anyopaque, log: ILog, result: FileScannedResult) anyerror!void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: SimpleFileCallback, result: FileScannedResult) anyerror!void {
-        return self.function(self.context, result);
+    pub fn call(self: SimpleFileCallback, log: ILog, result: FileScannedResult) anyerror!void {
+        return self.function(self.context, log, result);
     }
 };
 
@@ -192,14 +192,14 @@ const OrderedFileVisitor = struct {
     context: *anyopaque,
 
     // The visitor function.
-    function: *const fn (context: *anyopaque, orderedFile: IOrderedFile) anyerror!void,
+    function: *const fn (context: *anyopaque, log: ILog, orderedFile: IOrderedFile) anyerror!void,
 };
 
 //
 // Walks a directory recursively and yields files in alphanumeric order
 // Each file is handed to the visitor, in that order.
 //
-fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8, ignorePatterns: []const []const u8, visitor: OrderedFileVisitor) anyerror!void {
+fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, log: ILog, dirPath: []const u8, ignorePatterns: []const []const u8, visitor: OrderedFileVisitor) anyerror!void {
     if (!pathExists(io, dirPath)) {
         return;
     }
@@ -229,7 +229,9 @@ fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8, 
 
     for (files.items) |file| {
         const fileName = try path.join(allocator, &.{ dirPath, file.name });
-        try visitor.function(visitor.context, .{ .fileName = fileName });
+        try visitor.function(visitor.context, log, .{
+            .fileName = fileName,
+        });
     }
 
     // Phase 2: List all subdirectories and recursively walk each one
@@ -238,7 +240,7 @@ fn walkDirectory(allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8, 
 
     for (dirs.items) |dir| {
         const subDirPath = try path.join(allocator, &.{ dirPath, dir.name });
-        try walkDirectory(allocator, io, subDirPath, ignorePatterns, visitor);
+        try walkDirectory(allocator, io, log, subDirPath, ignorePatterns, visitor);
     }
 }
 
@@ -358,6 +360,7 @@ fn statModifiedTime(stat: std.Io.File.Stat) i64 {
 fn scanZipFile(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     zipFilePath: []const u8,
     fileStat: IFileStat,
     zipPathStack: []const []const u8,
@@ -375,7 +378,7 @@ fn scanZipFile(
     if (progressCallback) |callback| {
         const progressPath = try formatZipProgressPath(allocator, zipPathStack);
         state.currentlyScanning = progressPath;
-        callback.call(state.currentlyScanning, state);
+        callback.call(log, state.currentlyScanning, state);
     }
 
     var zip = JSZip.init(allocator);
@@ -420,7 +423,7 @@ fn scanZipFile(
 
                 // Extract nested zip from this zip file to temp file
                 var tempZipPath: ?[]const u8 = null;
-                extractNestedZip(allocator, io, zipObject, fileName, displayPath, zipFileInfo, nestedZipPathStack, visitFile, progressCallback, state, options, tempDir, uuidGenerator, &tempZipPath) catch |err| {
+                extractNestedZip(allocator, io, log, zipObject, fileName, displayPath, zipFileInfo, nestedZipPathStack, visitFile, progressCallback, state, options, tempDir, uuidGenerator, &tempZipPath) catch |err| {
                     // Keep file for inspection on error
                     if (tempZipPath) |keptPath| {
                         log.verbose(try std.fmt.allocPrint(allocator, "Keeping temporary zip file \"{s}\" for inspection due to error", .{keptPath}));
@@ -431,7 +434,7 @@ fn scanZipFile(
             else {
                 // Extract file from zip to temporary file
                 var tempFilePath: ?[]const u8 = null;
-                extractFile(allocator, io, zipObject, fileName, displayPath, contentType, zipPathStack, visitFile, state, tempDir, uuidGenerator, &tempFilePath) catch |err| {
+                extractFile(allocator, io, log, zipObject, fileName, displayPath, contentType, zipPathStack, visitFile, state, tempDir, uuidGenerator, &tempFilePath) catch |err| {
                     // Keep file for inspection on error
                     if (tempFilePath) |keptPath| {
                         log.verbose(try std.fmt.allocPrint(allocator, "Keeping temporary file \"{s}\" for inspection due to error", .{keptPath}));
@@ -450,6 +453,7 @@ fn scanZipFile(
 fn extractNestedZip(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     zipObject: jszip.ZipObject,
     fileName: []const u8,
     displayPath: []const u8,
@@ -484,6 +488,7 @@ fn extractNestedZip(
     try scanZipFile(
         allocator,
         io,
+        log,
         tempZipPath.*.?,
         zipFileInfo,
         nestedZipPathStack, // Path stack including root zip and nested zips
@@ -503,6 +508,7 @@ fn extractNestedZip(
 fn extractFile(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     zipObject: jszip.ZipObject,
     fileName: []const u8,
     displayPath: []const u8,
@@ -539,7 +545,7 @@ fn extractFile(
         .lastModified = statModifiedTime(stats),
     };
 
-    try visitFile.call(.{
+    try visitFile.call(log, .{
         .filePath = tempFilePath.*.?, // Temporary file path
         .fileStat = extractedFileInfo,
         .contentType = contentType,
@@ -579,14 +585,14 @@ const DirectoryScan = struct {
     //
     // The body of the `for await (const orderedFile of walkDirectory(...))` loop.
     //
-    fn visitOrderedFile(context: *anyopaque, orderedFile: IOrderedFile) anyerror!void {
+    fn visitOrderedFile(context: *anyopaque, log: ILog, orderedFile: IOrderedFile) anyerror!void {
         const self: *DirectoryScan = @ptrCast(@alignCast(context));
         const allocator = self.allocator;
         const state = self.state;
 
         if (self.progressCallback) |callback| {
             state.currentlyScanning = path.basename(path.dirname(orderedFile.fileName));
-            callback.call(state.currentlyScanning, state);
+            callback.call(log, state.currentlyScanning, state);
         }
 
         const contentType = try getMimeType(allocator, orderedFile.fileName);
@@ -624,11 +630,11 @@ const DirectoryScan = struct {
         if (std.mem.eql(u8, knownContentType, "application/zip")) {
             // If it's a zip file, we need to scan its contents.
             // Start the zip path stack with the root zip file path
-            try scanZipFile(allocator, self.io, filePath, fileInfo, &.{filePath}, self.visitFile, self.progressCallback, state, self.options, self.tempDir, self.uuidGenerator);
+            try scanZipFile(allocator, self.io, log, filePath, fileInfo, &.{filePath}, self.visitFile, self.progressCallback, state, self.options, self.tempDir, self.uuidGenerator);
         }
         else {
             // Otherwise, process the file directly.
-            try self.visitFile.call(.{
+            try self.visitFile.call(log, .{
                 .filePath = filePath,
                 .fileStat = fileInfo,
                 .contentType = knownContentType,
@@ -645,6 +651,7 @@ const DirectoryScan = struct {
 fn scanDirectory(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     directoryPath: []const u8,
     visitFile: SimpleFileCallback,
     progressCallback: ?ScanProgressCallback,
@@ -657,7 +664,7 @@ fn scanDirectory(
 
     if (progressCallback) |callback| {
         state.currentlyScanning = path.basename(directoryPath);
-        callback.call(state.currentlyScanning, state);
+        callback.call(log, state.currentlyScanning, state);
     }
 
     var directoryScan: DirectoryScan = .{
@@ -670,7 +677,7 @@ fn scanDirectory(
         .tempDir = tempDir,
         .uuidGenerator = uuidGenerator,
     };
-    try walkDirectory(allocator, io, directoryPath, options.ignorePatterns orelse &DEFAULT_WALK_IGNORE_PATTERNS, .{
+    try walkDirectory(allocator, io, log, directoryPath, options.ignorePatterns orelse &DEFAULT_WALK_IGNORE_PATTERNS, .{
         .context = &directoryScan,
         .function = DirectoryScan.visitOrderedFile,
     });
@@ -684,6 +691,7 @@ fn scanDirectory(
 fn scanPathInternal(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     unresolvedFilePath: []const u8,
     visitFile: SimpleFileCallback,
     progressCallback: ?ScanProgressCallback,
@@ -727,6 +735,7 @@ fn scanPathInternal(
             try scanZipFile(
                 allocator,
                 io,
+                log,
                 filePath,
                 fileInfo,
                 &.{filePath}, // Zip path stack starting with root zip path
@@ -740,7 +749,7 @@ fn scanPathInternal(
         }
         else {
             // Otherwise, process the file directly.
-            try visitFile.call(.{
+            try visitFile.call(log, .{
                 .filePath = filePath,
                 .fileStat = fileInfo,
                 .contentType = contentType,
@@ -750,7 +759,7 @@ fn scanPathInternal(
         }
     }
     else if (stats.kind == .directory) {
-        try scanDirectory(allocator, io, filePath, visitFile, progressCallback, state, options, tempDir, uuidGenerator);
+        try scanDirectory(allocator, io, log, filePath, visitFile, progressCallback, state, options, tempDir, uuidGenerator);
     }
 }
 
@@ -763,6 +772,7 @@ fn scanPathInternal(
 pub fn scanPaths(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     paths: []const []const u8,
     visitFile: SimpleFileCallback,
     progressCallback: ?ScanProgressCallback,
@@ -783,7 +793,7 @@ pub fn scanPaths(
     };
 
     for (paths) |scanPathValue| {
-        try scanPathInternal(allocator, io, scanPathValue, visitFile, progressCallback, &state, options, tempDir, uuidGenerator);
+        try scanPathInternal(allocator, io, log, scanPathValue, visitFile, progressCallback, &state, options, tempDir, uuidGenerator);
     }
 }
 
@@ -793,6 +803,7 @@ pub fn scanPaths(
 pub fn scanPath(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     filePath: []const u8,
     visitFile: SimpleFileCallback,
     progressCallback: ?ScanProgressCallback,
@@ -812,5 +823,5 @@ pub fn scanPath(
         .tempDir = tempDir,
     };
 
-    try scanPathInternal(allocator, io, filePath, visitFile, progressCallback, &state, options, tempDir, uuidGenerator);
+    try scanPathInternal(allocator, io, log, filePath, visitFile, progressCallback, &state, options, tempDir, uuidGenerator);
 }

@@ -43,6 +43,7 @@ pub fn registerOpenDatabaseTool(server: *McpServer, allocator: std.mem.Allocator
 //
 fn openDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const path = try toolContext.allocator.dupe(u8, arguments.get("path").?.string);
     var dbOptions: IBaseCommandOptions = toolContext.options;
     dbOptions.db = path;
@@ -50,6 +51,7 @@ fn openDatabase(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, 
     const loaded = try loadDatabase(
         toolContext.allocator,
         io,
+        log,
         path,
         &dbOptions,
         toolContext.uuidGenerator,

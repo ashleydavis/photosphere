@@ -1,11 +1,11 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const prompts = @import("clack/prompts.zig");
 
 //
 // Names used from other files.
 //
-const log = &utils.log.log;
 const clackSpinner = prompts.spinner;
 
 //
@@ -22,7 +22,7 @@ pub const SpinnerResult = union(enum) {
     //
     // Starts reporting with a message.
     //
-    pub fn start(self: SpinnerResult, text: []const u8) !void {
+    pub fn start(self: SpinnerResult, log: ILog, text: []const u8) !void {
         switch (self) {
             .animated => |animated| try animated.start(text),
             .plain => log.info(text),
@@ -32,7 +32,7 @@ pub const SpinnerResult = union(enum) {
     //
     // Stops reporting with a final message.
     //
-    pub fn stop(self: SpinnerResult, text: []const u8) !void {
+    pub fn stop(self: SpinnerResult, log: ILog, text: []const u8) !void {
         switch (self) {
             .animated => |animated| try animated.stop(text, 0),
             .plain => log.info(text),
@@ -42,7 +42,7 @@ pub const SpinnerResult = union(enum) {
     //
     // Changes the message.
     //
-    pub fn message(self: SpinnerResult, text: []const u8) void {
+    pub fn message(self: SpinnerResult, log: ILog, text: []const u8) void {
         switch (self) {
             .animated => |animated| animated.message(text),
             .plain => log.info(text),

@@ -74,6 +74,7 @@ test "should return undefined for non-existent lock" {
 }
 
 test "should return lock info for existing lock" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -81,7 +82,7 @@ test "should return lock info for existing lock" {
     const owner = "user123";
     const filePath = try fixture.path("test-file-2.txt");
 
-    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, filePath, owner);
+    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, filePath, owner);
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, filePath);
     try std.testing.expect(lockInfo != null);
@@ -113,13 +114,14 @@ test "should handle missing lock files gracefully" {
 }
 
 test "should successfully acquire a lock for new file" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const owner = "user123";
     const lockFilePath = try fixture.path("test-file-5.txt.lock");
 
-    const result = try fixture.storage.acquireWriteLock(fixture.arena.allocator(), std.testing.io, lockFilePath, owner);
+    const result = try fixture.storage.acquireWriteLock(fixture.arena.allocator(), std.testing.io, log, lockFilePath, owner);
     try std.testing.expect(result);
 
     // Verify lock file was created
@@ -132,27 +134,29 @@ test "should successfully acquire a lock for new file" {
 }
 
 test "should fail to acquire lock if one already exists" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const lockFilePath = try fixture.path("test-file-6.txt.lock");
 
-    const firstResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "user1");
+    const firstResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "user1");
     try std.testing.expect(firstResult);
 
-    const secondResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "user2");
+    const secondResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "user2");
     try std.testing.expect(!secondResult);
 }
 
 test "should create lock file in nested directories" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const lockFilePath = try fixture.path("nested/dir/test-file-7.txt.lock");
     const owner = "user123";
 
-    const result = try fixture.storage.acquireWriteLock(fixture.arena.allocator(), std.testing.io, lockFilePath, owner);
+    const result = try fixture.storage.acquireWriteLock(fixture.arena.allocator(), std.testing.io, log, lockFilePath, owner);
     try std.testing.expect(result);
 
     try std.testing.expect(pathExists(std.testing.io, lockFilePath));
@@ -208,6 +212,8 @@ const LockAttempt = struct {
     // whether it won.
     //
     fn run(orders: *MessageQueue, outcomes: *MessageQueue) void {
+        // The thread's own log, which writes to the console.
+        const log = utils.mute_log.MuteLog.init();
         var thread_allocator: ThreadAllocator = .init;
         defer thread_allocator.deinit();
         var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
@@ -222,7 +228,7 @@ const LockAttempt = struct {
             io.sleep(.fromNanoseconds(@intCast(order.delayMicroseconds * std.time.ns_per_us)), .awake) catch |err| @panic(@errorName(err));
         }
         var storage = FileStorage.init(order.root);
-        const success = storage.acquireWriteLock(arena, io, order.lockFilePath, order.owner) catch false;
+        const success = storage.acquireWriteLock(arena, io, log, order.lockFilePath, order.owner) catch false;
         thread_messages.post(outcomes, io, arena, Outcome{
             .index = order.index,
             .success = success,
@@ -363,6 +369,7 @@ test "should handle aggressive race conditions with many concurrent attempts" {
 }
 
 test "should handle race conditions with realistic timing delays" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -405,11 +412,12 @@ test "should handle race conditions with realistic timing delays" {
         try std.testing.expectEqualStrings(winner, lockInfo.?.owner);
 
         // Clean up for next iteration
-        try fixture.storage.releaseWriteLock(allocator, std.testing.io, lockFilePath);
+        try fixture.storage.releaseWriteLock(allocator, std.testing.io, log, lockFilePath);
     }
 }
 
 test "should demonstrate atomic lock file creation prevents race conditions" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -417,11 +425,11 @@ test "should demonstrate atomic lock file creation prevents race conditions" {
     const lockFilePath = try fixture.path("atomic-test-file.txt.lock");
 
     // First process acquires lock normally
-    const firstResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "first-user");
+    const firstResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "first-user");
     try std.testing.expect(firstResult);
 
     // Second process tries to acquire - should fail due to existing lock
-    const secondResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "second-user");
+    const secondResult = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "second-user");
     try std.testing.expect(!secondResult);
 
     // Verify the first user still owns the lock
@@ -434,6 +442,7 @@ test "should demonstrate atomic lock file creation prevents race conditions" {
 }
 
 test "should store timestamp accurately" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -444,7 +453,7 @@ test "should store timestamp accurately" {
 
     // Wait a small amount to ensure timestamp precision
     try std.testing.io.sleep(.fromMilliseconds(1), .awake);
-    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, owner);
+    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, owner);
     try std.testing.io.sleep(.fromMilliseconds(1), .awake);
 
     const afterTime = std.Io.Clock.real.now(std.testing.io).toMilliseconds();
@@ -456,6 +465,7 @@ test "should store timestamp accurately" {
 }
 
 test "should successfully release an existing lock" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -463,10 +473,10 @@ test "should successfully release an existing lock" {
     const lockFilePath = try fixture.path("test-file-11.txt.lock");
     const owner = "user123";
 
-    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, owner);
+    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, owner);
     try std.testing.expect((try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath)) != null);
 
-    try fixture.storage.releaseWriteLock(allocator, std.testing.io, lockFilePath);
+    try fixture.storage.releaseWriteLock(allocator, std.testing.io, log, lockFilePath);
     try std.testing.expect((try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath)) == null);
 
     // Verify lock file was deleted
@@ -474,16 +484,18 @@ test "should successfully release an existing lock" {
 }
 
 test "should handle releasing non-existent lock gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const lockFilePath = try fixture.path("non-existent-file-12.txt.lock");
 
     // Should not throw error
-    try fixture.storage.releaseWriteLock(fixture.arena.allocator(), std.testing.io, lockFilePath);
+    try fixture.storage.releaseWriteLock(fixture.arena.allocator(), std.testing.io, log, lockFilePath);
 }
 
 test "should allow reacquisition after release" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -491,9 +503,9 @@ test "should allow reacquisition after release" {
     const lockFilePath = try fixture.path("test-file-14.txt.lock");
 
     // Acquire, release, then acquire again
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "user1"));
-    try fixture.storage.releaseWriteLock(allocator, std.testing.io, lockFilePath);
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "user2"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "user1"));
+    try fixture.storage.releaseWriteLock(allocator, std.testing.io, log, lockFilePath);
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "user2"));
 
     // Verify new owner
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
@@ -501,6 +513,7 @@ test "should allow reacquisition after release" {
 }
 
 test "should create valid JSON lock files" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -508,7 +521,7 @@ test "should create valid JSON lock files" {
     const lockFilePath = try fixture.path("test-file-15.txt.lock");
     const owner = "user123";
 
-    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, owner);
+    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, owner);
 
     // Should be valid JSON
     const lockData = try fixture.readLockFile(lockFilePath);
@@ -529,6 +542,7 @@ test "should create valid JSON lock files" {
 }
 
 test "should handle special characters in owner names" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -536,13 +550,14 @@ test "should handle special characters in owner names" {
     const lockFilePath = try fixture.path("test-file-16.txt.lock");
     const specialOwner = "user@domain.com with spaces & symbols!";
 
-    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, specialOwner);
+    _ = try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, specialOwner);
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings(specialOwner, lockInfo.?.owner);
 }
 
 test "should handle full lock lifecycle" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -554,26 +569,27 @@ test "should handle full lock lifecycle" {
     try std.testing.expect((try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath)) == null);
 
     // 2. Acquire lock
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, owner));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, owner));
 
     // 3. Verify lock exists and has correct details
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings(owner, lockInfo.?.owner);
 
     // 4. Other processes cannot acquire lock
-    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "other-process"));
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "other-process"));
 
     // 5. Release lock
-    try fixture.storage.releaseWriteLock(allocator, std.testing.io, lockFilePath);
+    try fixture.storage.releaseWriteLock(allocator, std.testing.io, log, lockFilePath);
 
     // 6. Lock is gone
     try std.testing.expect((try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath)) == null);
 
     // 7. Other processes can now acquire lock
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "other-process"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "other-process"));
 }
 
 test "should work with complex file paths" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -590,17 +606,18 @@ test "should work with complex file paths" {
         const lockFilePath = try fixture.path(relativePath);
         const owner = try std.mem.concat(allocator, u8, &.{ "owner-", relativePath });
 
-        try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, owner));
+        try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, owner));
 
         const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
         try std.testing.expectEqualStrings(owner, lockInfo.?.owner);
 
-        try fixture.storage.releaseWriteLock(allocator, std.testing.io, lockFilePath);
+        try fixture.storage.releaseWriteLock(allocator, std.testing.io, log, lockFilePath);
         try std.testing.expect((try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath)) == null);
     }
 }
 
 test "a lock older than the timeout is broken and taken" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -613,13 +630,14 @@ test "a lock older than the timeout is broken and taken" {
         .timestamp = staleTimestamp,
     }));
 
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "new-owner"));
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings("new-owner", lockInfo.?.owner);
 }
 
 test "a corrupted lock file is broken and the lock taken" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -627,7 +645,7 @@ test "a corrupted lock file is broken and the lock taken" {
     const lockFilePath = try fixture.path("corrupt.lock");
     try test_files.writeFile(std.testing.io, lockFilePath, "invalid json");
 
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "new-owner"));
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings("new-owner", lockInfo.?.owner);
@@ -638,6 +656,7 @@ test "a corrupted lock file is broken and the lock taken" {
 // Breaking it as corrupt put two owners in the critical section at once.
 //
 test "an empty lock file that was just created is held, not broken" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -645,7 +664,7 @@ test "an empty lock file that was just created is held, not broken" {
     const lockFilePath = try fixture.path("being-written.lock");
     try test_files.writeFile(std.testing.io, lockFilePath, "");
 
-    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "new-owner"));
 
     const lockContent = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, lockFilePath, allocator, .unlimited);
     try std.testing.expectEqualStrings("", lockContent);
@@ -656,6 +675,7 @@ test "an empty lock file that was just created is held, not broken" {
 // it, so it is broken like any other corrupt lock.
 //
 test "an empty lock file older than the lock timeout is broken and the lock taken" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -669,7 +689,7 @@ test "an empty lock file older than the lock timeout is broken and the lock take
         .modify_timestamp = .{ .new = std.Io.Timestamp.fromNanoseconds(@as(i96, staleTime) * std.time.ns_per_ms) },
     });
 
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "new-owner"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "new-owner"));
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings("new-owner", lockInfo.?.owner);
@@ -696,6 +716,7 @@ test "parseISOString reads what toISOString writes and rejects anything else" {
 // and the Unicode spaces as well as ASCII whitespace, so such a lock is read and held rather than broken as corrupt.
 //
 test "a lock file surrounded by Unicode whitespace is read and held, not broken" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
@@ -704,7 +725,7 @@ test "a lock file surrounded by Unicode whitespace is read and held, not broken"
     const timestamp = std.Io.Clock.real.now(std.testing.io).toMilliseconds();
     try test_files.writeFile(std.testing.io, lockFilePath, try std.fmt.allocPrint(allocator, "\u{FEFF}{{\"owner\":\"first-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}\u{3000}", .{timestamp}));
 
-    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, lockFilePath, "second-owner"));
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "second-owner"));
 
     const lockInfo = try fixture.storage.checkWriteLock(allocator, std.testing.io, lockFilePath);
     try std.testing.expectEqualStrings("first-owner", lockInfo.?.owner);
@@ -718,24 +739,24 @@ test "every step of taking a lock is written to the verbose log, and a lock that
     const io = std.testing.io;
 
     // A log that asks for the [LOCK] lines and writes nothing.
-    var verboseLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = true,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    var quietVtable = verboseLog.ilog().vtable.*;
-    quietVtable.verbose = ignoreVerbose;
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(.{
-        .ptr = &verboseLog,
-        .vtable = &quietVtable,
+    const memory = try utils.memory_log.MemoryLog.init(std.testing.allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
     });
-    defer utils.log.setLog(previousLog);
+    defer memory.deinit();
+    const verboseLog = memory.log;
+    var quietVtable = verboseLog.vtable.*;
+    quietVtable.verbose = ignoreVerbose;
+    const log: utils.log.ILog = .{
+        .ptr = verboseLog.ptr,
+        .vtable = &quietVtable,
+    };
 
     // Taken, then refused while held.
     const lockFilePath = try fixture.path("verbose.lock");
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "first"));
-    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "second"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, log, lockFilePath, "first"));
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, io, log, lockFilePath, "second"));
 
     // A stale lock and a corrupt one are broken; an empty one being written is left alone.
     const staleTimestamp = std.Io.Clock.real.now(io).toMilliseconds() - 60_000;
@@ -745,17 +766,17 @@ test "every step of taking a lock is written to the verbose log, and a lock that
         .acquiredAt = "2020-01-01T00:00:00.000Z",
         .timestamp = staleTimestamp,
     }));
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, stalePath, "new"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, log, stalePath, "new"));
     const corruptPath = try fixture.path("verbose-corrupt.lock");
     try test_files.writeFile(io, corruptPath, "invalid json");
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, corruptPath, "new"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, log, corruptPath, "new"));
     const emptyPath = try fixture.path("verbose-empty.lock");
     try test_files.writeFile(io, emptyPath, "");
-    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, io, emptyPath, "new"));
+    try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, io, log, emptyPath, "new"));
 
     // A lock under a file cannot be created, and the error is passed on.
     try test_files.writeFile(io, try fixture.path("a-file"), "not a directory");
-    try std.testing.expect(std.meta.isError(fixture.storage.acquireWriteLock(allocator, io, try fixture.path("a-file/under.lock"), "new")));
+    try std.testing.expect(std.meta.isError(fixture.storage.acquireWriteLock(allocator, io, log, try fixture.path("a-file/under.lock"), "new")));
 }
 
 //
@@ -829,6 +850,14 @@ const RecordingLog = struct {
     }
 
     //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
+
+    //
     // The vtable that forwards to this log.
     //
     const vtable: utils.log.ILog.VTable = .{
@@ -842,6 +871,7 @@ const RecordingLog = struct {
         .event = ignoreMessage,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 };
 
@@ -862,13 +892,11 @@ test "a refused lock is logged with the age and the owner of the lock in the way
         .messages = std.Io.Writer.Allocating.init(allocator),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
 
     const lockFilePath = try std.fs.path.join(allocator, &.{ tempDir, "logged.lock" });
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "first-owner"));
-    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, lockFilePath, "second-owner"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, lockFilePath, "first-owner"));
+    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, log, lockFilePath, "second-owner"));
 
     const messages = recordingLog.messages.written();
     try std.testing.expect(std.mem.indexOf(u8, messages, "ACQUIRE_ATTEMPT") != null);
@@ -882,6 +910,7 @@ test "a refused lock is logged with the age and the owner of the lock in the way
 // so the file reads as corrupt and the lock is broken.
 //
 test "a lock whose acquiredAt is not a date reads as corrupt and the lock is taken" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -897,23 +926,24 @@ test "a lock whose acquiredAt is not a date reads as corrupt and the lock is tak
     try std.testing.expect((try storage.checkWriteLock(allocator, io, lockFilePath)) == null);
 
     // So it is broken as corrupt and the lock is taken.
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "new-owner"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, lockFilePath, "new-owner"));
     const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
     try std.testing.expectEqualStrings("new-owner", lockInfo.owner);
 }
 
 test "refreshWriteLock updates the timestamp of a lock the owner holds and keeps the owner" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
     const lockFilePath = try fixture.path("refresh.lock");
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "owner-1"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, log, lockFilePath, "owner-1"));
     const before = try fixture.readLockFile(lockFilePath);
 
     try io.sleep(.fromMilliseconds(20), .awake);
-    try fixture.storage.refreshWriteLock(allocator, io, lockFilePath, "owner-1");
+    try fixture.storage.refreshWriteLock(allocator, io, log, lockFilePath, "owner-1");
 
     const after = try fixture.readLockFile(lockFilePath);
     try std.testing.expectEqualStrings("owner-1", after.owner);
@@ -923,29 +953,31 @@ test "refreshWriteLock updates the timestamp of a lock the owner holds and keeps
 }
 
 test "refreshWriteLock fails when there is no lock" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const lockFilePath = try fixture.path("none.lock");
 
-    try std.testing.expectError(error.Thrown, fixture.storage.refreshWriteLock(allocator, std.testing.io, lockFilePath, "owner-1"));
+    try std.testing.expectError(error.Thrown, fixture.storage.refreshWriteLock(allocator, std.testing.io, log, lockFilePath, "owner-1"));
     const message = try std.fmt.allocPrint(allocator, "Cannot refresh write lock: lock does not exist for {s}", .{lockFilePath});
     try std.testing.expectEqualStrings(message, utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(!pathExists(std.testing.io, lockFilePath));
 }
 
 test "refreshWriteLock fails when another owner holds the lock, and leaves the lock as it was" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.init();
     defer fixture.deinit();
     const allocator = fixture.arena.allocator();
     const io = std.testing.io;
     const lockFilePath = try fixture.path("other.lock");
-    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, lockFilePath, "owner-1"));
+    try std.testing.expect(try fixture.storage.acquireWriteLock(allocator, io, log, lockFilePath, "owner-1"));
     const before = try fixture.readLockFile(lockFilePath);
 
-    try std.testing.expectError(error.Thrown, fixture.storage.refreshWriteLock(allocator, io, lockFilePath, "owner-2"));
+    try std.testing.expectError(error.Thrown, fixture.storage.refreshWriteLock(allocator, io, log, lockFilePath, "owner-2"));
     const message = try std.fmt.allocPrint(allocator, "Cannot refresh write lock: lock is owned by owner-1, not owner-2 for {s}", .{lockFilePath});
     try std.testing.expectEqualStrings(message, utils.errors.errorMessage(error.Thrown));
 
@@ -967,14 +999,12 @@ test "refreshWriteLock logs the attempt, the success and the failure" {
         .messages = std.Io.Writer.Allocating.init(allocator),
         .verbose_enabled = true,
     };
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(recordingLog.ilog());
-    defer utils.log.setLog(previousLog);
+    const log = recordingLog.ilog();
 
     const lockFilePath = try std.fs.path.join(allocator, &.{ tempDir, "logged-refresh.lock" });
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "owner-1"));
-    try storage.refreshWriteLock(allocator, io, lockFilePath, "owner-1");
-    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(allocator, io, lockFilePath, "owner-2"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, lockFilePath, "owner-1"));
+    try storage.refreshWriteLock(allocator, io, log, lockFilePath, "owner-1");
+    try std.testing.expectError(error.Thrown, storage.refreshWriteLock(allocator, io, log, lockFilePath, "owner-2"));
 
     const messages = recordingLog.messages.written();
     try std.testing.expect(std.mem.indexOf(u8, messages, "REFRESH_ATTEMPT") != null);
@@ -1037,6 +1067,7 @@ const FailFirstAllocator = struct {
 // with nothing wrong with the file, and it is a real way for that read to fail.
 //
 test "a lock that is refused to be read once, and then reads fine, is held and not broken as corrupt" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1046,14 +1077,14 @@ test "a lock that is refused to be read once, and then reads fine, is held and n
     var storage = FileStorage.init(tempDir);
 
     const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/held.lock", .{tempDir});
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, lockFilePath, "first-owner"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, lockFilePath, "first-owner"));
 
     // The first allocation acquireWriteLock makes is the room to read the lock file into, and it is refused.
     var failFirstAllocator: FailFirstAllocator = .{
         .parent = allocator,
         .refused = false,
     };
-    try std.testing.expect(!try storage.acquireWriteLock(failFirstAllocator.allocator(), io, lockFilePath, "second-owner"));
+    try std.testing.expect(!try storage.acquireWriteLock(failFirstAllocator.allocator(), io, log, lockFilePath, "second-owner"));
     try std.testing.expect(failFirstAllocator.refused);
 
     const lockInfo = (try storage.checkWriteLock(allocator, io, lockFilePath)).?;
@@ -1066,6 +1097,7 @@ test "a lock that is refused to be read once, and then reads fine, is held and n
 // exclusive create, which is the same refusal two processes racing to create the lock file get.
 //
 test "a lock path that is a dangling symbolic link is refused as taken, and the link is left alone" {
+    const log = utils.mute_log.MuteLog.init();
     if (builtin.os.tag == .windows) {
         // Creating a symbolic link on Windows needs a privilege a test run does not have.
         return error.SkipZigTest;
@@ -1081,7 +1113,7 @@ test "a lock path that is a dangling symbolic link is refused as taken, and the 
     const lockFilePath = try std.fmt.allocPrint(allocator, "{s}/linked.lock", .{tempDir});
     try std.Io.Dir.cwd().symLink(io, "nothing-is-here", lockFilePath, .{});
 
-    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, lockFilePath, "new-owner"));
+    try std.testing.expect(!try storage.acquireWriteLock(allocator, io, log, lockFilePath, "new-owner"));
 
     var linkTarget: [64]u8 = undefined;
     const targetLength = try std.Io.Dir.cwd().readLink(io, lockFilePath, &linkTarget);

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -9,7 +10,6 @@ const temp_dirs = @import("temp-dirs.zig");
 const marking_tool_programs = @import("marking-tool-programs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const hash_file_worker = node_api.hash_file_worker;
 const hashFileHandler = hash_file_worker.hashFileHandler;
 const IHashFileData = hash_file_worker.IHashFileData;
@@ -115,12 +115,12 @@ const HandlerTest = struct {
     //
     // Removes the directory.
     //
-    fn deinit(self: *HandlerTest) void {
+    fn deinit(self: *HandlerTest, log: ILog) void {
         forgetSharedHashCaches();
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.mediaTools.deinit();
         self.arena.deinit();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
@@ -149,27 +149,27 @@ const HandlerTest = struct {
     //
     // Puts a hash in the cache on disk under a key.
     //
-    fn cacheHash(self: *HandlerTest, key: []const u8, hash: []const u8, length: u64, lastModified: i64) !void {
+    fn cacheHash(self: *HandlerTest, log: ILog, key: []const u8, hash: []const u8, length: u64, lastModified: i64) !void {
         var cache = try HashCache.init(self.hashCacheDir, false);
         defer cache.deinit();
-        _ = try cache.load(std.testing.io);
+        _ = try cache.load(std.testing.io, log);
         try cache.addHash(key, .{
             .hash = hash,
             .length = length,
             .lastModified = lastModified,
         });
-        try cache.save(std.testing.io);
+        try cache.save(std.testing.io, log);
     }
 
     //
     // Runs the handler and reads its result.
     //
-    fn run(self: *HandlerTest, data: IHashFileData) !IHashFileResult {
+    fn run(self: *HandlerTest, log: ILog, data: IHashFileData) !IHashFileResult {
         const allocator = self.arena.allocator();
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
         const taskContext = self.context.taskContext();
-        const output = try hashFileHandler(allocator, std.testing.io, test_timers.timers(), taskData, taskContext, self.toolRunner);
+        const output = try hashFileHandler(allocator, std.testing.io, test_timers.timers(), log, taskData, taskContext, self.toolRunner);
         return std.json.parseFromValueLeaky(IHashFileResult, allocator, output, .{});
     }
 
@@ -184,14 +184,15 @@ const HandlerTest = struct {
 };
 
 test "returns hash from cache when cache hit" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const data = context.makeData();
     const cachedHash = [_]u8{0xaa} ** 32;
-    try context.cacheHash(data.filePath, &cachedHash, data.fileStat.length, data.fileStat.lastModified);
+    try context.cacheHash(log, data.filePath, &cachedHash, data.fileStat.length, data.fileStat.lastModified);
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqual(true, result.hashFromCache);
     try std.testing.expectEqualStrings(&std.fmt.bytesToHex(cachedHash, .lower), result.hash);
@@ -199,12 +200,13 @@ test "returns hash from cache when cache hit" {
 }
 
 test "computes hash via validateAndHash when not in cache" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const data = context.makeData();
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqual(false, result.hashFromCache);
     try std.testing.expectEqualStrings(&context.photoHash(), result.hash);
@@ -212,57 +214,58 @@ test "computes hash via validateAndHash when not in cache" {
 }
 
 test "does not ask the database whether the hash is already there" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // That question is answered by the orchestrator now, from a map it builds once when the run
     // starts. (The database named in the data does not exist, so any attempt to open it would fail.)
     const data = context.makeData();
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqualStrings(&context.photoHash(), result.hash);
     try std.testing.expect(!test_files.fileExists(std.testing.io, "/test/db"));
 }
 
 test "throws when validateAndHash returns undefined" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     var data = context.makeData();
     // A file that is not the image it claims to be fails its validation.
     try test_files.writeFile(std.testing.io, data.filePath, "not a png at all");
     data.fileStat.length = 16;
 
-    try std.testing.expectError(error.Thrown, context.run(data));
+    try std.testing.expectError(error.Thrown, context.run(log, data));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Failed to validate and hash file") != null);
 }
 
 test "dryRun true does not change the return value (hash-file is read-only regardless)" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const data = context.makeData();
     const cachedHash = [_]u8{0xaa} ** 32;
-    try context.cacheHash(data.filePath, &cachedHash, data.fileStat.length, data.fileStat.lastModified);
+    try context.cacheHash(log, data.filePath, &cachedHash, data.fileStat.length, data.fileStat.lastModified);
 
-    const resultNoDryRun = try context.run(data);
+    const resultNoDryRun = try context.run(log, data);
     var dryRunData = data;
     dryRunData.dryRun = true;
-    const resultDryRun = try context.run(dryRunData);
+    const resultDryRun = try context.run(log, dryRunData);
 
     try std.testing.expectEqualStrings(resultNoDryRun.hash, resultDryRun.hash);
     try std.testing.expectEqual(resultNoDryRun.hashFromCache, resultDryRun.hashFromCache);
 }
 
 test "looks a photo library item up by the identity it was given, not by its temporary path" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // The temporary copy the item was exported to has a path and a modified time that were both
     // minted by the copy, so looking it up by those would miss every time.
     var data = context.makeData();
@@ -274,58 +277,61 @@ test "looks a photo library item up by the identity it was given, not by its tem
     const cachedHash = [_]u8{0xbb} ** 32;
     var cache = try HashCache.init(context.hashCacheDir, false);
     defer cache.deinit();
-    _ = try cache.load(std.testing.io);
+    _ = try cache.load(std.testing.io, log);
     try cache.addSourceHash("1000000042", .{
         .hash = &cachedHash,
         .length = 4096,
         .lastModified = 1700000000000,
     });
-    try cache.save(std.testing.io);
+    try cache.save(std.testing.io, log);
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqual(true, result.hashFromCache);
     try std.testing.expectEqualStrings(&std.fmt.bytesToHex(cachedHash, .lower), result.hash);
 }
 
 test "looks an ordinary file up by nothing but its own path, which is what keeps the desktop unchanged" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const data = context.makeData();
     // An entry under some other key, even with the same size and date, is not this file's.
     const cachedHash = [_]u8{0xcc} ** 32;
-    try context.cacheHash("1000000042", &cachedHash, data.fileStat.length, data.fileStat.lastModified);
+    try context.cacheHash(log, "1000000042", &cachedHash, data.fileStat.length, data.fileStat.lastModified);
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqual(false, result.hashFromCache);
     try std.testing.expectEqualStrings(&context.photoHash(), result.hash);
 }
 
 test "does not send any messages" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const data = context.makeData();
     const cachedHash = [_]u8{0xaa} ** 32;
-    try context.cacheHash(data.filePath, &cachedHash, data.fileStat.length, data.fileStat.lastModified);
+    try context.cacheHash(log, data.filePath, &cachedHash, data.fileStat.length, data.fileStat.lastModified);
 
-    _ = try context.run(data);
+    _ = try context.run(log, data);
 
     try std.testing.expectEqual(@as(usize, 0), context.messages.count);
 }
 
 test "fails without starting a program when the task was run with no runner" {
+    const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var programs: MarkingToolPrograms = undefined;
-    try programs.create(context.arena.allocator(), std.testing.io, context.tempDir);
+    try programs.create(context.arena.allocator(), std.testing.io, log, context.tempDir);
     defer programs.destroy();
     context.toolRunner = null;
 
-    try std.testing.expectError(error.Thrown, context.run(context.makeData()));
+    try std.testing.expectError(error.Thrown, context.run(log, context.makeData()));
 
     try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", errors.lastErrorMessage());
     try std.testing.expect(!programs.anyStarted(std.testing.io));

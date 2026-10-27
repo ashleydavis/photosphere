@@ -5,6 +5,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
@@ -192,12 +193,12 @@ test "the console log writes no tool output for an empty string" {
     startCapture(arena.allocator(), &capture);
     defer utils.console.setCapture(null, null);
 
-    var toolsLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = true,
-    };
-    const log = toolsLog.ilog();
+    const toolsLog = utils.log.ConsoleLog.initWith(.{
+        .verbose = false,
+        .debug = false,
+        .tools = true,
+    });
+    const log = toolsLog;
     log.tool("magick", .{ .stdout = "", .stderr = "" });
     log.tool("magick", .{ .stdout = null, .stderr = null });
 
@@ -234,7 +235,7 @@ const PoolCollector = struct {
     //
     // The completion callback.
     //
-    fn onComplete(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, result: types.ITaskResult) anyerror!void {
+    fn onComplete(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, result: types.ITaskResult) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -248,7 +249,7 @@ const PoolCollector = struct {
     //
     // The typed task message callback.
     //
-    fn onTypedMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, data: types.ITaskEventData) anyerror!void {
+    fn onTypedMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, data: types.ITaskEventData) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -260,7 +261,7 @@ const PoolCollector = struct {
     //
     // The task message callback that records the label of each message.
     //
-    fn onLabelMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, data: types.ITaskEventData) anyerror!void {
+    fn onLabelMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, data: types.ITaskEventData) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -279,9 +280,9 @@ const PoolCollector = struct {
     // Reads the pool's messages on this thread, its main thread, until the number of completed tasks reaches the count. A task that
     // never ends fails at the pool's timeout, so the wait always ends.
     //
-    fn waitForCompleted(self: *PoolCollector, pool: *WorkerPoolBun, allocator: std.mem.Allocator, timers: Timers, count: usize) !void {
+    fn waitForCompleted(self: *PoolCollector, log: ILog, pool: *WorkerPoolBun, allocator: std.mem.Allocator, timers: Timers, count: usize) !void {
         while (self.completed < count) {
-            pool.waitForMessage(std.testing.io, allocator, timers);
+            pool.waitForMessage(std.testing.io, allocator, timers, log);
         }
     }
 };
@@ -289,7 +290,7 @@ const PoolCollector = struct {
 //
 // A completion callback that always fails.
 //
-fn failingCompletionCallback(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, result: types.ITaskResult) anyerror!void {
+fn failingCompletionCallback(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, result: types.ITaskResult) anyerror!void {
     _ = io;
     _ = allocator;
     _ = timers;
@@ -301,7 +302,7 @@ fn failingCompletionCallback(context: ?*anyopaque, io: std.Io, allocator: std.me
 //
 // A typed task message callback that always fails.
 //
-fn failingMessageCallback(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, data: types.ITaskEventData) anyerror!void {
+fn failingMessageCallback(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, data: types.ITaskEventData) anyerror!void {
     _ = io;
     _ = allocator;
     _ = timers;
@@ -327,7 +328,7 @@ var blocking_queues: helpers.BlockingTaskQueues = .init();
 // Runs the task its data asks for: "echo" returns the text, "label" sends the text as a message of the type
 // the tests listen for, and "block" blocks until it is released or cancelled.
 //
-fn testHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn testHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
     _ = timers;
     const kind = data.object.get("kind") orelse return .null;
     const text = data.object.get("text") orelse return .null;
@@ -338,7 +339,7 @@ fn testHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: s
         var message: std.json.ObjectMap = .empty;
         try message.put(allocator, "type", .{ .string = "label" });
         try message.put(allocator, "label", .{ .string = text.string });
-        context.sendEvent(io, allocator, .{ .object = message });
+        context.sendEvent(io, allocator, log, .{ .object = message });
         return .null;
     }
     if (std.mem.eql(u8, kind.string, "block")) {
@@ -362,11 +363,11 @@ fn taskData(allocator: std.mem.Allocator, kind: []const u8, text: []const u8) !s
 // Reads the pool's messages until a blocking task is running, so the worker's "ready" is read and the task is given to it (fails
 // after 10 seconds). The running task sends nothing more, so the messages are read without waiting for one.
 //
-fn waitForBlockingTask(pool: *WorkerPoolBun, allocator: std.mem.Allocator, timers: Timers) !void {
+fn waitForBlockingTask(pool: *WorkerPoolBun, log: ILog, allocator: std.mem.Allocator, timers: Timers) !void {
     var blocking: helpers.BlockingTaskCount = .{};
     var waited: u32 = 0;
     while (blocking.running == 0 and waited < 10000) {
-        pool.handleQueuedMessages(std.testing.io, allocator, timers);
+        pool.handleQueuedMessages(std.testing.io, log, allocator, timers);
         try std.testing.io.sleep(.fromMilliseconds(5), .awake);
         blocking.readEvents(&blocking_queues, allocator);
         waited += 5;
@@ -385,6 +386,12 @@ test "a completion callback that fails is logged and the task still finishes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var capture: Capture = undefined;
     startCapture(allocator, &capture);
     defer utils.console.setCapture(null, null);
@@ -400,24 +407,30 @@ test "a completion callback that fails is logged and the task still finishes" {
     _ = try pool.onTaskComplete(allocator, .{ .context = null, .function = failingCompletionCallback });
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = PoolCollector.onComplete });
 
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "echo", "hi"), "source", "task-1", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    _ = try pool.addTask(allocator, std.testing.io, memory.log, task_type, try taskData(allocator, "echo", "hi"), "source", "task-1", null);
+    try collector.waitForCompleted(memory.log, pool, allocator, timer_list.interface(), 1);
 
     try std.testing.expectEqual(@as(usize, 1), collector.completed);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
 
-    // The callback runs on the main thread, so its failure goes to the main thread's log, with no worker prefix.
+    // The callback runs on the main thread, so its failure goes to the main thread's memory.log, with no worker prefix.
     try std.testing.expectEqualStrings(
         \\Error in task completion callback
         \\Error: CallbackFailed
         \\
-    , capture.stderr.written());
+    , memory.stderr());
 }
 
 test "a task message callback that fails is logged and the other callbacks still run" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var capture: Capture = undefined;
     startCapture(allocator, &capture);
     defer utils.console.setCapture(null, null);
@@ -433,19 +446,19 @@ test "a task message callback that fails is logged and the other callbacks still
     _ = try pool.onTaskEvent(allocator, "label", .{ .context = &collector, .function = PoolCollector.onTypedMessage });
     _ = try pool.onAnyTaskEvent(allocator, .{ .context = null, .function = failingMessageCallback });
 
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "label", "hello"), "source", "task-2", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    _ = try pool.addTask(allocator, std.testing.io, memory.log, task_type, try taskData(allocator, "label", "hello"), "source", "task-2", null);
+    try collector.waitForCompleted(memory.log, pool, allocator, timer_list.interface(), 1);
 
     try std.testing.expectEqual(@as(usize, 1), collector.typedMessages);
 
-    // The callbacks run on the main thread, so their failures go to the main thread's log, with no worker prefix.
+    // The callbacks run on the main thread, so their failures go to the main thread's memory.log, with no worker prefix.
     try std.testing.expectEqualStrings(
         \\Error in task message callback
         \\Error: CallbackFailed
         \\Error in any task message callback
         \\Error: CallbackFailed
         \\
-    , capture.stderr.written());
+    , memory.stderr());
 }
 
 //
@@ -470,7 +483,7 @@ const RemovalCounter = struct {
     //
     // The onTaskAdded callback.
     //
-    fn onAdded(context: ?*anyopaque, allocator: std.mem.Allocator, taskId: []const u8) void {
+    fn onAdded(context: ?*anyopaque, allocator: std.mem.Allocator, _: ILog, taskId: []const u8) void {
         _ = allocator;
         _ = taskId;
         count(context);
@@ -479,7 +492,7 @@ const RemovalCounter = struct {
     //
     // The completion callback.
     //
-    fn onComplete(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, result: types.ITaskResult) anyerror!void {
+    fn onComplete(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, result: types.ITaskResult) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -490,7 +503,7 @@ const RemovalCounter = struct {
     //
     // The task message callback.
     //
-    fn onMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, data: types.ITaskEventData) anyerror!void {
+    fn onMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, data: types.ITaskEventData) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -510,6 +523,7 @@ const RemovalCounter = struct {
 };
 
 test "unsubscribing stops a callback of every kind from being called" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -542,9 +556,9 @@ test "unsubscribing stops a callback of every kind from being called" {
     anyMessageUnsubscribe.call(allocator);
     cancelledUnsubscribe.call(allocator);
 
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "label", "hello"), "db", "task-3", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
-    pool.cancelTasks(std.testing.io, allocator, "db");
+    _ = try pool.addTask(allocator, std.testing.io, log, task_type, try taskData(allocator, "label", "hello"), "db", "task-3", null);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
+    pool.cancelTasks(std.testing.io, allocator, log, "db");
 
     // The task was added, completed and sent one message, and the source was cancelled, so the callbacks
     // that are still registered were each called once.
@@ -555,6 +569,7 @@ test "unsubscribing stops a callback of every kind from being called" {
 }
 
 test "a queued interactive task is dispatched before a queued background one" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -570,14 +585,14 @@ test "a queued interactive task is dispatched before a queued background one" {
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = PoolCollector.onComplete });
     _ = try pool.onAnyTaskEvent(allocator, .{ .context = &collector, .function = PoolCollector.onLabelMessage });
 
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "block", ""), "source", "blocking-task", null);
-    try waitForBlockingTask(pool, allocator, timer_list.interface());
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "label", "background"), "source", "background-task", null);
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "label", "interactive"), "source", "interactive-task", .Interactive);
+    _ = try pool.addTask(allocator, std.testing.io, log, task_type, try taskData(allocator, "block", ""), "source", "blocking-task", null);
+    try waitForBlockingTask(pool, log, allocator, timer_list.interface());
+    _ = try pool.addTask(allocator, std.testing.io, log, task_type, try taskData(allocator, "label", "background"), "source", "background-task", null);
+    _ = try pool.addTask(allocator, std.testing.io, log, task_type, try taskData(allocator, "label", "interactive"), "source", "interactive-task", .Interactive);
     try std.testing.expectEqual(@as(usize, 2), pool.pendingTasks.items.len);
 
     blocking_queues.release.close(std.testing.io);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 3);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 3);
 
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
     try std.testing.expectEqual(@as(usize, 2), collector.anyMessages);
@@ -587,6 +602,7 @@ test "a queued interactive task is dispatched before a queued background one" {
 }
 
 test "a pool that can never create a worker leaves the task pending" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -601,15 +617,16 @@ test "a pool that can never create a worker leaves the task pending" {
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = PoolCollector.onComplete });
 
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "label", "hello"), "source", "task-4", null);
+    _ = try pool.addTask(allocator, std.testing.io, log, task_type, try taskData(allocator, "label", "hello"), "source", "task-4", null);
     try std.testing.io.sleep(.fromMilliseconds(100), .awake);
-    pool.handleQueuedMessages(std.testing.io, allocator, timer_list.interface());
+    pool.handleQueuedMessages(std.testing.io, log, allocator, timer_list.interface());
 
     try std.testing.expectEqual(@as(usize, 0), collector.completed);
     try std.testing.expectEqual(@as(usize, 0), pool.workers.items.len);
 }
 
 test "shutdown discards the result of a task that is still running" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -622,8 +639,8 @@ test "shutdown discards the result of a task that is still running" {
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = PoolCollector.onComplete });
 
-    _ = try pool.addTask(allocator, std.testing.io, task_type, try taskData(allocator, "block", ""), "source", "blocking-task", null);
-    try waitForBlockingTask(pool, allocator, timer_list.interface());
+    _ = try pool.addTask(allocator, std.testing.io, log, task_type, try taskData(allocator, "block", ""), "source", "blocking-task", null);
+    try waitForBlockingTask(pool, log, allocator, timer_list.interface());
     // The running task is cancelled, so its handler returns and its worker ends, and the result it sends is thrown away.
     pool.shutdown(std.testing.io, allocator);
     try std.testing.expectEqual(@as(usize, 0), pool.workers.items.len);

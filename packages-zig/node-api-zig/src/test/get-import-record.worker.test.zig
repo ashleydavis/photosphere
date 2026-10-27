@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
@@ -46,12 +47,12 @@ const RecordTest = struct {
     //
     // Puts the cache directory back the way it was.
     //
-    fn deinit(self: *RecordTest) void {
+    fn deinit(self: *RecordTest, log: ILog) void {
         test_environment.setEnv("PHOTOSPHERE_CACHE_DIR", null) catch |err| {
             std.debug.panic("PHOTOSPHERE_CACHE_DIR could not be put back: {s}", .{@errorName(err)});
         };
         temp_dirs.removeTempDir(std.testing.io, self.runRoot);
-        self.test_env.deinitWith(self.arena.allocator());
+        self.test_env.deinitWith(log, self.arena.allocator());
         self.arena.deinit();
     }
 
@@ -66,21 +67,22 @@ const RecordTest = struct {
     //
     // Runs the handler for a path.
     //
-    fn run(self: *RecordTest, databasePath: []const u8) !std.json.Value {
+    fn run(self: *RecordTest, log: ILog, databasePath: []const u8) !std.json.Value {
         const allocator = self.arena.allocator();
         var object: std.json.ObjectMap = .empty;
         try object.put(allocator, "databasePath", .{ .string = databasePath });
-        return getImportRecordHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = object }, self.context.taskContext());
+        return getImportRecordHandler(allocator, std.testing.io, test_timers.timers(), log, .{ .object = object }, self.context.taskContext());
     }
 };
 
 test "returns what this machine recorded" {
+    const log = utils.mute_log.MuteLog.init();
     var recordTest: RecordTest = undefined;
     try recordTest.init();
-    defer recordTest.deinit();
+    defer recordTest.deinit(log);
     try recordTest.writeRecord("db", "{\"entries\":[{\"assetId\":\"a\",\"logicalPath\":\"one.png\",\"outcome\":\"imported\",\"importedAt\":\"\",\"source\":\"automatic\"}],\"truncated\":true}");
 
-    const record = try recordTest.run("db");
+    const record = try recordTest.run(log, "db");
 
     const entries = record.object.get("entries").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), entries.len);
@@ -93,51 +95,56 @@ test "returns what this machine recorded" {
 }
 
 test "a database that has imported nothing comes back empty rather than failing" {
+    const log = utils.mute_log.MuteLog.init();
     var recordTest: RecordTest = undefined;
     try recordTest.init();
-    defer recordTest.deinit();
+    defer recordTest.deinit(log);
 
-    const record = try recordTest.run("db");
+    const record = try recordTest.run(log, "db");
 
     try std.testing.expectEqual(@as(usize, 0), record.object.get("entries").?.array.items.len);
     try std.testing.expectEqual(false, record.object.get("truncated").?.bool);
 }
 
 test "a missing database path is refused rather than read as an empty database" {
+    const log = utils.mute_log.MuteLog.init();
     var recordTest: RecordTest = undefined;
     try recordTest.init();
-    defer recordTest.deinit();
+    defer recordTest.deinit(log);
     try recordTest.writeRecord("", "{\"entries\":[{\"assetId\":\"a\",\"logicalPath\":\"one.png\",\"outcome\":\"imported\",\"importedAt\":\"\",\"source\":\"manual\"}],\"truncated\":false}");
 
-    try std.testing.expectError(error.Thrown, recordTest.run(""));
+    try std.testing.expectError(error.Thrown, recordTest.run(log, ""));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
 test "throws when the task data has no database path" {
+    const log = utils.mute_log.MuteLog.init();
     var recordTest: RecordTest = undefined;
     try recordTest.init();
-    defer recordTest.deinit();
+    defer recordTest.deinit(log);
 
-    try std.testing.expectError(error.Thrown, getImportRecordHandler(recordTest.arena.allocator(), std.testing.io, test_timers.timers(), .{ .object = .empty }, recordTest.context.taskContext()));
+    try std.testing.expectError(error.Thrown, getImportRecordHandler(recordTest.arena.allocator(), std.testing.io, test_timers.timers(), log, .{ .object = .empty }, recordTest.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
 test "throws a descriptive error when the database path is not a string" {
+    const log = utils.mute_log.MuteLog.init();
     var recordTest: RecordTest = undefined;
     try recordTest.init();
-    defer recordTest.deinit();
+    defer recordTest.deinit(log);
     const allocator = recordTest.arena.allocator();
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, getImportRecordHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = object }, recordTest.context.taskContext()));
+    try std.testing.expectError(error.Thrown, getImportRecordHandler(allocator, std.testing.io, test_timers.timers(), log, .{ .object = object }, recordTest.context.taskContext()));
     try std.testing.expectEqualStrings("The get-import-record task data is not valid: databasePath must be a string", errors.lastErrorMessage());
 }
 
 test "the record is read for the database path without opening the database" {
+    const log = utils.mute_log.MuteLog.init();
     var recordTest: RecordTest = undefined;
     try recordTest.init();
-    defer recordTest.deinit();
+    defer recordTest.deinit(log);
     const allocator = recordTest.arena.allocator();
     const io = std.testing.io;
 
@@ -154,10 +161,10 @@ test "the record is read for the database path without opening the database" {
         .path = "s3:bucket:/photos",
         .encryptionKey = "get-import-record-missing-key",
     });
-    try std.testing.expectError(error.Thrown, openStorage(allocator, io, "s3:bucket:/photos", null, null, null));
+    try std.testing.expectError(error.Thrown, openStorage(allocator, io, log, "s3:bucket:/photos", null, null, null));
     try recordTest.writeRecord("s3:bucket:/photos", "{\"entries\":[{\"assetId\":\"b\",\"logicalPath\":\"two.png\",\"outcome\":\"skipped\",\"importedAt\":\"\",\"source\":\"manual\"}],\"truncated\":false}");
 
-    const record = try recordTest.run("s3:bucket:/photos");
+    const record = try recordTest.run(log, "s3:bucket:/photos");
 
     const entries = record.object.get("entries").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), entries.len);

@@ -21,6 +21,7 @@ fn requestReceiver(allocator: std.mem.Allocator, receiver: *const LanShareReceiv
 
 
 test "cancel resolves receive with null" {
+    const log = utils.mute_log.MuteLog.init();
     const discoveryPort = try lan_share.socket.freeUdpPort();
     var receiver = LanShareReceiver.init(discoveryPort, std.testing.io, 60000);
     defer receiver.deinit();
@@ -29,7 +30,7 @@ test "cancel resolves receive with null" {
     const startedAt = std.Io.Clock.awake.now(std.testing.io).toMilliseconds();
     receiver.cancel();
 
-    const result = try receiver.receive();
+    const result = try receiver.receive(log);
     try std.testing.expect(result == null);
 
     // A cancel ends the receive at once. Failing here means cancel did not end the receive and it waited out its
@@ -38,6 +39,7 @@ test "cancel resolves receive with null" {
 }
 
 test "receive times out and returns null" {
+    const log = utils.mute_log.MuteLog.init();
     const discoveryPort = try lan_share.socket.freeUdpPort();
     // The receiver's wait for its timeout is a wait on the Io it is given, so a virtual clock ends it at once.
     var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
@@ -50,7 +52,7 @@ test "receive times out and returns null" {
     try receiver.start(try pairing_code.pairingCode());
 
     const startedAt = std.Io.Clock.awake.now(io).toMilliseconds();
-    const result = try receiver.receive();
+    const result = try receiver.receive(log);
     try std.testing.expect(result == null);
 
     // The 10 second limit for the receive to end.

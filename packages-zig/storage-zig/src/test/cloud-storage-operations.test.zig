@@ -173,10 +173,11 @@ fn slowDown(command: S3Command) anyerror!S3CommandOutput {
 }
 
 test "read returns the object's bytes" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(objectPresent);
     defer fixture.deinit();
 
-    const result = try fixture.storage.read(fixture.allocator, std.testing.io, "bucket/dir/file.txt");
+    const result = try fixture.storage.read(fixture.allocator, std.testing.io, log, "bucket/dir/file.txt");
     try std.testing.expect(result != null);
     try std.testing.expectEqualStrings(objectContents, result.?);
     try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.GetObjectCommand));
@@ -185,13 +186,15 @@ test "read returns the object's bytes" {
 }
 
 test "read returns undefined for an object that is not there" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(objectMissing);
     defer fixture.deinit();
 
-    try std.testing.expect((try fixture.storage.read(fixture.allocator, std.testing.io, "bucket/dir/file.txt")) == null);
+    try std.testing.expect((try fixture.storage.read(fixture.allocator, std.testing.io, log, "bucket/dir/file.txt")) == null);
 }
 
 test "read returns an empty buffer for an object with no content" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(struct {
         fn handler(command: S3Command) anyerror!S3CommandOutput {
             return switch (command) {
@@ -203,16 +206,17 @@ test "read returns an empty buffer for an object with no content" {
     defer fixture.deinit();
 
     // The SDK's Body is an empty stream for an empty object, so the read is empty rather than missing.
-    const result = try fixture.storage.read(fixture.allocator, std.testing.io, "bucket/dir/file.txt");
+    const result = try fixture.storage.read(fixture.allocator, std.testing.io, log, "bucket/dir/file.txt");
     try std.testing.expect(result != null);
     try std.testing.expectEqual(@as(usize, 0), result.?.len);
 }
 
 test "read reports the error of a server that is having trouble, naming the file" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(slowDown);
     defer fixture.deinit();
 
-    try std.testing.expectError(error.Thrown, fixture.storage.read(fixture.allocator, std.testing.io, "bucket/dir/file.txt"));
+    try std.testing.expectError(error.Thrown, fixture.storage.read(fixture.allocator, std.testing.io, log, "bucket/dir/file.txt"));
 
     //
     // (A WrappedError folds the cause's message into its own, so it reads twice: once from the format
@@ -320,10 +324,11 @@ test "writeStream reports the error of a refused write, naming the file" {
 }
 
 test "readStream hands out a stream that reads the object" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(objectPresent);
     defer fixture.deinit();
 
-    const rangeStream = try fixture.storage.readStream(fixture.allocator, std.testing.io, "bucket/dir/file.txt");
+    const rangeStream = try fixture.storage.readStream(fixture.allocator, std.testing.io, log, "bucket/dir/file.txt");
     defer rangeStream.destroy(std.testing.io);
     const body = try rangeStream.reader().allocRemaining(fixture.allocator, .unlimited);
     try std.testing.expectEqualStrings(objectContents, body);
@@ -335,10 +340,11 @@ test "readStream hands out a stream that reads the object" {
 }
 
 test "readStream refuses a path that names no key" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(objectPresent);
     defer fixture.deinit();
 
-    try std.testing.expectError(error.Thrown, fixture.storage.readStream(fixture.allocator, std.testing.io, "bucket-only"));
+    try std.testing.expectError(error.Thrown, fixture.storage.readStream(fixture.allocator, std.testing.io, log, "bucket-only"));
     try std.testing.expectEqual(@as(usize, 0), fixture.client.commands.items.len);
 }
 
@@ -603,23 +609,26 @@ test "checkWriteLock reports an error of the server other than the lock not bein
 }
 
 test "releaseWriteLock deletes the lock object" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(accepted);
     defer fixture.deinit();
 
-    try fixture.storage.releaseWriteLock(fixture.allocator, std.testing.io, "bucket/.db/write.lock");
+    try fixture.storage.releaseWriteLock(fixture.allocator, std.testing.io, log, "bucket/.db/write.lock");
     try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.DeleteObjectCommand));
     try std.testing.expectEqualStrings(".db/write.lock", fixture.client.firstOf(.DeleteObjectCommand).DeleteObjectCommand.Key);
 }
 
 test "releaseWriteLock ignores an error, because the lock not being there is the same outcome" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(slowDown);
     defer fixture.deinit();
 
-    try fixture.storage.releaseWriteLock(fixture.allocator, std.testing.io, "bucket/.db/write.lock");
+    try fixture.storage.releaseWriteLock(fixture.allocator, std.testing.io, log, "bucket/.db/write.lock");
     try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.DeleteObjectCommand));
 }
 
 test "every operation drops the leading slash of a key" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(struct {
         fn handler(command: S3Command) anyerror!S3CommandOutput {
             return switch (command) {
@@ -643,7 +652,7 @@ test "every operation drops the leading slash of a key" {
     const io = std.testing.io;
     _ = try fixture.storage.listFiles(allocator, io, "bucket//dir", 10, null);
     _ = try fixture.storage.listDirs(allocator, io, "bucket//dir", 10, null);
-    _ = try fixture.storage.read(allocator, io, "bucket//dir/file.txt");
+    _ = try fixture.storage.read(allocator, io, log, "bucket//dir/file.txt");
     _ = try fixture.storage.info(allocator, io, "bucket//dir/file.txt");
     try fixture.storage.write(allocator, io, "bucket//dir/file.txt", null, "x");
     var emptyInput = std.Io.Reader.fixed("");
@@ -652,7 +661,7 @@ test "every operation drops the leading slash of a key" {
     try fixture.storage.deleteDir(allocator, io, "bucket//dir");
     try fixture.storage.copyTo(allocator, io, "bucket//a.txt", "bucket//b.txt");
     _ = try fixture.storage.checkWriteLock(allocator, io, "bucket//.db/write.lock");
-    try fixture.storage.releaseWriteLock(allocator, io, "bucket//.db/write.lock");
+    try fixture.storage.releaseWriteLock(allocator, io, log, "bucket//.db/write.lock");
 
     for (fixture.client.commands.items) |command| {
         switch (command) {
@@ -676,6 +685,7 @@ test "every operation drops the leading slash of a key" {
 // each is sent a path whose key starts with one and must name the key without it.
 //
 test "fileExists, storedHash, readStream and writeStreamHashed drop the leading slash of a key" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(objectPresent);
     defer fixture.deinit();
 
@@ -683,7 +693,7 @@ test "fileExists, storedHash, readStream and writeStreamHashed drop the leading 
     const io = std.testing.io;
     try std.testing.expect(try fixture.storage.fileExists(allocator, io, "bucket//dir/file.txt"));
     _ = try fixture.storage.storedHash(allocator, io, "bucket//dir/file.txt");
-    const rangeStream = try fixture.storage.readStream(allocator, io, "bucket//dir/file.txt");
+    const rangeStream = try fixture.storage.readStream(allocator, io, log, "bucket//dir/file.txt");
     defer rangeStream.destroy(io);
     try std.testing.expectEqualStrings(objectContents, try rangeStream.reader().allocRemaining(allocator, .unlimited));
     var emptyInput = std.Io.Reader.fixed("");
@@ -704,6 +714,7 @@ test "fileExists, storedHash, readStream and writeStreamHashed drop the leading 
 }
 
 test "refreshWriteLock drops the leading slash of a key" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(struct {
         fn handler(command: S3Command) anyerror!S3CommandOutput {
             return switch (command) {
@@ -717,7 +728,7 @@ test "refreshWriteLock drops the leading slash of a key" {
     }.handler);
     defer fixture.deinit();
 
-    try fixture.storage.refreshWriteLock(fixture.allocator, std.testing.io, "bucket//.db/write.lock", "first");
+    try fixture.storage.refreshWriteLock(fixture.allocator, std.testing.io, log, "bucket//.db/write.lock", "first");
 
     try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.GetObjectCommand));
     try std.testing.expectEqual(@as(usize, 1), fixture.client.countOf(.PutObjectCommand));
@@ -726,16 +737,17 @@ test "refreshWriteLock drops the leading slash of a key" {
 }
 
 test "a path that names no bucket, or an empty key, is refused by every operation that parses one" {
+    const log = utils.mute_log.MuteLog.init();
     const fixture = try Fixture.init(objectPresent);
     defer fixture.deinit();
 
     const allocator = fixture.allocator;
     const io = std.testing.io;
-    try std.testing.expectError(error.Thrown, fixture.storage.read(allocator, io, "bucket-only"));
+    try std.testing.expectError(error.Thrown, fixture.storage.read(allocator, io, log, "bucket-only"));
     try std.testing.expectEqualStrings("Invalid path: bucket-only. Expected <bucket-name>/<path>", utils.errors.lastErrorMessage());
-    try std.testing.expectError(error.Thrown, fixture.storage.read(allocator, io, "/dir/file.txt"));
+    try std.testing.expectError(error.Thrown, fixture.storage.read(allocator, io, log, "/dir/file.txt"));
     try std.testing.expectEqualStrings("Invalid path: /dir/file.txt. Expected <bucket-name>/<path>", utils.errors.lastErrorMessage());
-    try std.testing.expectError(error.Thrown, fixture.storage.read(allocator, io, "bucket/"));
+    try std.testing.expectError(error.Thrown, fixture.storage.read(allocator, io, log, "bucket/"));
     try std.testing.expectEqualStrings("Invalid path: bucket/. Expected <bucket-name>/<path>", utils.errors.lastErrorMessage());
 
     try std.testing.expectError(error.Thrown, fixture.storage.fileExists(allocator, io, "bucket-only"));

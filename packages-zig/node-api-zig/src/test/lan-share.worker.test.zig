@@ -121,7 +121,7 @@ const CancelledByMessage = struct {
     //
     // Drops an event.
     //
-    fn ignoreEvent(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: std.json.Value) void {}
+    fn ignoreEvent(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: utils.log.ILog, _: std.json.Value) void {}
 
     //
     // Whether the test has cancelled the task, looking for its cancel among the thread's orders with the handler's Io and allocator.
@@ -215,6 +215,7 @@ const HandlerRun = struct {
     // returned.
     //
     fn run(orders: *MessageQueue, outcomes: *MessageQueue) void {
+        const console_log = utils.mute_log.MuteLog.init();
         var thread_allocator: ThreadAllocator = .init;
         defer thread_allocator.deinit();
         var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
@@ -246,7 +247,7 @@ const HandlerRun = struct {
             .result = null,
             .failure = null,
         };
-        if (handler(arena, io, test_timers.timers(), order.data, context.taskContext())) |result| {
+        if (handler(arena, io, test_timers.timers(), console_log, order.data, context.taskContext())) |result| {
             outcome.result = result;
         }
         else |err| {
@@ -357,6 +358,8 @@ const ReceiverRun = struct {
     // timeout or the test's cancel, and tells the test what it received.
     //
     fn run(orders: *MessageQueue, events: *MessageQueue) void {
+        // The thread's own log, which writes to the console.
+        const log = utils.mute_log.MuteLog.init();
         var thread_allocator: ThreadAllocator = .init;
         defer thread_allocator.deinit();
         var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
@@ -381,7 +384,7 @@ const ReceiverRun = struct {
             .httpsPort = receiver.httpsPort,
             .failure = null,
         }) catch @panic("out of memory telling the test the receiver started");
-        while (receiver.receiveStep()) {
+        while (receiver.receiveStep(log)) {
             if (orders.tryTake(io, arena)) |_| {
                 receiver.cancel();
             }
@@ -450,12 +453,13 @@ fn jsonText(allocator: std.mem.Allocator, value: std.json.Value) ![]const u8 {
 }
 
 test "receiveShareHandler calls receiver.start with the supplied code and returns the delivered payload" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const payload = try sampleSecretPayload(allocator);
     var run: HandlerRun = undefined;
     try run.start(io, allocator, .receive_share, try codeData(allocator, "4242"));
@@ -475,6 +479,7 @@ test "receiveShareHandler calls receiver.start with the supplied code and return
 }
 
 test "receiveShareHandler returns { payload: null } when no payload arrives before the timeout" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -484,26 +489,27 @@ test "receiveShareHandler returns { payload: null } when no payload arrives befo
     defer virtualTime.deinit();
     const io = virtualTime.io();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    const result = try receiveShareHandler(allocator, io, test_timers.timers(), try codeData(allocator, "1111"), context.taskContext());
+    const result = try receiveShareHandler(allocator, io, test_timers.timers(), log, try codeData(allocator, "1111"), context.taskContext());
 
     try std.testing.expect(result.object.get("payload").? == .null);
 }
 
 test "receiveShareHandler cancels the receiver when the context reports cancellation and stops watching afterwards" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, 0, null);
 
-    const result = try receiveShareHandler(allocator, io, test_timers.timers(), try codeData(allocator, "2222"), context.taskContext());
+    const result = try receiveShareHandler(allocator, io, test_timers.timers(), log, try codeData(allocator, "2222"), context.taskContext());
 
     try std.testing.expect(result.object.get("payload").? == .null);
     // The watcher asked once, cancelled the receiver and asked no more, and is no longer running once the handler has returned.
@@ -513,12 +519,13 @@ test "receiveShareHandler cancels the receiver when the context reports cancella
 }
 
 test "findReceiverHandler constructs the sender with the code and returns the discovered endpoint" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var run: HandlerRun = undefined;
     try run.start(io, allocator, .find_receiver, try codeData(allocator, "3333"));
     defer run.deinit(io, allocator);
@@ -537,6 +544,7 @@ test "findReceiverHandler constructs the sender with the code and returns the di
 }
 
 test "findReceiverHandler returns { endpoint: null } on timeout" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -546,40 +554,42 @@ test "findReceiverHandler returns { endpoint: null } on timeout" {
     defer virtualTime.deinit();
     const io = virtualTime.io();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
     // No receiver holds this code, so the wait ends only by timing out.
-    const result = try findReceiverHandler(allocator, io, test_timers.timers(), try codeData(allocator, "4444"), context.taskContext());
+    const result = try findReceiverHandler(allocator, io, test_timers.timers(), log, try codeData(allocator, "4444"), context.taskContext());
 
     try std.testing.expect(result.object.get("endpoint").? == .null);
 }
 
 test "findReceiverHandler cancels the sender when the context reports cancellation" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, 0, null);
 
     // No receiver holds this code, so only the cancellation can end the wait.
-    const result = try findReceiverHandler(allocator, io, test_timers.timers(), try codeData(allocator, "5555"), context.taskContext());
+    const result = try findReceiverHandler(allocator, io, test_timers.timers(), log, try codeData(allocator, "5555"), context.taskContext());
 
     try std.testing.expect(result.object.get("endpoint").? == .null);
     try std.testing.expectEqual(@as(u64, 1), context.cancelChecks);
 }
 
 test "sendPayloadHandler constructs the sender with payload/code, sends to the endpoint, and returns success true" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const payload = try sampleSecretPayload(allocator);
@@ -589,7 +599,7 @@ test "sendPayloadHandler constructs the sender with payload/code, sends to the e
     var finder = try LanShareSender.init(try lan_share_network.lan_share_types.discoveryPort(), allocator, io, .null, "6666");
     const endpoint = try discover(&finder, io);
 
-    const result = try sendPayloadHandler(allocator, io, test_timers.timers(), try sendData(allocator, payload, "6666", endpoint), context.taskContext());
+    const result = try sendPayloadHandler(allocator, io, test_timers.timers(), log, try sendData(allocator, payload, "6666", endpoint), context.taskContext());
 
     try std.testing.expect(result.object.get("success").?.bool);
     // The receiver was given the payload.
@@ -598,12 +608,13 @@ test "sendPayloadHandler constructs the sender with payload/code, sends to the e
 }
 
 test "sendPayloadHandler returns success false when the receiver rejects the payload" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     const payload = try sampleSecretPayload(allocator);
@@ -614,7 +625,7 @@ test "sendPayloadHandler returns success false when the receiver rejects the pay
     const endpoint = try discover(&finder, io);
 
     // The receiver holds 6666 and the task is given 7777, so the receiver's pairing code hash does not match.
-    const result = try sendPayloadHandler(allocator, io, test_timers.timers(), try sendData(allocator, payload, "7777", endpoint), context.taskContext());
+    const result = try sendPayloadHandler(allocator, io, test_timers.timers(), log, try sendData(allocator, payload, "7777", endpoint), context.taskContext());
 
     try std.testing.expect(!result.object.get("success").?.bool);
 }

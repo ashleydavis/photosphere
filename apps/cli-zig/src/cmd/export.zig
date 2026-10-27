@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -6,7 +7,6 @@ const bdb = @import("bdb-zig");
 const storage_zig = @import("storage-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const ensureDir = node_utils.fs.ensureDir;
 const path = node_utils.path;
@@ -79,8 +79,8 @@ fn getOutputFileName(allocator: std.mem.Allocator, originalName: []const u8, ass
 // Streams a file from storage to a new local file.
 // Both streams are finished before it returns.
 //
-fn streamToFile(io: std.Io, storage: IStorage, allocator: std.mem.Allocator, storagePath: []const u8, outputFilePath: []const u8) !void {
-    const assetStream = try storage.readStream(allocator, io, storagePath);
+fn streamToFile(io: std.Io, log: ILog, storage: IStorage, allocator: std.mem.Allocator, storagePath: []const u8, outputFilePath: []const u8) !void {
+    const assetStream = try storage.readStream(allocator, io, log, storagePath);
     defer assetStream.destroy(io);
     const outputFile = try std.Io.Dir.cwd().createFile(io, outputFilePath, .{});
     defer outputFile.close(io);
@@ -93,14 +93,14 @@ fn streamToFile(io: std.Io, storage: IStorage, allocator: std.mem.Allocator, sto
 //
 // Command that exports a particular asset by ID to a specified path.
 //
-pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, assetId: []const u8, outputPath: []const u8, options: *IExportCommandOptions) !void {
+pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, assetId: []const u8, outputPath: []const u8, options: *IExportCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
     const assetType = if (options.type) |value| (if (value.len > 0) value else "original") else "original";
     const dbPath = if (options.base.db) |db| (if (db.len > 0) db else try std.process.currentPathAlloc(io, allocator)) else try std.process.currentPathAlloc(io, allocator);
 
-    const loaded = try loadDatabase(allocator, io, dbPath, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbPath, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const metadataDatabase = loaded.bsonDatabase;
     const localStorage = loaded.assetStorage;
     const rawAssetStorage = loaded.rawAssetStorage;
@@ -109,11 +109,11 @@ pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     // A partial database may have dropped this original locally because the origin holds it. Reading
     // through origin-backed storage is what fetches it back, so exporting works whether the file is
     // on this machine or only on the remote.
-    const assetStorage = try openLazyOriginStorage(allocator, io, localStorage, rawAssetStorage, null);
+    const assetStorage = try openLazyOriginStorage(allocator, io, log, localStorage, rawAssetStorage, null);
 
-    const asset = try metadataCollection.getOne(io, assetId) orelse {
+    const asset = try metadataCollection.getOne(io, log, assetId) orelse {
         log.@"error"(try std.fmt.allocPrint(allocator, "Asset {s} not found in database.", .{assetId}));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
     const assetStoragePath = try getAssetStoragePath(allocator, assetId, assetType);
@@ -142,9 +142,9 @@ pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     }
 
     // Stream the asset from storage to the output file
-    try streamToFile(io, assetStorage, allocator, assetStoragePath, outputFilePath);
+    try streamToFile(io, log, assetStorage, allocator, assetStoragePath, outputFilePath);
 
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Successfully exported {s} version of asset {s} to {s}", .{ assetType, assetId, outputFilePath })));
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

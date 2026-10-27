@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const api_zig = @import("api-zig");
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
@@ -169,7 +170,7 @@ const MemoryStorage = struct {
     //
     // Returns a copy of the stored file, or null.
     //
-    fn read(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]u8 {
+    fn read(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, _: ILog, filePath: []const u8) anyerror!?[]u8 {
         _ = io;
         const self: *MemoryStorage = @ptrCast(@alignCast(ptr));
         const data = self.files.get(filePath) orelse return null;
@@ -191,7 +192,8 @@ const MemoryStorage = struct {
     //
     // Not used by the tests.
     //
-    fn readStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!IReadStream {
+    fn readStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!IReadStream {
+        _ = log;
         _ = ptr;
         _ = allocator;
         _ = io;
@@ -261,7 +263,8 @@ const MemoryStorage = struct {
     //
     // Not implemented.
     //
-    fn acquireWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!bool {
+    fn acquireWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!bool {
+        _ = log;
         _ = ptr;
         _ = allocator;
         _ = io;
@@ -273,7 +276,8 @@ const MemoryStorage = struct {
     //
     // Not implemented.
     //
-    fn releaseWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void {
+    fn releaseWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!void {
+        _ = log;
         _ = ptr;
         _ = allocator;
         _ = io;
@@ -284,7 +288,8 @@ const MemoryStorage = struct {
     //
     // Not implemented.
     //
-    fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
+    fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!void {
+        _ = log;
         _ = ptr;
         _ = allocator;
         _ = io;
@@ -315,6 +320,7 @@ const IScenario = struct {
 };
 
 test "saveDatabaseConfig and updateDatabaseConfig write the bytes recorded in the scenarios" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -330,10 +336,10 @@ test "saveDatabaseConfig and updateDatabaseConfig write the bytes recorded in th
             try memory_storage.files.put(allocator, ".db/config.json", initial);
         }
         if (std.mem.eql(u8, scenario.operation, "save")) {
-            try database_config.saveDatabaseConfig(allocator, io, memory_storage.storage(), scenario.config);
+            try database_config.saveDatabaseConfig(allocator, io, log, memory_storage.storage(), scenario.config);
         }
         else {
-            try database_config.updateDatabaseConfig(allocator, io, memory_storage.storage(), scenario.config);
+            try database_config.updateDatabaseConfig(allocator, io, log, memory_storage.storage(), scenario.config);
         }
         std.testing.expectEqualStrings(scenario.expected, memory_storage.files.get(".db/config.json").?) catch |err| {
             std.debug.print("scenario {s} failed\n", .{scenario.name});
@@ -343,14 +349,16 @@ test "saveDatabaseConfig and updateDatabaseConfig write the bytes recorded in th
 }
 
 test "loadDatabaseConfig returns null if the file does not exist" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var memory_storage = MemoryStorage.init(arena.allocator());
-    const config = try database_config.loadDatabaseConfig(arena.allocator(), std.testing.io, memory_storage.storage());
+    const config = try database_config.loadDatabaseConfig(arena.allocator(), std.testing.io, log, memory_storage.storage());
     try std.testing.expect(config == null);
 }
 
 test "loadDatabaseConfig reads every field" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -364,7 +372,7 @@ test "loadDatabaseConfig reads every field" {
         \\  "unknown": 5
         \\}
     );
-    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, memory_storage.storage())).?.object;
+    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, log, memory_storage.storage())).?.object;
     try std.testing.expectEqualStrings("o", config.get("origin").?.string);
     try std.testing.expectEqualStrings("r", config.get("lastReplicatedAt").?.string);
     try std.testing.expectEqualStrings("s", config.get("lastSyncedAt").?.string);
@@ -373,77 +381,84 @@ test "loadDatabaseConfig reads every field" {
 }
 
 test "loadDatabaseConfig keeps the last value of a repeated key" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memory_storage = MemoryStorage.init(allocator);
     try memory_storage.files.put(allocator, ".db/config.json", "{\"origin\": \"first\", \"origin\": \"second\"}");
-    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, memory_storage.storage())).?.object;
+    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, log, memory_storage.storage())).?.object;
     try std.testing.expectEqualStrings("second", config.get("origin").?.string);
 }
 
 test "loadDatabaseConfig returns an empty object for an empty config" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memory_storage = MemoryStorage.init(allocator);
     try memory_storage.files.put(allocator, ".db/config.json", "{}");
-    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, memory_storage.storage())).?.object;
+    const config = (try database_config.loadDatabaseConfig(allocator, std.testing.io, log, memory_storage.storage())).?.object;
     try std.testing.expectEqual(@as(usize, 0), config.count());
 }
 
 test "loadDatabaseConfig returns the JSON null of a null file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memory_storage = MemoryStorage.init(allocator);
     try memory_storage.files.put(allocator, ".db/config.json", "null");
-    try std.testing.expect((try database_config.loadDatabaseConfig(allocator, std.testing.io, memory_storage.storage())).? == .null);
+    try std.testing.expect((try database_config.loadDatabaseConfig(allocator, std.testing.io, log, memory_storage.storage())).? == .null);
 }
 
 test "loadDatabaseConfig throws a WrappedError for invalid JSON" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memory_storage = MemoryStorage.init(allocator);
     try memory_storage.files.put(allocator, ".db/config.json", "{ not json");
-    try std.testing.expectError(error.Thrown, database_config.loadDatabaseConfig(allocator, std.testing.io, memory_storage.storage()));
+    try std.testing.expectError(error.Thrown, database_config.loadDatabaseConfig(allocator, std.testing.io, log, memory_storage.storage()));
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Failed to parse database config at .db/config.json: "));
     try std.testing.expectEqualStrings("WrappedError", errors.lastErrorName());
     try std.testing.expect(errors.lastErrorCauseMessage().len > 0);
 }
 
 test "saveDatabaseConfig then loadDatabaseConfig round-trips" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var memory_storage = MemoryStorage.init(allocator);
-    try database_config.saveDatabaseConfig(allocator, io, memory_storage.storage(), IDatabaseConfig{ .origin = "fs:/a" });
+    try database_config.saveDatabaseConfig(allocator, io, log, memory_storage.storage(), IDatabaseConfig{ .origin = "fs:/a" });
     try std.testing.expectEqual(@as(u32, 1), memory_storage.writeCount);
-    const config = (try database_config.loadDatabaseConfig(allocator, io, memory_storage.storage())).?.object;
+    const config = (try database_config.loadDatabaseConfig(allocator, io, log, memory_storage.storage())).?.object;
     try std.testing.expectEqualStrings("fs:/a", config.get("origin").?.string);
     try std.testing.expectEqual(@as(usize, 1), config.count());
 }
 
 test "updateDatabaseConfig overwrites existing values in place" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var memory_storage = MemoryStorage.init(allocator);
     try memory_storage.files.put(allocator, ".db/config.json", "{\n  \"origin\": \"first\",\n  \"lastModifiedAt\": \"m\"\n}");
-    try database_config.updateDatabaseConfig(allocator, io, memory_storage.storage(), .{ .origin = "second" });
+    try database_config.updateDatabaseConfig(allocator, io, log, memory_storage.storage(), .{ .origin = "second" });
     try std.testing.expectEqualStrings("{\n  \"origin\": \"second\",\n  \"lastModifiedAt\": \"m\"\n}", memory_storage.files.get(".db/config.json").?);
 }
 
 test "updateDatabaseConfig with no origin removes the existing origin and keeps the other keys" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var memory_storage = MemoryStorage.init(allocator);
     try memory_storage.files.put(allocator, ".db/config.json", "{\n  \"origin\": \"first\",\n  \"lastModifiedAt\": \"m\"\n}");
-    try database_config.updateDatabaseConfig(allocator, io, memory_storage.storage(), .{ .origin = null });
+    try database_config.updateDatabaseConfig(allocator, io, log, memory_storage.storage(), .{ .origin = null });
     try std.testing.expectEqualStrings("{\n  \"lastModifiedAt\": \"m\"\n}", memory_storage.files.get(".db/config.json").?);
 }

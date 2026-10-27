@@ -5,6 +5,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
@@ -85,23 +86,24 @@ fn emptyTokenStorage(memoryStorage: *MemoryStorage) IStorage {
 //
 // Writes one record into collection "users" and commits it through a normal storage.
 //
-fn writeOneRecord(allocator: std.mem.Allocator, memoryStorage: *MemoryStorage) !void {
+fn writeOneRecord(log: ILog, allocator: std.mem.Allocator, memoryStorage: *MemoryStorage) !void {
     const database = try bdb.database.BsonDatabase.init(allocator, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const collection = try database.collection("users");
-    try collection.setInternalRecord(io, .{
+    try collection.setInternalRecord(io, log, .{
         ._id = RECORD_ID,
         .fields = try BsonDocument.fromFields(allocator, &.{.{ .key = "name", .value = .{ .string = "Ann" } }}),
         .metadata = .empty,
     });
-    try database.commit(io);
+    try database.commit(io, log);
 }
 
 test "BsonDatabase.collections stops listing on an empty continuation token" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memoryStorage = MemoryStorage.init(allocator);
-    try writeOneRecord(allocator, &memoryStorage);
+    try writeOneRecord(log, allocator, &memoryStorage);
 
     const database = try bdb.database.BsonDatabase.init(allocator, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const names = try database.collections(io);
@@ -110,40 +112,43 @@ test "BsonDatabase.collections stops listing on an empty continuation token" {
 }
 
 test "BsonCollection.iterateShards stops listing on an empty continuation token" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memoryStorage = MemoryStorage.init(allocator);
-    try writeOneRecord(allocator, &memoryStorage);
+    try writeOneRecord(log, allocator, &memoryStorage);
 
     const database = try bdb.database.BsonDatabase.init(allocator, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
     const collection = try database.collection("users");
     var shards = collection.iterateShards();
-    const firstShard = (try shards.next(io)).?;
+    const firstShard = (try shards.next(io, log)).?;
     try std.testing.expectEqual(@as(usize, 1), firstShard.len);
     try std.testing.expectEqualStrings(RECORD_ID, firstShard[0]._id);
-    try std.testing.expect(try shards.next(io) == null);
+    try std.testing.expect(try shards.next(io, log) == null);
 }
 
 test "listShards stops listing on an empty continuation token" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memoryStorage = MemoryStorage.init(allocator);
-    try writeOneRecord(allocator, &memoryStorage);
+    try writeOneRecord(log, allocator, &memoryStorage);
 
     const shardIds = try bdb.merkle_tree.listShards(allocator, io, emptyTokenStorage(&memoryStorage), "", "users");
     try std.testing.expectEqual(@as(usize, 1), shardIds.len);
 }
 
 test "buildDatabaseMerkleTree stops listing collections on an empty continuation token" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var memoryStorage = MemoryStorage.init(allocator);
-    try writeOneRecord(allocator, &memoryStorage);
+    try writeOneRecord(log, allocator, &memoryStorage);
 
-    const tree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), null, null, true);
+    const tree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, log, emptyTokenStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), null, null, true);
     try std.testing.expect(tree.merkle != null or tree.sort != null);
 }
 
@@ -186,6 +191,7 @@ fn oneAtATimeStorage(memoryStorage: *MemoryStorage) IStorage {
 }
 
 test "listShards and buildDatabaseMerkleTree follow the continuation token through every page of a listing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -194,14 +200,14 @@ test "listShards and buildDatabaseMerkleTree follow the continuation token throu
     for ([_][]const u8{ "users", "photos" }) |collectionName| {
         const collection = try database.collection(collectionName);
         for ([_][]const u8{ RECORD_ID, "22222222-2222-4222-a222-222222222222", "33333333-3333-4333-a333-333333333333", "44444444-4444-4444-a444-444444444444", "55555555-5555-4555-a555-555555555555" }) |recordId| {
-            try collection.setInternalRecord(io, .{
+            try collection.setInternalRecord(io, log, .{
                 ._id = recordId,
                 .fields = try BsonDocument.fromFields(allocator, &.{.{ .key = "name", .value = .{ .string = "Ann" } }}),
                 .metadata = .empty,
             });
         }
     }
-    try database.commit(io);
+    try database.commit(io, log);
     const wholeShards = try bdb.merkle_tree.listShards(allocator, io, memoryStorage.asStorage(), "", "users");
     try std.testing.expect(wholeShards.len >= 2);
 
@@ -210,8 +216,8 @@ test "listShards and buildDatabaseMerkleTree follow the continuation token throu
     for (wholeShards, pagedShards) |whole, paged| {
         try std.testing.expectEqualStrings(whole, paged);
     }
-    const wholeTree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), null, null, true);
-    const pagedTree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, oneAtATimeStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), null, null, true);
+    const wholeTree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, log, memoryStorage.asStorage(), "", test_uuid_generator.uuidGenerator(), null, null, true);
+    const pagedTree = try bdb.merkle_tree.buildDatabaseMerkleTree(allocator, io, log, oneAtATimeStorage(&memoryStorage), "", test_uuid_generator.uuidGenerator(), null, null, true);
     try std.testing.expectEqual(@as(u32, 2), pagedTree.sort.?.leafCount);
     try std.testing.expectEqualSlices(u8, wholeTree.sort.?.left.?.contentHash.?, pagedTree.sort.?.left.?.contentHash.?);
     try std.testing.expectEqualSlices(u8, wholeTree.sort.?.right.?.contentHash.?, pagedTree.sort.?.right.?.contentHash.?);

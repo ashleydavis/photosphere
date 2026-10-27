@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 const fixtures = @import("fixtures.zig");
@@ -42,19 +43,18 @@ fn loadTestKeys(allocator: std.mem.Allocator) !TestKeys {
 }
 
 test "encrypts and decrypts with key map" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = "hello world";
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
     try std.testing.expectEqualStrings(constants.ENCRYPTION_TAG, encrypted[0..4]);
-    const decrypted = try encrypt_buffer.decryptBuffer(allocator, encrypted, &keys.keyMap);
+    const decrypted = try encrypt_buffer.decryptBuffer(log, allocator, encrypted, &keys.keyMap);
     try std.testing.expectEqualStrings(plain, decrypted);
 }
 
@@ -71,37 +71,35 @@ test "encryptBuffer writes the new-format header" {
 }
 
 test "decrypts legacy payload using default key" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = "legacy payload";
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
     const legacyPayload = encrypted[44..];
-    const decrypted = try encrypt_buffer.decryptBuffer(allocator, legacyPayload, &keys.keyMap);
+    const decrypted = try encrypt_buffer.decryptBuffer(log, allocator, legacyPayload, &keys.keyMap);
     try std.testing.expectEqualStrings(plain, decrypted);
 }
 
 test "decrypts new-format payload using hash key in map" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = "new format";
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, plain);
     var hashOnlyMap: IPrivateKeyMap = .empty;
     try hashOnlyMap.put(allocator, keys.keyHashHex, keys.privateKey);
-    const decrypted = try encrypt_buffer.decryptBuffer(allocator, encrypted, &hashOnlyMap);
+    const decrypted = try encrypt_buffer.decryptBuffer(log, allocator, encrypted, &hashOnlyMap);
     try std.testing.expectEqualStrings(plain, decrypted);
 }
 
@@ -123,14 +121,13 @@ test "is refused at the write rather than producing a file nothing can decrypt" 
 }
 
 test "throws when the data says it is encrypted and the key is not in the map" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
     // It used to hand the ciphertext back, on the reading that a failed decryption means the
@@ -141,7 +138,7 @@ test "throws when the data says it is encrypted and the key is not in the map" {
     // nothing about the key.
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "secret");
     const emptyMap: IPrivateKeyMap = .empty;
-    try std.testing.expectError(error.Thrown, encrypt_buffer.decryptBuffer(allocator, encrypted, &emptyMap));
+    try std.testing.expectError(error.Thrown, encrypt_buffer.decryptBuffer(log, allocator, encrypted, &emptyMap));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "says it is encrypted") != null);
 
     // (Zig: the message and the cause are those of `new Error(message, { cause: err })`.)
@@ -152,14 +149,13 @@ test "throws when the data says it is encrypted and the key is not in the map" {
 }
 
 test "throws when the data says it is encrypted and the wrong key is in the map" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
     // (The second fixture key pair stands in for a generated key pair.)
@@ -169,75 +165,71 @@ test "throws when the data says it is encrypted and the wrong key is in the map"
     var wrongMap: IPrivateKeyMap = .empty;
     try wrongMap.put(allocator, "default", otherPrivateKey);
     try wrongMap.put(allocator, otherKeyHashHex, otherPrivateKey);
-    try std.testing.expectError(error.Thrown, encrypt_buffer.decryptBuffer(allocator, encrypted, &wrongMap));
+    try std.testing.expectError(error.Thrown, encrypt_buffer.decryptBuffer(log, allocator, encrypted, &wrongMap));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "says it is encrypted") != null);
 }
 
 test "still hands back a plaintext buffer unchanged, which is how an unencrypted file reads" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
 
     // The case the fallback exists for, and the reason it cannot simply be removed: a
     // database can hold files that were never encrypted, read through the same storage.
     const plain = "this was never encrypted, and is long enough to look like a file";
-    const result = try encrypt_buffer.decryptBuffer(allocator, plain, &keys.keyMap);
+    const result = try encrypt_buffer.decryptBuffer(log, allocator, plain, &keys.keyMap);
     try std.testing.expectEqualSlices(u8, plain, result);
     try std.testing.expectEqual(@as(u32, 2), mockLog.verboseCalls);
 }
 
 test "returns data unchanged when legacy data and no default key" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "x");
     const legacyPayload = encrypted[44..];
     var noDefaultMap: IPrivateKeyMap = .empty;
     try noDefaultMap.put(allocator, keys.keyHashHex, keys.privateKey);
-    const result = try encrypt_buffer.decryptBuffer(allocator, legacyPayload, &noDefaultMap);
+    const result = try encrypt_buffer.decryptBuffer(log, allocator, legacyPayload, &noDefaultMap);
     try std.testing.expectEqualSlices(u8, legacyPayload, result);
     try std.testing.expectEqual(@as(u32, 1), mockLog.verboseCalls);
 }
 
 test "returns data unchanged when shorter than 4 bytes" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const short = [_]u8{ 0, 0 };
-    const result = try encrypt_buffer.decryptBuffer(allocator, &short, &keys.keyMap);
+    const result = try encrypt_buffer.decryptBuffer(log, allocator, &short, &keys.keyMap);
     try std.testing.expectEqualSlices(u8, &short, result);
 }
 
 test "returns plain data unchanged when the default key cannot decrypt it" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const plain = try fixtures.makePlaintext(allocator, 1000);
-    const result = try encrypt_buffer.decryptBuffer(allocator, plain, &keys.keyMap);
+    const result = try encrypt_buffer.decryptBuffer(log, allocator, plain, &keys.keyMap);
     try std.testing.expectEqualSlices(u8, plain, result);
     try std.testing.expectEqual(@as(u32, 2), mockLog.verboseCalls);
 }
@@ -334,13 +326,13 @@ test "includesString finds a string in an array like Array.includes" {
 // Decrypts the data with every allocation in turn failing, expecting each failure to come back as OutOfMemory
 // until the decryption succeeds with the expected plaintext.
 //
-fn expectOutOfMemoryAtEveryAllocation(data: []const u8, keyMap: *const IPrivateKeyMap, expected: []const u8) !void {
+fn expectOutOfMemoryAtEveryAllocation(log: ILog, data: []const u8, keyMap: *const IPrivateKeyMap, expected: []const u8) !void {
     var failIndex: usize = 0;
     while (true) : (failIndex += 1) {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         defer arena.deinit();
         var failing = std.testing.FailingAllocator.init(arena.allocator(), .{ .fail_index = failIndex });
-        if (encrypt_buffer.decryptBuffer(failing.allocator(), data, keyMap)) |decrypted| {
+        if (encrypt_buffer.decryptBuffer(log, failing.allocator(), data, keyMap)) |decrypted| {
             try std.testing.expectEqualStrings(expected, decrypted);
             try std.testing.expect(failIndex > 0);
             return;
@@ -352,20 +344,19 @@ fn expectOutOfMemoryAtEveryAllocation(data: []const u8, keyMap: *const IPrivateK
 }
 
 test "decryptBuffer passes an allocation failure on for new-format and legacy data" {
+    var mockLog: mock_log.MockLog = .{};
+    const log = mockLog.ilog();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Mock log, so the fallback messages of decryptBuffer reach no stderr.
-    var mockLog: mock_log.MockLog = .{};
-    mockLog.install();
-    defer mockLog.uninstall();
     const keys = try loadTestKeys(allocator);
     const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, keys.publicKey, "allocation failures");
-    try expectOutOfMemoryAtEveryAllocation(encrypted, &keys.keyMap, "allocation failures");
+    try expectOutOfMemoryAtEveryAllocation(log, encrypted, &keys.keyMap, "allocation failures");
 
     // The legacy format is the new format without its 44 byte header.
-    try expectOutOfMemoryAtEveryAllocation(encrypted[44..], &keys.keyMap, "allocation failures");
+    try expectOutOfMemoryAtEveryAllocation(log, encrypted[44..], &keys.keyMap, "allocation failures");
 }
 
 test "normalizeEncryptionType decodes the field as Buffer.toString(\"ascii\") does, dropping the high bit of each byte" {

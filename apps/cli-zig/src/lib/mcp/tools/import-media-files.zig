@@ -55,6 +55,7 @@ pub fn registerImportMediaFilesTool(server: *McpServer, allocator: std.mem.Alloc
 //
 fn importMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
@@ -74,6 +75,7 @@ fn importMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.
     const summary = try addPaths(
         toolContext.allocator,
         io,
+        log,
         timer_list.interface(),
         toolContext.uuidGenerator,
         storageDescriptor,

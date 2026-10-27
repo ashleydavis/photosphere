@@ -3,11 +3,11 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const pc = @import("../lib/picocolors.zig");
-const log = &utils.log.log;
 const verifyTools = tools.verifyTools;
 const ToolStatus = tools.ToolStatus;
 const exit = node_utils.termination.exit;
@@ -50,20 +50,20 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 // toolRunner runs the ImageMagick and FFmpeg built into the program. The tools are built in, so there is nothing to
 // install and nothing to ask, and the options change nothing.
 //
-pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, options: *const IToolsCommandOptions) !void {
+pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, options: *const IToolsCommandOptions) !void {
     _ = options;
-    try listTools(allocator, io, toolRunner);
+    try listTools(allocator, io, log, toolRunner);
 }
 
 //
 // Prints the status of each tool, then exits: 0 when all are available, otherwise 1 after naming the tools that
 // did not run.
 //
-fn listTools(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) !void {
+fn listTools(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !void {
     log.info("");
     log.info(try pc.bold(allocator, "📦 Media Processing Tools Status\n"));
 
-    const toolsStatus = try verifyTools(allocator, io, toolRunner);
+    const toolsStatus = try verifyTools(allocator, io, log, toolRunner);
 
     // Show status of each tool
     const toolEntries = [_]IToolEntry{
@@ -130,10 +130,10 @@ fn listTools(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunn
 
     if (allAvailable) {
         log.info(try pc.green(allocator, "🎉 All tools are available and ready to use!"));
-        exit(io, 0);
+        exit(io, log, 0);
     }
     else {
         log.info(try pc.yellow(allocator, try text(allocator, "⚠️ {d} tool(s) missing: {s}", .{ missingTools.items.len, try std.mem.join(allocator, ", ", missingTools.items) })));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 }

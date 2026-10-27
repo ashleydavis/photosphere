@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
@@ -35,23 +36,21 @@ pub const ILogOptions = struct {
 };
 
 //
-// Configures the log of the calling thread, the CLI's main thread: Ziggy's file log, writing psi-<start time>.log and
+// Makes the CLI's log and returns it, for main to pass down: Ziggy's file log, writing psi-<start time>.log and
 // psi-<start time>-errors.log under <process tmp dir>/photosphere/logs, or with file logging disabled Ziggy's console log. The options
 // decide what the console shows; the log file always gets every line. The file log is closed, writing its footers, when the process
 // ends, by a termination callback.
-// toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions the file log's header gives.
+// consoleLog is the console log the program starts with, which finding the header writes to. toolRunner runs the ImageMagick and FFmpeg
+// built into the program, whose versions the file log's header gives.
 // The log is allocated with the allocator and must live until the process exits.
 //
-pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, options: ILogOptions) !void {
+pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, toolRunner: InProcessRunner, options: ILogOptions) !utils.log.ILog {
     if (options.disableFileLogging orelse false) {
-        const consoleLog = try allocator.create(ConsoleLog);
-        consoleLog.* = .{
-            .verbose_enabled = options.verbose orelse false,
-            .debug_enabled = options.debug orelse false,
-            .tools_enabled = options.tools orelse false,
-        };
-        utils.log.setLog(consoleLog.ilog());
-        return;
+        return ConsoleLog.initWith(.{
+            .verbose = options.verbose orelse false,
+            .debug = options.debug orelse false,
+            .tools = options.tools orelse false,
+        });
     }
 
     // getProcessTmpDir rather than the operating system's temporary directory, so the logs land wherever the rest of this process's
@@ -66,7 +65,8 @@ pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProc
         .logs_dir = logsDir,
         .command = command,
         .version = config.version,
-        .header_lines = try headerLines(allocator, io, toolRunner),
+        // The file log does not exist until this returns, so what finding the header writes goes to the console log.
+        .header_lines = try headerLines(allocator, io, consoleLog, toolRunner),
         .verbose = options.verbose orelse false,
         .debug = options.debug orelse false,
         .tools = options.tools orelse false,
@@ -75,12 +75,13 @@ pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProc
         .context = logger,
         .function = closeAtExit,
     });
+    return logger.ilog();
 }
 
 //
 // The termination callback: closes the file log, writing its footers. A failure to write them is reported on the console.
 //
-fn closeAtExit(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
+fn closeAtExit(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror!void {
     _ = exitCode;
     const logger: *FileLog = @ptrCast(@alignCast(context.?));
     logger.close(io) catch |err| {
@@ -91,10 +92,10 @@ fn closeAtExit(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
 //
 // The CLI's own lines of the log files' header: its build, the versions of the tools built into it and the whole command line.
 //
-fn headerLines(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner) ![]const []const u8 {
-    const imageMagick = try tools.Image.verifyImageMagick(allocator, io, toolRunner);
-    const ffmpeg = try tools.Video.verifyFfmpeg(allocator, io, toolRunner);
-    const ffprobe = try tools.Video.verifyFfprobe(allocator, io, toolRunner);
+fn headerLines(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) ![]const []const u8 {
+    const imageMagick = try tools.Image.verifyImageMagick(allocator, io, log, toolRunner);
+    const ffmpeg = try tools.Video.verifyFfmpeg(allocator, io, log, toolRunner);
+    const ffprobe = try tools.Video.verifyFfprobe(allocator, io, log, toolRunner);
     return try allocator.dupe([]const u8, &.{
         "--- Photosphere Version ---",
         config.version,

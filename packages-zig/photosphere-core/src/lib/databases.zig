@@ -12,6 +12,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -29,7 +30,6 @@ const databases_config = node_api.databases_config;
 const IDatabaseEntry = databases_config.IDatabaseEntry;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
 const CloudStorage = storage_zig.cloud_storage.CloudStorage;
-const log = &utils.log.log;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
@@ -195,7 +195,7 @@ fn getDatabases(services: TaskServices, timers: Timers, io: std.Io, allocator: s
 // echoed back. The entry type has no other keys.
 //
 fn addDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
+    const log = services.log;
     _ = timers;
     _ = context;
     const entry = try entryFromJson(data);
@@ -231,14 +231,14 @@ fn updateDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator:
 // set a key (an origin of null leaves the existing one alone), so a null origin is cleared here by loading the config, taking
 // the key out and saving it.
 //
-fn writeDatabaseOrigin(io: std.Io, allocator: std.mem.Allocator, rawStorage: storage_zig.storage.IStorage, origin: ?[]const u8) !void {
+fn writeDatabaseOrigin(io: std.Io, log: ILog, allocator: std.mem.Allocator, rawStorage: storage_zig.storage.IStorage, origin: ?[]const u8) !void {
     if (origin != null) {
-        try api_zig.database_config.updateDatabaseConfig(allocator, io, rawStorage, .{
+        try api_zig.database_config.updateDatabaseConfig(allocator, io, log, rawStorage, .{
             .origin = origin,
         });
         return;
     }
-    const existing = try api_zig.database_config.loadDatabaseConfig(allocator, io, rawStorage);
+    const existing = try api_zig.database_config.loadDatabaseConfig(allocator, io, log, rawStorage);
     var config: std.json.ObjectMap = .empty;
     if (existing) |existing_value| {
         if (existing_value == .object) {
@@ -250,7 +250,7 @@ fn writeDatabaseOrigin(io: std.Io, allocator: std.mem.Allocator, rawStorage: sto
             }
         }
     }
-    try api_zig.database_config.saveDatabaseConfig(allocator, io, rawStorage, std.json.Value{
+    try api_zig.database_config.saveDatabaseConfig(allocator, io, log, rawStorage, std.json.Value{
         .object = config,
     });
 }
@@ -260,6 +260,7 @@ fn writeDatabaseOrigin(io: std.Io, allocator: std.mem.Allocator, rawStorage: sto
 // .db/config.json, and to the database's entry when it has one with a different origin.
 //
 fn setDatabaseOrigin(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const log = services.log;
     _ = timers;
     _ = context;
     const database_path = json.getString(data, "databasePath") orelse {
@@ -269,7 +270,7 @@ fn setDatabaseOrigin(services: TaskServices, timers: Timers, io: std.Io, allocat
     const databases = try databases_config.getDatabases(allocator, io);
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     const opened = try openDatabaseStorage(allocator, io, databases, database_path, services.nativeCaller(&requester_storage));
-    try writeDatabaseOrigin(io, allocator, opened.rawStorage, origin);
+    try writeDatabaseOrigin(io, log, allocator, opened.rawStorage, origin);
     if (opened.entry) |found_entry| {
         if (!optionalStringsEqual(found_entry.origin, origin)) {
             var updated_entry = found_entry;

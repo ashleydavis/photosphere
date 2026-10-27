@@ -1,11 +1,11 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const bdb = @import("bdb-zig");
 const ziggy = @import("ziggy");
 const database_cache_dir = @import("database-cache-dir.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const path = node_utils.path;
 const pathExists = node_utils.fs.pathExists;
 const updateFileRawOptimistic = node_utils.fs.updateFileRawOptimistic;
@@ -570,13 +570,13 @@ pub const HashCache = struct {
     // If there's any problem loading the cache, it logs the error and starts fresh.
     // Running out of memory still fails.
     //
-    pub fn load(self: *HashCache, io: std.Io) !bool {
+    pub fn load(self: *HashCache, io: std.Io, log: ILog) !bool {
         var arena = std.heap.ArenaAllocator.init(cacheAllocator());
         defer arena.deinit();
         const allocator = arena.allocator();
         const cachePath = try path.join(allocator, &.{ self.cacheDir, "hash-cache-x.dat" });
 
-        return self.loadFrom(allocator, io, cachePath) catch |err| {
+        return self.loadFrom(allocator, io, log, cachePath) catch |err| {
             if (err == error.OutOfMemory) {
                 return err;
             }
@@ -589,7 +589,7 @@ pub const HashCache = struct {
     //
     // The body of load's try block. It is a function so load can catch its errors.
     //
-    fn loadFrom(self: *HashCache, allocator: std.mem.Allocator, io: std.Io, cachePath: []const u8) !bool {
+    fn loadFrom(self: *HashCache, allocator: std.mem.Allocator, io: std.Io, log: ILog, cachePath: []const u8) !bool {
         // Check if file exists first
         if (!pathExists(io, cachePath)) {
             // File doesn't exist - create new cache
@@ -605,7 +605,7 @@ pub const HashCache = struct {
             return false;
         };
 
-        try self.adoptEntries(entries);
+        try self.adoptEntries(log, entries);
         self.initialized = true;
         return true;
     }
@@ -635,14 +635,14 @@ pub const HashCache = struct {
     // what is on disk. The in-memory buffer holds the file layout without its trailing checksum,
     // which is what encodeEntries produces minus its last 32 bytes.
     //
-    fn adoptEntries(self: *HashCache, entries: []const IHashCacheEntry) !void {
+    fn adoptEntries(self: *HashCache, log: ILog, entries: []const IHashCacheEntry) !void {
         const encoded = try encodeEntries(cacheAllocator(), entries);
         const shrunk = cacheAllocator().realloc(encoded, encoded.len - 32) catch encoded[0 .. encoded.len - 32];
         if (self.buffer) |buffer| {
             cacheAllocator().free(buffer);
         }
         self.buffer = shrunk;
-        try self.createLookupTable();
+        try self.createLookupTable(log);
         self.clearPendingUpserts();
         self.clearPendingRemovals();
         self.isDirty = false;
@@ -652,7 +652,7 @@ pub const HashCache = struct {
     // Create the lookup table of index to offset.
     // This function is safe - it will reset the cache if corruption is detected.
     //
-    fn createLookupTable(self: *HashCache) !void {
+    fn createLookupTable(self: *HashCache, log: ILog) !void {
         const buffer = self.buffer orelse {
             self.entryCount = 0;
             self.offsetLookup.clearRetainingCapacity();
@@ -789,7 +789,7 @@ pub const HashCache = struct {
     // that it cannot get in at all, it gives up rather than failing the caller: the cache is only
     // an optimization, and a missing entry costs one recomputed hash.
     //
-    pub fn save(self: *HashCache, io: std.Io) !void {
+    pub fn save(self: *HashCache, io: std.Io, log: ILog) !void {
         if (!self.initialized or !self.isDirty or self.buffer == null or self.isReadonly) {
             return;
         }
@@ -826,7 +826,7 @@ pub const HashCache = struct {
         };
 
         // Adopt the merged result so this instance can serve entries other instances contributed.
-        try self.adoptEntries(mutator.mergedEntries);
+        try self.adoptEntries(log, mutator.mergedEntries);
     }
 
     //
@@ -1344,7 +1344,7 @@ threadlocal var loadedHashCaches: std.StringHashMapUnmanaged(ILoadedHashCache) =
 // picked up; a change too small and too quick to move either only costs the reader a hash it could
 // have found, which is the same answer it would have given before the entry was written.
 //
-pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
+pub fn loadSharedHashCache(io: std.Io, log: ILog, cacheDir: []const u8) !*HashCache {
     var arena = std.heap.ArenaAllocator.init(cacheAllocator());
     defer arena.deinit();
     const cachePath = try path.join(arena.allocator(), &.{ cacheDir, "hash-cache-x.dat" });
@@ -1366,7 +1366,7 @@ pub fn loadSharedHashCache(io: std.Io, cacheDir: []const u8) !*HashCache {
     errdefer cacheAllocator().destroy(cache);
     cache.* = try HashCache.init(cacheDir, true);
     errdefer cache.deinit();
-    _ = try cache.load(io);
+    _ = try cache.load(io, log);
 
     if (loadedHashCaches.getEntry(cacheDir)) |existing| {
         // The copy this thread held before is no longer handed out: the task that used it has finished.

@@ -260,19 +260,20 @@ const AWAIT_CHILDREN_SOURCE = "await-children-session";
 // them all. More are queued than the test app has workers, so at least one is still waiting for a worker when the source is cancelled.
 //
 fn awaitChildrenTask(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const log = services.log;
     _ = context;
     _ = data;
     var uuid_generator: ziggy.task_queue.utils.random_uuid_generator.RandomUuidGenerator = .{};
     const queue = try ziggy.task_queue.task_queue.TaskQueue.init(allocator, uuid_generator.uuidGenerator(), AWAIT_CHILDREN_SOURCE);
-    defer queue.deinit(io, allocator);
+    defer queue.deinit(io, allocator, log);
     var child_index: usize = 0;
     while (child_index < 4) : (child_index += 1) {
-        _ = try queue.addTask(io, allocator, "spin", .null, null, null);
+        _ = try queue.addTask(io, allocator, log, "spin", .null, null, null);
     }
     try services.sendEvent(io, allocator, .{
         .childrenQueued = true,
     });
-    try queue.awaitAllTasks(io, allocator, timers);
+    try queue.awaitAllTasks(io, allocator, timers, log);
     return try allocator.dupe(u8, "null");
 }
 

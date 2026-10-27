@@ -34,8 +34,9 @@ fn readConfig(allocator: std.mem.Allocator, io: std.Io, configDir: []const u8) !
 }
 
 test "getConfigPath is config.yaml in the config directory, joined and normalized as path.join does" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -53,8 +54,9 @@ test "getConfigPath is config.yaml in the config directory, joined and normalize
 }
 
 test "loadConfigFile returns the defaults when the config file does not exist" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -73,8 +75,9 @@ test "loadConfigFile returns the defaults when the config file does not exist" {
 }
 
 test "loadConfigFile returns the defaults for an empty config file" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -90,8 +93,9 @@ test "loadConfigFile returns the defaults for an empty config file" {
 }
 
 test "loadConfigFile reads the sections of the file and keeps a malformed section out of the way" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -125,8 +129,9 @@ test "loadConfigFile reads the sections of the file and keeps a malformed sectio
 }
 
 test "loadConfigFile throws when the config file is not YAML" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -140,8 +145,9 @@ test "loadConfigFile throws when the config file is not YAML" {
 }
 
 test "saveConfigFile writes the whole configuration, replacing whatever was there" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -205,8 +211,9 @@ const RecordingMutator = struct {
 };
 
 test "updateConfigFile hands the mutator the file's current contents and writes what it changes" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -243,8 +250,9 @@ test "updateConfigFile hands the mutator the file's current contents and writes 
 }
 
 test "updateConfigFile creates the file from the defaults when there is none" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -266,8 +274,9 @@ test "updateConfigFile creates the file from the defaults when there is none" {
 }
 
 test "two updates in turn both survive" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -293,8 +302,9 @@ test "two updates in turn both survive" {
 // A mutator that throws is left to throw. The lock is released on the way out, and the caller gets its error rather
 // than a half-applied change.
 test "updateConfigFile leaves the file as it was when the mutator throws" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -313,8 +323,9 @@ test "updateConfigFile leaves the file as it was when the mutator throws" {
 }
 
 test "updateConfigFile throws when the file in place is not YAML, without running the mutator" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -330,8 +341,9 @@ test "updateConfigFile throws when the file in place is not YAML, without runnin
 }
 
 test "defaultConfigFile is the format module's, with syncing and automatic import switched off" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

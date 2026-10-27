@@ -7,6 +7,7 @@
 
 const std = @import("std");
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const node_utils = @import("node-utils-zig");
 const rest_api = @import("rest-api-zig");
 
@@ -41,14 +42,14 @@ const Fixture = struct {
 };
 
 test "createAssetServer binds only to the loopback interface" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    var fixture: Fixture = undefined;
-    try fixture.init(allocator);
-    defer fixture.deinit();
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
 
-    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, .{
+    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, memory.log, .{
         .port = 0,
         .sessionId = "test-session",
     });
@@ -62,10 +63,11 @@ test "createAssetServer binds only to the loopback interface" {
     try std.testing.expectEqual(@as(u8, 1), bound.ip4.bytes[3]);
     try std.testing.expect(server.port > 0);
     try std.testing.expectEqual(server.port, bound.getPort());
-    try std.testing.expect(std.mem.indexOf(u8, fixture.stdout.written(), "Asset server running on http://localhost:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stdout(), "Asset server running on http://localhost:") != null);
 }
 
 test "createAssetServer listens on the port it is asked for" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -78,7 +80,7 @@ test "createAssetServer listens on the port it is asked for" {
     const freePort = listener.socket.address.getPort();
     listener.deinit(io);
 
-    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, .{
+    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, log, .{
         .port = freePort,
         .sessionId = "test-session",
     });
@@ -88,13 +90,14 @@ test "createAssetServer listens on the port it is asked for" {
 }
 
 test "createAssetServer serves the routes, with CORS headers, and stops answering when it is closed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
     defer fixture.deinit();
-    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, .{
+    const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, log, .{
         .port = 0,
         .sessionId = "test-session",
     });

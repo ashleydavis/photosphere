@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_factory = @import("storage-factory.zig");
 
@@ -127,8 +128,8 @@ pub const StoragePrefixWrapper = struct {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    pub fn read(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
-        return self.wrappedStorage.read(allocator, io, try self.makeFullPath(allocator, filePath));
+    pub fn read(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        return self.wrappedStorage.read(allocator, io, log, try self.makeFullPath(allocator, filePath));
     }
 
     //
@@ -141,8 +142,8 @@ pub const StoragePrefixWrapper = struct {
     //
     // Streams a file from stroage.
     //
-    pub fn readStream(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
-        return self.wrappedStorage.readStream(allocator, io, try self.makeFullPath(allocator, filePath));
+    pub fn readStream(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        return self.wrappedStorage.readStream(allocator, io, log, try self.makeFullPath(allocator, filePath));
     }
 
     //
@@ -185,21 +186,21 @@ pub const StoragePrefixWrapper = struct {
     // Attempts to acquire a write lock for the specified file.
     // Returns true if the lock was acquired, false if it already exists.
     //
-    pub fn acquireWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
-        return self.wrappedStorage.acquireWriteLock(allocator, io, try self.makeFullPath(allocator, filePath), owner);
+    pub fn acquireWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        return self.wrappedStorage.acquireWriteLock(allocator, io, log, try self.makeFullPath(allocator, filePath), owner);
     }
 
     //
     // Releases a write lock for the specified file.
     //
-    pub fn releaseWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
-        return self.wrappedStorage.releaseWriteLock(allocator, io, try self.makeFullPath(allocator, filePath));
+    pub fn releaseWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        return self.wrappedStorage.releaseWriteLock(allocator, io, log, try self.makeFullPath(allocator, filePath));
     }
 
     //
     // Refreshes a write lock for the specified file, updating its timestamp.
     //
-    pub fn refreshWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
-        return self.wrappedStorage.refreshWriteLock(allocator, io, try self.makeFullPath(allocator, filePath), owner);
+    pub fn refreshWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        return self.wrappedStorage.refreshWriteLock(allocator, io, log, try self.makeFullPath(allocator, filePath), owner);
     }
 };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const bdb = @import("bdb-zig");
@@ -10,7 +11,6 @@ const hash_cache = @import("hash-cache.zig");
 const media_source = @import("media-source.zig");
 const media_source_registry = @import("media-source-registry.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const sleep = utils.sleep.sleep;
 const swallowError = utils.swallow_error.swallowError;
 const IAutoImportSource = api.auto_import_settings.IAutoImportSource;
@@ -123,7 +123,7 @@ const AutoImportScannerCallbacks = struct {
     //    has to be opened, copied and hashed the long way. A photo library may reuse the id of a
     //    deleted item, so all three parts have to agree before an entry is believed.
     //
-    fn alreadyImportedContentHash(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem) anyerror!?[]const u8 {
+    fn alreadyImportedContentHash(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, item: IMediaItem) anyerror!?[]const u8 {
         const self: *AutoImportScannerCallbacks = @ptrCast(@alignCast(context.?));
         const options = self.options;
         const cacheEntry = try options.localHashCache.getHash(allocator, item.sourceId) orelse {
@@ -140,7 +140,7 @@ const AutoImportScannerCallbacks = struct {
 
         const contentHash = try std.fmt.allocPrint(allocator, "{x}", .{cacheEntry.hash});
         const hashIndex = try options.metadataCollection.sortIndex("hash", .asc);
-        const existingRecords = try hashIndex.findByValue(io, .{
+        const existingRecords = try hashIndex.findByValue(io, log, .{
             .string = contentHash,
         }, null);
         if (existingRecords.len == 0) {
@@ -156,7 +156,7 @@ const AutoImportScannerCallbacks = struct {
             var saveOperation: SaveHashCacheOperation = .{
                 .cache = options.localHashCache,
             };
-            _ = swallowError(io, &saveOperation);
+            _ = swallowError(io, log, &saveOperation);
         }
 
         return contentHash;
@@ -170,7 +170,7 @@ const AutoImportScannerCallbacks = struct {
     // sweeping those would throw away the desktop's whole cache the first time automatic import
     // walked a folder.
     //
-    fn onLibraryWalked(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, liveSourceIds: []const []const u8) anyerror!void {
+    fn onLibraryWalked(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, liveSourceIds: []const []const u8) anyerror!void {
         const self: *AutoImportScannerCallbacks = @ptrCast(@alignCast(context.?));
         const removed = try self.options.localHashCache.removeSourceEntriesNotIn(liveSourceIds);
         if (removed > 0) {
@@ -178,7 +178,7 @@ const AutoImportScannerCallbacks = struct {
             var saveOperation: SaveHashCacheOperation = .{
                 .cache = self.options.localHashCache,
             };
-            _ = swallowError(io, &saveOperation);
+            _ = swallowError(io, log, &saveOperation);
         }
     }
 
@@ -197,14 +197,6 @@ const AutoImportScannerCallbacks = struct {
         _ = context;
         try sleep(io, milliseconds);
     }
-
-    //
-    // Logs a message at info level.
-    //
-    fn logInfo(context: ?*anyopaque, message: []const u8) void {
-        _ = context;
-        log.info(message);
-    }
 };
 
 //
@@ -217,8 +209,8 @@ pub const SaveHashCacheOperation = struct {
     //
     // Saves the cache.
     //
-    pub fn run(self: *SaveHashCacheOperation, io: std.Io) !void {
-        try self.cache.save(io);
+    pub fn run(self: *SaveHashCacheOperation, io: std.Io, log: ILog) !void {
+        try self.cache.save(io, log);
     }
 };
 
@@ -272,10 +264,6 @@ pub fn createAutoImportScanner(allocator: std.mem.Allocator, options: ICreateAut
             .function = AutoImportScannerCallbacks.onLibraryWalked,
         },
         .onProgress = options.onProgress,
-        .logInfo = .{
-            .context = callbacks,
-            .function = AutoImportScannerCallbacks.logInfo,
-        },
     });
     return scanner;
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -8,7 +9,6 @@ const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const createAutoImportScanner = node_api.create_auto_import_scanner.createAutoImportScanner;
 const registerFolderMediaSourceBuilder = node_api.create_auto_import_scanner.registerFolderMediaSourceBuilder;
 const IAutoImportScannerProgress = node_api.auto_import_scanner.IAutoImportScannerProgress;
@@ -41,7 +41,7 @@ const storage_factory = @import("storage-zig").storage_factory;
 //
 // Nothing listening.
 //
-fn ignoreScannerProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").timers.Timers, progress: IAutoImportScannerProgress) void {
+fn ignoreScannerProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").timers.Timers, _: ILog, progress: IAutoImportScannerProgress) void {
     _ = context;
     _ = progress;
 }
@@ -49,7 +49,7 @@ fn ignoreScannerProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").ti
 //
 // Nothing listening.
 //
-fn ignoreScanProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
+fn ignoreScanProgress(context: ?*anyopaque, _: ILog, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
     _ = context;
     _ = currentlyScanning;
     _ = state;
@@ -76,7 +76,7 @@ const Pushed = struct {
     //
     // Records one file.
     //
-    fn visit(context: ?*anyopaque, result: IScannedImportFile) anyerror!void {
+    fn visit(context: ?*anyopaque, _: ILog, result: IScannedImportFile) anyerror!void {
         const self: *Pushed = @ptrCast(@alignCast(context.?));
         var copy = result;
         copy.filePath = try self.allocator.dupe(u8, result.filePath);
@@ -102,9 +102,6 @@ const ScannerTest = struct {
     // Holds the test's allocations.
     arena: std.heap.ArenaAllocator,
 
-    // Takes the line the scanner logs for each pass. Under `zig build test` standard output is the test program's channel to the build,
-    // so a line written there corrupts it and the build waits for the test's result forever.
-    mutedLog: mock_log.MutedLog,
 
     // The directory of the test.
     tempDir: []const u8,
@@ -133,11 +130,8 @@ const ScannerTest = struct {
     //
     // Makes the folder with one photo in it, an empty hash cache and an empty database.
     //
-    fn init(self: *ScannerTest) !void {
+    fn init(self: *ScannerTest, log: ILog) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-        self.mutedLog = .{};
-        self.mutedLog.install();
-        errdefer self.mutedLog.uninstall();
         const allocator = self.arena.allocator();
         const io = std.testing.io;
         self.test_env = try test_environment.setupEnvironment(io);
@@ -151,14 +145,14 @@ const ScannerTest = struct {
         try test_files.writeFile(io, self.photoPath, "the contents of a photo");
 
         self.hashCache = try HashCache.init(try path.join(allocator, &.{ self.tempDir, "hash-cache" }), false);
-        _ = try self.hashCache.load(io);
+        _ = try self.hashCache.load(io, log);
 
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
         const databaseDir = try path.join(allocator, &.{ self.tempDir, "database" });
         const created = try createDatabaseStorage(allocator, io, databaseDir);
         self.database = try createMediaFileDatabase(allocator, created.storage, self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider());
-        try createDatabase(allocator, io, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
+        try createDatabase(allocator, io, log, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session", "task", .{
             .context = null,
             .function = ignoreMessage,
@@ -168,26 +162,25 @@ const ScannerTest = struct {
     //
     // Removes the directory.
     //
-    fn deinit(self: *ScannerTest) void {
+    fn deinit(self: *ScannerTest, log: ILog) void {
         self.hashCache.deinit();
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
-        self.mutedLog.uninstall();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
     // Records that the database holds an asset with the given content hash, and commits it.
     //
-    fn addAsset(self: *ScannerTest, assetId: []const u8, contentHash: []const u8) !void {
-        try self.insertAsset(assetId, contentHash);
-        try self.database.bsonDatabase.commit(std.testing.io);
+    fn addAsset(self: *ScannerTest, log: ILog, assetId: []const u8, contentHash: []const u8) !void {
+        try self.insertAsset(log, assetId, contentHash);
+        try self.database.bsonDatabase.commit(std.testing.io, log);
     }
 
     //
     // Puts an asset with the given content hash in the database, without committing it.
     //
-    fn insertAsset(self: *ScannerTest, assetId: []const u8, contentHash: []const u8) !void {
+    fn insertAsset(self: *ScannerTest, log: ILog, assetId: []const u8, contentHash: []const u8) !void {
         const allocator = self.arena.allocator();
         var record = try BsonDocument.fromFields(allocator, &.{
             .{
@@ -199,7 +192,7 @@ const ScannerTest = struct {
                 .value = .{ .string = contentHash },
             },
         });
-        try self.database.metadataCollection.insertOne(std.testing.io, &record, null);
+        try self.database.metadataCollection.insertOne(std.testing.io, log, &record, null);
     }
 
     //
@@ -208,7 +201,7 @@ const ScannerTest = struct {
     // A file that is pushed is one the run is about to open, read and hash. An empty list is a run
     // that recognised everything it saw and did none of that.
     //
-    fn runOnePass(self: *ScannerTest) ![]IScannedImportFile {
+    fn runOnePass(self: *ScannerTest, log: ILog) ![]IScannedImportFile {
         const allocator = self.arena.allocator();
         var options: std.json.ObjectMap = .empty;
         try options.put(allocator, "auto", .{ .bool = true });
@@ -236,7 +229,7 @@ const ScannerTest = struct {
         var pushed: Pushed = .{
             .allocator = allocator,
         };
-        try scanner.scan(allocator, std.testing.io, test_timers.timers(), .{
+        try scanner.scan(allocator, std.testing.io, log, test_timers.timers(), .{
             .context = &pushed,
             .function = Pushed.visit,
         }, .{
@@ -288,31 +281,34 @@ fn photoHash() [32]u8 {
 }
 
 test "a photo nothing is known about is pushed to the import" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
 
-    const pushed = try context.runOnePass();
+    const pushed = try context.runOnePass(log);
 
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
     try std.testing.expectEqualStrings(context.photoPath, pushed[0].filePath);
 }
 
 test "a photo with an asset id recorded against it is never pushed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // Nothing is read at all here: not the file, not the database. This is the state a library
     // that has already been imported is in, and it is why such a run costs almost nothing.
     try context.recordAsImported("asset-1");
 
-    try std.testing.expectEqual(@as(usize, 0), (try context.runOnePass()).len);
+    try std.testing.expectEqual(@as(usize, 0), (try context.runOnePass(log)).len);
 }
 
 test "a photo the cache knows the hash of, but not where it landed, is looked up in the database" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // An earlier run hashed it but was stopped before it recorded where it went. The database is
     // asked for that hash, exactly as the import itself would. (The id is a UUID, because the database is a
@@ -321,44 +317,47 @@ test "a photo the cache knows the hash of, but not where it landed, is looked up
     const contentHash = photoHash();
     identity.hash = &contentHash;
     try context.hashCache.addSourceHash(context.photoPath, identity);
-    try context.addAsset("a1b2c3d4-e5f6-4890-abcd-ef1234567890", &std.fmt.bytesToHex(contentHash, .lower));
+    try context.addAsset(log, "a1b2c3d4-e5f6-4890-abcd-ef1234567890", &std.fmt.bytesToHex(contentHash, .lower));
 
-    try std.testing.expectEqual(@as(usize, 0), (try context.runOnePass()).len);
+    try std.testing.expectEqual(@as(usize, 0), (try context.runOnePass(log)).len);
 
     // And the answer is recorded, so the database is not asked a second time.
     try std.testing.expectEqualStrings("a1b2c3d4-e5f6-4890-abcd-ef1234567890", (try context.hashCache.getHash(allocator, context.photoPath)).?.assetId.?);
 }
 
 test "a photo the cache has hashed that the database does not hold is pushed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     var identity = try context.photoIdentity();
     const contentHash = photoHash();
     identity.hash = &contentHash;
     try context.hashCache.addSourceHash(context.photoPath, identity);
 
-    const pushed = try context.runOnePass();
+    const pushed = try context.runOnePass(log);
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
     try std.testing.expectEqualStrings(context.photoPath, pushed[0].filePath);
 }
 
 test "a photo whose size no longer matches is pushed, however well known its identity is" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     try context.recordAsImported("asset-1");
     try test_files.writeFile(std.testing.io, context.photoPath, "the contents of a photo, edited and now longer");
 
-    const pushed = try context.runOnePass();
+    const pushed = try context.runOnePass(log);
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
     try std.testing.expectEqualStrings(context.photoPath, pushed[0].filePath);
 }
 
 test "a photo whose modified time no longer matches is pushed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const io = std.testing.io;
     // The same bytes at a different time. A photo library is free to hand a deleted item's
     // identity to a new one, so an entry is only believed when all three parts agree.
@@ -374,19 +373,20 @@ test "a photo whose modified time no longer matches is pushed" {
         .modify_timestamp = .{ .new = movedOn },
     });
 
-    const pushed = try context.runOnePass();
+    const pushed = try context.runOnePass(log);
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
     try std.testing.expectEqualStrings(context.photoPath, pushed[0].filePath);
 }
 
 test "what the import records is an identity the next listing produces again" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // The whole thing rests on this. The identity written into the cache when a photo is imported
     // has to be the one a later listing of the same source reports, or the lookup can never
     // match and every photo is copied and hashed again on every run.
-    const pushed = try context.runOnePass();
+    const pushed = try context.runOnePass(log);
 
     const identity = try context.photoIdentity();
     try std.testing.expectEqualStrings(context.photoPath, pushed[0].cacheIdentity.?.key);
@@ -395,9 +395,10 @@ test "what the import records is an identity the next listing produces again" {
 }
 
 test "an automatic import with no sources is refused rather than run over nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     var options: std.json.ObjectMap = .empty;
     try options.put(allocator, "auto", .{ .bool = true });
@@ -419,9 +420,10 @@ test "an automatic import with no sources is refused rather than run over nothin
 }
 
 test "entries of photos no longer in the source are dropped from the cache after a walk" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
 
     // A photo imported from the folder that has since been deleted from it, and a manual import from elsewhere.
@@ -433,16 +435,17 @@ test "entries of photos no longer in the source are dropped from the cache after
     const manualPath = try path.join(allocator, &.{ context.tempDir, "manual.jpg" });
     try context.hashCache.addHash(manualPath, identity);
 
-    _ = try context.runOnePass();
+    _ = try context.runOnePass(log);
 
     try std.testing.expect(try context.hashCache.getHash(allocator, gonePath) == null);
     try std.testing.expect(try context.hashCache.getHash(allocator, manualPath) != null);
 }
 
 test "the cache is saved every hundred photos the database is asked about" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const io = std.testing.io;
 
@@ -460,17 +463,17 @@ test "the cache is saved every hundred photos the database is asked about" {
             .lastModified = @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_ms)),
         });
         // (The record keeps the hex it is given, so it gets a copy of its own.)
-        try context.insertAsset(try std.fmt.allocPrint(allocator, "a1b2c3d4-e5f6-4890-abcd-ef1234567{d:0>3}", .{index}), try allocator.dupe(u8, &std.fmt.bytesToHex(digest, .lower)));
+        try context.insertAsset(log, try std.fmt.allocPrint(allocator, "a1b2c3d4-e5f6-4890-abcd-ef1234567{d:0>3}", .{index}), try allocator.dupe(u8, &std.fmt.bytesToHex(digest, .lower)));
     }
-    try context.database.bsonDatabase.commit(io);
+    try context.database.bsonDatabase.commit(io, log);
 
-    const pushed = try context.runOnePass();
+    const pushed = try context.runOnePass(log);
 
     // Only the original photo is new; the hundredth answer saved the cache, so a fresh load sees the asset ids.
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
     var reloaded = try HashCache.init(try path.join(allocator, &.{ context.tempDir, "hash-cache" }), true);
     defer reloaded.deinit();
-    try std.testing.expect(try reloaded.load(io));
+    try std.testing.expect(try reloaded.load(io, log));
     try std.testing.expect(reloaded.getEntryCount() >= 100);
     const first = try path.join(allocator, &.{ context.watchedDir, "batch-000.jpg" });
     try std.testing.expectEqualStrings("a1b2c3d4-e5f6-4890-abcd-ef1234567000", (try reloaded.getHash(allocator, first)).?.assetId.?);

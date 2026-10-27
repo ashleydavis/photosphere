@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -6,7 +7,6 @@ const node_api = @import("node-api-zig");
 const HttpServer = node_utils.http_server.HttpServer;
 const AssetServerRoutes = node_api.asset_server_routes.AssetServerRoutes;
 const json = ziggy.json;
-const log = &utils.log.log;
 
 //
 // Options for creating the asset server.
@@ -64,7 +64,7 @@ pub const AssetServer = struct {
 // and of the calling thread's environment, and makes a core of its own with generators of its own (the test ones when NODE_ENV is
 // "testing").
 //
-pub fn createAssetServer(allocator: std.mem.Allocator, io: std.Io, options: IAssetServerOptions) !*AssetServer {
+pub fn createAssetServer(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IAssetServerOptions) !*AssetServer {
     const asset_server = try allocator.create(AssetServer);
     errdefer allocator.destroy(asset_server);
 

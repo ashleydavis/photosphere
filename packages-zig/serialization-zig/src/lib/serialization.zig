@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const bson = @import("bson.zig");
 const zlib = @import("zlib");
@@ -1350,7 +1351,7 @@ fn WriteOperation(comptime StorageT: type) type {
         //
         // Writes the file.
         //
-        pub fn run(self: *const @This(), io: std.Io) anyerror!void {
+        pub fn run(self: *const @This(), io: std.Io, _: ILog) anyerror!void {
             return self.storage.write(self.allocator, io, self.filePath, null, self.data);
         }
     };
@@ -1376,8 +1377,8 @@ fn ReadOperation(comptime StorageT: type) type {
         //
         // Reads the file (null when it does not exist).
         //
-        pub fn run(self: *const @This(), io: std.Io) anyerror!?[]u8 {
-            return self.storage.read(self.allocator, io, self.filePath);
+        pub fn run(self: *const @This(), io: std.Io, log: ILog) anyerror!?[]u8 {
+            return self.storage.read(self.allocator, io, log, self.filePath);
         }
     };
 }
@@ -1401,6 +1402,7 @@ fn ReadOperation(comptime StorageT: type) type {
 pub fn save(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: anytype,
     filePath: []const u8,
     data: anytype,
@@ -1420,7 +1422,7 @@ pub fn save(
     const finalBuffer = try std.mem.concat(allocator, u8, &.{ serializedData, &checksum });
 
     const operation: WriteOperation(@TypeOf(storage)) = .{ .allocator = allocator, .storage = storage, .filePath = filePath, .data = finalBuffer };
-    try retry(io, &operation, 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, try std.fmt.allocPrint(allocator, "Failed to write {s}", .{filePath}));
+    try retry(io, log, &operation, 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, try std.fmt.allocPrint(allocator, "Failed to write {s}", .{filePath}));
 }
 
 //
@@ -1443,6 +1445,7 @@ pub fn load(
     comptime T: type,
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: anytype,
     filePath: []const u8,
     expectedTypeCode: []const u8,
@@ -1452,7 +1455,7 @@ pub fn load(
     const ContextT = @TypeOf(context);
 
     const readOperation: ReadOperation(@TypeOf(storage)) = .{ .storage = storage, .allocator = allocator, .filePath = filePath };
-    const buffer = try retry(io, &readOperation, 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, try std.fmt.allocPrint(allocator, "Failed to read {s}", .{filePath})) orelse {
+    const buffer = try retry(io, log, &readOperation, 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, try std.fmt.allocPrint(allocator, "Failed to read {s}", .{filePath})) orelse {
         return null;
     };
 
@@ -1545,10 +1548,10 @@ fn asciiString(output: []u8, bytes: []const u8) []const u8 {
 // This is the single place that reads the version header; callers use this instead of
 // reading the version bytes directly.
 //
-pub fn loadVersion(allocator: std.mem.Allocator, io: std.Io, storage: anytype, filePath: []const u8) ?u32 {
+pub fn loadVersion(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: anytype, filePath: []const u8) ?u32 {
     // (FileStorage opens the file in readStream, so a failure of readStream means the file cannot be read and the
     // version is undefined.)
-    const stream = storage.readStream(allocator, io, filePath) catch {
+    const stream = storage.readStream(allocator, io, log, filePath) catch {
         return null;
     };
     defer stream.destroy(io);
@@ -1582,11 +1585,12 @@ pub const IVerifyResult = struct {
 pub fn verify(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     storage: anytype,
     filePath: []const u8,
 ) anyerror!IVerifyResult {
     const readOperation: ReadOperation(@TypeOf(storage)) = .{ .storage = storage, .allocator = allocator, .filePath = filePath };
-    const buffer = try retry(io, &readOperation, 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, try std.fmt.allocPrint(allocator, "Failed to read {s}", .{filePath})) orelse {
+    const buffer = try retry(io, log, &readOperation, 3, 1_000, 2, SERIALIZED_FILE_TIMEOUT_MS, try std.fmt.allocPrint(allocator, "Failed to read {s}", .{filePath})) orelse {
         return .{ .valid = false, .size = 0, .@"error" = "File not found or empty" };
     };
 

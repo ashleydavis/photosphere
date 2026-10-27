@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const tools = @import("tools-zig");
 const media_tools = @import("media-tools-zig");
 const heic = tools.heic;
@@ -62,17 +63,19 @@ test "dimensionsFromProbe fails loudly on a report it cannot take a size from" {
 }
 
 test "getHeicInfo reads the size of a tiled HEIC with the bundled ffprobe" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
 
-    const info = try heic.getHeicInfo(arena.allocator(), std.testing.io, mediaTools.runner(), test_heic);
+    const info = try heic.getHeicInfo(arena.allocator(), std.testing.io, log, mediaTools.runner(), test_heic);
     try std.testing.expectEqual(@as(f64, 1000), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 700), info.dimensions.height);
 }
 
 test "decodeHeic joins and trims the tiles of a HEIC into a JPEG of the picture's size" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -82,24 +85,25 @@ test "decodeHeic joins and trims the tiles of a HEIC into a JPEG of the picture'
     defer tmp_dir.cleanup();
 
     const outputPath = try tempFilePath(allocator, tmp_dir, "decoded.jpg");
-    try heic.decodeHeic(allocator, std.testing.io, mediaTools.runner(), test_heic, outputPath);
+    try heic.decodeHeic(allocator, std.testing.io, log, mediaTools.runner(), test_heic, outputPath);
 
     // The bundled ImageMagick reads the JPEG FFmpeg wrote, at the size of the whole picture, not of a tile.
-    const info = (try tools.getFileInfo(allocator, std.testing.io, mediaTools.runner(), outputPath, "image/jpeg")).?;
+    const info = (try tools.getFileInfo(allocator, std.testing.io, log, mediaTools.runner(), outputPath, "image/jpeg")).?;
     try std.testing.expectEqual(@as(f64, 1000), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 700), info.dimensions.height);
 
     // A second decode to the same path is refused rather than overwriting it.
-    try std.testing.expectError(error.Thrown, heic.decodeHeic(allocator, std.testing.io, mediaTools.runner(), test_heic, outputPath));
+    try std.testing.expectError(error.Thrown, heic.decodeHeic(allocator, std.testing.io, log, mediaTools.runner(), test_heic, outputPath));
 }
 
 test "getFileInfo reads a HEIC with ffprobe rather than ImageMagick" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
 
-    const info = (try tools.getFileInfo(arena.allocator(), std.testing.io, mediaTools.runner(), test_heic, "image/heic")).?;
+    const info = (try tools.getFileInfo(arena.allocator(), std.testing.io, log, mediaTools.runner(), test_heic, "image/heic")).?;
     try std.testing.expectEqual(@as(f64, 1000), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 700), info.dimensions.height);
 }

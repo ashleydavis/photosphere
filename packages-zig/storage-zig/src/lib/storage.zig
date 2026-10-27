@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const errors = utils.errors;
@@ -229,13 +230,13 @@ pub const IStorage = struct {
         info: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?IFileInfo,
 
         // Reads a file from storage. Returns null if the file doesn't exist.
-        read: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]u8,
+        read: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!?[]u8,
 
         // Writes a file to storage.
         write: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) anyerror!void,
 
         // Streams a file from storage.
-        readStream: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!IReadStream,
+        readStream: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!IReadStream,
 
         // Writes an input stream to storage.
         writeStream: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void,
@@ -255,14 +256,14 @@ pub const IStorage = struct {
 
         // Attempts to acquire a write lock for the specified file.
         // Returns true if the lock was acquired, false if it already exists.
-        acquireWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!bool,
+        acquireWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!bool,
 
         // Releases a write lock for the specified file.
-        releaseWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void,
+        releaseWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!void,
 
         // Refreshes a write lock for the specified file, updating its timestamp.
         // Fails if the lock is no longer owned by the specified owner.
-        refreshWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void,
+        refreshWriteLock: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!void,
 
         // How many bytes reading the file described by fileInfo hands out, or null when this storage
         // cannot say.
@@ -384,8 +385,8 @@ pub const IStorage = struct {
     // Reads a file from storage.
     // Returns null if the file doesn't exist.
     //
-    pub fn read(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]u8 {
-        return self.vtable.read(self.ptr, allocator, io, filePath);
+    pub fn read(self: IStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!?[]u8 {
+        return self.vtable.read(self.ptr, allocator, io, log, filePath);
     }
 
     //
@@ -398,8 +399,8 @@ pub const IStorage = struct {
     //
     // Streams a file from storage.
     //
-    pub fn readStream(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!IReadStream {
-        return self.vtable.readStream(self.ptr, allocator, io, filePath);
+    pub fn readStream(self: IStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!IReadStream {
+        return self.vtable.readStream(self.ptr, allocator, io, log, filePath);
     }
 
     //
@@ -442,23 +443,23 @@ pub const IStorage = struct {
     // Attempts to acquire a write lock for the specified file.
     // Returns true if the lock was acquired, false if it already exists.
     //
-    pub fn acquireWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!bool {
-        return self.vtable.acquireWriteLock(self.ptr, allocator, io, filePath, owner);
+    pub fn acquireWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!bool {
+        return self.vtable.acquireWriteLock(self.ptr, allocator, io, log, filePath, owner);
     }
 
     //
     // Releases a write lock for the specified file.
     //
-    pub fn releaseWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void {
-        return self.vtable.releaseWriteLock(self.ptr, allocator, io, filePath);
+    pub fn releaseWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!void {
+        return self.vtable.releaseWriteLock(self.ptr, allocator, io, log, filePath);
     }
 
     //
     // Refreshes a write lock for the specified file, updating its timestamp.
     // Fails if the lock is no longer owned by the specified owner.
     //
-    pub fn refreshWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
-        return self.vtable.refreshWriteLock(self.ptr, allocator, io, filePath, owner);
+    pub fn refreshWriteLock(self: IStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!void {
+        return self.vtable.refreshWriteLock(self.ptr, allocator, io, log, filePath, owner);
     }
 };
 
@@ -523,8 +524,8 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
         //
         // Forwards read.
         //
-        fn read(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]u8 {
-            return cast(ptr).read(allocator, io, filePath);
+        fn read(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!?[]u8 {
+            return cast(ptr).read(allocator, io, log, filePath);
         }
 
         //
@@ -537,8 +538,8 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
         //
         // Forwards readStream.
         //
-        fn readStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!IReadStream {
-            return cast(ptr).readStream(allocator, io, filePath);
+        fn readStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!IReadStream {
+            return cast(ptr).readStream(allocator, io, log, filePath);
         }
 
         //
@@ -579,22 +580,22 @@ pub fn implement(comptime Implementation: type) *const IStorage.VTable {
         //
         // Forwards acquireWriteLock.
         //
-        fn acquireWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!bool {
-            return cast(ptr).acquireWriteLock(allocator, io, filePath, owner);
+        fn acquireWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!bool {
+            return cast(ptr).acquireWriteLock(allocator, io, log, filePath, owner);
         }
 
         //
         // Forwards releaseWriteLock.
         //
-        fn releaseWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void {
-            return cast(ptr).releaseWriteLock(allocator, io, filePath);
+        fn releaseWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!void {
+            return cast(ptr).releaseWriteLock(allocator, io, log, filePath);
         }
 
         //
         // Forwards refreshWriteLock.
         //
-        fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
-            return cast(ptr).refreshWriteLock(allocator, io, filePath, owner);
+        fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!void {
+            return cast(ptr).refreshWriteLock(allocator, io, log, filePath, owner);
         }
 
         //

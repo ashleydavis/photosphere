@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const task_queue_zig = @import("ziggy").task_queue;
 const IQueueBackend = task_queue_zig.queue_backend.IQueueBackend;
 const TaskPriority = task_queue_zig.types.TaskPriority;
@@ -82,7 +83,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing is ever completed here, so a wait would never end.
     //
-    fn waitForMessage(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers) void {
+    fn waitForMessage(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, _: ILog) void {
         _ = ptr;
         @panic("A handler waited for a message, which a backend that only records tasks never sends");
     }
@@ -90,7 +91,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Records the task.
     //
-    fn addTask(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
+    fn addTask(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, _: ILog, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         _ = io;
         _ = data;
         _ = source;
@@ -143,7 +144,7 @@ pub const RecordingQueueBackend = struct {
     //
     // Nothing to cancel, because nothing runs.
     //
-    fn cancelTasks(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, source: []const u8) void {
+    fn cancelTasks(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: ILog, source: []const u8) void {
         _ = ptr;
         _ = source;
     }

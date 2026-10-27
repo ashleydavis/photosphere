@@ -5,7 +5,6 @@ const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const hash = node_api.hash;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const MediaTools = media_tools.MediaTools;
@@ -191,6 +190,7 @@ test "computeFileHash reports a missing file the way Node does" {
 }
 
 test "getHashFromCache answers from an entry whose length and date match the file, with the file's own stat" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -199,7 +199,7 @@ test "getHashFromCache answers from an entry whose length and date match the fil
     defer temp_dirs.removeTempDir(io, cacheDir);
     var cache = try node_api.hash_cache.HashCache.init(cacheDir, false);
     defer cache.deinit();
-    _ = try cache.load(io);
+    _ = try cache.load(io, log);
     const digest = [_]u8{0x11} ** 32;
     try cache.addHash("/photos/a.jpg", .{
         .hash = &digest,
@@ -219,6 +219,7 @@ test "getHashFromCache answers from an entry whose length and date match the fil
 }
 
 test "getHashFromCache looks an item up under its identity and compares against the identity" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -227,7 +228,7 @@ test "getHashFromCache looks an item up under its identity and compares against 
     defer temp_dirs.removeTempDir(io, cacheDir);
     var cache = try node_api.hash_cache.HashCache.init(cacheDir, false);
     defer cache.deinit();
-    _ = try cache.load(io);
+    _ = try cache.load(io, log);
     const digest = [_]u8{0x22} ** 32;
     try cache.addSourceHash("library-item-1", .{
         .hash = &digest,
@@ -252,6 +253,7 @@ test "getHashFromCache looks an item up under its identity and compares against 
 }
 
 test "validateAndHash hashes a valid image" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
@@ -260,10 +262,10 @@ test "validateAndHash hashes a valid image" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const contents = try test_files.readFile(allocator, io, "../test/test.png");
 
-    const hashed = (try hash.validateAndHash(allocator, io, runner, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
+    const hashed = (try hash.validateAndHash(allocator, io, log, runner, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
 
     var expected: [32]u8 = undefined;
     Sha256.hash(contents, &expected, .{});
@@ -273,6 +275,7 @@ test "validateAndHash hashes a valid image" {
 }
 
 test "validateAndHash returns undefined for a file that fails its validation" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
@@ -281,16 +284,13 @@ test "validateAndHash returns undefined for a file that fails its validation" {
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "validate-and-hash");
     defer temp_dirs.removeTempDir(io, workingDir);
     // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const filePath = try writeTestFile(allocator, io, workingDir, "broken.png", "this is not a png");
 
-    try std.testing.expect(try hash.validateAndHash(allocator, io, runner, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
+    try std.testing.expect(try hash.validateAndHash(allocator, io, log, runner, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
 }
 
 test "computeFileHash passes on a failure to open the file that is not a missing file" {

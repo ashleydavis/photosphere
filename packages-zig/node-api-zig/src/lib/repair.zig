@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
@@ -9,7 +10,6 @@ const hash = @import("hash.zig");
 const tree = @import("tree.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const ProgressCallback = media_file_database.ProgressCallback;
 const getDatabaseSummary = media_file_database.getDatabaseSummary;
@@ -113,13 +113,13 @@ pub const IRepairResult = struct {
 //
 // Calls the progress callback with a formatted message, when there is one.
 //
-fn reportProgress(io: std.Io, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
+fn reportProgress(io: std.Io, log: ILog, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
     const callback = progressCallback orelse {
         return;
     };
     var buffer: [1024]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, format, args) catch buffer[0..];
-    callback.call(io, message);
+    callback.call(io, log, message);
 }
 
 //
@@ -174,8 +174,8 @@ const RepairState = struct {
     //
     // Repairs a single file.
     //
-    fn repairFile(self: *RepairState, fileName: []const u8, expectedHash: []const u8) !bool {
-        return self.tryRepairFile(fileName, expectedHash) catch |err| {
+    fn repairFile(self: *RepairState, log: ILog, fileName: []const u8, expectedHash: []const u8) !bool {
+        return self.tryRepairFile(log, fileName, expectedHash) catch |err| {
             log.@"error"(try std.fmt.allocPrint(self.allocator, "Error repairing file {s}: {s}", .{ fileName, errors.errorMessage(err) }));
             return false;
         };
@@ -184,7 +184,7 @@ const RepairState = struct {
     //
     // The body of repairFile's try block.
     //
-    fn tryRepairFile(self: *RepairState, fileName: []const u8, expectedHash: []const u8) !bool {
+    fn tryRepairFile(self: *RepairState, log: ILog, fileName: []const u8, expectedHash: []const u8) !bool {
         const allocator = self.allocator;
         const io = self.io;
 
@@ -201,7 +201,7 @@ const RepairState = struct {
         };
 
         // Verify source file hash matches expected
-        const hashStream = try self.sourceAssetStorage.readStream(allocator, io, fileName);
+        const hashStream = try self.sourceAssetStorage.readStream(allocator, io, log, fileName);
         const sourceHash = computeHash(hashStream.reader());
         hashStream.destroy(io);
         if (!std.mem.eql(u8, &(try sourceHash), expectedHash)) {
@@ -210,7 +210,7 @@ const RepairState = struct {
         }
 
         // Copy file from source to target
-        const readStream = try self.sourceAssetStorage.readStream(allocator, io, fileName);
+        const readStream = try self.sourceAssetStorage.readStream(allocator, io, log, fileName);
         defer readStream.destroy(io);
 
         //
@@ -225,7 +225,7 @@ const RepairState = struct {
             return false;
         };
 
-        const copiedStream = try self.assetStorage.readStream(allocator, io, fileName);
+        const copiedStream = try self.assetStorage.readStream(allocator, io, log, fileName);
         defer copiedStream.destroy(io);
         const copiedHash = try computeAssetHash(allocator, copiedStream.reader(), .{
             .contentType = copiedFileInfo.contentType,
@@ -243,20 +243,20 @@ const RepairState = struct {
     //
     // Check nodes in the merkle to find corrupted/missing files.
     //
-    fn checkFile(self: *RepairState, node: *SortNode) !void {
+    fn checkFile(self: *RepairState, log: ILog, node: *SortNode) !void {
         const allocator = self.allocator;
         const io = self.io;
 
         self.result.filesProcessed += 1;
 
-        reportProgress(self.io, self.progressCallback, "Checking file {d} of {d}", .{ self.result.filesProcessed, self.summaryTotalFiles });
+        reportProgress(self.io, log, self.progressCallback, "Checking file {d} of {d}", .{ self.result.filesProcessed, self.summaryTotalFiles });
 
         const fileName = node.name.?;
         const fileInfo = try self.assetStorage.info(allocator, io, fileName) orelse {
             // File is missing - try to repair.
-            reportProgress(self.io, self.progressCallback, "Repairing missing file: {s}", .{fileName});
+            reportProgress(self.io, log, self.progressCallback, "Repairing missing file: {s}", .{fileName});
 
-            const repaired = try self.repairFile(fileName, node.contentHash.?);
+            const repaired = try self.repairFile(log, fileName, node.contentHash.?);
             if (repaired) {
                 try self.repaired.append(allocator, fileName);
             }
@@ -271,7 +271,7 @@ const RepairState = struct {
         if (node.size != fileInfo.length or node.lastModified.? != fileInfo.lastModified or (self.options.full orelse false)) {
 
             // Verify the actual hash.
-            const stream = try self.assetStorage.readStream(allocator, io, fileName);
+            const stream = try self.assetStorage.readStream(allocator, io, log, fileName);
             const freshHash = computeAssetHash(allocator, stream.reader(), .{
                 .contentType = fileInfo.contentType,
                 .length = fileInfo.length,
@@ -280,9 +280,9 @@ const RepairState = struct {
             stream.destroy(io);
             if (!std.mem.eql(u8, (try freshHash).hash, node.contentHash.?)) {
                 // File is corrupted - try to repair.
-                reportProgress(self.io, self.progressCallback, "Repairing corrupted file: {s}", .{fileName});
+                reportProgress(self.io, log, self.progressCallback, "Repairing corrupted file: {s}", .{fileName});
 
-                const repaired = try self.repairFile(fileName, node.contentHash.?);
+                const repaired = try self.repairFile(log, fileName, node.contentHash.?);
                 if (repaired) {
                     try self.repaired.append(allocator, fileName);
                 }
@@ -303,13 +303,13 @@ const RepairState = struct {
     //
     // Checks a node and its asset's database record.
     //
-    fn visitNode(self: *RepairState, node: *SortNode) anyerror!bool {
+    fn visitNode(self: *RepairState, log: ILog, node: *SortNode) anyerror!bool {
         const allocator = self.allocator;
         const io = self.io;
         self.result.nodesProcessed += 1;
 
         if (node.name) |nodeName| {
-            try self.checkFile(node);
+            try self.checkFile(log, node);
 
             //
             // Check asset nodes have a database record with the correct id and hash; repair if not.
@@ -322,7 +322,7 @@ const RepairState = struct {
                     //
                     // Record missing: synthesize a minimal database record.
                     //
-                    reportProgress(self.io, self.progressCallback, "Repairing missing database record: {s}", .{nodeName});
+                    reportProgress(self.io, log, self.progressCallback, "Repairing missing database record: {s}", .{nodeName});
                     var now: std.Io.Writer.Allocating = .init(allocator);
                     try js_date.writeIsoString(&now.writer, std.Io.Clock.real.now(io).toMilliseconds());
                     const color = try allocator.alloc(BsonValue, 3);
@@ -339,7 +339,7 @@ const RepairState = struct {
                     try minimalRecord.put(allocator, "micro", .{ .string = "" });
                     try minimalRecord.put(allocator, "color", .{ .array = color });
                     var insertOperation: InsertOneOperation = .{ .metadataCollection = self.metadataCollection, .record = &minimalRecord };
-                    try retry(io, &insertOperation, 3, 1_000, 2, 30_000, null);
+                    try retry(io, log, &insertOperation, 3, 1_000, 2, 30_000, null);
                     try self.recordsRepaired.append(allocator, nodeName);
                     try self.recordIdToHash.put(allocator, assetId, expectedHashHex);
                 }
@@ -347,11 +347,11 @@ const RepairState = struct {
                     //
                     // Hash wrong: update the record with the hash from the merkle tree.
                     //
-                    reportProgress(self.io, self.progressCallback, "Repairing database record hash: {s}", .{nodeName});
+                    reportProgress(self.io, log, self.progressCallback, "Repairing database record hash: {s}", .{nodeName});
                     var updates: BsonDocument = .empty;
                     try updates.put(allocator, "hash", .{ .string = expectedHashHex });
                     var updateOperation: UpdateOneOperation = .{ .metadataCollection = self.metadataCollection, .id = assetId, .updates = updates };
-                    const updated = try retry(io, &updateOperation, 3, 1_000, 2, 30_000, null);
+                    const updated = try retry(io, log, &updateOperation, 3, 1_000, 2, 30_000, null);
                     if (updated) {
                         try self.recordsRepaired.append(allocator, nodeName);
                         try self.recordIdToHash.put(allocator, assetId, expectedHashHex);
@@ -380,8 +380,8 @@ const InsertOneOperation = struct {
     //
     // Inserts the record.
     //
-    pub fn run(self: *InsertOneOperation, io: std.Io) !void {
-        return self.metadataCollection.insertOne(io, self.record, null);
+    pub fn run(self: *InsertOneOperation, io: std.Io, log: ILog) !void {
+        return self.metadataCollection.insertOne(io, log, self.record, null);
     }
 };
 
@@ -404,8 +404,8 @@ const UpdateOneOperation = struct {
     //
     // Updates the record.
     //
-    pub fn run(self: *UpdateOneOperation, io: std.Io) !bool {
-        return self.metadataCollection.updateOne(io, self.id, self.updates, .{});
+    pub fn run(self: *UpdateOneOperation, io: std.Io, log: ILog) !bool {
+        return self.metadataCollection.updateOne(io, log, self.id, self.updates, .{});
     }
 };
 
@@ -418,6 +418,7 @@ const UpdateOneOperation = struct {
 pub fn repair(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sourceAssetStorage: IStorage,
@@ -426,7 +427,7 @@ pub fn repair(
     options: IRepairOptions,
     progressCallback: ?ProgressCallback,
 ) !IRepairResult {
-    const summary = try getDatabaseSummary(allocator, io, assetStorage);
+    const summary = try getDatabaseSummary(allocator, io, log, assetStorage);
     var state: RepairState = .{
         .allocator = allocator,
         .io = io,
@@ -452,10 +453,10 @@ pub fn repair(
         },
     };
 
-    reportProgress(io, progressCallback, "Checking for missing or corrupt files in merkle tree...", .{});
+    reportProgress(io, log, progressCallback, "Checking for missing or corrupt files in merkle tree...", .{});
 
     var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{ .allocator = allocator, .storage = assetStorage };
-    const merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const merkleTree: IMerkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load merkle tree", .{});
     };
 
@@ -463,7 +464,7 @@ pub fn repair(
     // Build id->hash map from the database for asset record check and repair.
     //
     var records = metadataCollection.iterateRecords();
-    while (try records.next(io)) |record| {
+    while (try records.next(io, log)) |record| {
         if (record.fields.get("hash")) |recordHash| {
             if (recordHash == .string) {
                 try state.recordIdToHash.put(allocator, record._id, recordHash.string);
@@ -471,15 +472,15 @@ pub fn repair(
         }
     }
 
-    try traverseTreeAsync(SortNode, merkleTree.sort, &state, RepairState.visitNode);
+    try traverseTreeAsync(SortNode, merkleTree.sort, log, &state, RepairState.visitNode);
 
-    try bsonDatabase.commit(io);
+    try bsonDatabase.commit(io, log);
 
     if (state.recordsRepaired.items.len > 0 or state.repaired.items.len > 0) {
         var now: std.Io.Writer.Allocating = .init(allocator);
         try js_date.writeIsoString(&now.writer, std.Io.Clock.real.now(io).toMilliseconds());
         // The session id is "repair".
-        try tree.stampDatabaseStateLocked(allocator, io, assetStorage, rawStorage, "repair", .{ .lastModifiedAt = now.written() });
+        try tree.stampDatabaseStateLocked(allocator, io, log, assetStorage, rawStorage, "repair", .{ .lastModifiedAt = now.written() });
     }
 
     var result = state.result;

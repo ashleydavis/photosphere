@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
@@ -10,7 +11,6 @@ const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const storage_helper = @import("../lib/storage-helper.zig");
-const log = &utils.log.log;
 const path = node_utils.path;
 const Date = utils.timestamp_provider.Date;
 const loadEncryptionKeysFromPem = encryption.key_utils.loadEncryptionKeysFromPem;
@@ -37,14 +37,14 @@ pub const IHashCommandOptions = struct {
 //
 // Compute the hash of a file.
 //
-pub fn hashCommand(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, options: *const IHashCommandOptions) !void {
+pub fn hashCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, options: *const IHashCommandOptions) !void {
     if (filePath.len == 0) {
         log.@"error"(try pc.red(allocator, "File path is required."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     if (std.mem.startsWith(u8, filePath, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, options.yes orelse false);
+        _ = try configureS3IfNeeded(allocator, io, log, options.yes orelse false);
     }
 
     const keyPems = try resolveKeyPems(allocator, io, options.key);
@@ -62,10 +62,10 @@ pub fn hashCommand(allocator: std.mem.Allocator, io: std.Io, filePath: []const u
 
     const fileInfo = try storage.info(allocator, io, fileName) orelse {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "File not found: {s}", .{filePath})));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
-    const stream = try storage.readStream(allocator, io, fileName);
+    const stream = try storage.readStream(allocator, io, log, fileName);
     defer stream.destroy(io);
     const hashBuffer = try computeHash(stream.reader());
     const hashHex = std.fmt.bytesToHex(hashBuffer, .lower);

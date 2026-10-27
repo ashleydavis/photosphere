@@ -60,6 +60,7 @@ fn buildTree(allocator: std.mem.Allocator, leafNames: []const []const u8) !IMerk
 }
 
 test "encryptFile writes file to writeStorage" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -74,14 +75,15 @@ test "encryptFile writes file to writeStorage" {
     var tree = try buildTree(allocator, &.{"asset/f1"});
     try readStorage.write(allocator, io, "asset/f1", "application/octet-stream", "hello");
 
-    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
+    _ = try encryptFile(allocator, io, log, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, "asset/f1"));
-    const written = try writeStorage.read(allocator, io, "asset/f1");
+    const written = try writeStorage.read(allocator, io, log, "asset/f1");
     try std.testing.expectEqualStrings("hello", written.?);
 }
 
 test "encryptFile updates merkle tree entry after writing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -107,7 +109,7 @@ test "encryptFile updates merkle tree entry after writing" {
     tree.dirty = false;
     try readStorage.write(allocator, io, "asset/f1", "application/octet-stream", content);
 
-    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
+    _ = try encryptFile(allocator, io, log, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
 
     const info = try merkle_tree.getItemInfo(&tree, "asset/f1");
     try std.testing.expect(info != null);
@@ -115,6 +117,7 @@ test "encryptFile updates merkle tree entry after writing" {
 }
 
 test "encryptFile does not update merkle tree when file has no existing tree entry" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -130,13 +133,14 @@ test "encryptFile does not update merkle tree when file has no existing tree ent
     var tree = try buildTree(allocator, &.{});
     try readStorage.write(allocator, io, "asset/f1", "application/octet-stream", "no tree entry");
 
-    _ = try encryptFile(allocator, io, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
+    _ = try encryptFile(allocator, io, log, "asset/f1", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, "asset/f1"));
     try std.testing.expect(try merkle_tree.getItemInfo(&tree, "asset/f1") == null);
 }
 
 test "encryptFile does not update merkle tree for .db/ files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -151,7 +155,7 @@ test "encryptFile does not update merkle tree for .db/ files" {
     var tree = try buildTree(allocator, &.{});
     try readStorage.write(allocator, io, ".db/something", "application/octet-stream", "db file");
 
-    _ = try encryptFile(allocator, io, ".db/something", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
+    _ = try encryptFile(allocator, io, log, ".db/something", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, ".db/something"));
     // Tree should be unmodified (no entry for .db/ files)
@@ -160,6 +164,7 @@ test "encryptFile does not update merkle tree for .db/ files" {
 }
 
 test "encryptFile throws when source file does not exist" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -173,6 +178,6 @@ test "encryptFile throws when source file does not exist" {
     const writeStorage = writeStore.asStorage();
     var tree = try buildTree(allocator, &.{});
 
-    try std.testing.expectError(error.Thrown, encryptFile(allocator, io, "missing/file.dat", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree));
+    try std.testing.expectError(error.Thrown, encryptFile(allocator, io, log, "missing/file.dat", readStorage, writeStorage, readStorage, try getPublicKeyHash(allocator), &tree));
     try std.testing.expect(std.mem.indexOf(u8, errors.errorMessage(error.Thrown), "does not exist") != null);
 }

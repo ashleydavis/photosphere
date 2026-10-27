@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -164,7 +165,7 @@ pub const BsonDatabase = struct {
     // Flushes all pending writes to disk across all collections and updates the database merkle tree.
     // Dirty flags are cleared; the in-memory cache remains populated for fast subsequent reads.
     //
-    pub fn commit(self: *BsonDatabase, io: std.Io) !void {
+    pub fn commit(self: *BsonDatabase, io: std.Io, log: ILog) !void {
         if (!self.dirty) {
             return;
         }
@@ -174,13 +175,13 @@ pub const BsonDatabase = struct {
                 continue;
             }
 
-            try coll.commit(io);
+            try coll.commit(io, log);
 
             const collMerkleRef = try coll.merkleTree();
-            const collMerkle = try collMerkleRef.get(io);
+            const collMerkle = try collMerkleRef.get(io, log);
             const databaseMerkleRef = try self.merkleTree();
             if (collMerkle != null and collMerkle.?.merkle != null) {
-                try databaseMerkleRef.upsert(io, .{
+                try databaseMerkleRef.upsert(io, log, .{
                     .name = collName,
                     .hash = collMerkle.?.merkle.?.hash,
                     .length = collMerkle.?.merkle.?.nodeCount,
@@ -188,12 +189,12 @@ pub const BsonDatabase = struct {
                 });
             }
             else {
-                try databaseMerkleRef.remove(io, collName);
+                try databaseMerkleRef.remove(io, log, collName);
             }
         }
 
         const merkleRef = try self.merkleTree();
-        try merkleRef.commit(io);
+        try merkleRef.commit(io, log);
         self.clearDirty();
     }
 
@@ -231,17 +232,17 @@ pub const BsonDatabase = struct {
     //
     // The merkle ref loader.
     //
-    fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree {
+    fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog) anyerror!?IMerkleTree {
         const self: *BsonDatabase = @ptrCast(@alignCast(context));
-        return try merkle_tree.loadDatabaseMerkleTree(allocator, io, self.storage, self.bsonDbPath);
+        return try merkle_tree.loadDatabaseMerkleTree(allocator, io, log, self.storage, self.bsonDbPath);
     }
 
     //
     // The merkle ref saver.
     //
-    fn merkleSaver(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, tree: *IMerkleTree) anyerror!void {
+    fn merkleSaver(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, tree: *IMerkleTree) anyerror!void {
         const self: *BsonDatabase = @ptrCast(@alignCast(context));
-        return merkle_tree.saveDatabaseMerkleTree(allocator, io, self.storage, self.bsonDbPath, tree);
+        return merkle_tree.saveDatabaseMerkleTree(allocator, io, log, self.storage, self.bsonDbPath, tree);
     }
 
     //

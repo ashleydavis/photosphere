@@ -121,6 +121,7 @@ const basic_test_dir = "basic-file-ops";
 const basic_test_content = "Hello, CloudStorage!";
 
 test "CloudStorage Tests Basic File Operations should write and read a file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -130,7 +131,7 @@ test "CloudStorage Tests Basic File Operations should write and read a file" {
     const testFile = try pathOf(allocator, &.{ location, basic_test_dir, "write-read-test.txt" });
     try shared_storage.write(allocator, io, testFile, "text/plain", basic_test_content);
 
-    const readContent = try shared_storage.read(allocator, io, testFile);
+    const readContent = try shared_storage.read(allocator, io, log, testFile);
     try std.testing.expectEqualStrings(basic_test_content, readContent.?);
 }
 
@@ -179,6 +180,7 @@ test "CloudStorage Tests Basic File Operations should delete a file" {
 }
 
 test "CloudStorage Tests Basic File Operations should return undefined for non-existent file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -186,7 +188,7 @@ test "CloudStorage Tests Basic File Operations should return undefined for non-e
     const location = try setUp();
 
     const missingFile = try pathOf(allocator, &.{ location, basic_test_dir, "non-existent.txt" });
-    try std.testing.expect(try shared_storage.read(allocator, io, missingFile) == null);
+    try std.testing.expect(try shared_storage.read(allocator, io, log, missingFile) == null);
     try std.testing.expect(try shared_storage.info(allocator, io, missingFile) == null);
 }
 
@@ -305,6 +307,7 @@ test "CloudStorage Tests Directory Operations should delete directory and all co
 // Stream Operations
 
 test "CloudStorage Tests Stream Operations should write and read streams" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -318,7 +321,7 @@ test "CloudStorage Tests Stream Operations should write and read streams" {
     var readableStream = std.Io.Reader.fixed(testContent);
     try shared_storage.writeStream(allocator, io, testFile, "text/plain", &readableStream, testContent.len);
 
-    const stream = try shared_storage.readStream(allocator, io, testFile);
+    const stream = try shared_storage.readStream(allocator, io, log, testFile);
     defer stream.destroy(io);
     const result = try stream.reader().allocRemaining(allocator, .unlimited);
     try std.testing.expectEqualStrings(testContent, result);
@@ -352,6 +355,7 @@ test "CloudStorage Tests Write Lock Operations checkWriteLock should return unde
 }
 
 test "CloudStorage Tests Write Lock Operations checkWriteLock should return lock info for existing lock" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -360,7 +364,7 @@ test "CloudStorage Tests Write Lock Operations checkWriteLock should return lock
 
     const lockFile = try getLockFile(allocator, location, "check-existing", 1);
     const beforeTime = nowMilliseconds();
-    _ = try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1);
+    _ = try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1);
     const afterTime = nowMilliseconds();
 
     const lockInfo = (try shared_storage.checkWriteLock(allocator, io, lockFile)).?;
@@ -370,6 +374,7 @@ test "CloudStorage Tests Write Lock Operations checkWriteLock should return lock
 }
 
 test "CloudStorage Tests Write Lock Operations acquireWriteLock should successfully acquire a lock for new file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -377,7 +382,7 @@ test "CloudStorage Tests Write Lock Operations acquireWriteLock should successfu
     const location = try setUp();
 
     const lockFile = try getLockFile(allocator, location, "acquire-new", 1);
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1));
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1));
 
     // Verify lock was created
     try std.testing.expect(try shared_storage.fileExists(allocator, io, lockFile));
@@ -389,6 +394,7 @@ test "CloudStorage Tests Write Lock Operations acquireWriteLock should successfu
 }
 
 test "CloudStorage Tests Write Lock Operations acquireWriteLock should fail to acquire lock if one already exists" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -396,8 +402,8 @@ test "CloudStorage Tests Write Lock Operations acquireWriteLock should fail to a
     const location = try setUp();
 
     const lockFile = try getLockFile(allocator, location, "acquire-existing", 1);
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1));
-    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, lockFile, owner2));
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1));
+    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner2));
 
     // Verify original lock is unchanged
     const lockInfo = (try shared_storage.checkWriteLock(allocator, io, lockFile)).?;
@@ -450,6 +456,8 @@ const ILockOutcome = struct {
 // as not taking the lock.
 //
 fn attemptLock(orders: *MessageQueue, outcomes: *MessageQueue) void {
+    // The thread's own log, which writes to the console.
+    const log = utils.mute_log.MuteLog.init();
     var thread_allocator: ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
@@ -471,7 +479,7 @@ fn attemptLock(orders: *MessageQueue, outcomes: *MessageQueue) void {
     if (order.delayMicroseconds > 0) {
         io.sleep(.fromMicroseconds(order.delayMicroseconds), .awake) catch {};
     }
-    const success = storage.acquireWriteLock(arena, io, order.lockFile, order.owner) catch false;
+    const success = storage.acquireWriteLock(arena, io, log, order.lockFile, order.owner) catch false;
     const text = std.json.Stringify.valueAlloc(arena, ILockOutcome{
         .index = order.index,
         .success = success,
@@ -617,6 +625,7 @@ test "CloudStorage Tests Write Lock Operations acquireWriteLock should handle re
 }
 
 test "CloudStorage Tests Write Lock Operations acquireWriteLock should store valid JSON with owner and timestamp" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -624,9 +633,9 @@ test "CloudStorage Tests Write Lock Operations acquireWriteLock should store val
     const location = try setUp();
 
     const lockFile = try getLockFile(allocator, location, "json-format", 1);
-    _ = try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1);
+    _ = try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1);
 
-    const content = (try shared_storage.read(allocator, io, lockFile)).?;
+    const content = (try shared_storage.read(allocator, io, log, lockFile)).?;
     const lockData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, content, .{});
     const owner = lockData.object.get("owner").?;
     const acquiredAt = lockData.object.get("acquiredAt").?;
@@ -639,6 +648,7 @@ test "CloudStorage Tests Write Lock Operations acquireWriteLock should store val
 }
 
 test "CloudStorage Tests Write Lock Operations releaseWriteLock should successfully release an existing lock" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -646,25 +656,27 @@ test "CloudStorage Tests Write Lock Operations releaseWriteLock should successfu
     const location = try setUp();
 
     const lockFile = try getLockFile(allocator, location, "release-existing", 1);
-    _ = try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1);
+    _ = try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1);
     try std.testing.expect(try shared_storage.checkWriteLock(allocator, io, lockFile) != null);
 
-    try shared_storage.releaseWriteLock(allocator, io, lockFile);
+    try shared_storage.releaseWriteLock(allocator, io, log, lockFile);
     try std.testing.expect(try shared_storage.checkWriteLock(allocator, io, lockFile) == null);
     try std.testing.expect(!try shared_storage.fileExists(allocator, io, lockFile));
 }
 
 test "CloudStorage Tests Write Lock Operations releaseWriteLock should handle releasing non-existent lock gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const location = try setUp();
 
     const lockFile = try getLockFile(allocator, location, "release-nonexistent", 1);
-    try shared_storage.releaseWriteLock(allocator, std.testing.io, lockFile);
+    try shared_storage.releaseWriteLock(allocator, std.testing.io, log, lockFile);
 }
 
 test "CloudStorage Tests Write Lock Operations releaseWriteLock should allow reacquisition after release" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -673,9 +685,9 @@ test "CloudStorage Tests Write Lock Operations releaseWriteLock should allow rea
 
     const lockFile = try getLockFile(allocator, location, "reacquire-after-release", 1);
     // Acquire, release, then acquire again
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1));
-    try shared_storage.releaseWriteLock(allocator, io, lockFile);
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, owner2));
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1));
+    try shared_storage.releaseWriteLock(allocator, io, log, lockFile);
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner2));
 
     // Verify new owner
     const lockInfo = (try shared_storage.checkWriteLock(allocator, io, lockFile)).?;
@@ -683,6 +695,7 @@ test "CloudStorage Tests Write Lock Operations releaseWriteLock should allow rea
 }
 
 test "CloudStorage Tests Write Lock Operations lock file format and metadata should create lock files with correct content type" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -690,13 +703,14 @@ test "CloudStorage Tests Write Lock Operations lock file format and metadata sho
     const location = try setUp();
 
     const lockFile = try getLockFile(allocator, location, "content-type", 1);
-    _ = try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1);
+    _ = try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1);
 
     const info = (try shared_storage.info(allocator, io, lockFile)).?;
     try std.testing.expectEqualStrings("application/json", info.contentType.?);
 }
 
 test "CloudStorage Tests Write Lock Operations lock file format and metadata should handle special characters in owner names" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -705,13 +719,14 @@ test "CloudStorage Tests Write Lock Operations lock file format and metadata sho
 
     const lockFile = try getLockFile(allocator, location, "special-chars", 1);
     const specialOwner = "user@domain.com with spaces & symbols!";
-    _ = try shared_storage.acquireWriteLock(allocator, io, lockFile, specialOwner);
+    _ = try shared_storage.acquireWriteLock(allocator, io, log, lockFile, specialOwner);
 
     const lockInfo = (try shared_storage.checkWriteLock(allocator, io, lockFile)).?;
     try std.testing.expectEqualStrings(specialOwner, lockInfo.owner);
 }
 
 test "CloudStorage Tests Write Lock Operations lock file format and metadata should preserve lock timing information accurately" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -720,7 +735,7 @@ test "CloudStorage Tests Write Lock Operations lock file format and metadata sho
 
     const lockFile = try getLockFile(allocator, location, "timing", 1);
     const beforeTime = nowMilliseconds();
-    _ = try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1);
+    _ = try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1);
     const afterTime = nowMilliseconds();
 
     const lockInfo = (try shared_storage.checkWriteLock(allocator, io, lockFile)).?;
@@ -730,6 +745,7 @@ test "CloudStorage Tests Write Lock Operations lock file format and metadata sho
 }
 
 test "CloudStorage Tests Write Lock Operations full lock lifecycle should handle complete lock workflow" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -741,7 +757,7 @@ test "CloudStorage Tests Write Lock Operations full lock lifecycle should handle
     try std.testing.expect(try shared_storage.checkWriteLock(allocator, io, lockFile) == null);
 
     // 2. Acquire lock
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, owner1));
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner1));
 
     // 3. Verify lock exists and has correct details
     const lockInfo = (try shared_storage.checkWriteLock(allocator, io, lockFile)).?;
@@ -749,16 +765,16 @@ test "CloudStorage Tests Write Lock Operations full lock lifecycle should handle
     try std.testing.expect(lockInfo.acquiredAt.epochMilliseconds > 0);
 
     // 4. Other processes cannot acquire lock
-    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, lockFile, owner2));
+    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner2));
 
     // 5. Release lock
-    try shared_storage.releaseWriteLock(allocator, io, lockFile);
+    try shared_storage.releaseWriteLock(allocator, io, log, lockFile);
 
     // 6. Lock is gone
     try std.testing.expect(try shared_storage.checkWriteLock(allocator, io, lockFile) == null);
 
     // 7. Other processes can now acquire lock
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, owner2));
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, owner2));
 }
 
 // Error Handling
@@ -783,6 +799,7 @@ test "CloudStorage Tests Error Handling should handle invalid bucket/key combina
 // Path Handling
 
 test "CloudStorage Tests Path Handling should handle various path formats correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -801,7 +818,7 @@ test "CloudStorage Tests Path Handling should handle various path formats correc
         const content = try std.fmt.allocPrint(allocator, "Content for {s}", .{testPath});
 
         try shared_storage.write(allocator, io, fullPath, "text/plain", content);
-        const readContent = try shared_storage.read(allocator, io, fullPath);
+        const readContent = try shared_storage.read(allocator, io, log, fullPath);
         try std.testing.expectEqualStrings(content, readContent.?);
 
         try shared_storage.deleteFile(allocator, io, fullPath);
@@ -818,6 +835,7 @@ fn bucketOf(location: []const u8) []const u8 {
 }
 
 test "CloudStorage Zig: credentials given to the storage reach the server" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -833,10 +851,11 @@ test "CloudStorage Zig: credentials given to the storage reach the server" {
     defer storage.s3.deinit();
     const filePath = try pathOf(allocator, &.{ location, "zig-credentials", "file.txt" });
     try storage.write(allocator, io, filePath, "text/plain", "with credentials");
-    try std.testing.expectEqualStrings("with credentials", (try storage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualStrings("with credentials", (try storage.read(allocator, io, log, filePath)).?);
 }
 
 test "CloudStorage Zig: a key with a leading slash is the key without it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -849,8 +868,8 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
     const slashedDir = try std.mem.concat(allocator, u8, &.{ bucket, "//", std.fs.path.dirnamePosix(plainKey).? });
 
     try shared_storage.write(allocator, io, slashed, "text/plain", "slashed");
-    try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, plain)).?);
-    try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, slashed)).?);
+    try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, log, plain)).?);
+    try std.testing.expectEqualStrings("slashed", (try shared_storage.read(allocator, io, log, slashed)).?);
     try std.testing.expect(try shared_storage.fileExists(allocator, io, slashed));
     try std.testing.expect(try shared_storage.dirExists(allocator, io, slashedDir));
     try std.testing.expectEqual(@as(u64, "slashed".len), (try shared_storage.info(allocator, io, slashed)).?.length);
@@ -863,7 +882,7 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
 
     var input = std.Io.Reader.fixed("streamed");
     try shared_storage.writeStream(allocator, io, slashed, "text/plain", &input, "streamed".len);
-    const stream = try shared_storage.readStream(allocator, io, slashed);
+    const stream = try shared_storage.readStream(allocator, io, log, slashed);
     defer stream.destroy(io);
     var content: std.ArrayList(u8) = .empty;
     try stream.reader().appendRemainingUnlimited(allocator, &content);
@@ -871,7 +890,7 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
 
     const copied = try std.mem.concat(allocator, u8, &.{ bucket, "//", plainKey, ".copy" });
     try shared_storage.copyTo(allocator, io, slashed, copied);
-    try std.testing.expectEqualStrings("streamed", (try shared_storage.read(allocator, io, copied)).?);
+    try std.testing.expectEqualStrings("streamed", (try shared_storage.read(allocator, io, log, copied)).?);
 
     try shared_storage.deleteFile(allocator, io, slashed);
     try std.testing.expect(!try shared_storage.fileExists(allocator, io, plain));
@@ -880,6 +899,7 @@ test "CloudStorage Zig: a key with a leading slash is the key without it" {
 }
 
 test "CloudStorage Zig: a stream larger than one part goes up in parts, whole and in order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -896,10 +916,11 @@ test "CloudStorage Zig: a stream larger than one part goes up in parts, whole an
     try shared_storage.writeStream(allocator, io, filePath, "application/octet-stream", &input, null);
 
     try std.testing.expectEqual(@as(u64, content.len), (try shared_storage.info(allocator, io, filePath)).?.length);
-    try std.testing.expect(std.mem.eql(u8, content, (try shared_storage.read(allocator, io, filePath)).?));
+    try std.testing.expect(std.mem.eql(u8, content, (try shared_storage.read(allocator, io, log, filePath)).?));
 }
 
 test "CloudStorage Zig: copyTo copies a file to another key" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -910,7 +931,7 @@ test "CloudStorage Zig: copyTo copies a file to another key" {
     try shared_storage.write(allocator, io, source, "text/plain", "copied content");
 
     try shared_storage.copyTo(allocator, io, source, destination);
-    try std.testing.expectEqualStrings("copied content", (try shared_storage.read(allocator, io, destination)).?);
+    try std.testing.expectEqualStrings("copied content", (try shared_storage.read(allocator, io, log, destination)).?);
 
     // Copying a file that is not there fails, naming both paths.
     const missing = try pathOf(allocator, &.{ location, "zig-copy", "missing.txt" });
@@ -919,6 +940,7 @@ test "CloudStorage Zig: copyTo copies a file to another key" {
 }
 
 test "CloudStorage Zig: every operation on a bucket that does not exist fails, naming what it was doing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -936,11 +958,11 @@ test "CloudStorage Zig: every operation on a bucket that does not exist fails, n
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to list directories in " ++ dirPath ++ ": "));
     try std.testing.expectError(error.Thrown, storage.dirExists(allocator, io, dirPath));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to check if directory exists: "));
-    try std.testing.expectError(error.Thrown, storage.read(allocator, io, filePath));
+    try std.testing.expectError(error.Thrown, storage.read(allocator, io, log, filePath));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to read " ++ filePath ++ ": "));
     try std.testing.expectError(error.Thrown, storage.checkWriteLock(allocator, io, filePath));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to check write lock for " ++ filePath ++ ": "));
-    try std.testing.expectError(error.Thrown, storage.acquireWriteLock(allocator, io, filePath, "owner"));
+    try std.testing.expectError(error.Thrown, storage.acquireWriteLock(allocator, io, log, filePath, "owner"));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to acquire write lock for " ++ filePath ++ ": "));
     var input = std.Io.Reader.fixed("streamed");
     try std.testing.expectError(error.Thrown, storage.writeStream(allocator, io, filePath, "text/plain", &input, "streamed".len));
@@ -948,7 +970,7 @@ test "CloudStorage Zig: every operation on a bucket that does not exist fails, n
 
     // A file that is not there is not an error, whatever the bucket.
     try storage.deleteFile(allocator, io, filePath);
-    try storage.releaseWriteLock(allocator, io, filePath);
+    try storage.releaseWriteLock(allocator, io, log, filePath);
 }
 
 test "CloudStorage Zig: a lock older than the timeout is broken and taken, and the verbose log says each step" {
@@ -958,20 +980,20 @@ test "CloudStorage Zig: a lock older than the timeout is broken and taken, and t
     const io = std.testing.io;
     const location = try setUp();
 
-    // Every [LOCK] line is asked for, and the console log that gets them writes nothing.
-    var verboseLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = true,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    var quietVtable = verboseLog.ilog().vtable.*;
-    quietVtable.verbose = ignoreVerbose;
-    const previousLog = utils.log.currentLog();
-    utils.log.setLog(.{
-        .ptr = &verboseLog,
-        .vtable = &quietVtable,
+    // Every [LOCK] line is asked for, and the log that gets them writes nothing.
+    const memory = try utils.memory_log.MemoryLog.init(std.testing.allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
     });
-    defer utils.log.setLog(previousLog);
+    defer memory.deinit();
+    const verboseLog = memory.log;
+    var quietVtable = verboseLog.vtable.*;
+    quietVtable.verbose = ignoreVerbose;
+    const log: utils.log.ILog = .{
+        .ptr = verboseLog.ptr,
+        .vtable = &quietVtable,
+    };
 
     const lockFile = try pathOf(allocator, &.{ location, "zig-locks", "stale.lock" });
     const staleTimestamp = nowMilliseconds() - 60_000;
@@ -981,13 +1003,13 @@ test "CloudStorage Zig: a lock older than the timeout is broken and taken, and t
         .timestamp = staleTimestamp,
     }));
 
-    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, lockFile, "new-owner"));
+    try std.testing.expect(try shared_storage.acquireWriteLock(allocator, io, log, lockFile, "new-owner"));
     try std.testing.expectEqualStrings("new-owner", (try shared_storage.checkWriteLock(allocator, io, lockFile)).?.owner);
 
     // A fresh lock is refused, and releasing it twice is fine.
-    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, lockFile, "third-owner"));
-    try shared_storage.releaseWriteLock(allocator, io, lockFile);
-    try shared_storage.releaseWriteLock(allocator, io, lockFile);
+    try std.testing.expect(!try shared_storage.acquireWriteLock(allocator, io, log, lockFile, "third-owner"));
+    try shared_storage.releaseWriteLock(allocator, io, log, lockFile);
+    try shared_storage.releaseWriteLock(allocator, io, log, lockFile);
 }
 
 test "CloudStorage Zig: a lock file that is not a lock is reported" {

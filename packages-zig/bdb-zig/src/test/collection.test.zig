@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
@@ -61,12 +62,13 @@ fn makeUser(allocator: std.mem.Allocator, id: []const u8, name: []const u8, age:
 //
 // Gets a record by id through its shard.
 //
-fn getRecord(collection: *BsonCollection, id: []const u8) !?IInternalRecord {
+fn getRecord(collection: *BsonCollection, log: ILog, id: []const u8) !?IInternalRecord {
     const shard = try collection.shard(try collection.getShardId(id));
-    return shard.record(io, id);
+    return shard.record(io, log, id);
 }
 
 test "should delete a record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -75,21 +77,23 @@ test "should delete a record" {
     const user = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
 
     // (setInternalRecord inserts the record.)
-    try collection.setInternalRecord(io, user);
+    try collection.setInternalRecord(io, log, user);
 
-    try std.testing.expect(try collection.deleteOne(io, user._id));
-    try std.testing.expect((try collection.getOne(io, user._id)) == null);
+    try std.testing.expect(try collection.deleteOne(io, log, user._id));
+    try std.testing.expect((try collection.getOne(io, log, user._id)) == null);
 }
 
 test "should return false when deleting non-existent record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     const collection = try newCollection(arena.allocator(), &storage);
-    try std.testing.expect(!try collection.deleteOne(io, "123e4567-e89b-12d3-a456-000000000000"));
+    try std.testing.expect(!try collection.deleteOne(io, log, "123e4567-e89b-12d3-a456-000000000000"));
 }
 
 test "should iterate through all records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -97,12 +101,12 @@ test "should iterate through all records" {
     const collection = try newCollection(allocator, &storage);
     const ids = [_][]const u8{ "123e4567-e89b-12d3-a456-426614174001", "123e4567-e89b-12d3-a456-426614174002", "123e4567-e89b-12d3-a456-426614174003" };
     for (ids) |id| {
-        try collection.setInternalRecord(io, try makeUser(allocator, id, "User", 30, "user"));
+        try collection.setInternalRecord(io, log, try makeUser(allocator, id, "User", 30, "user"));
     }
 
     var retrieved: std.ArrayList([]const u8) = .empty;
     var iterator = collection.iterateRecords();
-    while (try iterator.next(io)) |record| {
+    while (try iterator.next(io, log)) |record| {
         try retrieved.append(allocator, record._id);
     }
 
@@ -119,15 +123,16 @@ test "should iterate through all records" {
 }
 
 test "should list and delete sort indexes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
 
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
-    try (try collection.sortIndex("role", .asc)).ensure(io, collection, .string);
-    try (try collection.sortIndex("name", .desc)).ensure(io, collection, .string);
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
+    try (try collection.sortIndex("role", .asc)).ensure(io, log, collection, .string);
+    try (try collection.sortIndex("name", .desc)).ensure(io, log, collection, .string);
 
     const indexes = try collection.sortIndexes(io);
     try std.testing.expectEqual(@as(usize, 3), indexes.len);
@@ -199,6 +204,7 @@ test "sortIndexes reports no indexes when the collection has no index directory"
 }
 
 test "should update sort index when record is updated" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -206,31 +212,32 @@ test "should update sort index when record is updated" {
     const collection = try newCollection(allocator, &storage);
     const john = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "John Doe", 30, "user");
     const alice = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "Alice Smith", 25, "admin");
-    try collection.setInternalRecord(io, john);
-    try collection.setInternalRecord(io, alice);
+    try collection.setInternalRecord(io, log, john);
+    try collection.setInternalRecord(io, log, alice);
 
     const ageIndex = try collection.sortIndex("age", .asc);
-    try ageIndex.ensure(io, collection, .number);
+    try ageIndex.ensure(io, log, collection, .number);
 
     // Verify initial sort order
-    var values = try sort_index_walk.sortIndexValues(allocator, io, ageIndex);
+    var values = try sort_index_walk.sortIndexValues(allocator, io, log, ageIndex);
     try std.testing.expectEqual(@as(f64, 25), values[0].number); // Alice first
     try std.testing.expectEqual(@as(f64, 30), values[1].number); // John second
 
     // Update John's age to 20 (should move him before Alice)
-    _ = try collection.updateOne(io, john._id, try BsonDocument.fromFields(allocator, &.{
+    _ = try collection.updateOne(io, log, john._id, try BsonDocument.fromFields(allocator, &.{
         .{
             .key = "age",
             .value = .{ .number = 20 },
         },
     }), .{});
 
-    values = try sort_index_walk.sortIndexValues(allocator, io, ageIndex);
+    values = try sort_index_walk.sortIndexValues(allocator, io, log, ageIndex);
     try std.testing.expectEqual(@as(f64, 20), values[0].number); // John first now
     try std.testing.expectEqual(@as(f64, 25), values[1].number); // Alice second now
 }
 
 test "should update sort index when record is deleted" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -238,23 +245,24 @@ test "should update sort index when record is deleted" {
     const collection = try newCollection(allocator, &storage);
     const john = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "John Doe", 30, "user");
     const alice = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "Alice Smith", 25, "admin");
-    try collection.setInternalRecord(io, john);
-    try collection.setInternalRecord(io, alice);
+    try collection.setInternalRecord(io, log, john);
+    try collection.setInternalRecord(io, log, alice);
 
     const ageIndex = try collection.sortIndex("age", .asc);
-    try ageIndex.ensure(io, collection, .number);
+    try ageIndex.ensure(io, log, collection, .number);
     try std.testing.expectEqual(@as(i64, 2), ageIndex.totalEntries);
 
     // Delete Alice
-    _ = try collection.deleteOne(io, alice._id);
+    _ = try collection.deleteOne(io, log, alice._id);
 
-    const values = try sort_index_walk.sortIndexValues(allocator, io, ageIndex);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, ageIndex);
     try std.testing.expectEqual(@as(usize, 1), values.len);
     try std.testing.expectEqual(@as(i64, 1), ageIndex.totalEntries);
     try std.testing.expectEqual(@as(f64, 30), values[0].number); // Only John remains
 }
 
 test "should set an internal record preserving metadata" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -274,28 +282,29 @@ test "should set an internal record preserving metadata" {
         }),
     };
 
-    try collection.setInternalRecord(io, internalRecord);
-    try collection.commit(io);
+    try collection.setInternalRecord(io, log, internalRecord);
+    try collection.commit(io, log);
 
     // Reload from storage with a fresh collection: the metadata survives exactly.
     const reloaded = try newCollection(allocator, &storage);
-    const retrieved = (try getRecord(reloaded, internalRecord._id)).?;
+    const retrieved = (try getRecord(reloaded, log, internalRecord._id)).?;
     try std.testing.expectEqualStrings("Sync User", retrieved.fields.get("name").?.string);
     try std.testing.expectEqual(@as(f64, 42), retrieved.fields.get("age").?.number);
     try std.testing.expect(retrieved.metadata.eql(internalRecord.metadata));
 }
 
 test "setInternalRecord should upsert (update existing record)" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
     const id = "123e4567-e89b-12d3-a456-426614174000";
-    try collection.setInternalRecord(io, try makeUser(allocator, id, "Original", 20, "user"));
-    try collection.setInternalRecord(io, try makeUser(allocator, id, "Updated", 21, "admin"));
+    try collection.setInternalRecord(io, log, try makeUser(allocator, id, "Original", 20, "user"));
+    try collection.setInternalRecord(io, log, try makeUser(allocator, id, "Updated", 21, "admin"));
 
-    const retrieved = (try getRecord(collection, id)).?;
+    const retrieved = (try getRecord(collection, log, id)).?;
     try std.testing.expectEqualStrings("Updated", retrieved.fields.get("name").?.string);
     try std.testing.expectEqual(@as(f64, 21), retrieved.fields.get("age").?.number);
 }
@@ -308,13 +317,14 @@ fn sortIndexExists(allocator: std.mem.Allocator, storage: *MemoryStorage, collec
 }
 
 test "deleteIndex should delete both asc and desc indexes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
-    try (try collection.sortIndex("age", .desc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
+    try (try collection.sortIndex("age", .desc)).ensure(io, log, collection, .number);
 
     try std.testing.expect(try sortIndexExists(allocator, &storage, collection, "age", .asc));
     try std.testing.expect(try sortIndexExists(allocator, &storage, collection, "age", .desc));
@@ -349,6 +359,7 @@ test "drop should return false for non-existent index" {
 }
 
 test "drop evicts the sort index from the collection's cache" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -356,7 +367,7 @@ test "drop evicts the sort index from the collection's cache" {
     const collection = try newCollection(allocator, &storage);
     const ageIndex = try collection.sortIndex("age", .asc);
     const nameIndex = try collection.sortIndex("name", .asc);
-    try ageIndex.ensure(io, collection, .number);
+    try ageIndex.ensure(io, log, collection, .number);
 
     _ = try ageIndex.drop(io);
 
@@ -366,21 +377,23 @@ test "drop evicts the sort index from the collection's cache" {
 }
 
 test "getSorted should return empty when sort index does not exist" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     const collection = try newCollection(arena.allocator(), &storage);
-    const result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
+    const result = try (try collection.sortIndex("age", .asc)).getPage(io, log, null);
     try std.testing.expectEqual(@as(usize, 0), result.records.len);
     try std.testing.expectEqual(@as(i64, 0), result.totalRecords);
 }
 
 test "findByIndex should return empty when no index exists on either direction" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     const collection = try newCollection(arena.allocator(), &storage);
-    const result = try (try collection.sortIndex("role", .asc)).findByValue(io, .{ .string = "user" }, null);
+    const result = try (try collection.sortIndex("role", .asc)).findByValue(io, log, .{ .string = "user" }, null);
     try std.testing.expectEqual(@as(usize, 0), result.len);
 }
 
@@ -398,6 +411,7 @@ test "getShardId should return consistent shard IDs for the same record" {
 }
 
 test "getShardId matches the shard files of the test databases" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -411,13 +425,13 @@ test "getShardId matches the shard files of the test databases" {
     for (collection.shardCache.keys()) |key| {
         _ = key;
     }
-    while (try shards.next(io)) |shardRecords| {
+    while (try shards.next(io, log)) |shardRecords| {
         for (shardRecords) |record| {
             const shardId = try collection.getShardId(record._id);
             const shardPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "db", "collections", "metadata", "shards", shardId });
             try std.testing.expect(storage.getFile(shardPath) != null);
             const shard = try collection.shard(shardId);
-            try std.testing.expect((try shard.record(io, record._id)) != null);
+            try std.testing.expect((try shard.record(io, log, record._id)) != null);
             try shardIdsSeen.append(allocator, shardId);
             checked += 1;
         }
@@ -435,17 +449,18 @@ test "getShardId should throw for an invalid record ID" {
 }
 
 test "iterateShards should only yield non-empty shards" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
-    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "A", 10, "user"));
-    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "B", 20, "user"));
+    try collection.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "A", 10, "user"));
+    try collection.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "B", 20, "user"));
 
     var totalRecords: usize = 0;
     var shards = collection.iterateShards();
-    while (try shards.next(io)) |shardRecords| {
+    while (try shards.next(io, log)) |shardRecords| {
         try std.testing.expect(shardRecords.len > 0);
         totalRecords += shardRecords.len;
     }
@@ -453,17 +468,18 @@ test "iterateShards should only yield non-empty shards" {
 }
 
 test "commit should flush dirty state and allow flush to succeed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
     const notificationsBefore = dirty_notifications;
-    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Committed", 30, "user"));
+    try collection.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Committed", 30, "user"));
     try std.testing.expect(collection.dirty());
     try std.testing.expectEqual(notificationsBefore + 1, dirty_notifications);
 
-    try collection.commit(io);
+    try collection.commit(io, log);
     try std.testing.expect(!collection.dirty());
 
     // flush should succeed after commit
@@ -477,31 +493,33 @@ test "commit should flush dirty state and allow flush to succeed" {
 }
 
 test "merkleTree should return a usable IMerkleRef" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     const collection = try newCollection(arena.allocator(), &storage);
     const merkleRef = try collection.merkleTree();
     // A fresh uncommitted collection has no persisted tree yet
-    try std.testing.expect((try merkleRef.get(io)) == null);
+    try std.testing.expect((try merkleRef.get(io, log)) == null);
     try std.testing.expectEqual(merkleRef, try collection.merkleTree());
 }
 
 test "sortIndex load should populate the sort index cache" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
-    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "A", 10, "user"));
-    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "B", 20, "user"));
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+    try collection.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "A", 10, "user"));
+    try collection.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174002", "B", 20, "user"));
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
 
     // load on a non-existent index should be a no-op (no throw)
-    try std.testing.expect(!try (try collection.sortIndex("name", .asc)).load(io));
+    try std.testing.expect(!try (try collection.sortIndex("name", .asc)).load(io, log));
 
     // load on an existing index should succeed
-    try std.testing.expect(try (try collection.sortIndex("age", .asc)).load(io));
+    try std.testing.expect(try (try collection.sortIndex("age", .asc)).load(io, log));
     try std.testing.expectEqual(try collection.sortIndex("age", .asc), try collection.sortIndex("age", .asc));
 }
 
@@ -514,18 +532,19 @@ test "shard should return the same cached instance for the same shardId" {
 }
 
 test "deleteOne removes the record from every sort index and the merkle trees" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
-    try (try collection.sortIndex("name", .desc)).ensure(io, collection, .string);
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
+    try (try collection.sortIndex("name", .desc)).ensure(io, log, collection, .string);
     const id = "123e4567-e89b-12d3-a456-426614174001";
-    try collection.setInternalRecord(io, try makeUser(allocator, id, "A", 10, "user"));
-    try collection.commit(io);
-    try std.testing.expect(try collection.deleteOne(io, id));
-    try collection.commit(io);
+    try collection.setInternalRecord(io, log, try makeUser(allocator, id, "A", 10, "user"));
+    try collection.commit(io, log);
+    try std.testing.expect(try collection.deleteOne(io, log, id));
+    try collection.commit(io, log);
     try std.testing.expectEqual(@as(i64, 0), (try collection.sortIndex("age", .asc)).totalEntries);
     try std.testing.expectEqual(@as(i64, 0), (try collection.sortIndex("name", .desc)).totalEntries);
     try std.testing.expect(storage.getFile("collections/users/collection.dat") == null);
@@ -576,6 +595,7 @@ test "a shard used recently survives while older ones are dropped" {
 }
 
 test "a shard with uncommitted writes is never dropped, because its records are the only copy" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -586,7 +606,7 @@ test "a shard with uncommitted writes is never dropped, because its records are 
     // dropping one would silently lose the write.
     const user = try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
     // (setInternalRecord inserts the record.)
-    try collection.setInternalRecord(io, user);
+    try collection.setInternalRecord(io, log, user);
 
     const dirtyShardId = try collection.getShardId(user._id);
     const dirtyShard = try collection.shard(dirtyShardId);
@@ -597,26 +617,27 @@ test "a shard with uncommitted writes is never dropped, because its records are 
     }
 
     try std.testing.expectEqual(dirtyShard, try collection.shard(dirtyShardId));
-    const record = (try getRecord(collection, user._id)).?;
+    const record = (try getRecord(collection, log, user._id)).?;
     try std.testing.expectEqualStrings("John Doe", record.fields.get("name").?.string);
 }
 
 test "iterateShards reads the shards a listing finds as well as the ones held in memory" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const writer = try newCollection(allocator, &storage);
-    try writer.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "A", 10, "user"));
-    try writer.commit(io);
+    try writer.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "A", 10, "user"));
+    try writer.commit(io, log);
 
     // A fresh collection holds nothing in memory, so the committed record is found through the listing.
     const reader = try newCollection(allocator, &storage);
-    try reader.setInternalRecord(io, try makeUser(allocator, "223e4567-e89b-12d3-a456-426614174002", "B", 20, "user"));
+    try reader.setInternalRecord(io, log, try makeUser(allocator, "223e4567-e89b-12d3-a456-426614174002", "B", 20, "user"));
 
     var totalRecords: usize = 0;
     var shards = reader.iterateShards();
-    while (try shards.next(io)) |shardRecords| {
+    while (try shards.next(io, log)) |shardRecords| {
         totalRecords += shardRecords.len;
     }
     try std.testing.expectEqual(@as(usize, 2), totalRecords);
@@ -651,6 +672,7 @@ fn makeExternalUser(allocator: std.mem.Allocator, id: []const u8, name: []const 
 }
 
 test "should insert and retrieve a record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -658,13 +680,14 @@ test "should insert and retrieve a record" {
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
 
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
-    const retrieved = (try collection.getOne(io, "123e4567-e89b-12d3-a456-426614174000")).?;
+    const retrieved = (try collection.getOne(io, log, "123e4567-e89b-12d3-a456-426614174000")).?;
     try std.testing.expect(retrieved.eql(user));
 }
 
 test "should generate an ID if not provided" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -672,10 +695,10 @@ test "should generate an ID if not provided" {
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin"); // Empty ID will be replaced
 
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
     // Get all records to find the one we inserted
-    const result = try collection.getAll(io, null);
+    const result = try collection.getAll(io, log, null);
     try std.testing.expectEqual(@as(usize, 1), result.records.len);
 
     const retrieved = result.records[0];
@@ -685,6 +708,7 @@ test "should generate an ID if not provided" {
 }
 
 test "should update a record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -692,7 +716,7 @@ test "should update a record" {
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
 
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
     const updates = try BsonDocument.fromFields(allocator, &.{
         .{
@@ -705,14 +729,15 @@ test "should update a record" {
         },
     });
 
-    const updateResult = try collection.updateOne(io, "123e4567-e89b-12d3-a456-426614174000", updates, .{});
+    const updateResult = try collection.updateOne(io, log, "123e4567-e89b-12d3-a456-426614174000", updates, .{});
     try std.testing.expect(updateResult);
 
-    const updated = (try collection.getOne(io, "123e4567-e89b-12d3-a456-426614174000")).?;
+    const updated = (try collection.getOne(io, log, "123e4567-e89b-12d3-a456-426614174000")).?;
     try std.testing.expect(updated.eql(try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 31, "admin")));
 }
 
 test "should return false when updating non-existent record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -726,11 +751,12 @@ test "should return false when updating non-existent record" {
         },
     });
 
-    const updateResult = try collection.updateOne(io, nonExistentId, updates, .{});
+    const updateResult = try collection.updateOne(io, log, nonExistentId, updates, .{});
     try std.testing.expect(!updateResult);
 }
 
 test "should upsert a record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -756,10 +782,10 @@ test "should upsert a record" {
         },
     });
 
-    const updateResult = try collection.updateOne(io, id, updates, .{ .upsert = true });
+    const updateResult = try collection.updateOne(io, log, id, updates, .{ .upsert = true });
     try std.testing.expect(updateResult);
 
-    const upserted = (try collection.getOne(io, id)).?;
+    const upserted = (try collection.getOne(io, log, id)).?;
     var expected = try BsonDocument.fromFields(allocator, &.{
         .{
             .key = "_id",
@@ -773,6 +799,7 @@ test "should upsert a record" {
 }
 
 test "should paginate through records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -786,11 +813,11 @@ test "should paginate through records" {
 
     // Insert all users
     for (&users) |*user| {
-        try collection.insertOne(io, user, null);
+        try collection.insertOne(io, log, user, null);
     }
 
     // Get first page
-    var result = try collection.getAll(io, null);
+    var result = try collection.getAll(io, log, null);
     try std.testing.expect(result.records.len > 0);
     try std.testing.expect(result.next != null);
 
@@ -799,7 +826,7 @@ test "should paginate through records" {
 
     // Continue pagination if there are more pages
     while (result.next) |next| {
-        result = try collection.getAll(io, next);
+        result = try collection.getAll(io, log, next);
         try allUsers.appendSlice(allocator, result.records);
     }
 
@@ -830,6 +857,7 @@ fn sortIndexTestUsers(allocator: std.mem.Allocator) ![3]BsonDocument {
 }
 
 test "should create and use a sort index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -839,14 +867,14 @@ test "should create and use a sort index" {
 
     // Insert all users
     for (&users) |*user| {
-        try collection.insertOne(io, user, null);
+        try collection.insertOne(io, log, user, null);
     }
 
     // Create an index on the age field
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
 
     // Get sorted records
-    const result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
+    const result = try (try collection.sortIndex("age", .asc)).getPage(io, log, null);
 
     // Check that the records are sorted by age
     try std.testing.expectEqual(users.len, result.records.len);
@@ -856,6 +884,7 @@ test "should create and use a sort index" {
 }
 
 test "should find records by index value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -869,29 +898,29 @@ test "should find records by index value" {
 
     // Insert all users
     for (&users) |*user| {
-        try collection.insertOne(io, user, null);
+        try collection.insertOne(io, log, user, null);
     }
 
     // Create an index on the role field
-    try (try collection.sortIndex("role", .asc)).ensure(io, collection, .string);
+    try (try collection.sortIndex("role", .asc)).ensure(io, log, collection, .string);
 
     // Find users with role 'user'
-    const userRoleResults = try (try collection.sortIndex("role", .asc)).findByValue(io, .{ .string = "user" }, null);
+    const userRoleResults = try (try collection.sortIndex("role", .asc)).findByValue(io, log, .{ .string = "user" }, null);
     try std.testing.expectEqual(@as(usize, 2), userRoleResults.len);
     for (userRoleResults) |userRoleResult| {
         try std.testing.expectEqualStrings("user", userRoleResult.get("role").?.string);
     }
 
     // Find users with role 'admin'
-    const adminRoleResults = try (try collection.sortIndex("role", .asc)).findByValue(io, .{ .string = "admin" }, null);
+    const adminRoleResults = try (try collection.sortIndex("role", .asc)).findByValue(io, log, .{ .string = "admin" }, null);
     try std.testing.expectEqual(@as(usize, 1), adminRoleResults.len);
     try std.testing.expectEqualStrings("admin", adminRoleResults[0].get("role").?.string);
 
     // Create an index on the age field
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
 
     // Find users with age 30
-    const age30Results = try (try collection.sortIndex("age", .asc)).findByValue(io, .{ .number = 30 }, null);
+    const age30Results = try (try collection.sortIndex("age", .asc)).findByValue(io, log, .{ .number = 30 }, null);
     try std.testing.expectEqual(@as(usize, 2), age30Results.len);
     for (age30Results) |age30Result| {
         try std.testing.expectEqual(@as(f64, 30), age30Result.get("age").?.number);
@@ -899,6 +928,7 @@ test "should find records by index value" {
 }
 
 test "should support pagination with sort indexes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -908,14 +938,14 @@ test "should support pagination with sort indexes" {
 
     // Insert users
     for (&users) |*user| {
-        try collection.insertOne(io, user, null);
+        try collection.insertOne(io, log, user, null);
     }
 
     // Create an index on age
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
 
     // Get first page
-    var result = try (try collection.sortIndex("age", .asc)).getPage(io, null);
+    var result = try (try collection.sortIndex("age", .asc)).getPage(io, log, null);
     try std.testing.expect(result.records.len > 0);
     try std.testing.expectEqual(@as(i64, 3), result.totalRecords);
     try std.testing.expect(result.totalPages > 0);
@@ -926,7 +956,7 @@ test "should support pagination with sort indexes" {
     var currentPageId = result.nextPageId;
 
     while (currentPageId) |pageId| {
-        result = try (try collection.sortIndex("age", .asc)).getPage(io, pageId);
+        result = try (try collection.sortIndex("age", .asc)).getPage(io, log, pageId);
         try allRecords.appendSlice(allocator, result.records);
         currentPageId = result.nextPageId;
     }
@@ -941,6 +971,7 @@ test "should support pagination with sort indexes" {
 }
 
 test "should support descending order with sort indexes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -950,14 +981,14 @@ test "should support descending order with sort indexes" {
 
     // Insert users
     for (&users) |*user| {
-        try collection.insertOne(io, user, null);
+        try collection.insertOne(io, log, user, null);
     }
 
     // Create a descending index on age
-    try (try collection.sortIndex("age", .desc)).ensure(io, collection, .number);
+    try (try collection.sortIndex("age", .desc)).ensure(io, log, collection, .number);
 
     // Get sorted records in descending order
-    const result = try (try collection.sortIndex("age", .desc)).getPage(io, null);
+    const result = try (try collection.sortIndex("age", .desc)).getPage(io, log, null);
 
     // Verify records are sorted in descending order
     try std.testing.expectEqual(users.len, result.records.len);
@@ -967,6 +998,7 @@ test "should support descending order with sort indexes" {
 }
 
 test "should throw when inserting a record with a duplicate ID" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -974,12 +1006,13 @@ test "should throw when inserting a record with a duplicate ID" {
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
 
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
-    try std.testing.expectError(error.Thrown, collection.insertOne(io, &user, null));
+    try std.testing.expectError(error.Thrown, collection.insertOne(io, log, &user, null));
 }
 
 test "flush should throw when collection is dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -987,7 +1020,7 @@ test "flush should throw when collection is dirty" {
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Dirty", 30, "user");
 
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
     // flush without commit should throw because the collection is dirty
     try std.testing.expectError(error.Thrown, collection.flush());
@@ -998,6 +1031,7 @@ test "flush should throw when collection is dirty" {
 // toInternal does.
 //
 test "insertOne stores the fields apart from the id and stamps the write time" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1005,9 +1039,9 @@ test "insertOne stores the fields apart from the id and stamps the write time" {
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "John Doe", 30, "user");
 
-    try collection.insertOne(io, &user, 1234);
+    try collection.insertOne(io, log, &user, 1234);
 
-    const stored = (try getRecord(collection, "123e4567-e89b-12d3-a456-426614174000")).?;
+    const stored = (try getRecord(collection, log, "123e4567-e89b-12d3-a456-426614174000")).?;
     try std.testing.expect(stored.fields.get("_id") == null);
     try std.testing.expectEqualStrings("name", stored.fields.fields.items[0].key);
     try std.testing.expectEqual(@as(f64, 1234), stored.metadata.get("timestamp").?.number);
@@ -1018,6 +1052,7 @@ test "insertOne stores the fields apart from the id and stamps the write time" {
 // string cannot be read as a record id, so it throws instead of being replaced.
 //
 test "insertOne generates an id for a falsy _id and throws for an _id that is not a string" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1028,15 +1063,15 @@ test "insertOne generates an id for a falsy _id and throws for an _id that is no
     try zeroId.put(allocator, "_id", .{
         .number = 0,
     });
-    try collection.insertOne(io, &zeroId, null);
+    try collection.insertOne(io, log, &zeroId, null);
     try std.testing.expect(zeroId.get("_id").? == .string);
-    try std.testing.expect((try getRecord(collection, zeroId.get("_id").?.string)) != null);
+    try std.testing.expect((try getRecord(collection, log, zeroId.get("_id").?.string)) != null);
 
     var numberId = try makeExternalUser(allocator, "", "John Doe", 30, "user");
     try numberId.put(allocator, "_id", .{
         .number = 5,
     });
-    try std.testing.expectError(error.Thrown, collection.insertOne(io, &numberId, null));
+    try std.testing.expectError(error.Thrown, collection.insertOne(io, log, &numberId, null));
     try std.testing.expectEqualStrings("Record ID must be a string, not number", errors.lastErrorMessage());
 }
 
@@ -1045,25 +1080,26 @@ test "insertOne generates an id for a falsy _id and throws for an _id that is no
 // hold nothing), so the listing still reaches the records in the first shard, and " 0x0" is shard 0 as well.
 //
 test "getAll reads its continuation token like parseInt" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin");
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
-    const fromStart = try collection.getAll(io, null);
+    const fromStart = try collection.getAll(io, log, null);
     try std.testing.expectEqual(@as(usize, 1), fromStart.records.len);
 
-    const fromNegative = try collection.getAll(io, "-2");
+    const fromNegative = try collection.getAll(io, log, "-2");
     try std.testing.expectEqual(@as(usize, 1), fromNegative.records.len);
     try std.testing.expectEqualStrings(fromStart.next.?, fromNegative.next.?);
 
-    const fromHex = try collection.getAll(io, " 0x0");
+    const fromHex = try collection.getAll(io, log, " 0x0");
     try std.testing.expectEqual(@as(usize, 1), fromHex.records.len);
 
-    const fromNothing = try collection.getAll(io, "abc");
+    const fromNothing = try collection.getAll(io, log, "abc");
     try std.testing.expectEqual(@as(usize, 0), fromNothing.records.len);
     try std.testing.expect(fromNothing.next == null);
 }
@@ -1073,49 +1109,51 @@ test "getAll reads its continuation token like parseInt" {
 // listing starts at the first shard rather than at shard zero of a parse of nothing.
 //
 test "getAll treats an empty continuation token as no token" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
     var user = try makeExternalUser(allocator, "", "Jane Doe", 25, "admin");
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
-    const fromNothing = try collection.getAll(io, null);
-    const fromEmpty = try collection.getAll(io, "");
+    const fromNothing = try collection.getAll(io, log, null);
+    const fromEmpty = try collection.getAll(io, log, "");
     try std.testing.expectEqual(fromNothing.records.len, fromEmpty.records.len);
     try std.testing.expectEqual(@as(usize, 1), fromEmpty.records.len);
     try std.testing.expectEqualStrings(fromNothing.next.?, fromEmpty.next.?);
 }
 
 test "insertOne adds the record to every sort index the collection has, and sortIndexes skips directories that are not sort indexes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const collection = try newCollection(allocator, &storage);
-    try collection.setInternalRecord(io, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Older", 40, "user"));
-    try (try collection.sortIndex("age", .asc)).ensure(io, collection, .number);
-    try (try collection.sortIndex("name", .desc)).ensure(io, collection, .string);
+    try collection.setInternalRecord(io, log, try makeUser(allocator, "123e4567-e89b-12d3-a456-426614174000", "Older", 40, "user"));
+    try (try collection.sortIndex("age", .asc)).ensure(io, log, collection, .number);
+    try (try collection.sortIndex("name", .desc)).ensure(io, log, collection, .string);
     try storage.putFile("indexes/users/notes/readme.txt", "not a sort index");
-    try collection.commit(io);
+    try collection.commit(io, log);
 
     var user = try makeExternalUser(allocator, "123e4567-e89b-12d3-a456-426614174001", "Younger", 20, "user");
-    try collection.insertOne(io, &user, null);
+    try collection.insertOne(io, log, &user, null);
 
     const indexes = try collection.sortIndexes(io);
     try std.testing.expectEqual(@as(usize, 2), indexes.len);
-    const byAge = try sort_index_walk.sortIndexValues(allocator, io, try collection.sortIndex("age", .asc));
+    const byAge = try sort_index_walk.sortIndexValues(allocator, io, log, try collection.sortIndex("age", .asc));
     try std.testing.expectEqual(@as(usize, 2), byAge.len);
     try std.testing.expectEqual(@as(f64, 20), byAge[0].number);
-    const byName = try sort_index_walk.sortIndexValues(allocator, io, try collection.sortIndex("name", .desc));
+    const byName = try sort_index_walk.sortIndexValues(allocator, io, log, try collection.sortIndex("name", .desc));
     try std.testing.expectEqual(@as(usize, 2), byName.len);
     try std.testing.expectEqualStrings("Younger", byName[0].string);
 
     // Once committed, the sort indexes are flushed with the rest of the cache.
-    try collection.commit(io);
+    try collection.commit(io, log);
     try collection.flush();
     const sortIndex = try collection.sortIndex("age", .asc);
     try std.testing.expectEqual(@as(usize, 0), sortIndex.leafCache.count());
-    try std.testing.expectEqual(@as(usize, 2), (try sortIndex.getPage(io, null)).records.len);
+    try std.testing.expectEqual(@as(usize, 2), (try sortIndex.getPage(io, log, null)).records.len);
 }

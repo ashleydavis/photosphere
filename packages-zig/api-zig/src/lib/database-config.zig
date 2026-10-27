@@ -6,6 +6,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const IStorage = storage_zig.storage.IStorage;
@@ -42,8 +43,8 @@ const ReadConfigOperation = struct {
     //
     // Reads the config file.
     //
-    pub fn run(self: *ReadConfigOperation, io: std.Io) !?[]u8 {
-        return self.rawStorage.read(self.allocator, io, CONFIG_PATH);
+    pub fn run(self: *ReadConfigOperation, io: std.Io, log: ILog) !?[]u8 {
+        return self.rawStorage.read(self.allocator, io, log, CONFIG_PATH);
     }
 };
 
@@ -66,7 +67,7 @@ const WriteConfigOperation = struct {
     //
     // Writes the config file.
     //
-    pub fn run(self: *WriteConfigOperation, io: std.Io) !void {
+    pub fn run(self: *WriteConfigOperation, io: std.Io, _: ILog) !void {
         return self.rawStorage.write(self.allocator, io, CONFIG_PATH, "application/json", self.data);
     }
 };
@@ -76,7 +77,7 @@ const WriteConfigOperation = struct {
 // (Zig: returns the parsed JSON value, so that
 // updateDatabaseConfig keeps its keys and their order; JSON `null` in the file is returned as .null.)
 //
-pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage) !?std.json.Value {
+pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage) !?std.json.Value {
     if (!try rawStorage.fileExists(allocator, io, CONFIG_PATH)) {
         return null;
     }
@@ -84,7 +85,7 @@ pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
         .allocator = allocator,
         .rawStorage = rawStorage,
     };
-    const data = try retry(io, &operation, 3, 1_000, 2, 30_000, null) orelse {
+    const data = try retry(io, log, &operation, 3, 1_000, 2, 30_000, null) orelse {
         return null;
     };
     const text = data;
@@ -104,7 +105,7 @@ pub fn loadDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
 // Saves the full database config to .db/config.json.
 // (Zig: `config` is an IDatabaseConfig or a std.json.Value object; null fields are left out of the file.)
 //
-pub fn saveDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, config: anytype) !void {
+pub fn saveDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, config: anytype) !void {
     const text = try std.json.Stringify.valueAlloc(allocator, config, .{
         .whitespace = .indent_2,
         .emit_null_optional_fields = false,
@@ -114,7 +115,7 @@ pub fn saveDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
         .rawStorage = rawStorage,
         .data = text,
     };
-    try retry(io, &operation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &operation, 3, 1_000, 2, 30_000, null);
 }
 
 //
@@ -124,8 +125,8 @@ pub fn saveDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
 // leaves it out, so the key is removed from the config. A partial that leaves a key out of the merge cannot be written.
 // No caller needs one.)
 //
-pub fn updateDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, partial: IDatabaseConfig) !void {
-    const existing = try loadDatabaseConfig(allocator, io, rawStorage);
+pub fn updateDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, partial: IDatabaseConfig) !void {
+    const existing = try loadDatabaseConfig(allocator, io, log, rawStorage);
 
     // `{ ...existing ?? {}, ...partial }`: the keys of the existing object in order, then the keys of partial
     // (an existing key keeps its position). Spreading a value that is not an object adds no keys.
@@ -151,7 +152,7 @@ pub fn updateDatabaseConfig(allocator: std.mem.Allocator, io: std.Io, rawStorage
             _ = merged.orderedRemove(field.name);
         }
     }
-    try saveDatabaseConfig(allocator, io, rawStorage, std.json.Value{
+    try saveDatabaseConfig(allocator, io, log, rawStorage, std.json.Value{
         .object = merged,
     });
 }

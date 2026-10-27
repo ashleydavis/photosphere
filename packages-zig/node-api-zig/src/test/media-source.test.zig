@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -26,12 +27,12 @@ fn folderSource(folderPath: []const u8, recurse: bool) IFolderAutoImportSource {
 //
 // Drains every page of a source into one list, so a test can assert on the whole listing.
 //
-fn listAll(allocator: std.mem.Allocator, source: *FolderMediaSource, pageSize: usize) ![]IMediaItem {
+fn listAll(log: ILog, allocator: std.mem.Allocator, source: *FolderMediaSource, pageSize: usize) ![]IMediaItem {
     var items: std.ArrayList(IMediaItem) = .empty;
     var cursor: ?[]const u8 = null;
     var pages: usize = 0;
     while (true) {
-        const page = try source.listPage(allocator, std.testing.io, cursor, pageSize);
+        const page = try source.listPage(allocator, std.testing.io, log, cursor, pageSize);
         try items.appendSlice(allocator, page.items);
         cursor = page.nextCursor;
         pages += 1;
@@ -125,6 +126,7 @@ const SourceTest = struct {
 };
 
 test "lists the media files in a folder" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -133,13 +135,14 @@ test "lists the media files in a folder" {
     _ = try context.writePhoto("b.png", "second");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const page = try source.listPage(allocator, std.testing.io, null, 10);
+    const page = try source.listPage(allocator, std.testing.io, log, null, 10);
 
     try expectStrings(&.{ "a.jpg", "b.png" }, try displayNames(allocator, page.items));
     try std.testing.expect(page.nextCursor == null);
 }
 
 test "reports the details of each item" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -147,7 +150,7 @@ test "reports the details of each item" {
     const filePath = try context.writePhoto("a.jpg", "0123456789");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const page = try source.listPage(allocator, std.testing.io, null, 10);
+    const page = try source.listPage(allocator, std.testing.io, log, null, 10);
 
     try std.testing.expectEqual(@as(usize, 1), page.items.len);
     const item = page.items[0];
@@ -160,6 +163,7 @@ test "reports the details of each item" {
 }
 
 test "filters out files that are not media" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -169,12 +173,13 @@ test "filters out files that are not media" {
     _ = try context.writePhoto("drawing.svg", "vector");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const items = try listAll(allocator, &source, 10);
+    const items = try listAll(log, allocator, &source, 10);
 
     try expectStrings(&.{"a.jpg"}, try displayNames(allocator, items));
 }
 
 test "pages through a listing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -186,19 +191,20 @@ test "pages through a listing" {
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
 
-    const firstPage = try source.listPage(allocator, io, null, 2);
+    const firstPage = try source.listPage(allocator, io, log, null, 2);
     try expectStrings(&.{ "a.jpg", "b.jpg" }, try displayNames(allocator, firstPage.items));
     try std.testing.expectEqualStrings(try path.join(allocator, &.{ context.photosDir, "b.jpg" }), firstPage.nextCursor.?);
 
-    const secondPage = try source.listPage(allocator, io, firstPage.nextCursor, 2);
+    const secondPage = try source.listPage(allocator, io, log, firstPage.nextCursor, 2);
     try expectStrings(&.{ "c.jpg", "d.jpg" }, try displayNames(allocator, secondPage.items));
 
-    const thirdPage = try source.listPage(allocator, io, secondPage.nextCursor, 2);
+    const thirdPage = try source.listPage(allocator, io, log, secondPage.nextCursor, 2);
     try expectStrings(&.{"e.jpg"}, try displayNames(allocator, thirdPage.items));
     try std.testing.expect(thirdPage.nextCursor == null);
 }
 
 test "every item is listed exactly once across pages" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -209,12 +215,13 @@ test "every item is listed exactly once across pages" {
     }
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const items = try listAll(allocator, &source, 3);
+    const items = try listAll(log, allocator, &source, 3);
 
     try expectStrings(&names, try displayNames(allocator, items));
 }
 
 test "resumes after a cursor whose item has been deleted, without going back to the start" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -225,7 +232,7 @@ test "resumes after a cursor whose item has been deleted, without going back to 
     }
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const firstPage = try source.listPage(allocator, io, null, 2);
+    const firstPage = try source.listPage(allocator, io, log, null, 2);
     try expectStrings(&.{ "a.jpg", "b.jpg" }, try displayNames(allocator, firstPage.items));
 
     // The item the cursor names is gone by the time the next page is asked for, which is the
@@ -235,11 +242,12 @@ test "resumes after a cursor whose item has been deleted, without going back to 
     try std.Io.Dir.cwd().deleteFile(io, try path.join(allocator, &.{ context.photosDir, "b.jpg" }));
 
     var resumedSource = context.source(&.{folderSource(context.photosDir, true)});
-    const nextPage = try resumedSource.listPage(allocator, io, try path.join(allocator, &.{ context.photosDir, "b.jpg" }), 10);
+    const nextPage = try resumedSource.listPage(allocator, io, log, try path.join(allocator, &.{ context.photosDir, "b.jpg" }), 10);
     try expectStrings(&.{ "c.jpg", "d.jpg" }, try displayNames(allocator, nextPage.items));
 }
 
 test "a cursor past the end of the listing yields nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -247,13 +255,14 @@ test "a cursor past the end of the listing yields nothing" {
     _ = try context.writePhoto("a.jpg", "one");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const page = try source.listPage(allocator, std.testing.io, try path.join(allocator, &.{ context.photosDir, "zz.jpg" }), 10);
+    const page = try source.listPage(allocator, std.testing.io, log, try path.join(allocator, &.{ context.photosDir, "zz.jpg" }), 10);
 
     try std.testing.expectEqual(@as(usize, 0), page.items.len);
     try std.testing.expect(page.nextCursor == null);
 }
 
 test "a recursive folder includes files in subfolders" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -262,13 +271,14 @@ test "a recursive folder includes files in subfolders" {
     _ = try context.writePhoto("holiday/b.jpg", "nested");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const names = try displayNames(allocator, try listAll(allocator, &source, 10));
+    const names = try displayNames(allocator, try listAll(log, allocator, &source, 10));
     string_lists.sortStrings(names);
 
     try expectStrings(&.{ "a.jpg", "b.jpg" }, names);
 }
 
 test "a non-recursive folder takes only the files directly in it" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -277,12 +287,13 @@ test "a non-recursive folder takes only the files directly in it" {
     _ = try context.writePhoto("holiday/b.jpg", "nested");
 
     var source = context.source(&.{folderSource(context.photosDir, false)});
-    const items = try listAll(allocator, &source, 10);
+    const items = try listAll(log, allocator, &source, 10);
 
     try expectStrings(&.{"a.jpg"}, try displayNames(allocator, items));
 }
 
 test "lists across several folders" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -295,25 +306,27 @@ test "lists across several folders" {
         folderSource(context.photosDir, true),
         folderSource(otherDir, true),
     });
-    const names = try displayNames(allocator, try listAll(allocator, &source, 10));
+    const names = try displayNames(allocator, try listAll(log, allocator, &source, 10));
     string_lists.sortStrings(names);
 
     try expectStrings(&.{ "a.jpg", "b.jpg" }, names);
 }
 
 test "a folder that does not exist yields nothing rather than throwing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
     const allocator = context.arena.allocator();
     var source = context.source(&.{folderSource(try path.join(allocator, &.{ context.tempDir, "absent" }), true)});
-    const page = try source.listPage(allocator, std.testing.io, null, 10);
+    const page = try source.listPage(allocator, std.testing.io, log, null, 10);
 
     try std.testing.expectEqual(@as(usize, 0), page.items.len);
     try std.testing.expect(page.nextCursor == null);
 }
 
 test "openItem returns the file path unchanged and closeItem does nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -322,7 +335,7 @@ test "openItem returns the file path unchanged and closeItem does nothing" {
     const filePath = try context.writePhoto("a.jpg", "photo");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const page = try source.listPage(allocator, io, null, 10);
+    const page = try source.listPage(allocator, io, log, null, 10);
 
     try std.testing.expectEqualStrings(filePath, try source.openItem(allocator, io, page.items[0]));
     try source.closeItem(allocator, io, page.items[0]);
@@ -330,6 +343,7 @@ test "openItem returns the file path unchanged and closeItem does nothing" {
 }
 
 test "a file added later shows up in the next listing, which is how each run finds new photos" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -337,19 +351,20 @@ test "a file added later shows up in the next listing, which is how each run fin
     _ = try context.writePhoto("a.jpg", "photo");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    try std.testing.expectEqual(@as(usize, 1), (try source.listPage(allocator, std.testing.io, null, 10)).items.len);
+    try std.testing.expectEqual(@as(usize, 1), (try source.listPage(allocator, std.testing.io, log, null, 10)).items.len);
 
     _ = try context.writePhoto("b.jpg", "another");
 
     // A fresh source, because a run that has ended takes its source with it: this is what the
     // next run does, and it is the only thing that finds a photo that arrived in between.
     var nextRun = context.source(&.{folderSource(context.photosDir, true)});
-    const items = try listAll(allocator, &nextRun, 10);
+    const items = try listAll(log, allocator, &nextRun, 10);
 
     try expectStrings(&.{ "a.jpg", "b.jpg" }, try displayNames(allocator, items));
 }
 
 test "deleteItems removes the source files" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -359,7 +374,7 @@ test "deleteItems removes the source files" {
     const secondPath = try context.writePhoto("b.jpg", "two");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const items = try listAll(allocator, &source, 10);
+    const items = try listAll(log, allocator, &source, 10);
 
     try source.deleteItems(allocator, io, &.{items[0].sourceId});
 
@@ -368,6 +383,7 @@ test "deleteItems removes the source files" {
 }
 
 test "deleting an item that is already gone is not an error" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -376,13 +392,14 @@ test "deleting an item that is already gone is not an error" {
     const filePath = try context.writePhoto("a.jpg", "one");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    const items = try listAll(allocator, &source, 10);
+    const items = try listAll(log, allocator, &source, 10);
     try std.Io.Dir.cwd().deleteFile(io, filePath);
 
     try source.deleteItems(allocator, io, &.{items[0].sourceId});
 }
 
 test "deleting an item the source has never listed names it in the error" {
+    const log = utils.mute_log.MuteLog.init();
     var context: SourceTest = undefined;
     try context.init();
     defer context.deinit();
@@ -391,7 +408,7 @@ test "deleting an item the source has never listed names it in the error" {
     _ = try context.writePhoto("a.jpg", "one");
 
     var source = context.source(&.{folderSource(context.photosDir, true)});
-    _ = try listAll(allocator, &source, 10);
+    _ = try listAll(log, allocator, &source, 10);
 
     const result = source.deleteItems(allocator, io, &.{"/somewhere/else.jpg"});
     try std.testing.expectError(error.Thrown, result);

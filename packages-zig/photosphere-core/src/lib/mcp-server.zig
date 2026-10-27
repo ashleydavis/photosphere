@@ -12,6 +12,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -30,7 +31,6 @@ const McpServer = protocol.McpServer;
 const IField = mcp.input_schema.IField;
 const HttpServer = node_utils.http_server.HttpServer;
 const BsonDocument = serialization_zig.bson.BsonDocument;
-const log = &utils.log.log;
 
 //
 // The fixed port of the MCP server. It is the same on every launch, so that one MCP client configuration keeps working without
@@ -499,7 +499,7 @@ pub const RunningMcpServer = struct {
 // callbacks, through which it sends the page its tool calls itself. The server is not started in test mode on the fixed port, but on a
 // free one. A failure to listen (the port is taken, for example) is returned, and the caller carries on without the server.
 //
-pub fn startMcpServer(allocator: std.mem.Allocator, io: std.Io, native_callbacks: ziggy.core.NativeCallbacks) !*RunningMcpServer {
+pub fn startMcpServer(allocator: std.mem.Allocator, io: std.Io, log: ILog, native_callbacks: ziggy.core.NativeCallbacks) !*RunningMcpServer {
     const running = try allocator.create(RunningMcpServer);
     errdefer allocator.destroy(running);
     const listener = try node_utils.http_server.open(io, MCP_HOST, requestedPort());

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -10,7 +11,6 @@ const tree = @import("tree.zig");
 const sync = @import("sync.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
@@ -158,13 +158,13 @@ pub const IConsolidationProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, io: std.Io, pushed: u64, total: u64) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, log: ILog, pushed: u64, total: u64) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: IConsolidationProgressCallback, io: std.Io, pushed: u64, total: u64) void {
-        self.function(self.context, io, pushed, total);
+    pub fn call(self: IConsolidationProgressCallback, io: std.Io, log: ILog, pushed: u64, total: u64) void {
+        self.function(self.context, io, log, pushed, total);
     }
 };
 
@@ -172,7 +172,7 @@ pub const IConsolidationProgressCallback = struct {
 // Copies one file between storages if the source has it, and returns what it copied so the caller
 // can record it in the destination's merkle tree.
 //
-fn copyAssetFile(allocator: std.mem.Allocator, io: std.Io, fileName: []const u8, sourceStorage: IStorage, destStorage: IStorage) !bool {
+fn copyAssetFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, fileName: []const u8, sourceStorage: IStorage, destStorage: IStorage) !bool {
     if (!try sourceStorage.fileExists(allocator, io, fileName)) {
         return false;
     }
@@ -182,7 +182,7 @@ fn copyAssetFile(allocator: std.mem.Allocator, io: std.Io, fileName: []const u8,
         .storage = sourceStorage,
         .fileName = fileName,
     };
-    const info = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const info = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return false;
     };
 
@@ -193,7 +193,7 @@ fn copyAssetFile(allocator: std.mem.Allocator, io: std.Io, fileName: []const u8,
         .fileName = fileName,
         .contentType = info.contentType,
     };
-    try retry(io, &copyOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &copyOperation, 3, 1_000, 2, 30_000, null);
 
     return true;
 }
@@ -205,6 +205,7 @@ fn copyAssetFile(allocator: std.mem.Allocator, io: std.Io, fileName: []const u8,
 pub fn consolidateDatabases(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     localPath: []const u8,
     localStorage: IStorage,
     localRawStorage: IStorage,
@@ -222,7 +223,7 @@ pub fn consolidateDatabases(
         .allocator = allocator,
         .storage = localStorage,
     };
-    const localTree = try retry(io, &loadLocalOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const localTree = try retry(io, log, &loadLocalOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load the merkle tree of the local database at {s}.", .{localPath});
     };
 
@@ -230,7 +231,7 @@ pub fn consolidateDatabases(
         .allocator = allocator,
         .storage = remoteStorage,
     };
-    var remoteTree = try retry(io, &loadRemoteOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var remoteTree = try retry(io, log, &loadRemoteOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load the merkle tree of the remote database at {s}.", .{remotePath});
     };
 
@@ -249,22 +250,22 @@ pub fn consolidateDatabases(
 
     try localBsonDatabase.flush();
 
-    if (!try acquireWriteLock(allocator, io, remoteRawStorage, sessionId, 3)) {
+    if (!try acquireWriteLock(allocator, io, log, remoteRawStorage, sessionId, 3)) {
         return errors.throwError("Failed to acquire the write lock on the remote database at {s}.", .{remotePath});
     }
 
     var pushedCount: u64 = 0;
-    const pushed = pushAbsentAssets(allocator, io, localStorage, localBsonDatabase, remoteStorage, remoteRawStorage, remoteBsonDatabase, &localTree, &remoteTree, plan, onProgress, &pushedCount);
-    try releaseWriteLockAfter(allocator, io, remoteRawStorage, pushed);
+    const pushed = pushAbsentAssets(allocator, io, log, localStorage, localBsonDatabase, remoteStorage, remoteRawStorage, remoteBsonDatabase, &localTree, &remoteTree, plan, onProgress, &pushedCount);
+    try releaseWriteLockAfter(allocator, io, log, remoteRawStorage, pushed);
 
     // --- Make the local database a partial replica of the remote. ---
 
-    if (!try acquireWriteLock(allocator, io, localRawStorage, sessionId, 3)) {
+    if (!try acquireWriteLock(allocator, io, log, localRawStorage, sessionId, 3)) {
         return errors.throwError("Failed to acquire the write lock on the local database at {s}.", .{localPath});
     }
 
-    const joined = joinAsPartialReplica(allocator, io, localStorage, localRawStorage, remotePath, remoteStorage, remoteBsonDatabase, uuidGenerator, timestampProvider, plan);
-    try releaseWriteLockAfter(allocator, io, localRawStorage, joined);
+    const joined = joinAsPartialReplica(allocator, io, log, localStorage, localRawStorage, remotePath, remoteStorage, remoteBsonDatabase, uuidGenerator, timestampProvider, plan);
+    try releaseWriteLockAfter(allocator, io, log, localRawStorage, joined);
 
     return .{
         .pushedCount = pushedCount,
@@ -280,6 +281,7 @@ pub fn consolidateDatabases(
 fn pushAbsentAssets(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     localStorage: IStorage,
     localBsonDatabase: *BsonDatabase,
     remoteStorage: IStorage,
@@ -295,7 +297,7 @@ fn pushAbsentAssets(
     const remoteMetadata = try remoteBsonDatabase.collection("metadata");
 
     for (plan.absentAssetIds) |assetId| {
-        var assetRecord = try localMetadata.getOne(io, assetId) orelse {
+        var assetRecord = try localMetadata.getOne(io, log, assetId) orelse {
             // The tree names a file the metadata knows nothing about. Pushing the bytes with no
             // record would put an asset in the remote that nothing can show, so it is reported
             // and skipped rather than half-pushed.
@@ -305,7 +307,7 @@ fn pushAbsentAssets(
 
         for (ASSET_FILE_PREFIXES) |prefix| {
             const fileName = try std.mem.concat(allocator, u8, &.{ prefix, assetId });
-            if (!try copyAssetFile(allocator, io, fileName, localStorage, remoteStorage)) {
+            if (!try copyAssetFile(allocator, io, log, fileName, localStorage, remoteStorage)) {
                 continue;
             }
 
@@ -314,7 +316,7 @@ fn pushAbsentAssets(
                 .storage = remoteStorage,
                 .fileName = fileName,
             };
-            const info = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null);
+            const info = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null);
             const localItem = if (localTree.sort != null) try findLeaf(allocator, localTree, fileName) else null;
             if (info == null or localItem == null or localItem.?.contentHash == null) {
                 return errors.throwError("Consolidation copied {s} to the remote but could not record it in the remote's merkle tree.", .{fileName});
@@ -328,10 +330,10 @@ fn pushAbsentAssets(
             });
         }
 
-        try remoteMetadata.insertOne(io, &assetRecord, null);
+        try remoteMetadata.insertOne(io, log, &assetRecord, null);
         pushedCount.* += 1;
         if (onProgress) |progressCallback| {
-            progressCallback.call(io, pushedCount.*, plan.absentAssetIds.len);
+            progressCallback.call(io, log, pushedCount.*, plan.absentAssetIds.len);
         }
     }
 
@@ -346,9 +348,9 @@ fn pushAbsentAssets(
         .merkleTree = remoteTree,
         .storage = remoteStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
-    try remoteBsonDatabase.commit(io);
-    try tree.stampDatabaseModified(allocator, io, remoteStorage, remoteRawStorage);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try remoteBsonDatabase.commit(io, log);
+    try tree.stampDatabaseModified(allocator, io, log, remoteStorage, remoteRawStorage);
 }
 
 //
@@ -357,6 +359,7 @@ fn pushAbsentAssets(
 fn joinAsPartialReplica(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     localStorage: IStorage,
     localRawStorage: IStorage,
     remotePath: []const u8,
@@ -378,7 +381,7 @@ fn joinAsPartialReplica(
                     .storage = localStorage,
                     .filePath = fileName,
                 };
-                try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
+                try retry(io, log, &deleteOperation, 3, 1_000, 2, 30_000, null);
             }
         }
     }
@@ -397,6 +400,7 @@ fn joinAsPartialReplica(
     _ = try replicate(
         allocator,
         io,
+        log,
         remotePath,
         remoteStorage,
         remoteBsonDatabase,
@@ -411,7 +415,7 @@ fn joinAsPartialReplica(
         null,
     );
 
-    try updateDatabaseConfig(allocator, io, localRawStorage, .{
+    try updateDatabaseConfig(allocator, io, log, localRawStorage, .{
         .origin = remotePath,
     });
 }

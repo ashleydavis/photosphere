@@ -22,13 +22,13 @@ const logExceptions = @import("log-exceptions.zig").logExceptions;
 // check-tools: no payload. The reply is {magick, ffprobe, ffmpeg, allAvailable, missingTools}, each tool as {available, version, error}.
 //
 fn checkTools(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
+    const log = services.log;
     _ = timers;
     _ = context;
     _ = data;
     // The tools built into the program, made on the task's thread, report on themselves.
     var tools = media_tools.ThreadTools.init();
-    const status = try tools_zig.verifyTools(allocator, io, tools.runner());
+    const status = try tools_zig.verifyTools(allocator, io, log, tools.runner());
     return try json.stringify(allocator, status);
 }
 

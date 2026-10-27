@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const media_source = @import("media-source.zig");
@@ -236,9 +237,9 @@ pub const CompositeMediaSource = struct {
     //
     // IMediaSource.listPage for this implementation.
     //
-    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
         const self: *CompositeMediaSource = @ptrCast(@alignCast(ptr));
-        return self.listPage(allocator, io, cursor, pageSize);
+        return self.listPage(allocator, io, log, cursor, pageSize);
     }
 
     //
@@ -273,7 +274,7 @@ pub const CompositeMediaSource = struct {
     // Every item's source id is stamped with the child it came from, so a later export, release or
     // delete goes back to that child rather than being guessed at.
     //
-    pub fn listPage(self: *CompositeMediaSource, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) !IMediaSourceListPage {
+    pub fn listPage(self: *CompositeMediaSource, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) !IMediaSourceListPage {
         const position: ICompositeCursor = if (cursor) |cursorText|
             try parseCompositeCursor(cursorText)
         else
@@ -286,7 +287,7 @@ pub const CompositeMediaSource = struct {
         var childCursor = position.childCursor;
 
         while (childIndex < self.sources.len) {
-            const page = try self.sources[childIndex].listPage(allocator, io, childCursor, pageSize);
+            const page = try self.sources[childIndex].listPage(allocator, io, log, childCursor, pageSize);
             const items = try allocator.alloc(IMediaItem, page.items.len);
             for (page.items, 0..) |item, itemIndex| {
                 items[itemIndex] = try stampChildIndex(allocator, item, childIndex);

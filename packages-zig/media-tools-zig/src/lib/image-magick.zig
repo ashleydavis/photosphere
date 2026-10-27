@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 // The C interface of ImageMagick, for a program that needs more of it than the runner.
@@ -102,7 +103,7 @@ pub const ImageMagick = struct {
     // Runs `magick` with the arguments and returns the exit code (0 when the command worked, 1 when it failed) and what it printed.
     // A command that fails hands back ImageMagick's messages instead of what it printed.
     //
-    pub fn runMagick(io: std.Io, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runMagick(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
             return try readVersion(io, allocator);
         }
@@ -147,6 +148,17 @@ pub const ImageMagick = struct {
         defer if (metadata != null) {
             _ = c.DestroyString(metadata);
         };
+        // ImageMagick's handlers are called with no way to pass a log, so for the length of the command they print to this thread's
+        // console, and its lines go to the log given (see RunConsole). The forward that was set is put back after.
+        var run_console: RunConsole = .{
+            .log = log,
+        };
+        const previous_forward = utils.console.currentForward();
+        utils.console.setForward(.{
+            .context = &run_console,
+            .function = RunConsole.forwardLine,
+        });
+        defer utils.console.setForward(previous_forward);
         const command: c.MagickCommand = if (is_identify) &c.IdentifyImageCommand else &c.MagickImageCommand;
         var succeeded = command.?(image_info, @intCast(command_arguments.items.len), argv.ptr, &metadata, exception) == c.MagickTrue;
         // As MagickCommandGenesis does without -regard-warnings: an error worse than ErrorException fails the command.
@@ -162,7 +174,7 @@ pub const ImageMagick = struct {
             };
         }
         if (messages.len > 0) {
-            utils.log.log.tool("magick", .{
+            log.tool("magick", .{
                 .stdout = null,
                 .stderr = messages,
             });
@@ -256,7 +268,32 @@ fn appendMessage(allocator: std.mem.Allocator, messages: *std.ArrayList(u8), cli
 }
 
 //
-// ImageMagick's warning handler while the program runs it: sends the warning to the log as the standard error of `magick`.
+// Where the console lines of a thread running a command go while it runs: ImageMagick's handlers print a warning to stdout and an error
+// to stderr (see logWarning and logError), and this sends a warning to the log given as the standard error of `magick` and an error
+// to its errors.
+//
+const RunConsole = struct {
+    // The log of the run.
+    log: utils.log.ILog,
+
+    //
+    // Sends one console line of the run to the log.
+    //
+    fn forwardLine(context: ?*anyopaque, stream: utils.console.Stream, line: []const u8) void {
+        const self: *const RunConsole = @ptrCast(@alignCast(context.?));
+        switch (stream) {
+            .stdout => self.log.tool("magick", .{
+                .stdout = null,
+                .stderr = line,
+            }),
+            .stderr => self.log.@"error"(line),
+        }
+    }
+};
+
+//
+// ImageMagick's warning handler while the program runs it: prints the warning to the calling thread's stdout, which a run sends to its
+// log as the standard error of `magick` (see RunConsole). ImageMagick calls it with no way to pass a log.
 //
 fn logWarning(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
     _ = severity;
@@ -268,16 +305,14 @@ fn logWarning(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]
     defer message.deinit(allocator);
     appendMessage(allocator, &message, "magick", reason, description) catch @panic("out of memory logging a warning of ImageMagick");
     if (message.items.len > 0) {
-        utils.log.log.tool("magick", .{
-            .stdout = null,
-            .stderr = message.items,
-        });
+        utils.console.log(message.items);
     }
 }
 
 //
-// ImageMagick's error handler while the program runs it: sends the error to the log's errors. ImageMagick hands an error to it only
-// where it reports the error and carries on.
+// ImageMagick's error handler while the program runs it: prints the error to the calling thread's stderr, which a run sends to its
+// log's errors (see RunConsole). ImageMagick calls it with no way to pass a log, and hands an error to it only where it reports the
+// error and carries on.
 //
 fn logError(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
     _ = severity;
@@ -289,6 +324,6 @@ fn logError(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]co
     defer message.deinit(allocator);
     appendMessage(allocator, &message, "magick", reason, description) catch @panic("out of memory logging an error of ImageMagick");
     if (message.items.len > 0) {
-        utils.log.log.@"error"(message.items[0 .. message.items.len - 1]);
+        utils.console.@"error"(message.items[0 .. message.items.len - 1]);
     }
 }

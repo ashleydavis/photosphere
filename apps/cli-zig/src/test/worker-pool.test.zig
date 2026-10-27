@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -61,7 +62,7 @@ pub const Collector = struct {
     //
     // The completion callback.
     //
-    pub fn onComplete(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, result: types.ITaskResult) anyerror!void {
+    pub fn onComplete(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, result: types.ITaskResult) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -86,7 +87,7 @@ pub const Collector = struct {
     //
     // The typed message callback.
     //
-    fn onTypedMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, data: types.ITaskEventData) anyerror!void {
+    fn onTypedMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, data: types.ITaskEventData) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -98,7 +99,7 @@ pub const Collector = struct {
     //
     // The any-message callback.
     //
-    fn onAnyMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, data: types.ITaskEventData) anyerror!void {
+    fn onAnyMessage(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, _: ILog, data: types.ITaskEventData) anyerror!void {
         _ = io;
         _ = allocator;
         _ = timers;
@@ -110,7 +111,7 @@ pub const Collector = struct {
     //
     // The onTaskAdded callback.
     //
-    fn onAdded(context: ?*anyopaque, allocator: std.mem.Allocator, taskId: []const u8) void {
+    fn onAdded(context: ?*anyopaque, allocator: std.mem.Allocator, _: ILog, taskId: []const u8) void {
         _ = allocator;
         const self: *Collector = @ptrCast(@alignCast(context.?));
         _ = taskId;
@@ -131,9 +132,9 @@ pub const Collector = struct {
     // Reads the pool's messages on this thread, its main thread, until the number of completed tasks reaches the count. A task that
     // never ends fails at the pool's timeout, so the wait always ends. The allocator is the one the pool was made with.
     //
-    pub fn waitForCompleted(self: *Collector, pool: *WorkerPoolBun, allocator: std.mem.Allocator, timers: Timers, count: usize) !void {
+    pub fn waitForCompleted(self: *Collector, log: ILog, pool: *WorkerPoolBun, allocator: std.mem.Allocator, timers: Timers, count: usize) !void {
         while (self.completed < count) {
-            pool.waitForMessage(std.testing.io, allocator, timers);
+            pool.waitForMessage(std.testing.io, allocator, timers, log);
         }
     }
 };
@@ -142,28 +143,29 @@ pub const Collector = struct {
 // Reads the pool's messages without waiting for one, for the number of milliseconds, for a test that waits on something other than
 // a task's end. The allocator is the one the pool was made with.
 //
-fn readMessagesFor(pool: *WorkerPoolBun, allocator: std.mem.Allocator, timers: Timers, milliseconds: usize) void {
+fn readMessagesFor(pool: *WorkerPoolBun, log: ILog, allocator: std.mem.Allocator, timers: Timers, milliseconds: usize) void {
     var waited: usize = 0;
     while (waited < milliseconds) {
-        pool.handleQueuedMessages(std.testing.io, allocator, timers);
+        pool.handleQueuedMessages(std.testing.io, log, allocator, timers);
         std.testing.io.sleep(.fromMilliseconds(5), .awake) catch {};
         waited += 5;
     }
-    pool.handleQueuedMessages(std.testing.io, allocator, timers);
+    pool.handleQueuedMessages(std.testing.io, log, allocator, timers);
 }
 
 //
 // Adds a task to the pool, with the allocator the pool was made with, and frees the id the pool returns.
 //
-fn addTask(pool: *WorkerPoolBun, allocator: std.mem.Allocator, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8) !void {
-    const id = try pool.addTask(allocator, std.testing.io, @"type", data, source, taskId, null);
+fn addTask(pool: *WorkerPoolBun, log: ILog, allocator: std.mem.Allocator, @"type": []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8) !void {
+    const id = try pool.addTask(allocator, std.testing.io, log, @"type", data, source, taskId, null);
     allocator.free(id);
 }
 
 //
 // Returns the text of the task data.
 //
-fn echoHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn echoHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = log;
     _ = timers;
     _ = io;
     _ = context;
@@ -173,7 +175,8 @@ fn echoHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: s
 //
 // Always fails.
 //
-fn failingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn failingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = log;
     _ = timers;
     _ = allocator;
     _ = io;
@@ -185,15 +188,15 @@ fn failingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data
 //
 // Sends two messages, one of type "progress".
 //
-fn messagingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn messagingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
     _ = timers;
     _ = data;
     var progress: std.json.ObjectMap = .empty;
     try progress.put(allocator, "type", .{ .string = "progress" });
-    context.sendEvent(io, allocator, .{ .object = progress });
+    context.sendEvent(io, allocator, log, .{ .object = progress });
     var other: std.json.ObjectMap = .empty;
     try other.put(allocator, "type", .{ .string = "other" });
-    context.sendEvent(io, allocator, .{ .object = other });
+    context.sendEvent(io, allocator, log, .{ .object = other });
     return .null;
 }
 
@@ -205,7 +208,8 @@ var blocking_queues: helpers.BlockingTaskQueues = .init();
 //
 // Blocks until released (or cancelled), telling the test thread when it starts and ends.
 //
-fn blockingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn blockingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = log;
     _ = timers;
     _ = data;
     blocking_queues.runBlockingTask(io, allocator, context);
@@ -215,7 +219,8 @@ fn blockingHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, dat
 //
 // Sleeps longer than the timeout of the timeout test.
 //
-fn slowHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn slowHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = log;
     _ = timers;
     _ = allocator;
     _ = data;
@@ -227,12 +232,11 @@ fn slowHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: s
 //
 // Runs `magick -version` through the tools built into the program, made on the task's thread, and returns what it printed.
 //
-fn magickVersionHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn magickVersionHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, _: types.ITaskContext) anyerror!std.json.Value {
     _ = timers;
     _ = data;
-    _ = context;
     var tools = media_tools.ThreadTools.init();
-    const result = try node_utils.exec.exec(allocator, io, tools.runner(), "magick -version");
+    const result = try node_utils.exec.exec(allocator, io, log, tools.runner(), "magick -version");
     return .{ .string = result.stdout };
 }
 
@@ -249,6 +253,7 @@ pub const test_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
 };
 
 test "runs a task on a worker and reports its outputs" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -260,10 +265,10 @@ test "runs a task on a worker and reports its outputs" {
     const backend = pool.queueBackend();
     var collector = Collector.init(arena.allocator());
     _ = try backend.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    const taskId = try backend.addTask(allocator, std.testing.io, "echo", .{ .string = "hi" }, "source", "task-1", null);
+    const taskId = try backend.addTask(allocator, std.testing.io, log, "echo", .{ .string = "hi" }, "source", "task-1", null);
     defer allocator.free(taskId);
     try std.testing.expectEqualStrings("task-1", taskId);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
     try std.testing.expectEqualStrings("echo hi", collector.lastOutput);
 }
@@ -272,6 +277,12 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
 
     // The test UUID generator keeps its counter under TEST_TMP_DIR: below a file, that directory cannot be
     // created, so generating the session ID of every worker fails.
@@ -297,15 +308,16 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
     const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, pool_allocator, "echo", .{ .string = "x" }, "source", null);
-    readMessagesFor(pool, pool_allocator, timer_list.interface(), 100);
+    try addTask(pool, memory.log, pool_allocator, "echo", .{ .string = "x" }, "source", null);
+    readMessagesFor(pool, memory.log, pool_allocator, timer_list.interface(), 100);
     pool.deinit(std.testing.io, pool_allocator);
 
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Error from worker 1\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Error from worker 1\n") != null);
     try std.testing.expectEqual(@as(usize, 0), collector.completed);
 }
 
 test "generates a task ID when none is given" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -316,13 +328,14 @@ test "generates a task ID when none is given" {
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    const taskId = try pool.addTask(allocator, std.testing.io, "echo", .{ .string = "x" }, "source", null, null);
+    const taskId = try pool.addTask(allocator, std.testing.io, log, "echo", .{ .string = "x" }, "source", null, null);
     defer allocator.free(taskId);
     try std.testing.expectEqual(@as(usize, 36), taskId.len);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
 }
 
 test "reports a failed task with the error name and message" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -333,9 +346,9 @@ test "reports a failed task with the error name and message" {
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, allocator, "fail", .null, "source", null);
-    try addTask(pool, allocator, "no-such-type", .null, "source", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 2);
+    try addTask(pool, log, allocator, "fail", .null, "source", null);
+    try addTask(pool, log, allocator, "no-such-type", .null, "source", null);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 2);
     try std.testing.expectEqual(@as(usize, 2), collector.failed);
     try std.testing.expectEqualStrings("Error", collector.lastErrorName);
     // A Ziggy worker fails a task of a type it was not given as UnknownTaskType.
@@ -343,6 +356,7 @@ test "reports a failed task with the error name and message" {
 }
 
 test "forwards task messages to the message callbacks" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -355,19 +369,20 @@ test "forwards task messages to the message callbacks" {
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.onTaskEvent(allocator, "progress", .{ .context = &collector, .function = Collector.onTypedMessage });
     const unsubscribe = try pool.onAnyTaskEvent(allocator, .{ .context = &collector, .function = Collector.onAnyMessage });
-    try addTask(pool, allocator, "message", .null, "source", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    try addTask(pool, log, allocator, "message", .null, "source", null);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
     try std.testing.expectEqual(@as(usize, 1), collector.typedMessages);
     try std.testing.expectEqual(@as(usize, 2), collector.anyMessages);
 
     unsubscribe.call(allocator);
-    try addTask(pool, allocator, "message", .null, "source", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 2);
+    try addTask(pool, log, allocator, "message", .null, "source", null);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 2);
     try std.testing.expectEqual(@as(usize, 2), collector.typedMessages);
     try std.testing.expectEqual(@as(usize, 2), collector.anyMessages);
 }
 
 test "creates workers lazily up to maxWorkers" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     blocking_queues.reset();
@@ -382,19 +397,19 @@ test "creates workers lazily up to maxWorkers" {
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
     var index: usize = 0;
     while (index < 4) {
-        try addTask(pool, allocator, "block", .null, "source", null);
+        try addTask(pool, log, allocator, "block", .null, "source", null);
         index += 1;
     }
     var waited: usize = 0;
     while (blocking.running < 2 and waited < 2000) {
-        pool.handleQueuedMessages(std.testing.io, allocator, timer_list.interface());
+        pool.handleQueuedMessages(std.testing.io, log, allocator, timer_list.interface());
         std.testing.io.sleep(.fromMilliseconds(5), .awake) catch {};
         blocking.readEvents(&blocking_queues, allocator);
         waited += 1;
     }
     try std.testing.expectEqual(@as(usize, 2), pool.workers.items.len);
     blocking_queues.release.close(std.testing.io);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 4);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 4);
     blocking.readEvents(&blocking_queues, allocator);
     try std.testing.expectEqual(@as(usize, 2), blocking.maxRunning);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
@@ -404,6 +419,12 @@ test "times out a task, reports it failed and replaces the worker" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
@@ -419,17 +440,18 @@ test "times out a task, reports it failed and replaces the worker" {
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, pool_allocator, "slow", .null, "source", "slow-task");
-    try addTask(pool, pool_allocator, "echo", .{ .string = "after" }, "source", "echo-task");
-    try collector.waitForCompleted(pool, pool_allocator, timer_list.interface(), 2);
+    try addTask(pool, memory.log, pool_allocator, "slow", .null, "source", "slow-task");
+    try addTask(pool, memory.log, pool_allocator, "echo", .{ .string = "after" }, "source", "echo-task");
+    try collector.waitForCompleted(memory.log, pool, pool_allocator, timer_list.interface(), 2);
     try std.testing.expectEqual(@as(usize, 1), collector.failed);
     try std.testing.expectEqualStrings("echo after", collector.lastOutput);
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "[Task Queue] Task slow-task timed out after 50ms\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "[Task Queue] Task slow-task timed out after 50ms\n") != null);
     try std.testing.expectEqual(@as(usize, 1), pool.workers.items.len);
     try std.testing.expectEqual(@as(u32, 1), pool.workers.items[0].workerId);
 }
 
 test "a worker abandoned at its timeout can still send once the pool is gone, and what it sends is dropped" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -447,8 +469,8 @@ test "a worker abandoned at its timeout can still send once the pool is gone, an
     const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 50, .{ .tasks = &test_tasks });
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, pool_allocator, "slow", .null, "source", "slow-task");
-    try collector.waitForCompleted(pool, pool_allocator, timer_list.interface(), 1);
+    try addTask(pool, log, pool_allocator, "slow", .null, "source", "slow-task");
+    try collector.waitForCompleted(log, pool, pool_allocator, timer_list.interface(), 1);
     try std.testing.expect(pool.abandonedWorkers);
     const queue = pool.mainQueue;
     pool.deinit(std.testing.io, pool_allocator);
@@ -464,6 +486,12 @@ test "the timeout message writes the timeout as a template string writes a numbe
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
@@ -480,12 +508,13 @@ test "the timeout message writes the timeout as a template string writes a numbe
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, pool_allocator, "slow", .null, "source", "slow-task");
-    try collector.waitForCompleted(pool, pool_allocator, timer_list.interface(), 1);
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "[Task Queue] Task slow-task timed out after 1e-7ms\n") != null);
+    try addTask(pool, memory.log, pool_allocator, "slow", .null, "source", "slow-task");
+    try collector.waitForCompleted(memory.log, pool, pool_allocator, timer_list.interface(), 1);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "[Task Queue] Task slow-task timed out after 1e-7ms\n") != null);
 }
 
 test "cancelTasks drops pending tasks and signals running tasks" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -501,26 +530,27 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
     _ = try pool.onTaskAdded(pool_allocator, "db", .{ .context = &collector, .function = Collector.onAdded });
     _ = try pool.onTasksCancelled(pool_allocator, "db", .{ .context = &collector, .function = Collector.onCancelled });
-    try addTask(pool, pool_allocator, "block", .null, "db", null);
-    try addTask(pool, pool_allocator, "block", .null, "db", null);
-    try addTask(pool, pool_allocator, "echo", .{ .string = "other" }, "other-source", null);
+    try addTask(pool, log, pool_allocator, "block", .null, "db", null);
+    try addTask(pool, log, pool_allocator, "block", .null, "db", null);
+    try addTask(pool, log, pool_allocator, "echo", .{ .string = "other" }, "other-source", null);
     try std.testing.expectEqual(@as(usize, 2), collector.added);
     var waited: usize = 0;
     while (blocking.running < 1 and waited < 2000) {
-        pool.handleQueuedMessages(std.testing.io, pool_allocator, timer_list.interface());
+        pool.handleQueuedMessages(std.testing.io, log, pool_allocator, timer_list.interface());
         std.testing.io.sleep(.fromMilliseconds(5), .awake) catch {};
         blocking.readEvents(&blocking_queues, pool_allocator);
         waited += 1;
     }
-    pool.cancelTasks(std.testing.io, pool_allocator, "db");
+    pool.cancelTasks(std.testing.io, pool_allocator, log, "db");
     try std.testing.expectEqual(@as(usize, 1), collector.cancellations);
-    try collector.waitForCompleted(pool, pool_allocator, timer_list.interface(), 2);
-    readMessagesFor(pool, pool_allocator, timer_list.interface(), 50);
+    try collector.waitForCompleted(log, pool, pool_allocator, timer_list.interface(), 2);
+    readMessagesFor(pool, log, pool_allocator, timer_list.interface(), 50);
     try std.testing.expectEqual(@as(usize, 2), collector.completed);
     try std.testing.expectEqualStrings("echo other", collector.lastOutput);
 }
 
 test "shutdown terminates the workers" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -531,13 +561,14 @@ test "shutdown terminates the workers" {
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, allocator, "echo", .{ .string = "x" }, "source", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    try addTask(pool, log, allocator, "echo", .{ .string = "x" }, "source", null);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
     pool.queueBackend().shutdown(std.testing.io, allocator);
     try std.testing.expectEqual(@as(usize, 0), pool.workers.items.len);
 }
 
 test "a task on a worker runs the tools built into the program, made on its own thread" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -548,13 +579,13 @@ test "a task on a worker runs the tools built into the program, made on its own 
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, allocator, "magick-version", .null, "source", null);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    try addTask(pool, log, allocator, "magick-version", .null, "source", null);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
     try std.testing.expectEqualStrings("", collector.lastErrorMessage);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
 
     // What the task printed is the version of the ImageMagick built into the program, read here from the library itself.
-    const builtInVersion = (try media_tools.ImageMagick.runMagick(std.testing.io, arena.allocator(), &.{"-version"})).output;
+    const builtInVersion = (try media_tools.ImageMagick.runMagick(std.testing.io, log, arena.allocator(), &.{"-version"})).output;
     try std.testing.expect(std.mem.indexOf(u8, builtInVersion, "Version: ImageMagick ") != null);
     try std.testing.expectEqualStrings(builtInVersion, collector.lastOutput);
 }

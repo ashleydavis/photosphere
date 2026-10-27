@@ -14,6 +14,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -25,6 +26,7 @@ const expectInteger = @import("sandbox.zig").expectInteger;
 const expectKeyStrings = @import("sandbox.zig").expectKeyStrings;
 const expectString = @import("sandbox.zig").expectString;
 const Sandbox = @import("sandbox.zig").Sandbox;
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const planAutoImportHandler = mobile_worker.plan_auto_import_worker.planAutoImportHandler;
 const DEFAULT_AUTO_IMPORT_PAUSE_MS = api.auto_import_mobile.DEFAULT_AUTO_IMPORT_PAUSE_MS;
 const DEFAULT_DATABASE_FOLDER_NAME = api.auto_import_mobile.DEFAULT_DATABASE_FOLDER_NAME;
@@ -38,9 +40,9 @@ const stepData = @import("sandbox.zig").stepData;
 // other section of the file as it is.
 // (Zig: the sources are the JSON text of the list, which the settings are read from.)
 //
-fn writeSettingsFile(sandbox: *Sandbox, enabled: bool, defaultDatabasePath: ?[]const u8, sourcesJson: []const u8, pauseBetweenRunsMs: i64) !void {
+fn writeSettingsFile(sandbox: *Sandbox, log: ILog, enabled: bool, defaultDatabasePath: ?[]const u8, sourcesJson: []const u8, pauseBetweenRunsMs: i64) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, "config.yaml")).config;
+    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
     const settingsJson = try std.fmt.allocPrint(allocator, "{{\"enabled\":{s},\"sources\":{s}}}", .{ if (enabled) "true" else "false", sourcesJson });
     config.autoImport = .{
         .settings = try api.auto_import_settings.normaliseAutoImportSettings(allocator, try sandbox.json(settingsJson)),
@@ -55,8 +57,8 @@ fn writeSettingsFile(sandbox: *Sandbox, enabled: bool, defaultDatabasePath: ?[]c
 //
 // Runs the handler.
 //
-fn plan(sandbox: *Sandbox) !std.json.Value {
-    return planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), .{
+fn plan(sandbox: *Sandbox, log: ILog) !std.json.Value {
+    return planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, .{
         .object = .empty,
     }, sandbox.context());
 }
@@ -65,10 +67,11 @@ fn plan(sandbox: *Sandbox) !std.json.Value {
 // either.
 test "plan-auto-import says not to run when there is no settings file at all" {
     var sandbox: Sandbox = undefined;
+    const log = MuteLog.init();
     try sandbox.init();
-    defer sandbox.deinit();
+    defer sandbox.deinit(log);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -77,10 +80,11 @@ test "plan-auto-import says not to run when there is no settings file at all" {
 test "plan-auto-import says not to run when the settings say off" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, false, "photosphere-default", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, false, "photosphere-default", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -89,10 +93,11 @@ test "plan-auto-import says not to run when the settings say off" {
 test "plan-auto-import creates and records the default database when there is not one yet" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, null, "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, null, "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectBool(true, result, "shouldRun");
     try expectBool(true, result, "isNewDefault");
@@ -114,10 +119,11 @@ test "plan-auto-import creates and records the default database when there is no
 test "plan-auto-import records the database before importing into it" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, null, "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, null, "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     var recordIndex: ?usize = null;
     var importIndex: ?usize = null;
@@ -138,10 +144,11 @@ test "plan-auto-import records the database before importing into it" {
 test "plan-auto-import imports straight into the chosen database once there is one" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectBool(false, result, "isNewDefault");
     try expectString("my-photos", result, "databasePath");
@@ -151,10 +158,11 @@ test "plan-auto-import imports straight into the chosen database once there is o
 test "plan-auto-import passes the configured places to watch through to the import" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"holiday-album\"},{\"type\":\"device-album\",\"albumId\":\"pets\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"holiday-album\"},{\"type\":\"device-album\",\"albumId\":\"pets\"}]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     const settingsSources = at(result, "settings.sources").?.array.items;
     try std.testing.expectEqual(@as(usize, 2), settingsSources.len);
@@ -172,10 +180,11 @@ test "plan-auto-import passes the configured places to watch through to the impo
 test "plan-auto-import watches the whole photo library when no album has been chosen" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, "my-photos", "[]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, "my-photos", "[]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectBool(true, result, "shouldRun");
     const importSources = at(stepData(at(result, "steps").?, "import-assets").?, "options.sources").?.array.items;
@@ -187,10 +196,11 @@ test "plan-auto-import watches the whole photo library when no album has been ch
 test "plan-auto-import's import step is a real automatic import into the planned database" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
     const importData = stepData(at(result, "steps").?, "import-assets").?;
 
     try expectEmptyArray(importData, "paths");
@@ -208,21 +218,23 @@ test "plan-auto-import's import step is a real automatic import into the planned
 test "plan-auto-import carries the gap between passes from the settings file" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 1500);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, "my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 1500);
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectInteger(1500, result, "pauseBetweenRunsMs");
 }
 
 test "plan-auto-import: a gap of zero in the file falls back to the default rather than spinning" {
     var sandbox: Sandbox = undefined;
+    const log = MuteLog.init();
     try sandbox.init();
-    defer sandbox.deinit();
+    defer sandbox.deinit(log);
     try sandbox.writeFile("config.yaml", "auto_import:\n  enabled: true\n  default_database_path: my-photos\n  pause_between_runs_ms: 0\n");
 
-    const result = try plan(&sandbox);
+    const result = try plan(&sandbox, log);
 
     try expectInteger(DEFAULT_AUTO_IMPORT_PAUSE_MS, result, "pauseBetweenRunsMs");
 }
@@ -230,10 +242,11 @@ test "plan-auto-import: a gap of zero in the file falls back to the default rath
 test "plan-auto-import puts a new default database in the app data directory when the request names one" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, null, "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, null, "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"appDataPath\":\"/data/app\"}"), sandbox.context());
+    const result = try planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json("{\"appDataPath\":\"/data/app\"}"), sandbox.context());
 
     // Joined the way the platform joins paths, as the desktop TypeScript test expects it.
     const expectedPath = try node_utils.path.join(sandbox.arenaAllocator(), &.{ "/data/app", DEFAULT_DATABASE_FOLDER_NAME });
@@ -247,10 +260,11 @@ test "plan-auto-import puts a new default database in the app data directory whe
 test "plan-auto-import keeps the database the user chose, whatever data directory the request names" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSettingsFile(&sandbox, true, "/elsewhere/my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSettingsFile(&sandbox, log, true, "/elsewhere/my-photos", "[{\"type\":\"device-album\",\"albumId\":\"all\"}]", 5000);
 
-    const result = try planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"appDataPath\":\"/data/app\"}"), sandbox.context());
+    const result = try planAutoImportHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json("{\"appDataPath\":\"/data/app\"}"), sandbox.context());
 
     try expectString("/elsewhere/my-photos", result, "databasePath");
 }

@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const memory_storage = @import("memory-storage.zig");
@@ -93,14 +94,15 @@ test "should update metadata when deleting a file" {
 }
 
 test "should save and load metadata with V2 format" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const originalTree = try buildTree(allocator, &.{ "A", "B", "C" });
     var storage = memory_storage.MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, std.testing.io, "test-tree-metadata.bin", &originalTree, storage.asStorage(), "FTRE");
-    const loadedTree = (try merkle_tree.loadTree(allocator, std.testing.io, "test-tree-metadata.bin", storage.asStorage(), "FTRE")).?;
+    try merkle_tree.saveTree(allocator, std.testing.io, log, "test-tree-metadata.bin", &originalTree, storage.asStorage(), "FTRE");
+    const loadedTree = (try merkle_tree.loadTree(allocator, std.testing.io, log, "test-tree-metadata.bin", storage.asStorage(), "FTRE")).?;
     try std.testing.expectEqualStrings(originalTree.id, loadedTree.id);
     try std.testing.expectEqual(originalTree.sort.?.nodeCount, loadedTree.sort.?.nodeCount);
     try std.testing.expectEqual(originalTree.sort.?.leafCount, loadedTree.sort.?.leafCount);

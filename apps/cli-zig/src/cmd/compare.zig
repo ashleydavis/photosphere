@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -9,7 +10,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const loadDatabase = init_cmd.loadDatabase;
 const jsNumber = init_cmd.jsNumber;
@@ -54,14 +54,13 @@ pub const ICompareCommandOptions = struct {
 };
 
 //
-// Writes each comparison progress message, prefixed with "Comparing |".
+// Writes each comparison progress message, prefixed with "Comparing |", to the log.
 //
-fn onProgress(context: ?*anyopaque, progress: []const u8) void {
-    _ = context;
+fn onProgress(_: ?*anyopaque, log: ILog, progress: []const u8) void {
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const message = std.fmt.allocPrint(arena.allocator(), "\u{1F50D} Comparing | {s}", .{progress}) catch @panic("out of memory writing the progress line");
-    writeProgress(message);
+    writeProgress(log, message);
 }
 
 //
@@ -99,7 +98,7 @@ fn sliceEnd(length: usize, maxItems: f64) usize {
 //
 // Lists the files of one category of differences.
 //
-fn showFiles(allocator: std.mem.Allocator, files: []const []const u8, marker: []const u8, showFull: bool, maxItems: f64) !void {
+fn showFiles(log: ILog, allocator: std.mem.Allocator, files: []const []const u8, marker: []const u8, showFull: bool, maxItems: f64) !void {
     const filesToShow = if (showFull) files else files[0..sliceEnd(files.len, maxItems)];
     for (filesToShow) |file| {
         log.info(try std.fmt.allocPrint(allocator, "  {s} {s}", .{ marker, file }));
@@ -114,7 +113,7 @@ fn showFiles(allocator: std.mem.Allocator, files: []const []const u8, marker: []
 //
 // Command that compares two asset databases by analyzing their Merkle trees.
 //
-pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *ICompareCommandOptions) !void {
+pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *ICompareCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
@@ -124,20 +123,20 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
 
     var srcDir = options.base.db;
     if (srcDir == null) {
-        srcDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+        srcDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
     }
 
-    const src = try loadDatabase(allocator, io, srcDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const src = try loadDatabase(allocator, io, log, srcDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const srcAssetStorage = src.assetStorage;
     const srcRawAssetStorage = src.rawAssetStorage;
     const srcDirResolved = src.databaseDir;
 
     var destDir = options.dest;
     if (destDir == null) {
-        const config = try loadDatabaseConfig(allocator, io, srcRawAssetStorage);
+        const config = try loadDatabaseConfig(allocator, io, log, srcRawAssetStorage);
         destDir = configOrigin(config);
         if (destDir == null) {
-            destDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+            destDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
         }
     }
 
@@ -145,7 +144,7 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     var destOptions = options.base;
     destOptions.db = destDir;
     destOptions.key = options.destKey;
-    const dest = try loadDatabase(allocator, io, destDir, &destOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const dest = try loadDatabase(allocator, io, log, destDir, &destOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const destAssetStorage = dest.assetStorage;
     const destDirResolved = dest.databaseDir;
 
@@ -156,16 +155,16 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     log.info("");
 
     // Load merkle trees from the databases
-    const srcMerkleTree = try loadMerkleTree(allocator, io, srcAssetStorage) orelse {
-        clearProgressMessage();
+    const srcMerkleTree = try loadMerkleTree(allocator, io, log, srcAssetStorage) orelse {
+        clearProgressMessage(log);
         log.info(try pc.red(allocator, "Error: Failed to load source database merkle tree"));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
-    const destMerkleTree = try loadMerkleTree(allocator, io, destAssetStorage) orelse {
-        clearProgressMessage();
+    const destMerkleTree = try loadMerkleTree(allocator, io, log, destAssetStorage) orelse {
+        clearProgressMessage(log);
         log.info(try pc.red(allocator, "Error: Failed to load destination database merkle tree"));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
     // Fast path: Compare root hashes first
@@ -175,14 +174,14 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
         log.info("");
 
         log.info(try pc.green(allocator, "No differences detected"));
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
-    writeProgress("Comparing trees...");
+    writeProgress(log, "Comparing trees...");
 
-    const compareResult = try compareTrees(allocator, &srcMerkleTree, &destMerkleTree, .{ .context = null, .function = onProgress });
+    const compareResult = try compareTrees(allocator, log, &srcMerkleTree, &destMerkleTree, .{ .context = null, .function = onProgress });
 
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     log.info("");
     log.info(try pc.bold(allocator, try pc.blue(allocator, "\u{1F4CA} Comparison Results")));
@@ -215,21 +214,21 @@ pub fn compareCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     // Files only in source
     if (compareResult.onlyInA.len > 0) {
         log.info(try pc.cyan(allocator, "Files only in source:"));
-        try showFiles(allocator, compareResult.onlyInA, try pc.cyan(allocator, "+"), showFull, maxItems);
+        try showFiles(log, allocator, compareResult.onlyInA, try pc.cyan(allocator, "+"), showFull, maxItems);
     }
 
     // Files only in destination
     if (compareResult.onlyInB.len > 0) {
         log.info(try pc.magenta(allocator, "Files only in destination:"));
-        try showFiles(allocator, compareResult.onlyInB, try pc.magenta(allocator, "+"), showFull, maxItems);
+        try showFiles(log, allocator, compareResult.onlyInB, try pc.magenta(allocator, "+"), showFull, maxItems);
     }
 
     // Modified files
     if (compareResult.modified.len > 0) {
         log.info(try pc.yellow(allocator, "Modified files:"));
-        try showFiles(allocator, compareResult.modified, try pc.yellow(allocator, "\u{25CF}"), showFull, maxItems);
+        try showFiles(log, allocator, compareResult.modified, try pc.yellow(allocator, "\u{25CF}"), showFull, maxItems);
     }
 
     log.info(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F} Databases have {d} differences", .{totalDifferences})));
-    exit(io, 0);
+    exit(io, log, 0);
 }

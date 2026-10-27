@@ -1,9 +1,9 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const serialization = @import("serialization-zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const throwError = utils.errors.throwError;
 const throwStacklessError = utils.errors.throwStacklessError;
@@ -38,10 +38,10 @@ pub const IHashCacheToolOptions = struct {
 // Loads a database's hash cache, ready to be read or written.
 // The cache is created with the allocator and lives until the process exits.
 //
-fn openHashCache(allocator: std.mem.Allocator, io: std.Io, options: IHashCacheToolOptions) !*HashCache {
+fn openHashCache(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IHashCacheToolOptions) !*HashCache {
     const hashCache = try allocator.create(HashCache);
     hashCache.* = try HashCache.init(try getHashCacheDir(allocator, options.db), false);
-    _ = try hashCache.load(io);
+    _ = try hashCache.load(io, log);
     return hashCache;
 }
 
@@ -102,16 +102,16 @@ pub fn cachedLength(length: f64) !u64 {
 // Command to compute the SHA-256 hash of a file, without touching the cache.
 // Prints the hash as hex.
 //
-pub fn hashFileCommand(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+pub fn hashFileCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
     const hash = try hashFile(allocator, io, filePath);
     log.info(try std.fmt.allocPrint(allocator, "{x}", .{hash}));
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command to hash a file and record it in the hash cache under its own path.
 //
-pub fn hashCacheAddCommand(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, options: IHashCacheToolOptions) !void {
+pub fn hashCacheAddCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, options: IHashCacheToolOptions) !void {
     const hash = try hashFile(allocator, io, filePath);
     const fileStat = std.Io.Dir.cwd().statFile(io, filePath, .{}) catch |err| {
         if (err == error.FileNotFound) {
@@ -120,49 +120,49 @@ pub fn hashCacheAddCommand(allocator: std.mem.Allocator, io: std.Io, filePath: [
         return err;
     };
 
-    const hashCache = try openHashCache(allocator, io, options);
+    const hashCache = try openHashCache(allocator, io, log, options);
     // The modification time is kept as whole milliseconds, truncated towards zero.
     try hashCache.addHash(filePath, .{
         .hash = hash,
         .length = fileStat.size,
         .lastModified = fileStat.mtime.toMilliseconds(),
     });
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
     log.info(try std.fmt.allocPrint(allocator, "{x}", .{hash}));
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command to record a hash in the hash cache against an arbitrary path, without needing the
 // file to exist. This is what the concurrency smoke test uses to generate cache entries cheaply.
 //
-pub fn hashCacheSetCommand(allocator: std.mem.Allocator, io: std.Io, entryKey: []const u8, hashHex: []const u8, length: []const u8, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheSetCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, entryKey: []const u8, hashHex: []const u8, length: []const u8, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     try hashCache.addHash(entryKey, .{
         .hash = try bufferFromHex(allocator, hashHex),
         .length = try cachedLength(parseInt(length, 10)),
         .lastModified = 0,
     });
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command to record a hash in the hash cache against the source id of a photo library item, which
 // is how automatic import files what it has hashed.
 //
-pub fn hashCacheSetSourceCommand(allocator: std.mem.Allocator, io: std.Io, sourceId: []const u8, hashHex: []const u8, length: []const u8, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheSetSourceCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourceId: []const u8, hashHex: []const u8, length: []const u8, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     try hashCache.addSourceHash(sourceId, .{
         .hash = try bufferFromHex(allocator, hashHex),
         .length = try cachedLength(parseInt(length, 10)),
         .lastModified = 0,
     });
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -170,14 +170,14 @@ pub fn hashCacheSetSourceCommand(allocator: std.mem.Allocator, io: std.Io, sourc
 // Prints the hash as hex, or nothing when the key is not cached, and exits 1 so a script can tell
 // a miss from a hit without parsing the output.
 //
-pub fn hashCacheGetCommand(allocator: std.mem.Allocator, io: std.Io, entryKey: []const u8, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheGetCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, entryKey: []const u8, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     const cacheEntry = try hashCache.getHash(allocator, entryKey) orelse {
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
     log.info(try std.fmt.allocPrint(allocator, "{x}", .{cacheEntry.hash}));
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -185,58 +185,58 @@ pub fn hashCacheGetCommand(allocator: std.mem.Allocator, io: std.Io, entryKey: [
 // Exits 1 when the entry is missing or has no asset id, so a script can tell the two states apart
 // from a recorded id without parsing the output.
 //
-pub fn hashCacheGetAssetIdCommand(allocator: std.mem.Allocator, io: std.Io, entryKey: []const u8, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheGetAssetIdCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, entryKey: []const u8, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     const cacheEntry = try hashCache.getHash(allocator, entryKey);
     if (cacheEntry == null or cacheEntry.?.assetId == null) {
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     log.info(cacheEntry.?.assetId.?);
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command to drop one entry from the hash cache.
 // Exits 1 when there was nothing to remove.
 //
-pub fn hashCacheRemoveCommand(allocator: std.mem.Allocator, io: std.Io, entryKey: []const u8, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheRemoveCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, entryKey: []const u8, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     const removed = try hashCache.removeHash(entryKey);
     if (removed) {
-        try hashCache.save(io);
+        try hashCache.save(io, log);
     }
 
-    exit(io, if (removed) 0 else 1);
+    exit(io, log, if (removed) 0 else 1);
 }
 
 //
 // Command to print the key of every entry in the hash cache, one per line, so a script can
 // check exactly which entries survived.
 //
-pub fn hashCacheListCommand(allocator: std.mem.Allocator, io: std.Io, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheListCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     for (try hashCache.getAllEntries(allocator)) |cacheEntry| {
         log.info(cacheEntry.key);
     }
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command to print how many entries the hash cache holds.
 //
-pub fn hashCacheCountCommand(allocator: std.mem.Allocator, io: std.Io, options: IHashCacheToolOptions) !void {
-    const hashCache = try openHashCache(allocator, io, options);
+pub fn hashCacheCountCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IHashCacheToolOptions) !void {
+    const hashCache = try openHashCache(allocator, io, log, options);
     log.info(try std.fmt.allocPrint(allocator, "{d}", .{hashCache.getEntryCount()}));
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
 // Command to print the directory holding a database's hash cache, so a script can look at the file
 // itself without having to work out how the path is derived.
 //
-pub fn hashCacheDirCommand(allocator: std.mem.Allocator, io: std.Io, options: IHashCacheToolOptions) !void {
+pub fn hashCacheDirCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IHashCacheToolOptions) !void {
     log.info(try getHashCacheDir(allocator, options.db));
-    exit(io, 0);
+    exit(io, log, 0);
 }

@@ -7,6 +7,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -138,7 +139,8 @@ pub const DeviceMediaSource = struct {
     // Returns one page of the library. A page that the album filter empties still yields its cursor, so the walk carries on to the
     // next page rather than stopping at the first page that happened to hold nothing wanted.
     //
-    pub fn listPage(self: *DeviceMediaSource, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) !IMediaSourceListPage {
+    pub fn listPage(self: *DeviceMediaSource, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) !IMediaSourceListPage {
+        _ = log;
         const request = try std.json.Stringify.valueAlloc(allocator, .{
             .cursor = cursor orelse "",
             .pageSize = pageSize,
@@ -221,9 +223,9 @@ pub const DeviceMediaSource = struct {
     //
     // The IMediaSource listPage of this source, called through the interface.
     //
-    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
         const self: *DeviceMediaSource = @ptrCast(@alignCast(ptr));
-        return self.listPage(allocator, io, cursor, pageSize);
+        return self.listPage(allocator, io, log, cursor, pageSize);
     }
 
     //

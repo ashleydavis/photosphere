@@ -1,8 +1,8 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const IStorage = storage_zig.storage.IStorage;
-const log = &utils.log.log;
 const sleep = utils.sleep.sleep;
 const retry = utils.retry.retry;
 
@@ -33,13 +33,13 @@ fn mathRound(value: f64) i64 {
 //
 // Throws when the write lock cannot be acquired.
 //
-pub fn acquireWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sessionId: []const u8, maxAttempts: u32) !bool {
+pub fn acquireWriteLock(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, sessionId: []const u8, maxAttempts: u32) !bool {
 
     const lockFilePath = ".db/write.lock";
 
     var attempt: u32 = 1;
     while (attempt <= maxAttempts) : (attempt += 1) {
-        const haveWriteLock = try rawStorage.acquireWriteLock(allocator, io, lockFilePath, sessionId);
+        const haveWriteLock = try rawStorage.acquireWriteLock(allocator, io, log, lockFilePath, sessionId);
         if (haveWriteLock) {
             // We have the write lock.
             return true;
@@ -100,17 +100,17 @@ const RefreshWriteLockOperation = struct {
     //
     // Refreshes the lock.
     //
-    pub fn run(self: *RefreshWriteLockOperation, io: std.Io) !void {
-        return self.rawStorage.refreshWriteLock(self.allocator, io, ".db/write.lock", self.sessionId);
+    pub fn run(self: *RefreshWriteLockOperation, io: std.Io, log: ILog) !void {
+        return self.rawStorage.refreshWriteLock(self.allocator, io, log, ".db/write.lock", self.sessionId);
     }
 };
 
 //
 // Refreshes the write lock to prevent timeout.
 //
-pub fn refreshWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sessionId: []const u8) !void {
+pub fn refreshWriteLock(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, sessionId: []const u8) !void {
     var operation: RefreshWriteLockOperation = .{ .allocator = allocator, .rawStorage = rawStorage, .sessionId = sessionId };
-    try retry(io, &operation, 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS, "Failed to refresh the database write lock");
+    try retry(io, log, &operation, 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS, "Failed to refresh the database write lock");
 }
 
 //
@@ -129,15 +129,15 @@ const ReleaseWriteLockOperation = struct {
     //
     // Releases the lock.
     //
-    pub fn run(self: *ReleaseWriteLockOperation, io: std.Io) !void {
-        return self.rawStorage.releaseWriteLock(self.allocator, io, ".db/write.lock");
+    pub fn run(self: *ReleaseWriteLockOperation, io: std.Io, log: ILog) !void {
+        return self.rawStorage.releaseWriteLock(self.allocator, io, log, ".db/write.lock");
     }
 };
 
 //
 // Releases the write lock for the database.
 //
-pub fn releaseWriteLock(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage) !void {
+pub fn releaseWriteLock(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage) !void {
     var operation: ReleaseWriteLockOperation = .{ .allocator = allocator, .rawStorage = rawStorage };
-    try retry(io, &operation, 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS, "Failed to release the database write lock");
+    try retry(io, log, &operation, 3, 1_000, 2, LOCK_REQUEST_TIMEOUT_MS, "Failed to release the database write lock");
 }

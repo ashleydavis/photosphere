@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -13,7 +14,6 @@ const storage_helper = @import("../lib/storage-helper.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const prompts = @import("../lib/clack/prompts.zig");
-const log = &utils.log.log;
 const loadEncryptionKeysFromPem = encryption.key_utils.loadEncryptionKeysFromPem;
 const pathJoin = storage_zig.storage_factory.pathJoin;
 const generateKeyPair = encryption.key_utils.generateKeyPair;
@@ -104,21 +104,20 @@ fn similarNamesList(allocator: std.mem.Allocator, similarKeyNames: []const []con
 }
 
 //
-// Writes each replication progress message.
+// Writes each replication progress message to the log.
 //
-fn onProgress(context: ?*anyopaque, io: std.Io, progress: []const u8) void {
+fn onProgress(_: ?*anyopaque, io: std.Io, log: ILog, progress: []const u8) void {
     _ = io;
-    _ = context;
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const message = std.fmt.allocPrint(arena.allocator(), "\u{1F504} {s}", .{progress}) catch @panic("out of memory writing the progress line");
-    writeProgress(message);
+    writeProgress(log, message);
 }
 
 //
 // Command that replicates an asset database from source to destination.
 //
-pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IReplicateCommandOptions) !void {
+pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IReplicateCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
@@ -127,7 +126,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
 
     if ((options.partial orelse false) and (options.full orelse false)) {
         log.@"error"(try pc.red(allocator, "\u{2717} --partial and --full cannot be used together. Please specify only one."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     // Load the source database for pre-flight validation (path resolution, encryption key check).
@@ -138,13 +137,13 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
         .verbose = options.base.verbose,
         .yes = options.base.yes,
     };
-    const loaded = try loadDatabase(allocator, io, options.base.db, &loadOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &loadOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const sourceRawAssetStorage = loaded.rawAssetStorage;
     const srcDir = loaded.databaseDir;
 
     var destDirOption = options.dest;
     if (destDirOption == null) {
-        const config = try loadDatabaseConfig(allocator, io, sourceRawAssetStorage);
+        const config = try loadDatabaseConfig(allocator, io, log, sourceRawAssetStorage);
         if (config) |configValue| {
             if (configValue == .object) {
                 if (configValue.object.get("origin")) |origin| {
@@ -156,7 +155,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
         }
         if (destDirOption == null) {
             const cwd = if (isSet(options.base.cwd)) options.base.cwd.? else try std.process.currentPathAlloc(io, allocator);
-            destDirOption = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+            destDirOption = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
         }
     }
     const destDir = destDirOption.?;
@@ -188,7 +187,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
 
             if (isCancel(mode)) {
                 log.info("Replication cancelled.");
-                exit(io, 0);
+                exit(io, log, 0);
             }
 
             options.partial = std.mem.eql(u8, mode.value, "partial");
@@ -199,7 +198,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
     const destMetaPath = try pathJoin(allocator, &.{ destDir, ".db" });
 
     if (std.mem.startsWith(u8, destDir, "s3:") or std.mem.startsWith(u8, destMetaPath, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
     }
 
     // Check if destination database already exists (using plain metadata probe storage)
@@ -220,14 +219,14 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
                     log.@"error"("Example:");
                     log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi replicate --dest-key my-photos.key --dest {s}", .{destDir}))}));
                     log.@"error"(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi replicate --dest-key <full or relative path to key> --dest {s}", .{destDir}))}));
-                    exit(io, 1);
+                    exit(io, log, 1);
                 }
                 else {
                     // Interactive mode - show key selection menu
                     log.info(try pc.yellow(allocator, "The destination database is encrypted and requires a private key to access."));
 
                     // Show menu of available keys
-                    const selectedKey = try selectEncryptionKey(allocator, io, "Select the encryption key for the destination database:");
+                    const selectedKey = try selectEncryptionKey(allocator, io, log, "Select the encryption key for the destination database:");
                     options.destKey = selectedKey;
                 }
             }
@@ -240,12 +239,12 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
                 if (similarKeyNames.len > 0) {
                     log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try similarNamesList(allocator, similarKeyNames)}));
                 }
-                exit(io, 1);
+                exit(io, log, 1);
             }
             _ = loadEncryptionKeysFromPem(allocator, verifyKeyPems) catch |err| {
                 log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Failed to load encryption key: {s}", .{utils.errors.errorMessage(err)})));
                 log.@"error"(try pc.red(allocator, "  Please check that the key exists. Use \"psi secrets list\" to see available keys."));
-                exit(io, 1);
+                exit(io, log, 1);
             };
         }
         else {
@@ -253,14 +252,14 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
             if (isSet(options.destKey)) {
                 log.@"error"(try pc.red(allocator, "\u{2717} You specified an encryption key, but the destination database is not encrypted."));
                 log.@"error"(try pc.red(allocator, "  Either remove the --dest-key option, or replicate to a different location to create a new encrypted database."));
-                exit(io, 1);
+                exit(io, log, 1);
             }
         }
     }
     else {
         // Database doesn't exist - ask about encryption if not already specified
         if (!isSet(options.destKey) and !(options.generateKey orelse false) and !nonInteractive) {
-            const encryptionResult = try promptForEncryption(allocator, io, "Would you like to encrypt the destination database?");
+            const encryptionResult = try promptForEncryption(allocator, io, log, "Would you like to encrypt the destination database?");
 
             if (isSet(encryptionResult.keyName)) {
                 options.destKey = encryptionResult.keyName;
@@ -294,7 +293,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
             if (similarKeyNames.len > 0) {
                 log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try similarNamesList(allocator, similarKeyNames)}));
             }
-            exit(io, 1);
+            exit(io, log, 1);
         }
         _ = try loadEncryptionKeysFromPem(allocator, destKeyPems);
     }
@@ -305,7 +304,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
             log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The destination database already exists at {s}.", .{destDir})));
             log.@"error"(try pc.red(allocator, "  Replication will overwrite any changes made to the destination database."));
             log.@"error"(try pc.red(allocator, "  Use the --force flag to proceed without confirmation."));
-            exit(io, 1);
+            exit(io, log, 1);
         }
         else {
             log.warn(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F}  The destination database already exists at {s}.", .{destDir})));
@@ -322,7 +321,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
 
             if (isCancel(confirmed) or !confirmed.value) {
                 log.info("Replication cancelled.");
-                exit(io, 0);
+                exit(io, log, 0);
             }
         }
     }
@@ -333,7 +332,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
     log.info(try std.fmt.allocPrint(allocator, "  Destination:    {s}", .{try pc.cyan(allocator, destDir)}));
     log.info("");
 
-    writeProgress(if (isSet(options.path))
+    writeProgress(log, if (isSet(options.path))
         try std.fmt.allocPrint(allocator, "Copying files matching: {s}...", .{options.path.?})
     else
         "Copying files...");
@@ -343,7 +342,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
     // the destination's database config - the CLI no longer does any of those itself.
     const progressCallback: ReplicateProgressCallback = .{ .context = null, .function = onProgress };
     var timer_list = TimerList.init();
-    const result = try replicateDatabase(allocator, io, timer_list.interface(), uuidGenerator, .{
+    const result = try replicateDatabase(allocator, io, log, timer_list.interface(), uuidGenerator, .{
         .sourcePath = srcDir,
         .destPath = destDir,
         .sourceEncryptionKey = options.base.key,
@@ -354,7 +353,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
         .pathFilter = options.path,
     }, &progressCallback);
 
-    clearProgressMessage(); // Flush the progress message.
+    clearProgressMessage(log); // Flush the progress message.
 
     log.info(try pc.bold(allocator, try pc.blue(allocator, if (isSet(options.path))
         try std.fmt.allocPrint(allocator, "\u{1F4CA} Replication Results (filtered: {s})", .{options.path.?})
@@ -397,5 +396,5 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, context: IComm
     log.info("    # View summary of the replicated database");
     log.info(try std.fmt.allocPrint(allocator, "    psi summary --db {s}", .{destDir}));
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

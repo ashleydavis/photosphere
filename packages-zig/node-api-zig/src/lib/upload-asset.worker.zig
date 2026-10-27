@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -18,7 +19,6 @@ const video = @import("video.zig");
 const image = @import("image.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const ILocation = utils.reverse_geocode.ILocation;
 const IReverseGeocodeResult = utils.reverse_geocode.IReverseGeocodeResult;
@@ -253,7 +253,7 @@ fn WriteFileStreamOperation(comptime sourceText: []const u8) type {
         //
         // Streams the local file into storage.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
             const file = std.Io.Dir.cwd().openFile(io, self.localPath, .{}) catch |err| {
                 if (err == error.FileNotFound) {
                     return errors.throwError("ENOENT: no such file or directory, open '{s}'", .{self.localPath});
@@ -285,7 +285,7 @@ fn ComputeFileHashOperation(comptime sourceText: []const u8) type {
         //
         // Hashes the file.
         //
-        pub fn run(self: *@This(), io: std.Io) ![]const u8 {
+        pub fn run(self: *@This(), io: std.Io, _: ILog) ![]const u8 {
             return computeFileHash(self.allocator, io, self.localPath, getNativeFileHasher());
         }
     };
@@ -310,7 +310,7 @@ const ReverseGeocodeOperation = struct {
     //
     // Looks the location up.
     //
-    pub fn run(self: *@This(), io: std.Io) !?IReverseGeocodeResult {
+    pub fn run(self: *@This(), io: std.Io, _: ILog) !?IReverseGeocodeResult {
         return reverseGeocode(self.allocator, io, self.coordinates, self.googleApiKey);
     }
 };
@@ -331,7 +331,7 @@ const ReadMicroOperation = struct {
     //
     // Reads the file.
     //
-    pub fn run(self: *@This(), io: std.Io) ![]u8 {
+    pub fn run(self: *@This(), io: std.Io, _: ILog) ![]u8 {
         return std.Io.Dir.cwd().readFileAlloc(io, self.localPath, self.allocator, .unlimited);
     }
 };
@@ -346,7 +346,7 @@ const RemoveDirOperation = struct {
     //
     // Removes the directory.
     //
-    pub fn run(self: *@This(), io: std.Io) !void {
+    pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
         try remove(io, self.dirPath);
     }
 };
@@ -386,7 +386,7 @@ fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) ![]Bso
 // The task data and output are JSON values holding IUploadAssetData and IUploadAssetResult; undefined is
 // JSON null.
 //
-pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
+pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
     if (context.isCancelled(io, allocator)) {
         return .null;
     }
@@ -397,7 +397,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
     try pendingMessage.put(allocator, "type", .{ .string = "import-pending" });
     try pendingMessage.put(allocator, "assetId", .{ .string = data.assetId });
     try pendingMessage.put(allocator, "logicalPath", .{ .string = data.logicalPath });
-    context.sendEvent(io, allocator, .{ .object = pendingMessage });
+    context.sendEvent(io, allocator, log, .{ .object = pendingMessage });
 
     // When this task started, so the import can report what the work other than hashing cost.
     const taskStartedAt = dateNow(io);
@@ -428,7 +428,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
     _ = try std.fmt.hexToBytes(expectedHashBuffer, data.expectedHash);
 
     const openStorageStartedAt = dateNow(io);
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const storage = opened.storage;
     const openStorageMs = dateNow(io) - openStorageStartedAt;
 
@@ -441,7 +441,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
         var removeOperation: RemoveDirOperation = .{
             .dirPath = assetTempDir,
         };
-        _ = swallowError(io, &removeOperation);
+        _ = swallowError(io, log, &removeOperation);
     }
 
     var assetDetails: ?IAssetDetails = null;
@@ -449,10 +449,10 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
     // filePath is always a valid file (already extracted if from zip)
     //TODO: We should be able to get this information from the validation phase instead of getting it again here.
     if (std.mem.startsWith(u8, contentType, "video")) {
-        assetDetails = try getVideoDetails(allocator, io, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
+        assetDetails = try getVideoDetails(allocator, io, log, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
     else if (std.mem.startsWith(u8, contentType, "image")) {
-        assetDetails = try getImageDetails(allocator, io, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
+        assetDetails = try getImageDetails(allocator, io, log, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
 
     const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
@@ -465,13 +465,13 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
         }
     }
 
-    const uploaded = uploadAndDescribe(allocator, io, data, context, toolRunner, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
+    const uploaded = uploadAndDescribe(allocator, io, log, data, context, toolRunner, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Error importing file {s} ({s})", .{ filePath, assetId }), err);
         var failedMessage: std.json.ObjectMap = .empty;
         try failedMessage.put(allocator, "type", .{ .string = "import-failed" });
         try failedMessage.put(allocator, "assetId", .{ .string = data.assetId });
         try failedMessage.put(allocator, "logicalPath", .{ .string = data.logicalPath });
-        context.sendEvent(io, allocator, .{ .object = failedMessage });
+        context.sendEvent(io, allocator, log, .{ .object = failedMessage });
 
         // Clean up uploaded files on error, then let exception propagate to task queue
         var deleteAssetOperation: DeleteFileOperation("() => storage.deleteFile(assetPath)") = .{
@@ -479,19 +479,19 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
             .storage = storage,
             .filePath = assetPath,
         };
-        try retry(io, &deleteAssetOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &deleteAssetOperation, 3, 1_000, 2, 30_000, null);
         var deleteThumbOperation: DeleteFileOperation("() => storage.deleteFile(thumbPath)") = .{
             .allocator = allocator,
             .storage = storage,
             .filePath = thumbPath,
         };
-        try retry(io, &deleteThumbOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &deleteThumbOperation, 3, 1_000, 2, 30_000, null);
         var deleteDisplayOperation: DeleteFileOperation("() => storage.deleteFile(displayPath)") = .{
             .allocator = allocator,
             .storage = storage,
             .filePath = displayPath,
         };
-        try retry(io, &deleteDisplayOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &deleteDisplayOperation, 3, 1_000, 2, 30_000, null);
         return err;
     };
 
@@ -534,6 +534,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, t
 fn uploadAndDescribe(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: utils.log.ILog,
     data: IUploadAssetData,
     context: ITaskContext,
     toolRunner: node_utils.in_process_tools.InProcessRunner,
@@ -574,7 +575,7 @@ fn uploadAndDescribe(
             .localPath = filePath,
             .contentLength = fileStat.length,
         };
-        try retry(io, &writeOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+        try retry(io, log, &writeOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
         uploadMs.* += dateNow(io) - assetUploadStartedAt;
 
         var infoOperation: InfoOperation("() => storage.info(assetPath)") = .{
@@ -582,7 +583,7 @@ fn uploadAndDescribe(
             .storage = storage,
             .fileName = assetPath,
         };
-        const assetInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        const assetInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
             return errors.throwError("Failed to get info for file {s} ({s})", .{ assetPath, assetId });
         };
 
@@ -634,7 +635,7 @@ fn uploadAndDescribe(
                 .localPath = details.thumbnailPath,
                 .contentLength = null,
             };
-            try retry(io, &writeOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+            try retry(io, log, &writeOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
             uploadMs.* += dateNow(io) - thumbUploadStartedAt;
 
             var infoOperation: InfoOperation("() => storage.info(thumbPath)") = .{
@@ -642,7 +643,7 @@ fn uploadAndDescribe(
                 .storage = storage,
                 .fileName = thumbPath,
             };
-            const thumbInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+            const thumbInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
                 return errors.throwError("Failed to get info for thumbnail {s} ({s})", .{ thumbPath, assetId });
             };
             // Hashed from the file it was made into, natively where there is a native
@@ -651,7 +652,7 @@ fn uploadAndDescribe(
                 .allocator = allocator,
                 .localPath = details.thumbnailPath,
             };
-            thumbHash = try retry(io, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+            thumbHash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
             thumbLength = thumbInfo.length;
             thumbLastModified = thumbInfo.lastModified;
         }
@@ -683,7 +684,7 @@ fn uploadAndDescribe(
                 .localPath = details.displayPath.?,
                 .contentLength = null,
             };
-            try retry(io, &writeOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+            try retry(io, log, &writeOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
             uploadMs.* += dateNow(io) - displayUploadStartedAt;
 
             var infoOperation: InfoOperation("() => storage.info(displayPath)") = .{
@@ -691,7 +692,7 @@ fn uploadAndDescribe(
                 .storage = storage,
                 .fileName = displayPath,
             };
-            const displayInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+            const displayInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
                 return errors.throwError("Failed to get info for display {s} ({s})", .{ displayPath, assetId });
             };
             // Hashed from the file it was made into, for the same reason as the thumbnail.
@@ -699,7 +700,7 @@ fn uploadAndDescribe(
                 .allocator = allocator,
                 .localPath = details.displayPath.?,
             };
-            displayHash = try retry(io, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+            displayHash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
             displayLength = displayInfo.length;
             displayLastModified = displayInfo.lastModified;
         }
@@ -726,7 +727,7 @@ fn uploadAndDescribe(
                 .coordinates = assetDetails.?.coordinates.?,
                 .googleApiKey = googleApiKey.?,
             };
-            const reverseGeocodingResult = try retry(io, &geocodeOperation, 3, 1500, 2, 30_000, null);
+            const reverseGeocodingResult = try retry(io, log, &geocodeOperation, 3, 1500, 2, 30_000, null);
             geocodeMs.* += dateNow(io) - geocodeStartedAt;
             if (reverseGeocodingResult) |geocoded| {
                 location = geocoded.location;
@@ -761,7 +762,7 @@ fn uploadAndDescribe(
             .allocator = allocator,
             .localPath = details.microPath,
         };
-        const microBytes = try retry(io, &readOperation, 3, 1_000, 2, 30_000, null);
+        const microBytes = try retry(io, log, &readOperation, 3, 1_000, 2, 30_000, null);
         const encoder = std.base64.standard.Encoder;
         const encoded = try allocator.alloc(u8, encoder.calcSize(microBytes.len));
         micro = encoder.encode(encoded, microBytes);
@@ -769,7 +770,7 @@ fn uploadAndDescribe(
 
     const dominantColorStartedAt = dateNow(io);
     const color: ?[3]f64 = if (assetDetails) |details|
-        try extractDominantColorFromThumbnail(allocator, io, toolRunner, details.thumbnailPath)
+        try extractDominantColorFromThumbnail(allocator, io, log, toolRunner, details.thumbnailPath)
     else
         null;
     dominantColorMs.* = dateNow(io) - dominantColorStartedAt;

@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -115,9 +116,9 @@ fn newCollection(allocator: std.mem.Allocator, storage: *MemoryStorage, timestam
 //
 // Gets the internal version of a record, with its metadata.
 //
-fn getInternalRecord(collection: *BsonCollection, id: []const u8) !?IInternalRecord {
+fn getInternalRecord(collection: *BsonCollection, log: ILog, id: []const u8) !?IInternalRecord {
     var records = collection.iterateRecords();
-    while (try records.next(io)) |record| {
+    while (try records.next(io, log)) |record| {
         if (std.mem.eql(u8, record._id, id)) {
             return record;
         }
@@ -208,6 +209,7 @@ fn timestampOf(metadata: BsonDocument) i64 {
 }
 
 test "inserting puts a timestamp on the entire record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -220,15 +222,16 @@ test "inserting puts a timestamp on the entire record" {
 
     var record = try simpleRecord(allocator, id);
 
-    try collection.insertOne(io, &record, timestamp);
+    try collection.insertOne(io, log, &record, timestamp);
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expectEqual(timestamp, timestampOf(internal.?.metadata));
     try std.testing.expect(metadataFields(internal.?.metadata) == null);
 }
 
 test "updating a root field sets the timestamp for that field but not others" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -243,10 +246,10 @@ test "updating a root field sets the timestamp for that field but not others" {
 
     var record = try simpleRecord(allocator, id);
 
-    try collection.insertOne(io, &record, insertTimestamp);
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Jane Doe"))}), .{ .timestamp = updateTimestamp });
+    try collection.insertOne(io, log, &record, insertTimestamp);
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Jane Doe"))}), .{ .timestamp = updateTimestamp });
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expectEqual(insertTimestamp, timestampOf(internal.?.metadata));
     try std.testing.expect(metadataFields(internal.?.metadata) != null);
@@ -261,6 +264,7 @@ test "updating a root field sets the timestamp for that field but not others" {
 }
 
 test "updating a nested field sets the timestamp for the nested field but not others" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -285,8 +289,8 @@ test "updating a nested field sets the timestamp for the nested field but not ot
         })),
     });
 
-    try collection.insertOne(io, &record, insertTimestamp);
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{
+    try collection.insertOne(io, log, &record, insertTimestamp);
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{
         field("address", try object(allocator, &.{
             field("street", string("456 Oak Ave")),
             field("city", string("New York")), // Unchanged
@@ -294,7 +298,7 @@ test "updating a nested field sets the timestamp for the nested field but not ot
         })),
     }), .{ .timestamp = updateTimestamp });
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expectEqual(insertTimestamp, timestampOf(internal.?.metadata));
     try std.testing.expect(metadataFields(internal.?.metadata) != null);
@@ -311,6 +315,7 @@ test "updating a nested field sets the timestamp for the nested field but not ot
 }
 
 test "updating multiple fields at once updates their timestamps" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -325,13 +330,13 @@ test "updating multiple fields at once updates their timestamps" {
 
     var record = try simpleRecord(allocator, id);
 
-    try collection.insertOne(io, &record, insertTimestamp);
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{
+    try collection.insertOne(io, log, &record, insertTimestamp);
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{
         field("name", string("Jane Doe")),
         field("age", number(31)),
     }), .{ .timestamp = updateTimestamp });
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expectEqual(insertTimestamp, timestampOf(internal.?.metadata));
     try std.testing.expect(metadataFields(internal.?.metadata) != null);
@@ -347,6 +352,7 @@ test "updating multiple fields at once updates their timestamps" {
 }
 
 test "updating a single field multiple times updates its timestamp each time" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -363,11 +369,11 @@ test "updating a single field multiple times updates its timestamp each time" {
 
     var record = try simpleRecord(allocator, id);
 
-    try collection.insertOne(io, &record, insertTimestamp);
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Jane Doe"))}), .{ .timestamp = update1Timestamp });
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Bob Smith"))}), .{ .timestamp = update2Timestamp });
+    try collection.insertOne(io, log, &record, insertTimestamp);
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Jane Doe"))}), .{ .timestamp = update1Timestamp });
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Bob Smith"))}), .{ .timestamp = update2Timestamp });
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expect(metadataFields(internal.?.metadata) != null);
     const nameMeta = entry(metadataFields(internal.?.metadata).?, "name");
@@ -377,6 +383,7 @@ test "updating a single field multiple times updates its timestamp each time" {
 }
 
 test "deleting a field with newer timestamp preserves metadata entry" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -389,14 +396,14 @@ test "deleting a field with newer timestamp preserves metadata entry" {
 
     var record = try simpleRecord(allocator, id);
 
-    try collection.insertOne(io, &record, insertTimestamp);
+    try collection.insertOne(io, log, &record, insertTimestamp);
 
     timestampProvider.advance(100);
     const updateTimestamp = timestampProvider.now();
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Jane Doe"))}), .{ .timestamp = updateTimestamp });
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{field("name", string("Jane Doe"))}), .{ .timestamp = updateTimestamp });
 
     // Verify name has metadata
-    var internal = try getInternalRecord(collection, id);
+    var internal = try getInternalRecord(collection, log, id);
     const nameMeta1 = entry(metadataFields(internal.?.metadata).?, "name");
     try std.testing.expect(nameMeta1 != null);
     try std.testing.expectEqual(updateTimestamp, timestampOf(nameMeta1.?));
@@ -404,9 +411,9 @@ test "deleting a field with newer timestamp preserves metadata entry" {
     // Delete the name field with a newer timestamp
     timestampProvider.advance(100);
     const deletionTimestamp = timestampProvider.now();
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{field("name", .undefined)}), .{ .timestamp = deletionTimestamp });
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{field("name", .undefined)}), .{ .timestamp = deletionTimestamp });
 
-    internal = try getInternalRecord(collection, id);
+    internal = try getInternalRecord(collection, log, id);
 
     // After deletion, the field should have metadata with the deletion timestamp
     try std.testing.expect(metadataFields(internal.?.metadata) != null);
@@ -422,6 +429,7 @@ test "deleting a field with newer timestamp preserves metadata entry" {
 // when it was made, and a sync merge then read it as the older side and discarded it. The change
 // is now stamped above the record.
 test "updating nested object with the same timestamp as the record stamps the change above it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -441,17 +449,17 @@ test "updating nested object with the same timestamp as the record stamps the ch
         })),
     });
 
-    try collection.insertOne(io, &record, insertTimestamp);
+    try collection.insertOne(io, log, &record, insertTimestamp);
 
     // Update the entire address with the same timestamp
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{
         field("address", try object(allocator, &.{
             field("street", string("456 Oak Ave")),
             field("city", string("Boston")),
         })),
     }), .{ .timestamp = insertTimestamp });
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expectEqual(insertTimestamp, timestampOf(internal.?.metadata));
 
@@ -466,6 +474,7 @@ test "updating nested object with the same timestamp as the record stamps the ch
 }
 
 test "deeply nested fields track timestamps correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -491,8 +500,8 @@ test "deeply nested fields track timestamps correctly" {
         })),
     });
 
-    try collection.insertOne(io, &record, insertTimestamp);
-    _ = try collection.updateOne(io, id, try BsonDocument.fromFields(allocator, &.{
+    try collection.insertOne(io, log, &record, insertTimestamp);
+    _ = try collection.updateOne(io, log, id, try BsonDocument.fromFields(allocator, &.{
         field("address", try object(allocator, &.{
             field("street", string("123 Main St")),
             field("city", string("New York")),
@@ -503,7 +512,7 @@ test "deeply nested fields track timestamps correctly" {
         })),
     }), .{ .timestamp = updateTimestamp });
 
-    const internal = try getInternalRecord(collection, id);
+    const internal = try getInternalRecord(collection, log, id);
     try std.testing.expect(internal != null);
     try std.testing.expectEqual(insertTimestamp, timestampOf(internal.?.metadata));
 

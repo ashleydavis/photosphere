@@ -2,6 +2,7 @@
 // A new, empty media file database in a directory of its own, with the generators the tests give to the code under test.//
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -35,22 +36,22 @@ pub const DatabaseFixture = struct {
     //
     // Creates the database.
     //
-    pub fn init(fixture: *DatabaseFixture, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
+    pub fn init(fixture: *DatabaseFixture, allocator: std.mem.Allocator, io: std.Io, log: ILog, name: []const u8) !void {
         fixture.test_env = try test_environment.setupEnvironment(io);
         fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
         fixture.timestampProvider = .{};
         fixture.dir = try temp_dirs.makeTempDir(allocator, io, name);
-        const created = try node_api.open_storage.openStorage(allocator, io, fixture.dir, null, null, null);
+        const created = try node_api.open_storage.openStorage(allocator, io, log, fixture.dir, null, null, null);
         fixture.rawStorage = created.rawStorage;
         fixture.database = try media_file_database.createMediaFileDatabase(allocator, created.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
-        try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, fixture.uuidGenerator.uuidGenerator(), fixture.database.metadataCollection, null);
+        try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, fixture.uuidGenerator.uuidGenerator(), fixture.database.metadataCollection, null);
     }
 
     //
     // Deletes the directory of the database.
     //
-    pub fn deinit(fixture: *DatabaseFixture, io: std.Io) void {
+    pub fn deinit(fixture: *DatabaseFixture, io: std.Io, log: ILog) void {
         temp_dirs.removeTempDir(io, fixture.dir);
-        fixture.test_env.deinit();
+        fixture.test_env.deinit(log);
     }
 };

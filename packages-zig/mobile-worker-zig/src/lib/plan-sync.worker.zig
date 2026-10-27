@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -193,13 +194,14 @@ pub fn planSyncHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: ILog,
     data: std.json.Value,
     context: ITaskContext,
     host: INetworkStatusHost,
 ) anyerror!std.json.Value {
     // One read for both sections. They used to be two files, so resolving which database to push
     // meant opening sync.toml and then auto-import.toml; the merged file costs one read per pass.
-    const read = try readConfigFromStorage(allocator, io, try node_api.config_file.getConfigPath(allocator));
+    const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
     const config = read.config;
     const syncConfig = config.sync;
     const settings = syncConfig.settings;
@@ -261,8 +263,8 @@ pub fn planSyncHandler(
     // A database with no origin has nowhere to sync to. The sync task itself would skip it, having
     // paid for an engine slot and a database open to find that out, and it would say so every pass
     // for as long as the phone was switched on.
-    const opened = try openStorage(allocator, io, databasePath.?, null, null, context.nativeCaller);
-    const databaseConfig = try loadDatabaseConfig(allocator, io, opened.rawStorage);
+    const opened = try openStorage(allocator, io, log, databasePath.?, null, null, context.nativeCaller);
+    const databaseConfig = try loadDatabaseConfig(allocator, io, log, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" has no origin to sync to", .{databasePath.?}), settings, pauseBetweenRunsMs));
     }

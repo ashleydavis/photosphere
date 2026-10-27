@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const vault_zig = @import("vault-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -22,8 +23,9 @@ fn setup(allocator: std.mem.Allocator, io: std.Io, databasesToml: []const u8) ![
 }
 
 test "forwards databasePath, encryptionKey, and s3Key to resolveStorageCredentials" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -33,15 +35,16 @@ test "forwards databasePath, encryptionKey, and s3Key to resolveStorageCredentia
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-s3", .type = "s3-credentials", .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\"}" });
 
-    const result = try openStorage(allocator, io, "s3:bucket:/prefix", fixture_dirs.KEYS_DIR ++ "/ts-private.pem", "open-storage-s3", null);
+    const result = try openStorage(allocator, io, log, "s3:bucket:/prefix", fixture_dirs.KEYS_DIR ++ "/ts-private.pem", "open-storage-s3", null);
 
     try std.testing.expectEqualStrings("AKID", result.s3Config.?.accessKeyId);
     try std.testing.expectEqual(@as(usize, 1), result.encryptionKeyPems.len);
 }
 
 test "passes the resolved encryption PEMs to loadEncryptionKeysFromPem" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -51,21 +54,22 @@ test "passes the resolved encryption PEMs to loadEncryptionKeysFromPem" {
     const dir = try temp_dirs.makeTempDir(allocator, io, "open-storage-encrypted");
     defer temp_dirs.removeTempDir(io, dir);
 
-    const result = try openStorage(allocator, io, dir, fixture_dirs.KEYS_DIR ++ "/ts-private.pem", null, null);
+    const result = try openStorage(allocator, io, log, dir, fixture_dirs.KEYS_DIR ++ "/ts-private.pem", null, null);
 
     try std.testing.expect(result.storageOptions.encryptionPublicKey != null);
     try std.testing.expect(result.storageOptions.decryptionKeyMap.?.get("default") != null);
 
     // The storage encrypts what it writes and the raw storage does not.
     try result.storage.write(allocator, io, "file.txt", null, "secret data");
-    const rawData = (try result.rawStorage.read(allocator, io, "file.txt")).?;
+    const rawData = (try result.rawStorage.read(allocator, io, log, "file.txt")).?;
     try std.testing.expect(!std.mem.eql(u8, rawData, "secret data"));
-    try std.testing.expectEqualStrings("secret data", (try result.storage.read(allocator, io, "file.txt")).?);
+    try std.testing.expectEqualStrings("secret data", (try result.storage.read(allocator, io, log, "file.txt")).?);
 }
 
 test "passes the resolved s3Config and storage options into createStorage" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -75,15 +79,16 @@ test "passes the resolved s3Config and storage options into createStorage" {
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-registered", .type = "s3-credentials", .value = "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\"}" });
 
-    const result = try openStorage(allocator, io, "s3:bucket/prefix", null, null, null);
+    const result = try openStorage(allocator, io, log, "s3:bucket/prefix", null, null, null);
 
     try std.testing.expectEqualStrings("us-east-1", result.s3Config.?.region.?);
     try std.testing.expectEqualStrings("s3:/bucket/prefix", result.storage.location);
 }
 
 test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, and googleApiKey" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -104,7 +109,7 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{ .name = "open-storage-geo", .type = "api-key", .value = "google-api-key" });
 
-    const result = try openStorage(allocator, io, dir, null, null, null);
+    const result = try openStorage(allocator, io, log, dir, null, null, null);
 
     try std.testing.expectEqualStrings("google-api-key", result.googleApiKey.?);
     try std.testing.expect(result.s3Config == null);
@@ -120,8 +125,9 @@ test "returns storage, rawStorage, encryptionKeyPems, s3Config, storageOptions, 
 }
 
 test "works without encryptionKey or s3Key arguments" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -129,7 +135,7 @@ test "works without encryptionKey or s3Key arguments" {
     const configDir = try setup(allocator, io, "");
     defer temp_dirs.removeTempDir(io, configDir);
 
-    const result = try openStorage(allocator, io, "/some/path", null, null, null);
+    const result = try openStorage(allocator, io, log, "/some/path", null, null, null);
 
     try std.testing.expect(result.s3Config == null);
     try std.testing.expectEqual(@as(usize, 0), result.encryptionKeyPems.len);

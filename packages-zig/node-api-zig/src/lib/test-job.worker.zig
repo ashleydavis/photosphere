@@ -15,7 +15,6 @@ const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const errors = utils.errors;
-const log = &utils.log.log;
 const sleep = utils.sleep.sleep;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IJobTag = task_queue_zig.types.IJobTag;
@@ -107,6 +106,7 @@ pub fn testJobHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -140,7 +140,7 @@ pub fn testJobHandler(
         }
 
         const fraction = @as(f64, @floatFromInt(now - startedAt)) / @as(f64, @floatFromInt(data.durationMs));
-        try sendJobProgress(allocator, io, context, data.job, startedAt, try describeTestJobProgress(allocator, data.stages, data.itemCount, fraction));
+        try sendJobProgress(allocator, io, log, context, data.job, startedAt, try describeTestJobProgress(allocator, data.stages, data.itemCount, fraction));
 
         try sleep(io, @intCast(@min(STEP_MS, endsAt - now)));
     }

@@ -1,9 +1,9 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const init_cmd = @import("../lib/init-cmd.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
@@ -22,18 +22,18 @@ pub const IDatabaseIdCommandOptions = struct {
 //
 // Command to display the database ID (UUID) of the database.
 //
-pub fn databaseIdCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDatabaseIdCommandOptions) !void {
+pub fn databaseIdCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IDatabaseIdCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
 
-    const merkleTree = try loadMerkleTree(allocator, io, assetStorage) orelse {
+    const merkleTree = try loadMerkleTree(allocator, io, log, assetStorage) orelse {
         return utils.errors.throwError("Failed to load merkle tree", .{});
     };
 
     log.info(merkleTree.id);
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

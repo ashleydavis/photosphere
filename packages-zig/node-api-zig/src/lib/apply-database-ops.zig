@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
@@ -59,7 +60,7 @@ fn isSameValue(left: BsonValue, right: BsonValue) bool {
 //
 // Applies a single metadata operation using the given metadata collection.
 //
-pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metadataCollection: *IBsonCollection, ops: []const IDatabaseOp) !void {
+pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, log: ILog, metadataCollection: *IBsonCollection, ops: []const IDatabaseOp) !void {
     for (ops) |op| {
         if (!std.mem.eql(u8, op.collectionName, "metadata")) {
             return errors.throwError("Unsupported collection \"{s}\". Only \"metadata\" is supported.", .{op.collectionName});
@@ -76,12 +77,12 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
                     }
                     try updates.put(allocator, entry.key_ptr.*, try toBsonValue(allocator, entry.value_ptr.*));
                 }
-                _ = try metadataCollection.updateOne(io, op.recordId, updates, .{
+                _ = try metadataCollection.updateOne(io, log, op.recordId, updates, .{
                     .upsert = true,
                 });
             },
             .push => |pushOp| {
-                const existing = try metadataCollection.getOne(io, op.recordId) orelse {
+                const existing = try metadataCollection.getOne(io, log, op.recordId) orelse {
                     return errors.throwError("Cannot push: metadata record \"{s}\" does not exist.", .{op.recordId});
                 };
                 const previous = existing.get(pushOp.field);
@@ -106,10 +107,10 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
                 try partial.put(allocator, pushOp.field, .{
                     .array = asArray.items,
                 });
-                _ = try metadataCollection.updateOne(io, op.recordId, partial, .{});
+                _ = try metadataCollection.updateOne(io, log, op.recordId, partial, .{});
             },
             .pull => |pullOp| {
-                const existing = try metadataCollection.getOne(io, op.recordId) orelse {
+                const existing = try metadataCollection.getOne(io, log, op.recordId) orelse {
                     return errors.throwError("Cannot pull: metadata record \"{s}\" does not exist.", .{op.recordId});
                 };
                 const previous = existing.get(pullOp.field);
@@ -128,7 +129,7 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
                 try partial.put(allocator, pullOp.field, .{
                     .array = filtered.items,
                 });
-                _ = try metadataCollection.updateOne(io, op.recordId, partial, .{});
+                _ = try metadataCollection.updateOne(io, log, op.recordId, partial, .{});
             },
         }
     }
@@ -140,7 +141,7 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, metada
 // (Zig: the write lock is acquired with 3 attempts, the default of acquireWriteLock's maxAttempts, as Zig has no default
 // parameter values; the lock is released before the failure of the try block is returned, as the finally block does.)
 //
-pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.native_caller.INativeCaller) !void {
+pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, log: ILog, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.native_caller.INativeCaller) !void {
     if (ops.len == 0) {
         return;
     }
@@ -149,16 +150,16 @@ pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator:
     for (groups.keys(), groups.values()) |databasePath, pathOps| {
         const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, null, null);
         const rawStorage = created.rawStorage;
-        const assetStorage = try media_file_database.createLazyDatabaseStorage(allocator, io, databasePath, null, null, host);
+        const assetStorage = try media_file_database.createLazyDatabaseStorage(allocator, io, log, databasePath, null, null, host);
         const database = try media_file_database.createMediaFileDatabase(allocator, assetStorage, uuidGenerator, timestampProvider);
-        try media_file_database.loadSortIndexes(allocator, assetStorage, database.metadataCollection);
+        try media_file_database.loadSortIndexes(allocator, log, assetStorage, database.metadataCollection);
 
-        if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+        if (!try api.write_lock.acquireWriteLock(allocator, io, log, rawStorage, sessionId, 3)) {
             return errors.throwError("Failed to acquire write lock.", .{});
         }
 
-        const result = applyGroupUnderLock(allocator, io, assetStorage, rawStorage, database, pathOps.items);
-        try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+        const result = applyGroupUnderLock(allocator, io, log, assetStorage, rawStorage, database, pathOps.items);
+        try api.write_lock.releaseWriteLock(allocator, io, log, rawStorage);
         try result;
     }
 }
@@ -167,8 +168,8 @@ pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, uuidGenerator:
 // The try block of applyDatabaseOps, run holding the write lock.
 // Zig needs it as a function to release the lock whether it failed or not.
 //
-fn applyGroupUnderLock(allocator: std.mem.Allocator, io: std.Io, assetStorage: storage_zig.storage.IStorage, rawStorage: storage_zig.storage.IStorage, database: media_file_database.IMediaFileDatabase, pathOps: []const IDatabaseOp) !void {
-    try applyMetadataDatabaseOps(allocator, io, database.metadataCollection, pathOps);
-    try database.bsonDatabase.commit(io);
-    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+fn applyGroupUnderLock(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: storage_zig.storage.IStorage, rawStorage: storage_zig.storage.IStorage, database: media_file_database.IMediaFileDatabase, pathOps: []const IDatabaseOp) !void {
+    try applyMetadataDatabaseOps(allocator, io, log, database.metadataCollection, pathOps);
+    try database.bsonDatabase.commit(io, log);
+    try tree.stampDatabaseModified(allocator, io, log, assetStorage, rawStorage);
 }

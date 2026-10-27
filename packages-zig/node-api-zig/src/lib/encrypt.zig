@@ -5,6 +5,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
@@ -13,7 +14,6 @@ const api = @import("api-zig");
 const tree = @import("tree.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const batchGenerator = utils.batch_generator.batchGenerator;
 const IStorage = storage_zig.storage.IStorage;
@@ -37,13 +37,13 @@ pub const IEncryptProgress = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, message: []const u8) void,
+    function: *const fn (context: ?*anyopaque, log: ILog, message: []const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: IEncryptProgress, message: []const u8) void {
-        self.function(self.context, message);
+    pub fn call(self: IEncryptProgress, log: ILog, message: []const u8) void {
+        self.function(self.context, log, message);
     }
 };
 
@@ -69,6 +69,7 @@ pub const IEncryptResult = struct {
 pub fn encryptFile(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     fileName: []const u8,
     readStorage: IStorage,
     writeStorage: IStorage,
@@ -81,11 +82,11 @@ pub fn encryptFile(
         .storage = readStorage,
         .fileName = fileName,
     };
-    const srcFileInfo = try retry(io, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const srcFileInfo = try retry(io, log, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Source file \"{s}\" does not exist.", .{fileName});
     };
 
-    const header = try readEncryptionHeader(allocator, io, rawReadStorage, fileName);
+    const header = try readEncryptionHeader(allocator, io, log, rawReadStorage, fileName);
     const shouldEncrypt = header == null or !std.mem.eql(u8, header.?, publicKeyHash);
     if (shouldEncrypt) {
         log.verbose(try std.fmt.allocPrint(allocator, "Encrypting {s}", .{fileName}));
@@ -97,7 +98,7 @@ pub fn encryptFile(
             .fileName = fileName,
             .contentType = srcFileInfo.contentType,
         };
-        try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+        try retry(io, log, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
 
         if (!std.mem.startsWith(u8, fileName, ".db/")) {
             const existing = try getItemInfo(merkleTree, fileName);
@@ -107,7 +108,7 @@ pub fn encryptFile(
                     .storage = writeStorage,
                     .fileName = fileName,
                 };
-                const updatedInfo = try retry(io, &updatedInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+                const updatedInfo = try retry(io, log, &updatedInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
                     return errors.throwError("Written file \"{s}\" has no info.", .{fileName});
                 };
 
@@ -140,8 +141,8 @@ pub const EncryptableFilesIterator = struct {
     //
     // Returns the next file to encrypt, or null when the walk is done.
     //
-    pub fn next(self: *EncryptableFilesIterator) !?[]const u8 {
-        while (try self.walker.next()) |file| {
+    pub fn next(self: *EncryptableFilesIterator, log: ILog) !?[]const u8 {
+        while (try self.walker.next(log)) |file| {
             const fileName = file.fileName;
             if (!std.mem.eql(u8, fileName, ".db/files.dat") and !std.mem.eql(u8, fileName, ".db/encryption.pub") and !std.mem.eql(u8, fileName, ".db/config.json") and !std.mem.eql(u8, fileName, "README.md")) {
                 return fileName;
@@ -173,6 +174,7 @@ pub fn encryptableFiles(allocator: std.mem.Allocator, io: std.Io, readStorage: I
 pub fn encrypt(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     readStorage: IStorage,
     writeStorage: IStorage,
     progressCallback: IEncryptProgress,
@@ -183,7 +185,7 @@ pub fn encrypt(
         .allocator = allocator,
         .storage = readStorage,
     };
-    var merkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var merkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load merkle tree from database.", .{});
     };
 
@@ -195,19 +197,19 @@ pub fn encrypt(
 
     var files = try encryptableFiles(allocator, io, readStorage);
     var batches = batchGenerator([]const u8, allocator, &files, BATCH_SIZE);
-    while (try batches.next()) |batch| {
+    while (try batches.next(log)) |batch| {
         // The files of a batch are encrypted one after another, on the task's own thread.
         for (batch) |fileName| {
             var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
             defer arena.deinit();
-            if (try encryptFile(arena.allocator(), io, fileName, readStorage, writeStorage, rawReadStorage, &publicKeyHash, &merkleTree)) {
+            if (try encryptFile(arena.allocator(), io, log, fileName, readStorage, writeStorage, rawReadStorage, &publicKeyHash, &merkleTree)) {
                 encrypted += 1;
             }
             else {
                 skipped += 1;
             }
         }
-        progressCallback.call(try std.fmt.allocPrint(allocator, "Encrypted {d} files, skipped {d} already encrypted", .{ encrypted, skipped }));
+        progressCallback.call(log, try std.fmt.allocPrint(allocator, "Encrypted {d} files, skipped {d} already encrypted", .{ encrypted, skipped }));
     }
 
     var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, writeStorage)") = .{
@@ -215,8 +217,8 @@ pub fn encrypt(
         .merkleTree = &merkleTree,
         .storage = writeStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
-    progressCallback.call(try std.fmt.allocPrint(allocator, "Encrypted {d} files, skipped {d} already encrypted, saved merkle tree", .{ encrypted, skipped }));
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
+    progressCallback.call(log, try std.fmt.allocPrint(allocator, "Encrypted {d} files, skipped {d} already encrypted, saved merkle tree", .{ encrypted, skipped }));
     return .{
         .encrypted = encrypted,
         .skipped = skipped,

@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
@@ -14,13 +15,11 @@ const storage_helper = @import("../lib/storage-helper.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const prompts = @import("../lib/clack/prompts.zig");
-const log = &utils.log.log;
 const loadEncryptionKeysFromPem = encryption.key_utils.loadEncryptionKeysFromPem;
 const exit = node_utils.termination.exit;
 const getDirectoryForCommand = directory_picker.getDirectoryForCommand;
 const resolveKeyPems = init_cmd.resolveKeyPems;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
-const ICommandContext = init_cmd.ICommandContext;
 const configureS3IfNeeded = init_cmd.configureS3IfNeeded;
 const createStorageForPath = storage_helper.createStorageForPath;
 const writeProgress = terminal_utils.writeProgress;
@@ -29,7 +28,6 @@ const confirm = prompts.confirm;
 const isCancel = prompts.isCancel;
 const apiDecrypt = node_api.decrypt.decrypt;
 const IDecryptProgress = node_api.decrypt.IDecryptProgress;
-const configureLog = @import("../lib/log.zig").configureLog;
 
 //
 // Options of the decrypt command.
@@ -42,44 +40,39 @@ pub const IDecryptCommandOptions = struct {
 };
 
 //
-// Writes a decrypt progress message.
+// Writes a progress message to the log.
 //
-fn onDecryptProgress(context: ?*anyopaque, message: []const u8) void {
-    _ = context;
-    writeProgress(message);
+fn onDecryptProgress(_: ?*anyopaque, log: ILog, message: []const u8) void {
+    writeProgress(log, message);
 }
 
 //
 // Decrypts the database at --db in place (encrypted → plain). Removes .db/encryption.pub.
 //
-pub fn decryptCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IDecryptCommandOptions) !void {
-    const verbose = options.base.verbose;
+pub fn decryptCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: *IDecryptCommandOptions) !void {
     const yes = options.base.yes;
     const cwd = options.base.cwd;
     const nonInteractive = yes orelse false;
 
-    try configureLog(allocator, io, context.toolRunner, .{
-        .verbose = verbose,
-    });
 
     var dbDir: ?[]const u8 = options.base.db;
     if (dbDir == null) {
-        dbDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd orelse try std.process.currentPathAlloc(io, allocator));
+        dbDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd orelse try std.process.currentPathAlloc(io, allocator));
     }
     if (dbDir == null or dbDir.?.len == 0) {
         log.@"error"(try pc.red(allocator, "\u{2717} Database directory is required (--db)."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
     const databaseDir = dbDir.?;
 
     if (std.mem.startsWith(u8, databaseDir, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
     }
 
     const keyPems = try resolveKeyPems(allocator, io, options.base.key);
     if (keyPems.len == 0) {
         log.@"error"(try pc.red(allocator, "\u{2717} Decryption requires --key."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     const readStorageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
@@ -88,7 +81,7 @@ pub fn decryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     const hasEncryptionPub = try rawStorage.fileExists(allocator, io, ".db/encryption.pub");
     if (!hasEncryptionPub) {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Database at {s} does not appear to be encrypted (no .db/encryption.pub).", .{try pc.cyan(allocator, databaseDir)})));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     const readStorage = (try createStorageForPath(allocator, io, databaseDir, readStorageOptions)).storage;
@@ -96,7 +89,7 @@ pub fn decryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     if (nonInteractive) {
         if (!(yes orelse false)) {
             log.@"error"(try pc.red(allocator, "\u{2717} Non interactive decryption requires --yes to proceed."));
-            exit(io, 1);
+            exit(io, log, 1);
         }
     }
     else {
@@ -111,23 +104,23 @@ pub fn decryptCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
         });
         if (isCancel(confirmed) or !confirmed.value) {
             log.info("Decryption cancelled.");
-            exit(io, 0);
+            exit(io, log, 0);
         }
     }
 
-    writeProgress("Decrypting files...");
+    writeProgress(log, "Decrypting files...");
 
     const progressCallback: IDecryptProgress = .{
         .context = null,
         .function = onDecryptProgress,
     };
-    const result = try apiDecrypt(allocator, io, readStorage, rawStorage, progressCallback, rawStorage);
+    const result = try apiDecrypt(allocator, io, log, readStorage, rawStorage, progressCallback, rawStorage);
 
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     try rawStorage.deleteFile(allocator, io, ".db/encryption.pub");
 
     log.info("");
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2705} Decrypted {d} files, {d} were already plain.", .{ result.decrypted, result.skipped })));
-    exit(io, 0);
+    exit(io, log, 0);
 }

@@ -17,6 +17,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const serialization_zig = @import("serialization-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -33,6 +34,7 @@ const test_hosts = @import("test-hosts.zig");
 const test_environment = @import("../../../node-api-zig/src/test/test-environment.zig");
 const fixture_dirs = @import("../../../node-api-zig/src/test/fixture-dirs.zig");
 const Sandbox = @import("sandbox.zig").Sandbox;
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const ReportingHost = test_hosts.ReportingHost;
 const planPrefetchHandler = mobile_worker.plan_prefetch_worker.planPrefetchHandler;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
@@ -50,9 +52,9 @@ const DATABASE_PATH = "photosphere-default";
 // Writes the syncing settings into the temporary sandbox's config.yaml, exactly as the app would,
 // putting back only the syncing section so whatever automatic import was told to watch survives.
 //
-fn writeSyncSettings(sandbox: *Sandbox, enabled: bool, onlyOnWifi: bool, pauseBetweenRunsMs: i64) !void {
+fn writeSyncSettings(sandbox: *Sandbox, log: ILog, enabled: bool, onlyOnWifi: bool, pauseBetweenRunsMs: i64) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, "config.yaml")).config;
+    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
     config.sync = .{
         .settings = .{
             .enabled = enabled,
@@ -70,9 +72,9 @@ fn writeSyncSettings(sandbox: *Sandbox, enabled: bool, onlyOnWifi: bool, pauseBe
 // Writes the automatic import section naming the database the prefetch falls back to, leaving the
 // syncing settings as they are.
 //
-fn writeDefaultDatabase(sandbox: *Sandbox, defaultDatabasePath: ?[]const u8) !void {
+fn writeDefaultDatabase(sandbox: *Sandbox, log: ILog, defaultDatabasePath: ?[]const u8) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, "config.yaml")).config;
+    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
     config.autoImport = .{
         .settings = .{
             .enabled = true,
@@ -110,10 +112,10 @@ fn writeDatabaseConfig(sandbox: *Sandbox, origin: ?[]const u8) !void {
 // read back by isDatabasePartial through the real loader: a file this test wrote by hand would prove
 // the two agreed with each other and nothing about whether either agrees with the app.
 //
-fn writeMerkleTree(sandbox: *Sandbox, isPartial: bool) !void {
+fn writeMerkleTree(sandbox: *Sandbox, log: ILog, isPartial: bool) !void {
     const allocator = sandbox.arenaAllocator();
     try std.Io.Dir.cwd().createDirPath(sandbox.io, DATABASE_PATH ++ "/.db");
-    const opened = try node_api.open_storage.openStorage(allocator, sandbox.io, DATABASE_PATH, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, sandbox.io, log, DATABASE_PATH, null, null, null);
     // A real UUID, because the tree is serialized by the real saver and it writes the id as sixteen
     // bytes rather than as text.
     var tree = merkle_tree_zig.merkle_tree.createTree("6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d");
@@ -123,7 +125,7 @@ fn writeMerkleTree(sandbox: *Sandbox, isPartial: bool) !void {
     });
     tree.databaseMetadata = metadata;
     tree.merkle = try merkle_tree_zig.merkle_tree.buildMerkleTree(allocator, tree.sort);
-    try node_api.tree.saveMerkleTree(allocator, sandbox.io, &tree, opened.storage);
+    try node_api.tree.saveMerkleTree(allocator, sandbox.io, log, &tree, opened.storage);
 }
 
 //
@@ -154,20 +156,20 @@ fn stopEncryptingEveryStorage() void {
 //
 // Sets up everything a prefetch pass needs, so a test only has to change the one thing it is about.
 //
-fn setUpPartialReplica(sandbox: *Sandbox) !void {
-    try writeDefaultDatabase(sandbox, DATABASE_PATH);
+fn setUpPartialReplica(sandbox: *Sandbox, log: ILog) !void {
+    try writeDefaultDatabase(sandbox, log, DATABASE_PATH);
     try writeDatabaseConfig(sandbox, "/somewhere/else/photos");
-    try writeMerkleTree(sandbox, true);
+    try writeMerkleTree(sandbox, log, true);
 }
 
 //
 // Runs the handler on a host reporting the connection type.
 //
-fn plan(sandbox: *Sandbox, connectionType: []const u8) !std.json.Value {
+fn plan(sandbox: *Sandbox, log: ILog, connectionType: []const u8) !std.json.Value {
     var host: ReportingHost = .{
         .reported = connectionType,
     };
-    return planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), .{
+    return planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, .{
         .object = .empty,
     }, sandbox.context(), host.networkStatusHost());
 }
@@ -177,10 +179,11 @@ fn plan(sandbox: *Sandbox, connectionType: []const u8) !std.json.Value {
 test "plan-prefetch says not to run when there is no settings file at all" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -191,11 +194,12 @@ test "plan-prefetch says not to run when there is no settings file at all" {
 test "plan-prefetch says not to run when syncing is switched off" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, false, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, false, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("switched off", result, "reason");
@@ -206,11 +210,12 @@ test "plan-prefetch says not to run when syncing is switched off" {
 test "plan-prefetch says not to run on a cellular connection when the Wi-Fi-only restriction is on" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "cellular");
+    const result = try plan(&sandbox, log, "cellular");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("cellular", result, "reason");
@@ -220,11 +225,12 @@ test "plan-prefetch says not to run on a cellular connection when the Wi-Fi-only
 test "plan-prefetch runs on Wi-Fi when the Wi-Fi-only restriction is on" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -232,11 +238,12 @@ test "plan-prefetch runs on Wi-Fi when the Wi-Fi-only restriction is on" {
 test "plan-prefetch says not to run when no database has been opened" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try writeDefaultDatabase(&sandbox, null);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try writeDefaultDatabase(&sandbox, log, null);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("no database", result, "reason");
@@ -247,13 +254,14 @@ test "plan-prefetch says not to run when no database has been opened" {
 test "plan-prefetch says not to run when the database has no origin to fill in from" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try writeDefaultDatabase(&sandbox, DATABASE_PATH);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try writeDefaultDatabase(&sandbox, log, DATABASE_PATH);
     try writeDatabaseConfig(&sandbox, null);
-    try writeMerkleTree(&sandbox, true);
+    try writeMerkleTree(&sandbox, log, true);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("no origin", result, "reason");
@@ -266,13 +274,14 @@ test "plan-prefetch says not to run when the database has no origin to fill in f
 test "plan-prefetch says not to run when the database is not a partial replica" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try writeDefaultDatabase(&sandbox, DATABASE_PATH);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try writeDefaultDatabase(&sandbox, log, DATABASE_PATH);
     try writeDatabaseConfig(&sandbox, "/somewhere/else/photos");
-    try writeMerkleTree(&sandbox, false);
+    try writeMerkleTree(&sandbox, log, false);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("not a partial replica", result, "reason");
@@ -288,18 +297,19 @@ test "plan-prefetch says not to run when the database is not a partial replica" 
 test "plan-prefetch runs against an encrypted replica, whose merkle tree has to be decrypted to be read" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
     defer stopEncryptingEveryStorage();
     try encryptEveryStorage(&sandbox);
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
 
     // The fixture is only worth anything if the tree did go down encrypted, and a wrong key or a key the format cannot read
     // back looks from here exactly like the bug under test.
     const written = try std.Io.Dir.cwd().readFileAlloc(sandbox.io, DATABASE_PATH ++ "/.db/files.dat", sandbox.arenaAllocator(), .unlimited);
     try std.testing.expectEqualStrings("PSEN", written[0..4]);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(true, result, "shouldRun");
     try expectString(DATABASE_PATH, result, "databasePath");
@@ -310,15 +320,16 @@ test "plan-prefetch runs against an encrypted replica, whose merkle tree has to 
 test "plan-prefetch says not to run when an encrypted database is not a partial replica" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
     defer stopEncryptingEveryStorage();
     try encryptEveryStorage(&sandbox);
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try writeDefaultDatabase(&sandbox, DATABASE_PATH);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try writeDefaultDatabase(&sandbox, log, DATABASE_PATH);
     try writeDatabaseConfig(&sandbox, "/somewhere/else/photos");
-    try writeMerkleTree(&sandbox, false);
+    try writeMerkleTree(&sandbox, log, false);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("not a partial replica", result, "reason");
@@ -329,11 +340,12 @@ test "plan-prefetch says not to run when an encrypted database is not a partial 
 test "plan-prefetch hands back a prefetch-database step for the database when a pass should run" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(true, result, "shouldRun");
     try expectString(DATABASE_PATH, result, "databasePath");
@@ -353,11 +365,12 @@ test "plan-prefetch hands back a prefetch-database step for the database when a 
 test "plan-prefetch carries the pause through so the loop waits what the sync settings asked for" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, 90000);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, 90000);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectInteger(90000, result, "pauseBetweenRunsMs");
 }
@@ -365,11 +378,12 @@ test "plan-prefetch carries the pause through so the loop waits what the sync se
 test "plan-prefetch's refusal still carries the pause, so the loop does not spin asking again" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, false, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, false, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi");
+    const result = try plan(&sandbox, log, "wifi");
 
     try expectBool(false, result, "shouldRun");
     try expectInteger(DEFAULT_SYNC_PAUSE_MS, result, "pauseBetweenRunsMs");
@@ -380,15 +394,16 @@ test "plan-prefetch's refusal still carries the pause, so the loop does not spin
 test "plan-prefetch fails when the host cannot report the connection type" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpPartialReplica(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpPartialReplica(&sandbox, log);
     var host: ReportingHost = .{
         .reported = "",
         .failure = error.NoConnectivityManager,
     };
 
-    try std.testing.expectError(error.NoConnectivityManager, planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), .{
+    try std.testing.expectError(error.NoConnectivityManager, planPrefetchHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, .{
         .object = .empty,
     }, sandbox.context(), host.networkStatusHost()));
 }

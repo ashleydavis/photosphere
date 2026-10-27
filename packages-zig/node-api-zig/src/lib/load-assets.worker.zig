@@ -11,7 +11,6 @@ const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
 const bson_json = @import("bson-json.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const TaskPriority = task_queue_zig.types.TaskPriority;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
@@ -80,6 +79,7 @@ pub fn loadAssetsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -97,13 +97,13 @@ pub fn loadAssetsHandler(
 
     log.info(try std.fmt.allocPrint(allocator, "Loading assets from database \"{s}\"", .{data.databasePath}));
 
-    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const plainStorage = opened.storage;
-    const isPartial = try isDatabasePartial(allocator, io, data.databasePath, opened.s3Config, opened.storageOptions);
+    const isPartial = try isDatabasePartial(allocator, io, log, data.databasePath, opened.s3Config, opened.storageOptions);
 
     // Only wrap in lazy storage for partial databases; plain storage otherwise.
     const storage = if (isPartial)
-        try createLazyDatabaseStorage(allocator, io, data.databasePath, opened.s3Config, opened.storageOptions, context.nativeCaller)
+        try createLazyDatabaseStorage(allocator, io, log, data.databasePath, opened.s3Config, opened.storageOptions, context.nativeCaller)
     else
         plainStorage;
 
@@ -121,7 +121,7 @@ pub fn loadAssetsHandler(
     while (!context.isCancelled(io, allocator)) {
         //todo: The sort order should be configurable.
         const sortIndex = try metadataCollection.sortIndex("photoDate", .desc);
-        const result = try sortIndex.getPage(io, nextPageId);
+        const result = try sortIndex.getPage(io, log, nextPageId);
 
         if (result.records.len == 0) {
             break;
@@ -143,11 +143,11 @@ pub fn loadAssetsHandler(
             .databasePath = data.databasePath,
             .batch = batch,
         };
-        context.sendEvent(io, allocator, try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, pageMessage, .{}), .{}));
+        context.sendEvent(io, allocator, log, try std.json.parseFromSliceLeaky(std.json.Value, allocator, try std.json.Stringify.valueAlloc(allocator, pageMessage, .{}), .{}));
 
         // The same count as the job the interface lists and can cancel. Indeterminate: the pages are
         // walked one at a time and how many there are is not known until the last one comes back.
-        try sendJobProgress(allocator, io, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} assets loaded", .{totalAssets}));
+        try sendJobProgress(allocator, io, log, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} assets loaded", .{totalAssets}));
 
         if (result.nextPageId == null) {
             break;
@@ -168,7 +168,7 @@ pub fn loadAssetsHandler(
         try prefetchData.put(allocator, "databasePath", .{
             .string = data.databasePath,
         });
-        _ = try queue.addTask(io, allocator, "prefetch-database", .{
+        _ = try queue.addTask(io, allocator, log, "prefetch-database", .{
             .object = prefetchData,
         }, null, TaskPriority.Background);
     }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -40,12 +41,13 @@ fn makeDocument(allocator: std.mem.Allocator, id: ?[]const u8, name: []const u8,
 //
 // Gets a record by id through its shard.
 //
-fn getRecord(collection: *IBsonCollection, id: []const u8) !?bdb.shard.IInternalRecord {
+fn getRecord(collection: *IBsonCollection, log: ILog, id: []const u8) !?bdb.shard.IInternalRecord {
     const shard = try collection.shard(try collection.getShardId(id));
-    return shard.record(io, id);
+    return shard.record(io, log, id);
 }
 
 test "should throw error when inserting document with duplicate ID" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -56,14 +58,15 @@ test "should throw error when inserting document with duplicate ID" {
     var testDoc = try makeDocument(allocator, "12345678-1234-1234-1234-123456789012", "Test Document", 42);
 
     // First insert should succeed
-    try collection.insertOne(io, &testDoc, null);
+    try collection.insertOne(io, log, &testDoc, null);
 
     // Second insert with same ID should throw an error
-    try std.testing.expectError(error.Thrown, collection.insertOne(io, &testDoc, null));
+    try std.testing.expectError(error.Thrown, collection.insertOne(io, log, &testDoc, null));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Document with ID 12345678-1234-1234-1234-123456789012 already exists") != null);
 }
 
 test "should allow inserting documents with different IDs" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -75,12 +78,12 @@ test "should allow inserting documents with different IDs" {
     var testDoc2 = try makeDocument(allocator, "87654321-4321-4321-4321-210987654321", "Test Document 2", 100);
 
     // Both inserts should succeed
-    try collection.insertOne(io, &testDoc1, null);
-    try collection.insertOne(io, &testDoc2, null);
+    try collection.insertOne(io, log, &testDoc1, null);
+    try collection.insertOne(io, log, &testDoc2, null);
 
     // Verify both documents exist
-    const doc1 = try getRecord(collection, "12345678-1234-1234-1234-123456789012");
-    const doc2 = try getRecord(collection, "87654321-4321-4321-4321-210987654321");
+    const doc1 = try getRecord(collection, log, "12345678-1234-1234-1234-123456789012");
+    const doc2 = try getRecord(collection, log, "87654321-4321-4321-4321-210987654321");
 
     try std.testing.expect(doc1 != null);
     try std.testing.expectEqualStrings("Test Document 1", doc1.?.fields.get("name").?.string);
@@ -90,6 +93,7 @@ test "should allow inserting documents with different IDs" {
 }
 
 test "should generate ID if not provided and not allow duplicate inserts" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -100,10 +104,10 @@ test "should generate ID if not provided and not allow duplicate inserts" {
     var testDoc = try makeDocument(allocator, null, "Test Document", 42);
 
     // First insert should succeed and assign an ID
-    try collection.insertOne(io, &testDoc, null);
+    try collection.insertOne(io, log, &testDoc, null);
 
     // Get the inserted document's ID
-    const allRecords = try collection.getAll(io, null);
+    const allRecords = try collection.getAll(io, log, null);
     const insertedDoc = allRecords.records[0];
     const generatedId = insertedDoc.get("_id").?.string;
 
@@ -111,7 +115,7 @@ test "should generate ID if not provided and not allow duplicate inserts" {
     var duplicateDoc = try makeDocument(allocator, generatedId, "Duplicate Document", 100);
 
     // Inserting with the same ID should throw an error
-    try std.testing.expectError(error.Thrown, collection.insertOne(io, &duplicateDoc, null));
+    try std.testing.expectError(error.Thrown, collection.insertOne(io, log, &duplicateDoc, null));
     const expectedMessage = try std.fmt.allocPrint(allocator, "Document with ID {s} already exists", .{generatedId});
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), expectedMessage) != null);
 }

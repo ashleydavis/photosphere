@@ -13,6 +13,7 @@ const syncDatabases = node_api.sync.syncDatabases;
 const saveDatabaseState = api.database_state.saveDatabaseState;
 
 test "returns synced:false without touching the databases when content hashes match" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -20,8 +21,8 @@ test "returns synced:false without touching the databases when content hashes ma
     var sourceRaw = MemoryStorage.init(allocator);
     var targetRaw = MemoryStorage.init(allocator);
     const contentHash = [_]u8{7} ** 32;
-    try saveDatabaseState(allocator, io, sourceRaw.asStorage(), .{ .contentHash = &contentHash });
-    try saveDatabaseState(allocator, io, targetRaw.asStorage(), .{ .contentHash = &contentHash });
+    try saveDatabaseState(allocator, io, log, sourceRaw.asStorage(), .{ .contentHash = &contentHash });
+    try saveDatabaseState(allocator, io, log, targetRaw.asStorage(), .{ .contentHash = &contentHash });
 
     // Stand-ins that throw if any of them is used: storages that throw on every call, and databases over them.
     var sourceAsset: ThrowingStorage = .{ .label = "sourceAsset" };
@@ -34,6 +35,7 @@ test "returns synced:false without touching the databases when content hashes ma
     const result = try syncDatabases(
         allocator,
         io,
+        log,
         sourceAsset.storage(),
         sourceRaw.asStorage(),
         sourceBson,
@@ -48,14 +50,15 @@ test "returns synced:false without touching the databases when content hashes ma
 }
 
 test "proceeds past the early-out when content hashes differ" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var sourceRaw = MemoryStorage.init(allocator);
     var targetRaw = MemoryStorage.init(allocator);
-    try saveDatabaseState(allocator, io, sourceRaw.asStorage(), .{ .contentHash = &([_]u8{1} ** 32) });
-    try saveDatabaseState(allocator, io, targetRaw.asStorage(), .{ .contentHash = &([_]u8{2} ** 32) });
+    try saveDatabaseState(allocator, io, log, sourceRaw.asStorage(), .{ .contentHash = &([_]u8{1} ** 32) });
+    try saveDatabaseState(allocator, io, log, targetRaw.asStorage(), .{ .contentHash = &([_]u8{2} ** 32) });
 
     var sourceAsset: ThrowingStorage = .{ .label = "sourceAsset" };
     var targetAsset: ThrowingStorage = .{ .label = "targetAsset" };
@@ -71,6 +74,7 @@ test "proceeds past the early-out when content hashes differ" {
     try std.testing.expectError(error.Thrown, syncDatabases(
         allocator,
         io,
+        log,
         sourceAsset.storage(),
         sourceRaw.asStorage(),
         sourceBson,
@@ -84,13 +88,14 @@ test "proceeds past the early-out when content hashes differ" {
 }
 
 test "proceeds past the early-out when a content hash is missing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var sourceRaw = MemoryStorage.init(allocator);
     var targetRaw = MemoryStorage.init(allocator);
-    try saveDatabaseState(allocator, io, sourceRaw.asStorage(), .{ .contentHash = &([_]u8{1} ** 32) });
+    try saveDatabaseState(allocator, io, log, sourceRaw.asStorage(), .{ .contentHash = &([_]u8{1} ** 32) });
     // The target has no state file, so there is no content hash to compare.
 
     var sourceAsset: ThrowingStorage = .{ .label = "sourceAsset" };
@@ -104,6 +109,7 @@ test "proceeds past the early-out when a content hash is missing" {
     try std.testing.expectError(error.Thrown, syncDatabases(
         allocator,
         io,
+        log,
         sourceAsset.storage(),
         sourceRaw.asStorage(),
         sourceBson,

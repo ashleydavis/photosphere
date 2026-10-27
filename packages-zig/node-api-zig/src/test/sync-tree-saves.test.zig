@@ -13,6 +13,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
@@ -43,10 +44,10 @@ fn namesFrom(allocator: std.mem.Allocator, count: usize, prefix: []const u8, suf
 //
 // A push that only copies, into a target that counts its tree writes.
 //
-fn pushCountingTreeWrites(allocator: std.mem.Allocator, io: std.Io, source: *MemoryStorage, targetStore: *MemoryStorage) !*SpyStorage {
+fn pushCountingTreeWrites(allocator: std.mem.Allocator, io: std.Io, log: ILog, source: *MemoryStorage, targetStore: *MemoryStorage) !*SpyStorage {
     const target = try allocator.create(SpyStorage);
     target.* = .{ .allocator = allocator, .inner = targetStore.asStorage() };
-    try pushFiles(allocator, io, source.asStorage(), target.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage()), throughTheDatabases(source.asStorage(), target.storage()));
+    try pushFiles(allocator, io, log, source.asStorage(), target.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage()), throughTheDatabases(source.asStorage(), target.storage()));
     return target;
 }
 
@@ -57,6 +58,7 @@ fn pushCountingTreeWrites(allocator: std.mem.Allocator, io: std.Io, source: *Mem
 // connection the import was trying to use.
 //
 test "a push that copies nothing does not write the tree back" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -70,11 +72,11 @@ test "a push that copies nothing does not write the tree back" {
     // The target holds everything the source does and more, so the trees differ (the push is not
     // skipped) and yet there is nothing for the push to copy.
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, shared), &.{});
+    try sync_helpers.fillDatabase(allocator, io, log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, shared), &.{});
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try std.mem.concat(allocator, []const u8, &.{ shared, &.{"asset/only-at-the-target.jpg"} })), &.{});
+    try sync_helpers.fillDatabase(allocator, io, log, target.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try std.mem.concat(allocator, []const u8, &.{ shared, &.{"asset/only-at-the-target.jpg"} })), &.{});
 
-    const counted = try pushCountingTreeWrites(allocator, io, &source, &target);
+    const counted = try pushCountingTreeWrites(allocator, io, log, &source, &target);
 
     try std.testing.expectEqual(@as(u32, 0), counted.treeWrites);
 }
@@ -86,6 +88,7 @@ test "a push that copies nothing does not write the tree back" {
 // in front of it.
 //
 test "a run of leaves that copy nothing after the hundredth file does not write the tree again" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -104,17 +107,18 @@ test "a run of leaves that copy nothing after the hundredth file does not write 
     const deletedPaths = try namesFrom(allocator, 50, "asset/fe000000-0000-0000-0000-000000000", "", true);
 
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try std.mem.concat(allocator, []const u8, &.{ toCopy, deletedPaths })), deleted);
+    try sync_helpers.fillDatabase(allocator, io, log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try std.mem.concat(allocator, []const u8, &.{ toCopy, deletedPaths })), deleted);
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, &.{}, &.{});
+    try sync_helpers.fillDatabase(allocator, io, log, target.asStorage(), dbId, &.{}, &.{});
 
-    const counted = try pushCountingTreeWrites(allocator, io, &source, &target);
+    const counted = try pushCountingTreeWrites(allocator, io, log, &source, &target);
 
     // The hundredth file's save, and the one at the end of the push.
     try std.testing.expectEqual(@as(u32, 2), counted.treeWrites);
 }
 
 test "a push that copies files still saves the tree, so an interrupted one does not start again from nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -125,11 +129,11 @@ test "a push that copies files still saves the tree, so an interrupted one does 
 
     const fileNames = try namesFrom(allocator, 5, "asset/new-", ".jpg", false);
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames), &.{});
+    try sync_helpers.fillDatabase(allocator, io, log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, fileNames), &.{});
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, &.{}, &.{});
+    try sync_helpers.fillDatabase(allocator, io, log, target.asStorage(), dbId, &.{}, &.{});
 
-    const counted = try pushCountingTreeWrites(allocator, io, &source, &target);
+    const counted = try pushCountingTreeWrites(allocator, io, log, &source, &target);
 
     try std.testing.expect(counted.treeWrites >= 1);
     for (fileNames) |fileName| {

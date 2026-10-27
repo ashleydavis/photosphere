@@ -56,6 +56,7 @@ pub fn registerSaveMediaFileTool(server: *McpServer, allocator: std.mem.Allocato
 //
 fn saveMediaFile(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
@@ -63,6 +64,6 @@ fn saveMediaFile(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io,
         },
     };
     const outputPath = arguments.get("outputPath").?.string;
-    const bytes = try streamAssetToFile(allocator, io, database.assetStorage, arguments.get("assetId").?.string, outputPath, arguments.get("type").?.string);
+    const bytes = try streamAssetToFile(allocator, io, log, database.assetStorage, arguments.get("assetId").?.string, outputPath, arguments.get("type").?.string);
     return textResult(allocator, try std.fmt.allocPrint(allocator, "Wrote {d} bytes to {s}", .{ bytes, outputPath }));
 }

@@ -40,9 +40,9 @@ fn servicesOf(ptr: *anyopaque) TaskServices {
     return services.*;
 }
 
-fn sendEventOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, event: std.json.Value) void {
+fn sendEventOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, log: utils.log.ILog, event: std.json.Value) void {
     servicesOf(ptr).sendEvent(io, allocator, event) catch |err| {
-        utils.log.log.exception("Error sending a task event", err);
+        log.exception("Error sending a task event", err);
     };
 }
 
@@ -112,7 +112,7 @@ pub fn planAutoImportTask(services: TaskServices, timers: Timers, io: std.Io, al
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
-    const result = try mobile_worker.plan_auto_import_worker.planAutoImportHandler(allocator, io, timers, .{
+    const result = try mobile_worker.plan_auto_import_worker.planAutoImportHandler(allocator, io, timers, services.log, .{
         .object = request,
     }, task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
@@ -127,7 +127,7 @@ pub fn planSyncTask(services: TaskServices, timers: Timers, io: std.Io, allocato
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
     const host = networkStatusOf(&services);
-    const result = try mobile_worker.plan_sync_worker.planSyncHandler(allocator, io, timers, data, task_context, host);
+    const result = try mobile_worker.plan_sync_worker.planSyncHandler(allocator, io, timers, services.log, data, task_context, host);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -140,7 +140,7 @@ pub fn planPrefetchTask(services: TaskServices, timers: Timers, io: std.Io, allo
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
     const host = networkStatusOf(&services);
-    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, data, task_context, host);
+    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, services.log, data, task_context, host);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -167,7 +167,7 @@ pub fn readConfigTask(services: TaskServices, timers: Timers, io: std.Io, alloca
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
-    const result = try node_api.config_worker.readConfigHandler(allocator, io, timers, try withConfigPath(allocator, data), task_context);
+    const result = try node_api.config_worker.readConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, data), task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -180,6 +180,6 @@ pub fn writeConfigTask(services: TaskServices, timers: Timers, io: std.Io, alloc
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
-    const result = try node_api.config_worker.writeConfigHandler(allocator, io, timers, try withConfigPath(allocator, data), task_context);
+    const result = try node_api.config_worker.writeConfigHandler(allocator, io, timers, services.log, try withConfigPath(allocator, data), task_context);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }

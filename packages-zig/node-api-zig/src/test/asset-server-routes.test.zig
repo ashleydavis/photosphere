@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -163,7 +164,7 @@ const FakeCore = struct {
     // Remembers what it was asked and streams the bytes the test set, or fails with the error it set. The stream is in the request's
     // memory, the allocator given, which the routes free when the request ends.
     //
-    fn serveAsset(ptr: *anyopaque, allocator: std.mem.Allocator, _: std.mem.Allocator, streamIo: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
+    fn serveAsset(ptr: *anyopaque, allocator: std.mem.Allocator, _: std.mem.Allocator, streamIo: std.Io, _: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
         _ = streamIo;
         const self: *FakeCore = @ptrCast(@alignCast(ptr));
         self.serveCalls += 1;
@@ -203,7 +204,7 @@ const FakeCore = struct {
     //
     // Remembers what it was asked and the body it was given, and fails with the error the test set, if any.
     //
-    fn writeAsset(ptr: *anyopaque, allocator: std.mem.Allocator, writeIo: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
+    fn writeAsset(ptr: *anyopaque, allocator: std.mem.Allocator, writeIo: std.Io, _: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
         _ = allocator;
         _ = writeIo;
         const self: *FakeCore = @ptrCast(@alignCast(ptr));
@@ -222,7 +223,7 @@ const FakeCore = struct {
     //
     // Remembers how many ops it was given and the record id of the first, and fails with the error the test set, if any.
     //
-    fn applyDatabaseOps(ptr: *anyopaque, allocator: std.mem.Allocator, applyIo: std.Io, ops: []const IDatabaseOp) anyerror!void {
+    fn applyDatabaseOps(ptr: *anyopaque, allocator: std.mem.Allocator, applyIo: std.Io, _: ILog, ops: []const IDatabaseOp) anyerror!void {
         _ = allocator;
         _ = applyIo;
         const self: *FakeCore = @ptrCast(@alignCast(ptr));
@@ -256,7 +257,7 @@ const Fixture = struct {
     fn start(fixture: *Fixture, enableCors: bool, log_queue: *MessageQueue) !void {
         fixture.fake = .{};
         fixture.routes = asset_server_routes.attachAssetServerRoutes(fixture.fake.core(), enableCors);
-        // One connection thread, because every request uses the one fake core. Its state is a log that sends its lines to the run's
+        // One connection thread, because every request uses the one fake core. Its state sends its console lines to the run's
         // queue, which the configuration names by its address.
         var config_buffer: [32]u8 = undefined;
         const listener = try node_utils.http_server.open(io, "127.0.0.1", 0);
@@ -300,15 +301,16 @@ const Fixture = struct {
 };
 
 //
-// The log of the fixture's connection thread (test-only code): it sends each error and exception, with its error, to the run's queue
-// as JSON text, which the test reads. The connection thread makes it as its state, so the thread's log lines reach the test.
+// The console of the fixture's connection thread (test-only code): it sends each line the thread writes to stderr to the run's queue
+// as JSON text, which the test reads. The connection thread makes it as its state, and the thread's log is the console, so the errors
+// and exceptions the thread logs reach the test.
 //
 const QueueLines = struct {
     // The run's queue.
     queue: *MessageQueue,
 
     //
-    // Makes the log on the connection thread and sets it as the thread's log. The configuration is the queue's address.
+    // Makes the state on the connection thread and sends the thread's console lines to it. The configuration is the queue's address.
     //
     fn create(config: []const u8, native_callbacks: ?*const @import("ziggy").core.NativeCallbacks, allocator: std.mem.Allocator, state_io: std.Io) anyerror!*anyopaque {
         _ = native_callbacks;
@@ -317,39 +319,30 @@ const QueueLines = struct {
         self.* = .{
             .queue = @ptrFromInt(try std.fmt.parseInt(usize, config, 10)),
         };
-        utils.log.setLog(.{
-            .ptr = self,
-            .vtable = &vtable,
+        utils.console.setForward(.{
+            .context = self,
+            .function = forwardLine,
         });
         return self;
     }
 
     //
-    // Puts the thread's log back and frees the log.
+    // Sends the thread's console lines to the process's streams again and frees the state.
     //
     fn destroy(state: *anyopaque, allocator: std.mem.Allocator) void {
         const self: *QueueLines = @ptrCast(@alignCast(state));
-        utils.log.setLog(null);
+        utils.console.setForward(null);
         allocator.destroy(self);
     }
 
-    const vtable: utils.log.ILog.VTable = .{
-        .info = ignore,
-        .verbose = ignore,
-        .@"error" = errorLine,
-        .exception = exceptionLine,
-        .warn = ignore,
-        .debug = ignore,
-        .tool = ignoreTool,
-        .event = ignore,
-        .verboseEnabled = verboseEnabled,
-        .getLogDetails = getLogDetails,
-    };
-
     //
-    // Posts a line to the run's queue, with an Io of the calling thread's own.
+    // Posts a line the thread wrote to stderr to the run's queue, with an Io of the calling thread's own. A line for stdout is dropped.
     //
-    fn post(self: *QueueLines, level: []const u8, message: []const u8, error_name: ?[]const u8) void {
+    fn forwardLine(context: ?*anyopaque, stream: utils.console.Stream, line: []const u8) void {
+        if (stream != .stderr) {
+            return;
+        }
+        const self: *QueueLines = @ptrCast(@alignCast(context.?));
         // Memory of the calling thread's own, on its stack, for the Io and the line.
         var buffer: [16 * 1024]u8 = undefined;
         var fixed = std.heap.FixedBufferAllocator.init(&buffer);
@@ -357,50 +350,16 @@ const QueueLines = struct {
         threaded.allocator = fixed.allocator();
         defer threaded.deinit();
         const text = @import("ziggy").json.stringify(fixed.allocator(), .{
-            .level = level,
-            .message = message,
-            .@"error" = error_name,
+            .level = "error",
+            .message = line,
         }) catch @panic("out of memory logging");
         self.queue.post(threaded.io(), 0, text) catch @panic("out of memory logging");
-    }
-
-    fn errorLine(ptr: *anyopaque, message: []const u8) void {
-        const self: *QueueLines = @ptrCast(@alignCast(ptr));
-        self.post("error", message, null);
-    }
-
-    fn exceptionLine(ptr: *anyopaque, message: []const u8, err: anyerror) void {
-        const self: *QueueLines = @ptrCast(@alignCast(ptr));
-        self.post("exception", message, @errorName(err));
-    }
-
-    fn ignore(ptr: *anyopaque, message: []const u8) void {
-        _ = ptr;
-        _ = message;
-    }
-
-    fn ignoreTool(ptr: *anyopaque, tool_name: []const u8, data: utils.log.IToolOutput) void {
-        _ = ptr;
-        _ = tool_name;
-        _ = data;
-    }
-
-    fn verboseEnabled(ptr: *anyopaque) bool {
-        _ = ptr;
-        return false;
-    }
-
-    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, details_io: std.Io) anyerror!utils.log.ILogDetails {
-        _ = ptr;
-        _ = allocator;
-        _ = details_io;
-        return utils.log.noLogDetails;
     }
 };
 
 //
 // Runs a test body against a started fixture, with an arena and stderr captured, so that a passing test writes nothing. The server's
-// connection thread sends its log lines to a queue of the run's (see QueueLines), which the test reads once the reply it waited for has
+// connection thread sends its console lines to a queue of the run's (see QueueLines), which the test reads once the reply it waited for has
 // come.
 //
 const Run = struct {
@@ -413,10 +372,10 @@ const Run = struct {
     // What the code under test wrote to standard error on the test's thread.
     stderr: std.Io.Writer.Allocating,
 
-    // The queue the server's connection thread sends its log lines to.
+    // The queue the server's connection thread sends its console lines to.
     main_queue: MessageQueue,
 
-    // The errors and exceptions read from the queue so far, each its message and, for an exception, its error, one to a line.
+    // The lines read from the queue so far, one to a line.
     logged_text: std.ArrayList(u8),
 
     //
@@ -439,16 +398,7 @@ const Run = struct {
         while (run.main_queue.tryTake(io, allocator)) |message| {
             defer allocator.free(message.text);
             const line = try std.json.parseFromSliceLeaky(std.json.Value, allocator, message.text, .{});
-            const level = line.object.get("level") orelse continue;
-            if (!std.mem.eql(u8, level.string, "error") and !std.mem.eql(u8, level.string, "exception")) {
-                continue;
-            }
             try run.logged_text.print(allocator, "{s}\n", .{line.object.get("message").?.string});
-            if (line.object.get("error")) |err| {
-                if (err == .string) {
-                    try run.logged_text.print(allocator, "{s}\n", .{err.string});
-                }
-            }
         }
         return run.logged_text.items;
     }

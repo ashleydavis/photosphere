@@ -3,9 +3,9 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const tty = @import("tty.zig");
-const log = &utils.log.log;
 
 //
 // True when stdout is a TTY (`process.stdout.isTTY`).
@@ -48,7 +48,7 @@ fn cursorTo(column: usize) void {
 //
 // Clears the current progress message.
 //
-pub fn clearProgressMessage() void {
+pub fn clearProgressMessage(log: ILog) void {
     // Clear the current line and reset cursor position
     // Only when verbose logging is disabled (same condition as writeProgress)
     if (!log.verboseEnabled() and stdoutIsTTY()) {
@@ -60,10 +60,10 @@ pub fn clearProgressMessage() void {
 //
 // Writes a progress message over the current line (only on a TTY and when verbose logging is off).
 //
-pub fn writeProgress(message: []const u8) void {
+pub fn writeProgress(log: ILog, message: []const u8) void {
     if (stdoutIsTTY()) {
         if (!log.verboseEnabled()) {
-            clearProgressMessage();
+            clearProgressMessage(log);
             writeStdout(message);
         }
     }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const api = @import("api-zig");
@@ -94,7 +95,7 @@ pub const AlreadyImportedContentHashFn = struct {
     context: ?*anyopaque,
 
     // The function.
-    function: *const fn (context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem) anyerror!?[]const u8,
+    function: *const fn (context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, item: IMediaItem) anyerror!?[]const u8,
 };
 
 //
@@ -106,7 +107,7 @@ pub const OnLibraryWalkedFn = struct {
     context: ?*anyopaque,
 
     // The function.
-    function: *const fn (context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, liveSourceIds: []const []const u8) anyerror!void,
+    function: *const fn (context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, liveSourceIds: []const []const u8) anyerror!void,
 };
 
 //
@@ -117,18 +118,7 @@ pub const OnAutoImportProgressFn = struct {
     context: ?*anyopaque,
 
     // The function.
-    function: *const fn (context: ?*anyopaque, io: std.Io, timers: Timers, progress: IAutoImportScannerProgress) void,
-};
-
-//
-// `(message: string) => void`: says something worth reading in the log. (Zig: a closure.)
-//
-pub const LogInfoFn = struct {
-    // The state of the function, passed to function.
-    context: ?*anyopaque,
-
-    // The function.
-    function: *const fn (context: ?*anyopaque, message: []const u8) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, timers: Timers, log: ILog, progress: IAutoImportScannerProgress) void,
 };
 
 //
@@ -175,9 +165,6 @@ pub const IAutoImportScannerDeps = struct {
 
     // Reports what the scanner is doing, so the user interface can show it.
     onProgress: OnAutoImportProgressFn,
-
-    // Says something worth reading in the log.
-    logInfo: LogInfoFn,
 };
 
 //
@@ -202,7 +189,7 @@ const PushedItemScan = struct {
     //
     // The body of the arrow function.
     //
-    fn visit(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
+    fn visit(context: ?*anyopaque, log: ILog, result: FileScannedResult) anyerror!void {
         const self: *PushedItemScan = @ptrCast(@alignCast(context.?));
         const item = self.item;
         self.pushed = true;
@@ -248,7 +235,7 @@ const PushedItemScan = struct {
 
         var scannedFile = IScannedImportFile.fromScanned(result, cacheIdentity);
         scannedFile.fileStat = fileStat;
-        try self.visitFile.call(scannedFile);
+        try self.visitFile.call(log, scannedFile);
     }
 };
 
@@ -347,9 +334,9 @@ pub const AutoImportScanner = struct {
     //
     // IImportScanner.scan for this implementation.
     //
-    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
+    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
         const self: *AutoImportScanner = @ptrCast(@alignCast(ptr));
-        return self.scan(allocator, io, timers, visitFile, onProgress);
+        return self.scan(allocator, io, log, timers, visitFile, onProgress);
     }
 
     //
@@ -374,22 +361,22 @@ pub const AutoImportScanner = struct {
     // next run, which the app starts a short while after this one ends. Nothing here watches the
     // filesystem or holds a timer: re-reading the source from the start is what finds new photos.
     //
-    pub fn scan(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
+    pub fn scan(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, log: ILog, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
         const deps = self.deps;
 
         while (!self.isCancelled(io, allocator) and !self.hasNothingLeftToPush()) {
             if (self.queueNeedsAPage()) {
-                try self.fetchAPage(allocator, io);
+                try self.fetchAPage(allocator, io, log);
             }
 
             const item = deps.queue.nextItem();
             if (item) |nextItem| {
-                try self.pushItem(allocator, io, nextItem, visitFile, onProgress);
+                try self.pushItem(allocator, io, log, nextItem, visitFile, onProgress);
             }
 
             // Reported on every tick, not only when something was released. It is what the panel
             // shows, and the import writes out what it has learnt on the back of it.
-            deps.onProgress.function(deps.onProgress.context, io, timers, self.progress());
+            deps.onProgress.function(deps.onProgress.context, io, timers, log, self.progress());
 
             if (self.isCancelled(io, allocator)) {
                 break;
@@ -404,7 +391,7 @@ pub const AutoImportScanner = struct {
 
         // Said once more on the way out, because the loop stops the moment there is nothing left and
         // the import has to hear that it is caught up before the run ends.
-        deps.onProgress.function(deps.onProgress.context, io, timers, self.progress());
+        deps.onProgress.function(deps.onProgress.context, io, timers, log, self.progress());
     }
 
     //
@@ -440,14 +427,14 @@ pub const AutoImportScanner = struct {
     // Hands one item to the import: asks whether it is already there, copies it out of the source if
     // it is not, and pushes it through the same file scan a manual import uses.
     //
-    fn pushItem(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
+    fn pushItem(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, log: ILog, item: IMediaItem, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
         const deps = self.deps;
 
         self.currentItem = item.displayName;
 
         // Asked before the item is opened, which is the whole point: opening it on a phone copies
         // the entire photo out of the library, and that copy is what this avoids.
-        const importedContentHash = try deps.alreadyImportedContentHash.function(deps.alreadyImportedContentHash.context, allocator, io, item);
+        const importedContentHash = try deps.alreadyImportedContentHash.function(deps.alreadyImportedContentHash.context, allocator, io, log, item);
         if (importedContentHash != null) {
             self.skippedAsAlreadyImported += 1;
             return;
@@ -477,6 +464,7 @@ pub const AutoImportScanner = struct {
         try scanPath(
             allocator,
             io,
+            log,
             exportedPath,
             .{
                 .context = &pushedItemScan,
@@ -499,8 +487,8 @@ pub const AutoImportScanner = struct {
     //
     // Reads one page of the source listing.
     //
-    fn listSourcePage(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8) !IMediaSourceListPage {
-        return self.deps.source.listPage(allocator, io, cursor, SOURCE_PAGE_SIZE);
+    fn listSourcePage(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8) !IMediaSourceListPage {
+        return self.deps.source.listPage(allocator, io, log, cursor, SOURCE_PAGE_SIZE);
     }
 
     //
@@ -513,13 +501,13 @@ pub const AutoImportScanner = struct {
     //
     // Fetches the next page of the existing library into the queue.
     //
-    fn fetchAPage(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io) !void {
+    fn fetchAPage(self: *AutoImportScanner, allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
         const deps = self.deps;
-        const page = try self.listSourcePage(allocator, io, self.nextPageCursor);
+        const page = try self.listSourcePage(allocator, io, log, self.nextPageCursor);
         self.nextPageCursor = page.nextCursor;
         self.listingFinished = page.nextCursor == null;
         const accepted = try deps.queue.addItems(page.items);
-        deps.logInfo.function(deps.logInfo.context, try std.fmt.allocPrint(allocator, "Automatic import found {d} item(s) in the source, {d} of them new.", .{ page.items.len, accepted }));
+        log.info(try std.fmt.allocPrint(allocator, "Automatic import found {d} item(s) in the source, {d} of them new.", .{ page.items.len, accepted }));
 
         for (page.items) |item| {
             const liveEntry = try self.liveSourceIds.getOrPut(self.allocator, item.sourceId);
@@ -532,7 +520,7 @@ pub const AutoImportScanner = struct {
         // the whole library and can say what is still on the device.
         if (page.nextCursor == null and !self.hasReportedFullLibrary) {
             self.hasReportedFullLibrary = true;
-            try deps.onLibraryWalked.function(deps.onLibraryWalked.context, allocator, io, self.liveSourceIds.keys());
+            try deps.onLibraryWalked.function(deps.onLibraryWalked.context, allocator, io, log, self.liveSourceIds.keys());
         }
     }
 

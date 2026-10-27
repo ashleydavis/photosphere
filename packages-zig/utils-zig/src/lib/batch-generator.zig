@@ -1,8 +1,9 @@
 const std = @import("std");
+const ILog = @import("ziggy").task_queue.utils.log.ILog;
 
 //
 // The iterator returned by batchGenerator.
-// `SourceT` is a pointer to an iterator whose `next()` returns `!?T`.
+// `SourceT` is a pointer to an iterator whose `next(log)` returns `!?T`.
 //
 pub fn BatchGenerator(comptime T: type, comptime SourceT: type) type {
     return struct {
@@ -19,16 +20,16 @@ pub fn BatchGenerator(comptime T: type, comptime SourceT: type) type {
         done: bool,
 
         //
-        // Returns the next batch, or null when every item has been yielded.
+        // Returns the next batch, or null when every item has been yielded. The log is given to the source's `next`.
         //
-        pub fn next(self: *@This()) !?[]T {
+        pub fn next(self: *@This(), log: ILog) !?[]T {
             if (self.done) {
                 return null;
             }
 
             var batch: std.ArrayList(T) = .empty;
 
-            while (try self.source.next()) |item| {
+            while (try self.source.next(log)) |item| {
                 try batch.append(self.allocator, item);
 
                 if (batch.items.len >= self.batchSize) {
@@ -50,7 +51,7 @@ pub fn BatchGenerator(comptime T: type, comptime SourceT: type) type {
 //
 // Consumes an async generator and yields its items in fixed-size batches.
 // The final batch may be smaller than batchSize if the source is exhausted.
-// (`source` is a pointer to an iterator whose `next()` returns `!?T`, and the result is an iterator whose
+// (`source` is a pointer to an iterator whose `next(log)` returns `!?T`, and the result is an iterator whose
 // `next` yields each batch.)
 //
 pub fn batchGenerator(comptime T: type, allocator: std.mem.Allocator, source: anytype, batchSize: usize) BatchGenerator(T, @TypeOf(source)) {

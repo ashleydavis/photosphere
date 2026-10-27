@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const s3_client = @import("s3-client.zig");
 
@@ -48,6 +49,10 @@ pub const S3RangeReadableStream = struct {
     // Used for the range requests.
     io: std.Io,
 
+    // The log the retried range requests are written to, given with the stream, as its Io is, because the reader's functions take
+    // neither.
+    log: ILog,
+
     // The S3 client.
     s3: *S3Client,
 
@@ -91,7 +96,7 @@ pub const S3RangeReadableStream = struct {
     //
     // Creates the stream.
     //
-    pub fn init(allocator: std.mem.Allocator, io: std.Io, s3: *S3Client, bucket: []const u8, key: []const u8) !*S3RangeReadableStream {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, log: ILog, s3: *S3Client, bucket: []const u8, key: []const u8) !*S3RangeReadableStream {
         const self = try allocator.create(S3RangeReadableStream);
         self.* = .{
             .interface = .{
@@ -102,6 +107,7 @@ pub const S3RangeReadableStream = struct {
             },
             .allocator = allocator,
             .io = io,
+            .log = log,
             .s3 = s3,
             .bucket = bucket,
             .key = key,
@@ -178,7 +184,7 @@ pub const S3RangeReadableStream = struct {
         //
         // Fetches one chunk; returns null when the response has no body.
         //
-        pub fn run(self: *ChunkAttempt, io: std.Io) !?ChunkData {
+        pub fn run(self: *ChunkAttempt, io: std.Io, _: ILog) !?ChunkData {
             const stream = self.stream;
             self.successfulChunkIndex = self.nextChunkIndex;
             self.nextChunkIndex = @min(self.nextChunkIndex + 1, CHUNK_SIZES.len - 1);
@@ -252,7 +258,7 @@ pub const S3RangeReadableStream = struct {
             .nextChunkIndex = self.chunkSizeIndex,
             .requestedChunkSize = 0,
         };
-        const chunkData = try retry(self.io, &attempt, 3, 100, 2, CHUNK_TIMEOUT, null);
+        const chunkData = try retry(self.io, self.log, &attempt, 3, 100, 2, CHUNK_TIMEOUT, null);
 
         // Persist the chunk size that succeeded so future chunks use the same or smaller size.
         self.chunkSizeIndex = attempt.successfulChunkIndex;

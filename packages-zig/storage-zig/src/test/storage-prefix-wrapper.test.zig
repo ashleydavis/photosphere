@@ -26,6 +26,7 @@ test "location joins the wrapped location and the prefix" {
 }
 
 test "every method joins the prefix and the path" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -40,18 +41,18 @@ test "every method joins the prefix and the path" {
     _ = try storage.fileExists(allocator, io, "asset/1");
     _ = try storage.dirExists(allocator, io, "asset");
     try std.testing.expectEqual(@as(u64, 42), (try storage.info(allocator, io, "asset/1")).?.length);
-    try std.testing.expectEqualStrings("data", (try storage.read(allocator, io, "asset/1")).?);
+    try std.testing.expectEqualStrings("data", (try storage.read(allocator, io, log, "asset/1")).?);
     try storage.write(allocator, io, "asset/1", null, "x");
-    try std.testing.expectError(error.NotImplemented, storage.readStream(allocator, io, "asset/2"));
+    try std.testing.expectError(error.NotImplemented, storage.readStream(allocator, io, log, "asset/2"));
     var input = std.Io.Reader.fixed("x");
     try storage.writeStream(allocator, io, "asset/2", null, &input, null);
     try storage.deleteFile(allocator, io, "asset//3");
     try storage.deleteDir(allocator, io, "asset/");
     try storage.copyTo(allocator, io, "a", "b");
     try std.testing.expect((try storage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, ".db/write.lock", "owner-1"));
-    try storage.releaseWriteLock(allocator, io, ".db/write.lock");
-    try storage.refreshWriteLock(allocator, io, ".db/write.lock", "owner-1");
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, ".db/write.lock", "owner-1"));
+    try storage.releaseWriteLock(allocator, io, log, ".db/write.lock");
+    try storage.refreshWriteLock(allocator, io, log, ".db/write.lock", "owner-1");
 
     const expected = [_][]const u8{
         "isEmpty /db",

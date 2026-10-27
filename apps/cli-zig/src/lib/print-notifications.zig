@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const pc = @import("picocolors.zig");
@@ -8,7 +9,6 @@ const INewsItem = node_api.news_fetcher.INewsItem;
 const checkForUpdates = check_for_updates.checkForUpdates;
 const markUpdateAsShown = check_for_updates.markUpdateAsShown;
 const checkForNews = check_for_news.checkForNews;
-const log = &utils.log.log;
 
 //
 // Prints a single news item to stdout in the standard CLI presentation: a bold "📰 News:"
@@ -16,7 +16,7 @@ const log = &utils.log.log;
 // label/URL pairs. Shared by printNotifications() and the `psi news` command so both
 // surfaces look identical.
 //
-pub fn printNewsItem(allocator: std.mem.Allocator, item: INewsItem) !void {
+pub fn printNewsItem(log: ILog, allocator: std.mem.Allocator, item: INewsItem) !void {
     log.info("");
     log.info(try pc.bold(allocator, "\u{1F4F0} News:"));
     log.info(try std.fmt.allocPrint(allocator, "   {s}", .{item.message}));
@@ -43,12 +43,12 @@ pub fn printNewsItem(allocator: std.mem.Allocator, item: INewsItem) !void {
 // to write around them. --quiet turns them off. Nothing else here is suppressed: the command's own
 // output is what the caller asked for.
 //
-pub fn printNotifications(allocator: std.mem.Allocator, io: std.Io, quiet: bool) !void {
+pub fn printNotifications(allocator: std.mem.Allocator, io: std.Io, log: ILog, quiet: bool) !void {
     if (quiet) {
         return;
     }
 
-    const updateVersion = checkForUpdates(allocator, io);
+    const updateVersion = checkForUpdates(allocator, io, log);
     if (updateVersion) |version| {
         log.info("");
         log.info(try pc.bold(allocator, try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{1F4E6} A new version is available: v{s}", .{version}))));
@@ -56,8 +56,8 @@ pub fn printNotifications(allocator: std.mem.Allocator, io: std.Io, quiet: bool)
         markUpdateAsShown(allocator, io, version);
     }
 
-    const news = checkForNews(allocator, io);
+    const news = checkForNews(allocator, io, log);
     if (news) |item| {
-        try printNewsItem(allocator, item);
+        try printNewsItem(log, allocator, item);
     }
 }

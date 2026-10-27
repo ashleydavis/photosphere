@@ -139,6 +139,7 @@ pub fn exportTempFolderHandler(services: TaskServices, timers: Timers, io: std.I
 // still runs and it is only the notification that is missing. Starting it when it is already started does nothing. The reply is null.
 //
 pub fn startBackgroundImportHandler(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const log = services.log;
     _ = context;
     _ = data;
     const result = try std.json.parseFromSliceLeaky(std.json.Value, allocator, try callNativeApp(services, io, allocator, timers, "requestNotificationPermission", "null"), .{});
@@ -147,7 +148,7 @@ pub fn startBackgroundImportHandler(services: TaskServices, timers: Timers, io: 
         return utils.errors.throwError("The phone's answer to requestNotificationPermission could not be read.", .{});
     }
     if (!granted.?.bool) {
-        utils.log.log.info("Notifications were refused; the background import runs without its notification.");
+        log.info("Notifications were refused; the background import runs without its notification.");
     }
     // The main thread switches the work on when this task ends (see main-process.zig), and logs it.
     return try allocator.dupe(u8, "null");
@@ -310,9 +311,10 @@ pub fn startBackgroundImportMessageHandler(services: HandlerServices, timers: Ti
 // main thread, which owns it. Safe to call when nothing is running. The response is null.
 //
 pub fn stopBackgroundImportMessageHandler(services: HandlerServices, timers: Timers, io: std.Io, _: std.mem.Allocator, request: NoRequest) !void {
+    const log = services.log;
     _ = request;
     main_state.current().stopBackgroundWork(services, timers, io, main_state.stateAllocator());
-    utils.log.log.info("Stopped the background automatic import.");
+    log.info("Stopped the background automatic import.");
 }
 
 //

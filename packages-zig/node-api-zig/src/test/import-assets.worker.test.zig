@@ -1,17 +1,18 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const task_queue_zig = @import("ziggy").task_queue;
-const Timers = @import("ziggy").timers.Timers;
+const ziggy = @import("ziggy");
+const Timers = ziggy.timers.Timers;
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const import_assets_worker = node_api.import_assets_worker;
 const importAssetsHandler = import_assets_worker.importAssetsHandler;
 const describeImportProgress = import_assets_worker.describeImportProgress;
@@ -164,27 +165,33 @@ const MockBackend = struct {
     // runs the timers that are due, with the Io, the allocator and the timers of the thread that waits. A caller that waits for
     // something loops until it has come, so a wait that ends with nothing is only a look.
     //
-    fn waitForMessage(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+    fn waitForMessage(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, log: ILog) void {
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
         if (self.pendingCompletions.items.len == 0 and timers.nextTimeout() == .none) {
             @panic("The import waited with no task left to complete and no timer set, so the wait would never end.");
         }
         const idleFor = std.Io.Clock.real.now(io).toMilliseconds() - self.lastAddedAt;
         if (self.pendingCompletions.items.len > 0 and idleFor >= self.idleMs) {
-            self.completeNext(io, allocator, timers);
+            self.completeNext(io, log, allocator, timers);
         }
         else {
             utils.sleep.sleep(io, 1) catch |err| {
                 std.debug.panic("The mock backend could not wait: {s}", .{@errorName(err)});
             };
         }
-        timers.runDue(io, allocator, null);
+        // The timers run as a worker's do, with the services of the task the import runs in, whose log is the one the wait was
+        // given. The mock runs no task, so only the log is filled in.
+        const services: ziggy.task_runner.TaskServices = .{
+            .task = undefined,
+            .log = log,
+        };
+        timers.runDue(io, allocator, &services);
     }
 
     //
     // Fires the first completion waiting.
     //
-    fn completeNext(self: *MockBackend, io: std.Io, allocator: std.mem.Allocator, timers: Timers) void {
+    fn completeNext(self: *MockBackend, io: std.Io, log: ILog, allocator: std.mem.Allocator, timers: Timers) void {
         const completion = self.pendingCompletions.orderedRemove(0);
         defer backend_allocator_state.allocator().free(completion);
         self.inFlight -= 1;
@@ -200,7 +207,7 @@ const MockBackend = struct {
         };
         for (callbacks) |registration| {
             if (registration) |callback| {
-                callback.call(io, allocator, timers, result) catch |err| {
+                callback.call(io, allocator, timers, log, result) catch |err| {
                     std.debug.panic("The queue failed to take a completion from the mock backend: {s}", .{@errorName(err)});
                 };
             }
@@ -235,7 +242,7 @@ const MockBackend = struct {
     //
     // Records the task, tells the queue it was added, and schedules its completion.
     //
-    fn addTask(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
+    fn addTask(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         _ = priority;
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
         const id = if (taskId) |given| try backend_allocator_state.allocator().dupe(u8, given) else try std.fmt.allocPrint(backend_allocator_state.allocator(), "{s}-{d}", .{ taskType, self.addedTasks.items.len });
@@ -253,7 +260,7 @@ const MockBackend = struct {
         defer backend_allocator_state.allocator().free(addedCallbacks);
 
         for (addedCallbacks) |callback| {
-            callback.call(allocator, id);
+            callback.call(allocator, log, id);
         }
 
         var arena = std.heap.ArenaAllocator.init(backend_allocator_state.allocator());
@@ -328,7 +335,7 @@ const MockBackend = struct {
     //
     // Counts the cancellation.
     //
-    fn cancelTasks(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, source: []const u8) void {
+    fn cancelTasks(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: ILog, source: []const u8) void {
         _ = source;
         const self: *MockBackend = @ptrCast(@alignCast(ptr));
         self.cancelCount += 1;
@@ -639,7 +646,7 @@ const ImportTest = struct {
     //
     // Makes the directories and the database, and installs the backend.
     //
-    fn init(self: *ImportTest, resultFactory: ResultFactory) !void {
+    fn init(self: *ImportTest, log: ILog, resultFactory: ResultFactory) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
@@ -656,11 +663,11 @@ const ImportTest = struct {
         self.databaseDir = try path.join(allocator, &.{ self.tempDir, "db" });
         const created = try storage_zig.storage_factory.createStorage(allocator, io, self.databaseDir, null, null);
         self.database = try node_api.media_file_database.createMediaFileDatabase(allocator, created.storage, self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider());
-        try node_api.media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
+        try node_api.media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
 
         // The default hash-file result reports DEFAULT_HASH, and the database already holds it, so no upload is
         // queued and the run can finish.
-        try self.holdInDatabase("b0b0b0b0-0000-4000-8000-000000000000", DEFAULT_HASH);
+        try self.holdInDatabase(log, "b0b0b0b0-0000-4000-8000-000000000000", DEFAULT_HASH);
 
         self.messages = .{};
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "orchestrator-task-id", .{
@@ -676,7 +683,7 @@ const ImportTest = struct {
     //
     // Puts the environment back and removes the directory.
     //
-    fn deinit(self: *ImportTest) void {
+    fn deinit(self: *ImportTest, log: ILog) void {
         test_environment.restoreQueueBackend();
         self.backend.deinit();
         self.messages.deinit();
@@ -688,13 +695,13 @@ const ImportTest = struct {
         };
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
     // Puts an asset holding a hash in the database.
     //
-    fn holdInDatabase(self: *ImportTest, assetId: []const u8, hash: []const u8) !void {
+    fn holdInDatabase(self: *ImportTest, log: ILog, assetId: []const u8, hash: []const u8) !void {
         var record = try BsonDocument.fromFields(self.arena.allocator(), &.{
             .{
                 .key = "_id",
@@ -705,8 +712,8 @@ const ImportTest = struct {
                 .value = .{ .string = hash },
             },
         });
-        try self.database.metadataCollection.insertOne(std.testing.io, &record, null);
-        try self.database.bsonDatabase.commit(std.testing.io);
+        try self.database.metadataCollection.insertOne(std.testing.io, log, &record, null);
+        try self.database.bsonDatabase.commit(std.testing.io, log);
     }
 
     //
@@ -772,24 +779,24 @@ const ImportTest = struct {
     //
     // Runs the handler and returns its output.
     //
-    fn run(self: *ImportTest, data: std.json.Value) !std.json.Value {
-        return self.runWithIo(std.testing.io, data);
+    fn run(self: *ImportTest, log: ILog, data: std.json.Value) !std.json.Value {
+        return self.runWithIo(std.testing.io, log, data);
     }
 
     //
     // Runs the handler on the given Io and returns its output.
     //
-    fn runWithIo(self: *ImportTest, io: std.Io, data: std.json.Value) !std.json.Value {
+    fn runWithIo(self: *ImportTest, io: std.Io, log: ILog, data: std.json.Value) !std.json.Value {
         // The backend's timers and waits are the import's thread's, so they run on the same Io as the import.
-        return importAssetsHandler(self.arena.allocator(), io, test_timers.timers(), data, self.context.taskContext());
+        return importAssetsHandler(self.arena.allocator(), io, test_timers.timers(), log, data, self.context.taskContext());
     }
 
     //
     // The hash cache of the database, loaded from disk.
     //
-    fn loadHashCache(self: *ImportTest) !HashCache {
+    fn loadHashCache(self: *ImportTest, log: ILog) !HashCache {
         var cache = try HashCache.init(try getHashCacheDir(self.arena.allocator(), self.databaseDir), true);
-        _ = try cache.load(std.testing.io);
+        _ = try cache.load(std.testing.io, log);
         return cache;
     }
 };
@@ -807,9 +814,10 @@ test "mentions failures only once there are some" {
 }
 
 test "no more child tasks than the configured limit are in flight at once, and every file is still hashed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(everyFileNew);
-    defer context.deinit();
+    try context.init(log, everyFileNew);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const fileCount = 20;
     const limit = 3;
@@ -823,16 +831,17 @@ test "no more child tasks than the configured limit are in flight at once, and e
         _ = try context.writePhoto(try std.fmt.allocPrint(allocator, "img{d}.jpg", .{fileNumber}));
     }
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     try std.testing.expect(context.backend.peakTasksInFlight <= limit);
     try std.testing.expectEqual(@as(usize, fileCount), (try context.backend.tasksOfType(allocator, "hash-file")).len);
 }
 
 test "the limit is read from the task data, so a different caller gets a different limit" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const fileCount = 20;
     context.backend.idleMs = 50;
@@ -842,7 +851,7 @@ test "the limit is read from the task data, so a different caller gets a differe
     }
 
     context.context.maxConcurrentChildTasks = 2;
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
     try std.testing.expect(context.backend.peakTasksInFlight <= 2);
 
     var secondBackend: MockBackend = .{
@@ -853,18 +862,19 @@ test "the limit is read from the task data, so a different caller gets a differe
     setQueueBackend(secondBackend.queueBackend());
 
     context.context.maxConcurrentChildTasks = 8;
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
     try std.testing.expect(secondBackend.peakTasksInFlight > 2);
     try std.testing.expect(secondBackend.peakTasksInFlight <= 8);
 }
 
 test "a missing or nonsensical concurrency limit fails loudly rather than importing unbounded" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     context.context.maxConcurrentChildTasks = 0;
 
-    try std.testing.expectError(error.Thrown, context.run(try context.makeData(false)));
+    try std.testing.expectError(error.Thrown, context.run(log, try context.makeData(false)));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "maxConcurrentChildTasks") != null);
 }
 
@@ -882,16 +892,14 @@ fn addingHashFileFails(backend: *MockBackend, allocator: std.mem.Allocator, task
 }
 
 test "childQueue.shutdown is called in the finally block even when scanPaths throws" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(addingHashFileFails);
-    defer context.deinit();
+    try context.init(log, addingHashFileFails);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
     // The failure of the scan is logged; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
 
-    try std.testing.expectError(error.ScanFailed, context.run(try context.makeData(false)));
+    try std.testing.expectError(error.ScanFailed, context.run(log, try context.makeData(false)));
 
     // shutdown() cancels the queue's tasks through the backend, confirming the finally block ran.
     try std.testing.expect(context.backend.cancelCount > 0);
@@ -907,6 +915,8 @@ test "childQueue.shutdown is called in the finally block even when scanPaths thr
 // to read.
 //
 fn releaseLockLater(databaseDir: [512]u8, databaseDirLength: usize, importTime: *virtual_time_io.VirtualTimeIo) void {
+    // The thread's own log, which writes to the console.
+    const log = utils.mute_log.MuteLog.init();
     var thread_allocator: @import("ziggy").thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
@@ -921,13 +931,14 @@ fn releaseLockLater(databaseDir: [512]u8, databaseDirLength: usize, importTime: 
     const created = storage_zig.storage_factory.createStorage(arena.allocator(), io, databaseDir[0..databaseDirLength], null, null) catch |err| {
         std.debug.panic("The releaser could not open the database's storage: {s}", .{@errorName(err)});
     };
-    created.rawStorage.releaseWriteLock(arena.allocator(), io, ".db/write.lock") catch {};
+    created.rawStorage.releaseWriteLock(arena.allocator(), io, log, ".db/write.lock") catch {};
 }
 
 test "when acquireWriteLock returns false, retries until lock is acquired and sleep is called" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
     virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
@@ -936,18 +947,15 @@ test "when acquireWriteLock returns false, retries until lock is acquired and sl
     _ = try context.writePhoto("img1.jpg");
     // Another owner holds the lock when the import first asks for it, and lets go of it a while later.
     const created = try storage_zig.storage_factory.createStorage(allocator, io, context.databaseDir, null, null);
-    try std.testing.expect(try created.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "other-owner"));
+    try std.testing.expect(try created.rawStorage.acquireWriteLock(allocator, io, log, ".db/write.lock", "other-owner"));
     // Waiting for the lock logs each failed attempt; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     var databaseDir: [512]u8 = undefined;
     @memcpy(databaseDir[0..context.databaseDir.len], context.databaseDir);
     const releaser = try std.Thread.spawn(.{}, releaseLockLater, .{ databaseDir, context.databaseDir.len, &virtual_time });
     defer releaser.join();
 
     const startedAt = std.Io.Clock.awake.now(io).toMilliseconds();
-    const output = try context.runWithIo(io, try context.makeData(true));
+    const output = try context.runWithIo(io, log, try context.makeData(true));
 
     // The import waited for the lock rather than giving up.
     try std.testing.expect(std.Io.Clock.awake.now(io).toMilliseconds() - startedAt >= 1000);
@@ -955,33 +963,35 @@ test "when acquireWriteLock returns false, retries until lock is acquired and sl
 }
 
 test "localHashCache.save is called after all tasks complete" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const filePath = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     // What the run learnt is on disk for the next run.
-    var cache = try context.loadHashCache();
+    var cache = try context.loadHashCache(log);
     defer cache.deinit();
     try std.testing.expect(try cache.getHash(allocator, filePath) != null);
 }
 
 test "after a successful upload, merkle-tree.addItem and metadataCollection.insertOne are called" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const io = std.testing.io;
     _ = try context.writePhoto("img1.jpg");
 
-    const output = try context.run(try context.makeData(false));
+    const output = try context.run(log, try context.makeData(false));
 
     const assetId = output.object.get("imported").?.array.items[0].object.get("assetId").?.string;
     const storage = try test_files.directoryStorage(allocator, io, context.databaseDir);
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     try std.testing.expect(node_api.media_file_database.getFilesImported(filesTree.databaseMetadata) == 1);
     try std.testing.expect(@import("merkle-tree-zig").merkle_tree.findItemInTree(filesTree.sort, try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId })) != null);
 
@@ -989,7 +999,7 @@ test "after a successful upload, merkle-tree.addItem and metadataCollection.inse
     var found = false;
     var next: ?[]const u8 = null;
     while (true) {
-        const page = try reopened.metadataCollection.getAll(io, next);
+        const page = try reopened.metadataCollection.getAll(io, log, next);
         for (page.records) |record| {
             if (std.mem.eql(u8, record.get("_id").?.string, assetId)) {
                 found = true;
@@ -1004,52 +1014,52 @@ test "after a successful upload, merkle-tree.addItem and metadataCollection.inse
 }
 
 test "sends import-success when hash-file reports a new file and upload-asset succeeds" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(true));
+    _ = try context.run(log, try context.makeData(true));
 
     try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(context.arena.allocator(), "import-success")).len);
 }
 
 test "a child that ended cancelled is not counted as a failed file, and an ordinary failure is" {
+        const log = utils.mute_log.MuteLog.init();
     {
         var context: ImportTest = undefined;
-        try context.init(sameNewHashUploadCancelled);
-        defer context.deinit();
+        try context.init(log, sameNewHashUploadCancelled);
+        defer context.deinit(log);
         _ = try context.writePhoto("img1.jpg");
 
-        _ = try context.run(try context.makeData(true));
+        _ = try context.run(log, try context.makeData(true));
 
         try std.testing.expectEqual(@as(usize, 0), (try context.messages.ofType(context.arena.allocator(), "import-failed")).len);
     }
     {
         var context: ImportTest = undefined;
-        try context.init(sameNewHashUploadFails);
-        defer context.deinit();
+        try context.init(log, sameNewHashUploadFails);
+        defer context.deinit(log);
         // The failed upload is logged; a passing test must write nothing to stderr, so the log is muted.
-        var mutedLog: mock_log.MutedLog = .{};
-        mutedLog.install();
-        defer mutedLog.uninstall();
         _ = try context.writePhoto("img1.jpg");
 
-        _ = try context.run(try context.makeData(true));
+        _ = try context.run(log, try context.makeData(true));
 
         try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(context.arena.allocator(), "import-failed")).len);
     }
 }
 
 test "queues a hash-file task for each file found by scanPaths" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const firstPath = try context.writePhoto("img1.jpg");
     const secondPath = try context.writePhoto("img2.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     const hashFileTasks = try context.backend.tasksOfType(allocator, "hash-file");
     try std.testing.expectEqual(@as(usize, 2), hashFileTasks.len);
@@ -1062,11 +1072,12 @@ test "queues a hash-file task for each file found by scanPaths" {
 }
 
 test "sends scan-progress messages during scanning" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     const scanProgress = try context.messages.ofType(context.arena.allocator(), "scan-progress");
     try std.testing.expect(scanProgress.len > 0);
@@ -1074,12 +1085,13 @@ test "sends scan-progress messages during scanning" {
 }
 
 test "reports its job as it scans, carrying the tag it was queued with" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
 
-    _ = try context.run(try context.withJob(try context.makeData(false), "session-1", "Importing photos", "session-1"));
+    _ = try context.run(log, try context.withJob(try context.makeData(false), "session-1", "Importing photos", "session-1"));
 
     const jobMessages = try context.messages.ofType(allocator, "job-progress");
     try std.testing.expect(jobMessages.len > 0);
@@ -1092,19 +1104,21 @@ test "reports its job as it scans, carrying the tag it was queued with" {
 }
 
 test "reports no job when the import was queued without a tag" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     try std.testing.expectEqual(@as(usize, 0), (try context.messages.ofType(context.arena.allocator(), "job-progress")).len);
 }
 
 test "sends file-ignored messages when files are ignored" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // Two files that are not media, and a photo after them, so the scan reports progress once both have
     // been ignored.
@@ -1112,7 +1126,7 @@ test "sends file-ignored messages when files are ignored" {
     _ = try context.writePhoto("b.txt");
     _ = try context.writePhoto("c.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     const ignoredMessages = try context.messages.ofType(allocator, "file-ignored");
     var ignored: i64 = 0;
@@ -1123,57 +1137,58 @@ test "sends file-ignored messages when files are ignored" {
 }
 
 test "stops queuing tasks when cancelled" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
     context.context.cancel();
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     try std.testing.expectEqual(@as(usize, 0), (try context.backend.tasksOfType(context.arena.allocator(), "hash-file")).len);
 }
 
 test "skips duplicate hashes discovered in the same scan" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(sameNewHashUploadFails);
-    defer context.deinit();
+    try context.init(log, sameNewHashUploadFails);
+    defer context.deinit(log);
     // The failed upload is logged; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     // Both files return the same hash: the second should be skipped.
     _ = try context.writePhoto("img1.jpg");
     _ = try context.writePhoto("img2.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     // Only one upload-asset task should be queued (duplicate skipped).
     try std.testing.expectEqual(@as(usize, 1), (try context.backend.tasksOfType(context.arena.allocator(), "upload-asset")).len);
 }
 
 test "sends import-skipped message when hash already in database" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     // The database already holds this hash. The import loads that once at the start of a run,
     // rather than asking per file, so this is where a photo becomes already-imported.
-    try context.holdInDatabase("c0c0c0c0-0000-4000-8000-000000000000", NEW_HASH);
+    try context.holdInDatabase(log, "c0c0c0c0-0000-4000-8000-000000000000", NEW_HASH);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     try std.testing.expectEqual(@as(usize, 1), (try context.messages.ofType(context.arena.allocator(), "import-skipped")).len);
 }
 
 test "hands each hash-file task the identity supplied for its path" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const filePath = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
     const hashFileTask = (try context.backend.tasksOfType(allocator, "hash-file"))[0];
     const identity = hashFileTask.object.get("cacheIdentity").?.object;
@@ -1183,12 +1198,13 @@ test "hands each hash-file task the identity supplied for its path" {
 }
 
 test "reports an automatic import as a job under its own name" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.withJob(try context.autoImportData(), "auto-import:/test/db", "Automatic import", "auto-import"));
+    _ = try context.run(log, try context.withJob(try context.autoImportData(), "auto-import:/test/db", "Automatic import", "auto-import"));
 
     // Automatic import is a job like any other. It runs the same handler as a manual import, so
     // the only thing separating them in the list is what the row is called.
@@ -1198,28 +1214,30 @@ test "reports an automatic import as a job under its own name" {
 }
 
 test "hands an ordinary file no identity at all, which is what keeps manual import unchanged" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     const hashFileTask = (try context.backend.tasksOfType(context.arena.allocator(), "hash-file"))[0];
     try std.testing.expect(hashFileTask.object.get("cacheIdentity") == null);
 }
 
 test "files a photo library item under its source id, against the size and time the library reported" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const filePath = try context.writePhoto("img1.jpg");
     const stat = try std.Io.Dir.cwd().statFile(std.testing.io, filePath, .{});
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
-    var cache = try context.loadHashCache();
+    var cache = try context.loadHashCache(log);
     defer cache.deinit();
     const listing = try cache.getAllEntries(allocator);
     try std.testing.expectEqual(@as(usize, 1), listing.len);
@@ -1229,16 +1247,17 @@ test "files a photo library item under its source id, against the size and time 
 }
 
 test "files an ordinary file under its own path and its own stat" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const filePath = try context.writePhoto("img1.jpg");
     const stat = try std.Io.Dir.cwd().statFile(std.testing.io, filePath, .{});
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
-    var cache = try context.loadHashCache();
+    var cache = try context.loadHashCache(log);
     defer cache.deinit();
     const listing = try cache.getAllEntries(allocator);
     try std.testing.expectEqual(@as(usize, 1), listing.len);
@@ -1249,35 +1268,37 @@ test "files an ordinary file under its own path and its own stat" {
 }
 
 test "records the asset id against the cache entry once the database write has landed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const filePath = try context.writePhoto("img1.jpg");
 
-    const output = try context.run(try context.autoImportData());
+    const output = try context.run(log, try context.autoImportData());
 
     // Under the source id, because that is what the entry is filed under, and with the id the
     // upload reported rather than anything invented here.
     const assetId = output.object.get("imported").?.array.items[0].object.get("assetId").?.string;
-    var cache = try context.loadHashCache();
+    var cache = try context.loadHashCache(log);
     defer cache.deinit();
     try std.testing.expectEqualStrings(assetId, (try cache.getHash(allocator, filePath)).?.assetId.?);
 }
 
 test "records the id of an asset the database already held, so it is not looked up again" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     // The database holds this hash, which is what makes it already-imported. The import reads
     // that from the map it builds when the run starts, not from the task result.
-    try context.holdInDatabase("d0d0d0d0-0000-4000-8000-000000000000", NEW_HASH);
+    try context.holdInDatabase(log, "d0d0d0d0-0000-4000-8000-000000000000", NEW_HASH);
     const filePath = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
-    var cache = try context.loadHashCache();
+    var cache = try context.loadHashCache(log);
     defer cache.deinit();
     try std.testing.expectEqualStrings("d0d0d0d0-0000-4000-8000-000000000000", (try cache.getHash(allocator, filePath)).?.assetId.?);
 }
@@ -1317,12 +1338,13 @@ fn hashFileSnapshotsImportRecord(backend: *MockBackend, allocator: std.mem.Alloc
 }
 
 test "writes the import record part way through a long import, not only at the end" {
+    const log = utils.mute_log.MuteLog.init();
     // An import of two thousand photos that died at nineteen hundred used to write no record at
     // all, because the record was only written in the finally at the end of the run. Automatic
     // import made that worse: a run that goes on until the app quits never reaches the end.
     var context: ImportTest = undefined;
-    try context.init(hashFileSnapshotsImportRecord);
-    defer context.deinit();
+    try context.init(log, hashFileSnapshotsImportRecord);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const fileCount = import_assets_worker.IMPORT_RECORD_FLUSH_SIZE + 25;
     var fileNumber: usize = 0;
@@ -1337,7 +1359,7 @@ test "writes the import record part way through a long import, not only at the e
     };
     context.backend.factoryState = &snapshot;
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     // The record held one flush's worth at that point, written at the hundred mark, and holds every file at the end.
     try std.testing.expectEqual(@as(?usize, import_assets_worker.IMPORT_RECORD_FLUSH_SIZE), snapshot.entriesAtThatPoint);
@@ -1346,25 +1368,27 @@ test "writes the import record part way through a long import, not only at the e
 }
 
 test "writes the import record once at the end of a short import" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     const record = try loadImportRecord(context.arena.allocator(), std.testing.io, context.databaseDir);
     try std.testing.expectEqual(@as(usize, 1), record.entries.len);
 }
 
 test "records against the database path, not the database's storage" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     // The record is a local file worked out from the database path. Handing the record a storage
     // is what used to put it inside the database, where several machines overwrote each other's.
@@ -1373,12 +1397,13 @@ test "records against the database path, not the database's storage" {
 }
 
 test "a dry run records nothing, because it changed nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(true));
+    _ = try context.run(log, try context.makeData(true));
 
     try std.testing.expect(!test_files.fileExists(std.testing.io, try getImportRecordPath(context.arena.allocator(), context.databaseDir)));
 }
@@ -1417,9 +1442,9 @@ const ReleaseNotingSource = struct {
     //
     // Lists a page of the folder source.
     //
-    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
         const self: *ReleaseNotingSource = @ptrCast(@alignCast(ptr));
-        return self.inner.listPage(allocator, io, cursor, pageSize);
+        return self.inner.listPage(allocator, io, log, cursor, pageSize);
     }
 
     //
@@ -1470,51 +1495,55 @@ fn readReleasedPaths(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 test "releases each file once the import has finished with it" {
+    const log = utils.mute_log.MuteLog.init();
     // On a phone this is what deletes the copy that had to be made to read the photo at all.
     // Doing it per file rather than at the end of the run is what keeps a long automatic import
     // from filling the sandbox with copies of every photo it has ever looked at.
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     try registerMediaSourceBuilder("folder", buildReleaseNotingSource);
     const filePath = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s}\n", .{filePath}), try readReleasedPaths(allocator, std.testing.io));
 }
 
 test "releases a file the database already held" {
+    const log = utils.mute_log.MuteLog.init();
     // The database holds this hash, which is what makes it already-imported. The import reads
     // that from the map it builds when the run starts, not from the task result.
     var context: ImportTest = undefined;
-    try context.init(hashFileReportsDefault);
-    defer context.deinit();
+    try context.init(log, hashFileReportsDefault);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     try registerMediaSourceBuilder("folder", buildReleaseNotingSource);
     const filePath = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s}\n", .{filePath}), try readReleasedPaths(allocator, std.testing.io));
 }
 
 test "reports what an automatic import is doing, so the panel has something to show" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
     try std.testing.expect((try context.messages.ofType(context.arena.allocator(), "import-progress")).len > 0);
 }
 
 test "says how much of what it skipped was recognised without opening the file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const io = std.testing.io;
     // The first photo of the folder is recorded in the hash cache as already imported, so the scanner
@@ -1523,7 +1552,7 @@ test "says how much of what it skipped was recognised without opening the file" 
     _ = try context.writePhoto("b.jpg");
     const stat = try std.Io.Dir.cwd().statFile(io, skippedPath, .{});
     var cache = try HashCache.init(try getHashCacheDir(allocator, context.databaseDir), false);
-    _ = try cache.load(io);
+    _ = try cache.load(io, log);
     var hash: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&hash, DEFAULT_HASH);
     try cache.addSourceHash(skippedPath, .{
@@ -1532,10 +1561,10 @@ test "says how much of what it skipped was recognised without opening the file" 
         .lastModified = @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_ms)),
     });
     _ = try cache.setAssetId(skippedPath, "b0b0b0b0-0000-4000-8000-000000000000");
-    try cache.save(io);
+    try cache.save(io, log);
     cache.deinit();
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
     const progressMessages = try context.messages.ofType(allocator, "import-progress");
     try std.testing.expect(progressMessages.len > 0);
@@ -1546,13 +1575,14 @@ test "says how much of what it skipped was recognised without opening the file" 
 }
 
 test "reports what a manual import is doing, through the very same message" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     // One kind of progress event, sent by both kinds of import. The panel shows either without
     // knowing which it is watching.
@@ -1564,14 +1594,15 @@ test "reports what a manual import is doing, through the very same message" {
 }
 
 test "names the database an automatic arrival landed in, which the gallery needs" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     // Automatic import writes to the default database, which is not necessarily the one on
     // screen. An arrival in another database is not that gallery's to show.
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.autoImportData());
+    _ = try context.run(log, try context.autoImportData());
 
     const arrivals = try context.messages.ofType(context.arena.allocator(), "import-success");
     try std.testing.expectEqual(@as(usize, 1), arrivals.len);
@@ -1580,12 +1611,13 @@ test "names the database an automatic arrival landed in, which the gallery needs
 }
 
 test "sends the arrival's asset as the record itself, which the gallery lays out" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     _ = try context.writePhoto("img1.jpg");
 
-    _ = try context.run(try context.makeData(false));
+    _ = try context.run(log, try context.makeData(false));
 
     // The gallery sets the layout fields on the asset it is given, so a string (the encoded record the upload carries) breaks it.
     const arrivals = try context.messages.ofType(context.arena.allocator(), "import-success");
@@ -1596,9 +1628,10 @@ test "sends the arrival's asset as the record itself, which the gallery lays out
 }
 
 test "writes fewer assets than a batch holds rather than stranding them" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ImportTest = undefined;
-    try context.init(newFileUploads);
-    defer context.deinit();
+    try context.init(log, newFileUploads);
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
     const io = std.testing.io;
     // Assets are held back until a batch is worth committing, because every batch pays for a
@@ -1607,11 +1640,11 @@ test "writes fewer assets than a batch holds rather than stranding them" {
     // taking in one photo is exactly that run.
     _ = try context.writePhoto("img1.jpg");
 
-    const output = try context.run(try context.autoImportData());
+    const output = try context.run(log, try context.autoImportData());
 
     try std.testing.expectEqual(@as(usize, 1), output.object.get("imported").?.array.items.len);
     const storage = try test_files.directoryStorage(allocator, io, context.databaseDir);
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     try std.testing.expectEqual(@as(u64, 1), node_api.media_file_database.getFilesImported(filesTree.databaseMetadata));
 }
 

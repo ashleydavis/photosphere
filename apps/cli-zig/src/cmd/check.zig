@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -7,14 +8,12 @@ const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const clearProgressMessage = terminal_utils.clearProgressMessage;
 const writeProgress = terminal_utils.writeProgress;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
-const FileLog = utils.file_log.FileLog;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const checkPaths = node_api.check.checkPaths;
 const CheckPathsProgressCallback = node_api.check.CheckPathsProgressCallback;
@@ -30,17 +29,16 @@ pub const ICheckCommandOptions = struct {
 };
 
 //
-// Writes the progress line.
+// Writes the progress line to the log.
 //
-fn onProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
-    _ = context;
+fn onProgress(_: ?*anyopaque, log: ILog, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void {
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const message = buildProgressMessage(arena.allocator(), currentlyScanning, summary) catch |err| {
         log.exception("Failed to write the progress message", err);
         return;
     };
-    writeProgress(message);
+    writeProgress(log, message);
 }
 
 //
@@ -68,12 +66,12 @@ pub fn buildProgressMessage(allocator: std.mem.Allocator, currentlyScanning: ?[]
 //
 // Command that checks which files and directories have been added to the Photosphere media file database.
 //
-pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, paths: []const []const u8, options: *ICheckCommandOptions) !void {
+pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, paths: []const []const u8, options: *ICheckCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
     const sessionTempDir = context.sessionTempDir;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const databaseDir = loaded.databaseDir;
 
     const storageDescriptor: IDatabaseDescriptor = .{
@@ -81,7 +79,7 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
         .encryptionKey = options.base.key,
     };
 
-    writeProgress("Searching for files...");
+    writeProgress(log, "Searching for files...");
 
     const progressCallback: CheckPathsProgressCallback = .{
         .context = null,
@@ -91,6 +89,7 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
     const addSummary = try checkPaths(
         allocator,
         io,
+        log,
         timer_list.interface(),
         storageDescriptor,
         paths,
@@ -99,7 +98,7 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
         sessionTempDir,
     );
 
-    clearProgressMessage(); // Flush the progress message.
+    clearProgressMessage(log); // Flush the progress message.
 
     const totalChecked = addSummary.filesAdded + addSummary.filesAlreadyAdded + addSummary.filesIgnored;
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Checked {d} files.\n", .{totalChecked})));
@@ -113,8 +112,7 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
 
     // If there were failures, tell the user to check the log file
     if (addSummary.filesFailed > 0) {
-        if (FileLog.fromILog(utils.log.currentLog())) |fileLogger| {
-            const logFilePath = fileLogger.getLogFilePath();
+        if (log.logFilePath()) |logFilePath| {
             log.info("");
             log.info(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F}  {d} file{s} failed. Check the log file for details:", .{ addSummary.filesFailed, if (addSummary.filesFailed == 1) "" else "s" })));
             log.info(try std.fmt.allocPrint(allocator, "    {s}", .{try pc.cyan(allocator, logFilePath)}));
@@ -135,5 +133,5 @@ pub fn checkCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandC
     log.info("    # View database summary and statistics");
     log.info(try std.fmt.allocPrint(allocator, "    psi summary --db {s}", .{databaseDir}));
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

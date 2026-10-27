@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const s3_client = @import("s3-client.zig");
@@ -19,7 +20,6 @@ const parseS3ListPath = s3_path.parseS3ListPath;
 const IWriteLockInfo = @import("storage.zig").IWriteLockInfo;
 const LockFileContent = @import("storage.zig").LockFileContent;
 const parseLockContent = @import("storage.zig").parseLockContent;
-const log = &utils.log.log;
 const Date = utils.timestamp_provider.Date;
 
 // Write lock timeout in milliseconds (10 seconds)
@@ -615,7 +615,8 @@ pub const CloudStorage = struct {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    pub fn read(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         const parsed = try self.parsePath(filePath);
         var key = parsed.key;
         if (std.mem.startsWith(u8, key, "/")) {
@@ -667,14 +668,14 @@ pub const CloudStorage = struct {
     //
     // Streams a file from storage.
     //
-    pub fn readStream(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
         const parsed = try self.parsePath(filePath);
         var key = parsed.key;
         if (std.mem.startsWith(u8, key, "/")) {
             key = key[1..]; // Remove leading slash.
         }
 
-        const stream = try S3RangeReadableStream.init(allocator, io, &self.s3, parsed.bucket, key);
+        const stream = try S3RangeReadableStream.init(allocator, io, log, &self.s3, parsed.bucket, key);
         return stream.readStream();
     }
 
@@ -835,7 +836,7 @@ pub const CloudStorage = struct {
     // Attempts to acquire a write lock for the specified file.
     // Returns true if the lock was acquired, false if it already exists.
     //
-    pub fn acquireWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
+    pub fn acquireWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
 
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
         const processId = @import("storage.zig").processId();
@@ -936,7 +937,7 @@ pub const CloudStorage = struct {
     //
     // Releases a write lock for the specified file.
     //
-    pub fn releaseWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+    pub fn releaseWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
 
         const parsed = try self.parsePath(filePath);
         var key = parsed.key;
@@ -961,7 +962,7 @@ pub const CloudStorage = struct {
     // Throws an error if the lock is no longer owned by the specified owner.
     // The body is a function, refreshWriteLockUnlogged, so that its failure can be logged and rethrown.
     //
-    pub fn refreshWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+    pub fn refreshWriteLock(self: *CloudStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
 
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
         const processId = @import("storage.zig").processId();

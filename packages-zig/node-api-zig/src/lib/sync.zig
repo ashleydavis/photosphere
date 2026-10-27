@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
@@ -10,7 +11,6 @@ const tree = @import("tree.zig");
 const hash = @import("hash.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const retryOnce = utils.retry.retryOnce;
 const OperationResult = utils.retry.OperationResult;
@@ -54,8 +54,8 @@ const SYNC_STEP_TIMEOUT_MS: u64 = 30 * 60 * 1000;
 //
 // Runs one step of a sync under a deadline, naming it if the deadline passes.
 //
-fn retryOnceNamed(io: std.Io, step: anytype, description: []const u8) anyerror!OperationResult(@TypeOf(step)) {
-    return retryOnce(io, step, SYNC_STEP_TIMEOUT_MS) catch |err| {
+fn retryOnceNamed(io: std.Io, log: ILog, step: anytype, description: []const u8) anyerror!OperationResult(@TypeOf(step)) {
+    return retryOnce(io, log, step, SYNC_STEP_TIMEOUT_MS) catch |err| {
         if (err != error.Thrown and err != error.FatalError) {
             errors.recordError("Error", "{s}", .{@errorName(err)});
         }
@@ -80,13 +80,13 @@ pub const SyncChangeCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, io: std.Io, change: ISyncChange) anyerror!void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, log: ILog, change: ISyncChange) anyerror!void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: SyncChangeCallback, io: std.Io, change: ISyncChange) anyerror!void {
-        return self.function(self.context, io, change);
+    pub fn call(self: SyncChangeCallback, io: std.Io, log: ILog, change: ISyncChange) anyerror!void {
+        return self.function(self.context, io, log, change);
     }
 };
 
@@ -154,8 +154,8 @@ fn PushFilesOperation(comptime sourceText: []const u8) type {
         //
         // Pushes the files.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            return pushFiles(self.allocator, io, self.sourceAssetStorage, self.targetAssetStorage, self.targetBsonDatabase, self.bytes);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            return pushFiles(self.allocator, io, log, self.sourceAssetStorage, self.targetAssetStorage, self.targetBsonDatabase, self.bytes);
         }
     };
 }
@@ -186,8 +186,8 @@ fn SyncDatabaseOperation(comptime sourceText: []const u8) type {
         //
         // Merges the records.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            return syncDatabase(self.allocator, io, self.sourceBsonDatabase, self.targetBsonDatabase, self.targetDeletedIds, self.onLocalChange);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            return syncDatabase(self.allocator, io, log, self.sourceBsonDatabase, self.targetBsonDatabase, self.targetDeletedIds, self.onLocalChange);
         }
     };
 }
@@ -206,8 +206,8 @@ fn CommitOperation(comptime sourceText: []const u8) type {
         //
         // Commits the database.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            return self.bsonDatabase.commit(io);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            return self.bsonDatabase.commit(io, log);
         }
     };
 }
@@ -235,8 +235,8 @@ fn StampDatabaseStateOperation(comptime sourceText: []const u8) type {
         //
         // Stamps the state file.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
-            return tree.stampDatabaseState(self.allocator, io, self.assetStorage, self.rawStorage, .{ .lastSyncedAt = self.syncedAt });
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            return tree.stampDatabaseState(self.allocator, io, log, self.assetStorage, self.rawStorage, .{ .lastSyncedAt = self.syncedAt });
         }
     };
 }
@@ -248,6 +248,7 @@ fn StampDatabaseStateOperation(comptime sourceText: []const u8) type {
 pub fn syncDatabases(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceAssetStorage: IStorage,
     sourceRawStorage: IStorage,
     sourceBsonDatabase: *BsonDatabase,
@@ -267,8 +268,8 @@ pub fn syncDatabases(
     // different record with the same content have equal content hashes and this early-out skips the
     // sync, leaving each side without the other's record.
     //
-    const sourceState = try loadDatabaseState(allocator, io, sourceRawStorage);
-    const targetState = try loadDatabaseState(allocator, io, targetRawStorage);
+    const sourceState = try loadDatabaseState(allocator, io, log, sourceRawStorage);
+    const targetState = try loadDatabaseState(allocator, io, log, targetRawStorage);
     const sourceContentHash = if (sourceState) |state| state.contentHash else null;
     const targetContentHash = if (targetState) |state| state.contentHash else null;
     if (sourceContentHash != null and targetContentHash != null
@@ -287,24 +288,24 @@ pub fn syncDatabases(
     //
     try sourceBsonDatabase.flush();
 
-    if (!try acquireWriteLock(allocator, io, sourceRawStorage, sessionId, 3)) { //todo: Don't need write lock if nothing to pull.
+    if (!try acquireWriteLock(allocator, io, log, sourceRawStorage, sessionId, 3)) { //todo: Don't need write lock if nothing to pull.
         return errors.throwError("Failed to acquire write lock for source database.", .{});
     }
 
-    const pulled = pullIncomingFiles(allocator, io, sourceAssetStorage, sourceRawStorage, sourceBsonDatabase, targetAssetStorage, targetRawStorage, targetBsonDatabase, syncedAt, onLocalChange);
-    try releaseWriteLockAfter(allocator, io, sourceRawStorage, pulled);
+    const pulled = pullIncomingFiles(allocator, io, log, sourceAssetStorage, sourceRawStorage, sourceBsonDatabase, targetAssetStorage, targetRawStorage, targetBsonDatabase, syncedAt, onLocalChange);
+    try releaseWriteLockAfter(allocator, io, log, sourceRawStorage, pulled);
 
     //
     // Push outgoing files.
     //
     try targetBsonDatabase.flush();
 
-    if (!try acquireWriteLock(allocator, io, targetRawStorage, sessionId, 3)) { //todo: Don't need write lock if nothing to push.
+    if (!try acquireWriteLock(allocator, io, log, targetRawStorage, sessionId, 3)) { //todo: Don't need write lock if nothing to push.
         return errors.throwError("Failed to acquire write lock for target database.", .{});
     }
 
-    const pushed = pushOutgoingFiles(allocator, io, sourceAssetStorage, sourceRawStorage, sourceBsonDatabase, targetAssetStorage, targetRawStorage, targetBsonDatabase, syncedAt);
-    try releaseWriteLockAfter(allocator, io, targetRawStorage, pushed);
+    const pushed = pushOutgoingFiles(allocator, io, log, sourceAssetStorage, sourceRawStorage, sourceBsonDatabase, targetAssetStorage, targetRawStorage, targetBsonDatabase, syncedAt);
+    try releaseWriteLockAfter(allocator, io, log, targetRawStorage, pushed);
 
     return .{ .synced = true };
 }
@@ -314,10 +315,10 @@ pub fn syncDatabases(
 // not, then passes on the section's result. The error message of a failed section is kept across the release,
 // which records errors of its own.
 //
-pub fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sectionResult: anyerror!void) !void {
+pub fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, sectionResult: anyerror!void) !void {
     var sectionError: errors.ErrorRecord = undefined;
     errors.captureError(&sectionError);
-    try releaseWriteLock(allocator, io, rawStorage);
+    try releaseWriteLock(allocator, io, log, rawStorage);
     errors.restoreError(&sectionError);
     return sectionResult;
 }
@@ -328,6 +329,7 @@ pub fn releaseWriteLockAfter(allocator: std.mem.Allocator, io: std.Io, rawStorag
 fn pullIncomingFiles(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceAssetStorage: IStorage,
     sourceRawStorage: IStorage,
     sourceBsonDatabase: *BsonDatabase,
@@ -346,7 +348,7 @@ fn pullIncomingFiles(
     // nothing, because the record merge and the commit had no timeout anywhere around them. A
     // pass that fails is ordinary and the loop runs another one; a pass that hangs is the end of
     // syncing until the app is restarted.
-    const pull = try chooseHowToPushBytes(allocator, io, targetAssetStorage, targetRawStorage, sourceAssetStorage, sourceRawStorage);
+    const pull = try chooseHowToPushBytes(allocator, io, log, targetAssetStorage, targetRawStorage, sourceAssetStorage, sourceRawStorage);
     var pullOperation: PushFilesOperation("() => pushFiles(targetAssetStorage, sourceAssetStorage, sourceBsonDatabase, pull)") = .{
         .allocator = allocator,
         .sourceAssetStorage = targetAssetStorage,
@@ -354,12 +356,12 @@ fn pullIncomingFiles(
         .targetBsonDatabase = sourceBsonDatabase,
         .bytes = pull,
     };
-    try retryOnceNamed(io, &pullOperation, "pulling files from the origin");
+    try retryOnceNamed(io, log, &pullOperation, "pulling files from the origin");
     var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(sourceAssetStorage)") = .{
         .allocator = allocator,
         .storage = sourceAssetStorage,
     };
-    const sourceMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree");
+    const sourceMerkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree");
     const sourceDeletedIds = try deletedAssetIdsOf(allocator, sourceMerkleTree);
     var syncOperation: SyncDatabaseOperation("() => syncDatabase(targetBsonDatabase, sourceBsonDatabase, sourceDeletedIds, onLocalChange)") = .{
         .allocator = allocator,
@@ -368,11 +370,11 @@ fn pullIncomingFiles(
         .targetDeletedIds = &sourceDeletedIds,
         .onLocalChange = onLocalChange,
     };
-    try retryOnceNamed(io, &syncOperation, "merging the origin's records into this database");
+    try retryOnceNamed(io, log, &syncOperation, "merging the origin's records into this database");
     var commitOperation: CommitOperation("() => sourceBsonDatabase.commit()") = .{
         .bsonDatabase = sourceBsonDatabase,
     };
-    try retryOnceNamed(io, &commitOperation, "committing this database");
+    try retryOnceNamed(io, log, &commitOperation, "committing this database");
 
     // Refresh the source state file under the write lock we already hold (records the new content
     // hash and sync time), avoiding a second lock acquisition after the block.
@@ -382,7 +384,7 @@ fn pullIncomingFiles(
         .rawStorage = sourceRawStorage,
         .syncedAt = syncedAt,
     };
-    try retryOnceNamed(io, &stampOperation, "stamping this database's state");
+    try retryOnceNamed(io, log, &stampOperation, "stamping this database's state");
 }
 
 //
@@ -391,6 +393,7 @@ fn pullIncomingFiles(
 fn pushOutgoingFiles(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceAssetStorage: IStorage,
     sourceRawStorage: IStorage,
     sourceBsonDatabase: *BsonDatabase,
@@ -406,13 +409,13 @@ fn pushOutgoingFiles(
     // of work. The copies inside it have their own deadline, one per file, which is where a
     // stuck upload is caught. A deadline here caught nothing but honest progress: thirty minutes
     // in it gave up on a push that was uploading steadily.
-    const push = try chooseHowToPushBytes(allocator, io, sourceAssetStorage, sourceRawStorage, targetAssetStorage, targetRawStorage);
-    try pushFiles(allocator, io, sourceAssetStorage, targetAssetStorage, targetBsonDatabase, push);
+    const push = try chooseHowToPushBytes(allocator, io, log, sourceAssetStorage, sourceRawStorage, targetAssetStorage, targetRawStorage);
+    try pushFiles(allocator, io, log, sourceAssetStorage, targetAssetStorage, targetBsonDatabase, push);
     var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(targetAssetStorage)") = .{
         .allocator = allocator,
         .storage = targetAssetStorage,
     };
-    const targetMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree");
+    const targetMerkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree");
     const targetDeletedIds = try deletedAssetIdsOf(allocator, targetMerkleTree);
     var syncOperation: SyncDatabaseOperation("() => syncDatabase(sourceBsonDatabase, targetBsonDatabase, targetDeletedIds)") = .{
         .allocator = allocator,
@@ -421,11 +424,11 @@ fn pushOutgoingFiles(
         .targetDeletedIds = &targetDeletedIds,
         .onLocalChange = null,
     };
-    try retryOnceNamed(io, &syncOperation, "merging this database's records into the origin");
+    try retryOnceNamed(io, log, &syncOperation, "merging this database's records into the origin");
     var commitOperation: CommitOperation("() => targetBsonDatabase.commit()") = .{
         .bsonDatabase = targetBsonDatabase,
     };
-    try retryOnceNamed(io, &commitOperation, "committing the origin");
+    try retryOnceNamed(io, log, &commitOperation, "committing the origin");
 
     // Refresh the target state file under the write lock we already hold. Both sides now hold the
     // same (merged) content, so their content hashes match and the next sync can early-out.
@@ -435,7 +438,7 @@ fn pushOutgoingFiles(
         .rawStorage = targetRawStorage,
         .syncedAt = syncedAt,
     };
-    try retryOnceNamed(io, &stampOperation, "stamping the origin's state");
+    try retryOnceNamed(io, log, &stampOperation, "stamping the origin's state");
 }
 
 //
@@ -514,19 +517,19 @@ pub fn throughTheDatabases(sourceAssetStorage: IStorage, targetAssetStorage: ISt
 // storages, which decrypt and encrypt on the way as they always have. A database that is not
 // encrypted has no key file, so a pair with one such side is never verbatim.
 //
-pub fn chooseHowToPushBytes(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: IStorage, sourceRawStorage: IStorage, targetAssetStorage: IStorage, targetRawStorage: IStorage) !IPushBytes {
+pub fn chooseHowToPushBytes(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourceAssetStorage: IStorage, sourceRawStorage: IStorage, targetAssetStorage: IStorage, targetRawStorage: IStorage) !IPushBytes {
     var sourceReadOperation: retry_operations.ReadOperation("() => sourceRawStorage.read(\".db/encryption.pub\")") = .{
         .allocator = allocator,
         .storage = sourceRawStorage,
         .fileName = ".db/encryption.pub",
     };
-    const sourceKey = try retry(io, &sourceReadOperation, 3, 1_000, 2, 30_000, null);
+    const sourceKey = try retry(io, log, &sourceReadOperation, 3, 1_000, 2, 30_000, null);
     var targetReadOperation: retry_operations.ReadOperation("() => targetRawStorage.read(\".db/encryption.pub\")") = .{
         .allocator = allocator,
         .storage = targetRawStorage,
         .fileName = ".db/encryption.pub",
     };
-    const targetKey = try retry(io, &targetReadOperation, 3, 1_000, 2, 30_000, null);
+    const targetKey = try retry(io, log, &targetReadOperation, 3, 1_000, 2, 30_000, null);
     if (sourceKey != null and targetKey != null and std.mem.eql(u8, sourceKey.?, targetKey.?)) {
         return .{
             .source = sourceRawStorage,
@@ -618,7 +621,7 @@ const PushState = struct {
     // always the one that does not belong: a pass that spent forty-six minutes of its forty-six
     // minutes writing the merkle tree said so here and nowhere else.
     //
-    fn sayWhereTheTimeWent(self: *PushState) !void {
+    fn sayWhereTheTimeWent(self: *PushState, log: ILog) !void {
         const loggedAt = now(self.io);
         const elapsed = now(self.io) - self.pushStartedAt;
         const unaccounted = elapsed - self.millisecondsAskingAboutTheSource - self.millisecondsWriting
@@ -647,7 +650,7 @@ const PushState = struct {
     //
     // Copies a single file if necessary.
     //
-    fn copyFile(self: *PushState, fileName: []const u8, sourceHash: []const u8) !void {
+    fn copyFile(self: *PushState, log: ILog, fileName: []const u8, sourceHash: []const u8) !void {
         const allocator = self.allocator;
         const io = self.io;
         const decidingStartedAt = now(io);
@@ -720,7 +723,7 @@ const PushState = struct {
         };
         var hashForTheStore = sourceHash;
         if (self.bytes.verbatim) {
-            const hashStream = try self.bytes.source.readStream(allocator, io, fileName);
+            const hashStream = try self.bytes.source.readStream(allocator, io, log, fileName);
             defer hashStream.destroy(io);
             hashForTheStore = (try computeAssetHash(allocator, hashStream.reader(), .{
                 .contentType = storedInfo.contentType,
@@ -728,7 +731,7 @@ const PushState = struct {
                 .lastModified = storedInfo.lastModified,
             })).hash;
         }
-        const readStream = try self.bytes.source.readStream(allocator, io, fileName);
+        const readStream = try self.bytes.source.readStream(allocator, io, log, fileName);
         defer readStream.destroy(io);
         self.millisecondsOpeningTheSource += now(io) - openedAt;
         // A store that checked the bytes against the hash as it wrote them has already told us
@@ -811,9 +814,9 @@ const CopyFileOperation = struct {
     //
     // Copies the file.
     //
-    pub fn run(self: *CopyFileOperation, io: std.Io) !void {
+    pub fn run(self: *CopyFileOperation, io: std.Io, log: ILog) !void {
         _ = io;
-        return self.state.copyFile(self.file.name, self.file.hash);
+        return self.state.copyFile(log, self.file.name, self.file.hash);
     }
 };
 
@@ -821,7 +824,7 @@ const CopyFileOperation = struct {
 // Pushes from source db to target db for a particular device based
 // on missing files detected by comparing source and target merkle trees.
 //
-pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: IStorage, targetAssetStorage: IStorage, targetBsonDatabase: *BsonDatabase, bytes: IPushBytes) !void {
+pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourceAssetStorage: IStorage, targetAssetStorage: IStorage, targetBsonDatabase: *BsonDatabase, bytes: IPushBytes) !void {
 
     //
     // Load the merkle tree.
@@ -830,7 +833,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
         .allocator = allocator,
         .storage = sourceAssetStorage,
     };
-    var sourceMerkleTree = try retry(io, &loadSourceOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree to push from") orelse {
+    var sourceMerkleTree = try retry(io, log, &loadSourceOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the source merkle tree to push from") orelse {
         return errors.throwError("Failed to load source merkle tree.", .{});
     };
 
@@ -838,7 +841,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
         .allocator = allocator,
         .storage = targetAssetStorage,
     };
-    var targetMerkleTree = try retry(io, &loadTargetOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree to push into") orelse {
+    var targetMerkleTree = try retry(io, log, &loadTargetOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to load the target merkle tree to push into") orelse {
         return errors.throwError("Failed to load target merkle tree.", .{});
     };
 
@@ -906,7 +909,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
     // left behind, and only a walk of both trees by name said so.
     //
     const decidingWhatToConsiderAt = now(io);
-    const comparison = try compareTrees(allocator, &sourceMerkleTree, &targetMerkleTree, null);
+    const comparison = try compareTrees(allocator, log, &sourceMerkleTree, &targetMerkleTree, null);
     var filesToConsider: std.ArrayList(IFileToConsider) = .empty;
     for ([_][]const []const u8{ comparison.onlyInA, comparison.modified }) |names| {
         for (names) |name| {
@@ -942,7 +945,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
             .state = &state,
             .file = file,
         };
-        retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to copy file {s}", .{file.name})) catch |err| {
+        retry(io, log, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to copy file {s}", .{file.name})) catch |err| {
             filesLeftBehind += 1;
             log.exception(try std.fmt.allocPrint(allocator, "Failed to copy {s}, carrying on with the rest of the sync", .{file.name}), err);
             continue;
@@ -969,7 +972,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
                 .merkleTree = &targetMerkleTree,
                 .storage = targetAssetStorage,
             };
-            try retry(io, &saveOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree part way through a push");
+            try retry(io, log, &saveOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree part way through a push");
             state.millisecondsSavingTheTree += now(io) - savedAt;
         }
 
@@ -983,7 +986,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
         // line that mattered was somewhere under them.
         if (state.filesCopied % 20 == 0 and state.filesCopied != filesCopiedAtLastTimingsLine) {
             filesCopiedAtLastTimingsLine = state.filesCopied;
-            try state.sayWhereTheTimeWent();
+            try state.sayWhereTheTimeWent(log);
         }
     }
 
@@ -1013,7 +1016,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
 
         // Remove from metadata collection
         const metadataCollection = try targetBsonDatabase.collection("metadata");
-        _ = try metadataCollection.deleteOne(io, assetId);
+        _ = try metadataCollection.deleteOne(io, log, assetId);
 
         // Ensure databaseMetadata exists
         if (targetMerkleTree.databaseMetadata == null) {
@@ -1058,13 +1061,13 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, sourceAssetStorage: I
             .merkleTree = &targetMerkleTree,
             .storage = targetAssetStorage,
         };
-        try retry(io, &saveOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree after a push");
+        try retry(io, log, &saveOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the target merkle tree after a push");
         state.millisecondsSavingTheTree += now(io) - savedAt;
     }
 
     // Said once at the end whatever the pass did, because a pass that copied nothing is exactly the
     // one whose time needs explaining and is the one the every-twenty-files line above never reaches.
-    try state.sayWhereTheTimeWent();
+    try state.sayWhereTheTimeWent(log);
 
     log.info(try std.fmt.allocPrint(allocator, "Push completed: {d} files copied, {d} left behind for the next pass, {d} deleted from target", .{ state.filesCopied, filesLeftBehind, assetsDeleted }));
 }
@@ -1132,13 +1135,13 @@ const DiffVisitor = struct {
     context: *anyopaque,
 
     // Handles one differing record.
-    function: *const fn (context: *anyopaque, diff: ISyncDiffRecord) anyerror!void,
+    function: *const fn (context: *anyopaque, log: ILog, diff: ISyncDiffRecord) anyerror!void,
 
     //
     // Hands the visitor a differing record.
     //
-    fn yield(self: DiffVisitor, diff: ISyncDiffRecord) !void {
-        return self.function(self.context, diff);
+    fn yield(self: DiffVisitor, log: ILog, diff: ISyncDiffRecord) !void {
+        return self.function(self.context, log, diff);
     }
 };
 
@@ -1157,6 +1160,7 @@ fn withoutDashes(allocator: std.mem.Allocator, recordId: []const u8) ![]const u8
 fn iterateShardDifferences(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     collectionName: []const u8,
     shardId: []const u8,
     sourceCollection: *IBsonCollection,
@@ -1181,8 +1185,8 @@ fn iterateShardDifferences(
         try recordIdsInTree2.put(allocator, recordId, {});
     }
 
-    const sourceRecords: *RecordMap = try sourceShard.records(io);
-    const targetRecords: *RecordMap = try targetShard.records(io);
+    const sourceRecords: *RecordMap = try sourceShard.records(io, log);
+    const targetRecords: *RecordMap = try targetShard.records(io, log);
 
     // Track record IDs we've already yielded to avoid duplicates
     var seenRecordIds: std.StringHashMapUnmanaged(void) = .empty;
@@ -1196,7 +1200,7 @@ fn iterateShardDifferences(
 
         // If record ID appears in both trees, it's modified (different hash)
         // Otherwise, it's only in source
-        try visitor.yield(.{
+        try visitor.yield(log, .{
             .collectionName = collectionName,
             .recordId = recordId,
             .sourceRecord = sourceRecord,
@@ -1213,7 +1217,7 @@ fn iterateShardDifferences(
         const normalizedId = try withoutDashes(allocator, recordId); //todo: This is a bit ugly.
         const sourceRecord = sourceRecords.get(normalizedId);
         const targetRecord = targetRecords.get(normalizedId);
-        try visitor.yield(.{
+        try visitor.yield(log, .{
             .collectionName = collectionName,
             .recordId = recordId,
             .sourceRecord = sourceRecord,
@@ -1228,6 +1232,7 @@ fn iterateShardDifferences(
 fn iterateCollectionDifferences(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     collectionName: []const u8,
     sourceCollection: *IBsonCollection,
     targetCollection: *IBsonCollection,
@@ -1245,13 +1250,13 @@ fn iterateCollectionDifferences(
     for (try leavesOf(allocator, diff.onlyInTree1)) |shardId| {
         try seenShardKeys.put(allocator, shardId, {});
 
-        const sourceShardTree = try (try (try sourceCollection.shard(shardId)).merkleTree()).get(io);
-        const targetShardTree = try (try (try targetCollection.shard(shardId)).merkleTree()).get(io);
+        const sourceShardTree = try (try (try sourceCollection.shard(shardId)).merkleTree()).get(io, log);
+        const targetShardTree = try (try (try targetCollection.shard(shardId)).merkleTree()).get(io, log);
         if (sourceShardTree == null and targetShardTree == null) {
             continue;
         }
 
-        try iterateShardDifferences(allocator, io, collectionName, shardId, sourceCollection, targetCollection, sourceShardTree, targetShardTree, visitor);
+        try iterateShardDifferences(allocator, io, log, collectionName, shardId, sourceCollection, targetCollection, sourceShardTree, targetShardTree, visitor);
     }
 
     // Process shards only in target or modified
@@ -1260,13 +1265,13 @@ fn iterateCollectionDifferences(
             continue; // Already processed
         }
 
-        const sourceShardTree = try (try (try sourceCollection.shard(shardId)).merkleTree()).get(io);
-        const targetShardTree = try (try (try targetCollection.shard(shardId)).merkleTree()).get(io);
+        const sourceShardTree = try (try (try sourceCollection.shard(shardId)).merkleTree()).get(io, log);
+        const targetShardTree = try (try (try targetCollection.shard(shardId)).merkleTree()).get(io, log);
         if (sourceShardTree == null and targetShardTree == null) {
             continue;
         }
 
-        try iterateShardDifferences(allocator, io, collectionName, shardId, sourceCollection, targetCollection, sourceShardTree, targetShardTree, visitor);
+        try iterateShardDifferences(allocator, io, log, collectionName, shardId, sourceCollection, targetCollection, sourceShardTree, targetShardTree, visitor);
     }
 }
 
@@ -1276,12 +1281,13 @@ fn iterateCollectionDifferences(
 fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and tested.
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceDb: *BsonDatabase,
     targetDb: *BsonDatabase,
     visitor: DiffVisitor,
 ) !void {
-    const sourceDbTree = try (try sourceDb.merkleTree()).get(io);
-    const targetDbTree = try (try targetDb.merkleTree()).get(io);
+    const sourceDbTree = try (try sourceDb.merkleTree()).get(io, log);
+    const targetDbTree = try (try targetDb.merkleTree()).get(io, log);
     if (sourceDbTree == null and targetDbTree == null) {
         return;
     }
@@ -1298,8 +1304,8 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
 
         const sourceCollection = try sourceDb.collection(collectionName);
         const targetCollection = try targetDb.collection(collectionName);
-        const sourceCollectionTree = try (try sourceCollection.merkleTree()).get(io);
-        const targetCollectionTree = try (try targetCollection.merkleTree()).get(io);
+        const sourceCollectionTree = try (try sourceCollection.merkleTree()).get(io, log);
+        const targetCollectionTree = try (try targetCollection.merkleTree()).get(io, log);
 
         if (sourceCollectionTree == null and targetCollectionTree == null) {
             continue;
@@ -1308,6 +1314,7 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
         try iterateCollectionDifferences(
             allocator,
             io,
+            log,
             collectionName,
             sourceCollection,
             targetCollection,
@@ -1325,8 +1332,8 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
 
         const sourceCollection = try sourceDb.collection(collectionName);
         const targetCollection = try targetDb.collection(collectionName);
-        const sourceCollectionTree = try (try sourceCollection.merkleTree()).get(io);
-        const targetCollectionTree = try (try targetCollection.merkleTree()).get(io);
+        const sourceCollectionTree = try (try sourceCollection.merkleTree()).get(io, log);
+        const targetCollectionTree = try (try targetCollection.merkleTree()).get(io, log);
 
         if (sourceCollectionTree == null and targetCollectionTree == null) {
             continue;
@@ -1335,6 +1342,7 @@ fn iterateDatabaseDifferences( //todo: todo this could be in the bdb package and
         try iterateCollectionDifferences(
             allocator,
             io,
+            log,
             collectionName,
             sourceCollection,
             targetCollection,
@@ -1370,7 +1378,7 @@ const SyncDatabaseState = struct {
     //
     // Handles one differing record.
     //
-    fn visit(context: *anyopaque, diff: ISyncDiffRecord) anyerror!void {
+    fn visit(context: *anyopaque, log: ILog, diff: ISyncDiffRecord) anyerror!void {
         const self: *SyncDatabaseState = @ptrCast(@alignCast(context));
         const allocator = self.allocator;
         const io = self.io;
@@ -1382,24 +1390,24 @@ const SyncDatabaseState = struct {
             // Both records exist, merge them.
             const merged = try mergeRecords(allocator, diff.sourceRecord.?, diff.targetRecord.?);
             // Use setInternalRecord to preserve all timestamps exactly
-            try targetCollection.setInternalRecord(io, merged);
+            try targetCollection.setInternalRecord(io, log, merged);
             self.mergedCount += 1;
             if (self.onLocalChange != null and isMetadata) {
-                try self.onLocalChange.?.call(io, .{ .type = .updated, .asset = try toExternal(allocator, merged) });
+                try self.onLocalChange.?.call(io, log, .{ .type = .updated, .asset = try toExternal(allocator, merged) });
             }
         }
         else if (diff.sourceRecord) |sourceRecord| {
             // Record only in source - insert it unless the target intentionally deleted it.
             if (!self.targetDeletedIds.contains(sourceRecord._id)) {
-                try targetCollection.setInternalRecord(io, sourceRecord);
+                try targetCollection.setInternalRecord(io, log, sourceRecord);
                 self.mergedCount += 1;
                 if (self.onLocalChange != null and isMetadata) {
-                    try self.onLocalChange.?.call(io, .{ .type = .added, .asset = try toExternal(allocator, sourceRecord) });
+                    try self.onLocalChange.?.call(io, log, .{ .type = .added, .asset = try toExternal(allocator, sourceRecord) });
                 }
             }
             else {
                 if (self.onLocalChange != null and isMetadata) {
-                    try self.onLocalChange.?.call(io, .{ .type = .deleted, .assetId = sourceRecord._id });
+                    try self.onLocalChange.?.call(io, log, .{ .type = .deleted, .assetId = sourceRecord._id });
                 }
             }
         }
@@ -1423,13 +1431,14 @@ const SyncDatabaseState = struct {
 pub fn syncDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceBsonDatabase: *BsonDatabase,
     targetBsonDatabase: *BsonDatabase,
     targetDeletedIds: *const std.StringArrayHashMapUnmanaged(void),
     onLocalChange: ?SyncChangeCallback,
 ) !void {
-    const sourceDbTree = try (try sourceBsonDatabase.merkleTree()).get(io);
-    const targetDbTree = try (try targetBsonDatabase.merkleTree()).get(io);
+    const sourceDbTree = try (try sourceBsonDatabase.merkleTree()).get(io, log);
+    const targetDbTree = try (try targetBsonDatabase.merkleTree()).get(io, log);
 
     // TODO: Records with the same content hash the same (the id is not hashed), so this can skip or lose one of them. See syncDatabases.
     if (sourceDbTree != null and sourceDbTree.?.merkle != null and targetDbTree != null and targetDbTree.?.merkle != null) { //todo: move this comparison to the iterateDatabaseDifferences function.
@@ -1450,7 +1459,7 @@ pub fn syncDatabase(
     };
 
     // Process differing records as they're found (using generator)
-    try iterateDatabaseDifferences(allocator, io, sourceBsonDatabase, targetBsonDatabase, .{
+    try iterateDatabaseDifferences(allocator, io, log, sourceBsonDatabase, targetBsonDatabase, .{
         .context = &state,
         .function = SyncDatabaseState.visit,
     });

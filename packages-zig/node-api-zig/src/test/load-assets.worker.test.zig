@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -6,7 +7,6 @@ const serialization_zig = @import("serialization-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const database_fixture = @import("database-fixture.zig");
 const recording_task_context = @import("recording-task-context.zig");
 const recording_queue_backend = @import("recording-queue-backend.zig");
@@ -46,7 +46,7 @@ fn assetIdFor(allocator: std.mem.Allocator, index: usize) ![]const u8 {
 // Inserts the given number of assets into a database, each with a photo date a day after the one before and with EXIF
 // properties (which the handler must not send), and commits them.
 //
-fn insertAssets(allocator: std.mem.Allocator, io: std.Io, fixture: *DatabaseFixture, assetCount: usize) !void {
+fn insertAssets(allocator: std.mem.Allocator, io: std.Io, log: ILog, fixture: *DatabaseFixture, assetCount: usize) !void {
     for (0..assetCount) |index| {
         var properties = try BsonDocument.fromFields(allocator, &.{
             .{
@@ -81,23 +81,23 @@ fn insertAssets(allocator: std.mem.Allocator, io: std.Io, fixture: *DatabaseFixt
                 .value = .{ .document = properties },
             },
         });
-        try fixture.database.metadataCollection.insertOne(io, &record, null);
+        try fixture.database.metadataCollection.insertOne(io, log, &record, null);
     }
-    try fixture.database.bsonDatabase.commit(io);
+    try fixture.database.bsonDatabase.commit(io, log);
     try fixture.database.bsonDatabase.flush();
 }
 
 //
 // Replicates a database as a partial replica, which names the database as its origin, and returns the replica's path.
 //
-fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, sourcePath: []const u8, context: *RecordingTaskContext) ![]const u8 {
+fn makePartialReplica(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourcePath: []const u8, context: *RecordingTaskContext) ![]const u8 {
     const replicaPath = try std.fmt.allocPrint(allocator, "{s}-replica", .{sourcePath});
     var replicateData: std.json.ObjectMap = .empty;
     try replicateData.put(allocator, "sourcePath", .{ .string = sourcePath });
     try replicateData.put(allocator, "destPath", .{ .string = replicaPath });
     try replicateData.put(allocator, "partial", .{ .bool = true });
     try replicateData.put(allocator, "force", .{ .bool = false });
-    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), .{ .object = replicateData }, context.taskContext());
+    _ = try replicateDatabaseHandler(allocator, io, test_timers.timers(), log, .{ .object = replicateData }, context.taskContext());
     return replicaPath;
 }
 
@@ -127,28 +127,26 @@ const BackendInstaller = struct {
 };
 
 test "queues the thumbnail prefetch of a partial database as background work" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-partial");
-    defer fixture.deinit(io);
-    try insertAssets(allocator, io, &fixture, 3);
+    try fixture.init(allocator, io, log, "load-assets-partial");
+    defer fixture.deinit(io, log);
+    try insertAssets(allocator, io, log, &fixture, 3);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
-    const replicaPath = try makePartialReplica(allocator, io, fixture.dir, &context);
+    const replicaPath = try makePartialReplica(allocator, io, log, fixture.dir, &context);
     defer temp_dirs.removeTempDir(io, replicaPath);
     var installer: BackendInstaller = undefined;
     installer.install(allocator);
     defer installer.uninstall();
 
-    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, replicaPath, false), context.taskContext());
+    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, replicaPath, false), context.taskContext());
 
     try std.testing.expectEqual(@as(usize, 1), installer.backend.countOfType("prefetch-database"));
     // Explicitly background: without it the prefetch inherits this task's interactive priority
@@ -157,48 +155,44 @@ test "queues the thumbnail prefetch of a partial database as background work" {
 }
 
 test "queues no prefetch for a database that is not partial" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-full");
-    defer fixture.deinit(io);
-    try insertAssets(allocator, io, &fixture, 3);
+    try fixture.init(allocator, io, log, "load-assets-full");
+    defer fixture.deinit(io, log);
+    try insertAssets(allocator, io, log, &fixture, 3);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
     var installer: BackendInstaller = undefined;
     installer.install(allocator);
     defer installer.uninstall();
 
-    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, fixture.dir, false), context.taskContext());
+    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, fixture.dir, false), context.taskContext());
 
     try std.testing.expectEqual(@as(usize, 0), installer.backend.countOfType("prefetch-database"));
 }
 
 test "reports its job as it streams assets, carrying the tag it was queued with" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-job");
-    defer fixture.deinit(io);
-    try insertAssets(allocator, io, &fixture, 3);
+    try fixture.init(allocator, io, log, "load-assets-job");
+    defer fixture.deinit(io, log);
+    try insertAssets(allocator, io, log, &fixture, 3);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, fixture.dir, true), context.taskContext());
+    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, fixture.dir, true), context.taskContext());
 
     const jobMessages = try context.messagesOfType("job-progress");
     try std.testing.expectEqual(@as(usize, 1), jobMessages.len);
@@ -211,59 +205,56 @@ test "reports its job as it streams assets, carrying the tag it was queued with"
 }
 
 test "reports no job when the load was queued without a tag" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-no-job");
-    defer fixture.deinit(io);
-    try insertAssets(allocator, io, &fixture, 3);
+    try fixture.init(allocator, io, log, "load-assets-no-job");
+    defer fixture.deinit(io, log);
+    try insertAssets(allocator, io, log, &fixture, 3);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, fixture.dir, false), context.taskContext());
+    _ = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, fixture.dir, false), context.taskContext());
 
     try std.testing.expectEqual(@as(usize, 0), (try context.messagesOfType("job-progress")).len);
 }
 
 test "throws when databasePath is empty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    try std.testing.expectError(error.Thrown, loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, "", false), context.taskContext()));
+    try std.testing.expectError(error.Thrown, loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, "", false), context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
 test "sends the assets as an asset-page message holding only the fields the gallery needs, newest first" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-page");
-    defer fixture.deinit(io);
-    try insertAssets(allocator, io, &fixture, 3);
+    try fixture.init(allocator, io, log, "load-assets-page");
+    defer fixture.deinit(io, log);
+    try insertAssets(allocator, io, log, &fixture, 3);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    const result = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, fixture.dir, false), context.taskContext());
+    const result = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, fixture.dir, false), context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 3), result.object.get("totalAssets").?.integer);
     try std.testing.expectEqual(@as(i64, 1), result.object.get("batchesSent").?.integer);
@@ -283,23 +274,21 @@ test "sends the assets as an asset-page message holding only the fields the gall
 }
 
 test "sends nothing and returns zero counts when the task is already cancelled" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-cancelled");
-    defer fixture.deinit(io);
-    try insertAssets(allocator, io, &fixture, 3);
+    try fixture.init(allocator, io, log, "load-assets-cancelled");
+    defer fixture.deinit(io, log);
+    try insertAssets(allocator, io, log, &fixture, 3);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, 0, null);
 
-    const result = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, fixture.dir, false), context.taskContext());
+    const result = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, fixture.dir, false), context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 0), result.object.get("totalAssets").?.integer);
     try std.testing.expectEqual(@as(i64, 0), result.object.get("batchesSent").?.integer);
@@ -307,22 +296,20 @@ test "sends nothing and returns zero counts when the task is already cancelled" 
 }
 
 test "sends no pages for a database with no assets" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "load-assets-empty");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "load-assets-empty");
+    defer fixture.deinit(io, log);
     var context: RecordingTaskContext = undefined;
     try context.init(allocator, null, null);
 
-    const result = try loadAssetsHandler(allocator, io, test_timers.timers(), try makeData(allocator, fixture.dir, false), context.taskContext());
+    const result = try loadAssetsHandler(allocator, io, test_timers.timers(), log, try makeData(allocator, fixture.dir, false), context.taskContext());
 
     try std.testing.expectEqual(@as(i64, 0), result.object.get("totalAssets").?.integer);
     try std.testing.expectEqual(@as(i64, 0), result.object.get("batchesSent").?.integer);

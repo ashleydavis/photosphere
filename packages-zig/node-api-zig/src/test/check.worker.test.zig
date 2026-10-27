@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -11,7 +12,6 @@ const temp_dirs = @import("temp-dirs.zig");
 const marking_tool_programs = @import("marking-tool-programs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const check_worker = node_api.check_worker;
 const checkFileHandler = check_worker.checkFileHandler;
 const ICheckFileData = check_worker.ICheckFileData;
@@ -92,7 +92,7 @@ const CheckTest = struct {
     //
     // Copies the test photo into a directory of the test's own and creates the database.
     //
-    fn init(self: *CheckTest) !void {
+    fn init(self: *CheckTest, log: ILog) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
@@ -107,7 +107,7 @@ const CheckTest = struct {
         self.databaseDir = try path.join(allocator, &.{ self.tempDir, "db" });
         const created = try storage_zig.storage_factory.createStorage(allocator, io, self.databaseDir, null, null);
         self.database = try node_api.media_file_database.createMediaFileDatabase(allocator, created.storage, self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider());
-        try node_api.media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
+        try node_api.media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "check-task-id", .{
             .context = null,
             .function = ignoreMessage,
@@ -119,11 +119,11 @@ const CheckTest = struct {
     //
     // Removes the directory.
     //
-    fn deinit(self: *CheckTest) void {
+    fn deinit(self: *CheckTest, log: ILog) void {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.mediaTools.deinit();
         self.arena.deinit();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
@@ -148,22 +148,22 @@ const CheckTest = struct {
     //
     // Puts a hash in the cache on disk under the photo's path, matching the photo's stat.
     //
-    fn cacheHash(self: *CheckTest, hash: []const u8) !void {
+    fn cacheHash(self: *CheckTest, log: ILog, hash: []const u8) !void {
         var cache = try HashCache.init(self.hashCacheDir, false);
         defer cache.deinit();
-        _ = try cache.load(std.testing.io);
+        _ = try cache.load(std.testing.io, log);
         try cache.addHash(self.filePath, .{
             .hash = hash,
             .length = self.contents.len,
             .lastModified = LAST_MODIFIED,
         });
-        try cache.save(std.testing.io);
+        try cache.save(std.testing.io, log);
     }
 
     //
     // Puts an asset holding the hash in the database.
     //
-    fn holdInDatabase(self: *CheckTest, assetId: []const u8, hashHex: []const u8) !void {
+    fn holdInDatabase(self: *CheckTest, log: ILog, assetId: []const u8, hashHex: []const u8) !void {
         const allocator = self.arena.allocator();
         var record = try BsonDocument.fromFields(allocator, &.{
             .{
@@ -179,21 +179,21 @@ const CheckTest = struct {
                 },
             },
         });
-        try self.database.metadataCollection.insertOne(std.testing.io, &record, null);
-        try self.database.bsonDatabase.commit(std.testing.io);
+        try self.database.metadataCollection.insertOne(std.testing.io, log, &record, null);
+        try self.database.bsonDatabase.commit(std.testing.io, log);
     }
 
     //
     // Runs the handler and reads its result.
     //
-    fn run(self: *CheckTest, data: ICheckFileData) !ICheckFileResult {
+    fn run(self: *CheckTest, log: ILog, data: ICheckFileData) !ICheckFileResult {
         const allocator = self.arena.allocator();
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{
             .emit_null_optional_fields = false,
         });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
         const taskContext = self.context.taskContext();
-        const output = try checkFileHandler(allocator, std.testing.io, test_timers.timers(), taskData, taskContext, self.toolRunner);
+        const output = try checkFileHandler(allocator, std.testing.io, test_timers.timers(), log, taskData, taskContext, self.toolRunner);
         return std.json.parseFromValueLeaky(ICheckFileResult, allocator, output, .{});
     }
 
@@ -208,17 +208,18 @@ const CheckTest = struct {
 };
 
 test "uses the cached hash and counts matching database records" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CheckTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // Not the photo's own hash, so the result can only have come from the cache.
     const cachedHash = [_]u8{0xab} ** 32;
     const cachedHashHex = std.fmt.bytesToHex(cachedHash, .lower);
-    try context.cacheHash(&cachedHash);
-    try context.holdInDatabase("a1b2c3d4-e5f6-4890-abcd-ef1234567891", &cachedHashHex);
-    try context.holdInDatabase("a1b2c3d4-e5f6-4890-abcd-ef1234567892", &cachedHashHex);
+    try context.cacheHash(log, &cachedHash);
+    try context.holdInDatabase(log, "a1b2c3d4-e5f6-4890-abcd-ef1234567891", &cachedHashHex);
+    try context.holdInDatabase(log, "a1b2c3d4-e5f6-4890-abcd-ef1234567892", &cachedHashHex);
 
-    const result = try context.run(context.makeData());
+    const result = try context.run(log, context.makeData());
 
     try std.testing.expectEqual(true, result.hashFromCache);
     try std.testing.expectEqual(@as(u64, 2), result.matchingRecordsCount);
@@ -228,11 +229,12 @@ test "uses the cached hash and counts matching database records" {
 }
 
 test "computes the hash on a cache miss and reports hashFromCache false" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CheckTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
 
-    const result = try context.run(context.makeData());
+    const result = try context.run(log, context.makeData());
 
     try std.testing.expectEqual(false, result.hashFromCache);
     try std.testing.expectEqual(@as(u64, 0), result.matchingRecordsCount);
@@ -240,20 +242,18 @@ test "computes the hash on a cache miss and reports hashFromCache false" {
 }
 
 test "returns an empty result without opening storage when the file cannot be hashed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CheckTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // The handler logs the image that cannot be read; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     try test_files.writeFile(std.testing.io, context.filePath, "this is not a png");
     var data = context.makeData();
     data.fileStat.length = 17;
     // A database that cannot be opened: opening it would fail the handler.
     data.storageDescriptor.databasePath = "s3:";
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expect(result.hashedFile == null);
     try std.testing.expectEqual(@as(u64, 0), result.matchingRecordsCount);
@@ -261,15 +261,16 @@ test "returns an empty result without opening storage when the file cannot be ha
 }
 
 test "fails without starting a program when the task was run with no runner" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CheckTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     var programs: MarkingToolPrograms = undefined;
-    try programs.create(context.arena.allocator(), std.testing.io, context.tempDir);
+    try programs.create(context.arena.allocator(), std.testing.io, log, context.tempDir);
     defer programs.destroy();
     context.toolRunner = null;
 
-    try std.testing.expectError(error.Thrown, context.run(context.makeData()));
+    try std.testing.expectError(error.Thrown, context.run(log, context.makeData()));
 
     try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", utils.errors.lastErrorMessage());
     try std.testing.expect(!programs.anyStarted(std.testing.io));

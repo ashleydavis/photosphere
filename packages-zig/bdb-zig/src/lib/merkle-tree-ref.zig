@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const errors = utils.errors;
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -16,12 +17,12 @@ pub const IMerkleRef = MerkleRef;
 //
 // Loads (and, if needed, builds) the tree. Returns null when there is no tree.
 //
-pub const Loader = *const fn (context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree;
+pub const Loader = *const fn (context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog) anyerror!?IMerkleTree;
 
 //
 // Saves the tree to storage.
 //
-pub const Saver = *const fn (context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, tree: *IMerkleTree) anyerror!void;
+pub const Saver = *const fn (context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, tree: *IMerkleTree) anyerror!void;
 
 //
 // Deletes the tree from storage.
@@ -105,9 +106,9 @@ pub const MerkleRef = struct {
     //
     // Returns the tree, invoking the loader on first access.
     //
-    pub fn get(self: *MerkleRef, io: std.Io) !?*IMerkleTree {
+    pub fn get(self: *MerkleRef, io: std.Io, log: ILog) !?*IMerkleTree {
         if (!self._loaded) {
-            self._tree = try self.loader(self.context, self.allocator, io);
+            self._tree = try self.loader(self.context, self.allocator, io, log);
             self._loaded = true;
         }
 
@@ -126,9 +127,9 @@ pub const MerkleRef = struct {
     // Inserts or updates a hashed item in the tree.
     // If the tree is undefined and a creator was supplied, creates a new tree first.
     //
-    pub fn upsert(self: *MerkleRef, io: std.Io, item: HashedItem) !void {
+    pub fn upsert(self: *MerkleRef, io: std.Io, log: ILog, item: HashedItem) !void {
         var tree: IMerkleTree = undefined;
-        if (try self.get(io)) |existing| {
+        if (try self.get(io, log)) |existing| {
             tree = existing.*;
         }
         else {
@@ -142,8 +143,8 @@ pub const MerkleRef = struct {
     //
     // Removes an item by name. Sets the tree to undefined if it becomes empty.
     //
-    pub fn remove(self: *MerkleRef, io: std.Io, name: []const u8) !void {
-        const tree = try self.get(io) orelse {
+    pub fn remove(self: *MerkleRef, io: std.Io, log: ILog, name: []const u8) !void {
+        const tree = try self.get(io, log) orelse {
             return;
         };
         if (tree.sort == null) {
@@ -162,13 +163,13 @@ pub const MerkleRef = struct {
     //
     // Writes the tree to storage (or deletes it if empty); clears the dirty flag.
     //
-    pub fn commit(self: *MerkleRef, io: std.Io) !void {
+    pub fn commit(self: *MerkleRef, io: std.Io, log: ILog) !void {
         if (!self._dirty) {
             return;
         }
 
         if (self._tree) |*tree| {
-            try self.saver(self.context, self.allocator, io, tree);
+            try self.saver(self.context, self.allocator, io, log, tree);
         }
         else {
             try self.deleter(self.context, self.allocator, io);

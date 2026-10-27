@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -13,7 +14,6 @@ const open_storage = @import("open-storage.zig");
 const hash = @import("hash.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const formatFileSize = utils.format.formatFileSize;
 const SortNode = merkle_tree_zig.merkle_tree.SortNode;
@@ -265,8 +265,8 @@ const ComputeAssetHashOperation = struct {
     //
     // Streams the file and hashes it.
     //
-    pub fn run(self: *ComputeAssetHashOperation, io: std.Io) !IHashedData {
-        const readStream = try self.storage.readStream(self.allocator, io, self.fileName);
+    pub fn run(self: *ComputeAssetHashOperation, io: std.Io, log: ILog) !IHashedData {
+        const readStream = try self.storage.readStream(self.allocator, io, log, self.fileName);
         defer readStream.destroy(io);
         return computeAssetHash(self.allocator, readStream.reader(), .{
             .contentType = self.fileInfo.contentType,
@@ -280,17 +280,17 @@ const ComputeAssetHashOperation = struct {
 // Handler for verifying a single file
 // The task data is the JSON value made by verifyFileDataToJson and the output is an IVerifyFileResult as JSON.
 //
-pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     const data = try verifyFileDataFromJson(allocator, taskData);
     const node = data.node;
     const storageDescriptor = data.storageDescriptor;
     const fileName = node.name orelse "";
 
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const storage = opened.storage;
 
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{ .allocator = allocator, .storage = storage, .fileName = fileName };
-    const fileInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const fileInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return verifyFileResultToJson(allocator, .{
             .fileName = fileName,
             .status = .removed,
@@ -302,7 +302,7 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, ta
     if (sizeChanged or timestampChanged) {
         // File metadata has changed - check if content actually changed by computing the hash.
         var hashOperation: ComputeAssetHashOperation = .{ .allocator = allocator, .storage = storage, .fileName = fileName, .fileInfo = fileInfo };
-        const freshHash = try retry(io, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+        const freshHash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
         const contentHash = node.contentHash orelse {
             errors.recordError("TypeError", "The \"buf2\" argument must be of type Buffer or Uint8Array. Received undefined", .{});
             return error.Thrown;

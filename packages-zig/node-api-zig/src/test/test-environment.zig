@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const node_utils = @import("node-utils-zig");
 const ziggy = @import("ziggy");
@@ -74,19 +75,19 @@ pub const TestEnvironment = struct {
     // Ends one use of the environment. The last waits for the pool's tasks, stops its workers and puts the test thread's environment
     // and queue backend back to none.
     //
-    pub fn deinit(self: *TestEnvironment) void {
-        self.deinitWith(environment_allocator.allocator());
+    pub fn deinit(self: *TestEnvironment, log: ILog) void {
+        self.deinitWith(log, environment_allocator.allocator());
     }
 
     //
     // Ends one use of an environment set up with setupEnvironmentWith, given the same allocator.
     //
-    pub fn deinitWith(self: *TestEnvironment, allocator: std.mem.Allocator) void {
+    pub fn deinitWith(self: *TestEnvironment, log: ILog, allocator: std.mem.Allocator) void {
         self.uses -= 1;
         if (self.uses > 0) {
             return;
         }
-        self.pool.deinit(std.testing.io, allocator, test_timers.timers());
+        self.pool.deinit(std.testing.io, allocator, test_timers.timers(), log);
         task_queue_zig.queue_backend.setQueueBackend(null);
         node_utils.process_env.setEnvironMap(null);
         self.map.deinit();

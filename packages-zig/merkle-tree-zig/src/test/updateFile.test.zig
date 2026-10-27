@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
@@ -59,7 +60,7 @@ test "should update a file and recalculate hashes along the path to root" {
 //
 // Checks each internal merkle node's hash equals the combined hash of its children.
 //
-fn verifyNodeHash(allHashesValid: *bool, currentNode: *MerkleNode) anyerror!bool {
+fn verifyNodeHash(allHashesValid: *bool, _: utils.log.ILog, currentNode: *MerkleNode) anyerror!bool {
     // Leaf nodes can't be verified this way
     if (currentNode.left == null and currentNode.right == null) {
         return true; // Continue traversal
@@ -75,6 +76,7 @@ fn verifyNodeHash(allHashesValid: *bool, currentNode: *MerkleNode) anyerror!bool
 }
 
 test "should preserve hash integrity through the entire tree after update" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -97,7 +99,7 @@ test "should preserve hash integrity through the entire tree after update" {
 
     // Verify the entire tree starting from the root
     var treeIntegrity = true;
-    try traverse.traverseTreeAsync(MerkleNode, tree.merkle, &treeIntegrity, verifyNodeHash);
+    try traverse.traverseTreeAsync(MerkleNode, tree.merkle, console_log, &treeIntegrity, verifyNodeHash);
     try std.testing.expect(treeIntegrity);
 
     // Verify all non-updated files still have their original hash

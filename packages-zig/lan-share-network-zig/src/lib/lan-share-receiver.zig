@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const encryption = @import("encryption-zig");
@@ -501,7 +502,7 @@ pub const LanShareReceiver = struct {
     //
     // Serves one connection: performs the TLS handshake and handles requests until the connection closes or the receive is done.
     //
-    fn serveConnection(self: *LanShareReceiver, handle: socket.Handle) void {
+    fn serveConnection(self: *LanShareReceiver, log: ILog, handle: socket.Handle) void {
         const connection = https.Connection.accept(std.heap.smp_allocator, &self.serverContext.?, handle) catch {
             // A failed handshake (a port scan, a client that went away) only loses that connection.
             return;
@@ -512,7 +513,7 @@ pub const LanShareReceiver = struct {
             var request = server.receiveHead() catch {
                 return;
             };
-            const keepServing = self.handleRequest(&request) catch {
+            const keepServing = self.handleRequest(log, &request) catch {
                 return;
             };
             if (!keepServing or !request.head.keep_alive) {
@@ -527,8 +528,8 @@ pub const LanShareReceiver = struct {
     // Returns the payload on success, or null on timeout or cancellation. The payload belongs to the receiver
     // and is freed by deinit.
     //
-    pub fn receive(self: *LanShareReceiver) !?std.json.Value {
-        while (self.receiveStep()) {}
+    pub fn receive(self: *LanShareReceiver, log: ILog) !?std.json.Value {
+        while (self.receiveStep(log)) {}
         return self.finishReceive();
     }
 
@@ -537,7 +538,7 @@ pub const LanShareReceiver = struct {
     // the receive has finished (a payload, a cancel or the timeout), and finishReceive then gives what it received. A caller that runs
     // the receive itself calls this until it returns false, and so can cancel the receiver between the slices on its own thread.
     //
-    pub fn receiveStep(self: *LanShareReceiver) bool {
+    pub fn receiveStep(self: *LanShareReceiver, log: ILog) bool {
         if (self.isDone.load(.acquire)) {
             return false;
         }
@@ -555,13 +556,13 @@ pub const LanShareReceiver = struct {
         // has finished.
         const wait_ms = @min(@min(self.nextBroadcastAt - current, deadline - current), POLL_INTERVAL_MS);
         const readable = socket.waitReadableOn(self.io, self.httpsServer.?, @intCast(@max(wait_ms, 0))) catch |err| {
-            utils.log.log.exception("The LAN share receiver stopped accepting connections.", err);
+            log.exception("The LAN share receiver stopped accepting connections.", err);
             self.complete(null);
             return false;
         };
         if (readable) {
             if (socket.accept(self.httpsServer.?)) |accepted| {
-                self.serveConnection(accepted);
+                self.serveConnection(log, accepted);
             }
             else |_| {}
         }
@@ -604,7 +605,7 @@ pub const LanShareReceiver = struct {
     //
     // Handles an incoming HTTP request to the HTTPS server. Returns false when the connection should be closed.
     //
-    fn handleRequest(self: *LanShareReceiver, request: *std.http.Server.Request) !bool {
+    fn handleRequest(self: *LanShareReceiver, log: ILog, request: *std.http.Server.Request) !bool {
         self.requestCount += 1;
         if (self.requestCount > MAX_REQUESTS) {
             try respondJson(request, .too_many_requests, "{\"error\":\"Too many requests\"}");
@@ -640,7 +641,7 @@ pub const LanShareReceiver = struct {
             // request from any device on the LAN stops `psi dbs receive`. It should be answered with an error instead.
             if (shareRequest == .null) {
                 errors.recordError("TypeError", "null is not an object (evaluating 'parsed.codeHash')", .{});
-                node_utils.termination.shutdownOnUncaughtException(self.io, error.Thrown);
+                node_utils.termination.shutdownOnUncaughtException(self.io, log, error.Thrown);
             }
 
             // Any other value that is not an object has no codeHash.

@@ -7,6 +7,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const ziggy = @import("ziggy");
@@ -150,7 +151,7 @@ const Events = struct {
 //
 // Answers a request with its path.
 //
-fn echoPath(_: ?*anyopaque, request: *Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn echoPath(_: ?*anyopaque, request: *Request, _: std.Io, _: ILog, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     try request.http.respond(request.path, .{
         .keep_alive = false,
     });
@@ -159,7 +160,7 @@ fn echoPath(_: ?*anyopaque, request: *Request, _: std.Io, _: std.mem.Allocator, 
 //
 // Answers with the method and the path.
 //
-fn echoMethod(_: ?*anyopaque, request: *Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn echoMethod(_: ?*anyopaque, request: *Request, _: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     try request.http.respond(try std.fmt.allocPrint(allocator, "{s} {s}", .{ @tagName(request.method), request.path }), .{
         .keep_alive = false,
     });
@@ -168,7 +169,7 @@ fn echoMethod(_: ?*anyopaque, request: *Request, _: std.Io, allocator: std.mem.A
 //
 // Answers 404 with the method and the path.
 //
-fn notFound(_: ?*anyopaque, request: *Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn notFound(_: ?*anyopaque, request: *Request, _: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     try request.http.respond(try std.fmt.allocPrint(allocator, "no route for {s} {s}", .{ @tagName(request.method), request.path }), .{
         .status = .not_found,
         .keep_alive = false,
@@ -179,7 +180,7 @@ fn notFound(_: ?*anyopaque, request: *Request, _: std.Io, allocator: std.mem.All
 // Holds the key its query parameter "key" names, tells the test it has begun, answers once the owner's message for the key comes, and
 // tells the test it has answered. The context is the address of the test's queue.
 //
-fn answerWhenReleased(context: ?*anyopaque, request: *Request, request_io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn answerWhenReleased(context: ?*anyopaque, request: *Request, request_io: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     const events = @intFromPtr(context.?);
     const key = (try request.queryParameter(allocator, "key")) orelse {
         return error.NoKey;
@@ -199,7 +200,7 @@ fn answerWhenReleased(context: ?*anyopaque, request: *Request, request_io: std.I
 //
 // Fails for one path and answers the others.
 //
-fn failForBoom(_: ?*anyopaque, request: *Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn failForBoom(_: ?*anyopaque, request: *Request, _: std.Io, _: ILog, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     if (std.mem.eql(u8, request.path, "/boom")) {
         return error.Boom;
     }
@@ -211,7 +212,7 @@ fn failForBoom(_: ?*anyopaque, request: *Request, _: std.Io, _: std.mem.Allocato
 //
 // Answers with the query parameter "name", the header "x-thing" and the body.
 //
-fn echoParts(_: ?*anyopaque, request: *Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn echoParts(_: ?*anyopaque, request: *Request, _: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     const name = (try request.queryParameter(allocator, "name")) orelse "none";
     const thing = try allocator.dupe(u8, request.header("x-thing") orelse "none");
     const body = try request.readBody(allocator, 1024);
@@ -224,7 +225,7 @@ fn echoParts(_: ?*anyopaque, request: *Request, _: std.Io, allocator: std.mem.Al
 // Holds the key "call-1", tells the test it has begun, waits for the owner's message for it and answers with it. The context is the
 // address of the test's queue.
 //
-fn holdAndAnswer(context: ?*anyopaque, request: *Request, request_io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn holdAndAnswer(context: ?*anyopaque, request: *Request, request_io: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     try request.hold(request_io, allocator, "call-1");
     postEvent(@intFromPtr(context.?), "begun");
     const message = request.waitForMessage(request_io, allocator, 5000) orelse {
@@ -408,7 +409,7 @@ test "open listens on the loopback address on a port the operating system choose
 //
 // Answers with the value of the environment variable TEST_HTTP_SERVER_VALUE on the connection thread, or "unset".
 //
-fn echoEnvironment(_: ?*anyopaque, request: *Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+fn echoEnvironment(_: ?*anyopaque, request: *Request, _: std.Io, _: ILog, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
     try request.http.respond(node_utils.process_env.getEnv("TEST_HTTP_SERVER_VALUE") orelse "unset", .{
         .keep_alive = false,
     });

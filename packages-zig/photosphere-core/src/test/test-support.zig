@@ -103,11 +103,11 @@ const ConsoleStream = enum { out, err };
 // The tests' on_create: gives the main thread its capture of its console before Photosphere's on_create logs anything, then calls it.
 // Runs on the main thread.
 //
-fn createWithCapture(services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator) anyerror!void {
+fn createWithCapture(services: ziggy.core.HandlerServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, arguments: []const []const u8) anyerror!void {
     main_console_out = std.Io.Writer.Allocating.init(main_console_allocator.allocator());
     main_console_err = std.Io.Writer.Allocating.init(main_console_allocator.allocator());
     utils.console.setCapture(&main_console_out.writer, &main_console_err.writer);
-    try photosphere_app.app.on_create.?(services, timers, io, allocator);
+    try photosphere_app.app.on_create.?(services, timers, io, allocator, arguments);
 }
 
 //
@@ -635,6 +635,29 @@ pub const TestApp = struct {
         const task_id = try std.fmt.allocPrint(allocator, "failing-{s}-{d}", .{ task_type, self.next_request_id });
         defer allocator.free(task_id);
         self.next_request_id += 1;
+        try self.sendAddTask(task_id, task_type, data_json);
+        const failed = try std.fmt.allocPrint(allocator, "\"taskId\":\"{s}\",\"status\":\"failed\"", .{task_id});
+        defer allocator.free(failed);
+        try self.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, failed);
+    }
+
+    //
+    // Queues a task of the type with the data (JSON text), as Ziggy's add-task system message does, and waits for a message to the native
+    // app that contains the expected text, such as the task's outputs in the message that says it has completed.
+    //
+    pub fn queueTaskExpecting(self: *TestApp, task_type: []const u8, data_json: []const u8, expected: []const u8) !void {
+        const task_id = try std.fmt.allocPrint(std.testing.allocator, "{s}-{d}", .{ task_type, self.next_request_id });
+        defer std.testing.allocator.free(task_id);
+        self.next_request_id += 1;
+        try self.sendAddTask(task_id, task_type, data_json);
+        try self.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, expected);
+    }
+
+    //
+    // Sends Ziggy's add-task system message for a task of the id and type with the data (JSON text).
+    //
+    fn sendAddTask(self: *TestApp, task_id: []const u8, task_type: []const u8, data_json: []const u8) !void {
+        const allocator = std.testing.allocator;
         const message = try utils.json.stringify(allocator, .{
             .kind = "system",
             .name = "add-task",
@@ -648,9 +671,6 @@ pub const TestApp = struct {
         });
         defer allocator.free(message);
         self.native_app.sendMessage(std.testing.allocator, message);
-        const failed = try std.fmt.allocPrint(allocator, "\"taskId\":\"{s}\",\"status\":\"failed\"", .{task_id});
-        defer allocator.free(failed);
-        try self.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, failed);
     }
 };
 

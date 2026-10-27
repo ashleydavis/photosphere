@@ -10,7 +10,6 @@ const open_storage = @import("open-storage.zig");
 const tree = @import("tree.zig");
 const media_file_database = @import("media-file-database.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const IStorage = storage_zig.storage.IStorage;
 const IMerkleTree = merkle_tree_zig.merkle_tree.IMerkleTree;
 const SortNode = merkle_tree_zig.merkle_tree.SortNode;
@@ -244,6 +243,7 @@ pub fn evictOriginalsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -256,11 +256,11 @@ pub fn evictOriginalsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const local = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const localRawStorage = local.rawStorage;
 
-    const config = try loadDatabaseConfig(allocator, io, localRawStorage);
+    const config = try loadDatabaseConfig(allocator, io, log, localRawStorage);
     const origin = configOrigin(config) orelse {
         // With nowhere to fetch an evicted original back from, dropping it would lose it.
         return evictResultToJson(allocator, .{
@@ -270,7 +270,7 @@ pub fn evictOriginalsHandler(
         });
     };
 
-    var localMerkleTree = try loadMerkleTree(allocator, io, localStorage) orelse {
+    var localMerkleTree = try loadMerkleTree(allocator, io, log, localStorage) orelse {
         return evictResultToJson(allocator, .{
             .evictedAssetIds = &.{},
             .freedBytes = 0,
@@ -278,8 +278,8 @@ pub fn evictOriginalsHandler(
         });
     };
 
-    const originStorage = (try openStorage(allocator, io, origin, null, null, context.nativeCaller)).storage;
-    const originMerkleTree = try loadMerkleTree(allocator, io, originStorage) orelse {
+    const originStorage = (try openStorage(allocator, io, log, origin, null, null, context.nativeCaller)).storage;
+    const originMerkleTree = try loadMerkleTree(allocator, io, log, originStorage) orelse {
         return evictResultToJson(allocator, .{
             .evictedAssetIds = &.{},
             .freedBytes = 0,
@@ -360,7 +360,7 @@ pub fn evictOriginalsHandler(
             .boolean = true,
         });
         localMerkleTree.databaseMetadata = databaseMetadata;
-        try saveMerkleTree(allocator, io, &localMerkleTree, localStorage);
+        try saveMerkleTree(allocator, io, log, &localMerkleTree, localStorage);
     }
 
     return evictResultToJson(allocator, .{

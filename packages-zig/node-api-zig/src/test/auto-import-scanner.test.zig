@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -83,7 +84,8 @@ const FakeMediaSource = struct {
     //
     // Answers the page scripted for the cursor, or an empty last page.
     //
-    fn listPage(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPage(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = pageSize;
@@ -194,7 +196,7 @@ const Hooks = struct {
     //
     // Recognises what the test asked it to.
     //
-    fn alreadyImportedContentHash(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem) anyerror!?[]const u8 {
+    fn alreadyImportedContentHash(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, _: ILog, item: IMediaItem) anyerror!?[]const u8 {
         _ = allocator;
         _ = io;
         const self: *Hooks = @ptrCast(@alignCast(context.?));
@@ -212,7 +214,7 @@ const Hooks = struct {
     //
     // Records the library.
     //
-    fn onLibraryWalked(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, liveSourceIds: []const []const u8) anyerror!void {
+    fn onLibraryWalked(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, _: ILog, liveSourceIds: []const []const u8) anyerror!void {
         _ = allocator;
         _ = io;
         const self: *Hooks = @ptrCast(@alignCast(context.?));
@@ -222,19 +224,11 @@ const Hooks = struct {
     //
     // Records the progress.
     //
-    fn onProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").timers.Timers, progress: IAutoImportScannerProgress) void {
+    fn onProgress(context: ?*anyopaque, _: std.Io, _: @import("ziggy").timers.Timers, _: ILog, progress: IAutoImportScannerProgress) void {
         const self: *Hooks = @ptrCast(@alignCast(context.?));
         self.progressReports.append(self.allocator, progress.skippedAsAlreadyImported) catch |err| {
             std.debug.panic("The progress report could not be kept: {s}", .{@errorName(err)});
         };
-    }
-
-    //
-    // Quiet.
-    //
-    fn logInfo(context: ?*anyopaque, message: []const u8) void {
-        _ = context;
-        _ = message;
     }
 };
 
@@ -317,10 +311,6 @@ const ScannerTest = struct {
                 .context = &self.hooks,
                 .function = Hooks.onProgress,
             },
-            .logInfo = .{
-                .context = &self.hooks,
-                .function = Hooks.logInfo,
-            },
         };
     }
 
@@ -348,7 +338,7 @@ const Pushed = struct {
     //
     // Records one file.
     //
-    fn visit(context: ?*anyopaque, result: IScannedImportFile) anyerror!void {
+    fn visit(context: ?*anyopaque, _: ILog, result: IScannedImportFile) anyerror!void {
         const self: *Pushed = @ptrCast(@alignCast(context.?));
         var copy = result;
         copy.filePath = try self.allocator.dupe(u8, result.filePath);
@@ -360,7 +350,7 @@ const Pushed = struct {
 //
 // Nothing watching progress here.
 //
-fn ignoreProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
+fn ignoreProgress(context: ?*anyopaque, _: ILog, currentlyScanning: ?[]const u8, state: *const ScannerState) void {
     _ = context;
     _ = currentlyScanning;
     _ = state;
@@ -369,11 +359,11 @@ fn ignoreProgress(context: ?*anyopaque, currentlyScanning: ?[]const u8, state: *
 //
 // Runs a scan to completion and returns the files it pushed.
 //
-fn runScan(allocator: std.mem.Allocator, scanner: *AutoImportScanner) ![]IScannedImportFile {
+fn runScan(log: ILog, allocator: std.mem.Allocator, scanner: *AutoImportScanner) ![]IScannedImportFile {
     var pushed: Pushed = .{
         .allocator = allocator,
     };
-    try scanner.scan(allocator, std.testing.io, test_timers.timers(), .{
+    try scanner.scan(allocator, std.testing.io, log, test_timers.timers(), .{
         .context = &pushed,
         .function = Pushed.visit,
     }, .{
@@ -394,6 +384,7 @@ fn expectStrings(expected: []const []const u8, actual: []const []const u8) !void
 }
 
 test "a single pass pushes the whole library and returns" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -416,13 +407,14 @@ test "a single pass pushes the whole library and returns" {
     });
 
     var scanner = try context.makeScanner(&source);
-    const pushed = try runScan(allocator, &scanner);
+    const pushed = try runScan(log, allocator, &scanner);
 
     try expectStrings(&.{ "one", "two", "three" }, source.exportedIds.items);
     try std.testing.expectEqual(@as(usize, 3), pushed.len);
 }
 
 test "tells the import what each pushed file really is" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -438,7 +430,7 @@ test "tells the import what each pushed file really is" {
     }});
 
     var scanner = try context.makeScanner(&source);
-    const pushed = try runScan(allocator, &scanner);
+    const pushed = try runScan(log, allocator, &scanner);
 
     const identity = pushed[0].cacheIdentity.?;
     try std.testing.expectEqualStrings("one", identity.key);
@@ -447,6 +439,7 @@ test "tells the import what each pushed file really is" {
 }
 
 test "an item already in the database is never opened and never pushed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -463,7 +456,7 @@ test "an item already in the database is never opened and never pushed" {
     context.hooks.recogniseOnly = "already-in";
 
     var scanner = try context.makeScanner(&source);
-    const pushed = try runScan(allocator, &scanner);
+    const pushed = try runScan(log, allocator, &scanner);
 
     try expectStrings(&.{"new-one"}, source.exportedIds.items);
     try std.testing.expectEqual(@as(usize, 1), pushed.len);
@@ -471,6 +464,7 @@ test "an item already in the database is never opened and never pushed" {
 }
 
 test "nothing is opened at all when the whole library is already in the database" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -485,13 +479,14 @@ test "nothing is opened at all when the whole library is already in the database
     context.hooks.recogniseAll = true;
 
     var scanner = try context.makeScanner(&source);
-    const pushed = try runScan(allocator, &scanner);
+    const pushed = try runScan(log, allocator, &scanner);
 
     try std.testing.expectEqual(@as(usize, 0), source.exportedIds.items.len);
     try std.testing.expectEqual(@as(usize, 0), pushed.len);
 }
 
 test "counts what it recognised as already imported, so the progress can say so" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -506,13 +501,14 @@ test "counts what it recognised as already imported, so the progress can say so"
     context.hooks.recogniseAll = true;
 
     var scanner = try context.makeScanner(&source);
-    _ = try runScan(allocator, &scanner);
+    _ = try runScan(log, allocator, &scanner);
 
     const reports = context.hooks.progressReports.items;
     try std.testing.expectEqual(@as(u64, 2), reports[reports.len - 1]);
 }
 
 test "releasing a pushed file releases the copy the source made for it" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -526,13 +522,14 @@ test "releasing a pushed file releases the copy the source made for it" {
     }});
     var scanner = try context.makeScanner(&source);
 
-    const pushed = try runScan(allocator, &scanner);
+    const pushed = try runScan(log, allocator, &scanner);
     try scanner.release(allocator, std.testing.io, pushed[0].filePath);
 
     try expectStrings(&.{"one"}, source.releasedIds.items);
 }
 
 test "releasing the same file twice releases the source item once" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -546,7 +543,7 @@ test "releasing the same file twice releases the source item once" {
     }});
     var scanner = try context.makeScanner(&source);
 
-    const pushed = try runScan(allocator, &scanner);
+    const pushed = try runScan(log, allocator, &scanner);
     try scanner.release(allocator, std.testing.io, pushed[0].filePath);
     try scanner.release(allocator, std.testing.io, pushed[0].filePath);
 
@@ -573,6 +570,7 @@ test "releasing something it never pushed does nothing" {
 }
 
 test "reports the whole library once the run has read all of it" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -595,7 +593,7 @@ test "reports the whole library once the run has read all of it" {
     });
 
     var scanner = try context.makeScanner(&source);
-    _ = try runScan(allocator, &scanner);
+    _ = try runScan(log, allocator, &scanner);
 
     try std.testing.expectEqual(@as(usize, 1), context.hooks.walkedLibraries.items.len);
     const walked = try allocator.dupe([]const u8, context.hooks.walkedLibraries.items[0]);
@@ -604,6 +602,7 @@ test "reports the whole library once the run has read all of it" {
 }
 
 test "a scan returns once the library has run dry, rather than waiting for more" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -619,12 +618,13 @@ test "a scan returns once the library has run dry, rather than waiting for more"
     // Nothing cancels this scan. If it did not end by itself the test would hang here, which is
     // the point: the app is what starts the next run, a short while after this one ends.
     var scanner = try context.makeScanner(&source);
-    _ = try runScan(allocator, &scanner);
+    _ = try runScan(log, allocator, &scanner);
 
     try expectStrings(&.{"one"}, source.exportedIds.items);
 }
 
 test "a photo that arrives after the run has ended is taken in by the next run" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -638,7 +638,7 @@ test "a photo that arrives after the run has ended is taken in by the next run" 
     }});
 
     var scanner = try context.makeScanner(&source);
-    _ = try runScan(allocator, &scanner);
+    _ = try runScan(log, allocator, &scanner);
     try expectStrings(&.{"existing"}, source.exportedIds.items);
 
     // A photo is taken after that run finished. Nothing is watching for it: the next run is what
@@ -652,7 +652,7 @@ test "a photo that arrives after the run has ended is taken in by the next run" 
     }};
 
     var nextRun = try context.makeScanner(&source);
-    _ = try runScan(allocator, &nextRun);
+    _ = try runScan(log, allocator, &nextRun);
 
     var found = false;
     for (source.exportedIds.items) |sourceId| {
@@ -677,7 +677,7 @@ const CAPTURED_AT_MS: i64 = 1718443800000;
 //
 // Runs a scan over one library item captured at CAPTURED_AT_MS (or at the given time) and returns what it pushed.
 //
-fn scanOneLibraryItem(context: *ScannerTest, capturedAtMs: i64) ![]IScannedImportFile {
+fn scanOneLibraryItem(context: *ScannerTest, log: ILog, capturedAtMs: i64) ![]IScannedImportFile {
     const allocator = context.arena.allocator();
     const pages = try allocator.alloc(IScriptedPage, 1);
     const items = try allocator.alloc(IMediaItem, 1);
@@ -692,20 +692,22 @@ fn scanOneLibraryItem(context: *ScannerTest, capturedAtMs: i64) ![]IScannedImpor
     const source = try allocator.create(FakeMediaSource);
     source.* = context.sourceWithPages(pages);
     var scanner = try context.makeScanner(source);
-    return runScan(allocator, &scanner);
+    return runScan(log, allocator, &scanner);
 }
 
 test "carries the library's date, not the copy's" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
 
-    const pushed = try scanOneLibraryItem(&context, CAPTURED_AT_MS);
+    const pushed = try scanOneLibraryItem(&context, log, CAPTURED_AT_MS);
 
     try std.testing.expectEqual(CAPTURED_AT_MS, pushed[0].fileStat.lastModified);
 }
 
 test "is not the moment the copy was made" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
@@ -713,40 +715,43 @@ test "is not the moment the copy was made" {
     // imported, because the copy made during the import is what was measured.
     const startedScanningAtMs = std.Io.Clock.real.now(std.testing.io).toMilliseconds();
 
-    const pushed = try scanOneLibraryItem(&context, CAPTURED_AT_MS);
+    const pushed = try scanOneLibraryItem(&context, log, CAPTURED_AT_MS);
 
     try std.testing.expect(pushed[0].fileStat.lastModified < startedScanningAtMs);
 }
 
 test "carries the library's size, not the copy's" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
     // The fake writes a short string as the copy, nothing like the 1024 bytes the library
     // reports for the item.
-    const pushed = try scanOneLibraryItem(&context, 1);
+    const pushed = try scanOneLibraryItem(&context, log, 1);
 
     try std.testing.expectEqual(@as(u64, 1024), pushed[0].fileStat.length);
 }
 
 test "keeps the content type the scan worked out" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
     // Only the size and the date come from the library. What the file turned out to be is
     // still what reading it said, because that is read from the bytes themselves.
-    const pushed = try scanOneLibraryItem(&context, 1);
+    const pushed = try scanOneLibraryItem(&context, log, 1);
 
     try std.testing.expectEqualStrings("image/jpeg", pushed[0].fileStat.contentType.?);
 }
 
 test "agrees with the cache identity" {
+    const log = utils.mute_log.MuteLog.init();
     var context: ScannerTest = undefined;
     try context.init();
     defer context.deinit();
     // They describe the same photo from the same two values, so a change to one that is not
     // made to the other is the bug that was here.
-    const pushed = try scanOneLibraryItem(&context, CAPTURED_AT_MS);
+    const pushed = try scanOneLibraryItem(&context, log, CAPTURED_AT_MS);
 
     try std.testing.expectEqual(pushed[0].cacheIdentity.?.length, pushed[0].fileStat.length);
     try std.testing.expectEqual(pushed[0].cacheIdentity.?.lastModified, pushed[0].fileStat.lastModified);

@@ -45,6 +45,7 @@ pub fn checkDatabaseExistsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -59,7 +60,7 @@ pub fn checkDatabaseExistsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const exists = try checkDatabaseExists(allocator, io, data.databasePath, context.nativeCaller);
+    const exists = try checkDatabaseExists(allocator, io, log, data.databasePath, context.nativeCaller);
     const result: ICheckDatabaseExistsResult = .{
         .exists = exists,
     };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const api = @import("api-zig");
 const node_utils = @import("node-utils-zig");
 const database_cache_dir = @import("database-cache-dir.zig");
@@ -109,7 +110,7 @@ const SerializeRecord = struct {
 // A failure to save is swallowed on purpose: the photos are already in the database, and losing the
 // note about them must not turn a successful import into a failed one.
 //
-pub fn recordImports(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, newEntries: []const IImportRecordEntry) void {
+pub fn recordImports(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, newEntries: []const IImportRecordEntry) void {
     if (newEntries.len == 0) {
         return;
     }
@@ -119,7 +120,7 @@ pub fn recordImports(allocator: std.mem.Allocator, io: std.Io, databasePath: []c
         .databasePath = databasePath,
         .newEntries = newEntries,
     };
-    _ = swallowError(io, &operation);
+    _ = swallowError(io, log, &operation);
 }
 
 //
@@ -138,7 +139,7 @@ const UpdateImportRecordOperation = struct {
     //
     // Adds the imports to the record on disk.
     //
-    pub fn run(self: *const UpdateImportRecordOperation, io: std.Io) !void {
+    pub fn run(self: *const UpdateImportRecordOperation, io: std.Io, _: ILog) !void {
         const mutator: AddEntriesMutator = .{ .newEntries = self.newEntries };
         const parse: ParseRecord = .{};
         const serialize: SerializeRecord = .{};

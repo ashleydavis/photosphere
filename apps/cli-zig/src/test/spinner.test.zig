@@ -36,8 +36,6 @@ test "uses the animated spinner when a user is watching" {
     const capture = try startCapture(allocator);
     defer utils.console.setCapture(null, null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
 
     const spin = try spinner(allocator, std.testing.io, true);
 
@@ -49,6 +47,7 @@ test "uses the animated spinner when a user is watching" {
 }
 
 test "does not create an animated spinner when non-interactive" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -59,7 +58,7 @@ test "does not create an animated spinner when non-interactive" {
     // is not the terminal's foreground job. With --yes there is nobody watching it anyway.
     const spin = try spinner(allocator, std.testing.io, false);
 
-    try spin.start("Waiting");
+    try spin.start(log, "Waiting");
 
     try std.testing.expect(spin == .plain);
 }
@@ -71,13 +70,12 @@ test "reports the same messages as plain log lines when non-interactive" {
     const capture = try startCapture(allocator);
     defer utils.console.setCapture(null, null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     const spin = try spinner(allocator, std.testing.io, false);
 
-    try spin.start("Waiting for sender");
-    spin.message("Still waiting");
-    try spin.stop("Payload received");
+    try spin.start(log, "Waiting for sender");
+    spin.message(log, "Still waiting");
+    try spin.stop(log, "Payload received");
 
     try std.testing.expect(mock.wasCalledWith(.info, "Waiting for sender"));
     try std.testing.expect(mock.wasCalledWith(.info, "Still waiting"));

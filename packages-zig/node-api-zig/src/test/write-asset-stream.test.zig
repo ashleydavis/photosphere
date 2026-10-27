@@ -6,7 +6,9 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
@@ -41,13 +43,14 @@ const Retrying = struct {
 //
 // Writes four bytes as an asset of the type, from a stream that knows its length.
 //
-fn writeFourBytes(allocator: std.mem.Allocator, io: std.Io, fixture: *DatabaseFixture, assetId: []const u8, assetType: []const u8) !void {
+fn writeFourBytes(allocator: std.mem.Allocator, io: std.Io, log: ILog, fixture: *DatabaseFixture, assetId: []const u8, assetType: []const u8) !void {
     var stream = std.Io.Reader.fixed("abcd");
     const storage = fixture.database.assetStorage;
-    try media_file_database.writeAssetStream(allocator, io, storage, fixture.rawStorage, "session-1", assetId, assetType, "image/jpeg", &stream, 4);
+    try media_file_database.writeAssetStream(allocator, io, log, storage, fixture.rawStorage, "session-1", assetId, assetType, "image/jpeg", &stream, 4);
 }
 
 test "writeAssetStream writes the stream to the correct asset path" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -56,15 +59,15 @@ test "writeAssetStream writes the stream to the correct asset path" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-path");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-path");
+    defer fixture.deinit(io, log);
 
     var spy: sync_test_helpers.SpyStorage = .{
         .allocator = allocator,
         .inner = fixture.database.assetStorage,
     };
     var stream = std.Io.Reader.fixed("abcd");
-    try media_file_database.writeAssetStream(allocator, io, spy.storage(), fixture.rawStorage, "session-1", "t1", "thumb", "image/jpeg", &stream, 4);
+    try media_file_database.writeAssetStream(allocator, io, log, spy.storage(), fixture.rawStorage, "session-1", "t1", "thumb", "image/jpeg", &stream, 4);
 
     try std.testing.expectEqual(@as(usize, 1), spy.writeStreamCalls.items.len);
     try std.testing.expectEqualStrings("thumb/t1", spy.writeStreamCalls.items[0].filePath);
@@ -76,6 +79,7 @@ test "writeAssetStream writes the stream to the correct asset path" {
 }
 
 test "writeAssetStream adds the written file to the merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -84,13 +88,13 @@ test "writeAssetStream adds the written file to the merkle tree" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-tree");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-tree");
+    defer fixture.deinit(io, log);
 
-    try writeFourBytes(allocator, io, &fixture, "t1", "thumb");
+    try writeFourBytes(allocator, io, log, &fixture, "t1", "thumb");
 
     // The README and the new file, with the hash and the length of what was written.
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, fixture.database.assetStorage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, fixture.database.assetStorage)).?;
     try std.testing.expectEqual(@as(u32, 2), filesTree.sort.?.leafCount);
     const item = (try merkle_tree_zig.merkle_tree.getItemInfo(&filesTree, "thumb/t1")).?;
     var expectedHash: [32]u8 = undefined;
@@ -102,12 +106,13 @@ test "writeAssetStream adds the written file to the merkle tree" {
 //
 // The number of files the database says it has imported.
 //
-fn filesImported(allocator: std.mem.Allocator, io: std.Io, fixture: *DatabaseFixture) !u64 {
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, fixture.database.assetStorage)).?;
+fn filesImported(allocator: std.mem.Allocator, io: std.Io, log: ILog, fixture: *DatabaseFixture) !u64 {
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, fixture.database.assetStorage)).?;
     return media_file_database.getFilesImported(filesTree.databaseMetadata);
 }
 
 test "writeAssetStream increments filesImported when assetType is asset" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -116,15 +121,16 @@ test "writeAssetStream increments filesImported when assetType is asset" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-asset");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-asset");
+    defer fixture.deinit(io, log);
 
-    try writeFourBytes(allocator, io, &fixture, "a1", "asset");
+    try writeFourBytes(allocator, io, log, &fixture, "a1", "asset");
 
-    try std.testing.expectEqual(@as(u64, 1), try filesImported(allocator, io, &fixture));
+    try std.testing.expectEqual(@as(u64, 1), try filesImported(allocator, io, log, &fixture));
 }
 
 test "writeAssetStream does not increment filesImported when assetType is thumb" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -133,15 +139,16 @@ test "writeAssetStream does not increment filesImported when assetType is thumb"
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-thumb");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-thumb");
+    defer fixture.deinit(io, log);
 
-    try writeFourBytes(allocator, io, &fixture, "t1", "thumb");
+    try writeFourBytes(allocator, io, log, &fixture, "t1", "thumb");
 
-    try std.testing.expectEqual(@as(u64, 0), try filesImported(allocator, io, &fixture));
+    try std.testing.expectEqual(@as(u64, 0), try filesImported(allocator, io, log, &fixture));
 }
 
 test "writeAssetStream does not increment filesImported when assetType is display" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -150,15 +157,16 @@ test "writeAssetStream does not increment filesImported when assetType is displa
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-display");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-display");
+    defer fixture.deinit(io, log);
 
-    try writeFourBytes(allocator, io, &fixture, "d1", "display");
+    try writeFourBytes(allocator, io, log, &fixture, "d1", "display");
 
-    try std.testing.expectEqual(@as(u64, 0), try filesImported(allocator, io, &fixture));
+    try std.testing.expectEqual(@as(u64, 0), try filesImported(allocator, io, log, &fixture));
 }
 
 test "writeAssetStream stamps the database as modified after writing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -167,16 +175,17 @@ test "writeAssetStream stamps the database as modified after writing" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-stamp");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-stamp");
+    defer fixture.deinit(io, log);
 
-    try writeFourBytes(allocator, io, &fixture, "t1", "thumb");
+    try writeFourBytes(allocator, io, log, &fixture, "t1", "thumb");
 
-    const state = (try @import("api-zig").database_state.loadDatabaseState(allocator, io, fixture.rawStorage)).?;
+    const state = (try @import("api-zig").database_state.loadDatabaseState(allocator, io, log, fixture.rawStorage)).?;
     try std.testing.expect(state.lastModifiedAt != null);
 }
 
 test "writeAssetStream throws when the write lock cannot be acquired" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -185,19 +194,20 @@ test "writeAssetStream throws when the write lock cannot be acquired" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-locked");
-    defer fixture.deinit(io);
-    try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "another-session"));
+    try fixture.init(allocator, io, log, "write-asset-stream-locked");
+    defer fixture.deinit(io, log);
+    try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, log, ".db/write.lock", "another-session"));
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, writeFourBytes(allocator, io, &fixture, "t1", "thumb"));
+    try std.testing.expectError(error.Thrown, writeFourBytes(allocator, io, log, &fixture, "t1", "thumb"));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ fixture.dir, "thumb", "t1" })));
 }
 
 test "writeAssetStream releases the write lock after writing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -206,10 +216,10 @@ test "writeAssetStream releases the write lock after writing" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-release");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-release");
+    defer fixture.deinit(io, log);
 
-    try writeFourBytes(allocator, io, &fixture, "t1", "thumb");
+    try writeFourBytes(allocator, io, log, &fixture, "t1", "thumb");
 
     try std.testing.expect((try fixture.rawStorage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }
@@ -217,13 +227,14 @@ test "writeAssetStream releases the write lock after writing" {
 //
 // Writes an empty stream as an asset of the type with the announced length, capturing what the log says, and returns the error.
 //
-fn writeEmptyStream(allocator: std.mem.Allocator, io: std.Io, fixture: *DatabaseFixture, contentLength: ?u64) !void {
+fn writeEmptyStream(allocator: std.mem.Allocator, io: std.Io, log: ILog, fixture: *DatabaseFixture, contentLength: ?u64) !void {
     var stream = std.Io.Reader.fixed("");
     const storage = fixture.database.assetStorage;
-    try media_file_database.writeAssetStream(allocator, io, storage, fixture.rawStorage, "session-1", "t1", "thumb", null, &stream, contentLength);
+    try media_file_database.writeAssetStream(allocator, io, log, storage, fixture.rawStorage, "session-1", "t1", "thumb", null, &stream, contentLength);
 }
 
 test "writeAssetStream releases the write lock even when the write fails" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -232,19 +243,20 @@ test "writeAssetStream releases the write lock even when the write fails" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-fail-release");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-fail-release");
+    defer fixture.deinit(io, log);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, &fixture, 1));
+    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, log, &fixture, 1));
     try std.testing.expectEqualStrings("Asset data is empty", utils.errors.errorMessage(error.Thrown));
 
     try std.testing.expect((try fixture.rawStorage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }
 
 test "writeAssetStream deletes the partially-written file when the write fails" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -253,18 +265,19 @@ test "writeAssetStream deletes the partially-written file when the write fails" 
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-fail-delete");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-fail-delete");
+    defer fixture.deinit(io, log);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, &fixture, 1));
+    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, log, &fixture, 1));
 
     try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ fixture.dir, "thumb", "t1" })));
 }
 
 test "writeAssetStream rejects when announced content length is zero" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -273,17 +286,18 @@ test "writeAssetStream rejects when announced content length is zero" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-zero-announced");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-zero-announced");
+    defer fixture.deinit(io, log);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, &fixture, 0));
+    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, log, &fixture, 0));
     try std.testing.expectEqualStrings("Asset data is empty", utils.errors.errorMessage(error.Thrown));
 }
 
 test "writeAssetStream rejects when written file has zero length and no length was announced" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -292,19 +306,20 @@ test "writeAssetStream rejects when written file has zero length and no length w
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-stream-zero-unannounced");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-stream-zero-unannounced");
+    defer fixture.deinit(io, log);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, &fixture, null));
+    try std.testing.expectError(error.Thrown, writeEmptyStream(allocator, io, log, &fixture, null));
     try std.testing.expectEqualStrings("Asset data is empty", utils.errors.errorMessage(error.Thrown));
 }
 
 // The tests below cover writeAsset and streamAsset.
 
 test "writeAsset writes the buffer, adds it to the merkle tree and counts an asset as imported" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -313,20 +328,21 @@ test "writeAsset writes the buffer, adds it to the merkle tree and counts an ass
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-buffer");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "write-asset-buffer");
+    defer fixture.deinit(io, log);
 
-    try media_file_database.writeAsset(allocator, io, fixture.database.assetStorage, fixture.rawStorage, "session-1", "a1", "asset", "image/jpeg", "abcd");
+    try media_file_database.writeAsset(allocator, io, log, fixture.database.assetStorage, fixture.rawStorage, "session-1", "a1", "asset", "image/jpeg", "abcd");
 
     const written = try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "asset", "a1" }));
     try std.testing.expectEqualStrings("abcd", written);
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, fixture.database.assetStorage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, fixture.database.assetStorage)).?;
     try std.testing.expect((try merkle_tree_zig.merkle_tree.getItemInfo(&filesTree, "asset/a1")) != null);
     try std.testing.expectEqual(@as(u64, 1), media_file_database.getFilesImported(filesTree.databaseMetadata));
     try std.testing.expect((try fixture.rawStorage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }
 
 test "writeAsset throws and releases the lock when the lock is held by another session" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -335,18 +351,24 @@ test "writeAsset throws and releases the lock when the lock is held by another s
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "write-asset-buffer-locked");
-    defer fixture.deinit(io);
-    try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "another-session"));
+    try fixture.init(allocator, io, log, "write-asset-buffer-locked");
+    defer fixture.deinit(io, log);
+    try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, log, ".db/write.lock", "another-session"));
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, media_file_database.writeAsset(allocator, io, fixture.database.assetStorage, fixture.rawStorage, "session-1", "a1", "asset", null, "abcd"));
+    try std.testing.expectError(error.Thrown, media_file_database.writeAsset(allocator, io, log, fixture.database.assetStorage, fixture.rawStorage, "session-1", "a1", "asset", null, "abcd"));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", utils.errors.errorMessage(error.Thrown));
 }
 
 test "writeAsset fails for a directory that holds no database, and leaves no file behind" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -357,19 +379,17 @@ test "writeAsset fails for a directory that holds no database, and leaves no fil
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "write-asset-no-database");
     defer temp_dirs.removeTempDir(io, emptyDir);
     const storage = try test_files.directoryStorage(allocator, io, emptyDir);
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
 
-    try std.testing.expectError(error.Thrown, media_file_database.writeAsset(allocator, io, storage, storage, "session-1", "a1", "asset", null, "abcd"));
+    try std.testing.expectError(error.Thrown, media_file_database.writeAsset(allocator, io, memory.log, storage, storage, "session-1", "a1", "asset", null, "abcd"));
 
     try std.testing.expectEqualStrings("Failed to load media file database.", utils.errors.errorMessage(error.Thrown));
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to add asset \"asset/a1\" from buffer") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(),"Failed to add asset \"asset/a1\" from buffer") != null);
     try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ emptyDir, "asset", "a1" })));
     try std.testing.expect((try storage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }
 
 test "streamAsset reads back the bytes of an asset by type and id" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -378,11 +398,11 @@ test "streamAsset reads back the bytes of an asset by type and id" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "stream-asset");
-    defer fixture.deinit(io);
-    try writeFourBytes(allocator, io, &fixture, "t1", "thumb");
+    try fixture.init(allocator, io, log, "stream-asset");
+    defer fixture.deinit(io, log);
+    try writeFourBytes(allocator, io, log, &fixture, "t1", "thumb");
 
-    const stream = try media_file_database.streamAsset(allocator, io, fixture.database.assetStorage, "t1", "thumb");
+    const stream = try media_file_database.streamAsset(allocator, io, log, fixture.database.assetStorage, "t1", "thumb");
     defer stream.destroy(io);
 
     const bytes = try stream.reader().allocRemaining(allocator, .unlimited);
@@ -390,6 +410,7 @@ test "streamAsset reads back the bytes of an asset by type and id" {
 }
 
 test "streamAsset fails for an asset that is not there" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -398,8 +419,8 @@ test "streamAsset fails for an asset that is not there" {
     defer retrying.deinit();
     const io = retrying.virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "stream-asset-missing");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "stream-asset-missing");
+    defer fixture.deinit(io, log);
 
-    try std.testing.expect(std.meta.isError(media_file_database.streamAsset(allocator, io, fixture.database.assetStorage, "missing", "thumb")));
+    try std.testing.expect(std.meta.isError(media_file_database.streamAsset(allocator, io, log, fixture.database.assetStorage, "missing", "thumb")));
 }

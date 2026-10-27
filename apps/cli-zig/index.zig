@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
@@ -12,7 +13,7 @@ pub const picocolors = @import("src/lib/picocolors.zig");
 pub const format = @import("src/lib/format.zig");
 pub const terminal_utils = @import("src/lib/terminal-utils.zig");
 pub const console_output = @import("src/lib/console-output.zig");
-pub const log = @import("src/lib/log.zig");
+pub const log_setup = @import("src/lib/log.zig");
 pub const file_logger = @import("src/lib/file-logger.zig");
 pub const process_argv = @import("src/lib/process-argv.zig");
 pub const tty = @import("src/lib/tty.zig");
@@ -2530,10 +2531,24 @@ fn isQuietCommanderError(code: []const u8) bool {
 }
 
 //
+// Configures the log once, from the --verbose and --tools of the command the line names, as initContext does in the TypeScript CLI,
+// and makes it main's log too, so main reports an error to the same log. Called once, by the command, just before initContext.
+// Commands without a context keep the console log, as in the TypeScript CLI.
+//
+fn commandLog(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, main_log: *ILog, mediaTools: *media_tools.MediaTools, options: IBaseCommandOptions) !ILog {
+    const log = try log_setup.configureLog(allocator, io, consoleLog, mediaTools.runner(), .{
+        .verbose = options.verbose,
+        .tools = options.tools,
+    });
+    main_log.* = log;
+    return log;
+}
+
+//
 // Runs the command line: parses it, then runs the command. Commands exit the process themselves.
 // mediaTools is the ImageMagick and FFmpeg built into the program, which every command that runs them uses.
 //
-fn run(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaTools, userArgs: []const []const u8) !u8 {
+fn run(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, main_log: *utils.log.ILog, mediaTools: *media_tools.MediaTools, userArgs: []const []const u8) !u8 {
     var state: IProgramState = .{
         .allocator = allocator,
     };
@@ -2545,13 +2560,13 @@ fn run(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaT
             // these codes, exits with 0 when there are no arguments, and rethrows any other error (like an
             // option missing its value) to main().catch.
             if (isHelpCode(failure.code)) {
-                exit(io, 0);
+                exit(io, consoleLog, 0);
             }
             if (isQuietCommanderError(failure.code)) {
-                exit(io, 1);
+                exit(io, consoleLog, 1);
             }
             if (userArgs.len == 0) {
-                exit(io, 0);
+                exit(io, consoleLog, 0);
             }
             // The error rethrown is commander's CommanderError, which shows under that name.
             utils.errors.recordError("CommanderError", "{s}", .{failure.message});
@@ -2560,351 +2575,384 @@ fn run(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaT
         .add => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try addCommand(allocator, io, context, parsed.paths, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try addCommand(allocator, io, log, context, parsed.paths, &options);
         },
         .check => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try checkCommand(allocator, io, context, parsed.paths, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try checkCommand(allocator, io, log, context, parsed.paths, &options);
         },
         .repair => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try repairCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try repairCommand(allocator, io, log, context, &options);
         },
         .findOrphans => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try findOrphansCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try findOrphansCommand(allocator, io, log, context, &options);
         },
         .sync => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try syncCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try syncCommand(allocator, io, log, context, &options);
         },
         .consolidate => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try consolidateCommand(allocator, io, context, parsed.remote, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try consolidateCommand(allocator, io, log, context, parsed.remote, &options);
         },
         .encrypt => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try encryptCommand(allocator, io, context, &options);
+            // The context is not used, but making it starts the S3 library and the sockets the command needs.
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            _ = try initContext(allocator, io, log, mediaTools, options.base);
+            try encryptCommand(allocator, io, log, &options);
         },
         .bug => |parsed| {
             // The preAction hook skips the notifications for bug.
             const options = parsed;
-            try bugReportCommand(allocator, io, mediaTools.runner(), &options);
+            try bugReportCommand(allocator, io, consoleLog, mediaTools.runner(), &options);
         },
         .news => {
             // The preAction hook skips the notifications for news.
-            try newsCommand(allocator, io);
+            try newsCommand(allocator, io, consoleLog);
         },
         .decrypt => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try decryptCommand(allocator, io, context, &options);
+            // The context is not used, but making it starts the S3 library and the sockets the command needs.
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            _ = try initContext(allocator, io, log, mediaTools, options.base);
+            try decryptCommand(allocator, io, log, &options);
         },
         .debugMerkleTree => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try debugMerkleTreeCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try debugMerkleTreeCommand(allocator, io, log, context, &options);
         },
         .debugFindCollisions => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try debugFindCollisionsCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try debugFindCollisionsCommand(allocator, io, log, context, &options);
         },
         .debugFindDuplicates => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try debugFindDuplicatesCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try debugFindDuplicatesCommand(allocator, io, log, context, &options);
         },
         .debugRemoveDuplicates => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try debugRemoveDuplicatesCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try debugRemoveDuplicatesCommand(allocator, io, log, context, &options);
         },
         .debugBuildSortIndex => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options);
-            try debugBuildSortIndexCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options);
+            const context = try initContext(allocator, io, log, mediaTools, options);
+            try debugBuildSortIndexCommand(allocator, io, log, context, &options);
         },
         .debugBuildFilesTree => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options);
-            try debugBuildFilesTreeCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options);
+            const context = try initContext(allocator, io, log, mediaTools, options);
+            try debugBuildFilesTreeCommand(allocator, io, log, context, &options);
         },
         .hash => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hashCommand(allocator, io, parsed.filePath, &parsed.options);
+            try hashCommand(allocator, io, consoleLog, parsed.filePath, &parsed.options);
         },
         .tools => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try toolsCommand(allocator, io, mediaTools.runner(), &parsed);
+            try toolsCommand(allocator, io, consoleLog, mediaTools.runner(), &parsed);
         },
         .hashCacheShow => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try hashCacheCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try hashCacheCommand(allocator, io, log, context, &options);
         },
         .hashCacheClear => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try clearCacheCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try clearCacheCommand(allocator, io, log, context, &options);
         },
         .hashCacheHashFile => |file| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashFileCommand(allocator, io, file);
+            try hash_cache_tools.hashFileCommand(allocator, io, consoleLog, file);
         },
         .hashCacheAdd => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheAddCommand(allocator, io, parsed.file, parsed.options);
+            try hash_cache_tools.hashCacheAddCommand(allocator, io, consoleLog, parsed.file, parsed.options);
         },
         .hashCacheSet => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheSetCommand(allocator, io, parsed.key, parsed.hash, parsed.length, parsed.options);
+            try hash_cache_tools.hashCacheSetCommand(allocator, io, consoleLog, parsed.key, parsed.hash, parsed.length, parsed.options);
         },
         .hashCacheSetSource => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheSetSourceCommand(allocator, io, parsed.key, parsed.hash, parsed.length, parsed.options);
+            try hash_cache_tools.hashCacheSetSourceCommand(allocator, io, consoleLog, parsed.key, parsed.hash, parsed.length, parsed.options);
         },
         .hashCacheGet => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheGetCommand(allocator, io, parsed.key, parsed.options);
+            try hash_cache_tools.hashCacheGetCommand(allocator, io, consoleLog, parsed.key, parsed.options);
         },
         .hashCacheGetAssetId => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheGetAssetIdCommand(allocator, io, parsed.key, parsed.options);
+            try hash_cache_tools.hashCacheGetAssetIdCommand(allocator, io, consoleLog, parsed.key, parsed.options);
         },
         .hashCacheRemove => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheRemoveCommand(allocator, io, parsed.key, parsed.options);
+            try hash_cache_tools.hashCacheRemoveCommand(allocator, io, consoleLog, parsed.key, parsed.options);
         },
         .hashCacheList => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheListCommand(allocator, io, parsed);
+            try hash_cache_tools.hashCacheListCommand(allocator, io, consoleLog, parsed);
         },
         .hashCacheCount => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheCountCommand(allocator, io, parsed);
+            try hash_cache_tools.hashCacheCountCommand(allocator, io, consoleLog, parsed);
         },
         .hashCacheDir => |parsed| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try hash_cache_tools.hashCacheDirCommand(allocator, io, parsed);
+            try hash_cache_tools.hashCacheDirCommand(allocator, io, consoleLog, parsed);
         },
         .upgrade => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try upgradeCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try upgradeCommand(allocator, io, log, context, &options);
         },
         .removeOrphans => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try removeOrphansCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try removeOrphansCommand(allocator, io, log, context, &options);
         },
         .remove => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try removeCommand(allocator, io, context, parsed.assetId, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try removeCommand(allocator, io, log, context, parsed.assetId, &options);
         },
         .compare => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try compareCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try compareCommand(allocator, io, log, context, &options);
         },
         .@"export" => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try exportCommand(allocator, io, context, parsed.assetId, parsed.outputPath, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try exportCommand(allocator, io, log, context, parsed.assetId, parsed.outputPath, &options);
         },
         .info => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try infoCommand(allocator, io, context, parsed.inputs, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try infoCommand(allocator, io, log, context, parsed.inputs, &options);
         },
         .replicate => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try replicateCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try replicateCommand(allocator, io, log, context, &options);
         },
         .list => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try listCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try listCommand(allocator, io, log, context, &options);
         },
         .origin => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try originCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try originCommand(allocator, io, log, context, &options);
         },
         .setOrigin => |parsed| {
             var options = parsed.options;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try setOriginCommand(allocator, io, context, &options, parsed.path);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try setOriginCommand(allocator, io, log, context, &options, parsed.path);
         },
         .rootHash => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try rootHashCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try rootHashCommand(allocator, io, log, context, &options);
         },
         .databaseId => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try databaseIdCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try databaseIdCommand(allocator, io, log, context, &options);
         },
         .summary => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try summaryCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try summaryCommand(allocator, io, log, context, &options);
         },
         .verify => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try verifyCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try verifyCommand(allocator, io, log, context, &options);
         },
         .init => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try initCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try initCommand(allocator, io, log, context, &options);
         },
         .version => {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try versionCommand(allocator, io, mediaTools.runner());
+            try versionCommand(allocator, io, consoleLog, mediaTools.runner());
         },
         .versionOption => {
             console.log(config.version);
-            exit(io, 0);
+            exit(io, consoleLog, 0);
         },
         .examples => {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try examplesCommand(allocator);
+            try examplesCommand(consoleLog, allocator);
         },
         .help => |commandName| {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
             // The help ends the parse: the program exits with 0 for the help of the program and the commands, and
             // the secrets and dbs groups exit themselves.
@@ -2912,135 +2960,136 @@ fn run(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaT
             if (helpError != error.CommanderError and helpError != error.Exit) {
                 return helpError;
             }
-            exit(io, program.getCommanderError().?.exitCode);
+            exit(io, consoleLog, program.getCommanderError().?.exitCode);
         },
         .secretsAdd => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsAdd(allocator, io, &options);
+            try secrets.secretsAdd(allocator, io, consoleLog, &options);
         },
         .secretsList => {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsList(allocator, io);
+            try secrets.secretsList(allocator, io, consoleLog);
         },
         .secretsView => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsView(allocator, io, &options);
+            try secrets.secretsView(allocator, io, consoleLog, &options);
         },
         .secretsEdit => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsEdit(allocator, io, &options);
+            try secrets.secretsEdit(allocator, io, consoleLog, &options);
         },
         .secretsRemove => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsRemove(allocator, io, &options);
+            try secrets.secretsRemove(allocator, io, consoleLog, &options);
         },
         .secretsClear => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsClear(allocator, io, &options);
+            try secrets.secretsClear(allocator, io, consoleLog, &options);
         },
         .secretsImport => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsImport(allocator, io, &options);
+            try secrets.secretsImport(allocator, io, consoleLog, &options);
         },
         .secretsSend => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsSend(allocator, io, &options);
+            try secrets.secretsSend(allocator, io, consoleLog, &options);
         },
         .secretsReceive => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try secrets.secretsReceive(allocator, io, &options);
+            try secrets.secretsReceive(allocator, io, consoleLog, &options);
         },
         .dbsList => {
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsList(allocator, io);
+            try dbs.dbsList(allocator, io, consoleLog);
         },
         .dbsAdd => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsAdd(allocator, io, &options);
+            try dbs.dbsAdd(allocator, io, consoleLog, &options);
         },
         .dbsView => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsView(allocator, io, &options);
+            try dbs.dbsView(allocator, io, consoleLog, &options);
         },
         .dbsEdit => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsEdit(allocator, io, &options);
+            try dbs.dbsEdit(allocator, io, consoleLog, &options);
         },
         .dbsRemove => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsRemove(allocator, io, &options);
+            try dbs.dbsRemove(allocator, io, consoleLog, &options);
         },
         .dbsClear => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsClear(allocator, io, &options);
+            try dbs.dbsClear(allocator, io, consoleLog, &options);
         },
         .dbsSend => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsSend(allocator, io, &options);
+            try dbs.dbsSend(allocator, io, consoleLog, &options);
         },
         .dbsReceive => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            try dbs.dbsReceive(allocator, io, &options);
+            try dbs.dbsReceive(allocator, io, consoleLog, &options);
         },
         .mcp => |parsed| {
             var options = parsed;
             if (state.notificationsQuiet) |quiet| {
-                try print_notifications.printNotifications(allocator, io, quiet);
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
             }
-            const context = try initContext(allocator, io, mediaTools, options.base);
-            try mcpCommand(allocator, io, context, &options);
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try mcpCommand(allocator, io, consoleLog, context, &options);
         },
         .processExit => |exitCode| {
-            exit(io, exitCode);
+            exit(io, consoleLog, exitCode);
         },
     }
     return 0;
@@ -3049,20 +3098,20 @@ fn run(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaT
 //
 // Handles errors in a consistent way.
 //
-pub fn handleError(allocator: std.mem.Allocator, err: anyerror, errorType: ?[]const u8) void {
+pub fn handleError(allocator: std.mem.Allocator, log: utils.log.ILog, err: anyerror, errorType: ?[]const u8) void {
     if (FatalError.isInstance(err)) {
         const red = pc.red(allocator, utils.errors.errorMessage(err)) catch utils.errors.errorMessage(err);
         const message = std.fmt.allocPrint(allocator, "\n\n{s}", .{red}) catch red;
-        utils.log.log.@"error"(message);
+        log.@"error"(message);
         return;
     }
 
     if (errorType) |kind| {
         const message = std.fmt.allocPrint(allocator, "An {s} error occurred", .{kind}) catch "An error occurred";
-        utils.log.log.exception(message, err);
+        log.exception(message, err);
     }
     else {
-        utils.log.log.exception("An unknown error occurred", err);
+        log.exception("An unknown error occurred", err);
     }
 
     console.log("");
@@ -3090,9 +3139,11 @@ pub fn main(init: std.process.Init) !void {
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
-    const exitCode = run(allocator, io, &mediaTools, process_argv.userArgs()) catch |err| {
-        handleError(allocator, err, null);
-        exit(io, 1);
+    // The log main reports an error to: the console log, until a command configures the log (see commandLog).
+    var log = utils.log.ConsoleLog.init();
+    const exitCode = run(allocator, io, log, &log, &mediaTools, process_argv.userArgs()) catch |err| {
+        handleError(allocator, log, err, null);
+        exit(io, log, 1);
     };
     std.process.exit(exitCode);
 }

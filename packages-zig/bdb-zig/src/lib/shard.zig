@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
@@ -182,8 +183,8 @@ pub const BsonShard = struct {
     //
     // Adds a record to this shard's in-memory map (keyed by normalized id).
     //
-    pub fn setRecord(self: *BsonShard, io: std.Io, recordId: []const u8, newRecord: IInternalRecord) !void {
-        try self.load(io); // Lazily load the shard.
+    pub fn setRecord(self: *BsonShard, io: std.Io, log: ILog, recordId: []const u8, newRecord: IInternalRecord) !void {
+        try self.load(io, log); // Lazily load the shard.
 
         const key = try getRecordKey(self.allocator, recordId);
 
@@ -196,7 +197,7 @@ pub const BsonShard = struct {
         // Update the shard's merkle tree.
         //
         const merkleRef = try self.merkleTree();
-        try merkleRef.upsert(io, try merkle_tree.hashRecord(self.allocator, io, recordId, newRecord.fields));
+        try merkleRef.upsert(io, log, try merkle_tree.hashRecord(self.allocator, io, recordId, newRecord.fields));
 
         self.markDirty();
     }
@@ -204,8 +205,8 @@ pub const BsonShard = struct {
     //
     // Gets a record by logical id from this shard's map.
     //
-    pub fn record(self: *BsonShard, io: std.Io, recordId: []const u8) !?IInternalRecord {
-        try self.load(io); // Lazily load the shard.
+    pub fn record(self: *BsonShard, io: std.Io, log: ILog, recordId: []const u8) !?IInternalRecord {
+        try self.load(io, log); // Lazily load the shard.
 
         if (self._records.?.count() == 0) {
             // No records.
@@ -219,16 +220,16 @@ pub const BsonShard = struct {
     //
     // Get the map of record it to records.
     //
-    pub fn records(self: *BsonShard, io: std.Io) !*RecordMap {
-        try self.load(io); // Lazily load the shard.
+    pub fn records(self: *BsonShard, io: std.Io, log: ILog) !*RecordMap {
+        try self.load(io, log); // Lazily load the shard.
         return &self._records.?;
     }
 
     //
     // Deletes a record by logical id from this shard's map.
     //
-    pub fn deleteRecord(self: *BsonShard, io: std.Io, recordId: []const u8) !void {
-        try self.load(io); // Lazily load the shard.
+    pub fn deleteRecord(self: *BsonShard, io: std.Io, log: ILog, recordId: []const u8) !void {
+        try self.load(io, log); // Lazily load the shard.
 
         if (self._records.?.count() == 0) {
             // No record to delete.
@@ -246,7 +247,7 @@ pub const BsonShard = struct {
         // Update the shard merkle tree.
         //
         const merkleRef = try self.merkleTree();
-        try merkleRef.remove(io, recordId);
+        try merkleRef.remove(io, log, recordId);
         self.markDirty();
     }
 
@@ -265,17 +266,17 @@ pub const BsonShard = struct {
     //
     // The merkle ref loader.
     //
-    fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree {
+    fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog) anyerror!?IMerkleTree {
         const self: *BsonShard = @ptrCast(@alignCast(context));
-        return try merkle_tree.loadShardMerkleTree(allocator, io, self.storage, self.bsonDbPath, self.collectionName, self.shardId);
+        return try merkle_tree.loadShardMerkleTree(allocator, io, log, self.storage, self.bsonDbPath, self.collectionName, self.shardId);
     }
 
     //
     // The merkle ref saver.
     //
-    fn merkleSaver(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, tree: *IMerkleTree) anyerror!void {
+    fn merkleSaver(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, tree: *IMerkleTree) anyerror!void {
         const self: *BsonShard = @ptrCast(@alignCast(context));
-        return merkle_tree.saveShardMerkleTree(allocator, io, self.storage, self.bsonDbPath, self.collectionName, self.shardId, tree);
+        return merkle_tree.saveShardMerkleTree(allocator, io, log, self.storage, self.bsonDbPath, self.collectionName, self.shardId, tree);
     }
 
     //
@@ -297,7 +298,7 @@ pub const BsonShard = struct {
     //
     // Persists dirty shard data (BSON and merkle tree) to storage; no-op when not dirty.
     //
-    pub fn commit(self: *BsonShard, io: std.Io) !void {
+    pub fn commit(self: *BsonShard, io: std.Io, log: ILog) !void {
         if (!self._dirty) {
             return;
         }
@@ -309,11 +310,11 @@ pub const BsonShard = struct {
             }
         }
         else {
-            try self.writeBsonFile(io, shardFilePath);
+            try self.writeBsonFile(io, log, shardFilePath);
         }
 
         const merkleRef = try self.merkleTree();
-        try merkleRef.commit(io);
+        try merkleRef.commit(io, log);
 
         self.markClean();
     }
@@ -370,10 +371,11 @@ pub const BsonShard = struct {
     //
     // Writes the shard BSON blob to storage.
     //
-    fn writeBsonFile(self: *BsonShard, io: std.Io, filePath: []const u8) !void {
+    fn writeBsonFile(self: *BsonShard, io: std.Io, log: ILog, filePath: []const u8) !void {
         try serialization.save(
             self.allocator,
             io,
+            log,
             self.storage,
             filePath,
             self,
@@ -487,11 +489,12 @@ pub const BsonShard = struct {
     // Supports version 1 and 2.
     // Returns records in internal format.
     //
-    fn loadRecords(self: *BsonShard, io: std.Io, shardFilePath: []const u8) ![]IInternalRecord {
+    fn loadRecords(self: *BsonShard, io: std.Io, log: ILog, shardFilePath: []const u8) ![]IInternalRecord {
         const loadedRecords = try serialization.load(
             []IInternalRecord,
             self.allocator,
             io,
+            log,
             self.storage,
             shardFilePath,
             "SHAR",
@@ -506,13 +509,13 @@ pub const BsonShard = struct {
     //
     // Loads records from a shard file into this shard's map (replaces prior contents).
     //
-    pub fn load(self: *BsonShard, io: std.Io) !void {
+    pub fn load(self: *BsonShard, io: std.Io, log: ILog) !void {
         if (self._records != null) {
             // Already loaded.
             return;
         }
         const shardFilePath = try pathJoin(self.allocator, &.{ self.bsonDbPath, "collections", self.collectionName, "shards", self.shardId });
-        const loaded = try self.loadRecords(io, shardFilePath);
+        const loaded = try self.loadRecords(io, log, shardFilePath);
         var recordMap: RecordMap = .empty;
         for (loaded) |loadedRecord| {
             const key = try getRecordKey(self.allocator, loadedRecord._id);

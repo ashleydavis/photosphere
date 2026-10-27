@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const errors = utils.errors;
 const ziggy_exec = @import("ziggy").task_queue.utils.exec;
@@ -24,20 +25,19 @@ pub const IValidate = ziggy_exec.IValidate;
 // starts ImageMagick, ffmpeg or ffprobe goes to the runner in tools when there is one, and null means every command is started as a
 // program.
 //
-pub fn exec(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_tools.InProcessRunner, command: []const u8) !ExecResult {
-    if (try in_process_tools.tryRun(allocator, io, tools, command)) |result| {
+pub fn exec(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: ?in_process_tools.InProcessRunner, command: []const u8) !ExecResult {
+    if (try in_process_tools.tryRun(allocator, io, log, tools, command)) |result| {
         return result;
     }
     return try ziggy_exec.exec(allocator, io, command);
 }
 
 //
-// Runs the command and adds logging for the tool used.
+// Runs the command and logs it, its failure and what the tool wrote to the log given.
 //
-pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_tools.InProcessRunner, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
-    const log = &utils.log.log;
+pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, log: utils.log.ILog, tools: ?in_process_tools.InProcessRunner, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
     log.verbose(try std.fmt.allocPrint(allocator, "Executing {s} with command: \"{s}\"", .{ tool, command }));
-    return execLoggedInner(allocator, io, tools, tool, command, validate) catch |err| {
+    return execLoggedInner(allocator, io, log, tools, tool, command, validate) catch |err| {
         const msg = try std.fmt.allocPrint(allocator, "Failed to execute command: {s}", .{command});
         log.exception(msg, err);
         return errors.throwError("{s}", .{msg});
@@ -47,9 +47,8 @@ pub fn execLogged(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_t
 //
 // The body of the try block of execLogged.
 //
-fn execLoggedInner(allocator: std.mem.Allocator, io: std.Io, tools: ?in_process_tools.InProcessRunner, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
-    const log = &utils.log.log;
-    const result = try exec(allocator, io, tools, command);
+fn execLoggedInner(allocator: std.mem.Allocator, io: std.Io, log: utils.log.ILog, tools: ?in_process_tools.InProcessRunner, tool: []const u8, command: []const u8, validate: ?IValidate) !ExecResult {
+    const result = try exec(allocator, io, log, tools, command);
     log.tool(tool, .{ .stdout = result.stdout, .stderr = result.stderr });
     if (validate) |check| {
         const validationFailedReason = try check.function(check.context, allocator, io);

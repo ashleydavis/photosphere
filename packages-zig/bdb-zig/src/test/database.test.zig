@@ -142,34 +142,37 @@ test "should return empty array when no collections exist" {
 }
 
 test "commit should be a no-op when not dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     const database = try newDatabase(arena.allocator(), &storage);
-    try database.commit(io);
+    try database.commit(io, log);
     try std.testing.expectEqual(@as(usize, 0), storage.files.count());
 }
 
 test "commit clears dirty flag so a second commit is a no-op" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
-    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alice"));
+    try users.setInternalRecord(io, log, try makeRecord(allocator, ID1, "name", "Alice"));
     try std.testing.expect(database.dirty);
 
-    try database.commit(io);
+    try database.commit(io, log);
     try std.testing.expect(!database.dirty);
     const databaseTree = storage.getFile("db.dat").?;
 
     // Second commit should not throw and should be a no-op
-    try database.commit(io);
+    try database.commit(io, log);
     try std.testing.expectEqual(databaseTree.ptr, storage.getFile("db.dat").?.ptr);
 }
 
 test "commit processes multiple collections" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -177,15 +180,15 @@ test "commit processes multiple collections" {
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
     const products = try database.collection("products");
-    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alice"));
-    try products.setInternalRecord(io, try makeRecord(allocator, ID2, "title", "Widget"));
+    try users.setInternalRecord(io, log, try makeRecord(allocator, ID1, "name", "Alice"));
+    try products.setInternalRecord(io, log, try makeRecord(allocator, ID2, "title", "Widget"));
 
-    try database.commit(io);
+    try database.commit(io, log);
     try std.testing.expect(!users.dirty());
     try std.testing.expect(!products.dirty());
     try std.testing.expect(storage.getFile("collections/users/collection.dat") != null);
     try std.testing.expect(storage.getFile("collections/products/collection.dat") != null);
-    const databaseTree = (try (try database.merkleTree()).get(io)).?;
+    const databaseTree = (try (try database.merkleTree()).get(io, log)).?;
     try std.testing.expectEqual(@as(u32, 2), databaseTree.sort.?.leafCount);
 }
 
@@ -212,31 +215,34 @@ test "merkleTree should return the same instance on repeated calls" {
 }
 
 test "merkleTree get should return undefined for an empty database" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var storage = MemoryStorage.init(arena.allocator());
     const database = try newDatabase(arena.allocator(), &storage);
-    try std.testing.expect((try (try database.merkleTree()).get(io)) == null);
+    try std.testing.expect((try (try database.merkleTree()).get(io, log)) == null);
 }
 
 test "commit removes a collection from the database tree when its last record is deleted" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
-    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alice"));
-    try database.commit(io);
+    try users.setInternalRecord(io, log, try makeRecord(allocator, ID1, "name", "Alice"));
+    try database.commit(io, log);
     try std.testing.expect(storage.getFile("db.dat") != null);
 
-    _ = try users.deleteOne(io, ID1);
-    try database.commit(io);
+    _ = try users.deleteOne(io, log, ID1);
+    try database.commit(io, log);
     try std.testing.expect(storage.getFile("db.dat") == null);
     try std.testing.expect(storage.getFile("collections/users/collection.dat") == null);
 }
 
 test "a database committed by Zig has the root hash of the stored test database for the same records" {
+    const log = utils.mute_log.MuteLog.init();
     // The 50-assets test database was written earlier and is stored in the repository. Re-setting every record into an empty database gives
     // the same collection root hash, because merkle hashes only depend on the record hashes.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -250,16 +256,16 @@ test "a database committed by Zig has the root hash of the stored test database 
     const sourceCollection = try sourceDatabase.collection("metadata");
     const destinationCollection = try destinationDatabase.collection("metadata");
     var iterator = sourceCollection.iterateRecords();
-    while (try iterator.next(io)) |record| {
-        try destinationCollection.setInternalRecord(io, record);
+    while (try iterator.next(io, log)) |record| {
+        try destinationCollection.setInternalRecord(io, log, record);
 
         // Committed after every record: the collection keeps at most 8 shards cached and drops a newly created
         // shard straight away when the other 8 are dirty, which would lose its record.
-        try destinationDatabase.commit(io);
+        try destinationDatabase.commit(io, log);
     }
 
-    const sourceTree = (try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, source.asStorage(), ".db/bson")).?;
-    const destinationTree = (try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, destination.asStorage(), ".db/bson")).?;
+    const sourceTree = (try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, log, source.asStorage(), ".db/bson")).?;
+    const destinationTree = (try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, log, destination.asStorage(), ".db/bson")).?;
     try std.testing.expectEqualSlices(u8, sourceTree.merkle.?.hash, destinationTree.merkle.?.hash);
 }
 
@@ -274,6 +280,7 @@ fn makeExternalRecord(allocator: std.mem.Allocator, id: []const u8, key: []const
 }
 
 test "commit should allow flush after completing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -281,15 +288,16 @@ test "commit should allow flush after completing" {
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
     var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
-    try users.insertOne(io, &alice, null);
+    try users.insertOne(io, log, &alice, null);
 
-    try database.commit(io);
+    try database.commit(io, log);
 
     // After commit, flush should succeed (dirty flag cleared)
     try database.flush();
 }
 
 test "flush should throw when database is dirty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -297,7 +305,7 @@ test "flush should throw when database is dirty" {
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
     var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
-    try users.insertOne(io, &alice, null);
+    try users.insertOne(io, log, &alice, null);
 
     try std.testing.expectError(error.Thrown, database.flush());
 }
@@ -313,6 +321,7 @@ test "flush should succeed when database is not dirty" {
 }
 
 test "flush should succeed after commit" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -320,13 +329,14 @@ test "flush should succeed after commit" {
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
     var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
-    try users.insertOne(io, &alice, null);
+    try users.insertOne(io, log, &alice, null);
 
-    try database.commit(io);
+    try database.commit(io, log);
     try database.flush();
 }
 
 test "flush evicts collection internal state but keeps the collection object cached" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -334,8 +344,8 @@ test "flush evicts collection internal state but keeps the collection object cac
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
     var alice = try makeExternalRecord(allocator, ID1, "name", "Alice");
-    try users.insertOne(io, &alice, null);
-    try database.commit(io);
+    try users.insertOne(io, log, &alice, null);
+    try database.commit(io, log);
 
     try database.flush();
 
@@ -361,6 +371,7 @@ test "merkleTree should return a new instance after flush" {
 }
 
 test "commit writes only the collections that changed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -368,15 +379,15 @@ test "commit writes only the collections that changed" {
     const database = try newDatabase(allocator, &storage);
     const users = try database.collection("users");
     const products = try database.collection("products");
-    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alice"));
-    try products.setInternalRecord(io, try makeRecord(allocator, ID2, "title", "Widget"));
-    try database.commit(io);
+    try users.setInternalRecord(io, log, try makeRecord(allocator, ID1, "name", "Alice"));
+    try products.setInternalRecord(io, log, try makeRecord(allocator, ID2, "title", "Widget"));
+    try database.commit(io, log);
     const productsTree = storage.getFile("collections/products/collection.dat").?;
 
     // Only users changes, so the products tree is left as it was.
-    try users.setInternalRecord(io, try makeRecord(allocator, ID1, "name", "Alicia"));
+    try users.setInternalRecord(io, log, try makeRecord(allocator, ID1, "name", "Alicia"));
     try std.testing.expect(!products.dirty());
-    try database.commit(io);
+    try database.commit(io, log);
     try std.testing.expectEqual(productsTree.ptr, storage.getFile("collections/products/collection.dat").?.ptr);
     try std.testing.expect(!users.dirty());
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 const api_zig = @import("api-zig");
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const storage_zig = @import("storage-zig");
@@ -47,6 +48,7 @@ fn expectState(expected: IDatabaseState, actual: IDatabaseState) !void {
 }
 
 test "round-trips all fields" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -60,8 +62,8 @@ test "round-trips all fields" {
         .lastReplicatedAt = "2026-01-02T03:04:07.000Z",
     };
 
-    try saveDatabaseState(allocator, io, storage.asStorage(), state);
-    const loaded = try loadDatabaseState(allocator, io, storage.asStorage());
+    try saveDatabaseState(allocator, io, log, storage.asStorage(), state);
+    const loaded = try loadDatabaseState(allocator, io, log, storage.asStorage());
 
     try std.testing.expect(loaded != null);
     try expectState(state, loaded.?);
@@ -69,33 +71,35 @@ test "round-trips all fields" {
 }
 
 test "a field survives a merge that does not mention it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try saveDatabaseState(allocator, io, storage.asStorage(), .{
+    try saveDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastReplicatedAt = "2026-01-02T03:04:07.000Z",
     });
-    try mergeDatabaseState(allocator, io, storage.asStorage(), .{
+    try mergeDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastSyncedAt = "2026-01-02T03:04:06.000Z",
     });
-    const loaded = (try loadDatabaseState(allocator, io, storage.asStorage())).?;
+    const loaded = (try loadDatabaseState(allocator, io, log, storage.asStorage())).?;
 
     try expectOptionalString("2026-01-02T03:04:07.000Z", loaded.lastReplicatedAt);
     try expectOptionalString("2026-01-02T03:04:06.000Z", loaded.lastSyncedAt);
 }
 
 test "omits absent fields on load" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try saveDatabaseState(allocator, io, storage.asStorage(), .{
+    try saveDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastSyncedAt = "2026-01-02T03:04:06.000Z",
     });
-    const loaded = (try loadDatabaseState(allocator, io, storage.asStorage())).?;
+    const loaded = (try loadDatabaseState(allocator, io, log, storage.asStorage())).?;
 
     try expectState(.{
         .lastSyncedAt = "2026-01-02T03:04:06.000Z",
@@ -105,100 +109,113 @@ test "omits absent fields on load" {
 }
 
 test "returns undefined when the file is missing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try std.testing.expect((try loadDatabaseState(allocator, io, storage.asStorage())) == null);
+    try std.testing.expect((try loadDatabaseState(allocator, io, log, storage.asStorage())) == null);
 }
 
 test "returns undefined for a zero-byte file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, STATE_PATH, null, "");
-    try std.testing.expect((try loadDatabaseState(allocator, io, storage.asStorage())) == null);
+    try std.testing.expect((try loadDatabaseState(allocator, io, log, storage.asStorage())) == null);
 }
 
 test "returns undefined for a garbage file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, STATE_PATH, null, &([_]u8{0xff} ** 20));
-    try std.testing.expect((try loadDatabaseState(allocator, io, storage.asStorage())) == null);
+    try std.testing.expect((try loadDatabaseState(allocator, io, log, storage.asStorage())) == null);
 }
 
 test "returns undefined when the checksum does not match" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try saveDatabaseState(allocator, io, storage.asStorage(), .{
+    try saveDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastModifiedAt = "2026-01-02T03:04:05.000Z",
     });
 
     // Flip the last checksum byte so the stored checksum no longer matches the payload.
-    const good = (try storage.asStorage().read(allocator, io, STATE_PATH)).?;
+    const good = (try storage.asStorage().read(allocator, io, log, STATE_PATH)).?;
     const corrupt = try allocator.dupe(u8, good);
     corrupt[corrupt.len - 1] = corrupt[corrupt.len - 1] ^ 0xff;
     try storage.asStorage().write(allocator, io, STATE_PATH, null, corrupt);
 
-    try std.testing.expect((try loadDatabaseState(allocator, io, storage.asStorage())) == null);
+    try std.testing.expect((try loadDatabaseState(allocator, io, log, storage.asStorage())) == null);
 }
 
 test "mergeDatabaseState merges into an existing state" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try saveDatabaseState(allocator, io, storage.asStorage(), .{
+    try saveDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastModifiedAt = "A",
         .lastSyncedAt = "B",
     });
 
-    try mergeDatabaseState(allocator, io, storage.asStorage(), .{
+    try mergeDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastSyncedAt = "C",
     });
 
     try expectState(.{
         .lastModifiedAt = "A",
         .lastSyncedAt = "C",
-    }, (try loadDatabaseState(allocator, io, storage.asStorage())).?);
+    }, (try loadDatabaseState(allocator, io, log, storage.asStorage())).?);
 }
 
 test "mergeDatabaseState creates the state when absent" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try mergeDatabaseState(allocator, io, storage.asStorage(), .{
+    try mergeDatabaseState(allocator, io, log, storage.asStorage(), .{
         .lastModifiedAt = "A",
     });
     try expectState(.{
         .lastModifiedAt = "A",
-    }, (try loadDatabaseState(allocator, io, storage.asStorage())).?);
+    }, (try loadDatabaseState(allocator, io, log, storage.asStorage())).?);
 }
 
 test "updateDatabaseStateLocked writes while holding the lock, then releases it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try updateDatabaseStateLocked(allocator, io, storage.asStorage(), "session-1", .{
+    try updateDatabaseStateLocked(allocator, io, log, storage.asStorage(), "session-1", .{
         .lastSyncedAt = "X",
     });
 
     try expectState(.{
         .lastSyncedAt = "X",
-    }, (try loadDatabaseState(allocator, io, storage.asStorage())).?);
+    }, (try loadDatabaseState(allocator, io, log, storage.asStorage())).?);
     // The lock is released afterwards, so another owner can acquire it.
-    try std.testing.expect(try storage.asStorage().acquireWriteLock(allocator, io, LOCK_PATH, "other"));
+    try std.testing.expect(try storage.asStorage().acquireWriteLock(allocator, io, log, LOCK_PATH, "other"));
 }
 
 test "updateDatabaseStateLocked does nothing when the lock is held by another owner" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -207,30 +224,26 @@ test "updateDatabaseStateLocked does nothing when the lock is held by another ow
     virtual_time.init(std.testing.allocator);
     defer virtual_time.deinit();
     const virtual_io = virtual_time.io();
-    _ = try storage.asStorage().acquireWriteLock(allocator, virtual_io, LOCK_PATH, "other-owner");
+    _ = try storage.asStorage().acquireWriteLock(allocator, virtual_io, memory.log, LOCK_PATH, "other-owner");
 
-    // (Zig: the warning acquireWriteLock logs is captured, because the test runner fails a test that writes to stderr.)
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
-
-    try updateDatabaseStateLocked(allocator, virtual_io, storage.asStorage(), "session-1", .{
+    try updateDatabaseStateLocked(allocator, virtual_io, memory.log, storage.asStorage(), "session-1", .{
         .lastSyncedAt = "X",
     });
 
-    try std.testing.expect((try loadDatabaseState(allocator, virtual_io, storage.asStorage())) == null);
-    try std.testing.expect(std.mem.startsWith(u8, stderr_capture.written(), "Failed to acquire write lock after 3 attempts. Lock is currently held by \"other-owner\" since "));
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "s ago (acquired at ") != null);
+    try std.testing.expect((try loadDatabaseState(allocator, virtual_io, memory.log, storage.asStorage())) == null);
+    try std.testing.expect(std.mem.startsWith(u8, memory.stderr(), "Failed to acquire write lock after 3 attempts. Lock is currently held by \"other-owner\" since "));
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "s ago (acquired at ") != null);
 }
 
 test "the state file is byte-identical to the expected file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     var contentHash: [16]u8 = undefined;
     _ = try std.fmt.hexToBytes(&contentHash, "0123456789abcdef0123456789abcdef");
-    try saveDatabaseState(allocator, io, storage.asStorage(), .{
+    try saveDatabaseState(allocator, io, log, storage.asStorage(), .{
         .contentHash = &contentHash,
         .lastModifiedAt = "2026-01-02T03:04:05.000Z",
         .lastReplicatedAt = "2026-01-02T03:04:07.000Z",
@@ -243,10 +256,16 @@ test "the state file is byte-identical to the expected file" {
         .contentHash = &contentHash,
         .lastModifiedAt = "2026-01-02T03:04:05.000Z",
         .lastReplicatedAt = "2026-01-02T03:04:07.000Z",
-    }, (try loadDatabaseState(allocator, io, storage.asStorage())).?);
+    }, (try loadDatabaseState(allocator, io, log, storage.asStorage())).?);
 }
 
 test "updateDatabaseStateLocked releases the lock and passes the error on when the merge fails" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -258,7 +277,7 @@ test "updateDatabaseStateLocked releases the lock and passes the error on when t
     // A directory where the state file goes, so saving the state fails.
     try tempDir.dir.createDirPath(io, STATE_PATH);
 
-    // (Zig: the retry warnings of the failing read and write are captured so that nothing reaches stderr.)
+    // (Zig: retry writes its last failure straight to the console, so that is captured so that nothing reaches stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
@@ -267,11 +286,11 @@ test "updateDatabaseStateLocked releases the lock and passes the error on when t
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
 
-    try std.testing.expect(std.meta.isError(updateDatabaseStateLocked(allocator, backoff_time.io(), storage, "session-1", .{
+    try std.testing.expect(std.meta.isError(updateDatabaseStateLocked(allocator, backoff_time.io(), memory.log, storage, "session-1", .{
         .lastSyncedAt = "X",
     })));
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read .db/state.dat") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to read .db/state.dat") != null);
 
     // The lock is released afterwards, so another owner can acquire it.
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, LOCK_PATH, "other"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, memory.log, LOCK_PATH, "other"));
 }

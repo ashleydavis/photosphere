@@ -5,7 +5,7 @@ const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
 const helpers = @import("test-helpers.zig");
 const ConsoleLog = utils.log.ConsoleLog;
-const FileLog = utils.file_log.FileLog;
+const MuteLog = utils.mute_log.MuteLog;
 
 //
 // Captured console output.
@@ -26,12 +26,12 @@ test "the CLI's console log writes each kind of message to the right stream" {
     utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
     defer utils.console.setCapture(null, null);
 
-    var quietLog: ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    const quiet = quietLog.ilog();
+    const quietLog = ConsoleLog.initWith(.{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    const quiet = quietLog;
     quiet.info("info");
     quiet.verbose("verbose");
     quiet.debug("debug");
@@ -45,12 +45,12 @@ test "the CLI's console log writes each kind of message to the right stream" {
 
     capture.stdout.clearRetainingCapacity();
     capture.stderr.clearRetainingCapacity();
-    var loudLog: ConsoleLog = .{
-        .verbose_enabled = true,
-        .debug_enabled = true,
-        .tools_enabled = true,
-    };
-    const loud = loudLog.ilog();
+    const loudLog = ConsoleLog.initWith(.{
+        .verbose = true,
+        .debug = true,
+        .tools = true,
+    });
+    const loud = loudLog;
     loud.verbose("verbose");
     loud.debug("debug");
     loud.tool("magick", .{ .stdout = "out", .stderr = "err" });
@@ -72,12 +72,12 @@ test "the CLI's console log writes a long tool output, event and error chain who
 
     const longText = try allocator.alloc(u8, 20000);
     @memset(longText, 'x');
-    var loudLog: ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = true,
-    };
-    const loud = loudLog.ilog();
+    const loudLog = ConsoleLog.initWith(.{
+        .verbose = false,
+        .debug = false,
+        .tools = true,
+    });
+    const loud = loudLog;
     loud.tool("ffprobe", .{ .stdout = longText, .stderr = null });
     loud.event(longText);
     try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "== ffprobe stdout ==\n", longText, "\n[EVENT] ", longText, "\n" }), capture.stdout.written());
@@ -88,7 +88,8 @@ test "the CLI's console log writes a long tool output, event and error chain who
     try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "Something failed\nError: ", longText[0..12000], "\nCaused by:\nError: ", longText[0..12000], "\n" }), capture.stderr.written());
 }
 
-test "configureLog installs the file logger unless file logging is disabled" {
+test "configureLog gives the file logger unless file logging is disabled" {
+    const console_log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -101,8 +102,6 @@ test "configureLog installs the file logger unless file logging is disabled" {
     try environ_map.put("TEMP", tmpDir);
     node_utils.process_env.setEnvironMap(&environ_map);
     defer node_utils.process_env.setEnvironMap(null);
-    const previous = utils.log.currentLog();
-    defer utils.log.setLog(previous);
     defer node_utils.termination.clearTerminationCallbacks();
 
     var capture = Capture{ .stdout = .init(allocator), .stderr = .init(allocator) };
@@ -112,17 +111,18 @@ test "configureLog installs the file logger unless file logging is disabled" {
     cli.process_argv.setArgv(&.{"psi"});
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    try cli.log.configureLog(allocator, io, mediaTools.runner(), .{ .disableFileLogging = true });
-    const details = try utils.log.log.getLogDetails(allocator, io);
+    const consoleLog = try cli.log_setup.configureLog(allocator, io, console_log, mediaTools.runner(), .{ .disableFileLogging = true });
+    const details = try consoleLog.getLogDetails(allocator, io);
     try std.testing.expect(details.logFilePath == null);
 
-    try cli.log.configureLog(allocator, io, mediaTools.runner(), .{ .verbose = true });
-    const fileLogger = FileLog.fromILog(utils.log.currentLog()).?;
-    utils.log.log.info("to both");
-    try std.testing.expect(utils.log.log.verboseEnabled());
-    try fileLogger.close(io);
-    try std.testing.expect(std.mem.startsWith(u8, std.fs.path.basename(fileLogger.getLogFilePath()), "psi-"));
-    const content = try std.Io.Dir.cwd().readFileAlloc(io, fileLogger.getLogFilePath(), allocator, .unlimited);
+    const log = try cli.log_setup.configureLog(allocator, io, console_log, mediaTools.runner(), .{ .verbose = true });
+    log.info("to both");
+    try std.testing.expect(log.verboseEnabled());
+    const logFilePath = log.logFilePath().?;
+    // The CLI closes its log file as the process ends, through the termination callbacks.
+    try node_utils.termination.invokeTerminationCallbacks(io, log, 0);
+    try std.testing.expect(std.mem.startsWith(u8, std.fs.path.basename(logFilePath), "psi-"));
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, logFilePath, allocator, .unlimited);
     try std.testing.expect(std.mem.indexOf(u8, content, "\nCommand: unknown\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, content, "] [INFO] to both\n") != null);
     // (With verbose logging the tool checks of the header also print verbose messages.)

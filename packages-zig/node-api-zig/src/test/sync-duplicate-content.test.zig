@@ -17,6 +17,7 @@
 //
 
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
@@ -31,6 +32,7 @@ const throughTheDatabases = node_api.sync.throughTheDatabases;
 const dbId = "6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d";
 
 test "the file arrives at the target under its own name" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -41,7 +43,7 @@ test "the file arrives at the target under its own name" {
 
     const photo = "the same photo imported twice";
     var source = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, source.asStorage(), dbId, &.{
+    try sync_helpers.fillDatabase(allocator, io, log, source.asStorage(), dbId, &.{
         .{
             .name = "asset/first-import",
             .contents = photo,
@@ -52,16 +54,16 @@ test "the file arrives at the target under its own name" {
         },
     }, &.{});
     var target = MemoryStorage.init(allocator);
-    try sync_helpers.fillDatabase(allocator, io, target.asStorage(), dbId, &.{
+    try sync_helpers.fillDatabase(allocator, io, log, target.asStorage(), dbId, &.{
         .{
             .name = "asset/second-import",
             .contents = photo,
         },
     }, &.{});
 
-    try pushFiles(allocator, io, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
+    try pushFiles(allocator, io, log, source.asStorage(), target.asStorage(), try sync_helpers.makeBsonDatabase(allocator, target.asStorage()), throughTheDatabases(source.asStorage(), target.asStorage()));
 
     try std.testing.expect(try target.asStorage().fileExists(allocator, io, "asset/first-import"));
-    const targetTree = (try merkle_tree.loadTree(allocator, io, ".db/files.dat", target.asStorage(), "FTRE")).?;
+    const targetTree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", target.asStorage(), "FTRE")).?;
     try std.testing.expect((try merkle_tree.getItemInfo(&targetTree, "asset/first-import")) != null);
 }

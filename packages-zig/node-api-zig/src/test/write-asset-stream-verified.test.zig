@@ -6,6 +6,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
@@ -28,18 +29,18 @@ const Fixtures = struct {
     //
     // Makes both databases.
     //
-    fn init(fixtures: *Fixtures, allocator: std.mem.Allocator, io: std.Io, name: []const u8) !void {
-        try fixtures.source.init(allocator, io, try std.fmt.allocPrint(allocator, "{s}-source", .{name}));
-        try fixtures.dest.init(allocator, io, try std.fmt.allocPrint(allocator, "{s}-dest", .{name}));
+    fn init(fixtures: *Fixtures, allocator: std.mem.Allocator, io: std.Io, log: ILog, name: []const u8) !void {
+        try fixtures.source.init(allocator, io, log, try std.fmt.allocPrint(allocator, "{s}-source", .{name}));
+        try fixtures.dest.init(allocator, io, log, try std.fmt.allocPrint(allocator, "{s}-dest", .{name}));
         try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ fixtures.source.dir, "thumb", "src-id" }), "abcd");
     }
 
     //
     // Deletes both databases.
     //
-    fn deinit(fixtures: *Fixtures, io: std.Io) void {
-        fixtures.source.deinit(io);
-        fixtures.dest.deinit(io);
+    fn deinit(fixtures: *Fixtures, io: std.Io, log: ILog) void {
+        fixtures.source.deinit(io, log);
+        fixtures.dest.deinit(io, log);
     }
 };
 
@@ -51,6 +52,7 @@ fn startIo(virtual_time: *virtual_time_io.VirtualTimeIo) void {
 }
 
 test "writeAssetStreamVerified calls writeAssetStream with dest storage and correct arguments" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -59,15 +61,15 @@ test "writeAssetStreamVerified calls writeAssetStream with dest storage and corr
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixtures: Fixtures = undefined;
-    try fixtures.init(allocator, io, "verified-writes");
-    defer fixtures.deinit(io);
+    try fixtures.init(allocator, io, log, "verified-writes");
+    defer fixtures.deinit(io, log);
     var spy: sync_test_helpers.SpyStorage = .{
         .allocator = allocator,
         .inner = fixtures.dest.database.assetStorage,
     };
     var stream = std.Io.Reader.fixed("abcd");
 
-    try media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, spy.storage(), fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4);
+    try media_file_database.writeAssetStreamVerified(allocator, io, log, fixtures.source.database.assetStorage, spy.storage(), fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4);
 
     try std.testing.expectEqual(@as(usize, 1), spy.writeStreamCalls.items.len);
     try std.testing.expectEqualStrings("thumb/dst-id", spy.writeStreamCalls.items[0].filePath);
@@ -79,6 +81,7 @@ test "writeAssetStreamVerified calls writeAssetStream with dest storage and corr
 }
 
 test "writeAssetStreamVerified throws when source file is not accessible after write" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -87,15 +90,16 @@ test "writeAssetStreamVerified throws when source file is not accessible after w
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixtures: Fixtures = undefined;
-    try fixtures.init(allocator, io, "verified-no-source");
-    defer fixtures.deinit(io);
+    try fixtures.init(allocator, io, log, "verified-no-source");
+    defer fixtures.deinit(io, log);
     var stream = std.Io.Reader.fixed("abcd");
 
-    try std.testing.expectError(error.Thrown, media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "no-such-id", "dst-id", "thumb", "image/jpeg", &stream, 4));
+    try std.testing.expectError(error.Thrown, media_file_database.writeAssetStreamVerified(allocator, io, log, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "no-such-id", "dst-id", "thumb", "image/jpeg", &stream, 4));
     try std.testing.expectEqualStrings("Verification failed: source file \"thumb/no-such-id\" is no longer accessible after write.", utils.errors.errorMessage(error.Thrown));
 }
 
 test "writeAssetStreamVerified throws when destination file is not found after write" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -104,8 +108,8 @@ test "writeAssetStreamVerified throws when destination file is not found after w
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixtures: Fixtures = undefined;
-    try fixtures.init(allocator, io, "verified-no-dest");
-    defer fixtures.deinit(io);
+    try fixtures.init(allocator, io, log, "verified-no-dest");
+    defer fixtures.deinit(io, log);
     var stream = std.Io.Reader.fixed("abcd");
 
     // writeAssetStream asks the destination for info() once to verify the write succeeded. writeAssetStreamVerified then asks again
@@ -116,11 +120,12 @@ test "writeAssetStreamVerified throws when destination file is not found after w
         .infoHiddenAfter = 1,
     };
 
-    try std.testing.expectError(error.Thrown, media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, spy.storage(), fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4));
+    try std.testing.expectError(error.Thrown, media_file_database.writeAssetStreamVerified(allocator, io, log, fixtures.source.database.assetStorage, spy.storage(), fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4));
     try std.testing.expectEqualStrings("Verification failed: destination file \"thumb/dst-id\" not found after write.", utils.errors.errorMessage(error.Thrown));
 }
 
 test "writeAssetStreamVerified throws when source and dest hashes do not match" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -129,15 +134,16 @@ test "writeAssetStreamVerified throws when source and dest hashes do not match" 
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixtures: Fixtures = undefined;
-    try fixtures.init(allocator, io, "verified-mismatch");
-    defer fixtures.deinit(io);
+    try fixtures.init(allocator, io, log, "verified-mismatch");
+    defer fixtures.deinit(io, log);
     var stream = std.Io.Reader.fixed("wxyz");
 
-    try std.testing.expectError(error.Thrown, media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4));
+    try std.testing.expectError(error.Thrown, media_file_database.writeAssetStreamVerified(allocator, io, log, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4));
     try std.testing.expectEqualStrings("Verification failed: hash mismatch for \"thumb\" of asset \"src-id\" -- destination copy is corrupt.", utils.errors.errorMessage(error.Thrown));
 }
 
 test "writeAssetStreamVerified resolves when source and dest hashes match" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -146,9 +152,9 @@ test "writeAssetStreamVerified resolves when source and dest hashes match" {
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixtures: Fixtures = undefined;
-    try fixtures.init(allocator, io, "verified-match");
-    defer fixtures.deinit(io);
+    try fixtures.init(allocator, io, log, "verified-match");
+    defer fixtures.deinit(io, log);
     var stream = std.Io.Reader.fixed("abcd");
 
-    try media_file_database.writeAssetStreamVerified(allocator, io, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4);
+    try media_file_database.writeAssetStreamVerified(allocator, io, log, fixtures.source.database.assetStorage, fixtures.dest.database.assetStorage, fixtures.dest.rawStorage, "session-1", "src-id", "dst-id", "thumb", "image/jpeg", &stream, 4);
 }

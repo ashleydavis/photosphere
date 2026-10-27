@@ -24,7 +24,7 @@ const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const api = @import("api-zig");
 const temp_dirs = @import("temp-dirs.zig");
-const mock_log = @import("mock-log.zig");
+const ILog = @import("utils-zig").log.ILog;
 const test_task_context = @import("test-task-context.zig");
 const errors = utils.errors;
 const config_worker = node_api.config_worker;
@@ -66,8 +66,6 @@ const Sandbox = struct {
     // The task context the handlers take.
     taskContext: TestTaskContext,
 
-    // Swallows what the code under test logs.
-    mutedLog: mock_log.MutedLog,
 
     //
     // Makes the temporary directory and changes into it.
@@ -81,15 +79,12 @@ const Sandbox = struct {
         try std.process.setCurrentPath(self.io, self.tempDir);
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.taskContext.init(self.uuidGenerator.uuidGenerator());
-        self.mutedLog = .{};
-        self.mutedLog.install();
     }
 
     //
     // Changes back to the directory the test started in and removes the temporary one.
     //
     fn deinit(self: *Sandbox) void {
-        self.mutedLog.uninstall();
         std.process.setCurrentPath(self.io, self.previousCwd) catch {
             @panic("The working directory could not be put back after a test.");
         };
@@ -132,12 +127,12 @@ const Sandbox = struct {
     //
     // Runs the read-config handler for the config path and returns its result.
     //
-    fn readConfig(self: *Sandbox, configPath: []const u8) !std.json.Value {
+    fn readConfig(self: *Sandbox, log: ILog, configPath: []const u8) !std.json.Value {
         var object: std.json.ObjectMap = .empty;
         try object.put(self.arenaAllocator(), "configPath", .{
             .string = configPath,
         });
-        return readConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), .{
+        return readConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), log, .{
             .object = object,
         }, self.taskContext.context.taskContext());
     }
@@ -145,8 +140,8 @@ const Sandbox = struct {
     //
     // Runs the write-config handler with the JSON text as its data.
     //
-    fn writeConfig(self: *Sandbox, dataJson: []const u8) !void {
-        const result = try writeConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), try self.json(dataJson), self.taskContext.context.taskContext());
+    fn writeConfig(self: *Sandbox, log: ILog, dataJson: []const u8) !void {
+        const result = try writeConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), log, try self.json(dataJson), self.taskContext.context.taskContext());
         try std.testing.expect(result == .null);
     }
 };
@@ -247,10 +242,11 @@ fn expectThrown(expectedMessage: []const u8, result: anytype) !void {
 // fresh install to seed and the second is a decision to leave alone, and both read as switched off.
 test "reading a sandbox with no config file reports that neither feature's settings have been written" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(false, result, "syncSettingsWritten");
     try expectBool(false, result, "autoImportSettingsWritten");
@@ -260,10 +256,11 @@ test "reading a sandbox with no config file reports that neither feature's setti
 // must not start pushing photos over a metered connection.
 test "reading a sandbox with no config file yields both loops switched off" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(false, result, "sync.settings.enabled");
     try expectBool(true, result, "sync.settings.onlyOnWifi");
@@ -279,11 +276,12 @@ test "reading a sandbox with no config file yields both loops switched off" {
 // spend somebody's mobile data.
 test "a corrupt config file reads as the defaults rather than throwing" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("sync:\n  enabled: true\n   this: [is not yaml");
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(false, result, "sync.settings.enabled");
     try expectBool(true, result, "sync.settings.onlyOnWifi");
@@ -296,11 +294,12 @@ test "a corrupt config file reads as the defaults rather than throwing" {
 // its settings were already decided.
 test "a corrupt config file reports that no section could be read" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("not: [valid");
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(false, result, "syncSettingsWritten");
     try expectBool(false, result, "autoImportSettingsWritten");
@@ -308,13 +307,14 @@ test "a corrupt config file reports that no section could be read" {
 
 test "writing then reading round-trips the syncing settings and the pacing" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"photosphere-default","pauseBetweenRunsMs":60000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "sync.settings.enabled");
     try expectBool(false, result, "sync.settings.onlyOnWifi");
@@ -324,13 +324,14 @@ test "writing then reading round-trips the syncing settings and the pacing" {
 
 test "writing then reading round-trips the automatic import settings and the default database" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"},{"type":"folder","path":"/photos/holiday","recurse":false}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "autoImport.settings.enabled");
     const sources = at(result, "autoImport.settings.sources").?.array.items;
@@ -348,13 +349,14 @@ test "writing then reading round-trips the automatic import settings and the def
 
 test "writing then reading round-trips both sections written together" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000},"sync":{"settings":{"enabled":true,"onlyOnWifi":true},"databasePath":"photosphere-default","pauseBetweenRunsMs":60000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "autoImport.settings.enabled");
     try expectInteger(5000, result, "autoImport.pauseBetweenRunsMs");
@@ -364,13 +366,14 @@ test "writing then reading round-trips both sections written together" {
 
 test "writing then reading says a file that is there is there, even when it says both loops are off" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":false,"onlyOnWifi":false},"pauseBetweenRunsMs":300000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "syncSettingsWritten");
     try expectBool(false, result, "sync.settings.enabled");
@@ -380,16 +383,17 @@ test "writing then reading says a file that is there is there, even when it says
 // write independently, so a write that replaced the whole document would take the other feature's settings with it.
 test "a write of one section leaves the others alone: writing the syncing settings keeps what automatic import watches" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"holiday-album"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":5000}}
     );
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"pauseBetweenRunsMs":60000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "autoImport.settings.enabled");
     try expectOneAlbum("holiday-album", result, "autoImport.settings.sources");
@@ -400,16 +404,17 @@ test "a write of one section leaves the others alone: writing the syncing settin
 
 test "a write of one section leaves the others alone: writing the automatic import settings keeps the syncing settings" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database-being-synced","pauseBetweenRunsMs":60000}}
     );
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":false,"sources":[]},"pauseBetweenRunsMs":5000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "sync.settings.enabled");
     try expectBool(false, result, "sync.settings.onlyOnWifi");
@@ -422,10 +427,11 @@ test "a write of one section leaves the others alone: writing the automatic impo
 // what keeps them.
 test "a write of one section leaves the others alone: keeps settings the task knows nothing about, such as the theme and the saved searches" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("theme: dark\ndeveloper_mode: true\nshow_fps_indicator: true\nsaved_searches:\n  - beach\n");
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
     );
 
@@ -446,13 +452,14 @@ test "a write of one section leaves the others alone: keeps settings the task kn
 // syncing switched off while both toggles said it was on.
 test "whether a feature's settings have been written: writing only the automatic import settings does not claim the syncing settings were chosen" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"pauseBetweenRunsMs":5000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "autoImportSettingsWritten");
     try expectBool(false, result, "syncSettingsWritten");
@@ -460,13 +467,14 @@ test "whether a feature's settings have been written: writing only the automatic
 
 test "whether a feature's settings have been written: writing only the syncing settings does not claim the automatic import settings were chosen" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "syncSettingsWritten");
     try expectBool(false, result, "autoImportSettingsWritten");
@@ -474,11 +482,12 @@ test "whether a feature's settings have been written: writing only the syncing s
 
 test "whether a feature's settings have been written: a file holding only another platform's settings claims neither" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("theme: dark\ndesktop:\n  last_folder: /home/someone/photos\n");
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(false, result, "syncSettingsWritten");
     try expectBool(false, result, "autoImportSettingsWritten");
@@ -486,13 +495,14 @@ test "whether a feature's settings have been written: a file holding only anothe
 
 test "whether a feature's settings have been written: both are claimed once both have been written" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":false,"sources":[]},"pauseBetweenRunsMs":5000},"sync":{"settings":{"enabled":false,"onlyOnWifi":true},"pauseBetweenRunsMs":60000}}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "syncSettingsWritten");
     try expectBool(true, result, "autoImportSettingsWritten");
@@ -502,9 +512,10 @@ test "whether a feature's settings have been written: both are claimed once both
 // person looking at what their phone is doing) reads these names rather than the camelCase ones used in memory.
 test "the file on disk is YAML with snake_case keys nested by feature" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","autoImport":{"settings":{"enabled":true,"sources":[{"type":"device-album","albumId":"all"}]},"defaultDatabasePath":"photosphere-default","pauseBetweenRunsMs":30000},"sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":300000}}
     );
 
@@ -527,17 +538,18 @@ test "the file on disk is YAML with snake_case keys nested by feature" {
 // than a fast backup. The value can only get here by hand, so it is corrected on the way in and on the way out.
 test "values a hand-edited file may hold: a gap of zero or less falls back to the default rather than spinning" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("auto_import:\n  enabled: true\n  pause_between_runs_ms: 0\nsync:\n  enabled: true\n  pause_between_runs_ms: 0\n");
 
-    const zeroGap = try sandbox.readConfig(CONFIG_PATH);
+    const zeroGap = try sandbox.readConfig(log, CONFIG_PATH);
     try expectInteger(DEFAULT_AUTO_IMPORT_PAUSE_MS, zeroGap, "autoImport.pauseBetweenRunsMs");
     try expectInteger(DEFAULT_SYNC_PAUSE_MS, zeroGap, "sync.pauseBetweenRunsMs");
 
     try sandbox.writeConfigText("auto_import:\n  pause_between_runs_ms: -1000\nsync:\n  pause_between_runs_ms: -1000\n");
 
-    const negativeGap = try sandbox.readConfig(CONFIG_PATH);
+    const negativeGap = try sandbox.readConfig(log, CONFIG_PATH);
     try expectInteger(DEFAULT_AUTO_IMPORT_PAUSE_MS, negativeGap, "autoImport.pauseBetweenRunsMs");
     try expectInteger(DEFAULT_SYNC_PAUSE_MS, negativeGap, "sync.pauseBetweenRunsMs");
 }
@@ -545,11 +557,12 @@ test "values a hand-edited file may hold: a gap of zero or less falls back to th
 // The string "false" is truthy, so coercing it would switch syncing on for somebody who wrote the opposite.
 test "values a hand-edited file may hold: a value that is not a boolean is not taken as one" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("sync:\n  enabled: \"false\"\n  only_on_wifi: \"no\"\n");
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(false, result, "sync.settings.enabled");
     try expectBool(true, result, "sync.settings.onlyOnWifi");
@@ -557,11 +570,12 @@ test "values a hand-edited file may hold: a value that is not a boolean is not t
 
 test "values a hand-edited file may hold: a missing setting falls back rather than being left undefined" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("sync:\n  enabled: true\n");
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectBool(true, result, "sync.settings.enabled");
     try expectBool(true, result, "sync.settings.onlyOnWifi");
@@ -569,11 +583,12 @@ test "values a hand-edited file may hold: a missing setting falls back rather th
 
 test "values a hand-edited file may hold: a malformed source is dropped rather than taken as a place to watch" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeConfigText("auto_import:\n  enabled: true\n  sources:\n    - type: device-album\n      album_id: all\n    - type: folder\n");
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
 
     try expectOneAlbum("all", result, "autoImport.settings.sources");
 }
@@ -583,6 +598,7 @@ test "values a hand-edited file may hold: a malformed source is dropped rather t
 test "buildConfigYaml produces a document the reader reads back as the input" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
+    const log = utils.mute_log.MuteLog.init();
     defer sandbox.deinit();
     const allocator = sandbox.arenaAllocator();
     var config = try node_api.config_format.defaultConfigFile(allocator);
@@ -610,7 +626,7 @@ test "buildConfigYaml produces a document the reader reads back as the input" {
 
     try sandbox.writeConfigText(rendered);
 
-    const contents = (try readConfigFromStorage(allocator, sandbox.io, CONFIG_PATH)).config;
+    const contents = (try readConfigFromStorage(allocator, sandbox.io, log, CONFIG_PATH)).config;
 
     try std.testing.expectEqual(true, contents.autoImport.settings.enabled);
     try std.testing.expect(contents.autoImport.defaultDatabasePath == null);
@@ -623,66 +639,72 @@ test "buildConfigYaml produces a document the reader reads back as the input" {
 
 test "bad input to the handlers: a write with no config path fails rather than writing somewhere else" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("configPath is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("configPath is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"","sync":{"settings":{"enabled":true,"onlyOnWifi":true},"pauseBetweenRunsMs":300000}}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a read with no config path fails rather than reading somewhere else" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("configPath is required", sandbox.readConfig(""));
+    try expectThrown("configPath is required", sandbox.readConfig(log, ""));
 }
 
 // A write with no section at all would silently rewrite the file with what it already held, which looks like it worked and
 // changes nothing. It is always a caller bug, so it is loud.
 test "bad input to the handlers: a write with nothing to write fails rather than doing nothing quietly" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("write-config was given no autoImport section, no sync section and no settings to write, so there is nothing to write.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml"}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a setting with no key fails rather than being written under an empty name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("write-config was given a setting with no key.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("write-config was given a setting with no key.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"","value":true}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a write of a section with no settings fails rather than writing a default" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("autoImport.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("autoImport.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","autoImport":{"pauseBetweenRunsMs":5000}}
     ), sandbox.taskContext.context.taskContext()));
-    try expectThrown("sync.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("sync.settings is required", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","sync":{"pauseBetweenRunsMs":5000}}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a config path that is not a string fails with a sentence" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The read-config task data is not valid: configPath must be a string", readConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("The read-config task data is not valid: configPath must be a string", readConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":5}
     ), sandbox.taskContext.context.taskContext()));
-    try expectThrown("The write-config task data is not valid: configPath must be a string, and autoImport, sync and entries must hold their parts", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("The write-config task data is not valid: configPath must be a string, and autoImport, sync and entries must hold their parts", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":5}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -692,56 +714,60 @@ test "bad input to the handlers: a config path that is not a string fails with a
 // routing sends it to state.yaml instead.
 test "the settings the interface names: a setting the format declares is written into its own section and read back by name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"dark"}]}
     );
 
     try expectString("dark", try sandbox.readConfigDocument(), "theme");
-    try expectString("dark", try sandbox.readConfig(CONFIG_PATH), "settings.theme");
+    try expectString("dark", try sandbox.readConfig(log, CONFIG_PATH), "settings.theme");
 }
 
 test "the settings the interface names: the searches the user saved are written at the top level and read back by name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"savedSearches","value":["beach","dogs"]}]}
     );
 
     try expectStrings(&.{ "beach", "dogs" }, try sandbox.readConfigDocument(), "saved_searches");
-    try expectStrings(&.{ "beach", "dogs" }, try sandbox.readConfig(CONFIG_PATH), "settings.savedSearches");
+    try expectStrings(&.{ "beach", "dogs" }, try sandbox.readConfig(log, CONFIG_PATH), "settings.savedSearches");
 }
 
 test "the settings the interface names: an entry with no value clears the setting rather than leaving it as it was" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"dark"}]}
     );
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"theme"}]}
     );
 
     try expectMissing(try sandbox.readConfigDocument(), "theme");
-    try expectMissing(try sandbox.readConfig(CONFIG_PATH), "settings.theme");
+    try expectMissing(try sandbox.readConfig(log, CONFIG_PATH), "settings.theme");
 }
 
 test "the settings the interface names: writing a setting leaves a feature's settings exactly as they were" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","sync":{"settings":{"enabled":true,"onlyOnWifi":false},"databasePath":"the-database","pauseBetweenRunsMs":90000}}
     );
 
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"light"}]}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
     try expectBool(true, result, "sync.settings.enabled");
     try expectBool(false, result, "sync.settings.onlyOnWifi");
     try expectString("the-database", result, "sync.databasePath");
@@ -754,13 +780,14 @@ test "the settings the interface names: writing a setting leaves a feature's set
 // saying on.
 test "the settings the interface names: writing a setting does not make it look as though syncing had been decided" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"light"}]}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
     try expectBool(false, result, "syncSettingsWritten");
     try expectBool(false, result, "autoImportSettingsWritten");
     try expectMissing(try sandbox.readConfigDocument(), "sync");
@@ -770,37 +797,40 @@ test "the settings the interface names: writing a setting does not make it look 
 // empty rather than finding a stale copy.
 test "the settings the interface names: a setting the state file holds is not answered from here" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":"dark"}]}
     );
 
-    const result = try sandbox.readConfig(CONFIG_PATH);
+    const result = try sandbox.readConfig(log, CONFIG_PATH);
     try expectMissing(result, "settings.gallerySort");
     try expectMissing(result, "settings.sidebar-collapsed-databases");
 }
 
 test "the settings the interface names: a switch is written as a boolean and read back by name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":true}]}
     );
 
-    try expectBool(true, try sandbox.readConfig(CONFIG_PATH), "settings.developerMode");
+    try expectBool(true, try sandbox.readConfig(log, CONFIG_PATH), "settings.developerMode");
 }
 
 test "the settings the interface names: the places automatic import watches are written as sources and read back by name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeConfig(
+    try sandbox.writeConfig(log, 
         \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"folder","path":"/photos","recurse":true}]}]}
     );
 
-    const sources = at(try sandbox.readConfig(CONFIG_PATH), "settings.autoImportSources").?.array.items;
+    const sources = at(try sandbox.readConfig(log, CONFIG_PATH), "settings.autoImportSources").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), sources.len);
     try std.testing.expectEqualStrings("folder", sources[0].object.get("type").?.string);
     try std.testing.expectEqualStrings("/photos", sources[0].object.get("path").?.string);
@@ -808,40 +838,44 @@ test "the settings the interface names: the places automatic import watches are 
 
 test "bad input to the handlers: a place to watch that is neither a folder nor an album fails rather than being dropped" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"autoImportSources\" was given a place to watch that is not a folder or a device album.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("The config setting \"autoImportSources\" was given a place to watch that is not a folder or a device album.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"autoImportSources","value":[{"type":"cloud"}]}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a list holding something other than text fails rather than being stored" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"savedSearches\" was given a list that holds something other than text.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("The config setting \"savedSearches\" was given a list that holds something other than text.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"savedSearches","value":["beach",3]}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a value no setting can hold fails rather than being stored" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("The config setting \"theme\" cannot hold that kind of value.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"theme","value":{"name":"dark"}}]}
     ), sandbox.taskContext.context.taskContext()));
 }
 
 test "bad input to the handlers: a number for a switch fails rather than being stored" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("The config setting \"developerMode\" cannot hold a value of that type.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("The config setting \"developerMode\" cannot hold a value of that type.", writeConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(
         \\{"configPath":"config.yaml","entries":[{"key":"developerMode","value":1}]}
     ), sandbox.taskContext.context.taskContext()));
 }

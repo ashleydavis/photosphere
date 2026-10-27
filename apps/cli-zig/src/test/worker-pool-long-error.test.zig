@@ -23,7 +23,8 @@ const long_error_task_type = "long-error";
 //
 // Fails with an error message several times as long as long_text.
 //
-fn longErrorHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+fn longErrorHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, context: types.ITaskContext) anyerror!std.json.Value {
+    _ = log;
     _ = timers;
     _ = allocator;
     _ = io;
@@ -40,6 +41,7 @@ const test_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
 };
 
 test "an error message longer than the collector's buffer is recorded whole" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = std.testing.allocator;
@@ -50,9 +52,9 @@ test "an error message longer than the collector's buffer is recorded whole" {
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    const taskId = try pool.addTask(allocator, std.testing.io, long_error_task_type, .null, "source", null, null);
+    const taskId = try pool.addTask(allocator, std.testing.io, log, long_error_task_type, .null, "source", null, null);
     allocator.free(taskId);
-    try collector.waitForCompleted(pool, allocator, timer_list.interface(), 1);
+    try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
 
     // The message is longer than the 256 bytes the collector used to copy it into.
     try std.testing.expectEqual(@as(usize, 1), collector.failed);

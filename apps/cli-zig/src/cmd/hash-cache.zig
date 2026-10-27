@@ -1,11 +1,11 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const pc = @import("../lib/picocolors.zig");
 const format = @import("../lib/format.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const HashCache = node_api.hash_cache.HashCache;
 const getHashCacheDir = node_api.hash_cache.getHashCacheDir;
@@ -33,32 +33,32 @@ pub const IHashCacheCommandOptions = struct {
 // The database has to be named because there is one cache per database: an entry records the id
 // the file has in that database, and one entry cannot hold the ids of several.
 //
-pub fn hashCacheCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IHashCacheCommandOptions) !void {
-    showHashCache(allocator, io, context, options) catch |err| {
+pub fn hashCacheCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IHashCacheCommandOptions) !void {
+    showHashCache(allocator, io, log, context, options) catch |err| {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "Error reading hash cache: {s}", .{errorMessage(err)})));
         if (options.base.verbose orelse false) {
             // Zig errors carry no stack trace, so the error chain stands in for `err.stack`.
             log.@"error"(try pc.red(allocator, try formatErrorChain(allocator, err)));
         }
-        exit(io, 1);
+        exit(io, log, 1);
     };
 }
 
 //
 // Shows the hash cache of a database.
 //
-fn showHashCache(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IHashCacheCommandOptions) !void {
+fn showHashCache(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IHashCacheCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const databaseDir = (try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false)).databaseDir;
+    const databaseDir = (try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false)).databaseDir;
 
     log.info(try pc.blue(allocator, "\n=== Local Hash Cache ==="));
     const localHashCachePath = try getHashCacheDir(allocator, databaseDir);
     var localHashCache = try HashCache.init(localHashCachePath, false);
     defer localHashCache.deinit();
 
-    const loaded = try localHashCache.load(io);
+    const loaded = try localHashCache.load(io, log);
     if (!loaded) {
         log.info(try pc.yellow(allocator, "Local hash cache not found or empty."));
     }
@@ -70,7 +70,7 @@ fn showHashCache(allocator: std.mem.Allocator, io: std.Io, context: ICommandCont
 
         if (entryCount > 0) {
             log.info("\nCache entries:");
-            try displayHashCacheEntries(allocator, &localHashCache);
+            try displayHashCacheEntries(log, allocator, &localHashCache);
         }
     }
 
@@ -80,7 +80,7 @@ fn showHashCache(allocator: std.mem.Allocator, io: std.Io, context: ICommandCont
 //
 // Helper function to display hash cache entries
 //
-fn displayHashCacheEntries(allocator: std.mem.Allocator, hashCache: *HashCache) !void {
+fn displayHashCacheEntries(log: ILog, allocator: std.mem.Allocator, hashCache: *HashCache) !void {
     const entries = try hashCache.getAllEntries(allocator);
 
     if (entries.len == 0) {

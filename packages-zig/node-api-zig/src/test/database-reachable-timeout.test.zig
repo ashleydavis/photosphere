@@ -197,12 +197,13 @@ const SilentServer = struct {
 };
 
 test "checkDatabaseExists gives up when the storage never answers, rather than waiting on the client's ten minute ceiling" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var server: SilentServer = undefined;
     var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
     virtual_time.init(std.testing.allocator);
@@ -226,7 +227,7 @@ test "checkDatabaseExists gives up when the storage never answers, rather than w
     });
 
     const started = std.Io.Clock.awake.now(clientIo);
-    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, clientIo, "s3:bucket/unreachable", null));
+    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, clientIo, log, "s3:bucket/unreachable", null));
     const elapsedMilliseconds = started.durationTo(std.Io.Clock.awake.now(clientIo)).toMilliseconds();
 
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Operation timed out after 30000ms: "));
@@ -235,12 +236,13 @@ test "checkDatabaseExists gives up when the storage never answers, rather than w
 }
 
 test "checkDatabaseExists answers normally when the storage does answer" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var server: SilentServer = undefined;
     try server.start(io, allocator, true, null);
     defer server.stop(io, allocator);
@@ -259,7 +261,7 @@ test "checkDatabaseExists answers normally when the storage does answer" {
         .value = try std.fmt.allocPrint(allocator, "{{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"endpoint\":\"http://127.0.0.1:{d}\"}}", .{server.port}),
     });
 
-    const exists = try media_file_database.checkDatabaseExists(allocator, io, "s3:bucket/reachable", null);
+    const exists = try media_file_database.checkDatabaseExists(allocator, io, log, "s3:bucket/reachable", null);
 
     try std.testing.expect(exists);
 }

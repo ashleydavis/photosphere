@@ -8,6 +8,8 @@
 //
 
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const ILog = @import("utils-zig").log.ILog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
@@ -83,7 +85,7 @@ fn contentsOf(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 //
 // Fills a storage with the given files and a merkle tree describing exactly them.
 //
-fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileNames: []const []const u8) !void {
+fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, fileNames: []const []const u8) !void {
     const files = try allocator.alloc(sync_helpers.IFileToStore, fileNames.len);
     for (fileNames, 0..) |name, index| {
         files[index] = .{
@@ -91,19 +93,19 @@ fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fil
             .contents = try contentsOf(allocator, name),
         };
     }
-    try sync_helpers.fillDatabase(allocator, io, storage, dbId, files, &.{});
+    try sync_helpers.fillDatabase(allocator, io, log, storage, dbId, files, &.{});
 }
 
 //
 // Makes an encrypted database under the given keys, holding the given files.
 //
-fn makeEncryptedDatabase(allocator: std.mem.Allocator, io: std.Io, keys: IDatabaseKeys, fileNames: []const []const u8) !IEncryptedDatabase {
+fn makeEncryptedDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, keys: IDatabaseKeys, fileNames: []const []const u8) !IEncryptedDatabase {
     const raw = try allocator.create(MemoryStorage);
     raw.* = MemoryStorage.init(allocator);
     const storage = try allocator.create(EncryptedStorage);
     storage.* = EncryptedStorage.init("encrypted", raw.asStorage(), keys.options.decryptionKeyMap.?, keys.options.encryptionPublicKey.?);
     try raw.asStorage().write(allocator, io, ".db/encryption.pub", null, keys.publicKeyPem);
-    try fillDatabase(allocator, io, storage.storage(), fileNames);
+    try fillDatabase(allocator, io, log, storage.storage(), fileNames);
     return .{
         .raw = raw,
         .storage = storage,
@@ -111,6 +113,7 @@ fn makeEncryptedDatabase(allocator: std.mem.Allocator, io: std.Io, keys: IDataba
 }
 
 test "moves the stored bytes as they are" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -120,23 +123,24 @@ test "moves the stored bytes as they are" {
     defer capture.stop();
 
     const keys = try makeKeys(allocator, "ts");
-    const source = try makeEncryptedDatabase(allocator, io, keys, &.{fileName});
-    const target = try makeEncryptedDatabase(allocator, io, keys, &.{});
+    const source = try makeEncryptedDatabase(allocator, io, log, keys, &.{fileName});
+    const target = try makeEncryptedDatabase(allocator, io, log, keys, &.{});
 
-    const bytes = try chooseHowToPushBytes(allocator, io, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage());
+    const bytes = try chooseHowToPushBytes(allocator, io, log, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage());
     try std.testing.expectEqual(true, bytes.verbatim);
 
-    try pushFiles(allocator, io, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), bytes);
+    try pushFiles(allocator, io, log, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), bytes);
 
     // Byte for byte the source's ciphertext, which it could only be if nothing was decrypted
     // and encrypted again on the way: a fresh encryption draws a fresh key and a fresh IV.
-    try std.testing.expectEqualSlices(u8, (try source.raw.asStorage().read(allocator, io, fileName)).?, (try target.raw.asStorage().read(allocator, io, fileName)).?);
+    try std.testing.expectEqualSlices(u8, (try source.raw.asStorage().read(allocator, io, log, fileName)).?, (try target.raw.asStorage().read(allocator, io, log, fileName)).?);
 
     // And the target reads it back as what the database holds.
-    try std.testing.expectEqualStrings(try contentsOf(allocator, fileName), (try target.storage.storage().read(allocator, io, fileName)).?);
+    try std.testing.expectEqualStrings(try contentsOf(allocator, fileName), (try target.storage.storage().read(allocator, io, log, fileName)).?);
 }
 
 test "hands the store the hash of the stored bytes, so the store can check them" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -146,16 +150,17 @@ test "hands the store the hash of the stored bytes, so the store can check them"
     defer capture.stop();
 
     const keys = try makeKeys(allocator, "ts");
-    const source = try makeEncryptedDatabase(allocator, io, keys, &.{fileName});
-    const target = try makeEncryptedDatabase(allocator, io, keys, &.{});
+    const source = try makeEncryptedDatabase(allocator, io, log, keys, &.{fileName});
+    const target = try makeEncryptedDatabase(allocator, io, log, keys, &.{});
 
-    try pushFiles(allocator, io, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), try chooseHowToPushBytes(allocator, io, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage()));
+    try pushFiles(allocator, io, log, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), try chooseHowToPushBytes(allocator, io, log, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage()));
 
-    const storedBytes = (try source.raw.asStorage().read(allocator, io, fileName)).?;
+    const storedBytes = (try source.raw.asStorage().read(allocator, io, log, fileName)).?;
     try std.testing.expectEqualSlices(u8, try sync_helpers.hashOf(allocator, storedBytes), (try target.raw.asStorage().storedHash(allocator, io, fileName)).?);
 }
 
 test "records the file in the target's tree as the source's tree has it" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -165,13 +170,13 @@ test "records the file in the target's tree as the source's tree has it" {
     defer capture.stop();
 
     const keys = try makeKeys(allocator, "ts");
-    const source = try makeEncryptedDatabase(allocator, io, keys, &.{fileName});
-    const target = try makeEncryptedDatabase(allocator, io, keys, &.{});
+    const source = try makeEncryptedDatabase(allocator, io, log, keys, &.{fileName});
+    const target = try makeEncryptedDatabase(allocator, io, log, keys, &.{});
 
-    try pushFiles(allocator, io, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), try chooseHowToPushBytes(allocator, io, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage()));
+    try pushFiles(allocator, io, log, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), try chooseHowToPushBytes(allocator, io, log, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage()));
 
-    const sourceTree = (try merkle_tree.loadTree(allocator, io, ".db/files.dat", source.storage.storage(), "FTRE")).?;
-    const targetTree = (try merkle_tree.loadTree(allocator, io, ".db/files.dat", target.storage.storage(), "FTRE")).?;
+    const sourceTree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", source.storage.storage(), "FTRE")).?;
+    const targetTree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", target.storage.storage(), "FTRE")).?;
     const sourceInfo = (try merkle_tree.getItemInfo(&sourceTree, fileName)).?;
     const targetInfo = (try merkle_tree.getItemInfo(&targetTree, fileName)).?;
     try std.testing.expectEqualSlices(u8, sourceInfo.hash, targetInfo.hash);
@@ -180,6 +185,7 @@ test "records the file in the target's tree as the source's tree has it" {
 }
 
 test "goes through the databases, decrypting and encrypting on the way" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -188,19 +194,20 @@ test "goes through the databases, decrypting and encrypting on the way" {
     capture.start(allocator);
     defer capture.stop();
 
-    const source = try makeEncryptedDatabase(allocator, io, try makeKeys(allocator, "ts"), &.{fileName});
-    const target = try makeEncryptedDatabase(allocator, io, try makeKeys(allocator, "ts2"), &.{});
+    const source = try makeEncryptedDatabase(allocator, io, log, try makeKeys(allocator, "ts"), &.{fileName});
+    const target = try makeEncryptedDatabase(allocator, io, log, try makeKeys(allocator, "ts2"), &.{});
 
-    const bytes = try chooseHowToPushBytes(allocator, io, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage());
+    const bytes = try chooseHowToPushBytes(allocator, io, log, source.storage.storage(), source.raw.asStorage(), target.storage.storage(), target.raw.asStorage());
     try std.testing.expectEqual(false, bytes.verbatim);
 
-    try pushFiles(allocator, io, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), bytes);
+    try pushFiles(allocator, io, log, source.storage.storage(), target.storage.storage(), try sync_helpers.makeBsonDatabase(allocator, target.storage.storage()), bytes);
 
-    try std.testing.expect(!std.mem.eql(u8, (try source.raw.asStorage().read(allocator, io, fileName)).?, (try target.raw.asStorage().read(allocator, io, fileName)).?));
-    try std.testing.expectEqualStrings(try contentsOf(allocator, fileName), (try target.storage.storage().read(allocator, io, fileName)).?);
+    try std.testing.expect(!std.mem.eql(u8, (try source.raw.asStorage().read(allocator, io, log, fileName)).?, (try target.raw.asStorage().read(allocator, io, log, fileName)).?));
+    try std.testing.expectEqualStrings(try contentsOf(allocator, fileName), (try target.storage.storage().read(allocator, io, log, fileName)).?);
 }
 
 test "is never verbatim when either side is not encrypted" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -209,10 +216,10 @@ test "is never verbatim when either side is not encrypted" {
     capture.start(allocator);
     defer capture.stop();
 
-    const encrypted = try makeEncryptedDatabase(allocator, io, try makeKeys(allocator, "ts"), &.{fileName});
+    const encrypted = try makeEncryptedDatabase(allocator, io, log, try makeKeys(allocator, "ts"), &.{fileName});
     var plain = MemoryStorage.init(allocator);
-    try fillDatabase(allocator, io, plain.asStorage(), &.{});
+    try fillDatabase(allocator, io, log, plain.asStorage(), &.{});
 
-    try std.testing.expectEqual(false, (try chooseHowToPushBytes(allocator, io, encrypted.storage.storage(), encrypted.raw.asStorage(), plain.asStorage(), plain.asStorage())).verbatim);
-    try std.testing.expectEqual(false, (try chooseHowToPushBytes(allocator, io, plain.asStorage(), plain.asStorage(), encrypted.storage.storage(), encrypted.raw.asStorage())).verbatim);
+    try std.testing.expectEqual(false, (try chooseHowToPushBytes(allocator, io, log, encrypted.storage.storage(), encrypted.raw.asStorage(), plain.asStorage(), plain.asStorage())).verbatim);
+    try std.testing.expectEqual(false, (try chooseHowToPushBytes(allocator, io, log, plain.asStorage(), plain.asStorage(), encrypted.storage.storage(), encrypted.raw.asStorage())).verbatim);
 }

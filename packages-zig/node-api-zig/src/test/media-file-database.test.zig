@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -9,7 +10,6 @@ const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const fixture_dirs = @import("fixture-dirs.zig");
-const mock_log = @import("mock-log.zig");
 const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
 const media_file_database = node_api.media_file_database;
 const errors = utils.errors;
@@ -39,8 +39,9 @@ fn makeGenerators(allocator: std.mem.Allocator) !*Generators {
 }
 
 test "DATABASE_README_CONTENT is the README of the test databases" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const readme = try test_files.readFile(arena.allocator(), std.testing.io, fixture_dirs.TEST_DBS_DIR ++ "/v6/README.md");
@@ -48,8 +49,9 @@ test "DATABASE_README_CONTENT is the README of the test databases" {
 }
 
 test "createMediaFileDatabase creates the BSON database under .db/bson with the metadata collection" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -63,14 +65,15 @@ test "createMediaFileDatabase creates the BSON database under .db/bson with the 
     try std.testing.expectEqualStrings(".db/bson", database.bsonDatabase.bsonDbPath);
     try std.testing.expectEqualStrings("metadata", database.metadataCollection.name);
     var records = database.metadataCollection.iterateRecords();
-    const record = (try records.next(io)).?;
+    const record = (try records.next(io, log)).?;
     try std.testing.expectEqualStrings("89171cd9-a652-4047-b869-1154bf2c95a1", record._id);
-    try std.testing.expect(try records.next(io) == null);
+    try std.testing.expect(try records.next(io, log) == null);
 }
 
 test "createDatabase creates README.md, the files tree, the sort indexes and config.json" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -81,17 +84,17 @@ test "createDatabase creates README.md, the files tree, the sort indexes and con
     const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database");
     defer temp_dirs.removeTempDir(io, dir);
-    const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
 
-    try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, "12345678-1234-4678-8abc-123456789abc");
+    try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, "12345678-1234-4678-8abc-123456789abc");
 
     try std.testing.expectEqualStrings(media_file_database.DATABASE_README_CONTENT, try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ dir, "README.md" })));
     try std.testing.expectEqualStrings("{}", try test_files.readFile(allocator, io, try std.fs.path.join(allocator, &.{ dir, ".db", "config.json" })));
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dir, ".db", "bson", "indexes", "metadata", "hash_asc", "tree.dat" })));
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ dir, ".db", "bson", "indexes", "metadata", "photoDate_desc", "tree.dat" })));
 
-    const loaded = (try node_api.tree.loadMerkleTree(allocator, io, created.storage)).?;
+    const loaded = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
     try std.testing.expectEqualStrings("12345678-1234-4678-8abc-123456789abc", loaded.id);
     try std.testing.expectEqual(@as(u32, 1), loaded.sort.?.leafCount);
     try std.testing.expectEqualStrings("README.md", loaded.sort.?.name.?);
@@ -101,8 +104,9 @@ test "createDatabase creates README.md, the files tree, the sort indexes and con
 }
 
 test "createDatabase generates a database id when none is given" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -113,16 +117,17 @@ test "createDatabase generates a database id when none is given" {
     const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-id");
     defer temp_dirs.removeTempDir(io, dir);
-    const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
-    const loaded = (try node_api.tree.loadMerkleTree(allocator, io, created.storage)).?;
+    try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
+    const loaded = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
     try std.testing.expectEqual(@as(usize, 36), loaded.id.len);
 }
 
 test "createDatabase throws when the directory already contains files" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -134,9 +139,9 @@ test "createDatabase throws when the directory already contains files" {
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-full");
     defer temp_dirs.removeTempDir(io, dir);
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ dir, "something.txt" }), "x");
-    const created = try node_api.open_storage.openStorage(allocator, io, dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try std.testing.expectError(error.Thrown, media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null));
+    try std.testing.expectError(error.Thrown, media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null));
 
     // The location is `pathJoin("fs:", path)` with forward slashes, so on Windows it reads "fs:/C:/...".
     const forwardSlashDir = try allocator.dupe(u8, dir);
@@ -147,8 +152,9 @@ test "createDatabase throws when the directory already contains files" {
 }
 
 test "createReadme writes README.md and adds it to the tree" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -159,7 +165,7 @@ test "createReadme writes README.md and adds it to the tree" {
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-readme");
     defer temp_dirs.removeTempDir(io, dir);
     const storage = try test_files.directoryStorage(allocator, io, dir);
-    const merkleTree = try media_file_database.createReadme(allocator, io, storage, merkle_tree_zig.merkle_tree.createTree("id"));
+    const merkleTree = try media_file_database.createReadme(allocator, io, log, storage, merkle_tree_zig.merkle_tree.createTree("id"));
     try std.testing.expect(merkleTree.dirty);
     try std.testing.expectEqualStrings("README.md", merkleTree.sort.?.name.?);
     var expectedHash: [32]u8 = undefined;
@@ -168,8 +174,9 @@ test "createReadme writes README.md and adds it to the tree" {
 }
 
 test "ensureSortIndex builds the hash and photoDate sort indexes" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -183,14 +190,15 @@ test "ensureSortIndex builds the hash and photoDate sort indexes" {
     try std.Io.Dir.cwd().deleteTree(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes" }));
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try media_file_database.ensureSortIndex(io, database.metadataCollection);
+    try media_file_database.ensureSortIndex(io, log, database.metadataCollection);
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes", "metadata", "hash_asc", "tree.dat" })));
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "bson", "indexes", "metadata", "photoDate_desc", "tree.dat" })));
 }
 
 test "loadSortIndexes succeeds for an existing database" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -201,12 +209,13 @@ test "loadSortIndexes succeeds for an existing database" {
     const generators = try makeGenerators(allocator);
     const storage = try test_files.directoryStorage(allocator, io, fixture_dirs.TEST_DBS_DIR ++ "/v6");
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try media_file_database.loadSortIndexes(allocator, database.assetStorage, database.metadataCollection);
+    try media_file_database.loadSortIndexes(allocator, log, database.assetStorage, database.metadataCollection);
 }
 
 test "getFilesImported, isPartialDatabase, emptyDatabaseMetadata and copyDatabaseMetadata read and write the metadata document" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -230,7 +239,7 @@ test "getFilesImported, isPartialDatabase, emptyDatabaseMetadata and copyDatabas
 // Builds a one-file database in a storage, with the database metadata under test written into its files merkle
 // tree, and returns the storage ready for getDatabaseSummary to read.
 //
-fn buildSummaryDatabase(allocator: std.mem.Allocator, io: std.Io, directory: []const u8, databaseMetadata: ?bson.BsonDocument) !storage_zig.storage.IStorage {
+fn buildSummaryDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, directory: []const u8, databaseMetadata: ?bson.BsonDocument) !storage_zig.storage.IStorage {
     const storage = try test_files.directoryStorage(allocator, io, directory);
     var tree = merkle_tree_zig.merkle_tree.createTree("12345678-1234-5678-9abc-123456789abc");
     const hash = [_]u8{1} ** 32;
@@ -243,7 +252,7 @@ fn buildSummaryDatabase(allocator: std.mem.Allocator, io: std.Io, directory: []c
     tree.merkle = try merkle_tree_zig.merkle_tree.buildMerkleTree(allocator, tree.sort);
     tree.dirty = false;
     tree.databaseMetadata = databaseMetadata;
-    try node_api.tree.saveMerkleTree(allocator, io, &tree, storage);
+    try node_api.tree.saveMerkleTree(allocator, io, log, &tree, storage);
     return storage;
 }
 
@@ -258,8 +267,9 @@ fn summaryMetadata(allocator: std.mem.Allocator, isPartial: bool) !bson.BsonDocu
 }
 
 test "getDatabaseSummary reports partial mode when the tree says the database is partial" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -269,16 +279,17 @@ test "getDatabaseSummary reports partial mode when the tree says the database is
     const io = virtual_time.io();
     const dir = try temp_dirs.makeTempDir(allocator, io, "summary-partial");
     defer temp_dirs.removeTempDir(io, dir);
-    const storage = try buildSummaryDatabase(allocator, io, dir, try summaryMetadata(allocator, true));
+    const storage = try buildSummaryDatabase(allocator, io, log, dir, try summaryMetadata(allocator, true));
 
-    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, log, storage);
 
     try std.testing.expectEqual(media_file_database.DatabaseMode.partial, summary.mode);
 }
 
 test "getDatabaseSummary reports full mode when the tree says the database is not partial" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -288,16 +299,17 @@ test "getDatabaseSummary reports full mode when the tree says the database is no
     const io = virtual_time.io();
     const dir = try temp_dirs.makeTempDir(allocator, io, "summary-full");
     defer temp_dirs.removeTempDir(io, dir);
-    const storage = try buildSummaryDatabase(allocator, io, dir, try summaryMetadata(allocator, false));
+    const storage = try buildSummaryDatabase(allocator, io, log, dir, try summaryMetadata(allocator, false));
 
-    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, log, storage);
 
     try std.testing.expectEqual(media_file_database.DatabaseMode.full, summary.mode);
 }
 
 test "getDatabaseSummary reports full mode when the tree has no database metadata" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -307,16 +319,17 @@ test "getDatabaseSummary reports full mode when the tree has no database metadat
     const io = virtual_time.io();
     const dir = try temp_dirs.makeTempDir(allocator, io, "summary-no-metadata");
     defer temp_dirs.removeTempDir(io, dir);
-    const storage = try buildSummaryDatabase(allocator, io, dir, null);
+    const storage = try buildSummaryDatabase(allocator, io, log, dir, null);
 
-    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, log, storage);
 
     try std.testing.expectEqual(media_file_database.DatabaseMode.full, summary.mode);
 }
 
 test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -326,9 +339,9 @@ test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
     const io = virtual_time.io();
     const storage = try test_files.directoryStorage(allocator, io, "../test/dbs/v6");
 
-    const summary = try media_file_database.getDatabaseSummary(allocator, io, storage);
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, log, storage);
 
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     try std.testing.expectEqual(media_file_database.DatabaseMode.full, summary.mode);
     // README.md and the asset, display and thumb files of its one asset: 913 + 2,049,800 + 696,014 + 130,591
     // bytes in a tree of 7 nodes (the numbers psi verify reports for it).
@@ -339,7 +352,7 @@ test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
     try std.testing.expectEqual(@as(u32, 6), summary.databaseVersion);
     const filesHash = try std.fmt.allocPrint(allocator, "{x}", .{filesTree.merkle.?.hash});
     try std.testing.expectEqualStrings(filesHash, summary.filesHash.?);
-    const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, io, storage, ".db/bson")).?;
+    const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, io, log, storage, ".db/bson")).?;
     const combined = merkle_tree_zig.merkle_tree.combineHashes(filesTree.merkle.?.hash, databaseHash);
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{x}", .{&combined}), summary.fullHash);
 }
@@ -350,8 +363,9 @@ test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
 const V6_ASSET_ID = "89171cd9-a652-4047-b869-1154bf2c95a1";
 
 test "removeAsset removes the files, the tree entries and the record of an asset and records its id as deleted" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -365,7 +379,7 @@ test "removeAsset removes the files, the tree entries and the record of an asset
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
 
-    try media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true);
+    try media_file_database.removeAsset(allocator, io, log, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true);
 
     for ([_][]const u8{ "asset", "display", "thumb" }) |directory| {
         const filePath = try std.fs.path.join(allocator, &.{ databaseDir, directory, V6_ASSET_ID });
@@ -374,7 +388,7 @@ test "removeAsset removes the files, the tree entries and the record of an asset
     try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, ".db", "write.lock" })));
 
     // The tree holds only the README, and its metadata counts no imports and names the asset as deleted.
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     try std.testing.expectEqual(@as(u32, 1), filesTree.sort.?.leafCount);
     try std.testing.expectEqual(@as(u64, 0), media_file_database.getFilesImported(filesTree.databaseMetadata));
     const deletedAssetIds = filesTree.databaseMetadata.?.get("deletedAssetIds").?.array;
@@ -383,17 +397,18 @@ test "removeAsset removes the files, the tree entries and the record of an asset
 
     // The record is gone from a fresh read of the collection.
     const reloaded = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try std.testing.expect((try reloaded.metadataCollection.getOne(io, V6_ASSET_ID)) == null);
+    try std.testing.expect((try reloaded.metadataCollection.getOne(io, log, V6_ASSET_ID)) == null);
 
     // Removing it again finds no record, so the metadata is left as it is.
-    try media_file_database.removeAsset(allocator, io, storage, storage, "session", reloaded.bsonDatabase, reloaded.metadataCollection, V6_ASSET_ID, true);
-    const again = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    try media_file_database.removeAsset(allocator, io, log, storage, storage, "session", reloaded.bsonDatabase, reloaded.metadataCollection, V6_ASSET_ID, true);
+    const again = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     try std.testing.expectEqual(@as(usize, 1), again.databaseMetadata.?.get("deletedAssetIds").?.array.len);
 }
 
 test "removeAsset leaves deletedAssetIds alone when the removal is not to be recorded" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -407,16 +422,17 @@ test "removeAsset leaves deletedAssetIds alone when the removal is not to be rec
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
 
-    try media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, false);
+    try media_file_database.removeAsset(allocator, io, log, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, false);
 
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     try std.testing.expectEqual(@as(u64, 0), media_file_database.getFilesImported(filesTree.databaseMetadata));
     try std.testing.expect(filesTree.databaseMetadata.?.get("deletedAssetIds") == null);
 }
 
 test "removeAsset throws when another session holds the write lock" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -429,13 +445,10 @@ test "removeAsset throws when another session holds the write lock" {
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
     const database = try media_file_database.createMediaFileDatabase(allocator, storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, ".db/write.lock", "another-session"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, ".db/write.lock", "another-session"));
     // Waiting for the lock logs the failure; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
 
-    try std.testing.expectError(error.Thrown, media_file_database.removeAsset(allocator, io, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true));
+    try std.testing.expectError(error.Thrown, media_file_database.removeAsset(allocator, io, log, storage, storage, "session", database.bsonDatabase, database.metadataCollection, V6_ASSET_ID, true));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", errors.lastErrorMessage());
     try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ databaseDir, "asset", V6_ASSET_ID })));
 }
@@ -490,6 +503,7 @@ fn restoreConfigDir(io: std.Io, dirs: ConfigDirs) void {
 }
 
 test "checkDatabaseExists is true when the database has a merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -498,14 +512,15 @@ test "checkDatabaseExists is true when the database has a merkle tree" {
     defer virtual_time.deinit();
     const io = virtual_time.io();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
-    try std.testing.expect(try media_file_database.checkDatabaseExists(allocator, io, databaseDir, null));
+    try std.testing.expect(try media_file_database.checkDatabaseExists(allocator, io, log, databaseDir, null));
 }
 
 test "checkDatabaseExists is false when the directory exists but holds no database" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -514,14 +529,15 @@ test "checkDatabaseExists is false when the directory exists but holds no databa
     defer virtual_time.deinit();
     const io = virtual_time.io();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-empty");
     defer temp_dirs.removeTempDir(io, emptyDir);
 
-    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, emptyDir, null));
+    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, log, emptyDir, null));
 }
 
 test "checkDatabaseExists is false when the path does not exist at all" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -530,14 +546,15 @@ test "checkDatabaseExists is false when the path does not exist at all" {
     defer virtual_time.deinit();
     const io = virtual_time.io();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-missing");
     defer temp_dirs.removeTempDir(io, tempDir);
 
-    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }), null));
+    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, log, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }), null));
 }
 
 test "checkDatabaseExists does not catch a storage error: it is not reported as no database" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -546,19 +563,20 @@ test "checkDatabaseExists does not catch a storage error: it is not reported as 
     defer virtual_time.deinit();
     const io = virtual_time.io();
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const dirs = try registerPathWithMissingKey(allocator, io, databaseDir);
     defer restoreConfigDir(io, dirs);
 
-    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, io, databaseDir, null));
+    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, io, log, databaseDir, null));
     try std.testing.expectEqualStrings("Encryption key \"missing-enc\" not found in vault", errors.lastErrorMessage());
 }
 
 test "getFilesImported reads a count held as a 32 bit integer" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -569,17 +587,18 @@ test "getFilesImported reads a count held as a 32 bit integer" {
 }
 
 test "openLazyOriginStorage hands back the local storage of a database with no origin" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databaseDir, null, null);
 
-    const opened = try media_file_database.openLazyOriginStorage(allocator, io, created.storage, created.rawStorage, null);
+    const opened = try media_file_database.openLazyOriginStorage(allocator, io, log, created.storage, created.rawStorage, null);
 
     try std.testing.expectEqual(created.storage.ptr, opened.ptr);
     try std.testing.expectEqual(created.storage.vtable, opened.vtable);

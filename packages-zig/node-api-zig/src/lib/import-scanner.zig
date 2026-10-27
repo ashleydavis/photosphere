@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const api = @import("api-zig");
 const file_scanner = @import("file-scanner.zig");
 const IFileCacheIdentity = api.import_assets_types.IFileCacheIdentity;
@@ -59,13 +60,13 @@ pub const VisitImportFile = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, result: IScannedImportFile) anyerror!void,
+    function: *const fn (context: ?*anyopaque, log: ILog, result: IScannedImportFile) anyerror!void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: VisitImportFile, result: IScannedImportFile) anyerror!void {
-        return self.function(self.context, result);
+    pub fn call(self: VisitImportFile, log: ILog, result: IScannedImportFile) anyerror!void {
+        return self.function(self.context, log, result);
     }
 };
 
@@ -95,7 +96,7 @@ pub const IImportScanner = struct {
     //
     pub const VTable = struct {
         // Pushes every file this scanner has, one at a time, and returns when there are no more.
-        scan: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void,
+        scan: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void,
 
         // Releases whatever the scanner materialised for one file, once the import has finished with it.
         release: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void,
@@ -107,8 +108,8 @@ pub const IImportScanner = struct {
     // A scanner that watches somewhere for new files does not return until the import is cancelled,
     // which is the one genuine difference between the two kinds.
     //
-    pub fn scan(self: IImportScanner, allocator: std.mem.Allocator, io: std.Io, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
-        return self.vtable.scan(self.ptr, allocator, io, timers, visitFile, onProgress);
+    pub fn scan(self: IImportScanner, allocator: std.mem.Allocator, io: std.Io, log: ILog, timers: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
+        return self.vtable.scan(self.ptr, allocator, io, log, timers, visitFile, onProgress);
     }
 
     //

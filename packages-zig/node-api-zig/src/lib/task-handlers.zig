@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const InProcessRunner = @import("node-utils-zig").in_process_tools.InProcessRunner;
 const task_queue_zig = ziggy.task_queue;
@@ -90,7 +91,7 @@ pub const handlers = [_]IHandlerEntry{
 // A task handler that runs ImageMagick or FFmpeg: a task queue handler that is also given the runner of the tools built into the
 // program, or null when the program has none.
 //
-pub const ToolTaskHandler = *const fn (allocator: std.mem.Allocator, io: std.Io, timers: ziggy.timers.Timers, data: std.json.Value, context: task_queue_zig.types.ITaskContext, tools: ?InProcessRunner) anyerror!std.json.Value;
+pub const ToolTaskHandler = *const fn (allocator: std.mem.Allocator, io: std.Io, timers: ziggy.timers.Timers, log: ILog, data: std.json.Value, context: task_queue_zig.types.ITaskContext, tools: ?InProcessRunner) anyerror!std.json.Value;
 
 //
 // A task type whose handler runs ImageMagick or FFmpeg, and that handler.
@@ -152,9 +153,9 @@ pub fn taskEntries(comptime Tools: type, comptime registerMediaSources: fn (cont
 //
 fn withMediaSources(comptime registerMediaSources: fn (context: task_queue_zig.types.ITaskContext) anyerror!void, comptime handler: task_queue_zig.types.TaskHandler) task_queue_zig.types.TaskHandler {
     return &struct {
-        fn run(allocator: std.mem.Allocator, io: std.Io, timers: ziggy.timers.Timers, data: std.json.Value, context: task_queue_zig.types.ITaskContext) anyerror!std.json.Value {
+        fn run(allocator: std.mem.Allocator, io: std.Io, timers: ziggy.timers.Timers, log: ILog, data: std.json.Value, context: task_queue_zig.types.ITaskContext) anyerror!std.json.Value {
             try registerMediaSources(context);
-            return try handler(allocator, io, timers, data, context);
+            return try handler(allocator, io, timers, log, data, context);
         }
     }.run;
 }
@@ -165,10 +166,10 @@ fn withMediaSources(comptime registerMediaSources: fn (context: task_queue_zig.t
 //
 fn withTools(comptime Tools: type, comptime registerMediaSources: fn (context: task_queue_zig.types.ITaskContext) anyerror!void, comptime handler: ToolTaskHandler) task_queue_zig.types.TaskHandler {
     return &struct {
-        fn run(allocator: std.mem.Allocator, io: std.Io, timers: ziggy.timers.Timers, data: std.json.Value, context: task_queue_zig.types.ITaskContext) anyerror!std.json.Value {
+        fn run(allocator: std.mem.Allocator, io: std.Io, timers: ziggy.timers.Timers, log: ILog, data: std.json.Value, context: task_queue_zig.types.ITaskContext) anyerror!std.json.Value {
             try registerMediaSources(context);
             var tools = Tools.init();
-            return try handler(allocator, io, timers, data, context, tools.runner());
+            return try handler(allocator, io, timers, log, data, context, tools.runner());
         }
     }.run;
 }

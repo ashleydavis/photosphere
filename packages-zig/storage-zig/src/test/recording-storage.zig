@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 
 const IStorage = storage_zig.storage.IStorage;
@@ -137,7 +138,8 @@ pub const RecordingStorage = struct {
     //
     // Records read.
     //
-    pub fn read(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = io;
         try self.record("read", filePath);
         return try allocator.dupe(u8, "data");
@@ -157,7 +159,8 @@ pub const RecordingStorage = struct {
     //
     // Records readStream (not supported: fails).
     //
-    pub fn readStream(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        _ = log;
         _ = allocator;
         _ = io;
         try self.record("readStream", filePath);
@@ -216,7 +219,8 @@ pub const RecordingStorage = struct {
     //
     // Records acquireWriteLock.
     //
-    pub fn acquireWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
+    pub fn acquireWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        _ = log;
         _ = allocator;
         _ = io;
         try self.calls.append(self.allocator, try std.fmt.allocPrint(self.allocator, "acquireWriteLock {s} {s}", .{ filePath, owner }));
@@ -226,7 +230,8 @@ pub const RecordingStorage = struct {
     //
     // Records releaseWriteLock.
     //
-    pub fn releaseWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+    pub fn releaseWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        _ = log;
         _ = allocator;
         _ = io;
         try self.record("releaseWriteLock", filePath);
@@ -235,7 +240,8 @@ pub const RecordingStorage = struct {
     //
     // Records refreshWriteLock.
     //
-    pub fn refreshWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+    pub fn refreshWriteLock(self: *RecordingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        _ = log;
         _ = allocator;
         _ = io;
         try self.calls.append(self.allocator, try std.fmt.allocPrint(self.allocator, "refreshWriteLock {s} {s}", .{ filePath, owner }));

@@ -16,12 +16,13 @@ test "the runner handles magick, ffmpeg and ffprobe and no other tool" {
 }
 
 test "the runner runs magick" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var tools = try MediaTools.init();
     defer tools.deinit();
     const runner = tools.runner();
-    const result = try runner.run(runner.context, std.testing.io, arena.allocator(), "magick", &.{"-version"});
+    const result = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "magick", &.{"-version"});
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     try std.testing.expect(std.mem.indexOf(u8, result.output, "Version: ImageMagick 7.") != null);
 }
@@ -43,6 +44,8 @@ const ThreadOutcome = struct {
 // their runner.
 //
 fn runWithOwnRunner(outcome: *ThreadOutcome) void {
+    // The thread's own log, which writes to the console.
+    const log = utils.mute_log.MuteLog.init();
     var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
@@ -53,9 +56,9 @@ fn runWithOwnRunner(outcome: *ThreadOutcome) void {
     var tools = media_tools.ThreadTools.init();
     const runner = tools.runner();
     outcome.runner_state = @intFromPtr(runner.context.?);
-    const magick = runner.run(runner.context, threaded.io(), arena.allocator(), "magick", &.{"-version"}) catch return;
+    const magick = runner.run(runner.context, threaded.io(), log, arena.allocator(), "magick", &.{"-version"}) catch return;
     outcome.magick_ran = magick.exit_code == 0 and std.mem.indexOf(u8, magick.output, "Version: ImageMagick 7.") != null;
-    const ffprobe = runner.run(runner.context, threaded.io(), arena.allocator(), "ffprobe", &.{"-version"}) catch return;
+    const ffprobe = runner.run(runner.context, threaded.io(), log, arena.allocator(), "ffprobe", &.{"-version"}) catch return;
     outcome.ffprobe_ran = ffprobe.exit_code == 0 and std.mem.startsWith(u8, ffprobe.output, "ffprobe version ");
 }
 
@@ -79,11 +82,12 @@ test "each thread makes tools of its own, and runs them while another thread run
 }
 
 test "the runner fails for a tool that is not built in, naming it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var tools = try MediaTools.init();
     defer tools.deinit();
     const runner = tools.runner();
-    try std.testing.expectError(error.Thrown, runner.run(runner.context, std.testing.io, arena.allocator(), "convert", &.{"-version"}));
+    try std.testing.expectError(error.Thrown, runner.run(runner.context, std.testing.io, log, arena.allocator(), "convert", &.{"-version"}));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "convert is not built into the program.") != null);
 }

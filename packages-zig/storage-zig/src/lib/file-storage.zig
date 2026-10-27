@@ -1,10 +1,10 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const locale_compare = @import("locale-compare.zig");
 
 const errors = utils.errors;
-const log = &utils.log.log;
 const Date = utils.timestamp_provider.Date;
 const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
 const IFileInfo = @import("storage.zig").IFileInfo;
@@ -223,7 +223,8 @@ pub const FileStorage = struct {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    pub fn read(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = self;
         if (!pathExists(io, filePath)) {
             // Returns undefined if the file doesn't exist.
@@ -251,7 +252,8 @@ pub const FileStorage = struct {
     // Streams a file from stroage.
     // The file is opened here, so a missing file fails now with Node's ENOENT message instead of on the first read.
     //
-    pub fn readStream(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        _ = log;
         _ = self;
         return createReadStream(allocator, io, filePath);
     }
@@ -339,7 +341,7 @@ pub const FileStorage = struct {
     // Attempts to acquire a write lock for the specified file.
     // Returns true if the lock was acquired, false if it already exists.
     //
-    pub fn acquireWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
+    pub fn acquireWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
 
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
         const processId = @import("storage.zig").processId();
@@ -359,7 +361,7 @@ pub const FileStorage = struct {
                     if (log.verboseEnabled()) {
                         log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_TIMEOUT_BREAK,{d},{s},{s},age:{d}ms,oldOwner:{s}", .{ timestamp, processId, owner, filePath, lockAge, lock.owner }));
                     }
-                    try logAcquireError(allocator, timestamp, processId, owner, filePath, remove(io, filePath));
+                    try logAcquireError(log, allocator, timestamp, processId, owner, filePath, remove(io, filePath));
                 }
                 else {
                     // Lock is still valid
@@ -369,7 +371,7 @@ pub const FileStorage = struct {
                     return false;
                 }
             }
-            else if (lockFileBeingWritten(io, filePath, timestamp) catch |err| return failAcquire(allocator, timestamp, processId, owner, filePath, err)) {
+            else if (lockFileBeingWritten(io, filePath, timestamp) catch |err| return failAcquire(log, allocator, timestamp, processId, owner, filePath, err)) {
                 // The lock file is empty because its owner has created it and not yet written it.
                 // Breaking it here as corrupt let two owners hold the lock at once.
                 // The lock file is created and its JSON written in one call, so a contender that reads it empty in between
@@ -394,12 +396,12 @@ pub const FileStorage = struct {
                 if (log.verboseEnabled()) {
                     log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_CORRUPTED_BREAK,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
                 }
-                try logAcquireError(allocator, timestamp, processId, owner, filePath, remove(io, filePath));
+                try logAcquireError(log, allocator, timestamp, processId, owner, filePath, remove(io, filePath));
             }
         }
 
         // Ensure directory exists
-        try logAcquireError(allocator, timestamp, processId, owner, filePath, ensureDir(io, dirname(filePath)));
+        try logAcquireError(log, allocator, timestamp, processId, owner, filePath, ensureDir(io, dirname(filePath)));
 
         // Create lock file with owner and timestamp information
         const lockInfo: LockFileContent = .{
@@ -418,10 +420,10 @@ pub const FileStorage = struct {
                 }
                 return false;
             }
-            return failAcquire(allocator, timestamp, processId, owner, filePath, err);
+            return failAcquire(log, allocator, timestamp, processId, owner, filePath, err);
         };
         defer lockFile.close(io);
-        try logAcquireError(allocator, timestamp, processId, owner, filePath, lockFile.writeStreamingAll(io, lockText));
+        try logAcquireError(log, allocator, timestamp, processId, owner, filePath, lockFile.writeStreamingAll(io, lockText));
 
         if (log.verboseEnabled()) {
             log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_SUCCESS,{d},{s},{s}", .{ timestamp, processId, owner, filePath }));
@@ -432,7 +434,7 @@ pub const FileStorage = struct {
     //
     // Releases a write lock for the specified file.
     //
-    pub fn releaseWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+    pub fn releaseWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
         _ = self;
 
         std.Io.Dir.cwd().deleteFile(io, filePath) catch {
@@ -449,7 +451,7 @@ pub const FileStorage = struct {
     // Throws an error if the lock is no longer owned by the specified owner.
     // The body is a function, refreshWriteLockUnlogged, so that its failure can be logged and rethrown.
     //
-    pub fn refreshWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+    pub fn refreshWriteLock(self: *FileStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
         const timestamp = std.Io.Clock.real.now(io).toMilliseconds();
         const processId = @import("storage.zig").processId();
 
@@ -513,9 +515,9 @@ fn lockFileBeingWritten(io: std.Io, filePath: []const u8, timestamp: i64) !bool 
 // The catch block of FileStorage.acquireWriteLock for errors other than EEXIST: logs the error and rethrows it.
 // Each fallible step of acquireWriteLock passes its result through this.
 //
-fn logAcquireError(allocator: std.mem.Allocator, timestamp: i64, processId: i64, owner: []const u8, filePath: []const u8, result: anytype) anyerror!void {
+fn logAcquireError(log: ILog, allocator: std.mem.Allocator, timestamp: i64, processId: i64, owner: []const u8, filePath: []const u8, result: anytype) anyerror!void {
     _ = result catch |err| {
-        return failAcquire(allocator, timestamp, processId, owner, filePath, err);
+        return failAcquire(log, allocator, timestamp, processId, owner, filePath, err);
     };
 }
 
@@ -523,7 +525,7 @@ fn logAcquireError(allocator: std.mem.Allocator, timestamp: i64, processId: i64,
 // The catch block of FileStorage.acquireWriteLock for errors other than EEXIST: logs the error and returns it to be
 // rethrown.
 //
-fn failAcquire(allocator: std.mem.Allocator, timestamp: i64, processId: i64, owner: []const u8, filePath: []const u8, err: anyerror) anyerror {
+fn failAcquire(log: ILog, allocator: std.mem.Allocator, timestamp: i64, processId: i64, owner: []const u8, filePath: []const u8, err: anyerror) anyerror {
     if (log.verboseEnabled()) {
         log.verbose(try std.fmt.allocPrint(allocator, "[LOCK] {d},ACQUIRE_FAILED_ERROR,{d},{s},{s},error:{s}", .{ timestamp, processId, owner, filePath, errors.errorMessage(err) }));
     }

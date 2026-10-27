@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const cli = @import("cli-zig");
 const node_api = @import("node-api-zig");
 const storage_zig = @import("storage-zig");
@@ -18,6 +19,7 @@ fn writeStray(allocator: std.mem.Allocator, db: []const u8, fileName: []const u8
 }
 
 test "findOrphans lists the files that are not in the merkle tree, skipping .db, metadata and .DS_Store" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -33,8 +35,8 @@ test "findOrphans lists the files that are not in the merkle tree, skipping .db,
     try writeStray(allocator, db, "other/file");
 
     const created = try storage_zig.storage_factory.createStorage(allocator, io, db, null, null);
-    const merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, created.storage)).?;
-    const orphans = try findOrphans(allocator, io, created.storage, &merkleTree);
+    const merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
+    const orphans = try findOrphans(allocator, io, log, created.storage, &merkleTree);
 
     try std.testing.expectEqual(@as(usize, 2), orphans.len);
     try std.testing.expectEqualStrings("asset/orphan-1", orphans[0]);
@@ -42,6 +44,7 @@ test "findOrphans lists the files that are not in the merkle tree, skipping .db,
 }
 
 test "findOrphans finds nothing in a database without strays" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -52,8 +55,8 @@ test "findOrphans finds nothing in a database without strays" {
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
     const created = try storage_zig.storage_factory.createStorage(allocator, io, db, null, null);
-    const merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, created.storage)).?;
-    const orphans = try findOrphans(allocator, io, created.storage, &merkleTree);
+    const merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
+    const orphans = try findOrphans(allocator, io, log, created.storage, &merkleTree);
 
     try std.testing.expectEqual(@as(usize, 0), orphans.len);
 }

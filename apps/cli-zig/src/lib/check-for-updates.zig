@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const node_api = @import("node-api-zig");
 const config = @import("config.zig");
 const fetch = node_api.fetch.fetch;
@@ -31,7 +32,7 @@ pub fn tagName(allocator: std.mem.Allocator, body: []const u8) ?[]const u8 {
 //
 // The body of checkForUpdates inside its try block (errors become undefined).
 //
-fn checkForUpdatesUnsafe(allocator: std.mem.Allocator, io: std.Io, currentVersion: []const u8) !?[]const u8 {
+fn checkForUpdatesUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog, currentVersion: []const u8) !?[]const u8 {
     const response = try fetch(allocator, io, LATEST_RELEASE_URL);
     if (!response.ok) {
         return null;
@@ -41,7 +42,7 @@ fn checkForUpdatesUnsafe(allocator: std.mem.Allocator, io: std.Io, currentVersio
     if (std.mem.eql(u8, latestVersion, currentVersion)) {
         return null;
     }
-    const lastShown = try getLastShownUpdateVersion(allocator, io);
+    const lastShown = try getLastShownUpdateVersion(allocator, io, log);
     if (lastShown != null and std.mem.eql(u8, lastShown.?, latestVersion)) {
         return null;
     }
@@ -56,13 +57,13 @@ fn checkForUpdatesUnsafe(allocator: std.mem.Allocator, io: std.Io, currentVersio
 // build ("dev" or nightly), when the user has already been notified about this
 // version, or when the network/parse step fails.
 //
-pub fn checkForUpdates(allocator: std.mem.Allocator, io: std.Io) ?[]const u8 {
+pub fn checkForUpdates(allocator: std.mem.Allocator, io: std.Io, log: ILog) ?[]const u8 {
     const currentVersion: []const u8 = config.version;
     if (std.mem.eql(u8, currentVersion, "dev") or std.mem.indexOf(u8, currentVersion, "nightly") != null) {
         return null;
     }
 
-    return checkForUpdatesUnsafe(allocator, io, currentVersion) catch null;
+    return checkForUpdatesUnsafe(allocator, io, log, currentVersion) catch null;
 }
 
 //

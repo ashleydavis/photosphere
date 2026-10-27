@@ -4,6 +4,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 
@@ -17,12 +18,12 @@ const retry = utils.retry.retry;
 // Reads exactly `length` bytes from the start of a storage file using its read stream.
 // Returns undefined if the file does not exist or produces no data.
 //
-pub fn readFirstBytes(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, filePath: []const u8, length: usize) !?[]u8 {
+pub fn readFirstBytes(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, filePath: []const u8, length: usize) !?[]u8 {
     if (!try storage.fileExists(allocator, io, filePath)) {
         return null;
     }
 
-    const stream = try storage.readStream(allocator, io, filePath);
+    const stream = try storage.readStream(allocator, io, log, filePath);
     defer stream.destroy(io);
 
     // Collects chunks until at least `length` bytes have arrived or the stream ends, keeping the first `length`.
@@ -53,8 +54,8 @@ const ReadFirstBytesOperation = struct {
     //
     // Reads the first bytes of the file.
     //
-    pub fn run(self: *const ReadFirstBytesOperation, io: std.Io) anyerror!?[]u8 {
-        return readFirstBytes(self.allocator, io, self.rawStorage, self.filePath, NEW_FORMAT_HEADER_LENGTH);
+    pub fn run(self: *const ReadFirstBytesOperation, io: std.Io, log: ILog) anyerror!?[]u8 {
+        return readFirstBytes(self.allocator, io, log, self.rawStorage, self.filePath, NEW_FORMAT_HEADER_LENGTH);
     }
 };
 
@@ -67,11 +68,12 @@ const ReadFirstBytesOperation = struct {
 pub fn readEncryptionHeader(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     rawStorage: IStorage,
     filePath: []const u8,
 ) !?[]const u8 {
     const operation: ReadFirstBytesOperation = .{ .allocator = allocator, .rawStorage = rawStorage, .filePath = filePath };
-    const raw = try retry(io, &operation, 3, 1_000, 2, 30_000, null) orelse {
+    const raw = try retry(io, log, &operation, 3, 1_000, 2, 30_000, null) orelse {
         return null;
     };
     if (raw.len < 4) {

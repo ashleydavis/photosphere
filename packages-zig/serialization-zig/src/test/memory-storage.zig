@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 
 //
 // In-memory storage for tests, providing the storage methods that save, load, loadVersion and verify use.
@@ -23,7 +24,8 @@ pub const MemoryStorage = struct {
     //
     // Reads a whole file (null when it does not exist).
     //
-    pub fn read(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = io;
         const data = self.files.get(filePath) orelse {
             return null;
@@ -46,7 +48,8 @@ pub const MemoryStorage = struct {
     //
     // Opens a stream that reads a file.
     //
-    pub fn readStream(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !*MemoryStream {
+    pub fn readStream(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !*MemoryStream {
+        _ = log;
         _ = io;
         const data = self.files.get(filePath) orelse {
             return error.FileNotFound;

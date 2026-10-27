@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -141,11 +142,11 @@ const UploadTest = struct {
     //
     // Removes the directory.
     //
-    fn deinit(self: *UploadTest) void {
+    fn deinit(self: *UploadTest, log: ILog) void {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.mediaTools.deinit();
         self.arena.deinit();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
@@ -174,7 +175,7 @@ const UploadTest = struct {
     //
     // Runs the handler and returns its JSON output.
     //
-    fn runRaw(self: *UploadTest, data: IUploadAssetData) !std.json.Value {
+    fn runRaw(self: *UploadTest, log: ILog, data: IUploadAssetData) !std.json.Value {
         const allocator = self.arena.allocator();
         const text = try utils.json.stringify(allocator, data);
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
@@ -182,14 +183,14 @@ const UploadTest = struct {
         virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
         defer virtual_time.deinit();
         const taskContext = self.context.taskContext();
-        return uploadAssetHandler(allocator, virtual_time.io(), test_timers.timers(), taskData, taskContext, self.toolRunner);
+        return uploadAssetHandler(allocator, virtual_time.io(), test_timers.timers(), log, taskData, taskContext, self.toolRunner);
     }
 
     //
     // Runs the handler and reads its result.
     //
-    fn run(self: *UploadTest, data: IUploadAssetData) !IUploadAssetResult {
-        const output = try self.runRaw(data);
+    fn run(self: *UploadTest, log: ILog, data: IUploadAssetData) !IUploadAssetResult {
+        const output = try self.runRaw(log, data);
         return std.json.parseFromValueLeaky(IUploadAssetResult, self.arena.allocator(), output, .{});
     }
 
@@ -212,24 +213,26 @@ const UploadTest = struct {
 };
 
 test "returns undefined when cancelled" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     context.context.cancel();
 
-    const output = try context.runRaw(context.makeUploadAssetData());
+    const output = try context.runRaw(log, context.makeUploadAssetData());
 
     try std.testing.expect(output == .null);
 }
 
 test "returns IUploadAssetResult with assetData in dry-run mode without writing to storage" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqualStrings("asset-1", result.assetData.assetId);
     try std.testing.expectEqualStrings("asset-1", (try context.record(result)).get("_id").?.string);
@@ -237,36 +240,39 @@ test "returns IUploadAssetResult with assetData in dry-run mode without writing 
 }
 
 test "sends import-pending message at start" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
 
-    _ = try context.run(data);
+    _ = try context.run(log, data);
 
     try std.testing.expectEqualStrings("{\"type\":\"import-pending\",\"assetId\":\"asset-1\",\"logicalPath\":\"/test/photos/img.jpg\"}", context.messages.messages.items[0]);
 }
 
 test "does not send import-success or import-skipped messages" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
 
-    _ = try context.run(data);
+    _ = try context.run(log, data);
 
     try std.testing.expect(!context.messages.sentType("import-success"));
     try std.testing.expect(!context.messages.sentType("import-skipped"));
 }
 
 test "does not acquire write lock or write to database" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
 
-    _ = try context.run(context.makeUploadAssetData());
+    _ = try context.run(log, context.makeUploadAssetData());
 
     // Storage writes happened, but nothing of the database itself was touched.
     try std.testing.expect(context.databaseHas("asset/asset-1"));
@@ -276,24 +282,26 @@ test "does not acquire write lock or write to database" {
 }
 
 test "returns correct assetRecord hash" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
     data.expectedHash = "aabbcc";
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqualStrings("aabbcc", (try context.record(result)).get("hash").?.string);
 }
 
 test "in non-dry-run mode, storage.writeStream is called for the asset, thumbnail, and display file" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
 
-    _ = try context.run(context.makeUploadAssetData());
+    _ = try context.run(log, context.makeUploadAssetData());
 
     try std.testing.expect(context.databaseHas("asset/asset-1"));
     try std.testing.expect(context.databaseHas("thumb/asset-1"));
@@ -301,27 +309,29 @@ test "in non-dry-run mode, storage.writeStream is called for the asset, thumbnai
 }
 
 test "result.totalSize equals the sum of asset + thumbnail + display byte lengths" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
     data.fileStat.length = 500;
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     // In dry-run mode each of the three uploads uses fileStat.length.
     try std.testing.expectEqual(@as(u64, 500 * 3), result.totalSize);
 }
 
 test "returned IAssetDatabaseData includes display fields when a display version is produced" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expect(result.assetData.displayPath != null);
     try std.testing.expect(result.assetData.displayHash != null);
@@ -330,9 +340,10 @@ test "returned IAssetDatabaseData includes display fields when a display version
 }
 
 test "returned IAssetDatabaseData includes thumb fields when a thumbnail is produced" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     // (A video has a thumbnail and no display version.)
     var data = context.makeUploadAssetData();
     data.dryRun = true;
@@ -341,7 +352,7 @@ test "returned IAssetDatabaseData includes thumb fields when a thumbnail is prod
     try test_files.writeFile(std.testing.io, context.filePath, video);
     data.fileStat.length = video.len;
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expect(result.assetData.thumbPath != null);
     try std.testing.expect(result.assetData.thumbHash != null);
@@ -351,13 +362,14 @@ test "returned IAssetDatabaseData includes thumb fields when a thumbnail is prod
 }
 
 test "when contentType starts with image/, getImageDetails is called" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     // The details of an image: a display version, and no duration.
     try std.testing.expect(result.assetData.displayPath != null);
@@ -366,9 +378,10 @@ test "when contentType starts with image/, getImageDetails is called" {
 }
 
 test "when contentType starts with video/, getVideoDetails is called" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.dryRun = true;
     data.contentType = "video/mp4";
@@ -376,7 +389,7 @@ test "when contentType starts with video/, getVideoDetails is called" {
     try test_files.writeFile(std.testing.io, context.filePath, video);
     data.fileStat.length = video.len;
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     // The details of a video: a duration, and no display version.
     try std.testing.expect((try context.record(result)).get("duration") != null);
@@ -385,9 +398,10 @@ test "when contentType starts with video/, getVideoDetails is called" {
 }
 
 test "sends import-failed and cleans up on upload error" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
 
     // The failure is logged on the console; captured so nothing reaches the test program's stderr.
@@ -400,7 +414,7 @@ test "sends import-failed and cleans up on upload error" {
     // (Not an image or a video, so the failure is the upload's.)
     data.contentType = "application/octet-stream";
 
-    try std.testing.expectError(error.Thrown, context.run(data));
+    try std.testing.expectError(error.Thrown, context.run(log, data));
 
     try std.testing.expect(context.messages.sentType("import-failed"));
     try std.testing.expect(!context.databaseHas("thumb/asset-1"));
@@ -408,9 +422,10 @@ test "sends import-failed and cleans up on upload error" {
 }
 
 test "fails naming the file when the file to upload is not there" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
 
     // The failure is logged on the console; captured so nothing reaches the test program's stderr.
@@ -422,7 +437,7 @@ test "fails naming the file when the file to upload is not there" {
     // (Not an image or a video, so nothing reads the file before it is uploaded.)
     data.contentType = "application/octet-stream";
 
-    try std.testing.expectError(error.Thrown, context.run(data));
+    try std.testing.expectError(error.Thrown, context.run(log, data));
 
     try std.testing.expect(context.messages.sentType("import-failed"));
     try std.testing.expect(std.mem.endsWith(u8, utils.errors.lastErrorMessage(), try std.fmt.allocPrint(allocator, "ENOENT: no such file or directory, open '{s}'", .{data.filePath})));
@@ -434,12 +449,13 @@ test "fails naming the file when the file to upload is not there" {
 // SHA-256, which is slow, as long again as writing them.
 //
 test "hashes the thumbnail and display from the files on disk, and never reads the store back" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     const allocator = context.arena.allocator();
 
-    const result = try context.run(context.makeUploadAssetData());
+    const result = try context.run(log, context.makeUploadAssetData());
 
     // The hashes recorded are the hashes of the files as written, which in an unencrypted store are the files.
     var thumbDigest: [32]u8 = undefined;
@@ -451,11 +467,12 @@ test "hashes the thumbnail and display from the files on disk, and never reads t
 }
 
 test "the asset's hash is the one the import already had, so its file is not hashed again" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
 
-    const result = try context.run(context.makeUploadAssetData());
+    const result = try context.run(log, context.makeUploadAssetData());
 
     try std.testing.expectEqualStrings("aabbcc", (try context.record(result)).get("hash").?.string);
     try std.testing.expectEqualStrings("aabbcc", result.assetData.assetHash);
@@ -466,9 +483,10 @@ test "the asset's hash is the one the import already had, so its file is not has
 // holds is checked by length, and one that cannot say (an encrypted store) is not checked here.
 //
 test "a store that holds a different length than was written refuses the asset" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
 
     // The failure is logged on the console; captured so nothing reaches the test program's stderr.
     var stderr_capture = std.Io.Writer.Allocating.init(context.arena.allocator());
@@ -478,20 +496,21 @@ test "a store that holds a different length than was written refuses the asset" 
     // The stat says 1000 bytes; the store holds what the file really has.
     data.fileStat.length = 1000;
 
-    try std.testing.expectError(error.Thrown, context.run(data));
+    try std.testing.expectError(error.Thrown, context.run(log, data));
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "asset/asset-1") != null);
 }
 
 test "a store that cannot say what length its copy reads is not checked by length" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var data = context.makeUploadAssetData();
     data.fileStat.length = 1000;
     // An encrypted store cannot say what its copy reads without reading it.
     data.storageDescriptor.encryptionKey = fixture_dirs.KEYS_DIR ++ "/ts-private.pem";
 
-    const result = try context.run(data);
+    const result = try context.run(log, data);
 
     try std.testing.expectEqualStrings("aabbcc", (try context.record(result)).get("hash").?.string);
 }
@@ -537,9 +556,10 @@ const UploadDateWitness = struct {
 };
 
 test "the upload date is read once the files are uploaded" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var witness: UploadDateWitness = .{
         .databaseDir = context.databaseDir,
     };
@@ -551,7 +571,7 @@ test "the upload date is read once the files are uploaded" {
         .function = MessageRecorder.send,
     }, 10);
 
-    _ = try context.run(context.makeUploadAssetData());
+    _ = try context.run(log, context.makeUploadAssetData());
 
     try std.testing.expectEqual(@as(?bool, true), witness.displayExisted);
 }
@@ -560,11 +580,11 @@ test "the upload date is read once the files are uploaded" {
 // Reads the width, height and format of a file the upload wrote to the database, with the ImageMagick built into the program, as
 // "<w> <h> <format>".
 //
-fn describeStoredImage(context: *UploadTest, relativePath: []const u8) ![]const u8 {
+fn describeStoredImage(context: *UploadTest, log: ILog, relativePath: []const u8) ![]const u8 {
     const allocator = context.arena.allocator();
     const runner = context.mediaTools.runner();
     const filePath = try std.fs.path.join(allocator, &.{ context.databaseDir, relativePath });
-    const result = try runner.run(runner.context, std.testing.io, allocator, "magick", &.{ "identify", "-format", "%w %h %m", filePath });
+    const result = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ "identify", "-format", "%w %h %m", filePath });
     if (result.exit_code != 0) {
         std.debug.print("ImageMagick could not read {s}: exit code {d}\n{s}\n", .{ filePath, result.exit_code, result.output });
         return error.TestUnexpectedResult;
@@ -573,39 +593,41 @@ fn describeStoredImage(context: *UploadTest, relativePath: []const u8) ![]const 
 }
 
 test "makes the thumbnail of a photo and of a video with the tools built into the program" {
+    const log = utils.mute_log.MuteLog.init();
     // The 2560x1920 photo's thumbnail is 300 on its short side.
     var photo: UploadTest = undefined;
     try photo.init();
-    defer photo.deinit();
-    const photoResult = try photo.run(photo.makeUploadAssetData());
+    defer photo.deinit(log);
+    const photoResult = try photo.run(log, photo.makeUploadAssetData());
     try std.testing.expect(photoResult.assetData.thumbPath != null);
-    try std.testing.expectEqualStrings("400 300 JPEG", try describeStoredImage(&photo, "thumb/asset-1"));
+    try std.testing.expectEqualStrings("400 300 JPEG", try describeStoredImage(&photo, log, "thumb/asset-1"));
 
     // The 1280x720 video's thumbnail is a frame of it, 300 on its short side.
     var video: UploadTest = undefined;
     try video.init();
-    defer video.deinit();
+    defer video.deinit(log);
     var data = video.makeUploadAssetData();
     data.contentType = "video/mp4";
     const videoContents = try test_files.readFile(video.arena.allocator(), std.testing.io, "../test/multiple-files/test.mp4");
     try test_files.writeFile(std.testing.io, video.filePath, videoContents);
     data.fileStat.length = videoContents.len;
-    const videoResult = try video.run(data);
+    const videoResult = try video.run(log, data);
     try std.testing.expect(videoResult.isVideo);
     try std.testing.expect(videoResult.assetData.thumbPath != null);
-    try std.testing.expectEqualStrings("533 300 JPEG", try describeStoredImage(&video, "thumb/asset-1"));
+    try std.testing.expectEqualStrings("533 300 JPEG", try describeStoredImage(&video, log, "thumb/asset-1"));
 }
 
 test "fails without starting a program when the task was run with no runner" {
+    const log = utils.mute_log.MuteLog.init();
     var context: UploadTest = undefined;
     try context.init();
-    defer context.deinit();
+    defer context.deinit(log);
     var programs: MarkingToolPrograms = undefined;
-    try programs.create(context.arena.allocator(), std.testing.io, context.tempDir);
+    try programs.create(context.arena.allocator(), std.testing.io, log, context.tempDir);
     defer programs.destroy();
     context.toolRunner = null;
 
-    try std.testing.expectError(error.Thrown, context.run(context.makeUploadAssetData()));
+    try std.testing.expectError(error.Thrown, context.run(log, context.makeUploadAssetData()));
 
     try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", errors.lastErrorMessage());
     try std.testing.expect(!programs.anyStarted(std.testing.io));

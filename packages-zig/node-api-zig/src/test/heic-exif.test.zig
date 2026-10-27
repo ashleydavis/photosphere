@@ -1,7 +1,7 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const node_api = @import("node-api-zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const heic_exif = node_api.heic_exif;
 const image = node_api.image;
 const exif_parser = node_api.exif_parser;
@@ -71,13 +71,14 @@ fn parse(allocator: std.mem.Allocator, jpeg: []const u8) !exif_parser.ExifResult
 }
 
 test "getImageMetadata reads the date, the place and the tags of a HEIC from its EXIF item" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
 
-    const metadata = try image.getImageMetadata(allocator, std.testing.io, test_heic, "image/heic");
+    const metadata = try image.getImageMetadata(allocator, std.testing.io, log, test_heic, "image/heic");
     try std.testing.expectEqualStrings("2021-05-06T07:08:09.000Z", metadata.photoDate.?);
     try std.testing.expectApproxEqAbs(@as(f64, -27.4705), metadata.coordinates.?.lat, 0.00001);
     try std.testing.expectApproxEqAbs(@as(f64, 153.026), metadata.coordinates.?.lng, 0.00001);
@@ -124,19 +125,17 @@ test "exifAsJpeg fails loudly on a file that is not HEIF and on EXIF that is not
 }
 
 test "getImageMetadata goes on without the metadata of a HEIC whose EXIF cannot be read" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
 
     // The code under test logs the failure; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
 
     // A YAML file is no HEIF, so the EXIF reader fails, as the parser does for a JPEG that is not one.
-    const metadata = try image.getImageMetadata(allocator, std.testing.io, "../test/demo-news.yaml", "image/heic");
+    const metadata = try image.getImageMetadata(allocator, std.testing.io, log, "../test/demo-news.yaml", "image/heic");
     try std.testing.expect(metadata.metadata == null);
     try std.testing.expect(metadata.photoDate == null);
     try std.testing.expect(metadata.coordinates == null);

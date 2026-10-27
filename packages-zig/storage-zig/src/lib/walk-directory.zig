@@ -2,7 +2,7 @@ const std = @import("std");
 const utils = @import("utils-zig");
 const storage_factory = @import("storage-factory.zig");
 
-const log = utils.log;
+const ILog = utils.log.ILog;
 const retry = utils.retry.retry;
 const IStorage = @import("storage.zig").IStorage;
 const IListResult = @import("storage.zig").IListResult;
@@ -93,7 +93,7 @@ const ListFilesOperation = struct {
     //
     // Lists one batch of files.
     //
-    pub fn run(self: *ListFilesOperation, io: std.Io) !IListResult {
+    pub fn run(self: *ListFilesOperation, io: std.Io, _: ILog) !IListResult {
         return self.storage.listFiles(self.allocator, io, self.dirPath, 1000, self.next);
     }
 };
@@ -120,7 +120,7 @@ const ListDirsOperation = struct {
     //
     // Lists one batch of directories.
     //
-    pub fn run(self: *ListDirsOperation, io: std.Io) !IListResult {
+    pub fn run(self: *ListDirsOperation, io: std.Io, _: ILog) !IListResult {
         return self.storage.listDirs(self.allocator, io, self.dirPath, 1000, self.next);
     }
 };
@@ -196,7 +196,7 @@ pub const DirectoryWalker = struct {
     //
     // Returns the next file, or null when the walk is complete.
     //
-    pub fn next(self: *DirectoryWalker) !?IOrderedFile {
+    pub fn next(self: *DirectoryWalker, log: ILog) !?IOrderedFile {
         while (self.stack.items.len > 0) {
             const frame = &self.stack.items[self.stack.items.len - 1];
             if (!frame.fetched) {
@@ -208,7 +208,7 @@ pub const DirectoryWalker = struct {
                         .dirPath = frame.dirPath,
                         .next = frame.next,
                     };
-                    batch = try retry(self.io, &operation, 3, 1_000, 2, DIRECTORY_LISTING_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to list the directories in {s}", .{frame.dirPath}));
+                    batch = try retry(self.io, log, &operation, 3, 1_000, 2, DIRECTORY_LISTING_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to list the directories in {s}", .{frame.dirPath}));
                 }
                 else {
                     var operation: ListFilesOperation = .{
@@ -217,7 +217,7 @@ pub const DirectoryWalker = struct {
                         .dirPath = frame.dirPath,
                         .next = frame.next,
                     };
-                    batch = try retry(self.io, &operation, 3, 1_000, 2, DIRECTORY_LISTING_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to list the files in {s}", .{frame.dirPath}));
+                    batch = try retry(self.io, log, &operation, 3, 1_000, 2, DIRECTORY_LISTING_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to list the files in {s}", .{frame.dirPath}));
                 }
                 frame.names = batch.names;
                 frame.index = 0;
@@ -232,7 +232,7 @@ pub const DirectoryWalker = struct {
 
                 // Check if path matches any ignore patterns
                 if (self.shouldIgnore(fullPath)) {
-                    log.log.verbose(try std.fmt.allocPrint(self.allocator, "Ignoring {s}", .{fullPath}));
+                    log.verbose(try std.fmt.allocPrint(self.allocator, "Ignoring {s}", .{fullPath}));
                     continue;
                 }
 

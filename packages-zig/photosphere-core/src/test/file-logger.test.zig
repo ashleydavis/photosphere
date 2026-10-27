@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const file_logger = @import("photosphere-core").file_logger;
 const media_tools = @import("media-tools-zig");
@@ -52,8 +53,8 @@ const Fixture = struct {
     //
     // Makes a logger that logs in the directory and runs the tools built into the program.
     //
-    fn createLogger(self: *Fixture) !*FileLogger {
-        return FileLogger.init(std.testing.allocator, std.testing.io, self.tools.runner(), self.logs_dir, "9.8.7");
+    fn createLogger(self: *Fixture, log: ILog) !*FileLogger {
+        return FileLogger.init(std.testing.allocator, std.testing.io, log, self.tools.runner(), self.logs_dir, "9.8.7");
     }
 };
 
@@ -79,10 +80,11 @@ fn countLinesContaining(text: []const u8, needle: []const u8) usize {
 }
 
 test "init makes the logs directory and a log file and an error log file named for the start time, with headers" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     try std.testing.expectEqualStrings(fixture.logs_dir, logger.getLogsDirectory());
     const log_name = std.fs.path.basename(logger.getLogFilePath());
@@ -121,21 +123,22 @@ fn wordAfter(output: []const u8, prefix: []const u8) ![]const u8 {
 }
 
 test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built into the program" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const runner = fixture.tools.runner();
-    const magick = try runner.run(runner.context, std.testing.io, arena.allocator(), "magick", &.{"-version"});
-    const ffmpeg = try runner.run(runner.context, std.testing.io, arena.allocator(), "ffmpeg", &.{"-version"});
-    const ffprobe = try runner.run(runner.context, std.testing.io, arena.allocator(), "ffprobe", &.{"-version"});
+    const magick = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "magick", &.{"-version"});
+    const ffmpeg = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "ffmpeg", &.{"-version"});
+    const ffprobe = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "ffprobe", &.{"-version"});
     const expected = try std.fmt.allocPrint(arena.allocator(), "\n--- Tool Versions ---\nImageMagick: {s}\nFFmpeg: {s}\nFFprobe: {s}\n", .{
         try wordAfter(magick.output, "Version: ImageMagick "),
         try wordAfter(ffmpeg.output, "ffmpeg version "),
         try wordAfter(ffprobe.output, "ffprobe version "),
     });
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     const log_text = try readFile(logger.getLogFilePath());
     defer std.testing.allocator.free(log_text);
@@ -146,20 +149,22 @@ test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built
 }
 
 test "init fails with a message when the logs directory cannot be made" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
     // A file where the directory should go.
     try fixture.tmp.dir.writeFile(std.testing.io, .{ .sub_path = "logs", .data = "not a directory" });
-    try std.testing.expectError(error.Thrown, fixture.createLogger());
+    try std.testing.expectError(error.Thrown, fixture.createLogger(log));
     try std.testing.expect(std.mem.indexOf(u8, utils.errors.errorMessage(error.Thrown), "Path exists but is not a directory") != null);
 }
 
 test "info, verbose, debug, event and tool go to the log file only, with the level in capitals" {
+    const consoleLog = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(consoleLog);
     defer logger.deinit();
     const log = logger.ilog();
     log.info("an info line");
@@ -191,10 +196,11 @@ test "info, verbose, debug, event and tool go to the log file only, with the lev
 }
 
 test "error, warn and exception go to both files and the error file ends with a footer" {
+    const consoleLog = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(consoleLog);
     defer logger.deinit();
     const log = logger.ilog();
     log.@"error"("an error line");
@@ -222,10 +228,11 @@ test "error, warn and exception go to both files and the error file ends with a 
 }
 
 test "footer of the log file says when it ended and how long it ran" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     logger.ilog().info("something");
     try logger.close();
@@ -239,10 +246,11 @@ test "footer of the log file says when it ended and how long it ran" {
 }
 
 test "nothing is logged after close, and closing again does nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     try logger.close();
     logger.ilog().info("too late");
@@ -256,10 +264,11 @@ test "nothing is logged after close, and closing again does nothing" {
 }
 
 test "handleWorkerLogMessage writes each level with the source" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     try logger.handleWorkerLogMessage(.{ .level = .info, .message = "w info", .@"error" = null, .tool_data = null }, "Worker 1");
     try logger.handleWorkerLogMessage(.{ .level = .verbose, .message = "w verbose", .@"error" = null, .tool_data = null }, "Worker 1");
@@ -302,10 +311,11 @@ test "handleWorkerLogMessage writes each level with the source" {
 }
 
 test "getLogDetails gives the path and the header up to the start marker, not the lines logged after it" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     logger.ilog().info("after the header");
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -319,10 +329,11 @@ test "getLogDetails gives the path and the header up to the start marker, not th
 }
 
 test "getLogDetails gives the first 50 lines when the file has no start marker" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     var content: std.ArrayList(u8) = .empty;
     defer content.deinit(std.testing.allocator);
@@ -340,10 +351,11 @@ test "getLogDetails gives the first 50 lines when the file has no start marker" 
 }
 
 test "getLogDetails fails when the log file is gone" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     try std.Io.Dir.cwd().deleteFile(std.testing.io, logger.getLogFilePath());
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
@@ -351,27 +363,23 @@ test "getLogDetails fails when the log file is gone" {
     try std.testing.expectError(error.FileNotFound, logger.ilog().getLogDetails(arena_state.allocator(), std.testing.io));
 }
 
-test "verboseEnabled is false, and fromILog finds the logger behind its ILog only" {
+test "verboseEnabled is false, and logFilePath gives the log file" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     try std.testing.expect(!logger.ilog().verboseEnabled());
-    try std.testing.expect(FileLogger.fromILog(logger.ilog()).? == logger);
-    var console_log: utils.log.ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    try std.testing.expect(FileLogger.fromILog(console_log.ilog()) == null);
+    try std.testing.expectEqualStrings(logger.getLogFilePath(), logger.ilog().logFilePath().?);
 }
 
 test "a failed write is reported on the console and the lines after it are still written" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     // Put a directory where the log file is, so that appending to it fails.
     try std.Io.Dir.cwd().deleteFile(std.testing.io, logger.getLogFilePath());
@@ -383,10 +391,11 @@ test "a failed write is reported on the console and the lines after it are still
 }
 
 test "handleWorkerLogMessage treats an empty error text as no error text" {
+    const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
     try fixture.start();
     defer fixture.stop();
-    const logger = try fixture.createLogger();
+    const logger = try fixture.createLogger(log);
     defer logger.deinit();
     try logger.handleWorkerLogMessage(.{ .level = .exception, .message = "w exception empty stack", .@"error" = "", .tool_data = null }, "Worker 1");
     try logger.close();

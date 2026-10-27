@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
 const protocol = @import("protocol.zig");
 const McpServer = protocol.McpServer;
@@ -84,7 +85,7 @@ pub const StreamableHttpRoutes = struct {
     //
     // POST /mcp.
     //
-    fn postRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn postRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         _ = context;
         const headers = try readHeaders(allocator, request.http);
         return postMcp(serverFor(request), allocator, io, request.http, headers);
@@ -93,7 +94,7 @@ pub const StreamableHttpRoutes = struct {
     //
     // GET /mcp.
     //
-    fn getRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn getRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         _ = context;
         const headers = try readHeaders(allocator, request.http);
         return getMcp(request, io, allocator, headers);
@@ -102,7 +103,7 @@ pub const StreamableHttpRoutes = struct {
     //
     // HEAD /mcp, which the SDK refuses.
     //
-    fn headRoute(context: ?*anyopaque, request: *http_server.Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn headRoute(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         _ = context;
         return sendJsonErrorWithHeaders(allocator, request.http, .method_not_allowed, -32000, "Method not allowed.", &.{
             .{
@@ -115,7 +116,7 @@ pub const StreamableHttpRoutes = struct {
     //
     // OPTIONS /mcp, which Express answers with the methods the routes have.
     //
-    fn optionsRoute(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn optionsRoute(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: ILog, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         _ = context;
         return sendAllowed(request.http, "GET,HEAD,POST");
     }
@@ -123,7 +124,7 @@ pub const StreamableHttpRoutes = struct {
     //
     // The 404 Express sends for anything else.
     //
-    fn notFound(context: ?*anyopaque, request: *http_server.Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn notFound(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         _ = context;
         const message = try std.fmt.allocPrint(allocator, "Cannot {s} {s}", .{ @tagName(request.method), try escapeHtml(allocator, request.path) });
         return sendErrorPage(allocator, request.http, .not_found, message);

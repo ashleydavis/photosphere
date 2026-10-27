@@ -82,12 +82,14 @@ const CountedServices = struct {
         .dataDir = dataDir,
         .isPhone = isPhone,
         .nativeCallbacks = nativeCallbacks,
+        .configureLog = configureLog,
     };
 
     fn interface(self: *CountedServices) HandlerServices {
         return .{
             .ptr = self,
             .vtable = &vtable,
+            .log = ziggy.task_queue.utils.mute_log.MuteLog.init(),
         };
     }
 
@@ -129,6 +131,10 @@ const CountedServices = struct {
 
     fn isPhone(_: *anyopaque) bool {
         unexpected("isPhone");
+    }
+
+    fn configureLog(_: *anyopaque, _: ziggy.task_queue.utils.log.ILogOptions) anyerror!void {
+        unexpected("configureLog");
     }
 
     fn nativeCallbacks(_: *anyopaque) ziggy.core.NativeCallbacks {
@@ -190,11 +196,12 @@ test "scheduleSync called again replaces the debounce timer, so only the last ed
     try app.start();
     defer app.stop();
     const Check = struct {
-        fn run(_: u8, _: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const log = services.log;
             const state = main_state.current();
-            try state.scheduleSync(timers, main_io);
+            try state.scheduleSync(timers, main_io, log);
             const first = state.sync_debounce_timer.?;
-            try state.scheduleSync(timers, main_io);
+            try state.scheduleSync(timers, main_io, log);
             const second = state.sync_debounce_timer.?;
             try std.testing.expect(first != second);
             try std.testing.expect(!timers.isSet(first));
@@ -258,11 +265,12 @@ test "resetSyncState to the database that is already open cancels nothing, and t
     try app.startWithTasks(&[_]ziggy.task_runner.TaskHandlerEntry{.{ .name = "spin", .handler = spinTask }});
     defer app.stop();
     const Open = struct {
-        fn run(_: u8, _: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+        fn run(_: u8, services: HandlerServices, timers: Timers, main_io: std.Io, _: std.mem.Allocator) anyerror!void {
+            const log = services.log;
             const state = main_state.current();
             try main_state.setOwned(main_state.stateAllocator(), &state.current_database_path, "/the/open/db");
             state.is_sync_running = true;
-            try state.scheduleSync(timers, main_io);
+            try state.scheduleSync(timers, main_io, log);
         }
     };
     try app.onMainThread(@as(u8, 0), Open.run);
@@ -446,4 +454,22 @@ test "only the first sync pass after the sync is switched on is the first" {
         }
     };
     try app.onMainThread(@as(u8, 0), Check.run);
+}
+
+test "no log option on the app's command line turns on no lines" {
+    const options = main_state.logOptions(&.{"-geometry=800x600"});
+    try std.testing.expect(!options.verbose);
+    try std.testing.expect(!options.debug);
+    try std.testing.expect(!options.tools);
+}
+
+test "--verbose, --debug and --tools on the app's command line each turn on their lines" {
+    const verbose = main_state.logOptions(&.{"--verbose"});
+    try std.testing.expect(verbose.verbose);
+    try std.testing.expect(!verbose.debug);
+    try std.testing.expect(!verbose.tools);
+    const all = main_state.logOptions(&.{ "--tools", "-geometry=800x600", "--debug", "--verbose" });
+    try std.testing.expect(all.verbose);
+    try std.testing.expect(all.debug);
+    try std.testing.expect(all.tools);
 }

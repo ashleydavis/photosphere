@@ -10,7 +10,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const temp_dirs = @import("../../../node-api-zig/src/test/temp-dirs.zig");
-const mock_log = @import("../../../node-api-zig/src/test/mock-log.zig");
+const ILog = utils.log.ILog;
 const test_environment = @import("../../../node-api-zig/src/test/test-environment.zig");
 const TaskContext = task_queue_zig.task_context.TaskContext;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -87,9 +87,6 @@ pub const Sandbox = struct {
     // The task context the handlers take.
     taskContext: TaskContext,
 
-    // Swallows what the code under test logs.
-    mutedLog: mock_log.MutedLog,
-
     //
     // Makes the temporary directory and changes into it.
     //
@@ -112,16 +109,13 @@ pub const Sandbox = struct {
             .context = null,
             .function = ignoreMessage,
         }, 10);
-        self.mutedLog = .{};
-        self.mutedLog.install();
     }
 
     //
     // Changes back to the directory the test started in and removes the temporary one.
     //
-    pub fn deinit(self: *Sandbox) void {
-        self.mutedLog.uninstall();
-        self.environment.deinit();
+    pub fn deinit(self: *Sandbox, log: ILog) void {
+        self.environment.deinit(log);
         std.process.setCurrentPath(self.io, self.previousCwd) catch {
             @panic("The working directory could not be put back after a test.");
         };

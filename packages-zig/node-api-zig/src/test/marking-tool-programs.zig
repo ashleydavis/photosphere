@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const node_utils = @import("node-utils-zig");
 const test_files = @import("test-files.zig");
@@ -24,7 +25,7 @@ pub const MarkingToolPrograms = struct {
     //
     // Writes the programs into a new directory under tempDir and makes PATH hold only that directory.
     //
-    pub fn create(self: *MarkingToolPrograms, allocator: std.mem.Allocator, io: std.Io, tempDir: []const u8) !void {
+    pub fn create(self: *MarkingToolPrograms, allocator: std.mem.Allocator, io: std.Io, log: ILog, tempDir: []const u8) !void {
         const cwd = std.Io.Dir.cwd();
         self.path = try std.fs.path.join(allocator, &.{ tempDir, "marking-tool-programs" });
         try cwd.createDirPath(io, self.path);
@@ -44,7 +45,7 @@ pub const MarkingToolPrograms = struct {
                     .sub_path = scriptPath,
                     .data = try std.fmt.allocPrint(allocator, "#!/bin/sh\n: > '{s}'\n", .{self.markerPath}),
                 });
-                _ = try node_utils.exec.exec(allocator, io, null, try std.fmt.allocPrint(allocator, "chmod +x \"{s}\"", .{scriptPath}));
+                _ = try node_utils.exec.exec(allocator, io, log, null, try std.fmt.allocPrint(allocator, "chmod +x \"{s}\"", .{scriptPath}));
             }
         }
         // The rest of the environment the test runs in is kept, so the scratch space and the rest stay the test program's own.

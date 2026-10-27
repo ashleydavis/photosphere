@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -33,7 +34,7 @@ const CANCEL_POLL_INTERVAL_MS = 250;
 // receiver is deinitialised when the handler returns, which frees the payload it holds, so the payload is copied
 // with the task's allocator first.)
 //
-pub fn receiveShareHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn receiveShareHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     const data = try std.json.parseFromValueLeaky(IReceiveShareTaskData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -43,7 +44,7 @@ pub fn receiveShareHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, 
 
     // The receive runs in slices, each waiting a short time for a connection (see receiveStep), with a look for cancellation between
     // them. A connection being served is served to its end first.
-    while (receiver.receiveStep()) {
+    while (receiver.receiveStep(log)) {
         if (context.isCancelled(io, allocator)) {
             receiver.cancel();
         }
@@ -66,7 +67,8 @@ pub fn receiveShareHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, 
 // (Zig: the task data and output are JSON values holding IFindReceiverTaskData and IFindReceiverTaskResult. The
 // sender has no payload to send, which is JSON null.)
 //
-pub fn findReceiverHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn findReceiverHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+    _ = log;
     const data = try std.json.parseFromValueLeaky(IFindReceiverTaskData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -99,7 +101,8 @@ pub fn findReceiverHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, 
 // (Zig: the task data and output are JSON values holding ISendPayloadTaskData and ISendPayloadTaskResult. The
 // handler is given the context every handler is given, and does not use it.)
 //
-pub fn sendPayloadHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+pub fn sendPayloadHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
+    _ = log;
     _ = context;
     const data = try std.json.parseFromValueLeaky(ISendPayloadTaskData, allocator, taskData, .{
         .ignore_unknown_fields = true,

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
@@ -10,7 +11,6 @@ const media_file_database = @import("media-file-database.zig");
 const retry_operations = @import("retry-operations.zig");
 const verify_worker = @import("verify.worker.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
 const ProgressCallback = media_file_database.ProgressCallback;
@@ -104,11 +104,11 @@ pub const IVerifyResult = struct {
 //
 // Formats a progress message and calls the progress callback with it, when there is one.
 //
-fn reportProgress(allocator: std.mem.Allocator, io: std.Io, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) !void {
+fn reportProgress(allocator: std.mem.Allocator, io: std.Io, log: ILog, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) !void {
     const callback = progressCallback orelse {
         return;
     };
-    callback.call(io, try std.fmt.allocPrint(allocator, format, args));
+    callback.call(io, log, try std.fmt.allocPrint(allocator, format, args));
 }
 
 //
@@ -159,7 +159,7 @@ const VerifyState = struct {
     // Registers a callback to integrate results as tasks complete.
     // Runs on the thread blocked in awaitAllTasks.
     //
-    fn onTaskComplete(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, taskResult: ITaskResult) anyerror!void {
+    fn onTaskComplete(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, log: ILog, taskResult: ITaskResult) anyerror!void {
         const self: *VerifyState = @ptrCast(@alignCast(context.?));
         const allocator = self.allocator;
 
@@ -168,7 +168,7 @@ const VerifyState = struct {
         if (taskResult.status == TaskStatus.Succeeded) {
             const fileResult = try std.json.parseFromValueLeaky(IVerifyFileResult, allocator, taskResult.outputs orelse .null, .{ .ignore_unknown_fields = true, .allocate = .alloc_always });
 
-            try reportProgress(allocator, io, self.progressCallback, "Verified file {d} of {d}", .{ self.result.filesProcessed, self.totalFiles });
+            try reportProgress(allocator, io, log, self.progressCallback, "Verified file {d} of {d}", .{ self.result.filesProcessed, self.totalFiles });
 
             if (fileResult.status == .removed) {
                 // For partial databases, ignore missing files (they're expected to be missing)
@@ -217,7 +217,7 @@ const VerifyState = struct {
     //
     // Queues the verification of a node and checks asset records.
     //
-    fn visitNode(self: *VerifyState, io: std.Io, node: *SortNode) !void {
+    fn visitNode(self: *VerifyState, io: std.Io, log: ILog, node: *SortNode) !void {
         const allocator = self.allocator;
         self.result.nodesProcessed += 1;
 
@@ -227,7 +227,7 @@ const VerifyState = struct {
                 return; // Skip this node
             }
 
-            _ = try self.queue.addTask(io, allocator, "verify-file", try verify_worker.verifyFileDataToJson(allocator, .{
+            _ = try self.queue.addTask(io, allocator, log, "verify-file", try verify_worker.verifyFileDataToJson(allocator, .{
                 .node = node.*,
                 .storageDescriptor = self.storageDescriptor,
                 .options = .{
@@ -282,7 +282,7 @@ fn gatherNodes(allocator: std.mem.Allocator, node: ?*SortNode, nodes: *std.Array
 // Also checks each asset in the merkle tree has a database record with the correct id and hash.
 // A caller with nothing to supply for an optional parameter passes null.
 //
-pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageDescriptor: IDatabaseDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: *IBsonCollection, options: ?IVerifyOptions, progressCallback: ?ProgressCallback) !IVerifyResult {
+pub fn verify(allocator: std.mem.Allocator, io: std.Io, log: ILog, timers: Timers, storageDescriptor: IDatabaseDescriptor, databaseStorage: IStorage, uuidGenerator: IUuidGenerator, metadataCollection: *IBsonCollection, options: ?IVerifyOptions, progressCallback: ?ProgressCallback) !IVerifyResult {
 
     var pathFilter: ?[]const u8 = null;
     if (options != null and options.?.pathFilter != null and options.?.pathFilter.?.len > 0) {
@@ -293,7 +293,7 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageD
 
     // Load the merkle tree once and reuse it throughout the verification process
     var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(databaseStorage)") = .{ .allocator = allocator, .storage = databaseStorage };
-    const merkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const merkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load merkle tree", .{});
     };
 
@@ -332,10 +332,10 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageD
     //
     if (progressCallback) |callback| {
         if (options != null and options.?.pathFilter != null and options.?.pathFilter.?.len > 0) {
-            try reportProgress(allocator, io, callback, "Verifying files matching: {s}", .{options.?.pathFilter.?});
+            try reportProgress(allocator, io, log, callback, "Verifying files matching: {s}", .{options.?.pathFilter.?});
         }
         else {
-            callback.call(io, "Verifying files...");
+            callback.call(io, log, "Verifying files...");
         }
     }
 
@@ -345,7 +345,7 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageD
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
     const queue = try TaskQueue.init(allocator, uuidGenerator, storageDescriptor.databasePath);
-    defer queue.deinit(io, allocator);
+    defer queue.deinit(io, allocator, log);
     state.queue = queue;
 
     //
@@ -353,14 +353,14 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageD
     //
     var recordsLoaded: u64 = 0;
     var records = metadataCollection.iterateRecords();
-    while (try records.next(io)) |record| { //todo: each shard could be loaded in a separate task.
+    while (try records.next(io, log)) |record| { //todo: each shard could be loaded in a separate task.
         if (record.fields.get("hash")) |recordHash| {
             if (recordHash == .string) {
                 try recordIdToHash.put(allocator, record._id, recordHash.string);
             }
         }
         recordsLoaded += 1;
-        try reportProgress(allocator, io, progressCallback, "Loaded database records... {d} loaded", .{recordsLoaded});
+        try reportProgress(allocator, io, log, progressCallback, "Loaded database records... {d} loaded", .{recordsLoaded});
     }
 
     //
@@ -381,13 +381,13 @@ pub fn verify(allocator: std.mem.Allocator, io: std.Io, timers: Timers, storageD
     var nodes: std.ArrayList(*SortNode) = .empty;
     try gatherNodes(allocator, merkleTree.sort, &nodes);
     for (nodes.items) |node| {
-        try state.visitNode(io, node);
+        try state.visitNode(io, log, node);
     }
 
     //
     // Wait for all tasks to complete.
     //
-    try queue.awaitAllTasks(io, allocator, timers);
+    try queue.awaitAllTasks(io, allocator, timers, log);
 
     state.result.modified = state.modified.items;
     state.result.removed = state.removed.items;
@@ -462,9 +462,9 @@ const DatabaseFileVerifyState = struct {
     //
     // Helper to report progress
     //
-    fn reportProgress(self: *DatabaseFileVerifyState, io: std.Io) !void {
+    fn reportProgress(self: *DatabaseFileVerifyState, io: std.Io, log: ILog) !void {
         self.filesVerified += 1;
-        try verify_reportProgress(self.allocator, io, self.progressCallback, "Verified database file {d} of {d}", .{ self.filesVerified, self.expectedTotal });
+        try verify_reportProgress(self.allocator, io, log, self.progressCallback, "Verified database file {d} of {d}", .{ self.filesVerified, self.expectedTotal });
     }
 };
 
@@ -479,7 +479,7 @@ const verify_reportProgress = reportProgress;
 //
 // @param assetStorage - Storage rooted at the asset storage root (database files live under .db/)
 //
-pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, progressCallback: ?ProgressCallback) !IDatabaseFileVerifyResult {
+pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, progressCallback: ?ProgressCallback) !IDatabaseFileVerifyResult {
     var state: DatabaseFileVerifyState = .{
         .allocator = allocator,
         .result = .{
@@ -500,7 +500,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
     // Phase 1: Count all files to verify
     //
     if (progressCallback) |callback| {
-        callback.call(io, "Verifying database files...");
+        callback.call(io, log, "Verifying database files...");
     }
 
     var expectedTotal: u64 = 0;
@@ -557,7 +557,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
     if (try assetStorage.fileExists(allocator, io, ".db/files.dat")) {
         log.verbose("Verifying .db/files.dat");
         state.result.totalFiles += 1;
-        const verifyResult = try verifySerializedFile(allocator, io, assetStorage, ".db/files.dat");
+        const verifyResult = try verifySerializedFile(allocator, io, log, assetStorage, ".db/files.dat");
         state.result.totalSize += verifyResult.size;
         if (verifyResult.valid) {
             state.result.validFiles += 1;
@@ -565,7 +565,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
         else {
             try state.addError(".db/files.dat", verifyResult.@"error" orelse "Unknown error");
         }
-        try state.reportProgress(io);
+        try state.reportProgress(io, log);
     }
 
     // 2. For each collection, verify all files
@@ -577,7 +577,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
         if (try assetStorage.fileExists(allocator, io, collectionDatPath)) {
             log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{collectionDatPath}));
             state.result.totalFiles += 1;
-            const verifyResult = try verifySerializedFile(allocator, io, assetStorage, collectionDatPath);
+            const verifyResult = try verifySerializedFile(allocator, io, log, assetStorage, collectionDatPath);
             state.result.totalSize += verifyResult.size;
             if (verifyResult.valid) {
                 state.result.validFiles += 1;
@@ -585,7 +585,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
             else {
                 try state.addError(collectionDatPath, verifyResult.@"error" orelse "Unknown error");
             }
-            try state.reportProgress(io);
+            try state.reportProgress(io, log);
         }
         // 3b. Get all files in the collection directory (v6: shards/ subdir)
         const collectionFiles = try assetStorage.listFiles(allocator, io, try storage_zig.storage_factory.pathJoin(allocator, &.{ collectionDir, "shards" }), 10000, null);
@@ -595,7 +595,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
             if (std.mem.endsWith(u8, fileName, ".dat")) {
                 // Shard merkle tree file (no checksum)
                 log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{filePath}));
-                const verifyResult = try verifySerializedFile(allocator, io, assetStorage, filePath);
+                const verifyResult = try verifySerializedFile(allocator, io, log, assetStorage, filePath);
                 state.result.totalSize += verifyResult.size;
                 if (verifyResult.valid) {
                     state.result.validFiles += 1;
@@ -603,14 +603,14 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                 else {
                     try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                 }
-                try state.reportProgress(io);
+                try state.reportProgress(io, log);
             }
             else {
                 // Shard data file (with checksum)
                 log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{filePath}));
                 // A labeled block whose error is caught.
                 verifyShard: {
-                    const verifyResult = verifySerializedFile(allocator, io, assetStorage, filePath) catch |err| {
+                    const verifyResult = verifySerializedFile(allocator, io, log, assetStorage, filePath) catch |err| {
                         try state.addError(filePath, errors.errorMessage(err));
                         break :verifyShard;
                     };
@@ -622,7 +622,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                         try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                     }
                 }
-                try state.reportProgress(io);
+                try state.reportProgress(io, log);
             }
         }
     }
@@ -654,7 +654,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                     log.verbose(try std.fmt.allocPrint(allocator, "Verifying {s}", .{filePath}));
                     // A labeled block whose error is caught.
                     verifyIndexFile: {
-                        const verifyResult = verifySerializedFile(allocator, io, assetStorage, filePath) catch |err| {
+                        const verifyResult = verifySerializedFile(allocator, io, log, assetStorage, filePath) catch |err| {
                             try state.addError(filePath, errors.errorMessage(err));
                             break :verifyIndexFile;
                         };
@@ -666,7 +666,7 @@ pub fn verifyDatabaseFiles(allocator: std.mem.Allocator, io: std.Io, assetStorag
                             try state.addError(filePath, verifyResult.@"error" orelse "Unknown error");
                         }
                     }
-                    try state.reportProgress(io);
+                    try state.reportProgress(io, log);
                 }
             }
         }

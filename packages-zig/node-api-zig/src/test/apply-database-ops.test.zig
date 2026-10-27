@@ -5,7 +5,9 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const node_utils = @import("node-utils-zig");
 const bdb = @import("bdb-zig");
 const serialization_zig = @import("serialization-zig");
@@ -135,6 +137,7 @@ test "groupOpsByDatabaseId iterates database keys in first-seen order" {
 }
 
 test "applyMetadataDatabaseOps set with upsert creates a new metadata record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -144,14 +147,15 @@ test "applyMetadataDatabaseOps set with upsert creates a new metadata record" {
     const fields = try minimalAssetJson(allocator, "wrong-id-should-be-stripped", "");
     const op = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/ignored-for-this-test\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, fields }));
 
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{op});
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{op});
 
-    const saved = (try fixture.collection.getOne(io, BSON_RECORD_ID)).?;
+    const saved = (try fixture.collection.getOne(io, log, BSON_RECORD_ID)).?;
     try std.testing.expectEqualStrings(BSON_RECORD_ID, saved.get("_id").?.string);
     try std.testing.expectEqualStrings("x.jpg", saved.get("origFileName").?.string);
 }
 
 test "applyMetadataDatabaseOps set merges into an existing record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -159,12 +163,12 @@ test "applyMetadataDatabaseOps set merges into an existing record" {
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
     const existing = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, try minimalAssetJson(allocator, BSON_RECORD_ID, ",\"description\":\"old\"") }));
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{existing});
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{existing});
     const change = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{{\"description\":\"new\"}}}}}}", .{BSON_RECORD_ID}));
 
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{change});
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{change});
 
-    const saved = (try fixture.collection.getOne(io, BSON_RECORD_ID)).?;
+    const saved = (try fixture.collection.getOne(io, log, BSON_RECORD_ID)).?;
     try std.testing.expectEqualStrings("new", saved.get("description").?.string);
     try std.testing.expectEqualStrings("x.jpg", saved.get("origFileName").?.string);
 }
@@ -172,15 +176,15 @@ test "applyMetadataDatabaseOps set merges into an existing record" {
 //
 // Makes a record with a labels array, then applies an op of the given type and value to it, and returns the labels afterwards.
 //
-fn labelsAfter(allocator: std.mem.Allocator, startingLabels: []const u8, opType: []const u8, value: []const u8) ![]const []const u8 {
+fn labelsAfter(log: ILog, allocator: std.mem.Allocator, startingLabels: []const u8, opType: []const u8, value: []const u8) ![]const []const u8 {
     const io = std.testing.io;
     var fixture: *Fixture = try allocator.create(Fixture);
     try fixture.init(allocator);
     const create = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, try minimalAssetJson(allocator, BSON_RECORD_ID, startingLabels) }));
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{create});
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{create});
     const change = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"{s}\",\"field\":\"labels\",\"value\":\"{s}\"}}}}", .{ BSON_RECORD_ID, opType, value }));
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{change});
-    const saved = (try fixture.collection.getOne(io, BSON_RECORD_ID)).?;
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{change});
+    const saved = (try fixture.collection.getOne(io, log, BSON_RECORD_ID)).?;
     var labels: std.ArrayList([]const u8) = .empty;
     for (saved.get("labels").?.array) |label| {
         try labels.append(allocator, label.string);
@@ -189,31 +193,35 @@ fn labelsAfter(allocator: std.mem.Allocator, startingLabels: []const u8, opType:
 }
 
 test "applyMetadataDatabaseOps push appends a value to an array field when absent" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(arena.allocator(), ",\"labels\":[\"x\"]", "push", "y");
+    const labels = try labelsAfter(log, arena.allocator(), ",\"labels\":[\"x\"]", "push", "y");
     try std.testing.expectEqual(@as(usize, 2), labels.len);
     try std.testing.expectEqualStrings("x", labels[0]);
     try std.testing.expectEqualStrings("y", labels[1]);
 }
 
 test "applyMetadataDatabaseOps push does not duplicate an existing value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(arena.allocator(), ",\"labels\":[\"x\"]", "push", "x");
+    const labels = try labelsAfter(log, arena.allocator(), ",\"labels\":[\"x\"]", "push", "x");
     try std.testing.expectEqual(@as(usize, 1), labels.len);
     try std.testing.expectEqualStrings("x", labels[0]);
 }
 
 test "applyMetadataDatabaseOps push creates the array when the field is not an array" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(arena.allocator(), "", "push", "x");
+    const labels = try labelsAfter(log, arena.allocator(), "", "push", "x");
     try std.testing.expectEqual(@as(usize, 1), labels.len);
     try std.testing.expectEqualStrings("x", labels[0]);
 }
 
 test "applyMetadataDatabaseOps push appends an object value even when an equal object is already there" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -221,24 +229,26 @@ test "applyMetadataDatabaseOps push appends an object value even when an equal o
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
     const create = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, try minimalAssetJson(allocator, BSON_RECORD_ID, ",\"labels\":[{\"a\":1}]") }));
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{create});
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{create});
     const change = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"push\",\"field\":\"labels\",\"value\":{{\"a\":1}}}}}}", .{BSON_RECORD_ID}));
 
-    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, fixture.collection, &.{change});
+    try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{change});
 
-    const saved = (try fixture.collection.getOne(io, BSON_RECORD_ID)).?;
+    const saved = (try fixture.collection.getOne(io, log, BSON_RECORD_ID)).?;
     try std.testing.expectEqual(@as(usize, 2), saved.get("labels").?.array.len);
 }
 
 test "applyMetadataDatabaseOps pull removes a value from an array field" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(arena.allocator(), ",\"labels\":[\"x\",\"y\"]", "pull", "x");
+    const labels = try labelsAfter(log, arena.allocator(), ",\"labels\":[\"x\",\"y\"]", "pull", "x");
     try std.testing.expectEqual(@as(usize, 1), labels.len);
     try std.testing.expectEqualStrings("y", labels[0]);
 }
 
 test "applyMetadataDatabaseOps push throws when the record is missing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -246,11 +256,12 @@ test "applyMetadataDatabaseOps push throws when the record is missing" {
     try fixture.init(allocator);
     const op = try opFromJson(allocator, "{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"c1c2c3c4-e5f6-7890-abcd-ef1234567890\",\"op\":{\"type\":\"push\",\"field\":\"labels\",\"value\":\"x\"}}");
 
-    try std.testing.expectError(error.Thrown, apply_database_ops.applyMetadataDatabaseOps(allocator, std.testing.io, fixture.collection, &.{op}));
+    try std.testing.expectError(error.Thrown, apply_database_ops.applyMetadataDatabaseOps(allocator, std.testing.io, log, fixture.collection, &.{op}));
     try std.testing.expectEqualStrings("Cannot push: metadata record \"c1c2c3c4-e5f6-7890-abcd-ef1234567890\" does not exist.", utils.errors.errorMessage(error.Thrown));
 }
 
 test "applyMetadataDatabaseOps pull throws when the record is missing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -258,11 +269,12 @@ test "applyMetadataDatabaseOps pull throws when the record is missing" {
     try fixture.init(allocator);
     const op = try opFromJson(allocator, "{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"c1c2c3c4-e5f6-7890-abcd-ef1234567890\",\"op\":{\"type\":\"pull\",\"field\":\"labels\",\"value\":\"x\"}}");
 
-    try std.testing.expectError(error.Thrown, apply_database_ops.applyMetadataDatabaseOps(allocator, std.testing.io, fixture.collection, &.{op}));
+    try std.testing.expectError(error.Thrown, apply_database_ops.applyMetadataDatabaseOps(allocator, std.testing.io, log, fixture.collection, &.{op}));
     try std.testing.expectEqualStrings("Cannot pull: metadata record \"c1c2c3c4-e5f6-7890-abcd-ef1234567890\" does not exist.", utils.errors.errorMessage(error.Thrown));
 }
 
 test "applyMetadataDatabaseOps rejects unsupported collection names" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -270,7 +282,7 @@ test "applyMetadataDatabaseOps rejects unsupported collection names" {
     try fixture.init(allocator);
     const op = try opFromJson(allocator, "{\"databaseId\":\"/x\",\"collectionName\":\"other\",\"recordId\":\"a1\",\"op\":{\"type\":\"set\",\"fields\":{\"description\":\"x\"}}}");
 
-    try std.testing.expectError(error.Thrown, apply_database_ops.applyMetadataDatabaseOps(allocator, std.testing.io, fixture.collection, &.{op}));
+    try std.testing.expectError(error.Thrown, apply_database_ops.applyMetadataDatabaseOps(allocator, std.testing.io, log, fixture.collection, &.{op}));
     try std.testing.expectEqualStrings("Unsupported collection \"other\". Only \"metadata\" is supported.", utils.errors.errorMessage(error.Thrown));
 }
 
@@ -283,6 +295,7 @@ fn setOpFor(allocator: std.mem.Allocator, databasePath: []const u8, recordId: []
 }
 
 test "applyDatabaseOps acquires write lock and persists metadata on a real database directory" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -291,22 +304,23 @@ test "applyDatabaseOps acquires write lock and persists metadata on a real datab
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "apply-database-ops-lock");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "apply-database-ops-lock");
+    defer fixture.deinit(io, log);
     const op = try setOpFor(allocator, fixture.dir, BSON_RECORD_ID);
 
-    try apply_database_ops.applyDatabaseOps(allocator, io, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
 
-    const created = try node_api.open_storage.openStorage(allocator, io, fixture.dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, fixture.dir, null, null, null);
     const verifyDb = try media_file_database.createMediaFileDatabase(allocator, created.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
-    try media_file_database.loadSortIndexes(allocator, created.storage, verifyDb.metadataCollection);
-    const loaded = (try verifyDb.metadataCollection.getOne(io, BSON_RECORD_ID)).?;
+    try media_file_database.loadSortIndexes(allocator, log, created.storage, verifyDb.metadataCollection);
+    const loaded = (try verifyDb.metadataCollection.getOne(io, log, BSON_RECORD_ID)).?;
     try std.testing.expectEqualStrings("x.jpg", loaded.get("origFileName").?.string);
     // The lock is let go once the ops are applied.
     try std.testing.expect((try fixture.rawStorage.checkWriteLock(allocator, io, ".db/write.lock")) == null);
 }
 
 test "applyDatabaseOps does nothing for an empty op list" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -314,10 +328,16 @@ test "applyDatabaseOps does nothing for an empty op list" {
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: utils.timestamp_provider.TimestampProvider = .{};
 
-    try apply_database_ops.applyDatabaseOps(allocator, io, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session-1", &.{}, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session-1", &.{}, null);
 }
 
 test "applyDatabaseOps throws when another session holds the write lock, and changes nothing" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -326,18 +346,14 @@ test "applyDatabaseOps throws when another session holds the write lock, and cha
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "apply-database-ops-locked");
-    defer fixture.deinit(io);
-    try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, ".db/write.lock", "another-session"));
+    try fixture.init(allocator, io, memory.log, "apply-database-ops-locked");
+    defer fixture.deinit(io, memory.log);
+    try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, memory.log, ".db/write.lock", "another-session"));
     const op = try setOpFor(allocator, fixture.dir, BSON_RECORD_ID);
 
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(null, &stderr_capture.writer);
-    defer utils.console.setCapture(null, null);
-
-    try std.testing.expectError(error.Thrown, apply_database_ops.applyDatabaseOps(allocator, io, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null));
+    try std.testing.expectError(error.Thrown, apply_database_ops.applyDatabaseOps(allocator, io, memory.log, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", utils.errors.errorMessage(error.Thrown));
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Lock is currently held by \"another-session\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Lock is currently held by \"another-session\"") != null);
 
     // The other session still holds its lock.
     const lockInfo = (try fixture.rawStorage.checkWriteLock(allocator, io, ".db/write.lock")).?;
@@ -354,6 +370,7 @@ fn isoNow(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 }
 
 test "applyDatabaseOps stamps lastModifiedAt on the database state after applying ops" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -362,15 +379,15 @@ test "applyDatabaseOps stamps lastModifiedAt on the database state after applyin
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "apply-database-ops-stamp");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "apply-database-ops-stamp");
+    defer fixture.deinit(io, log);
     const op = try setOpFor(allocator, fixture.dir, BSON_RECORD_ID);
 
     const before = try isoNow(allocator, io);
-    try apply_database_ops.applyDatabaseOps(allocator, io, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
     const after = try isoNow(allocator, io);
 
-    const state = (try api.database_state.loadDatabaseState(allocator, io, fixture.rawStorage)).?;
+    const state = (try api.database_state.loadDatabaseState(allocator, io, log, fixture.rawStorage)).?;
     try std.testing.expect(state.lastModifiedAt != null);
     try std.testing.expectEqual(@as(usize, 24), state.lastModifiedAt.?.len);
     try std.testing.expect(std.mem.order(u8, before, state.lastModifiedAt.?) != .gt);
@@ -378,6 +395,7 @@ test "applyDatabaseOps stamps lastModifiedAt on the database state after applyin
 }
 
 test "applyDatabaseOps writes state separately for each database group" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -386,19 +404,19 @@ test "applyDatabaseOps writes state separately for each database group" {
     defer virtual_time.deinit();
     const io = virtual_time.io();
     var fixtureA: DatabaseFixture = undefined;
-    try fixtureA.init(allocator, io, "apply-database-ops-stamp-a");
-    defer fixtureA.deinit(io);
+    try fixtureA.init(allocator, io, log, "apply-database-ops-stamp-a");
+    defer fixtureA.deinit(io, log);
     var fixtureB: DatabaseFixture = undefined;
-    try fixtureB.init(allocator, io, "apply-database-ops-stamp-b");
-    defer fixtureB.deinit(io);
+    try fixtureB.init(allocator, io, log, "apply-database-ops-stamp-b");
+    defer fixtureB.deinit(io, log);
     const recordIdB = "b1c2d3e4-f506-7890-abcd-ef1234567890";
     const opA = try setOpFor(allocator, fixtureA.dir, BSON_RECORD_ID);
     const opB = try setOpFor(allocator, fixtureB.dir, recordIdB);
 
-    try apply_database_ops.applyDatabaseOps(allocator, io, fixtureA.uuidGenerator.uuidGenerator(), fixtureA.timestampProvider.timestampProvider(), "session-1", &.{ opA, opB }, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, fixtureA.uuidGenerator.uuidGenerator(), fixtureA.timestampProvider.timestampProvider(), "session-1", &.{ opA, opB }, null);
 
-    const stateA = (try api.database_state.loadDatabaseState(allocator, io, fixtureA.rawStorage)).?;
-    const stateB = (try api.database_state.loadDatabaseState(allocator, io, fixtureB.rawStorage)).?;
+    const stateA = (try api.database_state.loadDatabaseState(allocator, io, log, fixtureA.rawStorage)).?;
+    const stateB = (try api.database_state.loadDatabaseState(allocator, io, log, fixtureB.rawStorage)).?;
     try std.testing.expect(stateA.lastModifiedAt != null);
     try std.testing.expect(stateB.lastModifiedAt != null);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const file_scanner = @import("file-scanner.zig");
 const IFileStat = file_scanner.IFileStat;
@@ -11,7 +12,6 @@ const api = @import("api-zig");
 const hash_cache = @import("hash-cache.zig");
 const validation = @import("validation.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const HashCache = hash_cache.HashCache;
 const validateFile = validation.validateFile;
 const IFileCacheIdentity = api.import_assets_types.IFileCacheIdentity;
@@ -156,6 +156,7 @@ pub fn getHashFromCache(allocator: std.mem.Allocator, filePath: []const u8, file
 pub fn validateAndHash(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     toolRunner: InProcessRunner,
     filePath: []const u8, // Actual file path (always a valid file, already extracted if from zip)
     fileStat: IFileStat,
@@ -164,7 +165,7 @@ pub fn validateAndHash(
 ) !?IHashedData {
     // filePath is always a valid file (already extracted if from zip)
     // Validate the file
-    const isValid = validateFile(allocator, io, toolRunner, filePath, contentType, fileStat) catch |err| {
+    const isValid = validateFile(allocator, io, log, toolRunner, filePath, contentType, fileStat) catch |err| {
         // Use logicalPath for display (always set)
         log.exception(try std.fmt.allocPrint(allocator, "File \"{s}\" has failed its validation with error: {s}", .{ logicalPath, errors.errorMessage(err) }), err);
         return null;

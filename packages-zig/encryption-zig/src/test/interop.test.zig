@@ -58,6 +58,7 @@ fn encryptThroughStream(allocator: std.mem.Allocator, publicKey: *const crypto.P
 }
 
 test "Zig decrypts every fixture (new format, legacy format and stream output)" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -69,7 +70,7 @@ test "Zig decrypts every fixture (new format, legacy format and stream output)" 
     for (sizes) |size| {
         const plain = try fixtures.makePlaintext(allocator, size);
         const newFormat = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "new-{d}.bin", .{size}));
-        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, newFormat, &keyMap));
+        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(log, allocator, newFormat, &keyMap));
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptNewFormat(allocator, newFormat, &hashOnlyMap));
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, newFormat));
 
@@ -81,16 +82,17 @@ test "Zig decrypts every fixture (new format, legacy format and stream output)" 
 
             const streamed = try fixtures.readFixture(allocator, try std.fmt.allocPrint(allocator, "stream-{d}.bin", .{size}));
             try std.testing.expectEqual(encrypt_stream.computeEncryptedLength(size), streamed.len);
-            try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, streamed, &keyMap));
+            try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(log, allocator, streamed, &keyMap));
             try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, streamed));
         }
-        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, legacy, &keyMap));
+        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(log, allocator, legacy, &keyMap));
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptLegacy(allocator, legacy, privateKey));
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, legacy));
     }
 }
 
 test "Zig encrypts and decrypts its own output for every size" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -101,12 +103,12 @@ test "Zig encrypts and decrypts its own output for every size" {
         const plain = try fixtures.makePlaintext(allocator, size);
         const encrypted = try encrypt_buffer.encryptBuffer(allocator, std.testing.io, publicKey, plain);
         try std.testing.expectEqual(encrypt_stream.computeEncryptedLength(size), encrypted.len);
-        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, encrypted, &keyMap));
+        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(log, allocator, encrypted, &keyMap));
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, encrypted));
 
         const streamed = try encryptThroughStream(allocator, publicKey, plain);
         try std.testing.expectEqual(encrypt_stream.computeEncryptedLength(size), streamed.len);
-        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, streamed, &keyMap));
+        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(log, allocator, streamed, &keyMap));
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, streamed));
     }
 }
@@ -163,6 +165,7 @@ test "Zig output with the fixture key has the header and length of the fixtures"
 }
 
 test "Zig-generated keys export as PEM with the layout of the fixture PEM files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -199,7 +202,7 @@ test "Zig-generated keys export as PEM with the layout of the fixture PEM files"
         const plain = try fixtures.makePlaintext(allocator, size);
         const zigEncrypted = try encrypt_buffer.encryptBuffer(allocator, io, keyPair.publicKey, plain);
         try std.testing.expectEqual(expectedLength, zigEncrypted.len);
-        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(allocator, zigEncrypted, &keyMap));
+        try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptBuffer(log, allocator, zigEncrypted, &keyMap));
         try std.testing.expectEqualSlices(u8, plain, try encrypt_buffer.decryptLegacy(allocator, zigEncrypted[ts_key_header.len..], keyPair.privateKey));
         const zigStream = try encryptThroughStream(allocator, keyPair.publicKey, plain);
         try std.testing.expectEqualSlices(u8, plain, try decryptThroughStream(allocator, &keyMap, zigStream));

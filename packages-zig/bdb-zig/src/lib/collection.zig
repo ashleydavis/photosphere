@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -168,14 +169,14 @@ pub const RecordIterator = struct {
     //
     // Returns the next record, or null when every shard has been iterated.
     //
-    pub fn next(self: *RecordIterator, io: std.Io) !?IInternalRecord {
+    pub fn next(self: *RecordIterator, io: std.Io, log: ILog) !?IInternalRecord {
         while (self.recordIndex >= self.shardRecords.len) {
             if (self.shardId >= NUM_SHARDS) {
                 return null;
             }
             const shardName = try std.fmt.allocPrint(self.collection.allocator, "{d}", .{self.shardId});
             const shard = try self.collection.shard(shardName);
-            const recordMap = try shard.records(io);
+            const recordMap = try shard.records(io, log);
             self.shardRecords = recordMap.values();
             self.recordIndex = 0;
             self.shardId += 1;
@@ -202,7 +203,7 @@ pub const ShardIterator = struct {
     //
     // Returns the records of the next shard that has records, or null when every shard has been iterated.
     //
-    pub fn next(self: *ShardIterator, io: std.Io) !?[]IInternalRecord {
+    pub fn next(self: *ShardIterator, io: std.Io, log: ILog) !?[]IInternalRecord {
         const allocator = self.collection.allocator;
         if (self.shardIdsToRead == null) {
             // The shards that exist are listed once, rather than reading all NUM_SHARDS of them to find
@@ -247,7 +248,7 @@ pub const ShardIterator = struct {
                 continue;
             }
             const shard = try self.collection.shard(shardName);
-            const recordMap = try shard.records(io);
+            const recordMap = try shard.records(io, log);
             if (recordMap.count() > 0) {
                 return recordMap.values();
             }
@@ -435,33 +436,33 @@ pub const BsonCollection = struct {
     //
     // Adds a record to all existing sort indexes.
     //
-    fn addRecordToSortIndexes(self: *BsonCollection, io: std.Io, record: IInternalRecord) !void {
+    fn addRecordToSortIndexes(self: *BsonCollection, io: std.Io, log: ILog, record: IInternalRecord) !void {
         const indexes = try self.sortIndexes(io);
         for (indexes) |indexInfo| {
             const index = try self.sortIndex(indexInfo.fieldName, indexInfo.direction);
-            try index.addRecord(io, record);
+            try index.addRecord(io, log, record);
         }
     }
 
     //
     // Updates a record in all sort indexes.
     //
-    fn updateRecordInSortIndexes(self: *BsonCollection, io: std.Io, updatedRecord: IInternalRecord, oldRecord: ?IInternalRecord) !void {
+    fn updateRecordInSortIndexes(self: *BsonCollection, io: std.Io, log: ILog, updatedRecord: IInternalRecord, oldRecord: ?IInternalRecord) !void {
         const indexes = try self.sortIndexes(io);
         for (indexes) |indexInfo| {
             const index = try self.sortIndex(indexInfo.fieldName, indexInfo.direction);
-            try index.updateRecord(io, updatedRecord, oldRecord);
+            try index.updateRecord(io, log, updatedRecord, oldRecord);
         }
     }
 
     //
     // Deletes a record from all existing sort indexes.
     //
-    fn deleteRecordFromSortIndexes(self: *BsonCollection, io: std.Io, recordId: []const u8, record: IInternalRecord) !void {
+    fn deleteRecordFromSortIndexes(self: *BsonCollection, io: std.Io, log: ILog, recordId: []const u8, record: IInternalRecord) !void {
         const indexes = try self.sortIndexes(io);
         for (indexes) |indexInfo| {
             const index = try self.sortIndex(indexInfo.fieldName, indexInfo.direction);
-            try index.deleteRecord(io, recordId, record);
+            try index.deleteRecord(io, log, recordId, record);
         }
     }
 
@@ -480,17 +481,17 @@ pub const BsonCollection = struct {
     //
     // The merkle ref loader.
     //
-    fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!?IMerkleTree {
+    fn merkleLoader(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog) anyerror!?IMerkleTree {
         const self: *BsonCollection = @ptrCast(@alignCast(context));
-        return try merkle_tree.loadCollectionMerkleTree(allocator, io, self.storage, self.bsonDbPath, self.name);
+        return try merkle_tree.loadCollectionMerkleTree(allocator, io, log, self.storage, self.bsonDbPath, self.name);
     }
 
     //
     // The merkle ref saver.
     //
-    fn merkleSaver(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, tree: *IMerkleTree) anyerror!void {
+    fn merkleSaver(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, tree: *IMerkleTree) anyerror!void {
         const self: *BsonCollection = @ptrCast(@alignCast(context));
-        return merkle_tree.saveCollectionMerkleTree(allocator, io, self.storage, self.bsonDbPath, self.name, tree);
+        return merkle_tree.saveCollectionMerkleTree(allocator, io, log, self.storage, self.bsonDbPath, self.name, tree);
     }
 
     //
@@ -582,7 +583,7 @@ pub const BsonCollection = struct {
     // An `_id` that is set to anything but a string throws, because the record id is read as a string to find its
     // shard; the error names the type, where the runtime's own message would name the string method it called.
     //
-    pub fn insertOne(self: *BsonCollection, io: std.Io, record: *IRecord, timestamp: ?i64) !void {
+    pub fn insertOne(self: *BsonCollection, io: std.Io, log: ILog, record: *IRecord, timestamp: ?i64) !void {
         const existingId: bson.BsonValue = record.get("_id") orelse .undefined;
         const idIsFalsy = switch (existingId) {
             .undefined, .null => true,
@@ -604,14 +605,14 @@ pub const BsonCollection = struct {
 
         const shardId = try self.getShardId(recordId);
         const recordShard = try self.shard(shardId);
-        if (try recordShard.record(io, recordId) != null) {
+        if (try recordShard.record(io, log, recordId) != null) {
             return errors.throwError("Document with ID {s} already exists in shard {s}", .{ recordId, shardId });
         }
 
         const versionTimestamp = timestamp orelse self.timestampProvider.now(io);
         const internalRecord = try toInternal(self.allocator, record.*, versionTimestamp);
-        try recordShard.setRecord(io, recordId, internalRecord);
-        try self.addRecordToSortIndexes(io, internalRecord);
+        try recordShard.setRecord(io, log, recordId, internalRecord);
+        try self.addRecordToSortIndexes(io, log, internalRecord);
 
         self.markDirty();
     }
@@ -619,11 +620,11 @@ pub const BsonCollection = struct {
     //
     // Gets one record by ID (null when it does not exist).
     //
-    pub fn getOne(self: *BsonCollection, io: std.Io, id: []const u8) !?IRecord {
+    pub fn getOne(self: *BsonCollection, io: std.Io, log: ILog, id: []const u8) !?IRecord {
         const shardId = try self.getShardId(id);
         const recordShard = try self.shard(shardId);
 
-        const record = try recordShard.record(io, id) orelse {
+        const record = try recordShard.record(io, log, id) orelse {
             return null; // Record not found
         };
 
@@ -649,13 +650,13 @@ pub const BsonCollection = struct {
     // Gets one shard's worth of records, starting at the shard the continuation token names (the first shard
     // when there is none), and the token of the shard after it.
     //
-    pub fn getAll(self: *BsonCollection, io: std.Io, next: ?[]const u8) !IGetAllResult {
+    pub fn getAll(self: *BsonCollection, io: std.Io, log: ILog, next: ?[]const u8) !IGetAllResult {
         // (Zig: shardId is a JS number, as parseInt gives it: NaN ends the listing at once, and a negative start
         // walks up through shards that hold nothing.)
         var shardId: f64 = if (utils.js_string.isTruthy(next)) utils.js_number.parseInt(next.?, null) else 0;
         while (shardId < NUM_SHARDS) {
             const recordShard = try self.shard(try jsNumberToString(self.allocator, shardId));
-            const records = try recordShard.records(io);
+            const records = try recordShard.records(io, log);
             if (records.count() > 0) {
                 var externalRecords: std.ArrayList(IRecord) = .empty;
                 for (records.values()) |internal| {
@@ -679,11 +680,11 @@ pub const BsonCollection = struct {
     //
     // Updates a record.
     //
-    pub fn updateOne(self: *BsonCollection, io: std.Io, id: []const u8, updates: bson.BsonDocument, options: IUpdateOptions) !bool {
+    pub fn updateOne(self: *BsonCollection, io: std.Io, log: ILog, id: []const u8, updates: bson.BsonDocument, options: IUpdateOptions) !bool {
         const shardId = try self.getShardId(id);
         const recordShard = try self.shard(shardId);
 
-        var existingRecord = try recordShard.record(io, id);
+        var existingRecord = try recordShard.record(io, log, id);
 
         if (!(options.upsert orelse false)) {
             //
@@ -714,8 +715,8 @@ pub const BsonCollection = struct {
             .metadata = try updateMetadata(self.allocator, .{ .document = existingRecord.?.fields }, .{ .document = updates }, existingRecord.?.metadata, @floatFromInt(timestamp)),
         };
 
-        try recordShard.setRecord(io, id, updatedRecord);
-        try self.updateRecordInSortIndexes(io, updatedRecord, existingRecord);
+        try recordShard.setRecord(io, log, id, updatedRecord);
+        try self.updateRecordInSortIndexes(io, log, updatedRecord, existingRecord);
 
         self.markDirty();
 
@@ -727,15 +728,15 @@ pub const BsonCollection = struct {
     // This is useful for sync operations where timestamps must be preserved exactly.
     // Always upserts (creates if doesn't exist, updates if it does).
     //
-    pub fn setInternalRecord(self: *BsonCollection, io: std.Io, record: IInternalRecord) !void {
+    pub fn setInternalRecord(self: *BsonCollection, io: std.Io, log: ILog, record: IInternalRecord) !void {
         const shardId = try self.getShardId(record._id);
         const recordShard = try self.shard(shardId);
 
-        const existingRecord = try recordShard.record(io, record._id);
+        const existingRecord = try recordShard.record(io, log, record._id);
 
         // Set the record directly with all its metadata preserved
-        try recordShard.setRecord(io, record._id, record);
-        try self.updateRecordInSortIndexes(io, record, existingRecord);
+        try recordShard.setRecord(io, log, record._id, record);
+        try self.updateRecordInSortIndexes(io, log, record, existingRecord);
 
         self.markDirty();
     }
@@ -743,22 +744,22 @@ pub const BsonCollection = struct {
     //
     // Deletes a record.
     //
-    pub fn deleteOne(self: *BsonCollection, io: std.Io, recordId: []const u8) !bool {
+    pub fn deleteOne(self: *BsonCollection, io: std.Io, log: ILog, recordId: []const u8) !bool {
         const shardId = try self.getShardId(recordId);
         const recordShard = try self.shard(shardId);
 
         //
         // Find the record to delete.
         //
-        const existingRecord = try recordShard.record(io, recordId) orelse {
+        const existingRecord = try recordShard.record(io, log, recordId) orelse {
             return false; // Record not found
         };
 
         //
         // Delete the record.
         //
-        try recordShard.deleteRecord(io, recordId);
-        try self.deleteRecordFromSortIndexes(io, recordId, existingRecord);
+        try recordShard.deleteRecord(io, log, recordId);
+        try self.deleteRecordFromSortIndexes(io, log, recordId, existingRecord);
         self.markDirty();
 
         return true;
@@ -808,20 +809,20 @@ pub const BsonCollection = struct {
     // Dirty flags are cleared; the in-memory cache remains populated for fast subsequent reads.
     // Returns the current collection merkle tree for the database to incorporate.
     //
-    pub fn commit(self: *BsonCollection, io: std.Io) !void {
+    pub fn commit(self: *BsonCollection, io: std.Io, log: ILog) !void {
 
         for (self.shardCache.keys(), self.shardCache.values()) |shardId, cachedShard| {
             if (!cachedShard.dirty()) {
                 continue;
             }
 
-            try cachedShard.commit(io);
+            try cachedShard.commit(io, log);
 
             const shardMerkleRef = try cachedShard.merkleTree();
-            const shardTree = try shardMerkleRef.get(io);
+            const shardTree = try shardMerkleRef.get(io, log);
             const collectionMerkleRef = try self.merkleTree();
             if (shardTree != null and shardTree.?.merkle != null) {
-                try collectionMerkleRef.upsert(io, .{
+                try collectionMerkleRef.upsert(io, log, .{
                     .name = shardId,
                     .hash = shardTree.?.merkle.?.hash,
                     .length = shardTree.?.merkle.?.nodeCount,
@@ -829,16 +830,16 @@ pub const BsonCollection = struct {
                 });
             }
             else {
-                try collectionMerkleRef.remove(io, shardId);
+                try collectionMerkleRef.remove(io, log, shardId);
             }
         }
 
         for (self.sortIndexCache.values()) |cachedSortIndex| {
-            try cachedSortIndex.commit(io);
+            try cachedSortIndex.commit(io, log);
         }
 
         const merkleRef = try self.merkleTree();
-        try merkleRef.commit(io);
+        try merkleRef.commit(io, log);
 
         self.clearDirty();
     }

@@ -22,6 +22,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
@@ -31,7 +32,6 @@ const MessageQueue = ziggy.message_queue.MessageQueue;
 const Message = ziggy.message_queue.Message;
 const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
 const json = ziggy.json;
-const log = &utils.log.log;
 
 //
 // How long a connection may wait without sending a request before the server thread gives it up, in milliseconds.
@@ -174,7 +174,7 @@ pub fn currentRequest() ?*Request {
 // returns and `thread_arena`, an arena freed when the connection thread ends, for what outlives the request (a cache of the thread's
 // state). An error it returns closes the connection.
 //
-pub const Handler = *const fn (context: ?*anyopaque, request: *Request, io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!void;
+pub const Handler = *const fn (context: ?*anyopaque, request: *Request, io: std.Io, log: utils.log.ILog, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!void;
 
 //
 // One route: the method and path it serves, and its handler.
@@ -198,25 +198,25 @@ pub const Router = struct {
     // The routes, tried in order.
     routes: []const Route,
     // Runs before the routes, as Express middleware does, and returns true when it responded to the request itself. Null for none.
-    before: ?*const fn (context: ?*anyopaque, request: *Request, io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!bool = null,
+    before: ?*const fn (context: ?*anyopaque, request: *Request, io: std.Io, log: utils.log.ILog, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!bool = null,
     // Responds to a request no route matches.
     notFound: Handler,
 
     //
     // Serves one request: `before`, then the first route of the request's method and path, then `notFound`.
     //
-    pub fn handle(self: Router, request: *Request, io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) !void {
+    pub fn handle(self: Router, request: *Request, io: std.Io, log: utils.log.ILog, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) !void {
         if (self.before) |before| {
-            if (try before(self.context, request, io, allocator, thread_arena)) {
+            if (try before(self.context, request, io, log, allocator, thread_arena)) {
                 return;
             }
         }
         for (self.routes) |route| {
             if (route.method == request.method and pathIs(request.path, route.path)) {
-                return route.handle(self.context, request, io, allocator, thread_arena);
+                return route.handle(self.context, request, io, log, allocator, thread_arena);
             }
         }
-        return self.notFound(self.context, request, io, allocator, thread_arena);
+        return self.notFound(self.context, request, io, log, allocator, thread_arena);
     }
 
     //
@@ -443,6 +443,8 @@ const from_accepting = std.math.maxInt(u32);
 // with a connection of its own.
 //
 fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *MessageQueue) void {
+    // The server thread has no log of its own, so what it logs goes to the console.
+    const log = utils.log.ConsoleLog.init();
     var thread_allocator: ThreadAllocator = .init;
     defer thread_allocator.deinit();
     const allocator = thread_allocator.allocator();
@@ -547,7 +549,7 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
             connections.items[message.from - 1].requested = true;
             continue;
         }
-        if (!handleServerMessage(io, allocator, connections.items, message)) {
+        if (!handleServerMessage(io, allocator, log, connections.items, message)) {
             return;
         }
     }
@@ -559,6 +561,8 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
 // thread wakes it with a connection of its own after sending "stop" (stopAccepting).
 //
 fn acceptMain(listener_given: std.Io.net.Server, queue: *MessageQueue, server_queue: *MessageQueue) void {
+    // The accepting thread has no log of its own, so what it logs goes to the console.
+    const log = utils.log.ConsoleLog.init();
     var thread_allocator: ThreadAllocator = .init;
     defer thread_allocator.deinit();
     const allocator = thread_allocator.allocator();
@@ -683,7 +687,7 @@ fn closeConnection(io: std.Io, connection: *ConnectionThread) void {
 // Handles one message to the server thread: "stop" from the owner, "hold" from a connection thread, or a message from the owner for the
 // connection thread that holds its key, which it passes on. Frees the message's text. Returns false when the server is to stop.
 //
-fn handleServerMessage(io: std.Io, allocator: std.mem.Allocator, connections: []ConnectionThread, message: Message) bool {
+fn handleServerMessage(io: std.Io, allocator: std.mem.Allocator, log: utils.log.ILog, connections: []ConnectionThread, message: Message) bool {
     defer allocator.free(message.text);
     if (message.from == from_owner and isType(message.text, "stop")) {
         return false;
@@ -779,6 +783,8 @@ fn handOver(io: std.Io, allocator: std.mem.Allocator, connection: *ConnectionThr
 // and state, and reads its configuration and environment into memory of its own.
 //
 fn connectionMain(start: ThreadStart, number: u32, queue: *MessageQueue, server_queue: *MessageQueue) void {
+    // A connection thread has no log of its own, so what it logs goes to the console.
+    const log = utils.log.ConsoleLog.init();
     var thread_allocator: ThreadAllocator = .init;
     defer thread_allocator.deinit();
     const allocator = thread_allocator.allocator();
@@ -816,7 +822,7 @@ fn connectionMain(start: ThreadStart, number: u32, queue: *MessageQueue, server_
         }
         const socket = socketOf(message.text);
         allocator.free(message.text);
-        const stopped = serveConnection(io, allocator, thread_arena, socket, state, queue, server_queue, number, start.router);
+        const stopped = serveConnection(io, allocator, log, thread_arena, socket, state, queue, server_queue, number, start.router);
         server_queue.post(io, number, "{\"type\":\"free\"}") catch @panic("out of memory freeing a connection thread");
         if (stopped) {
             return;
@@ -828,7 +834,7 @@ fn connectionMain(start: ThreadStart, number: u32, queue: *MessageQueue, server_
 // Reads one request on the connection and has the router serve it. The server thread closes the connection once this thread reports
 // it free. Returns true when the thread was told to stop while it served it.
 //
-fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, socket: std.Io.net.Socket.Handle, state: ?*anyopaque, queue: *MessageQueue, server_queue: *MessageQueue, number: u32, router: Router) bool {
+fn serveConnection(io: std.Io, allocator: std.mem.Allocator, log: utils.log.ILog, thread_arena: std.mem.Allocator, socket: std.Io.net.Socket.Handle, state: ?*anyopaque, queue: *MessageQueue, server_queue: *MessageQueue, number: u32, router: Router) bool {
     const stream: std.Io.net.Stream = .{
         .socket = .{
             .handle = socket,
@@ -847,11 +853,11 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.m
         switch (err) {
             error.HttpConnectionClosing, error.ReadFailed, error.HttpRequestTruncated => {},
             error.HttpHeadersInvalid => {
-                refuse(&writer.interface, "400 Bad Request");
+                refuse(log, &writer.interface, "400 Bad Request");
                 letClientReadRefusal(stream, io, &reader.interface);
             },
             error.HttpHeadersOversize => {
-                refuse(&writer.interface, "431 Request Header Fields Too Large");
+                refuse(log, &writer.interface, "431 Request Header Fields Too Large");
                 letClientReadRefusal(stream, io, &reader.interface);
             },
         }
@@ -879,7 +885,7 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, thread_arena: std.m
     };
     current_request = &request;
     defer current_request = null;
-    router.handle(&request, io, arena, thread_arena) catch |err| {
+    router.handle(&request, io, log, arena, thread_arena) catch |err| {
         log.exception("The HTTP server could not respond to a request", err);
     };
     return request.stopped or stopRequested(io, allocator, queue);
@@ -1017,7 +1023,7 @@ const refusal_drain_limit = 64 * 1024;
 //
 // Responds to a request that could not be read with its status, and closes the connection.
 //
-fn refuse(writer: *std.Io.Writer, status: []const u8) void {
+fn refuse(log: ILog, writer: *std.Io.Writer, status: []const u8) void {
     writer.print("HTTP/1.1 {s}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n", .{status}) catch |err| {
         log.exception("The HTTP server could not refuse a request", err);
         return;

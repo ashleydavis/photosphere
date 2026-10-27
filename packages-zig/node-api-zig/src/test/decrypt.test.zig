@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const node_api = @import("node-api-zig");
@@ -60,10 +61,10 @@ fn buildMinimalFilesTree(allocator: std.mem.Allocator, leafNames: []const []cons
 //
 // Collects every file name the decryptableFiles iterator yields.
 //
-fn collectFiles(allocator: std.mem.Allocator, storage: *MemoryStorage) ![]const []const u8 {
+fn collectFiles(log: ILog, allocator: std.mem.Allocator, storage: *MemoryStorage) ![]const []const u8 {
     var results: std.ArrayList([]const u8) = .empty;
     var files = try decryptableFiles(allocator, std.testing.io, storage.asStorage());
-    while (try files.next()) |fileName| {
+    while (try files.next(log)) |fileName| {
         try results.append(allocator, fileName);
     }
     return results.items;
@@ -84,7 +85,7 @@ fn contains(names: []const []const u8, name: []const u8) bool {
 //
 // A progress callback that ignores the messages.
 //
-fn ignoreProgress(context: ?*anyopaque, message: []const u8) void {
+fn ignoreProgress(context: ?*anyopaque, _: ILog, message: []const u8) void {
     _ = context;
     _ = message;
 }
@@ -110,7 +111,7 @@ const ProgressMessages = struct {
     //
     // Records a message.
     //
-    fn push(context: ?*anyopaque, message: []const u8) void {
+    fn push(context: ?*anyopaque, _: ILog, message: []const u8) void {
         const self: *ProgressMessages = @ptrCast(@alignCast(context.?));
         const copy = self.allocator.dupe(u8, message) catch {
             @panic("out of memory");
@@ -122,6 +123,7 @@ const ProgressMessages = struct {
 };
 
 test "decryptableFiles yields regular files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -129,12 +131,13 @@ test "decryptableFiles yields regular files" {
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, "photo/img.jpg", "image/jpeg", "x");
     try storage.asStorage().write(allocator, io, ".db/bson/meta", "application/octet-stream", "x");
-    const files = try collectFiles(allocator, &storage);
+    const files = try collectFiles(log, allocator, &storage);
     try std.testing.expect(contains(files, "photo/img.jpg"));
     try std.testing.expect(contains(files, ".db/bson/meta"));
 }
 
 test "decryptableFiles excludes .db/files.dat" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -142,12 +145,13 @@ test "decryptableFiles excludes .db/files.dat" {
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, ".db/files.dat", "application/octet-stream", "x");
     try storage.asStorage().write(allocator, io, "photo/img.jpg", "image/jpeg", "x");
-    const files = try collectFiles(allocator, &storage);
+    const files = try collectFiles(log, allocator, &storage);
     try std.testing.expect(!contains(files, ".db/files.dat"));
     try std.testing.expect(contains(files, "photo/img.jpg"));
 }
 
 test "decryptableFiles excludes .db/encryption.pub" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -155,11 +159,12 @@ test "decryptableFiles excludes .db/encryption.pub" {
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, ".db/encryption.pub", "application/octet-stream", "x");
     try storage.asStorage().write(allocator, io, "photo/img.jpg", "image/jpeg", "x");
-    const files = try collectFiles(allocator, &storage);
+    const files = try collectFiles(log, allocator, &storage);
     try std.testing.expect(!contains(files, ".db/encryption.pub"));
 }
 
 test "decryptableFiles excludes README.md" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -167,20 +172,22 @@ test "decryptableFiles excludes README.md" {
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, "README.md", "text/markdown", "x");
     try storage.asStorage().write(allocator, io, "photo/img.jpg", "image/jpeg", "x");
-    const files = try collectFiles(allocator, &storage);
+    const files = try collectFiles(log, allocator, &storage);
     try std.testing.expect(!contains(files, "README.md"));
 }
 
 test "decryptableFiles yields nothing for empty storage" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    const files = try collectFiles(allocator, &storage);
+    const files = try collectFiles(log, allocator, &storage);
     try std.testing.expectEqual(@as(usize, 0), files.len);
 }
 
 test "decryptableFiles excludes .db/config.json" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -188,12 +195,13 @@ test "decryptableFiles excludes .db/config.json" {
     var storage = MemoryStorage.init(allocator);
     try storage.asStorage().write(allocator, io, ".db/config.json", "application/json", "{}");
     try storage.asStorage().write(allocator, io, "photo/img.jpg", "image/jpeg", "x");
-    const files = try collectFiles(allocator, &storage);
+    const files = try collectFiles(log, allocator, &storage);
     try std.testing.expect(!contains(files, ".db/config.json"));
     try std.testing.expect(contains(files, "photo/img.jpg"));
 }
 
 test "decrypt copies all files from read storage to write storage and updates merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -208,21 +216,22 @@ test "decrypt copies all files from read storage to write storage and updates me
 
     const leafFile = "other/data.bin";
     const tree = try buildMinimalFilesTree(allocator, &.{leafFile});
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, readStorage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, &tree, readStorage, "FTRE");
     try readStorage.write(allocator, io, leafFile, "application/octet-stream", "encrypted or plain payload");
 
-    _ = try decrypt(allocator, io, readStorage, writeStorage, noProgress, readStorage);
+    _ = try decrypt(allocator, io, log, readStorage, writeStorage, noProgress, readStorage);
 
     try std.testing.expect(try writeStorage.fileExists(allocator, io, FILES_TREE_PATH));
     try std.testing.expect(try writeStorage.fileExists(allocator, io, leafFile));
-    const writtenContent = try writeStorage.read(allocator, io, leafFile);
+    const writtenContent = try writeStorage.read(allocator, io, log, leafFile);
     try std.testing.expectEqualStrings("encrypted or plain payload", writtenContent.?);
 
-    const loadedTree = try loadMerkleTree(allocator, io, writeStorage);
+    const loadedTree = try loadMerkleTree(allocator, io, log, writeStorage);
     try std.testing.expect(loadedTree.?.merkle != null);
 }
 
 test "decrypt after decrypt, tree entries use logical hash/length and tree has no .db/files.dat entry" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -247,12 +256,12 @@ test "decrypt after decrypt, tree entries use logical hash/length and tree has n
     });
     tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
     tree.dirty = false;
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, readStorage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, &tree, readStorage, "FTRE");
     try readStorage.write(allocator, io, displayPath, "application/octet-stream", logicalContent);
 
-    _ = try decrypt(allocator, io, readStorage, writeStorage, noProgress, readStorage);
+    _ = try decrypt(allocator, io, log, readStorage, writeStorage, noProgress, readStorage);
 
-    const loadedTree = try loadMerkleTree(allocator, io, writeStorage);
+    const loadedTree = try loadMerkleTree(allocator, io, log, writeStorage);
     try std.testing.expect(loadedTree.?.merkle != null);
     var leaves = merkle_tree.iterateLeaves(MerkleNode, allocator, loadedTree.?.merkle);
     while (try leaves.next()) |leaf| {
@@ -267,6 +276,7 @@ test "decrypt after decrypt, tree entries use logical hash/length and tree has n
 }
 
 test "decrypt invokes progressCallback when provided" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -279,7 +289,7 @@ test "decrypt invokes progressCallback when provided" {
     const readStorage = readStore.asStorage();
     const writeStorage = writeStore.asStorage();
     const tree = try buildMinimalFilesTree(allocator, &.{"a.dat"});
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, readStorage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, &tree, readStorage, "FTRE");
     try readStorage.write(allocator, io, "a.dat", "application/octet-stream", "a");
 
     var messages: ProgressMessages = .{
@@ -289,7 +299,7 @@ test "decrypt invokes progressCallback when provided" {
         .context = &messages,
         .function = ProgressMessages.push,
     };
-    _ = try decrypt(allocator, io, readStorage, writeStorage, progressCallback, readStorage);
+    _ = try decrypt(allocator, io, log, readStorage, writeStorage, progressCallback, readStorage);
 
     var sawSavedMerkleTree = false;
     for (messages.messages.items) |message| {
@@ -301,6 +311,7 @@ test "decrypt invokes progressCallback when provided" {
 }
 
 test "decrypt when readStorage === writeStorage and file is plain, skips write but updates tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -312,18 +323,19 @@ test "decrypt when readStorage === writeStorage and file is plain, skips write b
     const storage = store.asStorage();
     const leafFile = "asset/f1";
     const tree = try buildMinimalFilesTree(allocator, &.{leafFile});
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, storage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, &tree, storage, "FTRE");
     try storage.write(allocator, io, leafFile, "application/octet-stream", "plain content");
 
-    _ = try decrypt(allocator, io, storage, storage, noProgress, storage);
+    _ = try decrypt(allocator, io, log, storage, storage, noProgress, storage);
 
-    const readBack = try storage.read(allocator, io, leafFile);
+    const readBack = try storage.read(allocator, io, log, leafFile);
     try std.testing.expectEqualStrings("plain content", readBack.?);
-    const loadedTree = try loadMerkleTree(allocator, io, storage);
+    const loadedTree = try loadMerkleTree(allocator, io, log, storage);
     try std.testing.expect(loadedTree.?.merkle != null);
 }
 
 test "decrypt returns correct decrypted count for files written to a different storage" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -337,17 +349,18 @@ test "decrypt returns correct decrypted count for files written to a different s
     const writeStorage = writeStore.asStorage();
     // Use empty tree to avoid BSON leaf files being written to storage.
     const tree = try buildMinimalFilesTree(allocator, &.{});
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, readStorage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, &tree, readStorage, "FTRE");
     try readStorage.write(allocator, io, "f1.dat", "application/octet-stream", "content1");
     try readStorage.write(allocator, io, "f2.dat", "application/octet-stream", "content2");
 
-    const result = try decrypt(allocator, io, readStorage, writeStorage, noProgress, readStorage);
+    const result = try decrypt(allocator, io, log, readStorage, writeStorage, noProgress, readStorage);
 
     try std.testing.expectEqual(@as(u64, 2), result.decrypted);
     try std.testing.expectEqual(@as(u64, 0), result.skipped);
 }
 
 test "decrypt returns correct skipped count when files are already plain and same storage is used" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -359,16 +372,17 @@ test "decrypt returns correct skipped count when files are already plain and sam
     const storage = store.asStorage();
     // Use empty tree to avoid BSON leaf files being written to storage.
     const tree = try buildMinimalFilesTree(allocator, &.{});
-    try merkle_tree.saveTree(allocator, io, FILES_TREE_PATH, &tree, storage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, FILES_TREE_PATH, &tree, storage, "FTRE");
     try storage.write(allocator, io, "f1.dat", "application/octet-stream", "plain content");
 
-    const result = try decrypt(allocator, io, storage, storage, noProgress, storage);
+    const result = try decrypt(allocator, io, log, storage, storage, noProgress, storage);
 
     try std.testing.expectEqual(@as(u64, 1), result.skipped);
     try std.testing.expectEqual(@as(u64, 0), result.decrypted);
 }
 
 test "decrypt throws when merkle tree cannot be loaded" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -382,11 +396,12 @@ test "decrypt throws when merkle tree cannot be loaded" {
     const writeStorage = writeStore.asStorage();
     try readStorage.write(allocator, io, "asset/x", "application/octet-stream", "x");
 
-    try std.testing.expectError(error.Thrown, decrypt(allocator, io, readStorage, writeStorage, noProgress, readStorage));
+    try std.testing.expectError(error.Thrown, decrypt(allocator, io, log, readStorage, writeStorage, noProgress, readStorage));
     try std.testing.expect(std.mem.indexOf(u8, errors.errorMessage(error.Thrown), "Failed to load merkle tree") != null);
 }
 
 test "decryptFile throws when the file it is asked to decrypt is not there" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -396,6 +411,6 @@ test "decryptFile throws when the file it is asked to decrypt is not there" {
     const readStorage = readStore.asStorage();
     var tree = try buildMinimalFilesTree(allocator, &.{"asset/missing"});
 
-    try std.testing.expectError(error.Thrown, node_api.decrypt.decryptFile(allocator, io, "asset/missing", readStorage, writeStore.asStorage(), readStorage, &tree));
+    try std.testing.expectError(error.Thrown, node_api.decrypt.decryptFile(allocator, io, log, "asset/missing", readStorage, writeStore.asStorage(), readStorage, &tree));
     try std.testing.expectEqualStrings("Source file \"asset/missing\" does not exist.", errors.lastErrorMessage());
 }

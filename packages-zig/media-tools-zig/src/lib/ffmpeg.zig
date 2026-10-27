@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const MessageQueue = @import("ziggy").message_queue.MessageQueue;
@@ -89,7 +90,7 @@ pub const Ffmpeg = struct {
     // the keyboard, not to print the banner or progress and to say only errors, because the program is not at a terminal. The
     // output is empty: what `ffmpeg` says goes to the log (see the top of this file).
     //
-    pub fn runFfmpeg(io: std.Io, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runFfmpeg(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
             return try versionOutput(allocator, "ffmpeg");
         }
@@ -98,7 +99,7 @@ pub const Ffmpeg = struct {
         defer log_queue.deinit();
         var exit_code: c_int = undefined;
         const started = ffmpeg_run(@intCast(argv.len - 1), argv.ptr, &log_queue, &exit_code);
-        logRun(io, allocator, "ffmpeg", &log_queue);
+        logRun(io, allocator, log, "ffmpeg", &log_queue);
         if (started < 0) {
             return utils.errors.throwError("ffmpeg could not be started: FFmpeg error {d}.", .{started});
         }
@@ -113,7 +114,7 @@ pub const Ffmpeg = struct {
     // wrote, which ffprobe is told to write to a file of the runner's naming. ffprobe is told to put the error in the report when
     // it cannot read the file (`-show_error`), so a failed probe hands back its error; a probe that works writes no error.
     //
-    pub fn runFfprobe(io: std.Io, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runFfprobe(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
             return try versionOutput(allocator, "ffprobe");
         }
@@ -123,7 +124,7 @@ pub const Ffmpeg = struct {
         defer std.Io.Dir.cwd().deleteFile(io, report_path) catch |err| {
             // The report is not there when ffprobe failed before it wrote anything.
             if (err != error.FileNotFound) {
-                utils.log.log.exception("Could not delete the report ffprobe wrote", err);
+                log.exception("Could not delete the report ffprobe wrote", err);
             }
         };
         const argv = try buildArgv(allocator, "ffprobe", &.{ "-o", report_path, "-show_error" }, arguments);
@@ -131,7 +132,7 @@ pub const Ffmpeg = struct {
         defer log_queue.deinit();
         var exit_code: c_int = undefined;
         const started = ffprobe_run(@intCast(argv.len - 1), argv.ptr, &log_queue, &exit_code);
-        logRun(io, allocator, "ffprobe", &log_queue);
+        logRun(io, allocator, log, "ffprobe", &log_queue);
         if (started < 0) {
             return utils.errors.throwError("ffprobe could not be started: FFmpeg error {d}.", .{started});
         }
@@ -151,13 +152,13 @@ pub const Ffmpeg = struct {
     }
 
     //
-    // Sends the messages a run posted to its log queue to the calling thread's log, in the order they were posted, once the run has
+    // Sends the messages a run posted to its log queue to the log given, in the order they were posted, once the run has
     // ended and its threads with it. Each message is numbered with its level.
     //
-    fn logRun(io: std.Io, allocator: std.mem.Allocator, program: []const u8, log_queue: *MessageQueue) void {
+    fn logRun(io: std.Io, allocator: std.mem.Allocator, log: ILog, program: []const u8, log_queue: *MessageQueue) void {
         while (log_queue.tryTake(io, allocator)) |message| {
             defer allocator.free(message.text);
-            writeToLog(program, @bitCast(message.from), message.text);
+            writeToLog(log, program, @bitCast(message.from), message.text);
         }
     }
 };
@@ -169,19 +170,19 @@ const line_size = 4096;
 const message_buffer_size = line_size + " [cut short]".len;
 
 //
-// Writes one message of FFmpeg's log to the calling thread's log: an error to the log's errors, and anything else to the log as the
+// Writes one message of FFmpeg's log to the log given: an error to the log's errors, and anything else to the log as the
 // program's standard error.
 //
-fn writeToLog(program: []const u8, level: c_int, text: []const u8) void {
+fn writeToLog(log: ILog, program: []const u8, level: c_int, text: []const u8) void {
     if (level <= av_log_error) {
-        utils.log.log.@"error"(text);
+        log.@"error"(text);
         return;
     }
     // The line is made in a buffer on the calling thread's stack, because this runs on whichever thread logs, and a message is never
     // longer than the line logMessage writes it into, with what it adds.
     var buffer: [message_buffer_size + 1]u8 = undefined;
     const line = std.fmt.bufPrint(&buffer, "{s}\n", .{text}) catch @panic("a message of FFmpeg is longer than its line");
-    utils.log.log.tool(program, .{
+    log.tool(program, .{
         .stdout = null,
         .stderr = line,
     });
@@ -190,10 +191,12 @@ fn writeToLog(program: []const u8, level: c_int, text: []const u8) void {
 //
 // FFmpeg's log callback, called on whichever thread logs. A message of a run goes to the log callback an option of the run set, or
 // else, when it is at or under the level the run asked for (`-loglevel`), to the run's log queue, written as FFmpeg writes it to the
-// standard error, with the context it is about in front (`[in#0 @ 0x...] Error opening input: ...`). A message on a thread of no run
-// goes to that thread's log when it is an error. A message longer than the line it is written into is cut short, and says so.
+// standard error, with the context it is about in front (`[in#0 @ 0x...] Error opening input: ...`). A message on a thread of no run, which FFmpeg
+// calls this with no way to pass a log, goes to the console when it is an error. A message longer than the line it is written into is cut
+// short, and says so.
 //
 fn logMessage(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, vl: ?*anyopaque) callconv(.c) void {
+    const console_log = utils.log.ConsoleLog.init();
     if (fftools_forward_log(avcl, level, fmt, vl) != 0) {
         return;
     }
@@ -209,7 +212,7 @@ fn logMessage(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, vl: ?*anyopaqu
     var print_prefix: c_int = 1;
     const length = av_log_format_line2(avcl, level, fmt, vl, &line, line.len, &print_prefix);
     if (length < 0) {
-        utils.log.log.@"error"("A message of FFmpeg's log could not be written out.");
+        console_log.@"error"("A message of FFmpeg's log could not be written out.");
         return;
     }
     const written: usize = @min(@as(usize, @intCast(length)), line.len - 1);
@@ -221,7 +224,7 @@ fn logMessage(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, vl: ?*anyopaqu
     var message_buffer: [message_buffer_size]u8 = undefined;
     const message = std.fmt.bufPrint(&message_buffer, "{s}{s}", .{ text, if (written < length) " [cut short]" else "" }) catch @panic("a message of FFmpeg is longer than its buffer");
     const queue = log_queue orelse {
-        writeToLog("ffmpeg", plain_level, message);
+        writeToLog(console_log, "ffmpeg", plain_level, message);
         return;
     };
     // The thread may be one of the run's own, which has no Io, so it posts with an Io of its own, which allocates nothing for a post,

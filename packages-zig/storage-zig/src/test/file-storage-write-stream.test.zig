@@ -8,11 +8,13 @@
 
 const test_files = @import("test-files.zig");
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const storage_zig = @import("storage-zig");
 
 const FileStorage = storage_zig.file_storage.FileStorage;
 
 test "a file-backed stream is written byte for byte" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -29,15 +31,16 @@ test "a file-backed stream is written byte for byte" {
     const copiedPath = try std.fs.path.join(allocator, &.{ tempDir, "copied.bin" });
     try test_files.writeFile(io, sourcePath, contents);
 
-    const stream = try storage.readStream(allocator, io, sourcePath);
+    const stream = try storage.readStream(allocator, io, log, sourcePath);
     defer stream.destroy(io);
     try storage.writeStream(allocator, io, copiedPath, "application/octet-stream", stream.reader(), null);
 
-    const written = (try storage.read(allocator, io, copiedPath)).?;
+    const written = (try storage.read(allocator, io, log, copiedPath)).?;
     try std.testing.expectEqualSlices(u8, contents, written);
 }
 
 test "a stream with no path behind it is still piped through" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -53,11 +56,12 @@ test "a stream with no path behind it is still piped through" {
     var input = std.Io.Reader.fixed(contents);
     try storage.writeStream(allocator, io, pipedPath, "application/octet-stream", &input, null);
 
-    const written = (try storage.read(allocator, io, pipedPath)).?;
+    const written = (try storage.read(allocator, io, log, pipedPath)).?;
     try std.testing.expectEqualSlices(u8, contents, written);
 }
 
 test "an empty file-backed stream produces an empty file, not a missing one" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -70,10 +74,10 @@ test "an empty file-backed stream produces an empty file, not a missing one" {
     const copyPath = try std.fs.path.join(allocator, &.{ tempDir, "empty-copy.bin" });
     try test_files.writeFile(io, sourcePath, "");
 
-    const stream = try storage.readStream(allocator, io, sourcePath);
+    const stream = try storage.readStream(allocator, io, log, sourcePath);
     defer stream.destroy(io);
     try storage.writeStream(allocator, io, copyPath, "application/octet-stream", stream.reader(), null);
 
-    const written = (try storage.read(allocator, io, copyPath)).?;
+    const written = (try storage.read(allocator, io, log, copyPath)).?;
     try std.testing.expectEqual(@as(usize, 0), written.len);
 }

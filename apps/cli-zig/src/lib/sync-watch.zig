@@ -1,8 +1,8 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const pc = @import("picocolors.zig");
 const init_cmd = @import("init-cmd.zig");
-const log = &utils.log.log;
 const throwError = utils.errors.throwError;
 const errorMessage = utils.errors.errorMessage;
 const sleep = utils.sleep.sleep;
@@ -53,7 +53,7 @@ pub const ISyncWatchOptions = struct {
     context: ?*anyopaque,
 
     // Runs one sync and reports whether anything was transferred.
-    syncOnce: *const fn (context: ?*anyopaque, io: std.Io) anyerror!bool,
+    syncOnce: *const fn (context: ?*anyopaque, io: std.Io, log: ILog) anyerror!bool,
 
     // True once the watch should stop. Passed in rather than reached for, so the loop can be tested
     // without sending a signal to the test runner.
@@ -66,13 +66,13 @@ pub const ISyncWatchOptions = struct {
 // A sync that fails is reported and the watch carries on: a network that is down now may be up in
 // thirty seconds, and stopping would mean nothing syncs again until someone notices.
 //
-pub fn runSyncWatch(allocator: std.mem.Allocator, io: std.Io, options: ISyncWatchOptions) !void {
+pub fn runSyncWatch(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: ISyncWatchOptions) !void {
     var intervalText: std.Io.Writer.Allocating = .init(allocator);
     try utils.js_number.writeNumber(&intervalText.writer, options.intervalSeconds);
     log.info(try pc.bold(allocator, try std.fmt.allocPrint(allocator, "Syncing every {s} second(s). Press Ctrl-C to stop.", .{intervalText.written()})));
 
     while (!options.isStopped(options.context)) {
-        if (options.syncOnce(options.context, io)) |synced| {
+        if (options.syncOnce(options.context, io, log)) |synced| {
             if (synced) {
                 log.info("Sync completed successfully!");
             }

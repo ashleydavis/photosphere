@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -7,7 +8,6 @@ const http_server = node_utils.http_server;
 const IAssetServerCore = asset_server_core.IAssetServerCore;
 const IDatabaseOp = api.database_op.IDatabaseOp;
 const errors = utils.errors;
-const log = &utils.log.log;
 
 //
 // The largest JSON body POST /apply-database-ops reads, in bytes: the default limit of `express.json()`, which is "100kb".
@@ -114,7 +114,7 @@ pub const AssetServerRoutes = struct {
     //
     // The CORS middleware, before the routes: an OPTIONS request is answered with 200 when this server owns the application.
     //
-    fn beforeRoutes(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!bool {
+    fn beforeRoutes(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: ILog, _: std.mem.Allocator, _: std.mem.Allocator) anyerror!bool {
         const self = of(context);
         if (self.enableCors and request.method == .OPTIONS) {
             try self.send(request.http, .ok, "text/plain; charset=utf-8", "OK");
@@ -127,7 +127,7 @@ pub const AssetServerRoutes = struct {
     // What express answers when no route matches: OPTIONS for a path that has routes lists the methods they answer, and anything
     // else is a 404.
     //
-    fn notFound(context: ?*anyopaque, request: *http_server.Request, _: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn notFound(context: ?*anyopaque, request: *http_server.Request, _: std.Io, _: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         const self = of(context);
         if (request.method == .OPTIONS) {
             if (http_server.pathIs(request.path, "/asset")) {
@@ -144,25 +144,25 @@ pub const AssetServerRoutes = struct {
     //
     // GET /asset and HEAD /asset.
     //
-    fn getAssetRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!void {
+    fn getAssetRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, log: ILog, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator) anyerror!void {
         const self = of(context);
-        return self.getAsset(allocator, thread_arena, io, self.coreFor(request), request.http, request.query);
+        return self.getAsset(allocator, thread_arena, io, log, self.coreFor(request), request.http, request.query);
     }
 
     //
     // POST /asset.
     //
-    fn postAssetRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn postAssetRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, log: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         const self = of(context);
-        return self.postAsset(allocator, io, self.coreFor(request), request.http, request.query, request.contentType, request.contentLength);
+        return self.postAsset(allocator, io, log, self.coreFor(request), request.http, request.query, request.contentType, request.contentLength);
     }
 
     //
     // POST /apply-database-ops.
     //
-    fn postApplyDatabaseOpsRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
+    fn postApplyDatabaseOpsRoute(context: ?*anyopaque, request: *http_server.Request, io: std.Io, log: ILog, allocator: std.mem.Allocator, _: std.mem.Allocator) anyerror!void {
         const self = of(context);
-        return self.postApplyDatabaseOps(allocator, io, self.coreFor(request), request.http, request.contentType);
+        return self.postApplyDatabaseOps(allocator, io, log, self.coreFor(request), request.http, request.contentType);
     }
 
     //
@@ -170,7 +170,7 @@ pub const AssetServerRoutes = struct {
     // (Zig: the route has `express.json()` before it, which reads a JSON body sent with a GET. The standard library's HTTP server
     // does not give the body of a GET to read, so a body sent with a GET is ignored.)
     //
-    fn getAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, core: IAssetServerCore, request: *std.http.Server.Request, query: []const u8) !void {
+    fn getAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, log: ILog, core: IAssetServerCore, request: *std.http.Server.Request, query: []const u8) !void {
         const assetId = try queryParameter(allocator, query, "id");
         const databasePath = try queryParameter(allocator, query, "db");
         const assetType = try queryParameter(allocator, query, "type");
@@ -189,14 +189,14 @@ pub const AssetServerRoutes = struct {
 
         // The stream is opened and its first bytes read before anything is sent, so that an asset that cannot be read is answered
         // with the 500 (the headers are not sent until the first byte is written).
-        const assetStream = core.serveAsset(allocator, thread_arena, io, assetId.?, assetType.?, databasePath.?) catch |err| {
-            return self.failedToLoadAsset(allocator, request, assetId.?, err);
+        const assetStream = core.serveAsset(allocator, thread_arena, io, log, assetId.?, assetType.?, databasePath.?) catch |err| {
+            return self.failedToLoadAsset(log, allocator, request, assetId.?, err);
         };
         defer assetStream.destroy(io);
         const reader = assetStream.reader();
         _ = reader.peek(1) catch |err| switch (err) {
             error.EndOfStream => {},
-            else => return self.failedToLoadAsset(allocator, request, assetId.?, err),
+            else => return self.failedToLoadAsset(log, allocator, request, assetId.?, err),
         };
 
         var headers: [1 + cors_headers.len]std.http.Header = undefined;
@@ -220,7 +220,7 @@ pub const AssetServerRoutes = struct {
     //
     // The catch block of GET /asset, for an error before any byte is sent.
     //
-    fn failedToLoadAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, request: *std.http.Server.Request, assetId: []const u8, err: anyerror) !void {
+    fn failedToLoadAsset(self: *AssetServerRoutes, log: ILog, allocator: std.mem.Allocator, request: *std.http.Server.Request, assetId: []const u8, err: anyerror) !void {
         log.exception(try std.fmt.allocPrint(allocator, "Error loading asset {s}", .{assetId}), err);
         return self.sendHtmlText(request, .internal_server_error, "Error loading asset");
     }
@@ -230,7 +230,7 @@ pub const AssetServerRoutes = struct {
     // Same query params as GET: id, type, db. Body: raw bytes. Content-Type: MIME of the blob.
     // Used when moving/copying assets between databases (gallery) so file data matches metadata applied via apply-database-ops.
     //
-    fn postAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, core: IAssetServerCore, request: *std.http.Server.Request, query: []const u8, contentType: ?[]const u8, contentLength: ?u64) !void {
+    fn postAsset(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, log: ILog, core: IAssetServerCore, request: *std.http.Server.Request, query: []const u8, contentType: ?[]const u8, contentLength: ?u64) !void {
         const assetId = try queryParameter(allocator, query, "id");
         const databasePath = try queryParameter(allocator, query, "db");
         const assetType = try queryParameter(allocator, query, "type");
@@ -244,7 +244,7 @@ pub const AssetServerRoutes = struct {
 
         const body_buffer = try allocator.alloc(u8, 16 * 1024);
         const body = try request.readerExpectContinue(body_buffer);
-        core.writeAsset(allocator, io, assetId.?, assetType.?, databasePath.?, contentType, body, announcedLength) catch |err| {
+        core.writeAsset(allocator, io, log, assetId.?, assetType.?, databasePath.?, contentType, body, announcedLength) catch |err| {
             log.exception(try std.fmt.allocPrint(allocator, "Error storing asset {s} ({s})", .{ assetId.?, assetType.? }), err);
             var message = errors.errorMessage(err);
             if (message.len == 0) {
@@ -262,7 +262,7 @@ pub const AssetServerRoutes = struct {
     // Request body: JSON { ops: IDatabaseOp[] } where each op targets a database path (databaseId), collection, record id, and operation.
     // Responses: 400 if ops is missing or not an array; 204 on success; 500 if applying ops fails.
     //
-    fn postApplyDatabaseOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, core: IAssetServerCore, request: *std.http.Server.Request, contentType: ?[]const u8) !void {
+    fn postApplyDatabaseOps(self: *AssetServerRoutes, allocator: std.mem.Allocator, io: std.Io, log: ILog, core: IAssetServerCore, request: *std.http.Server.Request, contentType: ?[]const u8) !void {
         // Reads a JSON body of at most 100kb, and leaves the body undefined for
         // a request that does not say it holds JSON.
         const has_body = request.head.method.requestHasBody() and (request.head.content_length != null or request.head.transfer_encoding != .none);
@@ -291,7 +291,7 @@ pub const AssetServerRoutes = struct {
             return self.sendHtmlText(request, .bad_request, "Request body must be a JSON object with an \"ops\" array.");
         }
 
-        applyOps(allocator, io, core, ops_value.?.array.items) catch |err| {
+        applyOps(allocator, io, log, core, ops_value.?.array.items) catch |err| {
             log.exception("Error applying database ops", err);
             var message = errors.errorMessage(err);
             if (message.len == 0) {
@@ -305,12 +305,12 @@ pub const AssetServerRoutes = struct {
     //
     // Reads the operations the page sent and has the core apply them.
     //
-    fn applyOps(allocator: std.mem.Allocator, io: std.Io, core: IAssetServerCore, items: []const std.json.Value) !void {
+    fn applyOps(allocator: std.mem.Allocator, io: std.Io, log: ILog, core: IAssetServerCore, items: []const std.json.Value) !void {
         const ops = try allocator.alloc(IDatabaseOp, items.len);
         for (items, ops) |item, *op| {
             op.* = try api.database_op.databaseOpFromJson(item);
         }
-        try core.applyDatabaseOps(allocator, io, ops);
+        try core.applyDatabaseOps(allocator, io, log, ops);
     }
 
     //

@@ -80,8 +80,8 @@ test "what the process logs reaches the log file, and the console" {
 
     // Logged by code running on the main thread, as the app's code runs.
     try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, _: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            utils.log.log.info("a line written by the code under test");
+        fn check(_: u8, _: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            services.log.info("a line written by the code under test");
         }
     }.check);
 
@@ -90,33 +90,27 @@ test "what the process logs reaches the log file, and the console" {
     try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "a line written by the code under test") != null);
 }
 
-test "the log is the file logger on the main thread while the core runs" {
+test "the main thread's log writes the log file while the core runs" {
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
 
     try app.onState(@as(u8, 0), struct {
-        fn check(_: u8, _: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
-            try std.testing.expect(utils.file_log.FileLog.fromILog(utils.log.currentLog()) != null);
+        fn check(_: u8, _: *main_state.MainState, services: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expect(services.log.logFilePath() != null);
         }
     }.check);
 }
 
-test "destroying the core logs that the app is shutting down and ends the log file, and the thread that made the core keeps its own log" {
+test "destroying the core logs that the app is shutting down and ends the log file" {
     var app: TestApp = undefined;
-    const earlier_log = utils.log.currentLog();
     try app.start();
     defer app.stop();
     const text_before = try waitForLogLine(std.testing.allocator, &app, "Instance started (pid=");
     std.testing.allocator.free(text_before);
-    // The file logger is the main thread's log, so the thread that made the core has the log it had before.
-    try std.testing.expect(utils.log.currentLog().ptr == earlier_log.ptr);
-    try std.testing.expect(utils.log.currentLog().vtable == earlier_log.vtable);
 
     app.stopCore();
 
-    try std.testing.expect(utils.log.currentLog().ptr == earlier_log.ptr);
-    try std.testing.expect(utils.log.currentLog().vtable == earlier_log.vtable);
     const text = (try readLogFile(std.testing.allocator, &app)).?;
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "] [INFO] Photosphere Desktop shutting down...\n") != null);

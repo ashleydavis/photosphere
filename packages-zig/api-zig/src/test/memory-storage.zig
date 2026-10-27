@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const utils = @import("utils-zig");
 const storage = storage_zig.storage;
@@ -265,7 +266,8 @@ pub const MemoryStorage = struct {
     //
     // Reads a whole file (null when it does not exist).
     //
-    pub fn read(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = io;
         const data = self.files.get(filePath) orelse {
             return null;
@@ -286,7 +288,8 @@ pub const MemoryStorage = struct {
     //
     // Opens a stream that reads a file.
     //
-    pub fn readStream(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        _ = log;
         _ = io;
         const data = self.files.get(filePath) orelse {
             return error.FileNotFound;
@@ -363,7 +366,8 @@ pub const MemoryStorage = struct {
     //
     // Acquires the write lock for a lock file (false when it is already held).
     //
-    pub fn acquireWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
+    pub fn acquireWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        _ = log;
         _ = allocator;
         if (self.locks.contains(filePath)) {
             return false;
@@ -381,7 +385,8 @@ pub const MemoryStorage = struct {
     //
     // Releases the write lock for a lock file.
     //
-    pub fn releaseWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+    pub fn releaseWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = self.locks.orderedRemove(filePath);
@@ -390,7 +395,8 @@ pub const MemoryStorage = struct {
     //
     // Refreshes the write lock for a lock file (fails when it is not held, or held by another owner).
     //
-    pub fn refreshWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+    pub fn refreshWriteLock(self: *MemoryStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        _ = log;
         _ = allocator;
         const existingLock = self.locks.get(filePath) orelse {
             return utils.errors.throwError("Cannot refresh write lock: lock does not exist for {s}", .{filePath});

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -8,7 +9,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const format = @import("../lib/format.zig");
 const common = @import("../lib/clack/prompts/common.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
@@ -42,11 +42,11 @@ pub const IListCommandOptions = struct {
 //
 // Command that lists all files in the database with pagination
 //
-pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IListCommandOptions) !void {
+pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IListCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const bsonDatabase = loaded.bsonDatabase;
     const rawAssetStorage = loaded.rawAssetStorage;
     const pageSizeText = if (options.pageSize) |pageSize| (if (pageSize.len > 0) pageSize else "20") else "20";
@@ -66,7 +66,7 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     var totalDisplayed: usize = 0;
 
     while (true) {
-        const result = try (try metadataCollection.sortIndex("photoDate", .desc)).getPage(io, nextPageId);
+        const result = try (try metadataCollection.sortIndex("photoDate", .desc)).getPage(io, log, nextPageId);
 
         if (result.records.len == 0) {
             if (totalDisplayed == 0) {
@@ -84,12 +84,12 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         const encryptionHeaders = try allocator.alloc(?[]const u8, pageRecords.len);
         for (pageRecords, 0..) |record, recordIndex| {
             const recordId = try js_value.toString(allocator, record.get("_id").?);
-            const hash = try readEncryptionHeader(allocator, io, rawAssetStorage, try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", recordId }));
+            const hash = try readEncryptionHeader(allocator, io, log, rawAssetStorage, try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", recordId }));
             encryptionHeaders[recordIndex] = hash;
         }
 
         // Display current page
-        try displayPage(allocator, pageRecords, pageNumber, pageSize, encryptionHeaders);
+        try displayPage(log, allocator, pageRecords, pageNumber, pageSize, encryptionHeaders);
         totalDisplayed += pageRecords.len;
 
         // Check if there are more pages
@@ -122,7 +122,7 @@ pub fn listCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
         pageNumber += 1;
     }
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -202,7 +202,7 @@ fn getProperties(record: IAsset) ?BsonDocument {
 //
 // Displays one page of records.
 //
-fn displayPage(allocator: std.mem.Allocator, records: []const IAsset, pageNumber: u32, pageSize: f64, encryptionHeaders: []const ?[]const u8) !void {
+fn displayPage(log: ILog, allocator: std.mem.Allocator, records: []const IAsset, pageNumber: u32, pageSize: f64, encryptionHeaders: []const ?[]const u8) !void {
     _ = pageSize;
     log.info(try pc.bold(allocator, try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "--- Page {d} ---", .{pageNumber}))));
 

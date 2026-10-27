@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 
 const IStorage = storage_zig.storage.IStorage;
@@ -116,12 +117,12 @@ pub const LazyOriginStorage = struct {
     // Reads a file from local storage. If the file is absent locally, fetches it from
     // origin, caches it locally, and returns the data.
     //
-    pub fn read(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
-        if (try self.local.read(allocator, io, filePath)) |localData| {
+    pub fn read(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        if (try self.local.read(allocator, io, log, filePath)) |localData| {
             return localData;
         }
 
-        const originData = try self.origin.read(allocator, io, filePath) orelse {
+        const originData = try self.origin.read(allocator, io, log, filePath) orelse {
             return null;
         };
 
@@ -146,12 +147,12 @@ pub const LazyOriginStorage = struct {
     // threads, or one thread switching between them, and a task runs only on its own thread, so the file is cached first. When the
     // cache write fails, the caller is given the origin's stream instead.)
     //
-    pub fn readStream(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
         if (try self.local.fileExists(allocator, io, filePath)) {
-            return self.local.readStream(allocator, io, filePath);
+            return self.local.readStream(allocator, io, log, filePath);
         }
 
-        const originStream = try self.origin.readStream(allocator, io, filePath);
+        const originStream = try self.origin.readStream(allocator, io, log, filePath);
         const cached = cached: {
             defer originStream.destroy(io);
             self.local.writeStream(allocator, io, filePath, null, originStream.reader(), null) catch {
@@ -160,9 +161,9 @@ pub const LazyOriginStorage = struct {
             break :cached true;
         };
         if (cached) {
-            return self.local.readStream(allocator, io, filePath);
+            return self.local.readStream(allocator, io, log, filePath);
         }
-        return self.origin.readStream(allocator, io, filePath);
+        return self.origin.readStream(allocator, io, log, filePath);
     }
 
     //
@@ -203,21 +204,21 @@ pub const LazyOriginStorage = struct {
     //
     // Acquires the local write lock.
     //
-    pub fn acquireWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
-        return self.local.acquireWriteLock(allocator, io, filePath, owner);
+    pub fn acquireWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        return self.local.acquireWriteLock(allocator, io, log, filePath, owner);
     }
 
     //
     // Releases the local write lock.
     //
-    pub fn releaseWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
-        try self.local.releaseWriteLock(allocator, io, filePath);
+    pub fn releaseWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        try self.local.releaseWriteLock(allocator, io, log, filePath);
     }
 
     //
     // Refreshes the local write lock.
     //
-    pub fn refreshWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
-        try self.local.refreshWriteLock(allocator, io, filePath, owner);
+    pub fn refreshWriteLock(self: *LazyOriginStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        try self.local.refreshWriteLock(allocator, io, log, filePath, owner);
     }
 };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -62,7 +63,7 @@ const FolderScan = struct {
     //
     // Keeps each file the folder's recurse flag allows.
     //
-    fn visit(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
+    fn visit(context: ?*anyopaque, _: ILog, result: FileScannedResult) anyerror!void {
         const self: *FolderScan = @ptrCast(@alignCast(context.?));
         const allocator = self.allocator;
 
@@ -148,9 +149,9 @@ pub const FolderMediaSource = struct {
     //
     // IMediaSource.listPage for this implementation.
     //
-    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPageErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
         const self: *FolderMediaSource = @ptrCast(@alignCast(ptr));
-        return self.listPage(allocator, io, cursor, pageSize);
+        return self.listPage(allocator, io, log, cursor, pageSize);
     }
 
     //
@@ -180,7 +181,7 @@ pub const FolderMediaSource = struct {
     //
     // Walks every watched folder and returns what is there now, in a stable order.
     //
-    fn scan(self: *FolderMediaSource, io: std.Io) ![]IScannedItem {
+    fn scan(self: *FolderMediaSource, io: std.Io, log: ILog) ![]IScannedItem {
         const allocator = self.allocator;
         var scanned: std.ArrayList(IScannedItem) = .empty;
 
@@ -197,6 +198,7 @@ pub const FolderMediaSource = struct {
             try scanPaths(
                 allocator,
                 io,
+                log,
                 &.{folderPath},
                 .{
                     .context = &folderScan,
@@ -229,9 +231,9 @@ pub const FolderMediaSource = struct {
     //
     // Returns one page of the folders' contents, starting after the item named by the cursor.
     //
-    pub fn listPage(self: *FolderMediaSource, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) !IMediaSourceListPage {
+    pub fn listPage(self: *FolderMediaSource, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) !IMediaSourceListPage {
         if (cursor == null or self.scannedItems == null) {
-            self.scannedItems = try self.scan(io);
+            self.scannedItems = try self.scan(io, log);
         }
 
         var startIndex: usize = 0;
@@ -241,7 +243,7 @@ pub const FolderMediaSource = struct {
                 // The item the cursor named is gone, so the cached listing cannot be trusted to
                 // position us. Rescan and resume at the first item that sorts after the cursor,
                 // which keeps the backfill moving forwards rather than starting over.
-                self.scannedItems = try self.scan(io);
+                self.scannedItems = try self.scan(io, log);
                 startIndex = self.scannedItems.?.len;
                 for (self.scannedItems.?, 0..) |scannedItem, index| {
                     if (localeCompare(scannedItem.item.sourceId, cursorSourceId) > 0) {

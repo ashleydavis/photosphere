@@ -7,6 +7,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const write_lock = @import("write-lock.zig");
@@ -120,11 +121,12 @@ const state_deserializers = [_]serialization.DeserializerEntry(IDatabaseState, v
 // rebuilds the state on the next write. Never throws for a bad file.
 // (Zig: load takes no migrations or target version; with no migrations, STATE_VERSION has no effect.)
 //
-pub fn loadDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage) !?IDatabaseState {
+pub fn loadDatabaseState(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage) !?IDatabaseState {
     const state = load(
         IDatabaseState,
         allocator,
         io,
+        log,
         rawStorage,
         STATE_PATH,
         STATE_TYPE_CODE,
@@ -141,8 +143,8 @@ pub fn loadDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: I
 // Saves the full database state to .db/state.dat.
 // Lock-free primitive: the caller must already hold the database write lock (see acquireWriteLock).
 //
-pub fn saveDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, state: IDatabaseState) !void {
-    try save(allocator, io, rawStorage, STATE_PATH, state, STATE_VERSION, STATE_TYPE_CODE, serializeDatabaseState);
+pub fn saveDatabaseState(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, state: IDatabaseState) !void {
+    try save(allocator, io, log, rawStorage, STATE_PATH, state, STATE_VERSION, STATE_TYPE_CODE, serializeDatabaseState);
 }
 
 //
@@ -151,8 +153,8 @@ pub fn saveDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: I
 // The partial is the same type as an `IDatabaseState`, with every field optional, so a field partial leaves null is
 // absent from the merge. A caller cannot blank a field with it. No caller does.
 //
-pub fn mergeDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, partial: IDatabaseState) !void {
-    const existing = try loadDatabaseState(allocator, io, rawStorage);
+pub fn mergeDatabaseState(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, partial: IDatabaseState) !void {
+    const existing = try loadDatabaseState(allocator, io, log, rawStorage);
 
     // `{ ...existing ?? {}, ...partial }`: a field partial holds replaces the existing one.
     var merged: IDatabaseState = existing orelse .{};
@@ -161,21 +163,21 @@ pub fn mergeDatabaseState(allocator: std.mem.Allocator, io: std.Io, rawStorage: 
             @field(merged, field.name) = value;
         }
     }
-    try saveDatabaseState(allocator, io, rawStorage, merged);
+    try saveDatabaseState(allocator, io, log, rawStorage, merged);
 }
 
 //
 // Merges partial into the state while holding the write lock for the duration.
 // For callers that do not already hold the lock. Silently does nothing if the lock cannot be acquired.
 //
-pub fn updateDatabaseStateLocked(allocator: std.mem.Allocator, io: std.Io, rawStorage: IStorage, sessionId: []const u8, partial: IDatabaseState) !void {
-    if (!try acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+pub fn updateDatabaseStateLocked(allocator: std.mem.Allocator, io: std.Io, log: ILog, rawStorage: IStorage, sessionId: []const u8, partial: IDatabaseState) !void {
+    if (!try acquireWriteLock(allocator, io, log, rawStorage, sessionId, 3)) {
         return;
     }
     // The lock is released whether or not the merge fails; an error from releasing replaces the error of the merge.
-    mergeDatabaseState(allocator, io, rawStorage, partial) catch |err| {
-        try releaseWriteLock(allocator, io, rawStorage);
+    mergeDatabaseState(allocator, io, log, rawStorage, partial) catch |err| {
+        try releaseWriteLock(allocator, io, log, rawStorage);
         return err;
     };
-    try releaseWriteLock(allocator, io, rawStorage);
+    try releaseWriteLock(allocator, io, log, rawStorage);
 }

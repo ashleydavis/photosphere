@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -54,11 +55,9 @@ const TimestampProvider = utils.timestamp_provider.TimestampProvider;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 const WorkerPoolBun = worker_pool.WorkerPoolBun;
-const configureLog = @import("log.zig").configureLog;
 const exit = node_utils.termination.exit;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
-const log = &utils.log.log;
 const confirm = prompts.confirm;
 const text = prompts.text;
 const password = prompts.password;
@@ -322,7 +321,7 @@ const IStoredS3Credentials = struct {
 // Prompts the user to configure S3 credentials and stores them in the vault as a named secret.
 // Returns the configured credentials, or undefined if AWS env vars are already set.
 //
-pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteractive: bool) !?IS3Credentials {
+pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, log: ILog, nonInteractive: bool) !?IS3Credentials {
     const accessKeyIdEnv = node_utils.process_env.getEnv("AWS_ACCESS_KEY_ID") orelse "";
     const secretAccessKeyEnv = node_utils.process_env.getEnv("AWS_SECRET_ACCESS_KEY") orelse "";
     if (accessKeyIdEnv.len > 0 and secretAccessKeyEnv.len > 0) {
@@ -336,7 +335,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
 
     if (nonInteractive) {
         log.@"error"(try pc.red(allocator, "\u{2717} S3 credentials are required. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or run interactively to configure credentials."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     log.info(try pc.yellow(allocator, "\nNo S3 credentials found."));
@@ -347,7 +346,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
 
     if (isCancel(shouldConfigure) or !shouldConfigure.value) {
         log.@"error"(try pc.red(allocator, "S3 credentials are required."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     log.info(try pc.cyan(allocator, "Your credentials will be stored securely in your OS keychain as 'default:s3'."));
@@ -359,7 +358,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
     });
 
     if (isCancel(endpoint)) {
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     const region = try text(allocator, io, .{
@@ -369,7 +368,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
     });
 
     if (isCancel(region)) {
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     const accessKeyId = try text(allocator, io, .{
@@ -378,7 +377,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
     });
 
     if (isCancel(accessKeyId)) {
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     const secretAccessKey = try password(allocator, io, .{
@@ -387,7 +386,7 @@ pub fn configureS3IfNeeded(allocator: std.mem.Allocator, io: std.Io, nonInteract
     });
 
     if (isCancel(secretAccessKey)) {
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     var credentials: IS3Credentials = .{
@@ -436,12 +435,12 @@ pub fn getAvailableKeys(allocator: std.mem.Allocator, io: std.Io) ![]const []con
 //
 // Prompts the user to pick an encryption key from those stored in the vault.
 //
-pub fn selectEncryptionKey(allocator: std.mem.Allocator, io: std.Io, message: []const u8) ![]const u8 {
+pub fn selectEncryptionKey(allocator: std.mem.Allocator, io: std.Io, log: ILog, message: []const u8) ![]const u8 {
     const keyNames = try getAvailableKeys(allocator, io);
 
     if (keyNames.len == 0) {
         try outro(io, try pc.red(allocator, "\u{2717} No encryption keys found.\n  Use \"psi secrets add\" to add a key or \"psi secrets import\" to import an existing key file."), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     var options: std.ArrayList(prompts.Option) = .empty;
@@ -457,7 +456,7 @@ pub fn selectEncryptionKey(allocator: std.mem.Allocator, io: std.Io, message: []
     });
 
     if (isCancel(selectedKey)) {
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     return selectedKey.value;
@@ -504,14 +503,14 @@ fn generatePrivateKeyPem(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
 // Prompts for encryption settings. Either selects an existing vault key or
 // generates a new RSA-4096 key pair and stores it in the vault.
 //
-pub fn promptForEncryption(allocator: std.mem.Allocator, io: std.Io, message: []const u8) !IEncryptionPromptResult {
+pub fn promptForEncryption(allocator: std.mem.Allocator, io: std.Io, log: ILog, message: []const u8) !IEncryptionPromptResult {
     const wantEncryption = try confirm(allocator, io, .{
         .message = message,
         .initialValue = false,
     });
 
     if (isCancel(wantEncryption)) {
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     if (!wantEncryption.value) {
@@ -530,11 +529,11 @@ pub fn promptForEncryption(allocator: std.mem.Allocator, io: std.Io, message: []
     });
 
     if (isCancel(keyChoice)) {
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     if (std.mem.eql(u8, keyChoice.value, "existing")) {
-        const selectedKey = try selectEncryptionKey(allocator, io, "Select an encryption key:");
+        const selectedKey = try selectEncryptionKey(allocator, io, log, "Select an encryption key:");
         return .{ .keyName = selectedKey, .generateKey = false };
     }
     else if (std.mem.eql(u8, keyChoice.value, "generate")) {
@@ -546,7 +545,7 @@ pub fn promptForEncryption(allocator: std.mem.Allocator, io: std.Io, message: []
         });
 
         if (isCancel(keyNameInput)) {
-            exit(io, 1);
+            exit(io, log, 1);
         }
 
         const keyName = utils.js_string.trim(keyNameInput.value);
@@ -763,7 +762,7 @@ pub const IResolvedDatabaseSecrets = struct {
 // Returns undefined if no match is found (not an error - the value is treated as a raw path).
 // Errors if multiple entries match by name (ambiguous).
 //
-pub fn resolveDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, dbValue: []const u8) !?IDatabaseEntry {
+pub fn resolveDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, log: ILog, dbValue: []const u8) !?IDatabaseEntry {
     const databases = try getDatabases(allocator, io);
 
     // Try exact path match first.
@@ -790,7 +789,7 @@ pub fn resolveDatabaseEntry(allocator: std.mem.Allocator, io: std.Io, dbValue: [
         for (nameMatches.items) |match| {
             log.@"error"(try std.fmt.allocPrint(allocator, "  \u{2022} {s} \u{2192} {s}", .{ match.name, match.path }));
         }
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     return nameMatches.items[0];
@@ -990,7 +989,7 @@ const ICleanupContext = struct {
 // Termination callback: shuts down the worker pool, then deletes the session temporary directory on
 // success or reports that it was retained on failure.
 //
-fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
+fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, log: ILog, exitCode: u8) anyerror!void {
     const cleanup: *ICleanupContext = @ptrCast(@alignCast(context.?));
     cleanup.workerPool.stopWorkers(io);
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
@@ -1016,16 +1015,10 @@ fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror
 // Everything is allocated with the allocator, which must live until the process exits.
 // mediaTools is the ImageMagick and FFmpeg built into the program, which must also live until the process exits.
 //
-pub fn initContext(allocator: std.mem.Allocator, io: std.Io, mediaTools: *media_tools.MediaTools, options: IBaseCommandOptions) !ICommandContext {
+pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaTools: *media_tools.MediaTools, options: IBaseCommandOptions) !ICommandContext {
     // The S3 library and Winsock start once, here on the main thread, before any worker does, so no lock guards their start.
     storage_zig.s3_client.startLibrary();
     lan_share_network.socket.startSockets();
-
-    // Configure logging
-    try configureLog(allocator, io, mediaTools.runner(), .{
-        .verbose = options.verbose,
-        .tools = options.tools,
-    });
 
     // Test providers are automatically configured when NODE_ENV === "testing"
     const isTesting = std.mem.eql(u8, node_utils.process_env.getEnv("NODE_ENV") orelse "", "testing");
@@ -1148,6 +1141,7 @@ fn didYouMeanList(allocator: std.mem.Allocator, similarNames: []const []const u8
 pub fn loadDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     dbDirOption: ?[]const u8,
     options: *IBaseCommandOptions,
     uuidGenerator: IUuidGenerator,
@@ -1160,7 +1154,7 @@ pub fn loadDatabase(
     const nonInteractive = options.yes orelse false;
 
     // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log, toolRunner);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {
@@ -1168,13 +1162,13 @@ pub fn loadDatabase(
     }
     else {
         const cwd = if (options.cwd != null and options.cwd.?.len > 0) options.cwd.? else try std.process.currentPathAlloc(io, allocator);
-        dbDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+        dbDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
     }
 
     // Try to resolve the --db value to a database entry in databases.json.
     // This allows --db to accept a database name in addition to a path.
     var resolvedSecrets: ?IResolvedDatabaseSecrets = null;
-    const matchedEntry = try resolveDatabaseEntry(allocator, io, dbDir);
+    const matchedEntry = try resolveDatabaseEntry(allocator, io, log, dbDir);
     if (matchedEntry) |entry| {
         // If matched by name (dbDir doesn't equal the entry's path), use the entry's path.
         if (!std.mem.eql(u8, entry.path, dbDir)) {
@@ -1188,7 +1182,7 @@ pub fn loadDatabase(
     if (std.mem.startsWith(u8, dbDir, "s3:") or std.mem.startsWith(u8, metaPath, "s3:")) {
         const hasS3Config = if (resolvedSecrets) |secrets| secrets.s3Config != null else false;
         if (!hasS3Config) {
-            _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+            _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
         }
     }
 
@@ -1200,7 +1194,7 @@ pub fn loadDatabase(
         keyPems = try resolveKeyPemsWithPrompt(allocator, io, keyName, nonInteractive, false);
         if (keyPems.len == 0) {
             try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found.\n  Use \"psi secrets list\" to see available keys.", .{keyName.?})), .{});
-            exit(io, 1);
+            exit(io, log, 1);
         }
     }
 
@@ -1231,7 +1225,7 @@ pub fn loadDatabase(
         }
 
         try outro(io, notFoundMessage, .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     if (!allowOlderVersions) {
@@ -1240,10 +1234,10 @@ pub fn loadDatabase(
         // quickly load the version from the database and reject if the database is old.
         //
         const treePath = if (hasFilesDat) ".db/files.dat" else ".db/tree.dat";
-        const databaseVersion = loadTreeVersion(allocator, io, treePath, assetStorage);
+        const databaseVersion = loadTreeVersion(allocator, io, log, treePath, assetStorage);
         if (databaseVersion != null and databaseVersion.? != 0 and databaseVersion.? < CURRENT_DATABASE_VERSION) {
             try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Database version {d} is outdated. Current version is {d}. Please run 'psi upgrade' to upgrade your database.", .{ databaseVersion.?, CURRENT_DATABASE_VERSION })), .{});
-            exit(io, 1);
+            exit(io, log, 1);
         }
     }
 
@@ -1262,7 +1256,7 @@ pub fn loadDatabase(
                     if (similarKeyNames.len > 0) {
                         log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try didYouMeanList(allocator, similarKeyNames)}));
                     }
-                    exit(io, 1);
+                    exit(io, log, 1);
                 }
 
                 storageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
@@ -1271,12 +1265,12 @@ pub fn loadDatabase(
             }
             else if (nonInteractive) {
                 try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} This database is encrypted and requires a private key to access.\n  Please provide the key name using the --key option.\n\nExample:\n    {s}", .{try pc.cyan(allocator, "psi <command> --key my-photos")})), .{});
-                exit(io, 1);
+                exit(io, log, 1);
             }
             else {
                 log.info(try pc.yellow(allocator, "This database is encrypted and requires a private key to access."));
 
-                const selectedKeyName = try selectEncryptionKey(allocator, io, "Select the encryption key for this database:");
+                const selectedKeyName = try selectEncryptionKey(allocator, io, log, "Select the encryption key for this database:");
                 keyName = selectedKeyName;
                 options.key = keyName;
 
@@ -1287,7 +1281,7 @@ pub fn loadDatabase(
                     if (similarKeyNames.len > 0) {
                         log.info(try std.fmt.allocPrint(allocator, "Did you mean:\n{s}", .{try didYouMeanList(allocator, similarKeyNames)}));
                     }
-                    exit(io, 1);
+                    exit(io, log, 1);
                 }
 
                 storageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
@@ -1307,7 +1301,7 @@ pub fn loadDatabase(
     // Create database instance (v6 layout: BSON under .db/bson)
     const database = try createMediaFileDatabase(allocator, assetStorage, uuidGenerator, timestampProvider);
 
-    try loadSortIndexes(allocator, database.assetStorage, database.metadataCollection);
+    try loadSortIndexes(allocator, log, database.assetStorage, database.metadataCollection);
 
     return .{
         .databaseDir = dbDir,
@@ -1328,6 +1322,7 @@ pub fn loadDatabase(
 pub fn createDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     dbDirOption: ?[]const u8,
     options: *ICreateCommandOptions,
     uuidGenerator: IUuidGenerator,
@@ -1343,7 +1338,7 @@ pub fn createDatabase(
     log.verbose(try std.fmt.allocPrint(allocator, "Executing command: {s}", .{command}));
 
     // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log, toolRunner);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {
@@ -1352,7 +1347,7 @@ pub fn createDatabase(
     else {
         // Get the directory for the database (validates it's empty/non-existent for init)
         const cwd = if (options.base.cwd != null and options.base.cwd.?.len > 0) options.base.cwd.? else try std.process.currentPathAlloc(io, allocator);
-        dbDir = try getDirectoryForCommand(allocator, io, .init, nonInteractive, cwd);
+        dbDir = try getDirectoryForCommand(allocator, io, log, .init, nonInteractive, cwd);
     }
 
     // Ask about encryption if not already specified
@@ -1361,14 +1356,14 @@ pub fn createDatabase(
         if (options.generateKey orelse false) {
             // User requested key generation via --generate-key without a key name.
             // Run the generate branch of the interactive prompt.
-            const encryptionResult = try promptForEncryption(allocator, io, "Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)");
+            const encryptionResult = try promptForEncryption(allocator, io, log, "Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)");
             if (encryptionResult.keyName != null and encryptionResult.keyName.?.len > 0) {
                 options.base.key = encryptionResult.keyName;
                 options.generateKey = encryptionResult.generateKey orelse false;
             }
         }
         else {
-            const encryptionResult = try promptForEncryption(allocator, io, "Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)");
+            const encryptionResult = try promptForEncryption(allocator, io, log, "Would you like to encrypt your database? (You can say no now and create an encrypted copy later using the replicate command)");
             if (encryptionResult.keyName != null and encryptionResult.keyName.?.len > 0) {
                 options.base.key = encryptionResult.keyName;
                 options.generateKey = encryptionResult.generateKey orelse false;
@@ -1388,13 +1383,13 @@ pub fn createDatabase(
         // A registered database carries its own S3 credential, so look that up before falling back
         // to configureS3IfNeeded, which only knows about the AWS_* environment variables and the
         // shared 'default:s3' keychain entry.
-        const matchedEntry = try resolveDatabaseEntry(allocator, io, dbDir);
+        const matchedEntry = try resolveDatabaseEntry(allocator, io, log, dbDir);
         if (matchedEntry) |entry| {
             resolvedSecrets = try resolveSecretsFromEntry(allocator, io, entry);
         }
         const hasS3Config = if (resolvedSecrets) |secrets| secrets.s3Config != null else false;
         if (!hasS3Config) {
-            _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+            _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
         }
     }
 
@@ -1422,7 +1417,7 @@ pub fn createDatabase(
                 const newPair = try promptToGenerateOrAddKey(allocator, io, keyName, nonInteractive);
                 if (newPair == null) {
                     try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found in vault.", .{keyName})), .{});
-                    exit(io, 1);
+                    exit(io, log, 1);
                 }
                 else {
                     pair = newPair;
@@ -1457,19 +1452,19 @@ pub fn createDatabase(
     // Check the requested directory is empty or non-existent using the storage interface.
     if (!try assetStorage.isEmpty(allocator, io, "/")) {
         try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The directory {s} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.", .{try pc.cyan(allocator, dbDir)})), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     if (!try assetStorage.isEmpty(allocator, io, ".db")) {
         try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} The metadata directory {s} is not empty or already contains a database.\n  Please choose an empty directory or a non-existent one.", .{try pc.cyan(allocator, metaPath)})), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     // Create database instance (v6 layout: BSON under .db/bson)
     const database = try createMediaFileDatabase(allocator, assetStorage, uuidGenerator, timestampProvider);
 
     // Create the database (instead of loading)
-    try createMediaDatabase(allocator, io, assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection, try normaliseDatabaseId(options.databaseId));
+    try createMediaDatabase(allocator, io, log, assetStorage, rawAssetStorage, uuidGenerator, database.metadataCollection, try normaliseDatabaseId(options.databaseId));
 
     // If database is encrypted, write the public key PEM to .db/encryption.pub as a marker
     if (isEncrypted and publicKeyPemForMarker != null) {

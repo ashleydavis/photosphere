@@ -43,6 +43,7 @@ pub fn registerGetMediaFileInfoTool(server: *McpServer, allocator: std.mem.Alloc
 //
 fn getMediaFileInfo(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
@@ -50,7 +51,7 @@ fn getMediaFileInfo(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.
         },
     };
     const assetId = arguments.get("assetId").?.string;
-    const asset = try getAsset(io, database.bsonDatabase, assetId) orelse {
+    const asset = try getAsset(io, log, database.bsonDatabase, assetId) orelse {
         return textResult(allocator, try std.fmt.allocPrint(allocator, "Media file {s} not found.", .{assetId}));
     };
     return textResult(allocator, try jsonStringifyIndented(allocator, .{ .document = asset }));

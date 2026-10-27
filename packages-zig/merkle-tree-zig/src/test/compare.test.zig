@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
@@ -91,12 +92,13 @@ fn expectNames(expected: []const []const u8, actual: []const []const u8) !void {
 }
 
 test "should identify files only in first tree" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const trees = try buildTestTrees(allocator);
 
-    const diff = try compare.compareTrees(allocator, &trees.treeA, &trees.treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &trees.treeA, &trees.treeB, null);
 
     // File2 exists in A but not in B
     try std.testing.expect(contains(diff.onlyInA, "file2.txt"));
@@ -106,24 +108,26 @@ test "should identify files only in first tree" {
 }
 
 test "should identify files only in second tree" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const trees = try buildTestTrees(allocator);
 
-    const diff = try compare.compareTrees(allocator, &trees.treeA, &trees.treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &trees.treeA, &trees.treeB, null);
 
     // File6 exists in B but not in A
     try std.testing.expect(contains(diff.onlyInB, "file6.txt"));
 }
 
 test "should identify modified files" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const trees = try buildTestTrees(allocator);
 
-    const diff = try compare.compareTrees(allocator, &trees.treeA, &trees.treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &trees.treeA, &trees.treeB, null);
 
     // File4 is modified (different content)
     try std.testing.expect(contains(diff.modified, "file4.txt"));
@@ -134,6 +138,7 @@ test "should identify modified files" {
 }
 
 test "should identify deleted files" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -147,20 +152,21 @@ test "should identify deleted files" {
     treeA.merkle = try merkle_tree.buildMerkleTree(allocator, treeA.sort);
     treeA.dirty = false;
 
-    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &treeA, &treeB, null);
 
     // file3 should be in the onlyInB category (exists in B but not in A)
     try std.testing.expect(contains(diff.onlyInB, "file3.txt"));
 }
 
 test "should handle identical trees" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const treeA = try buildTree(allocator, &.{ "file1.txt", "file2.txt" });
     const treeB = try buildTree(allocator, &.{ "file1.txt", "file2.txt" });
 
-    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &treeA, &treeB, null);
 
     // Should have no differences
     try expectNames(&.{}, diff.onlyInA);
@@ -169,13 +175,14 @@ test "should handle identical trees" {
 }
 
 test "should handle completely different trees" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const treeA = try buildTree(allocator, &.{ "fileA.txt", "fileB.txt" });
     const treeB = try buildTree(allocator, &.{ "fileC.txt", "fileD.txt" });
 
-    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &treeA, &treeB, null);
 
     // All files should be in their respective "only in" categories
     try expectNames(&.{ "fileA.txt", "fileB.txt" }, diff.onlyInA);
@@ -213,6 +220,7 @@ fn buildTreeWithContent(allocator: std.mem.Allocator, files: []const TestFile) !
 // visited second.
 //
 test "a name only in A is reported even when B holds its content under another name" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -234,7 +242,7 @@ test "a name only in A is reported even when B holds its content under another n
         },
     });
 
-    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &treeA, &treeB, null);
 
     try expectNames(&.{"asset/first-import"}, diff.onlyInA);
     try expectNames(&.{}, diff.onlyInB);
@@ -242,6 +250,7 @@ test "a name only in A is reported even when B holds its content under another n
 }
 
 test "a name only in B is reported even when A holds its content under another name" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -263,7 +272,7 @@ test "a name only in B is reported even when A holds its content under another n
         },
     });
 
-    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &treeA, &treeB, null);
 
     try expectNames(&.{}, diff.onlyInA);
     try expectNames(&.{"asset/first-import"}, diff.onlyInB);
@@ -283,7 +292,8 @@ const ProgressRecorder = struct {
     //
     // The callback function.
     //
-    fn record(context: ?*anyopaque, progress: []const u8) void {
+    fn record(context: ?*anyopaque, log: utils.log.ILog, progress: []const u8) void {
+        _ = log;
         const self: *ProgressRecorder = @ptrCast(@alignCast(context.?));
         self.count += 1;
         self.lastMessage = progress;
@@ -291,6 +301,7 @@ const ProgressRecorder = struct {
 };
 
 test "compareTrees reports its progress to the callback" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -298,7 +309,7 @@ test "compareTrees reports its progress to the callback" {
     const treeB = try buildTree(allocator, &.{"file1.txt"});
     var recorder: ProgressRecorder = .{};
 
-    _ = try compare.compareTrees(allocator, &treeA, &treeB, .{
+    _ = try compare.compareTrees(allocator, console_log, &treeA, &treeB, .{
         .context = &recorder,
         .function = ProgressRecorder.record,
     });
@@ -308,6 +319,7 @@ test "compareTrees reports its progress to the callback" {
 }
 
 test "should leave out leaves with no name or no content hash" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -320,12 +332,12 @@ test "should leave out leaves with no name or no content hash" {
     treeA.sort = &root;
     const treeB = try buildTree(allocator, &.{"file1.txt"});
 
-    const diff = try compare.compareTrees(allocator, &treeA, &treeB, null);
+    const diff = try compare.compareTrees(allocator, console_log, &treeA, &treeB, null);
     try expectNames(&.{}, diff.onlyInA);
     try expectNames(&.{"file1.txt"}, diff.onlyInB);
     try expectNames(&.{}, diff.modified);
 
-    const reversed = try compare.compareTrees(allocator, &treeB, &treeA, null);
+    const reversed = try compare.compareTrees(allocator, console_log, &treeB, &treeA, null);
     try expectNames(&.{"file1.txt"}, reversed.onlyInA);
     try expectNames(&.{}, reversed.onlyInB);
 }

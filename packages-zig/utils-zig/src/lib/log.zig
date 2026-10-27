@@ -149,13 +149,6 @@ pub const ILog = struct {
 };
 
 //
-// Sets the global log.
-//
-pub fn setLog(_log: ILog) void {
-    log = _log;
-}
-
-//
 // The default log, which writes to the console.
 //
 pub const ConsoleLog = struct {
@@ -272,13 +265,3 @@ pub const ConsoleLog = struct {
         return noLogDetails;
     }
 };
-
-//
-// State of the default console log.
-//
-var console_log: ConsoleLog = .{ .verbose_enabled = false };
-
-//
-// The global log.
-//
-pub var log: ILog = .{ .ptr = &console_log, .vtable = &ConsoleLog.vtable };

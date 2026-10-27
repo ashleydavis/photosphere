@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -28,9 +29,9 @@ fn ignoreMessage(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, message:
 //
 // Runs the handler for the tree leaf of a file of a database.
 //
-fn runHandler(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8, fileName: []const u8, adjust: *const fn (*SortNode) void) !verify_worker.IVerifyFileResult {
+fn runHandler(allocator: std.mem.Allocator, io: std.Io, log: ILog, databaseDir: []const u8, fileName: []const u8, adjust: *const fn (*SortNode) void) !verify_worker.IVerifyFileResult {
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
-    const tree = (try node_api.tree.loadMerkleTree(allocator, io, storage)).?;
+    const tree = (try node_api.tree.loadMerkleTree(allocator, io, log, storage)).?;
     const leaf = merkle_tree_zig.merkle_tree.findItemInTree(tree.sort, fileName).?;
     var node = leaf.*;
     adjust(&node);
@@ -38,7 +39,7 @@ fn runHandler(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8,
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     var context = TaskContext.init(uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", "task", .{ .context = null, .function = ignoreMessage }, 10);
     const data = try verify_worker.verifyFileDataToJson(allocator, .{ .node = node, .storageDescriptor = .{ .databasePath = databaseDir }, .options = .{ .full = false } });
-    const output = try verify_worker.verifyFileHandler(allocator, io, test_timers.timers(), data, context.taskContext());
+    const output = try verify_worker.verifyFileHandler(allocator, io, test_timers.timers(), log, data, context.taskContext());
     return std.json.parseFromValueLeaky(verify_worker.IVerifyFileResult, allocator, output, .{});
 }
 
@@ -65,8 +66,9 @@ fn changeSizeAndTimestamp(node: *SortNode) void {
 }
 
 test "verifyFileHandler reports unmodified, removed and modified files" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -76,13 +78,13 @@ test "verifyFileHandler reports unmodified, removed and modified files" {
     const filePath = try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH });
 
     // The copy has new timestamps, so the handler hashes the file and finds the content unchanged.
-    const unmodified = try runHandler(allocator, io, databaseDir, THUMB_PATH, keepNode);
+    const unmodified = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, keepNode);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, unmodified.status);
     try std.testing.expectEqualStrings(THUMB_PATH, unmodified.fileName);
 
     // Content changed: modified with the reasons.
     try test_files.writeFile(io, filePath, "changed");
-    const modified = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
+    const modified = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.modified, modified.status);
     try std.testing.expectEqual(@as(usize, 3), modified.reasons.?.len);
     try std.testing.expectEqualStrings("size changed (1.5 KB → 7 B)", modified.reasons.?[0]);
@@ -91,7 +93,7 @@ test "verifyFileHandler reports unmodified, removed and modified files" {
 
     // Missing file: removed.
     try std.Io.Dir.cwd().deleteFile(io, filePath);
-    const removed = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeTimestamp);
+    const removed = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, changeTimestamp);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.removed, removed.status);
     try std.testing.expect(removed.reasons == null);
 }
@@ -105,8 +107,9 @@ fn dropContentHash(node: *SortNode) void {
 }
 
 test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whose node has no content hash" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -114,14 +117,15 @@ test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whos
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
-    try std.testing.expectError(error.Thrown, runHandler(allocator, io, databaseDir, THUMB_PATH, dropContentHash));
+    try std.testing.expectError(error.Thrown, runHandler(allocator, io, log, databaseDir, THUMB_PATH, dropContentHash));
     try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("The \"buf2\" argument must be of type Buffer or Uint8Array. Received undefined", utils.errors.lastErrorMessage());
 }
 
 test "verifyFileHandler does not hash a file whose size and timestamp are unchanged" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -131,7 +135,7 @@ test "verifyFileHandler does not hash a file whose size and timestamp are unchan
     const storage = try test_files.directoryStorage(allocator, io, databaseDir);
 
     // Corrupt the content but keep the size, and give the tree the new timestamp: only a hash would notice.
-    const original = (try storage.read(allocator, io, THUMB_PATH)).?;
+    const original = (try storage.read(allocator, io, log, THUMB_PATH)).?;
     const corrupted = try allocator.dupe(u8, original);
     corrupted[0] ^= 0xff;
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), corrupted);
@@ -143,13 +147,14 @@ test "verifyFileHandler does not hash a file whose size and timestamp are unchan
         }
     };
     Adjust.lastModified = info.lastModified;
-    const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, Adjust.call);
+    const result = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, Adjust.call);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, result.status);
 }
 
 test "verifyFileDataToJson and verifyFileDataFromJson round trip a leaf" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -173,8 +178,9 @@ test "verifyFileDataToJson and verifyFileDataFromJson round trip a leaf" {
 }
 
 test "toLocaleString formats dates like Date.toLocaleString in en-US" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -184,8 +190,9 @@ test "toLocaleString formats dates like Date.toLocaleString in en-US" {
 }
 
 test "reports removed when the file no longer exists in storage" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -194,7 +201,7 @@ test "reports removed when the file no longer exists in storage" {
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     try std.Io.Dir.cwd().deleteFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }));
 
-    const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
+    const result = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
 
     try std.testing.expectEqualStrings(THUMB_PATH, result.fileName);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.removed, result.status);
@@ -202,8 +209,9 @@ test "reports removed when the file no longer exists in storage" {
 }
 
 test "reports unmodified when size and timestamp are unchanged" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -214,7 +222,7 @@ test "reports unmodified when size and timestamp are unchanged" {
 
     // The content is corrupted but keeps its size, so only a hash would notice: no content hash is needed when the
     // metadata matches.
-    const original = (try storage.read(allocator, io, THUMB_PATH)).?;
+    const original = (try storage.read(allocator, io, log, THUMB_PATH)).?;
     const corrupted = try allocator.dupe(u8, original);
     corrupted[0] ^= 0xff;
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), corrupted);
@@ -227,7 +235,7 @@ test "reports unmodified when size and timestamp are unchanged" {
     };
     Adjust.lastModified = info.lastModified;
 
-    const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, Adjust.call);
+    const result = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, Adjust.call);
 
     try std.testing.expectEqualStrings(THUMB_PATH, result.fileName);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, result.status);
@@ -235,8 +243,9 @@ test "reports unmodified when size and timestamp are unchanged" {
 }
 
 test "reports modified when metadata and content hash both changed" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -245,7 +254,7 @@ test "reports modified when metadata and content hash both changed" {
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), "changed");
 
-    const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
+    const result = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
 
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.modified, result.status);
     var found = false;
@@ -258,8 +267,9 @@ test "reports modified when metadata and content hash both changed" {
 }
 
 test "reports unmodified when metadata changed but content hash matches" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -267,7 +277,7 @@ test "reports unmodified when metadata changed but content hash matches" {
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
-    const result = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
+    const result = try runHandler(allocator, io, log, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
 
     try std.testing.expectEqualStrings(THUMB_PATH, result.fileName);
     try std.testing.expectEqual(verify_worker.VerifyFileStatus.unmodified, result.status);
@@ -275,8 +285,9 @@ test "reports unmodified when metadata changed but content hash matches" {
 }
 
 test "verifyFileDataFromJson reads a value with no node and no storage descriptor as an empty leaf" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -301,8 +312,9 @@ fn dropTimestamp(node: *SortNode) void {
 }
 
 test "verifyFileHandler fails like Bun for a changed file whose node has no timestamp" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -311,7 +323,7 @@ test "verifyFileHandler fails like Bun for a changed file whose node has no time
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), "changed");
 
-    try std.testing.expectError(error.Thrown, runHandler(allocator, io, databaseDir, THUMB_PATH, dropTimestamp));
+    try std.testing.expectError(error.Thrown, runHandler(allocator, io, log, databaseDir, THUMB_PATH, dropTimestamp));
     try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("undefined is not an object (evaluating 'node.lastModified.toLocaleString')", utils.errors.lastErrorMessage());
 }
@@ -326,15 +338,11 @@ const VerboseRecordingLog = struct {
     // The verbose lines, in order.
     lines: std.ArrayList([]const u8) = .empty,
 
-    // The log that was active before this one was installed.
-    previousLog: utils.log.ILog = undefined,
-
     //
-    // Makes this the global log.
+    // Gets the ILog interface for this log.
     //
-    fn install(self: *VerboseRecordingLog) void {
-        self.previousLog = utils.log.currentLog();
-        utils.log.setLog(.{
+    fn ilog(self: *VerboseRecordingLog) utils.log.ILog {
+        return .{
             .ptr = self,
             .vtable = &.{
                 .info = dropMessage,
@@ -347,15 +355,9 @@ const VerboseRecordingLog = struct {
                 .event = dropMessage,
                 .verboseEnabled = verboseIsOn,
                 .getLogDetails = noLogDetails,
+                .logFilePath = logFilePath,
             },
-        });
-    }
-
-    //
-    // Restores the log that was active before install.
-    //
-    fn uninstall(self: *VerboseRecordingLog) void {
-        utils.log.setLog(self.previousLog);
+        };
     }
 
     //
@@ -410,11 +412,20 @@ const VerboseRecordingLog = struct {
         _ = io;
         return utils.log.noLogDetails;
     }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
 };
 
 test "verifyFileHandler logs the reasons a file was modified when verbose logging is on" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -425,10 +436,8 @@ test "verifyFileHandler logs the reasons a file was modified when verbose loggin
     var recordingLog: VerboseRecordingLog = .{
         .allocator = allocator,
     };
-    recordingLog.install();
-    defer recordingLog.uninstall();
 
-    _ = try runHandler(allocator, io, databaseDir, THUMB_PATH, changeSizeAndTimestamp);
+    _ = try runHandler(allocator, io, recordingLog.ilog(), databaseDir, THUMB_PATH, changeSizeAndTimestamp);
 
     var found = false;
     for (recordingLog.lines.items) |line| {

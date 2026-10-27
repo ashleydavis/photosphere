@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const api_zig = @import("api-zig");
 const utils = @import("utils-zig");
 const media_source = api_zig.media_source;
@@ -53,7 +54,8 @@ const RecordingMediaSource = struct {
     //
     // Lists nothing.
     //
-    fn listPage(ptr: *anyopaque, allocator: std.mem.Allocator, listIo: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+    fn listPage(ptr: *anyopaque, allocator: std.mem.Allocator, listIo: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+        _ = log;
         _ = ptr;
         _ = allocator;
         _ = listIo;

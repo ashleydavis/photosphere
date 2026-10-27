@@ -196,6 +196,7 @@ test "tools/list reports each tool with the JSON Schema of its input" {
 }
 
 test "the tools of psi mcp are listed with the input schemas the SDK reports for them" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -203,6 +204,7 @@ test "the tools of psi mcp are listed with the input schemas the SDK reports for
         .uuidGenerator = undefined,
         .timestampProvider = undefined,
         .toolRunner = undefined,
+        .log = console_log,
         .sessionId = "session",
         .options = .{},
         .allocator = allocator,

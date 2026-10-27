@@ -15,6 +15,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -23,7 +24,6 @@ const task_queue_zig = @import("ziggy").task_queue;
 const state_format = @import("state-format.zig");
 const app_state_format = @import("app-state-format.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const yaml = node_utils.yaml;
 const FileStorage = storage_zig.file_storage.FileStorage;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -115,7 +115,7 @@ pub const IStateRead = struct {
 // throwing. Nothing in here is worth refusing to start over: losing it costs a collapsed sidebar and a
 // remembered folder. The parse failure is logged so it is not silent.
 //
-pub fn readStateFromStorage(allocator: std.mem.Allocator, io: std.Io, statePath: []const u8) !IStateRead {
+pub fn readStateFromStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, statePath: []const u8) !IStateRead {
     var storage = FileStorage.init("fs:");
     const absent: IStateRead = .{
         .state = try defaultStateFile(allocator),
@@ -125,7 +125,7 @@ pub fn readStateFromStorage(allocator: std.mem.Allocator, io: std.Io, statePath:
         return absent;
     }
 
-    const contents = try storage.read(allocator, io, statePath) orelse {
+    const contents = try storage.read(allocator, io, log, statePath) orelse {
         return absent;
     };
 
@@ -209,10 +209,10 @@ pub fn readStateHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
-    context: ITaskContext,
+    _: ITaskContext,
 ) anyerror!std.json.Value {
-    _ = context;
     // (Zig: reading the task data into the typed struct fails when statePath is not a string.
     // The failure is reported as a sentence, not a bare parser error name.)
     const data = std.json.parseFromValueLeaky(IReadStateData, allocator, taskData, .{
@@ -224,7 +224,7 @@ pub fn readStateHandler(
         return errors.throwError("statePath is required", .{});
     }
 
-    const contents = try readStateFromStorage(allocator, io, data.statePath);
+    const contents = try readStateFromStorage(allocator, io, log, data.statePath);
 
     var settingsObject: std.json.ObjectMap = .empty;
     var settings = try appStateSettings(allocator, try yamlToAppState(allocator, contents.document));
@@ -255,10 +255,10 @@ pub fn writeStateHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
-    context: ITaskContext,
+    _: ITaskContext,
 ) anyerror!std.json.Value {
-    _ = context;
     // (Zig: reading the task data into the typed struct fails when a field has the wrong type.
     // The failure is reported as a sentence, not a bare parser error name.)
     const data = std.json.parseFromValueLeaky(IWriteStateData, allocator, taskData, .{
@@ -274,7 +274,7 @@ pub fn writeStateHandler(
     }
 
     var storage = FileStorage.init("fs:");
-    const contents = try readStateFromStorage(allocator, io, data.statePath);
+    const contents = try readStateFromStorage(allocator, io, log, data.statePath);
     var current = contents.state;
 
     if (data.news) |news| {

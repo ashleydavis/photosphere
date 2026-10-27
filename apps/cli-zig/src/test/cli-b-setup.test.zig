@@ -5,6 +5,7 @@
 // validate, and a malformed MCP message.
 //
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
@@ -72,14 +73,14 @@ const ILogEnvironment = struct {
     // The temporary directory the logs go in.
     tmp_dir: []const u8,
 
-    // What the logger and its console log wrote.
+    // What the logger wrote to the console itself.
     capture: ICapture,
 
     // The logger under test.
     logger: *FileLogger,
 
-    // The console log the logger passes every line on to, kept here because the logger holds a pointer to it.
-    console_log: utils.log.ConsoleLog,
+    // The memory log the logger passes every line on to in place of the console, kept here to read and free.
+    memory_log: *utils.memory_log.MemoryLog,
 
     // The ImageMagick and FFmpeg built into the program, whose versions the logger's headers give. The environment does
     // not move once made, so their runner stays valid.
@@ -88,7 +89,7 @@ const ILogEnvironment = struct {
     //
     // Creates the environment and its logger.
     //
-    fn init(self: *ILogEnvironment, name: []const u8) !void {
+    fn init(self: *ILogEnvironment, log: ILog, name: []const u8) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         self.tmp_dir = try helpers.makeTempDir(allocator, name);
@@ -100,13 +101,13 @@ const ILogEnvironment = struct {
         self.capture = undefined;
         startCapture(&self.capture, allocator);
         cli.process_argv.setArgv(&.{ "psi", "verify", "--db", "x" });
-        self.console_log = .{
-            .verbose_enabled = false,
-            .debug_enabled = false,
-            .tools_enabled = false,
-        };
+        self.memory_log = try utils.memory_log.MemoryLog.init(allocator, .{
+            .verbose = false,
+            .debug = false,
+            .tools = false,
+        });
         self.mediaTools = try media_tools.MediaTools.init();
-        self.logger = try FileLogger.create(allocator, io, self.mediaTools.runner(), self.console_log.ilog(), "verify --db x");
+        self.logger = try FileLogger.create(allocator, io, log, self.mediaTools.runner(), self.memory_log.log, "verify --db x");
     }
 
     //
@@ -118,6 +119,7 @@ const ILogEnvironment = struct {
         node_utils.process_env.setEnvironMap(null);
         std.Io.Dir.cwd().deleteTree(io, self.tmp_dir) catch {};
         self.mediaTools.deinit();
+        self.memory_log.deinit();
         self.arena.deinit();
     }
 
@@ -212,8 +214,9 @@ test "writeOutputLine writes a message with newlines and characters of several b
 }
 
 test "the log header is everything up to the marker, and without a marker the first fifty lines" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-header");
+    try environment.init(log, "file-logger-header");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -244,8 +247,9 @@ test "the log header is everything up to the marker, and without a marker the fi
 }
 
 test "a log shorter than fifty lines is returned whole when it has no marker" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-header-short");
+    try environment.init(log, "file-logger-header-short");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -255,8 +259,9 @@ test "a log shorter than fifty lines is returned whole when it has no marker" {
 }
 
 test "getLogDetails reports the error when the log file is not there" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-details-missing");
+    try environment.init(log, "file-logger-details-missing");
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
@@ -268,8 +273,9 @@ test "getLogDetails reports the error when the log file is not there" {
 }
 
 test "a log file that cannot be written to drops the entries rather than failing" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-write-fails");
+    try environment.init(log, "file-logger-write-fails");
     defer environment.deinit();
 
     // Every append opens the file, so a log file that is gone fails on every message and on the footer. Logging
@@ -280,14 +286,15 @@ test "a log file that cannot be written to drops the entries rather than failing
     environment.logger.close();
 
     try std.testing.expect(environment.logger.hasLoggedErrors());
-    try std.testing.expect(std.mem.indexOf(u8, environment.capture.stdout.written(), "dropped info\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, environment.capture.stderr.written(), "dropped warning\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, environment.memory_log.stdout(), "dropped info\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, environment.memory_log.stderr(), "dropped warning\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, environment.capture.stdout.written(), "Errors, warnings") != null);
 }
 
 test "close writes the footer once however many times it is called" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-close-twice");
+    try environment.init(log, "file-logger-close-twice");
     defer environment.deinit();
 
     environment.logger.info("something");
@@ -301,8 +308,9 @@ test "close writes the footer once however many times it is called" {
 }
 
 test "nothing after close reaches the log files, and an error after close is not counted as one" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-after-close");
+    try environment.init(log, "file-logger-after-close");
     defer environment.deinit();
 
     environment.logger.close();
@@ -321,8 +329,9 @@ test "nothing after close reaches the log files, and an error after close is not
 }
 
 test "tool output is written under the tool's name, and empty output is left out" {
+    const log = utils.mute_log.MuteLog.init();
     var environment: ILogEnvironment = undefined;
-    try environment.init("file-logger-tool");
+    try environment.init(log, "file-logger-tool");
     defer environment.deinit();
 
     environment.logger.tool("identify", .{
@@ -797,6 +806,7 @@ test "stringifyCompact writes a number JSON cannot write as null, and leaves an 
 }
 
 test "requireDatabase answers with the no-database result when nothing is open" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -805,6 +815,7 @@ test "requireDatabase answers with the no-database result when nothing is open" 
         .uuidGenerator = undefined,
         .timestampProvider = undefined,
         .toolRunner = undefined,
+        .log = console_log,
         .sessionId = "session",
         .options = .{},
         .allocator = allocator,
@@ -1028,6 +1039,7 @@ const three_plain_items =
 ;
 
 test "checkForNews returns the oldest unseen item, marks it shown, then the next one" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1040,13 +1052,14 @@ test "checkForNews returns the oldest unseen item, marks it shown, then the next
     defer node_utils.process_env.setEnvironMap(null);
 
     // The oldest unseen item first, one per call, and nothing once they have all been shown.
-    try std.testing.expectEqualStrings("one", (cli.check_for_news.checkForNews(allocator, io).?).id);
-    try std.testing.expectEqualStrings("two", (cli.check_for_news.checkForNews(allocator, io).?).id);
-    try std.testing.expectEqualStrings("three", (cli.check_for_news.checkForNews(allocator, io).?).id);
-    try std.testing.expect(cli.check_for_news.checkForNews(allocator, io) == null);
+    try std.testing.expectEqualStrings("one", (cli.check_for_news.checkForNews(allocator, io, log).?).id);
+    try std.testing.expectEqualStrings("two", (cli.check_for_news.checkForNews(allocator, io, log).?).id);
+    try std.testing.expectEqualStrings("three", (cli.check_for_news.checkForNews(allocator, io, log).?).id);
+    try std.testing.expect(cli.check_for_news.checkForNews(allocator, io, log) == null);
 }
 
 test "getAllNews marks only the items already shown, and is empty when the feed cannot be read" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1059,14 +1072,14 @@ test "getAllNews marks only the items already shown, and is empty when the feed 
     defer node_utils.process_env.setEnvironMap(null);
 
     // Nothing shown yet.
-    const all = cli.check_for_news.getAllNews(allocator, io);
+    const all = cli.check_for_news.getAllNews(allocator, io, log);
     try std.testing.expectEqual(@as(usize, 3), all.len);
     try std.testing.expect(!all[0].seen);
     try std.testing.expect(!all[1].seen);
 
     // After one item has been shown, only that one is marked.
-    _ = cli.check_for_news.checkForNews(allocator, io);
-    const partly = cli.check_for_news.getAllNews(allocator, io);
+    _ = cli.check_for_news.checkForNews(allocator, io, log);
+    const partly = cli.check_for_news.getAllNews(allocator, io, log);
     try std.testing.expectEqual(@as(usize, 3), partly.len);
     try std.testing.expect(partly[0].seen);
     try std.testing.expect(!partly[1].seen);
@@ -1074,14 +1087,14 @@ test "getAllNews marks only the items already shown, and is empty when the feed 
 
     // markNewsAsShown with no ids records nothing, so the marks do not change.
     cli.check_for_news.markNewsAsShown(allocator, io, &.{});
-    const unchanged = cli.check_for_news.getAllNews(allocator, io);
+    const unchanged = cli.check_for_news.getAllNews(allocator, io, log);
     try std.testing.expect(unchanged[0].seen);
     try std.testing.expect(!unchanged[1].seen);
 
     // A feed that cannot be read gives an empty feed and no item, rather than an error.
     try environ_map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, try std.fs.path.join(allocator, &.{ root, "no-such-feed.yaml" })));
-    try std.testing.expectEqual(@as(usize, 0), (cli.check_for_news.getAllNews(allocator, io)).len);
-    try std.testing.expect(cli.check_for_news.checkForNews(allocator, io) == null);
+    try std.testing.expectEqual(@as(usize, 0), (cli.check_for_news.getAllNews(allocator, io, log)).len);
+    try std.testing.expect(cli.check_for_news.checkForNews(allocator, io, log) == null);
 }
 
 test "process_argv hands back the user arguments, and nothing when only the executable is set" {

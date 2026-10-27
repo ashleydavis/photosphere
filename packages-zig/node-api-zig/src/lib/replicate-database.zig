@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -22,13 +23,13 @@ pub const ReplicateProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, io: std.Io, progress: []const u8) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, log: ILog, progress: []const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: ReplicateProgressCallback, io: std.Io, progress: []const u8) void {
-        self.function(self.context, io, progress);
+    pub fn call(self: ReplicateProgressCallback, io: std.Io, log: ILog, progress: []const u8) void {
+        self.function(self.context, io, log, progress);
     }
 };
 
@@ -44,7 +45,7 @@ pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicat
 //
 // Forwards replicate-progress task events to the ReplicateProgressCallback.
 //
-fn onReplicateProgressMessage(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, data: ITaskEventData) anyerror!void {
+fn onReplicateProgressMessage(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, log: ILog, data: ITaskEventData) anyerror!void {
     const onProgress: *const ReplicateProgressCallback = @ptrCast(@alignCast(context.?));
     const message = switch (data.event) {
         .object => |object| object,
@@ -56,7 +57,7 @@ fn onReplicateProgressMessage(context: ?*anyopaque, io: std.Io, _: std.mem.Alloc
         return;
     };
     switch (progress) {
-        .string => |text| onProgress.call(io, text),
+        .string => |text| onProgress.call(io, log, text),
         else => {},
     }
 }
@@ -85,13 +86,14 @@ fn lastPathPart(path: []const u8) ?[]const u8 {
 pub fn replicateDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     timers: Timers,
     uuidGenerator: IUuidGenerator,
     data: IReplicateDatabaseData,
     onProgress: ?*const ReplicateProgressCallback,
 ) !IReplicationResult {
     const queue = try TaskQueue.init(allocator, uuidGenerator, data.sourcePath);
-    defer queue.deinit(io, allocator);
+    defer queue.deinit(io, allocator, log);
 
     if (onProgress) |progressCallback| {
         _ = try queue.onTaskEvent(allocator, "replicate-progress", .{
@@ -109,9 +111,9 @@ pub fn replicateDatabase(
         .name = try std.fmt.allocPrint(allocator, "Replicating to {s}", .{destName}),
         .cancelSource = data.sourcePath,
     };
-    const taskId = try queue.addTask(io, allocator, "replicate-database", try replicateDatabaseDataToJson(allocator, taggedData), null, null);
-    const result = try queue.awaitTask(io, allocator, timers, taskId);
-    queue.shutdown(io, allocator);
+    const taskId = try queue.addTask(io, allocator, log, "replicate-database", try replicateDatabaseDataToJson(allocator, taggedData), null, null);
+    const result = try queue.awaitTask(io, allocator, timers, log, taskId);
+    queue.shutdown(io, allocator, log);
 
     const taskResult = result orelse {
         return errors.throwError("Replication was cancelled before completion", .{});

@@ -15,6 +15,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const api = @import("api-zig");
 const node_api = @import("node-api-zig");
@@ -27,6 +28,7 @@ const expectKeyStrings = @import("sandbox.zig").expectKeyStrings;
 const expectString = @import("sandbox.zig").expectString;
 const test_hosts = @import("test-hosts.zig");
 const Sandbox = @import("sandbox.zig").Sandbox;
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const ReportingHost = test_hosts.ReportingHost;
 const planSyncHandler = mobile_worker.plan_sync_worker.planSyncHandler;
 const DEFAULT_SYNC_PAUSE_MS = api.sync_settings.DEFAULT_SYNC_PAUSE_MS;
@@ -46,9 +48,9 @@ const DATABASE_PATH = "photosphere-default";
 // share one file now: rebuilding the document from the syncing settings alone would delete whatever
 // automatic import had been told to watch.
 //
-fn writeSyncSettings(sandbox: *Sandbox, enabled: bool, onlyOnWifi: bool, pauseBetweenRunsMs: i64) !void {
+fn writeSyncSettings(sandbox: *Sandbox, log: ILog, enabled: bool, onlyOnWifi: bool, pauseBetweenRunsMs: i64) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, "config.yaml")).config;
+    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
     config.sync = .{
         .settings = .{
             .enabled = enabled,
@@ -66,9 +68,9 @@ fn writeSyncSettings(sandbox: *Sandbox, enabled: bool, onlyOnWifi: bool, pauseBe
 // Writes the automatic import section naming the database background sync falls back to, exactly as
 // the app would, leaving the syncing settings as they are.
 //
-fn writeDefaultDatabase(sandbox: *Sandbox, defaultDatabasePath: ?[]const u8) !void {
+fn writeDefaultDatabase(sandbox: *Sandbox, log: ILog, defaultDatabasePath: ?[]const u8) !void {
     const allocator = sandbox.arenaAllocator();
-    var config = (try readConfigFromStorage(allocator, sandbox.io, "config.yaml")).config;
+    var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
     config.autoImport = .{
         .settings = .{
             .enabled = true,
@@ -102,19 +104,19 @@ fn writeDatabaseConfig(sandbox: *Sandbox, origin: ?[]const u8) !void {
 //
 // Sets up everything a sync needs, so a test only has to change the one thing it is about.
 //
-fn setUpSyncableDatabase(sandbox: *Sandbox) !void {
-    try writeDefaultDatabase(sandbox, DATABASE_PATH);
+fn setUpSyncableDatabase(sandbox: *Sandbox, log: ILog) !void {
+    try writeDefaultDatabase(sandbox, log, DATABASE_PATH);
     try writeDatabaseConfig(sandbox, "/somewhere/else/photos");
 }
 
 //
 // Runs the handler with the data as JSON text, on a host reporting the connection type.
 //
-fn plan(sandbox: *Sandbox, connectionType: []const u8, dataJson: []const u8) !std.json.Value {
+fn plan(sandbox: *Sandbox, log: ILog, connectionType: []const u8, dataJson: []const u8) !std.json.Value {
     var host: ReportingHost = .{
         .reported = connectionType,
     };
-    return planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(dataJson), sandbox.context(), host.networkStatusHost());
+    return planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json(dataJson), sandbox.context(), host.networkStatusHost());
 }
 
 // A phone whose settings cannot be read must not start pushing photos over whatever connection it happens to have. Off is the only
@@ -122,10 +124,11 @@ fn plan(sandbox: *Sandbox, connectionType: []const u8, dataJson: []const u8) !st
 test "plan-sync says not to sync when there is no settings file at all" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -136,11 +139,12 @@ test "plan-sync says not to sync when there is no settings file at all" {
 test "plan-sync says not to sync when syncing is switched off" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, false, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, false, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -150,11 +154,12 @@ test "plan-sync says not to sync when syncing is switched off" {
 test "plan-sync says not to sync on a cellular connection when the Wi-Fi-only restriction is on" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "cellular", "{}");
+    const result = try plan(&sandbox, log, "cellular", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -164,11 +169,12 @@ test "plan-sync says not to sync on a cellular connection when the Wi-Fi-only re
 test "plan-sync syncs on Wi-Fi when the Wi-Fi-only restriction is on" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -178,11 +184,12 @@ test "plan-sync syncs on Wi-Fi when the Wi-Fi-only restriction is on" {
 test "plan-sync syncs when the connection type is unknown and the Wi-Fi-only restriction is on" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "unknown", "{}");
+    const result = try plan(&sandbox, log, "unknown", "{}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -190,11 +197,12 @@ test "plan-sync syncs when the connection type is unknown and the Wi-Fi-only res
 test "plan-sync syncs on a cellular connection when the Wi-Fi-only restriction is off" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "cellular", "{}");
+    const result = try plan(&sandbox, log, "cellular", "{}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -202,11 +210,12 @@ test "plan-sync syncs on a cellular connection when the Wi-Fi-only restriction i
 test "plan-sync says not to sync when there is no connection" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "none", "{}");
+    const result = try plan(&sandbox, log, "none", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -215,11 +224,12 @@ test "plan-sync says not to sync when there is no connection" {
 test "plan-sync treats a connection type nobody anticipated as unknown rather than stopping syncing" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "something-new", "{}");
+    const result = try plan(&sandbox, log, "something-new", "{}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -227,11 +237,12 @@ test "plan-sync treats a connection type nobody anticipated as unknown rather th
 test "plan-sync says not to sync when no default database has been created yet" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try writeDefaultDatabase(&sandbox, null);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try writeDefaultDatabase(&sandbox, log, null);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -243,12 +254,13 @@ test "plan-sync says not to sync when no default database has been created yet" 
 test "plan-sync says not to sync when the database has no origin to sync to" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try writeDefaultDatabase(&sandbox, DATABASE_PATH);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try writeDefaultDatabase(&sandbox, log, DATABASE_PATH);
     try writeDatabaseConfig(&sandbox, null);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectEmptyArray(result, "steps");
@@ -260,11 +272,12 @@ test "plan-sync says not to sync when the database has no origin to sync to" {
 test "plan-sync hands back a sync-database step for the default database when a sync should run" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(true, result, "shouldRun");
     try expectString(DATABASE_PATH, result, "databasePath");
@@ -284,11 +297,12 @@ test "plan-sync hands back a sync-database step for the default database when a 
 test "plan-sync carries the pause through so the loop waits what the settings asked for" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, 90000);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, 90000);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectInteger(90000, result, "pauseBetweenRunsMs");
 }
@@ -296,11 +310,12 @@ test "plan-sync carries the pause through so the loop waits what the settings as
 test "plan-sync's refusal still carries the pause, so the loop does not spin asking again" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, false, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, false, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(false, result, "shouldRun");
     try expectInteger(DEFAULT_SYNC_PAUSE_MS, result, "pauseBetweenRunsMs");
@@ -312,11 +327,12 @@ test "plan-sync's refusal still carries the pause, so the loop does not spin ask
 test "plan-sync says not to sync while a prefetch is still filling the database in" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"working\"}");
+    const result = try plan(&sandbox, log, "wifi", "{\"prefetchState\":\"working\"}");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("prefetch", result, "reason");
@@ -329,11 +345,12 @@ test "plan-sync says not to sync while a prefetch is still filling the database 
 test "plan-sync syncs when the prefetch is stalled, so a prefetch that cannot finish cannot stop syncing" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"stalled\"}");
+    const result = try plan(&sandbox, log, "wifi", "{\"prefetchState\":\"stalled\"}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -341,11 +358,12 @@ test "plan-sync syncs when the prefetch is stalled, so a prefetch that cannot fi
 test "plan-sync syncs when the prefetch has finished filling the database in" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"complete\"}");
+    const result = try plan(&sandbox, log, "wifi", "{\"prefetchState\":\"complete\"}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -354,11 +372,12 @@ test "plan-sync syncs when the prefetch has finished filling the database in" {
 test "plan-sync syncs when nothing is known about the prefetch yet" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"unknown\"}");
+    const result = try plan(&sandbox, log, "wifi", "{\"prefetchState\":\"unknown\"}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -367,11 +386,12 @@ test "plan-sync syncs when nothing is known about the prefetch yet" {
 test "plan-sync syncs when the native side said nothing about the prefetch at all" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{}");
+    const result = try plan(&sandbox, log, "wifi", "{}");
 
     try expectBool(true, result, "shouldRun");
 }
@@ -380,13 +400,14 @@ test "plan-sync syncs when the native side said nothing about the prefetch at al
 test "plan-sync syncs when the prefetch state is a value nobody recognises or the data is not an object" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    try expectBool(true, try plan(&sandbox, "wifi", "{\"prefetchState\":\"something-new\"}"), "shouldRun");
-    try expectBool(true, try plan(&sandbox, "wifi", "{\"prefetchState\":5}"), "shouldRun");
-    try expectBool(true, try plan(&sandbox, "wifi", "null"), "shouldRun");
+    try expectBool(true, try plan(&sandbox, log, "wifi", "{\"prefetchState\":\"something-new\"}"), "shouldRun");
+    try expectBool(true, try plan(&sandbox, log, "wifi", "{\"prefetchState\":5}"), "shouldRun");
+    try expectBool(true, try plan(&sandbox, log, "wifi", "null"), "shouldRun");
 }
 
 // The reason a user is most likely to care about is the one the log should carry: a phone with syncing switched off is not syncing
@@ -394,11 +415,12 @@ test "plan-sync syncs when the prefetch state is a value nobody recognises or th
 test "plan-sync: the master switch wins over a working prefetch" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, false, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, false, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "wifi", "{\"prefetchState\":\"working\"}");
+    const result = try plan(&sandbox, log, "wifi", "{\"prefetchState\":\"working\"}");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("switched off", result, "reason");
@@ -407,11 +429,12 @@ test "plan-sync: the master switch wins over a working prefetch" {
 test "plan-sync: the connection check wins over a working prefetch" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "cellular", "{\"prefetchState\":\"working\"}");
+    const result = try plan(&sandbox, log, "cellular", "{\"prefetchState\":\"working\"}");
 
     try expectBool(false, result, "shouldRun");
     try expectContains("cellular", result, "reason");
@@ -420,11 +443,12 @@ test "plan-sync: the connection check wins over a working prefetch" {
 test "plan-sync's refusal says why, so a phone that is not syncing can be accounted for" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, true, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, true, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
 
-    const result = try plan(&sandbox, "cellular", "{}");
+    const result = try plan(&sandbox, log, "cellular", "{}");
 
     try expectString("the connection is \"cellular\" and syncing is not allowed on it", result, "reason");
 }
@@ -434,13 +458,14 @@ test "plan-sync's refusal says why, so a phone that is not syncing can be accoun
 test "plan-sync fails when the host cannot report the connection type" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
-    defer sandbox.deinit();
-    try writeSyncSettings(&sandbox, true, false, DEFAULT_SYNC_PAUSE_MS);
-    try setUpSyncableDatabase(&sandbox);
+    const log = MuteLog.init();
+    defer sandbox.deinit(log);
+    try writeSyncSettings(&sandbox, log, true, false, DEFAULT_SYNC_PAUSE_MS);
+    try setUpSyncableDatabase(&sandbox, log);
     var host: ReportingHost = .{
         .reported = "",
         .failure = error.NoConnectivityManager,
     };
 
-    try std.testing.expectError(error.NoConnectivityManager, planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{}"), sandbox.context(), host.networkStatusHost()));
+    try std.testing.expectError(error.NoConnectivityManager, planSyncHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json("{}"), sandbox.context(), host.networkStatusHost()));
 }

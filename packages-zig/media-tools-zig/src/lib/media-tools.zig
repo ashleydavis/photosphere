@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const image_magick = @import("image-magick.zig");
@@ -84,16 +85,16 @@ pub const ThreadTools = struct {
     //
     // Runs the tool with the arguments, which do not include the tool's name. Fails for a tool that is not built in.
     //
-    fn run(context: ?*anyopaque, io: std.Io, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
+    fn run(context: ?*anyopaque, io: std.Io, log: ILog, allocator: std.mem.Allocator, tool: []const u8, arguments: []const []const u8) anyerror!in_process_tools.ToolOutput {
         _ = context;
         if (std.mem.eql(u8, tool, "magick")) {
-            return try image_magick.ImageMagick.runMagick(io, allocator, arguments);
+            return try image_magick.ImageMagick.runMagick(io, log, allocator, arguments);
         }
         if (std.mem.eql(u8, tool, "ffmpeg")) {
-            return try ffmpeg.Ffmpeg.runFfmpeg(io, allocator, arguments);
+            return try ffmpeg.Ffmpeg.runFfmpeg(io, log, allocator, arguments);
         }
         if (std.mem.eql(u8, tool, "ffprobe")) {
-            return try ffmpeg.Ffmpeg.runFfprobe(io, allocator, arguments);
+            return try ffmpeg.Ffmpeg.runFfprobe(io, log, allocator, arguments);
         }
         return utils.errors.throwError("{s} is not built into the program.", .{tool});
     }

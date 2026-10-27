@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -50,35 +51,35 @@ pub const IAssetServerCore = struct {
     //
     pub const VTable = struct {
         // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream.
-        serveAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream,
+        serveAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream,
 
         // Writes raw bytes for one asset variant into a database directory from a byte stream.
-        writeAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void,
+        writeAsset: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void,
 
         // Applies metadata operations to one or more on-disk databases.
-        applyDatabaseOps: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) anyerror!void,
+        applyDatabaseOps: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, ops: []const IDatabaseOp) anyerror!void,
     };
 
     //
     // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream (to be destroyed
     // with IReadStream.destroy).
     //
-    pub fn serveAsset(self: IAssetServerCore, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
-        return self.vtable.serveAsset(self.ptr, allocator, thread_arena, io, assetId, assetType, databasePath);
+    pub fn serveAsset(self: IAssetServerCore, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
+        return self.vtable.serveAsset(self.ptr, allocator, thread_arena, io, log, assetId, assetType, databasePath);
     }
 
     //
     // Writes raw bytes for one asset variant into a database directory from a byte stream.
     //
-    pub fn writeAsset(self: IAssetServerCore, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
-        return self.vtable.writeAsset(self.ptr, allocator, io, assetId, assetType, databasePath, contentType, inputStream, contentLength);
+    pub fn writeAsset(self: IAssetServerCore, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
+        return self.vtable.writeAsset(self.ptr, allocator, io, log, assetId, assetType, databasePath, contentType, inputStream, contentLength);
     }
 
     //
     // Applies metadata operations to one or more on-disk databases.
     //
-    pub fn applyDatabaseOps(self: IAssetServerCore, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) anyerror!void {
-        return self.vtable.applyDatabaseOps(self.ptr, allocator, io, ops);
+    pub fn applyDatabaseOps(self: IAssetServerCore, allocator: std.mem.Allocator, io: std.Io, log: ILog, ops: []const IDatabaseOp) anyerror!void {
+        return self.vtable.applyDatabaseOps(self.ptr, allocator, io, log, ops);
     }
 };
 
@@ -160,13 +161,13 @@ pub const AssetServerCore = struct {
     // Returns a cached lazy storage instance for the given database path, creating one if needed with the arena of the thread that
     // owns the core.
     //
-    fn getAssetStorage(self: *AssetServerCore, thread_arena: std.mem.Allocator, io: std.Io, databasePath: []const u8) !IStorage {
+    fn getAssetStorage(self: *AssetServerCore, thread_arena: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8) !IStorage {
         if (self.storageCache.get(databasePath)) |cached| {
             return cached;
         }
-        const credentials = try resolve_storage_credentials.resolveStorageCredentials(thread_arena, io, databasePath, null, null, self.nativeCaller);
+        const credentials = try resolve_storage_credentials.resolveStorageCredentials(thread_arena, io, log, databasePath, null, null, self.nativeCaller);
         const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(thread_arena, credentials.encryptionKeyPems);
-        const storage = try media_file_database.createLazyDatabaseStorage(thread_arena, io, databasePath, credentials.s3Config, loadedKeys.options, self.nativeCaller);
+        const storage = try media_file_database.createLazyDatabaseStorage(thread_arena, io, log, databasePath, credentials.s3Config, loadedKeys.options, self.nativeCaller);
         try self.storageCache.put(thread_arena, try thread_arena.dupe(u8, databasePath), storage);
         return storage;
     }
@@ -174,48 +175,48 @@ pub const AssetServerCore = struct {
     //
     // Loads one asset variant (thumb | display | asset) from a database directory and returns it as a byte stream.
     //
-    pub fn serveAsset(self: *AssetServerCore, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) !IReadStream {
-        const assetStorage = try self.getAssetStorage(thread_arena, io, databasePath);
-        return try media_file_database.streamAsset(allocator, io, assetStorage, assetId, assetType);
+    pub fn serveAsset(self: *AssetServerCore, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8) !IReadStream {
+        const assetStorage = try self.getAssetStorage(thread_arena, io, log, databasePath);
+        return try media_file_database.streamAsset(allocator, io, log, assetStorage, assetId, assetType);
     }
 
     //
     // Writes raw bytes for one asset variant into a database directory from a byte stream.
     //
-    pub fn writeAsset(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) !void {
+    pub fn writeAsset(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) !void {
         const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, null, null);
-        try media_file_database.writeAssetStream(allocator, io, created.storage, created.rawStorage, self.sessionId, assetId, assetType, contentType, inputStream, contentLength);
+        try media_file_database.writeAssetStream(allocator, io, log, created.storage, created.rawStorage, self.sessionId, assetId, assetType, contentType, inputStream, contentLength);
     }
 
     //
     // Applies metadata operations to one or more on-disk databases.
     //
-    pub fn applyDatabaseOps(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) !void {
-        try apply_database_ops.applyDatabaseOps(allocator, io, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.nativeCaller);
+    pub fn applyDatabaseOps(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, log: ILog, ops: []const IDatabaseOp) !void {
+        try apply_database_ops.applyDatabaseOps(allocator, io, log, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.nativeCaller);
     }
 
     //
     // The IAssetServerCore.VTable.serveAsset of this core.
     //
-    fn serveAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
+    fn serveAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, thread_arena: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8) anyerror!IReadStream {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
-        return self.serveAsset(allocator, thread_arena, io, assetId, assetType, databasePath);
+        return self.serveAsset(allocator, thread_arena, io, log, assetId, assetType, databasePath);
     }
 
     //
     // The IAssetServerCore.VTable.writeAsset of this core.
     //
-    fn writeAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
+    fn writeAssetErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) anyerror!void {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
-        return self.writeAsset(allocator, io, assetId, assetType, databasePath, contentType, inputStream, contentLength);
+        return self.writeAsset(allocator, io, log, assetId, assetType, databasePath, contentType, inputStream, contentLength);
     }
 
     //
     // The IAssetServerCore.VTable.applyDatabaseOps of this core.
     //
-    fn applyDatabaseOpsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, ops: []const IDatabaseOp) anyerror!void {
+    fn applyDatabaseOpsErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, ops: []const IDatabaseOp) anyerror!void {
         const self: *AssetServerCore = @ptrCast(@alignCast(ptr));
-        return self.applyDatabaseOps(allocator, io, ops);
+        return self.applyDatabaseOps(allocator, io, log, ops);
     }
 };
 

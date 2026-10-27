@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const TimerList = @import("ziggy").timers.TimerList;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -9,7 +10,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const storage_helper = @import("../lib/storage-helper.zig");
 const sync_cmd = @import("sync.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const TaskQueue = task_queue_zig.task_queue.TaskQueue;
 const TaskStatus = task_queue_zig.types.TaskStatus;
@@ -43,10 +43,9 @@ pub const IConsolidateCommandOptions = struct {
 };
 
 //
-// Logs a replication progress message.
+// Logs a replication progress message to the log.
 //
-fn onReplicateProgress(context: ?*anyopaque, io: std.Io, progress: []const u8) void {
-    _ = context;
+fn onReplicateProgress(_: ?*anyopaque, io: std.Io, log: ILog, progress: []const u8) void {
     _ = io;
     log.verbose(progress);
 }
@@ -71,20 +70,20 @@ fn consolidateDatabaseDataToJson(allocator: std.mem.Allocator, data: IConsolidat
 //   * A database that is already related: the origin is simply recorded, because ordinary sync
 //     already covers them.
 //
-pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, remotePath: []const u8, options: *IConsolidateCommandOptions) !void {
+pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, remotePath: []const u8, options: *IConsolidateCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
     const nonInteractive = options.base.yes orelse false;
 
-    const loaded = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const databaseDir = loaded.databaseDir;
     const localStorage = loaded.assetStorage;
     const localRawStorage = loaded.rawAssetStorage;
 
     if (std.mem.startsWith(u8, remotePath, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
     }
 
     const remoteStorage = (try createStorageForPath(allocator, io, remotePath, null)).storage;
@@ -105,7 +104,7 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
             .function = onReplicateProgress,
         };
         var replicate_timers = TimerList.init();
-        _ = try replicateDatabase(allocator, io, replicate_timers.interface(), uuidGenerator, .{
+        _ = try replicateDatabase(allocator, io, log, replicate_timers.interface(), uuidGenerator, .{
             .sourcePath = databaseDir,
             .destPath = remotePath,
             .sourceEncryptionKey = options.base.key,
@@ -115,37 +114,37 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
             .force = false,
             .pathFilter = null,
         }, &progressCallback);
-        try updateDatabaseConfig(allocator, io, localRawStorage, .{
+        try updateDatabaseConfig(allocator, io, log, localRawStorage, .{
             .origin = remotePath,
         });
 
         log.info(try pc.green(allocator, "\u{2713} Created the remote database and set it as this database's origin."));
-        exit(io, 0);
+        exit(io, log, 0);
         return;
     }
 
-    const localTree = try loadMerkleTree(allocator, io, localStorage);
-    const remoteTree = try loadMerkleTree(allocator, io, remoteStorage);
+    const localTree = try loadMerkleTree(allocator, io, log, localStorage);
+    const remoteTree = try loadMerkleTree(allocator, io, log, remoteStorage);
     if (localTree == null or remoteTree == null) {
         log.@"error"(try pc.red(allocator, "\u{2717} Could not read the merkle tree of one of the databases."));
-        exit(io, 1);
+        exit(io, log, 1);
         return;
     }
 
     if (std.mem.eql(u8, localTree.?.id, remoteTree.?.id)) {
         // Already the same database, so nothing has to move: recording the origin is the whole job.
-        const existingConfig = try loadDatabaseConfig(allocator, io, localRawStorage);
+        const existingConfig = try loadDatabaseConfig(allocator, io, log, localRawStorage);
         const existingOrigin = configOrigin(existingConfig);
         if (existingOrigin != null and std.mem.eql(u8, existingOrigin.?, remotePath)) {
             log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Already joined to {s}.", .{remotePath})));
         }
         else {
-            try updateDatabaseConfig(allocator, io, localRawStorage, .{
+            try updateDatabaseConfig(allocator, io, log, localRawStorage, .{
                 .origin = remotePath,
             });
             log.info(try pc.green(allocator, "\u{2713} The remote is the same database, so it has been set as this database's origin."));
         }
-        exit(io, 0);
+        exit(io, log, 0);
         return;
     }
 
@@ -157,20 +156,20 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
     {
         const queue = try TaskQueue.init(allocator, uuidGenerator, try std.mem.concat(allocator, u8, &.{ "consolidate-", sessionId }));
         var timer_list = TimerList.init();
-        defer queue.deinit(io, allocator);
-        defer queue.shutdown(io, allocator);
+        defer queue.deinit(io, allocator, log);
+        defer queue.shutdown(io, allocator, log);
 
-        const taskId = try queue.addTask(io, allocator, "consolidate-database", try consolidateDatabaseDataToJson(allocator, .{
+        const taskId = try queue.addTask(io, allocator, log, "consolidate-database", try consolidateDatabaseDataToJson(allocator, .{
             .databasePath = databaseDir,
             .remotePath = remotePath,
             .sessionId = sessionId,
         }), null, null);
-        const taskResult = try queue.awaitTask(io, allocator, timer_list.interface(), taskId);
+        const taskResult = try queue.awaitTask(io, allocator, timer_list.interface(), log, taskId);
 
         if (taskResult == null or taskResult.?.status != TaskStatus.Succeeded) {
             const errorMessage = if (taskResult) |failedResult| failedResult.errorMessage orelse "the task did not finish" else "the task did not finish";
             log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Consolidation failed: {s}", .{errorMessage})));
-            exit(io, 1);
+            exit(io, log, 1);
             return;
         }
 
@@ -184,5 +183,5 @@ pub fn consolidateCommand(allocator: std.mem.Allocator, io: std.Io, context: ICo
         log.info(try std.fmt.allocPrint(allocator, "    psi sync --db {s}", .{databaseDir}));
     }
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

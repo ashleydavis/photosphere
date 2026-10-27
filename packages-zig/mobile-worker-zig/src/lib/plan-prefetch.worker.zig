@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
@@ -132,12 +133,13 @@ pub fn planPrefetchHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: ILog,
     data: std.json.Value,
     context: ITaskContext,
     host: INetworkStatusHost,
 ) anyerror!std.json.Value {
     _ = data;
-    const read = try readConfigFromStorage(allocator, io, try node_api.config_file.getConfigPath(allocator));
+    const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
     const config = read.config;
     const syncConfig = config.sync;
     const settings = syncConfig.settings;
@@ -176,8 +178,8 @@ pub fn planPrefetchHandler(
     }
 
     // A database with no origin has nothing to fetch from.
-    const opened = try openStorage(allocator, io, databasePath.?, null, null, context.nativeCaller);
-    const databaseConfig = try loadDatabaseConfig(allocator, io, opened.rawStorage);
+    const opened = try openStorage(allocator, io, log, databasePath.?, null, null, context.nativeCaller);
+    const databaseConfig = try loadDatabaseConfig(allocator, io, log, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" has no origin to fill in from", .{databasePath.?}), settings, pauseBetweenRunsMs));
     }
@@ -192,7 +194,7 @@ pub fn planPrefetchHandler(
     // loop threw and the prefetch never ran at all. Measured on a Pixel 6 against an encrypted S3
     // origin, every pass reported "Checksum mismatch: expected <the last 32 bytes of the encrypted
     // file> got <a hash of the rest of it>". `load-assets` passes them at the same call.
-    if (!try isDatabasePartial(allocator, io, databasePath.?, opened.s3Config, opened.storageOptions)) {
+    if (!try isDatabasePartial(allocator, io, log, databasePath.?, opened.s3Config, opened.storageOptions)) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" is not a partial replica, so there is nothing to fill in", .{databasePath.?}), settings, pauseBetweenRunsMs));
     }
 

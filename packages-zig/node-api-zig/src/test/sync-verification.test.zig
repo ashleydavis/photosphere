@@ -3,6 +3,8 @@
 //
 
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const ILog = @import("utils-zig").log.ILog;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
@@ -46,12 +48,12 @@ const laterAssetBytes = "the-bytes-of-another-photo";
 // Writes an asset file and records it in the database's merkle tree.
 // (This does what writeAsset does for a test, without the write lock.)
 //
-fn writeAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, rawStorage: IStorage, id: []const u8, contentType: []const u8, buffer: []const u8) !void {
+fn writeAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, rawStorage: IStorage, id: []const u8, contentType: []const u8, buffer: []const u8) !void {
     const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", id });
-    var merkleTree = (try tree.loadMerkleTree(allocator, io, assetStorage)).?;
+    var merkleTree = (try tree.loadMerkleTree(allocator, io, log, assetStorage)).?;
     try assetStorage.write(allocator, io, assetPath, contentType, buffer);
     const assetInfo = (try assetStorage.info(allocator, io, assetPath)).?;
-    const stream = try assetStorage.readStream(allocator, io, assetPath);
+    const stream = try assetStorage.readStream(allocator, io, log, assetPath);
     defer stream.destroy(io);
     const hashedAsset = try hash.computeAssetHash(allocator, stream.reader(), .{
         .contentType = assetInfo.contentType,
@@ -66,14 +68,14 @@ fn writeAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, 
     });
     const filesImported = media_file_database.getFilesImported(merkleTree.databaseMetadata);
     try merkleTree.databaseMetadata.?.put(allocator, "filesImported", .{ .number = @floatFromInt(filesImported + 1) });
-    try tree.saveMerkleTree(allocator, io, &merkleTree, assetStorage);
-    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+    try tree.saveMerkleTree(allocator, io, log, &merkleTree, assetStorage);
+    try tree.stampDatabaseModified(allocator, io, log, assetStorage, rawStorage);
 }
 
 //
 // Inserts a metadata record and commits it.
 //
-fn insertRecord(allocator: std.mem.Allocator, io: std.Io, database: media_file_database.IMediaFileDatabase, id: []const u8, origFileName: []const u8) !void {
+fn insertRecord(allocator: std.mem.Allocator, io: std.Io, log: ILog, database: media_file_database.IMediaFileDatabase, id: []const u8, origFileName: []const u8) !void {
     var record = try BsonDocument.fromFields(allocator, &.{
         .{
             .key = "_id",
@@ -88,8 +90,8 @@ fn insertRecord(allocator: std.mem.Allocator, io: std.Io, database: media_file_d
             .value = .{ .string = "image/jpeg" },
         },
     });
-    try database.metadataCollection.insertOne(io, &record, null);
-    try database.bsonDatabase.commit(io);
+    try database.metadataCollection.insertOne(io, log, &record, null);
+    try database.bsonDatabase.commit(io, log);
 }
 
 //
@@ -98,7 +100,7 @@ fn insertRecord(allocator: std.mem.Allocator, io: std.Io, database: media_file_d
 //
 // Returns the wrapper, so a test can read what was streamed back out of the target.
 //
-fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8, targetHashes: *const std.StringHashMapUnmanaged([]const u8), verifiesWhatItWrites: ?bool) !*SpyStorage {
+fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDir: []const u8, targetHashes: *const std.StringHashMapUnmanaged([]const u8), verifiesWhatItWrites: ?bool) !*SpyStorage {
     const clock = try allocator.create(SettableTimestampProvider);
     clock.* = .{ .current = 1767225600000 }; // 2026-01-01T00:00:00.000Z
 
@@ -106,13 +108,13 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8
     try std.Io.Dir.cwd().createDirPath(io, sourcePath);
     const source = try createStorage(allocator, io, sourcePath, null, null);
     const sourceDatabase = try media_file_database.createMediaFileDatabase(allocator, source.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
-    try media_file_database.createDatabase(allocator, io, source.storage, source.rawStorage, try sync_helpers.testUuidGenerator(allocator), sourceDatabase.metadataCollection, null);
+    try media_file_database.createDatabase(allocator, io, log, source.storage, source.rawStorage, try sync_helpers.testUuidGenerator(allocator), sourceDatabase.metadataCollection, null);
 
-    try insertRecord(allocator, io, sourceDatabase, assetId, "test.jpg");
-    try writeAsset(allocator, io, source.storage, source.rawStorage, assetId, "image/jpeg", assetBytes);
+    try insertRecord(allocator, io, log, sourceDatabase, assetId, "test.jpg");
+    try writeAsset(allocator, io, log, source.storage, source.rawStorage, assetId, "image/jpeg", assetBytes);
 
-    try insertRecord(allocator, io, sourceDatabase, laterAssetId, "later.jpg");
-    try writeAsset(allocator, io, source.storage, source.rawStorage, laterAssetId, "image/jpeg", laterAssetBytes);
+    try insertRecord(allocator, io, log, sourceDatabase, laterAssetId, "later.jpg");
+    try writeAsset(allocator, io, log, source.storage, source.rawStorage, laterAssetId, "image/jpeg", laterAssetBytes);
 
     // The target is a database of its own, holding nothing, carrying the source's database id so
     // the two are related and a sync between them is allowed.
@@ -124,15 +126,15 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8
     try std.Io.Dir.cwd().createDirPath(io, targetPath);
     const target = try createStorage(allocator, io, targetPath, null, null);
     const targetDatabase = try media_file_database.createMediaFileDatabase(allocator, target.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
-    try media_file_database.createDatabase(allocator, io, target.storage, target.rawStorage, try sync_helpers.testUuidGenerator(allocator), targetDatabase.metadataCollection, null);
+    try media_file_database.createDatabase(allocator, io, log, target.storage, target.rawStorage, try sync_helpers.testUuidGenerator(allocator), targetDatabase.metadataCollection, null);
 
-    const sourceTree = try tree.loadMerkleTree(allocator, io, source.storage);
-    var targetTree = try tree.loadMerkleTree(allocator, io, target.storage);
+    const sourceTree = try tree.loadMerkleTree(allocator, io, log, source.storage);
+    var targetTree = try tree.loadMerkleTree(allocator, io, log, target.storage);
     if (sourceTree == null or targetTree == null) {
         return error.BothDatabasesMustHaveAMerkleTree;
     }
     targetTree.?.id = sourceTree.?.id;
-    try tree.saveMerkleTree(allocator, io, &targetTree.?, target.storage);
+    try tree.saveMerkleTree(allocator, io, log, &targetTree.?, target.storage);
 
     const reopenedSource = try createStorage(allocator, io, sourcePath, null, null);
     const reopenedSourceDatabase = try media_file_database.createMediaFileDatabase(allocator, reopenedSource.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
@@ -149,6 +151,7 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8
     _ = try syncDatabases(
         allocator,
         io,
+        log,
         reopenedSource.storage,
         reopenedSource.rawStorage,
         reopenedSourceDatabase.bsonDatabase,
@@ -170,6 +173,7 @@ fn assetPathOf(allocator: std.mem.Allocator, id: []const u8) ![]const u8 {
 }
 
 test "a target that knows its own hash is not read back" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -188,7 +192,7 @@ test "a target that knows its own hash is not read back" {
     var hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
     try hashes.put(allocator, try assetPathOf(allocator, assetId), try sync_helpers.hashOf(allocator, assetBytes));
 
-    const target = try syncOneAsset(allocator, io, workingDir, &hashes, null);
+    const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, null);
 
     // Said first, because "it was not read back" is true of a file that was never copied at all.
     try std.testing.expect(try target.storage().fileExists(allocator, io, try assetPathOf(allocator, assetId)));
@@ -196,6 +200,7 @@ test "a target that knows its own hash is not read back" {
 }
 
 test "a store that checked the bytes as it wrote them is asked nothing further" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -214,13 +219,14 @@ test "a store that checked the bytes as it wrote them is asked nothing further" 
     // phone, where every request is a fresh connection and the response crosses the engine
     // bridge, those two were a large part of what a file cost.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
-    const target = try syncOneAsset(allocator, io, workingDir, &hashes, true);
+    const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, true);
 
     try std.testing.expect(try target.storage().fileExists(allocator, io, try assetPathOf(allocator, assetId)));
     try std.testing.expect(!target.wasAskedAbout(try assetPathOf(allocator, assetId)));
 }
 
 test "the hash the sync already has goes up with the file" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -238,12 +244,13 @@ test "the hash the sync already has goes up with the file" {
     // software, which is slow enough on a phone that one large video held the upload for a
     // very long time with no byte reaching the server. The merkle tree is made of these hashes, so the sync already has it.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
-    const target = try syncOneAsset(allocator, io, workingDir, &hashes, null);
+    const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, null);
 
     try std.testing.expectEqualSlices(u8, try sync_helpers.hashOf(allocator, assetBytes), target.hashesWrittenWith.get(try assetPathOf(allocator, assetId)).?);
 }
 
 test "a target that does not know its own hash is checked by length, not read back" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -260,13 +267,14 @@ test "a target that does not know its own hash is checked by length, not read ba
     // Reading a file back to hash it is what made syncing a phone's library impossible: each file
     // crossed the network twice and was hashed in software, which is slow. `psi verify` is the deep check.
     const hashes: std.StringHashMapUnmanaged([]const u8) = .empty;
-    const target = try syncOneAsset(allocator, io, workingDir, &hashes, null);
+    const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, null);
 
     try std.testing.expect(try target.storage().fileExists(allocator, io, try assetPathOf(allocator, assetId)));
     try std.testing.expect(!target.wasReadBack(try assetPathOf(allocator, assetId)));
 }
 
 test "a file that will not copy is left behind and the rest of the library still goes" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -287,7 +295,7 @@ test "a file that will not copy is left behind and the rest of the library still
     try hashes.put(allocator, try assetPathOf(allocator, assetId), &([_]u8{9} ** 32));
     try hashes.put(allocator, try assetPathOf(allocator, laterAssetId), try sync_helpers.hashOf(allocator, laterAssetBytes));
 
-    const target = try syncOneAsset(allocator, io, workingDir, &hashes, null);
+    const target = try syncOneAsset(allocator, io, log, workingDir, &hashes, null);
 
     try std.testing.expect(try target.storage().fileExists(allocator, io, try assetPathOf(allocator, laterAssetId)));
 }

@@ -1,4 +1,6 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -79,18 +81,19 @@ fn writeTestFile(allocator: std.mem.Allocator, io: std.Io, directoryPath: []cons
 //
 // Runs the handler and reads its result.
 //
-fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestTaskContext) !IResetAppStorageResult {
-    const output = try resetAppStorageHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, testContext.context.taskContext());
+fn run(allocator: std.mem.Allocator, io: std.Io, log: ILog, testContext: *TestTaskContext) !IResetAppStorageResult {
+    const output = try resetAppStorageHandler(allocator, io, test_timers.timers(), log, .{ .object = .empty }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(IResetAppStorageResult, allocator, output, .{});
 }
 
 test "empties the config and cache directories and leaves the directories in place" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -105,7 +108,7 @@ test "empties the config and cache directories and leaves the directories in pla
     try writeTestFile(allocator, io, cacheDir, "hashes.dat", "hashes");
     try useDirectories(configDir, cacheDir);
 
-    const result = try run(allocator, io, &testContext);
+    const result = try run(allocator, io, log, &testContext);
 
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, configDir)).len);
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, cacheDir)).len);
@@ -116,12 +119,13 @@ test "empties the config and cache directories and leaves the directories in pla
 }
 
 test "removes nested directory trees" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -135,19 +139,20 @@ test "removes nested directory trees" {
     try writeTestFile(allocator, io, try std.fs.path.join(allocator, &.{ configDir, "a-database", ".db", "bson" }), "metadata.bson", "bytes");
     try useDirectories(configDir, cacheDir);
 
-    const result = try run(allocator, io, &testContext);
+    const result = try run(allocator, io, log, &testContext);
 
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, configDir)).len);
     try std.testing.expectEqual(@as(u64, 1), result.entriesRemoved);
 }
 
 test "leaves everything outside the two directories alone" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -163,18 +168,19 @@ test "leaves everything outside the two directories alone" {
     try writeTestFile(allocator, io, photosDir, "holiday.jpg", "a photo nobody may delete");
     try useDirectories(configDir, cacheDir);
 
-    _ = try run(allocator, io, &testContext);
+    _ = try run(allocator, io, log, &testContext);
 
     try std.testing.expect(node_utils.fs.pathExists(io, try std.fs.path.join(allocator, &.{ photosDir, "holiday.jpg" })));
 }
 
 test "empties one directory once when the config and the cache are the same place" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -189,7 +195,7 @@ test "empties one directory once when the config and the cache are the same plac
     try std.Io.Dir.cwd().createDirPath(io, try std.fs.path.join(allocator, &.{ sandboxDir, "my-photos" }));
     try useDirectories(sandboxDir, sandboxDir);
 
-    const result = try run(allocator, io, &testContext);
+    const result = try run(allocator, io, log, &testContext);
 
     try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, sandboxDir)).len);
     try std.testing.expectEqual(@as(u64, 2), result.entriesRemoved);
@@ -198,12 +204,13 @@ test "empties one directory once when the config and the cache are the same plac
 }
 
 test "succeeds when the directories do not exist yet" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     var uuidGenerator = try TestUuidGenerator.init(allocator);
@@ -216,18 +223,19 @@ test "succeeds when the directories do not exist yet" {
         try std.fs.path.join(allocator, &.{ tempDir, "never-written-cache" }),
     );
 
-    const result = try run(allocator, io, &testContext);
+    const result = try run(allocator, io, log, &testContext);
 
     try std.testing.expectEqual(@as(u64, 0), result.entriesRemoved);
 }
 
 test "empties a phone's data directory as well, where the databases are, when it is neither the config nor the cache directory" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "reset-app-storage-worker");
@@ -251,12 +259,13 @@ test "empties a phone's data directory as well, where the databases are, when it
 }
 
 test "empties a phone's data directory once when the cache directory is the same place" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     const saved = try SavedDirectories.save(allocator);
     defer saved.restore();
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "reset-app-storage-worker");

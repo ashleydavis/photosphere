@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const encryption = @import("encryption-zig");
 
 const IFileInfo = @import("storage.zig").IFileInfo;
@@ -140,13 +141,13 @@ pub const EncryptedStorage = struct {
     // Reads a file from storage.
     // Returns undefined if the file doesn't exist.
     //
-    pub fn read(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
-        const data = try self.wrappedStorage.read(allocator, io, filePath) orelse {
+    pub fn read(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        const data = try self.wrappedStorage.read(allocator, io, log, filePath) orelse {
             return null;
         };
 
         // decryptBuffer returns either newly allocated memory or `data` itself, both owned by the caller.
-        return @constCast(try decryptBuffer(allocator, data, &self.decryptionKeyMap));
+        return @constCast(try decryptBuffer(log, allocator, data, &self.decryptionKeyMap));
     }
 
     //
@@ -159,8 +160,8 @@ pub const EncryptedStorage = struct {
     //
     // Streams a file from stroage.
     //
-    pub fn readStream(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
-        const readStreamResult = try self.wrappedStorage.readStream(allocator, io, filePath);
+    pub fn readStream(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        const readStreamResult = try self.wrappedStorage.readStream(allocator, io, log, filePath);
         errdefer readStreamResult.destroy(io);
         const decryptionStream = try createDecryptionStream(allocator, &self.decryptionKeyMap, readStreamResult.reader());
         const decryptedStream = try allocator.create(DecryptedReadStream);
@@ -213,22 +214,22 @@ pub const EncryptedStorage = struct {
     // Attempts to acquire a write lock for the specified file.
     // Returns true if the lock was acquired, false if it already exists.
     //
-    pub fn acquireWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
-        return self.wrappedStorage.acquireWriteLock(allocator, io, filePath, owner);
+    pub fn acquireWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        return self.wrappedStorage.acquireWriteLock(allocator, io, log, filePath, owner);
     }
 
     //
     // Releases a write lock for the specified file.
     //
-    pub fn releaseWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
-        return self.wrappedStorage.releaseWriteLock(allocator, io, filePath);
+    pub fn releaseWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        return self.wrappedStorage.releaseWriteLock(allocator, io, log, filePath);
     }
 
     //
     // Refreshes a write lock for the specified file, updating its timestamp.
     //
-    pub fn refreshWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
-        return self.wrappedStorage.refreshWriteLock(allocator, io, filePath, owner);
+    pub fn refreshWriteLock(self: *EncryptedStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        return self.wrappedStorage.refreshWriteLock(allocator, io, log, filePath, owner);
     }
 };
 

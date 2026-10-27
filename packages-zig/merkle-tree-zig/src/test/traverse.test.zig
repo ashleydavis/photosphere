@@ -72,7 +72,7 @@ const Recorder = struct {
     //
     // The traverseTreeAsync callback.
     //
-    fn asyncCallback(self: *Recorder, current: *SortNode) anyerror!bool {
+    fn asyncCallback(self: *Recorder, _: utils.log.ILog, current: *SortNode) anyerror!bool {
         return self.visit(current);
     }
 
@@ -87,8 +87,8 @@ const Recorder = struct {
 //
 // Traverses a tree with the async traversal and a recorder.
 //
-fn traverseAsync(root: ?*SortNode, recorder: *Recorder) !void {
-    try traverse.traverseTreeAsync(SortNode, root, recorder, Recorder.asyncCallback);
+fn traverseAsync(log: utils.log.ILog, root: ?*SortNode, recorder: *Recorder) !void {
+    try traverse.traverseTreeAsync(SortNode, root, log, recorder, Recorder.asyncCallback);
 }
 
 //
@@ -359,68 +359,75 @@ fn buildFourLeafTree(allocator: std.mem.Allocator) !*SortNode {
 }
 
 test "traverseTreeAsync: handles undefined node" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var recorder: Recorder = .{ .allocator = arena.allocator() };
-    try traverseAsync(null, &recorder);
+    try traverseAsync(log, null, &recorder);
     try std.testing.expectEqual(@as(usize, 0), recorder.visited.items.len);
 }
 
 test "traverseTreeAsync: traverses single leaf node" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(try leaf(allocator, "A", 100), &recorder);
+    try traverseAsync(log, try leaf(allocator, "A", 100), &recorder);
     try expectNames(&.{"A"}, recorder.visited.items);
 }
 
 test "traverseTreeAsync: traverses two leaf nodes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(try node(allocator, try leaf(allocator, "A", 100), try leaf(allocator, "B", 100)), &recorder);
+    try traverseAsync(log, try node(allocator, try leaf(allocator, "A", 100), try leaf(allocator, "B", 100)), &recorder);
     try expectNames(&.{ "A", "A", "B" }, recorder.visited.items);
 }
 
 test "traverseTreeAsync: performs pre-order traversal (parent, left, right)" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var recorder: Recorder = .{ .allocator = allocator };
     const sortTree = try node(allocator, try node(allocator, try leaf(allocator, "A", 100), try leaf(allocator, "B", 100)), try leaf(allocator, "C", 100));
-    try traverseAsync(sortTree, &recorder);
+    try traverseAsync(log, sortTree, &recorder);
     try expectNames(&.{ "A", "A", "A", "B", "C" }, recorder.visited.items);
 }
 
 test "traverseTreeAsync: visits all nodes in pre-order for balanced tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try std.testing.expectEqual(@as(usize, 7), recorder.visited.items.len);
 }
 
 test "traverseTreeAsync: waits for async callback to complete" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C" });
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try std.testing.expectEqual(@as(usize, 5), recorder.visited.items.len);
 }
 
 test "traverseTreeAsync: processes nodes sequentially in pre-order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
 
     // Should be sequential: 0, 1, 2, 3, 4, 5, 6 (the root first)
     try std.testing.expectEqual(@as(usize, 7), recorder.visited.items.len);
@@ -428,64 +435,70 @@ test "traverseTreeAsync: processes nodes sequentially in pre-order" {
 }
 
 test "traverseTreeAsync: can perform async operations in callback" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C" });
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try std.testing.expectEqual(@as(usize, 5), recorder.visited.items.len);
 }
 
 test "traverseTreeAsync: stops node children when callback returns false" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var recorder: Recorder = .{ .allocator = allocator, .stopAtFirstInternal = true };
-    try traverseAsync(try buildFourLeafTree(allocator), &recorder);
+    try traverseAsync(log, try buildFourLeafTree(allocator), &recorder);
     try std.testing.expect(merkle_verify.containsName(recorder.visited.items, "C"));
     try std.testing.expect(merkle_verify.containsName(recorder.visited.items, "D"));
     try std.testing.expect(recorder.visited.items.len < 7);
 }
 
 test "traverseTreeAsync: stops after async operation returns false" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
     var recorder: Recorder = .{ .allocator = allocator, .stopAtLeaves = true };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try expectNames(&.{ "A", "B", "C", "D" }, recorder.leafNames.items);
 }
 
 test "traverseTreeAsync: can conditionally terminate based on async check" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
     var recorder: Recorder = .{ .allocator = allocator, .limit = 4 };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try std.testing.expect(recorder.visited.items.len > 0);
     try std.testing.expect(recorder.visited.items.len <= 7);
 }
 
 test "traverseTreeAsync: collects all leaf nodes asynchronously" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try expectNames(&.{ "A", "B", "C", "D" }, recorder.leafNames.items);
 }
 
 test "traverseTreeAsync: can perform async filtering" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D", "E" });
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     var filtered: usize = 0;
     for (recorder.nodeCounts.items) |nodeCount| {
         if (nodeCount > 1) {
@@ -498,74 +511,81 @@ test "traverseTreeAsync: can perform async filtering" {
 //
 // A traverseTreeAsync callback that always fails.
 //
-fn failingCallback(context: void, current: *SortNode) anyerror!bool {
+fn failingCallback(context: void, _: utils.log.ILog, current: *SortNode) anyerror!bool {
     _ = context;
     _ = current;
     return errors.throwError("Callback error", .{});
 }
 
 test "traverseTreeAsync: propagates errors from async callback" {
+    const console_log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const tree = try buildTree(arena.allocator(), &.{ "A", "B", "C" });
-    try std.testing.expectError(error.Thrown, traverse.traverseTreeAsync(SortNode, tree.sort, {}, failingCallback));
+    try std.testing.expectError(error.Thrown, traverse.traverseTreeAsync(SortNode, tree.sort, console_log, {}, failingCallback));
     try std.testing.expectEqualStrings("Callback error", errors.lastErrorMessage());
 }
 
 test "traverseTreeAsync: stops traversal on error" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, &.{ "A", "B", "C", "D" });
     var recorder: Recorder = .{ .allocator = allocator, .failAt = 3 };
-    try std.testing.expectError(error.Thrown, traverseAsync(tree.sort, &recorder));
+    try std.testing.expectError(error.Thrown, traverseAsync(log, tree.sort, &recorder));
     try std.testing.expectEqual(@as(usize, 3), recorder.visited.items.len);
 }
 
 test "traverseTreeAsync: traverses tree with 100 nodes asynchronously" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, try paddedFileNames(allocator, 100));
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try std.testing.expect(recorder.visited.items.len >= 100);
 }
 
 test "traverseTreeAsync: can limit traversal in large tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const tree = try buildTree(allocator, try paddedFileNames(allocator, 100));
     var recorder: Recorder = .{ .allocator = allocator, .limit = 50 };
-    try traverseAsync(tree.sort, &recorder);
+    try traverseAsync(log, tree.sort, &recorder);
     try std.testing.expect(recorder.visited.items.len < 199);
     try std.testing.expect(recorder.visited.items.len > 0);
 }
 
 test "traverseTreeAsync: handles nodes with only left child" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const leftLeaf = try leaf(allocator, "A", 100);
     var parent: SortNode = .{ .nodeCount = 2, .leafCount = 1, .size = leftLeaf.size, .minName = "A", .left = leftLeaf };
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(&parent, &recorder);
+    try traverseAsync(log, &parent, &recorder);
     try expectNames(&.{ "A", "A" }, recorder.visited.items);
 }
 
 test "traverseTreeAsync: handles nodes with only right child" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const rightLeaf = try leaf(allocator, "B", 100);
     var parent: SortNode = .{ .nodeCount = 2, .leafCount = 1, .size = rightLeaf.size, .minName = "B", .right = rightLeaf };
     var recorder: Recorder = .{ .allocator = allocator };
-    try traverseAsync(&parent, &recorder);
+    try traverseAsync(log, &parent, &recorder);
     try expectNames(&.{ "B", "B" }, recorder.visited.items);
 }
 
 test "traverseTreeSync vs traverseTreeAsync: both produce same traversal order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -573,11 +593,12 @@ test "traverseTreeSync vs traverseTreeAsync: both produce same traversal order" 
     var syncRecorder: Recorder = .{ .allocator = allocator };
     var asyncRecorder: Recorder = .{ .allocator = allocator };
     try traverseSync(tree.sort, &syncRecorder);
-    try traverseAsync(tree.sort, &asyncRecorder);
+    try traverseAsync(log, tree.sort, &asyncRecorder);
     try expectNames(asyncRecorder.visited.items, syncRecorder.visited.items);
 }
 
 test "traverseTreeSync vs traverseTreeAsync: both handle early termination similarly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -587,11 +608,12 @@ test "traverseTreeSync vs traverseTreeAsync: both handle early termination simil
     var syncRecorder: Recorder = .{ .allocator = allocator, .stopAtFirstInternal = true };
     var asyncRecorder: Recorder = .{ .allocator = allocator, .stopAtFirstInternal = true };
     try traverseSync(sortTree, &syncRecorder);
-    try traverseAsync(sortTree, &asyncRecorder);
+    try traverseAsync(log, sortTree, &asyncRecorder);
     try expectNames(asyncRecorder.visited.items, syncRecorder.visited.items);
 }
 
 test "traverseTreeSync vs traverseTreeAsync: both collect same nodes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -599,6 +621,25 @@ test "traverseTreeSync vs traverseTreeAsync: both collect same nodes" {
     var syncRecorder: Recorder = .{ .allocator = allocator };
     var asyncRecorder: Recorder = .{ .allocator = allocator };
     try traverseSync(tree.sort, &syncRecorder);
-    try traverseAsync(tree.sort, &asyncRecorder);
+    try traverseAsync(log, tree.sort, &asyncRecorder);
     try expectNames(asyncRecorder.leafNames.items, syncRecorder.leafNames.items);
+}
+
+//
+// A traverseTreeAsync callback that keeps the pointer of the log it is given.
+//
+fn keepLog(given: *?*anyopaque, log: utils.log.ILog, current: *SortNode) anyerror!bool {
+    _ = current;
+    given.* = log.ptr;
+    return true;
+}
+
+test "traverseTreeAsync gives the callback the log it is given" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const tree = try buildTree(arena.allocator(), &.{ "A", "B" });
+    const traversal_log = utils.mute_log.MuteLog.init();
+    var given: ?*anyopaque = null;
+    try traverse.traverseTreeAsync(SortNode, tree.sort, traversal_log, &given, keepLog);
+    try std.testing.expect(given == @as(?*anyopaque, traversal_log.ptr));
 }

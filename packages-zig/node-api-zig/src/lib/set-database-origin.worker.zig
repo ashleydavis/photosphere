@@ -47,6 +47,7 @@ pub fn setDatabaseOriginHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -61,8 +62,8 @@ pub fn setDatabaseOriginHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const opened = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
-    try updateDatabaseConfig(allocator, io, opened.rawStorage, .{
+    const opened = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    try updateDatabaseConfig(allocator, io, log, opened.rawStorage, .{
         .origin = data.origin,
     });
     return .null;

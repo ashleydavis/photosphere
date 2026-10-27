@@ -3,6 +3,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const merkle_verify = @import("merkle-verify.zig");
@@ -60,19 +61,20 @@ fn compareTrees(original: ?*const SortNode, loaded: ?*const SortNode) !void {
 //
 // Saves a tree and loads it back.
 //
-fn saveAndLoad(allocator: std.mem.Allocator, tree: *const IMerkleTree) !IMerkleTree {
+fn saveAndLoad(log: ILog, allocator: std.mem.Allocator, tree: *const IMerkleTree) !IMerkleTree {
     var storage = MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, tree, storage.asStorage(), "FTRE");
-    return (try merkle_tree.loadTree(allocator, io, TEST_FILE_PATH, storage.asStorage(), "FTRE")).?;
+    try merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, tree, storage.asStorage(), "FTRE");
+    return (try merkle_tree.loadTree(allocator, io, log, TEST_FILE_PATH, storage.asStorage(), "FTRE")).?;
 }
 
 test "should save and load a small tree correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const originalTree = try buildTree(allocator, &.{ "A", "B" });
-    const loadedTree = try saveAndLoad(allocator, &originalTree);
+    const loadedTree = try saveAndLoad(log, allocator, &originalTree);
 
     try std.testing.expectEqual(originalTree.sort.?.leafCount, loadedTree.sort.?.leafCount);
     try std.testing.expectEqual(originalTree.sort.?.nodeCount, loadedTree.sort.?.nodeCount);
@@ -90,13 +92,14 @@ test "should save and load a small tree correctly" {
 }
 
 test "should save and load a complex tree correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const fileNames = [_][]const u8{ "A", "B", "C", "D", "E", "F", "G" };
     const originalTree = try buildTree(allocator, &fileNames);
-    const loadedTree = try saveAndLoad(allocator, &originalTree);
+    const loadedTree = try saveAndLoad(log, allocator, &originalTree);
 
     try std.testing.expectEqual(@as(u32, fileNames.len), loadedTree.sort.?.leafCount);
     try std.testing.expectEqual(originalTree.sort.?.nodeCount, loadedTree.sort.?.nodeCount);
@@ -108,13 +111,14 @@ test "should save and load a complex tree correctly" {
 }
 
 test "should handle trees with special characters in file names" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const specialChars = "file-with-special-chars-!@#$%^&*()_+.txt";
     const tree = try buildTree(allocator, &.{specialChars});
-    const loadedTree = try saveAndLoad(allocator, &tree);
+    const loadedTree = try saveAndLoad(log, allocator, &tree);
 
     try std.testing.expectEqual(tree.sort.?.nodeCount, loadedTree.sort.?.nodeCount);
     try std.testing.expectEqualStrings(specialChars, loadedTree.sort.?.name.?);
@@ -122,6 +126,7 @@ test "should handle trees with special characters in file names" {
 }
 
 test "should handle large trees efficiently" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -131,7 +136,7 @@ test "should handle large trees efficiently" {
         fileName.* = try std.fmt.allocPrint(allocator, "file-{d}.txt", .{index});
     }
     const originalTree = try buildTree(allocator, &fileNames);
-    const loadedTree = try saveAndLoad(allocator, &originalTree);
+    const loadedTree = try saveAndLoad(log, allocator, &originalTree);
 
     try std.testing.expectEqual(@as(u32, 100), loadedTree.sort.?.leafCount);
     try std.testing.expectEqual(originalTree.sort.?.nodeCount, loadedTree.sort.?.nodeCount);
@@ -139,6 +144,7 @@ test "should handle large trees efficiently" {
 }
 
 test "saveTree throws for a dirty tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -146,22 +152,24 @@ test "saveTree throws for a dirty tree" {
     var tree = try buildTree(allocator, &.{"A"});
     tree.dirty = true;
     var storage = MemoryStorage.init(allocator);
-    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &tree, storage.asStorage(), "FTRE"));
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, &tree, storage.asStorage(), "FTRE"));
     try std.testing.expectEqualStrings("Tree is dirty. Cannot save. Make sure to rebuild the tree before saving.", errors.lastErrorMessage());
 }
 
 test "saveTree throws for an id that is not a UUID" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const tree = merkle_tree.createTree("test-tree");
     var storage = MemoryStorage.init(allocator);
-    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &tree, storage.asStorage(), "FTRE"));
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, &tree, storage.asStorage(), "FTRE"));
     try std.testing.expectEqualStrings("Invalid UUID", errors.lastErrorMessage());
 }
 
 test "saveTree throws like Buffer.writeUInt32LE for a last modified date before 1970" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -169,11 +177,12 @@ test "saveTree throws like Buffer.writeUInt32LE for a last modified date before 
     var tree = try buildTree(allocator, &.{"A"});
     tree.sort.?.lastModified = -315619200000; // 1960-01-01T00:00:00.000Z
     var storage = MemoryStorage.init(allocator);
-    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &tree, storage.asStorage(), "FTRE"));
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, &tree, storage.asStorage(), "FTRE"));
     try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -74", errors.lastErrorMessage());
 }
 
 test "saves and loads an empty tree and its database metadata" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -183,7 +192,7 @@ test "saves and loads an empty tree and its database metadata" {
     try metadata.put(allocator, "filesImported", .{ .number = 3 });
     tree.databaseMetadata = metadata;
 
-    const loadedTree = try saveAndLoad(allocator, &tree);
+    const loadedTree = try saveAndLoad(log, allocator, &tree);
     try std.testing.expect(loadedTree.sort == null);
     try std.testing.expect(loadedTree.merkle == null);
     try std.testing.expectEqual(@as(u32, 6), loadedTree.version);
@@ -192,51 +201,57 @@ test "saves and loads an empty tree and its database metadata" {
 }
 
 test "loadTree returns undefined for a missing file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try std.testing.expect((try merkle_tree.loadTree(allocator, io, "missing.dat", storage.asStorage(), "FTRE")) == null);
+    try std.testing.expect((try merkle_tree.loadTree(allocator, io, log, "missing.dat", storage.asStorage(), "FTRE")) == null);
 }
 
 test "should load version from a valid tree file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     const originalTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
     var storage = MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, io, "test-tree-version.bin", &originalTree, storage.asStorage(), "FTRE");
-    try std.testing.expectEqual(@as(?u32, merkle_tree.CURRENT_DATABASE_VERSION), merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage()));
+    try merkle_tree.saveTree(allocator, io, log, "test-tree-version.bin", &originalTree, storage.asStorage(), "FTRE");
+    try std.testing.expectEqual(@as(?u32, merkle_tree.CURRENT_DATABASE_VERSION), merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage()));
 }
 
 test "should return undefined for non-existent file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
-    try std.testing.expectEqual(@as(?u32, null), merkle_tree.loadTreeVersion(allocator, io, "non-existent-file.bin", storage.asStorage()));
+    try std.testing.expectEqual(@as(?u32, null), merkle_tree.loadTreeVersion(allocator, io, log, "non-existent-file.bin", storage.asStorage()));
 }
 
 test "should return undefined for empty file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("test-tree-version.bin", "");
-    try std.testing.expectEqual(@as(?u32, null), merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage()));
+    try std.testing.expectEqual(@as(?u32, null), merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage()));
 }
 
 test "should return undefined for file with less than 4 bytes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
     try storage.putFile("test-tree-version.bin", &.{ 0x01, 0x02 });
-    try std.testing.expectEqual(@as(?u32, null), merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage()));
+    try std.testing.expectEqual(@as(?u32, null), merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage()));
 }
 
 test "should correctly read version from file with exactly 4 bytes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -244,10 +259,11 @@ test "should correctly read version from file with exactly 4 bytes" {
     var versionBuffer: [4]u8 = undefined;
     std.mem.writeInt(u32, &versionBuffer, 42, .little);
     try storage.putFile("test-tree-version.bin", &versionBuffer);
-    try std.testing.expectEqual(@as(?u32, 42), merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage()));
+    try std.testing.expectEqual(@as(?u32, 42), merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage()));
 }
 
 test "should read version from large file without loading entire file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -256,10 +272,11 @@ test "should read version from large file without loading entire file" {
     @memset(completeFile, 0xFF);
     std.mem.writeInt(u32, completeFile[0..4], 123, .little);
     try storage.putFile("test-tree-version.bin", completeFile);
-    try std.testing.expectEqual(@as(?u32, 123), merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage()));
+    try std.testing.expectEqual(@as(?u32, 123), merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage()));
 }
 
 test "should handle different version values correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -269,11 +286,12 @@ test "should handle different version values correctly" {
         var versionBuffer: [4]u8 = undefined;
         std.mem.writeInt(u32, &versionBuffer, expectedVersion, .little);
         try storage.putFile("test-tree-version.bin", &versionBuffer);
-        try std.testing.expectEqual(@as(?u32, expectedVersion), merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage()));
+        try std.testing.expectEqual(@as(?u32, expectedVersion), merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage()));
     }
 }
 
 test "should work correctly with large tree files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -289,10 +307,10 @@ test "should work correctly with large tree files" {
     originalTree.merkle = try merkle_tree.buildMerkleTree(allocator, originalTree.sort);
 
     var storage = MemoryStorage.init(allocator);
-    try merkle_tree.saveTree(allocator, io, "test-tree-version.bin", &originalTree, storage.asStorage(), "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, "test-tree-version.bin", &originalTree, storage.asStorage(), "FTRE");
 
-    const version = merkle_tree.loadTreeVersion(allocator, io, "test-tree-version.bin", storage.asStorage());
-    const fullTree = (try merkle_tree.loadTree(allocator, io, "test-tree-version.bin", storage.asStorage(), "FTRE")).?;
+    const version = merkle_tree.loadTreeVersion(allocator, io, log, "test-tree-version.bin", storage.asStorage());
+    const fullTree = (try merkle_tree.loadTree(allocator, io, log, "test-tree-version.bin", storage.asStorage(), "FTRE")).?;
 
     try std.testing.expectEqual(@as(?u32, merkle_tree.CURRENT_DATABASE_VERSION), version);
     try std.testing.expectEqual(merkle_tree.CURRENT_DATABASE_VERSION, fullTree.version);
@@ -353,10 +371,10 @@ fn writeTreeFile(allocator: std.mem.Allocator, file: ITreeFile, serializer: seri
 //
 // Saves a hand-written tree file and loads it with loadTree.
 //
-fn loadTreeFile(allocator: std.mem.Allocator, file: ITreeFile) !?IMerkleTree {
+fn loadTreeFile(log: ILog, allocator: std.mem.Allocator, file: ITreeFile) !?IMerkleTree {
     var storage = MemoryStorage.init(allocator);
-    try serialization.save(allocator, io, storage.asStorage(), TEST_FILE_PATH, file, file.version, "FTRE", writeTreeFile);
-    return merkle_tree.loadTree(allocator, io, TEST_FILE_PATH, storage.asStorage(), "FTRE");
+    try serialization.save(allocator, io, log, storage.asStorage(), TEST_FILE_PATH, file, file.version, "FTRE", writeTreeFile);
+    return merkle_tree.loadTree(allocator, io, log, TEST_FILE_PATH, storage.asStorage(), "FTRE");
 }
 
 //
@@ -374,6 +392,7 @@ const IOutOfBoundsTreeFile = struct {
 };
 
 test "loadTree throws for a string or hash index outside the file's tables" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -394,25 +413,27 @@ test "loadTree throws for a string or hash index outside the file's tables" {
     };
     for (cases) |case| {
         errdefer std.debug.print("case: {s}\n", .{case.message});
-        try std.testing.expectError(error.Thrown, loadTreeFile(allocator, .{ .version = 6, .sortTree = case.sortTree, .merkleTree = case.merkleTree }));
+        try std.testing.expectError(error.Thrown, loadTreeFile(log, allocator, .{ .version = 6, .sortTree = case.sortTree, .merkleTree = case.merkleTree }));
         try std.testing.expectEqualStrings(case.message, errors.lastErrorMessage());
     }
 }
 
 test "loadTree reads a version 6 file of an empty tree, and a version 4 file with no sort or merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const versionSix = (try loadTreeFile(allocator, .{ .version = 6, .sortTree = &.{0}, .merkleTree = &.{0} })).?;
+    const versionSix = (try loadTreeFile(log, allocator, .{ .version = 6, .sortTree = &.{0}, .merkleTree = &.{0} })).?;
     try std.testing.expect(versionSix.sort == null and versionSix.merkle == null);
 
-    const versionFour = (try loadTreeFile(allocator, .{ .version = 4, .sortTree = &.{0}, .merkleTree = &.{0} })).?;
+    const versionFour = (try loadTreeFile(log, allocator, .{ .version = 4, .sortTree = &.{0}, .merkleTree = &.{0} })).?;
     try std.testing.expectEqual(@as(u32, 4), versionFour.version);
     try std.testing.expect(versionFour.sort == null and versionFour.merkle == null);
 }
 
 test "saveTree refuses a hash that is not 32 bytes, or a leaf without a name" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -421,14 +442,14 @@ test "saveTree refuses a hash that is not 32 bytes, or a leaf without a name" {
     var shortHashLeaf: SortNode = .{ .name = "A", .contentHash = "short", .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "A" };
     var shortHashTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
     shortHashTree.sort = &shortHashLeaf;
-    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &shortHashTree, storage.asStorage(), "FTRE"));
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, &shortHashTree, storage.asStorage(), "FTRE"));
     try std.testing.expectEqualStrings("BufferSet expects 32-byte hashes (SHA-256), got 5 bytes", errors.lastErrorMessage());
 
     const hash = [_]u8{1} ** 32;
     var namelessLeaf: SortNode = .{ .contentHash = &hash, .nodeCount = 1, .leafCount = 1, .size = 1, .minName = "" };
     var namelessTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
     namelessTree.sort = &namelessLeaf;
-    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &namelessTree, storage.asStorage(), "FTRE"));
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, &namelessTree, storage.asStorage(), "FTRE"));
     try std.testing.expectEqualStrings("Leaf node has no name. This could be a bug.", errors.lastErrorMessage());
 
     // A merkle leaf without a name, under a sort tree that is fine.
@@ -437,7 +458,7 @@ test "saveTree refuses a hash that is not 32 bytes, or a leaf without a name" {
     var namelessMerkleTree = merkle_tree.createTree(merkle_verify.TEST_TREE_ID);
     namelessMerkleTree.sort = &namedLeaf;
     namelessMerkleTree.merkle = &namelessMerkleLeaf;
-    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, TEST_FILE_PATH, &namelessMerkleTree, storage.asStorage(), "FTRE"));
+    try std.testing.expectError(error.Thrown, merkle_tree.saveTree(allocator, io, log, TEST_FILE_PATH, &namelessMerkleTree, storage.asStorage(), "FTRE"));
     try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
 
     // buildMerkleTree refuses the nameless sort leaf too.
@@ -446,15 +467,16 @@ test "saveTree refuses a hash that is not 32 bytes, or a leaf without a name" {
 }
 
 test "loadTree throws for an internal sort node whose child is an empty tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // Version 6: an internal node (3) whose left child is empty (0).
-    try std.testing.expectError(error.Thrown, loadTreeFile(allocator, .{ .version = 6, .sortTree = &.{ 3, 0, 0 }, .merkleTree = &.{0} }));
+    try std.testing.expectError(error.Thrown, loadTreeFile(log, allocator, .{ .version = 6, .sortTree = &.{ 3, 0, 0 }, .merkleTree = &.{0} }));
     try std.testing.expectEqualStrings("TypeError: Cannot read properties of undefined (reading 'leafCount')", errors.lastErrorMessage());
 
     // Version 4: the same, with the leaf count and size of the internal node.
-    try std.testing.expectError(error.Thrown, loadTreeFile(allocator, .{ .version = 4, .sortTree = &.{ 3, 2, 0, 0, 0, 0 }, .merkleTree = &.{0} }));
+    try std.testing.expectError(error.Thrown, loadTreeFile(log, allocator, .{ .version = 4, .sortTree = &.{ 3, 2, 0, 0, 0, 0 }, .merkleTree = &.{0} }));
     try std.testing.expectEqualStrings("TypeError: Cannot read properties of undefined (reading 'leafCount')", errors.lastErrorMessage());
 }

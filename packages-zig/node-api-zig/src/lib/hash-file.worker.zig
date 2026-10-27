@@ -105,8 +105,7 @@ fn dateNow(io: std.Io) i64 {
 // does both.
 // The task data and output are JSON values holding IHashFileData and IHashFileResult.
 //
-pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
-    _ = context;
+pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, _: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
     // ImageMagick and FFmpeg are built into the program and run in its process through `tools`, made on the task's thread. A task run with
     // no runner fails here rather than starting an installed program.
     const toolRunner = tools orelse {
@@ -128,7 +127,7 @@ pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, task
     // The hash cache, read-only and shared with every other file this engine hashes: reading it is
     // proportional to how much is in it, and this task used to read the whole thing per file.
     const cacheLoadStartedAt = dateNow(io);
-    const localHashCache = try loadSharedHashCache(io, hashCacheDir);
+    const localHashCache = try loadSharedHashCache(io, log, hashCacheDir);
     const cacheLoadMs = dateNow(io) - cacheLoadStartedAt;
 
     // Try to retrieve the hash from the cache first.
@@ -149,7 +148,7 @@ pub fn hashFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, task
     }
     else {
         const hashStartedAt = dateNow(io);
-        const hashedFile = try validateAndHash(allocator, io, toolRunner, filePath, fileStat, contentType, logicalPath);
+        const hashedFile = try validateAndHash(allocator, io, log, toolRunner, filePath, fileStat, contentType, logicalPath);
         hashMs = dateNow(io) - hashStartedAt;
         const validHash = hashedFile orelse {
             return errors.throwError("Failed to validate and hash file \"{s}\"", .{logicalPath});

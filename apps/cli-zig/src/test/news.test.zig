@@ -50,19 +50,22 @@ test "newsCommand prints the whole feed newest first, marks the new items and re
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const root = try helpers.makeTempDir(allocator, "news-command");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     try setup(allocator, root, three_item_feed);
     defer node_utils.process_env.setEnvironMap(null);
     cli.picocolors.setColorSupportOverride(false);
     defer cli.picocolors.setColorSupportOverride(null);
-    var capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(&capture.writer, &capture.writer);
-    defer utils.console.setCapture(null, null);
 
     // The first item was already shown by the notifications.
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{"first"});
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, memory.log);
     try std.testing.expectEqualStrings(
         \\
         \\📋 Photosphere News
@@ -75,36 +78,40 @@ test "newsCommand prints the whole feed newest first, marks the new items and re
         \\• Hello there
         \\     Docs: https://example.com/docs
         \\
-    , capture.written());
+    , memory.stdout());
     try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n    - third\n", try readState(allocator, root));
 
-    capture.clearRetainingCapacity();
-    try cli.news.newsCommand(allocator, std.testing.io);
-    try std.testing.expect(std.mem.endsWith(u8, capture.written(), "\n• Third\n• Second item\n     Go: https://example.com/go\n• Hello there\n     Docs: https://example.com/docs\n"));
+    try cli.news.newsCommand(allocator, std.testing.io, memory.log);
+    try std.testing.expect(std.mem.endsWith(u8, memory.stdout(), "\n• Third\n• Second item\n     Go: https://example.com/go\n• Hello there\n     Docs: https://example.com/docs\n"));
 }
 
 test "newsCommand says there is no news when the feed is empty or cannot be read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const root = try helpers.makeTempDir(allocator, "news-command-empty");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     cli.picocolors.setColorSupportOverride(false);
     defer cli.picocolors.setColorSupportOverride(null);
-    var capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(&capture.writer, &capture.writer);
-    defer utils.console.setCapture(null, null);
     defer node_utils.process_env.setEnvironMap(null);
 
     for ([_][]const u8{ "items: []\n", "items: [unclosed" }) |feed| {
         try setup(allocator, root, feed);
-        capture.clearRetainingCapacity();
-        try cli.news.newsCommand(allocator, std.testing.io);
-        try std.testing.expectEqualStrings("\n📋 Photosphere News\n\nRunning version: vdev\n\nNo news items available.\n", capture.written());
+        // What this run writes starts where the previous run's text ends.
+        const start = memory.stdout().len;
+        try cli.news.newsCommand(allocator, std.testing.io, memory.log);
+        try std.testing.expectEqualStrings("\n📋 Photosphere News\n\nRunning version: vdev\n\nNo news items available.\n", memory.stdout()[start..]);
     }
 }
 
 test "getAllNews pairs every item with whether it was shown, and is empty when the feed cannot be read" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -114,7 +121,7 @@ test "getAllNews pairs every item with whether it was shown, and is empty when t
     defer node_utils.process_env.setEnvironMap(null);
 
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{"second"});
-    const allNews = cli.check_for_news.getAllNews(allocator, std.testing.io);
+    const allNews = cli.check_for_news.getAllNews(allocator, std.testing.io, log);
     try std.testing.expectEqual(@as(usize, 3), allNews.len);
     try std.testing.expectEqualStrings("first", allNews[0].item.id);
     try std.testing.expect(!allNews[0].seen);
@@ -124,7 +131,7 @@ test "getAllNews pairs every item with whether it was shown, and is empty when t
     try std.testing.expect(!allNews[2].seen);
 
     try setup(allocator, root, "items: [unclosed");
-    try std.testing.expectEqual(@as(usize, 0), cli.check_for_news.getAllNews(allocator, std.testing.io).len);
+    try std.testing.expectEqual(@as(usize, 0), cli.check_for_news.getAllNews(allocator, std.testing.io, log).len);
 }
 
 test "markNewsAsShown records the ids, and nothing for no ids" {
@@ -158,10 +165,9 @@ test "newsCommand always prints the running version" {
     try setup(allocator, root, "items: []\n");
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     var found = false;
     for (mock.calls.items) |call| {
@@ -181,13 +187,12 @@ test "newsCommand omits the latest release line when latest version is unknown" 
     try setup(allocator, root, "items: []\n");
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expect(!mock.wasCalledContaining(.info, "Latest release"));
-    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io) == null);
+    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log) == null);
 }
 
 test "newsCommand prints \"No news items available\" when the feed is empty" {
@@ -199,10 +204,9 @@ test "newsCommand prints \"No news items available\" when the feed is empty" {
     try setup(allocator, root, "items: []\n");
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expect(mock.wasCalledContaining(.info, "No news items available"));
     try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" })));
@@ -224,11 +228,10 @@ test "newsCommand renders both seen and unseen items and marks unseen ones as sh
     );
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{"a"});
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expect(mock.wasCalledContaining(.info, "older seen item"));
     var newMarked = false;
@@ -259,11 +262,10 @@ test "newsCommand renders items newest-first (reverse of feed order)" {
     );
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{ "a", "b", "c" });
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     var newestIndex: ?usize = null;
     var oldestIndex: ?usize = null;
@@ -300,10 +302,9 @@ test "newsCommand renders link and action lines when present on items" {
     );
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expect(mock.wasCalledContaining(.info, "Docs: https://example.com/docs"));
     try std.testing.expect(mock.wasCalledContaining(.info, "Open: https://example.com/open"));
@@ -325,12 +326,11 @@ test "newsCommand records nothing when every item is already seen" {
     );
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
     cli.check_for_news.markNewsAsShown(allocator, std.testing.io, &.{ "a", "b" });
     const stateBefore = try readState(allocator, root);
 
-    try cli.news.newsCommand(allocator, std.testing.io);
+    try cli.news.newsCommand(allocator, std.testing.io, log);
 
     try std.testing.expectEqualStrings(stateBefore, try readState(allocator, root));
 }

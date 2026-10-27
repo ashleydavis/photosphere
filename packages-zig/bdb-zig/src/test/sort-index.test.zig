@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
@@ -49,11 +50,11 @@ const Fixture = struct {
     //
     // Creates a collection holding the given records.
     //
-    fn collection(self: *Fixture, name: []const u8, records: []const IInternalRecord) !*BsonCollection {
+    fn collection(self: *Fixture, log: ILog, name: []const u8, records: []const IInternalRecord) !*BsonCollection {
         const newCollection = try self.allocator.create(BsonCollection);
         newCollection.* = BsonCollection.init(self.allocator, name, "db", self.storage.asStorage(), "db", self.uuidGenerator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider(), .{ .context = self.storage, .function = ignoreDirty });
         for (records) |record| {
-            try newCollection.setInternalRecord(io, record);
+            try newCollection.setInternalRecord(io, log, record);
         }
         return newCollection;
     }
@@ -228,9 +229,9 @@ fn testRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
 //
 // Returns the scores of a sort index in page order.
 //
-fn scores(allocator: std.mem.Allocator, index: *SortIndex, fieldName: []const u8) ![]f64 {
+fn scores(log: ILog, allocator: std.mem.Allocator, index: *SortIndex, fieldName: []const u8) ![]f64 {
     _ = fieldName;
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     const result = try allocator.alloc(f64, values.len);
     for (values, 0..) |value, valueIndex| {
         result[valueIndex] = value.number;
@@ -241,12 +242,12 @@ fn scores(allocator: std.mem.Allocator, index: *SortIndex, fieldName: []const u8
 //
 // Returns every record of a sort index by following the page chain from the first page.
 //
-fn getAllRecords(allocator: std.mem.Allocator, index: *SortIndex) ![]ISortIndexRecord {
+fn getAllRecords(log: ILog, allocator: std.mem.Allocator, index: *SortIndex) ![]ISortIndexRecord {
     var allRecords: std.ArrayList(ISortIndexRecord) = .empty;
-    var currentPage = try index.getPage(io, "");
+    var currentPage = try index.getPage(io, log, "");
     try allRecords.appendSlice(allocator, currentPage.records);
     while (currentPage.nextPageId) |nextPageId| {
-        currentPage = try index.getPage(io, nextPageId);
+        currentPage = try index.getPage(io, log, nextPageId);
         try allRecords.appendSlice(allocator, currentPage.records);
     }
     return allRecords.items;
@@ -276,33 +277,35 @@ fn makeFieldsRecord(allocator: std.mem.Allocator, number: u32, fields: []const b
 }
 
 test "should initialize the sort index with records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
-    const collection = try fixture.collection("test_collection", &try testRecords(arena.allocator()));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(arena.allocator()));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/tree.dat") != null);
     // The build checkpoint is deleted when the build completes.
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
-    try index.commit(io);
-    const values = try scores(arena.allocator(), index, "score");
+    try index.commit(io, log);
+    const values = try scores(log, arena.allocator(), index, "score");
     try std.testing.expectEqualSlices(f64, &.{ 65, 72, 85, 85, 90 }, values);
 }
 
 test "should retrieve a page of sorted records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
     // Initialize the index
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Get the first page (using empty string to get first page)
-    const result = try index.getPage(io, "");
+    const result = try index.getPage(io, log, "");
 
     // Check page contents
     try std.testing.expectEqual(@as(usize, 5), result.records.len);
@@ -327,7 +330,7 @@ test "should retrieve a page of sorted records" {
     var nextPageId = result.nextPageId;
 
     while (nextPageId) |pageId| {
-        const nextPage = try index.getPage(io, pageId);
+        const nextPage = try index.getPage(io, log, pageId);
         try allRecords.appendSlice(allocator, nextPage.records);
         nextPageId = nextPage.nextPageId;
     }
@@ -344,69 +347,73 @@ test "should retrieve a page of sorted records" {
 }
 
 test "should find records by exact value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
-    const collection = try fixture.collection("test_collection", &try testRecords(arena.allocator()));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(arena.allocator()));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
-    const result = try index.findByValue(io, .{ .number = 85 }, null);
+    const result = try index.findByValue(io, log, .{ .number = 85 }, null);
     try std.testing.expectEqual(@as(usize, 2), result.len);
     for (result) |record| {
         try std.testing.expectEqual(@as(f64, 85), record.get("score").?.number);
         try std.testing.expectEqualStrings("_id", record.fields.items[0].key);
     }
-    const result2 = try index.findByValue(io, .{ .number = 90 }, null);
+    const result2 = try index.findByValue(io, log, .{ .number = 90 }, null);
     try std.testing.expectEqual(@as(usize, 1), result2.len);
-    const result3 = try index.findByValue(io, .{ .number = 100 }, null);
+    const result3 = try index.findByValue(io, log, .{ .number = 100 }, null);
     try std.testing.expectEqual(@as(usize, 0), result3.len);
 }
 
 test "should update and delete records in the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", &records);
+    const collection = try fixture.collection(log, "test_collection", &records);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     const updatedRecord = try makeTestRecord(allocator, 1, "Record 1 Updated", 95, "A");
-    try index.updateRecord(io, updatedRecord, records[0]);
+    try index.updateRecord(io, log, updatedRecord, records[0]);
 
-    const result = try index.findByValue(io, .{ .number = 95 }, null);
+    const result = try index.findByValue(io, log, .{ .number = 95 }, null);
     try std.testing.expectEqual(@as(usize, 1), result.len);
     try std.testing.expectEqualStrings("Record 1 Updated", result[0].get("name").?.string);
-    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 85 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, log, .{ .number = 85 }, null)).len);
 
-    try index.deleteRecord(io, records[4]._id, records[4]);
-    try std.testing.expectEqual(@as(usize, 0), (try index.findByValue(io, .{ .number = 85 }, null)).len);
+    try index.deleteRecord(io, log, records[4]._id, records[4]);
+    try std.testing.expectEqual(@as(usize, 0), (try index.findByValue(io, log, .{ .number = 85 }, null)).len);
 }
 
 test "should add a new record to the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 6, "Record 6", 80, "A"));
-    try std.testing.expectEqualSlices(f64, &.{ 65, 72, 80, 85, 85, 90 }, try scores(allocator, index, "score"));
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 6, "Record 6", 80, "A"));
+    try std.testing.expectEqualSlices(f64, &.{ 65, 72, 80, 85, 85, 90 }, try scores(log, allocator, index, "score"));
 }
 
 test "should delete the entire index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
     // Initialize the index
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Delete the index
     _ = try index.drop(io);
@@ -417,45 +424,50 @@ test "should delete the entire index" {
 }
 
 test "should return empty result when calling getPage on non-existent index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    const result = try index.getPage(io, null);
+    const result = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(usize, 0), result.records.len);
     try std.testing.expectEqual(@as(i64, 0), result.totalRecords);
 }
 
 test "should return empty array when calling findByValue on non-existent index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try std.testing.expectEqual(@as(usize, 0), (try index.findByValue(io, .{ .number = 85 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try index.findByValue(io, log, .{ .number = 85 }, null)).len);
 }
 
 test "should no-op when calling updateRecord without loading" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     const records = try testRecords(arena.allocator());
-    try index.updateRecord(io, records[0], null);
+    try index.updateRecord(io, log, records[0], null);
     try std.testing.expect(!index.dirty());
     try std.testing.expectEqual(@as(usize, 0), fixture.storage.files.count());
 }
 
 test "should no-op when calling deleteRecord without loading" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
     const records = try testRecords(arena.allocator());
-    try index.deleteRecord(io, records[0]._id, records[0]);
+    try index.deleteRecord(io, log, records[0]._id, records[0]);
     try std.testing.expect(!index.dirty());
 }
 
 test "should batch saves according to buildBatchSize" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -465,14 +477,14 @@ test "should batch saves according to buildBatchSize" {
     while (number < 25) : (number += 1) {
         try records.append(allocator, try makeTestRecord(allocator, number, "Record", @as(f64, @floatFromInt(number)) * 10, "A"));
     }
-    const collection = try fixture.collection("test_collection", records.items);
+    const collection = try fixture.collection(log, "test_collection", records.items);
     var recordingStorage = WriteRecordingStorage.init(allocator);
     var vtable: storage_zig.storage.IStorage.VTable = undefined;
     const index = try allocator.create(SortIndex);
     index.* = try SortIndex.init(allocator, recordingStorage.asStorage(&vtable), "db", "test_collection", "score", .asc, fixture.uuidGenerator.uuidGenerator(), null, null, null);
 
     // Track file writes
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Should have written files (tree.dat and leaf page files)
     // The exact count depends on splits, but we should have at least the tree file
@@ -487,12 +499,13 @@ test "should batch saves according to buildBatchSize" {
 }
 
 test "should handle empty collection" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
-    const collection = try fixture.collection("test_collection", &.{});
+    const collection = try fixture.collection(log, "test_collection", &.{});
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 0), index.totalEntries);
     try std.testing.expectEqual(@as(i64, 1), index.totalPages); // Should have one empty leaf page
     // The empty root leaf is not written (it is deleted on commit), only the tree file.
@@ -500,94 +513,100 @@ test "should handle empty collection" {
 }
 
 test "should handle single record collection" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &.{try makeTestRecord(allocator, 1, "Record 1", 85, "A")});
+    const collection = try fixture.collection(log, "test_collection", &.{try makeTestRecord(allocator, 1, "Record 1", 85, "A")});
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 1), index.totalEntries);
     try std.testing.expectEqual(@as(i64, 1), index.totalPages);
-    try std.testing.expectEqualSlices(f64, &.{85}, try scores(allocator, index, "score"));
+    try std.testing.expectEqualSlices(f64, &.{85}, try scores(log, allocator, index, "score"));
 }
 
 test "should handle collection with all same values" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &.{
+    const collection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 1, "Record 1", 100, "A"),
         try makeTestRecord(allocator, 2, "Record 2", 100, "B"),
         try makeTestRecord(allocator, 3, "Record 3", 100, "C"),
         try makeTestRecord(allocator, 4, "Record 4", 100, "D"),
     });
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try std.testing.expectEqual(@as(usize, 4), (try index.findByValue(io, .{ .number = 100 }, null)).len);
-    try std.testing.expectEqual(@as(usize, 4), (try sort_index_walk.walkSortIndex(allocator, io, index)).len);
+    try index.build(io, log, collection);
+    try std.testing.expectEqual(@as(usize, 4), (try index.findByValue(io, log, .{ .number = 100 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 4), (try sort_index_walk.walkSortIndex(allocator, io, log, index)).len);
 }
 
 test "should handle records with undefined indexed field" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &.{
+    const collection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 1, "Record 1", 85, "A"),
         try makeTestRecord(allocator, 2, "Record 2", null, "B"), // No score
         try makeTestRecord(allocator, 3, "Record 3", 90, "C"),
     });
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 2), index.totalEntries);
-    try std.testing.expectEqualSlices(f64, &.{ 85, 90 }, try scores(allocator, index, "score"));
+    try std.testing.expectEqualSlices(f64, &.{ 85, 90 }, try scores(log, allocator, index, "score"));
 }
 
 test "should load index from disk" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     const loadedIndex = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try std.testing.expect(try loadedIndex.load(io));
+    try std.testing.expect(try loadedIndex.load(io, log));
     try std.testing.expectEqual(@as(i64, 5), loadedIndex.totalEntries);
     // build() was called without a type, so the tree file stores no type.
     try std.testing.expect(loadedIndex.type == null);
-    try std.testing.expectEqualSlices(f64, &.{ 65, 72, 85, 85, 90 }, try scores(allocator, loadedIndex, "score"));
+    try std.testing.expectEqualSlices(f64, &.{ 65, 72, 85, 85, 90 }, try scores(log, allocator, loadedIndex, "score"));
 }
 
 test "should return false when loading non-existent index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
     const index = try fixture.sortIndex("nonexistent", "score", .asc, null, null);
-    try std.testing.expect(!try index.load(io));
+    try std.testing.expect(!try index.load(io, log));
 }
 
 test "should clear treeNodes when building after load" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
     // Build the index first
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Verify it has data
-    const firstResult = try index.getPage(io, null);
+    const firstResult = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(i64, 5), firstResult.totalRecords);
 
     // Create a new collection with different data
     // (Zig: the ids are valid record ids, because the collection stores the records in its shards.)
-    const newCollection = try fixture.collection("test_collection", &.{
+    const newCollection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 6, "New 1", 10, "A"),
         try makeTestRecord(allocator, 7, "New 2", 20, "B"),
     });
@@ -596,92 +615,96 @@ test "should clear treeNodes when building after load" {
     _ = try index.drop(io);
 
     // Build again with new data - this should clear treeNodes
-    try index.build(io, newCollection);
+    try index.build(io, log, newCollection);
 
     // Verify we have the new data, not the old
-    const secondResult = try index.getPage(io, null);
+    const secondResult = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(i64, 2), secondResult.totalRecords);
     try std.testing.expectEqual(@as(f64, 10), secondResult.records[0].get("score").?.number);
     try std.testing.expectEqual(@as(f64, 20), secondResult.records[1].get("score").?.number);
 }
 
 test "should not rebuild if already loaded" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     const rootPageId = index.rootPageId.?;
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expectEqualStrings(rootPageId, index.rootPageId.?);
     try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
 }
 
 test "should reset state properly when building" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
     // Build with initial data
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
-    const firstResult = try index.getPage(io, null);
+    const firstResult = try index.getPage(io, log, null);
     const firstRootPageId = firstResult.currentPageId;
 
     // Delete and rebuild with different data
     _ = try index.drop(io);
 
     // (Zig: the id is a valid record id, because the collection stores the record in its shards.)
-    const newCollection = try fixture.collection("test_collection", &.{
+    const newCollection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 6, "New 1", 10, "A"),
     });
-    try index.build(io, newCollection);
+    try index.build(io, log, newCollection);
 
     // Verify state was reset
-    const secondResult = try index.getPage(io, null);
+    const secondResult = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(i64, 1), secondResult.totalRecords); // New count
     try std.testing.expectEqual(@as(i64, 1), secondResult.totalPages); // New page count
     try std.testing.expect(!std.mem.eql(u8, firstRootPageId, secondResult.currentPageId)); // New root
 }
 
 test "addRecord then commit persists the record" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 6, "Record 6", 80, "A"));
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 6, "Record 6", 80, "A"));
+    try index.commit(io, log);
 
     // A fresh index reads the committed record from storage.
     const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    const found = try reloaded.findByValue(io, .{ .number = 80 }, null);
+    const found = try reloaded.findByValue(io, log, .{ .number = 80 }, null);
     try std.testing.expectEqual(@as(usize, 1), found.len);
     try std.testing.expectEqualStrings("Record 6", found[0].get("name").?.string);
 }
 
 test "addRecord then commit persists all records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 10, "Batch 1", 60, "A"));
-    try index.addRecord(io, try makeTestRecord(allocator, 11, "Batch 2", 95, "B"));
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 10, "Batch 1", 60, "A"));
+    try index.addRecord(io, log, try makeTestRecord(allocator, 11, "Batch 2", 95, "B"));
+    try index.commit(io, log);
 
-    const all = try getAllRecords(allocator, index);
+    const all = try getAllRecords(log, allocator, index);
     try std.testing.expectEqual(@as(usize, 5), all.len);
     var found60 = false;
     var found95 = false;
@@ -696,44 +719,46 @@ test "addRecord then commit persists all records" {
     }
     try std.testing.expect(found60);
     try std.testing.expect(found95);
-    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 60 }, null)).len);
-    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 95 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, log, .{ .number = 60 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, log, .{ .number = 95 }, null)).len);
 }
 
 test "updateRecord then commit persists update" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.updateRecord(io, try makeTestRecord(allocator, 1, "Record 1 Updated", 50, "A"), records[0]);
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.updateRecord(io, log, try makeTestRecord(allocator, 1, "Record 1 Updated", 50, "A"), records[0]);
+    try index.commit(io, log);
 
     const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    const at50 = try reloaded.findByValue(io, .{ .number = 50 }, null);
+    const at50 = try reloaded.findByValue(io, log, .{ .number = 50 }, null);
     try std.testing.expectEqual(@as(usize, 1), at50.len);
     try std.testing.expectEqualStrings("Record 1 Updated", at50[0].get("name").?.string);
-    try std.testing.expectEqual(@as(usize, 0), (try reloaded.findByValue(io, .{ .number = 85 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try reloaded.findByValue(io, log, .{ .number = 85 }, null)).len);
 }
 
 test "deleteRecord then commit persists delete" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.deleteRecord(io, records[1]._id, records[1]);
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.deleteRecord(io, log, records[1]._id, records[1]);
+    try index.commit(io, log);
 
     const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    _ = try reloaded.load(io);
-    const ids = try sort_index_walk.walkSortIndex(allocator, io, reloaded);
+    _ = try reloaded.load(io, log);
+    const ids = try sort_index_walk.walkSortIndex(allocator, io, log, reloaded);
     try std.testing.expectEqual(@as(usize, 2), ids.len);
     for (ids) |id| {
         try std.testing.expect(!std.mem.eql(u8, id, records[1]._id));
@@ -741,179 +766,192 @@ test "deleteRecord then commit persists delete" {
 }
 
 test "mix of add, update, delete then commit" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 20, "New", 88, "A"));
-    try index.updateRecord(io, try makeTestRecord(allocator, 1, "Record 1", 70, "A"), records[0]);
-    try index.deleteRecord(io, records[2]._id, records[2]);
-    try index.commit(io);
-    try std.testing.expectEqualSlices(f64, &.{ 70, 72, 88 }, try scores(allocator, index, "score"));
-    try std.testing.expectEqual(@as(usize, 0), (try index.findByValue(io, .{ .number = 90 }, null)).len);
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 20, "New", 88, "A"));
+    try index.updateRecord(io, log, try makeTestRecord(allocator, 1, "Record 1", 70, "A"), records[0]);
+    try index.deleteRecord(io, log, records[2]._id, records[2]);
+    try index.commit(io, log);
+    try std.testing.expectEqualSlices(f64, &.{ 70, 72, 88 }, try scores(log, allocator, index, "score"));
+    try std.testing.expectEqual(@as(usize, 0), (try index.findByValue(io, log, .{ .number = 90 }, null)).len);
 }
 
 test "commit when idle is no-op" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.commit(io, log);
 }
 
 test "commit throws when the index was never built" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var fixture = try Fixture.init(arena.allocator());
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try std.testing.expectError(error.Thrown, index.commit(io));
+    try std.testing.expectError(error.Thrown, index.commit(io, log));
     try std.testing.expectEqualStrings("Root page ID is not set. Cannot save tree.", errors.lastErrorMessage());
 }
 
 test "multiple commit cycles" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 30, "A", 1, "X"));
-    try index.commit(io);
-    try index.addRecord(io, try makeTestRecord(allocator, 31, "B", 2, "X"));
-    try index.commit(io);
-    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 1 }, null)).len);
-    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, .{ .number = 2 }, null)).len);
-    try std.testing.expectEqual(@as(usize, 5), (try sort_index_walk.walkSortIndex(allocator, io, index)).len);
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 30, "A", 1, "X"));
+    try index.commit(io, log);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 31, "B", 2, "X"));
+    try index.commit(io, log);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, log, .{ .number = 1 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 1), (try index.findByValue(io, log, .{ .number = 2 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 5), (try sort_index_walk.walkSortIndex(allocator, io, log, index)).len);
 }
 
 test "hasDirtyData() returns false on a fresh index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expect(!index.dirty());
 }
 
 test "hasDirtyData() returns true after addRecord" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 99, "New", 55, "Z"));
     try std.testing.expect(index.dirty());
 }
 
 test "hasDirtyData() returns false after commit()" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+    try index.commit(io, log);
     try std.testing.expect(!index.dirty());
 }
 
 test "onDirty callback fires on first dirty transition" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, .{ .context = fixture.storage, .function = countDirty });
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     dirty_count = 0; // reset: build calls commit internally
-    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+    try index.addRecord(io, log, try makeTestRecord(allocator, 99, "New", 55, "Z"));
     try std.testing.expectEqual(@as(u32, 1), dirty_count);
 }
 
 test "onDirty callback does not fire again until commit" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, .{ .context = fixture.storage, .function = countDirty });
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     dirty_count = 0;
-    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
-    try index.addRecord(io, try makeTestRecord(allocator, 98, "New2", 56, "Z"));
+    try index.addRecord(io, log, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+    try index.addRecord(io, log, try makeTestRecord(allocator, 98, "New2", 56, "Z"));
     try std.testing.expectEqual(@as(u32, 1), dirty_count);
 }
 
 test "onDirty callback fires again after commit then addRecord" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, .{ .context = fixture.storage, .function = countDirty });
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
-    try index.commit(io);
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+    try index.commit(io, log);
     dirty_count = 0;
-    try index.addRecord(io, try makeTestRecord(allocator, 98, "New2", 56, "Z"));
+    try index.addRecord(io, log, try makeTestRecord(allocator, 98, "New2", 56, "Z"));
     try std.testing.expectEqual(@as(u32, 1), dirty_count);
 }
 
 test "should infer string type when no type is specified" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("fruits", &.{
+    const collection = try fixture.collection(log, "fruits", &.{
         try makeValueRecord(allocator, 1, "name", .{ .string = "Cherry" }),
         try makeValueRecord(allocator, 2, "name", .{ .string = "Apple" }),
         try makeValueRecord(allocator, 3, "name", .{ .string = "Banana" }),
     });
     const index = try fixture.sortIndex("fruits", "name", .asc, null, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqualStrings("Apple", values[0].string);
     try std.testing.expectEqualStrings("Banana", values[1].string);
     try std.testing.expectEqualStrings("Cherry", values[2].string);
 }
 
 test "should infer number type when no type is specified" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("scores", &.{
+    const collection = try fixture.collection(log, "scores", &.{
         try makeValueRecord(allocator, 1, "score", .{ .number = 30 }),
         try makeValueRecord(allocator, 2, "score", .{ .number = 5 }),
         try makeValueRecord(allocator, 3, "score", .{ .number = 100 }),
     });
     const index = try fixture.sortIndex("scores", "score", .asc, null, null);
-    try index.build(io, collection);
-    try std.testing.expectEqualSlices(f64, &.{ 5, 30, 100 }, try scores(allocator, index, "score"));
+    try index.build(io, log, collection);
+    try std.testing.expectEqualSlices(f64, &.{ 5, 30, 100 }, try scores(log, allocator, index, "score"));
 }
 
 test "should infer date type when no type is specified" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -921,68 +959,71 @@ test "should infer date type when no type is specified" {
     const date1: i64 = 1704067200000; // 2024-01-01
     const date2: i64 = 1718409600000; // 2024-06-15
     const date3: i64 = 1710028800000; // 2024-03-10
-    const collection = try fixture.collection("events", &.{
+    const collection = try fixture.collection(log, "events", &.{
         try makeValueRecord(allocator, 1, "eventDate", .{ .date = date1 }),
         try makeValueRecord(allocator, 2, "eventDate", .{ .date = date2 }),
         try makeValueRecord(allocator, 3, "eventDate", .{ .date = date3 }),
     });
     const index = try fixture.sortIndex("events", "eventDate", .asc, null, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqual(date1, values[0].date);
     try std.testing.expectEqual(date3, values[1].date);
     try std.testing.expectEqual(date2, values[2].date);
 }
 
 test "should throw error when comparing incompatible types" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("mixed", &.{
+    const collection = try fixture.collection(log, "mixed", &.{
         try makeValueRecord(allocator, 1, "value", .{ .string = "string" }),
         try makeValueRecord(allocator, 2, "value", .{ .number = 123 }),
     });
     const index = try fixture.sortIndex("mixed", "value", .asc, null, null);
-    try std.testing.expectError(error.Thrown, index.build(io, collection));
+    try std.testing.expectError(error.Thrown, index.build(io, log, collection));
     const message = errors.lastErrorMessage();
     try std.testing.expect(std.mem.startsWith(u8, message, "Type mismatch in compareValues: first value is "));
 }
 
 test "should work correctly when all values are the same inferred type" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("consistent", &.{
+    const collection = try fixture.collection(log, "consistent", &.{
         try makeValueRecord(allocator, 1, "value", .{ .string = "first" }),
         try makeValueRecord(allocator, 2, "value", .{ .string = "second" }),
         try makeValueRecord(allocator, 3, "value", .{ .string = "third" }),
     });
     const index = try fixture.sortIndex("consistent", "value", .asc, null, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqualStrings("first", values[0].string);
     try std.testing.expectEqualStrings("second", values[1].string);
     try std.testing.expectEqualStrings("third", values[2].string);
 }
 
 test "should handle collection with records missing the indexed field" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &.{
+    const collection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 1, "Record 1", 10, "A"),
         try makeTestRecord(allocator, 2, "Record 2", null, "B"), // Missing score
         try makeTestRecord(allocator, 3, "Record 3", 30, "A"),
     });
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Should only index records with the score field
-    const result = try index.getPage(io, null);
+    const result = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(i64, 2), result.totalRecords); // Only 2 records have scores
     try std.testing.expectEqual(@as(usize, 2), result.records.len);
     try std.testing.expectEqual(@as(f64, 10), result.records[0].get("score").?.number);
@@ -990,6 +1031,7 @@ test "should handle collection with records missing the indexed field" {
 }
 
 test "should handle large dataset with multiple pages" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -999,14 +1041,14 @@ test "should handle large dataset with multiple pages" {
     while (number < 1700) : (number += 1) {
         try records.append(allocator, try makeTestRecord(allocator, number, "Record", @floatFromInt(number), if (number % 2 == 0) "A" else "B"));
     }
-    const collection = try fixture.collection("test_collection", records.items);
+    const collection = try fixture.collection(log, "test_collection", records.items);
     const index = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // More than 1500 records in one leaf split it into two pages under a new root.
     try std.testing.expectEqual(@as(i64, 2), index.totalPages);
     try std.testing.expectEqual(@as(i64, 1700), index.totalEntries);
-    const values = try scores(allocator, index, "score");
+    const values = try scores(log, allocator, index, "score");
     try std.testing.expectEqual(@as(usize, 1700), values.len);
     for (values, 0..) |value, valueIndex| {
         try std.testing.expectEqual(@as(f64, @floatFromInt(valueIndex)), value);
@@ -1014,22 +1056,24 @@ test "should handle large dataset with multiple pages" {
 }
 
 test "should handle records with duplicate values" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &.{
+    const collection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 1, "Record 1", 10, "A"),
         try makeTestRecord(allocator, 2, "Record 2", 10, "B"),
         try makeTestRecord(allocator, 3, "Record 3", 10, "C"),
         try makeTestRecord(allocator, 4, "Record 4", 20, "A"),
     });
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try std.testing.expectEqualSlices(f64, &.{ 10, 10, 10, 20 }, try scores(allocator, index, "score"));
+    try index.build(io, log, collection);
+    try std.testing.expectEqualSlices(f64, &.{ 10, 10, 10, 20 }, try scores(log, allocator, index, "score"));
 }
 
 test "should handle descending sort" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1039,29 +1083,30 @@ test "should handle descending sort" {
     while (number < 20) : (number += 1) {
         try records.append(allocator, try makeTestRecord(allocator, number, "Record", @floatFromInt(number * 10), "A"));
     }
-    const collection = try fixture.collection("test_collection", records.items);
+    const collection = try fixture.collection(log, "test_collection", records.items);
     const index = try fixture.sortIndex("test_collection", "score", .desc, null, null);
-    try index.build(io, collection);
-    const values = try scores(allocator, index, "score");
+    try index.build(io, log, collection);
+    const values = try scores(log, allocator, index, "score");
     try std.testing.expectEqual(@as(f64, 190), values[0]); // Highest score first
     try std.testing.expectEqual(@as(f64, 0), values[values.len - 1]);
 }
 
 test "should handle string type sorting" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &.{
+    const collection = try fixture.collection(log, "test_collection", &.{
         try makeTestRecord(allocator, 1, "Zebra", 10, "A"),
         try makeTestRecord(allocator, 2, "Apple", 20, "B"),
         try makeTestRecord(allocator, 3, "Banana", 30, "C"),
     });
     const index = try fixture.sortIndex("test_collection", "name", .asc, null, null);
 
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
-    const result = try index.getPage(io, null);
+    const result = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(i64, 3), result.totalRecords);
     try std.testing.expectEqualStrings("Apple", result.records[0].get("name").?.string);
     try std.testing.expectEqualStrings("Banana", result.records[1].get("name").?.string);
@@ -1069,38 +1114,40 @@ test "should handle string type sorting" {
 }
 
 test "should handle date type sorting" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     // ISO strings in a 'date' index are compared as dates; a Date value compares with them too.
-    const collection = try fixture.collection("test_collection", &.{
+    const collection = try fixture.collection(log, "test_collection", &.{
         try makeValueRecord(allocator, 1, "createdAt", .{ .string = "2024-01-03T00:00:00.000Z" }),
         try makeValueRecord(allocator, 2, "createdAt", .{ .string = "2024-01-01T00:00:00.000Z" }),
         try makeValueRecord(allocator, 3, "createdAt", .{ .date = 1704153600000 }), // 2024-01-02
     });
     const index = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqualStrings("2024-01-01T00:00:00.000Z", values[0].string);
     try std.testing.expectEqual(@as(i64, 1704153600000), values[1].date);
     try std.testing.expectEqualStrings("2024-01-03T00:00:00.000Z", values[2].string);
 }
 
 test "should handle mixed case string comparisons correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("strings", &.{
+    const collection = try fixture.collection(log, "strings", &.{
         try makeValueRecord(allocator, 1, "name", .{ .string = "banana" }),
         try makeValueRecord(allocator, 2, "name", .{ .string = "Apple" }),
         try makeValueRecord(allocator, 3, "name", .{ .string = "apple" }),
         try makeValueRecord(allocator, 4, "name", .{ .string = "Banana" }),
     });
     const index = try fixture.sortIndex("strings", "name", .asc, .string, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     // localeCompare: case-insensitive first, then lowercase before uppercase.
     try std.testing.expectEqualStrings("apple", values[0].string);
     try std.testing.expectEqualStrings("Apple", values[1].string);
@@ -1109,54 +1156,57 @@ test "should handle mixed case string comparisons correctly" {
 }
 
 test "should handle numeric strings as strings, not numbers" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("strings", &.{
+    const collection = try fixture.collection(log, "strings", &.{
         try makeValueRecord(allocator, 1, "code", .{ .string = "10" }),
         try makeValueRecord(allocator, 2, "code", .{ .string = "9" }),
         try makeValueRecord(allocator, 3, "code", .{ .string = "100" }),
     });
     const index = try fixture.sortIndex("strings", "code", .asc, .string, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqualStrings("10", values[0].string);
     try std.testing.expectEqualStrings("100", values[1].string);
     try std.testing.expectEqualStrings("9", values[2].string);
 }
 
 test "should handle string numbers correctly when type is number" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("numbers", &.{
+    const collection = try fixture.collection(log, "numbers", &.{
         try makeValueRecord(allocator, 1, "value", .{ .string = "10" }),
         try makeValueRecord(allocator, 2, "value", .{ .number = 9 }),
         try makeValueRecord(allocator, 3, "value", .{ .string = "100" }),
     });
     const index = try fixture.sortIndex("numbers", "value", .asc, .number, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqual(@as(f64, 9), values[0].number);
     try std.testing.expectEqualStrings("10", values[1].string);
     try std.testing.expectEqualStrings("100", values[2].string);
 }
 
 test "should handle NaN values correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("numbers", &.{
+    const collection = try fixture.collection(log, "numbers", &.{
         try makeValueRecord(allocator, 1, "value", .{ .number = 5 }),
         try makeValueRecord(allocator, 2, "value", .{ .string = "not a number" }),
         try makeValueRecord(allocator, 3, "value", .{ .number = 1 }),
     });
     const index = try fixture.sortIndex("numbers", "value", .asc, .number, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     // NaN sorts before every number.
     try std.testing.expectEqualStrings("not a number", values[0].string);
     try std.testing.expectEqual(@as(f64, 1), values[1].number);
@@ -1164,130 +1214,138 @@ test "should handle NaN values correctly" {
 }
 
 test "should handle zero and negative numbers correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("numbers", &.{
+    const collection = try fixture.collection(log, "numbers", &.{
         try makeValueRecord(allocator, 1, "value", .{ .number = 0 }),
         try makeValueRecord(allocator, 2, "value", .{ .number = -5.5 }),
         try makeValueRecord(allocator, 3, "value", .{ .number = 3 }),
     });
     const index = try fixture.sortIndex("numbers", "value", .desc, .number, null);
-    try index.build(io, collection);
-    try std.testing.expectEqualSlices(f64, &.{ 3, 0, -5.5 }, try scores(allocator, index, "value"));
+    try index.build(io, log, collection);
+    try std.testing.expectEqualSlices(f64, &.{ 3, 0, -5.5 }, try scores(log, allocator, index, "value"));
 }
 
 test "build resumes from a checkpoint and skips completed shards" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
 
     // Build once so the index exists, then leave a checkpoint that marks the first non-empty shard as done.
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "{\"completedShards\":[0],\"currentShard\":null,\"currentShardRecordIndex\":0,\"totalRecordsProcessed\":0,\"lastUpdated\":0}");
 
     // A new index loads the existing tree and adds the records of the shards that are not completed.
     const resumed = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try resumed.build(io, collection);
+    try resumed.build(io, log, collection);
     var shards = collection.iterateShards();
-    const firstShard = (try shards.next(io)).?;
+    const firstShard = (try shards.next(io, log)).?;
     try std.testing.expectEqual(@as(i64, @intCast(10 - firstShard.len)), resumed.totalEntries);
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
 }
 
 test "build deletes a stale checkpoint when the index does not exist" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "{\"completedShards\":[0,1,2,3,4,5],\"currentShard\":null,\"currentShardRecordIndex\":0,\"totalRecordsProcessed\":0,\"lastUpdated\":0}");
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
 }
 
 test "ensure builds a missing index once and loads an existing one" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.ensure(io, collection, .number);
+    try index.ensure(io, log, collection, .number);
     try std.testing.expectEqual(SortDataType.number, index.type.?);
     try std.testing.expectEqual(@as(i64, 5), index.totalEntries);
 
     const loaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try loaded.ensure(io, collection, .string);
+    try loaded.ensure(io, log, collection, .string);
     // The type stored in the tree file wins over the type passed to ensure.
     try std.testing.expectEqual(SortDataType.number, loaded.type.?);
     try std.testing.expectEqualStrings(index.rootPageId.?, loaded.rootPageId.?);
 }
 
 test "commit() keeps leafCache populated" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     // After build+commit, leafCache should be populated so getPage works without re-reading disk
-    const page = try index.getPage(io, null);
+    const page = try index.getPage(io, log, null);
     try std.testing.expect(page.records.len > 0);
 }
 
 test "flush() clears leafCache" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try index.flush();
     try std.testing.expectEqual(@as(usize, 0), index.leafCache.count());
 
     // After flush, should still be able to getPage (loads from disk)
-    _ = try index.load(io);
-    const page = try index.getPage(io, null);
+    _ = try index.load(io, log);
+    const page = try index.getPage(io, log, null);
     try std.testing.expect(page.records.len > 0);
 }
 
 test "flush() throws when dirtyLeaves is not empty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.addRecord(io, try makeTestRecord(allocator, 99, "New", 55, "Z"));
+    try index.build(io, log, collection);
+    try index.addRecord(io, log, try makeTestRecord(allocator, 99, "New", 55, "Z"));
 
     try std.testing.expectError(error.Thrown, index.flush());
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "can't flush") != null);
 }
 
 test "flush() throws when deletedLeaves is not empty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try testRecords(allocator);
-    const collection = try fixture.collection("test_collection", records[0..3]);
+    const collection = try fixture.collection(log, "test_collection", records[0..3]);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try index.deleteRecord(io, records[0]._id, records[0]);
+    try index.build(io, log, collection);
+    try index.deleteRecord(io, log, records[0]._id, records[0]);
 
     try std.testing.expectError(error.Thrown, index.flush());
     try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "can't flush") != null);
@@ -1350,17 +1408,18 @@ fn dateTestRecords(allocator: std.mem.Allocator) ![5]IInternalRecord {
 }
 
 test "should initialize the date sort indexes with records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try dateTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try dateTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
     const sortIndexDesc = try fixture.sortIndex("test_collection", "updatedAt", .desc, .date, null);
 
     // Initialize both indexes
-    try sortIndexAsc.build(io, collection);
-    try sortIndexDesc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
+    try sortIndexDesc.build(io, log, collection);
 
     // Check that tree files have been written
     try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/createdAt_asc/tree.dat"));
@@ -1368,18 +1427,19 @@ test "should initialize the date sort indexes with records" {
 }
 
 test "should retrieve records in ascending date order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try dateTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try dateTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Get all records by traversing pages
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify records are in ascending date order
     var recordIndex: usize = 1;
@@ -1397,18 +1457,19 @@ test "should retrieve records in ascending date order" {
 }
 
 test "should retrieve records in descending date order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try dateTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try dateTestRecords(allocator));
     const sortIndexDesc = try fixture.sortIndex("test_collection", "updatedAt", .desc, .date, null);
 
     // Initialize the index
-    try sortIndexDesc.build(io, collection);
+    try sortIndexDesc.build(io, log, collection);
 
     // Get all records by traversing pages
-    const allRecords = try getAllRecords(allocator, sortIndexDesc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexDesc);
 
     // Verify records are in descending date order
     var recordIndex: usize = 1;
@@ -1426,19 +1487,20 @@ test "should retrieve records in descending date order" {
 }
 
 test "should find records by exact date value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try dateTestRecords(allocator);
-    const collection = try fixture.collection("test_collection", &records);
+    const collection = try fixture.collection(log, "test_collection", &records);
     const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Find a record with a specific createdAt date
-    const result = try sortIndexAsc.findByValue(io, records[2].fields.get("createdAt").?, null); // Record 3 (1 day ago)
+    const result = try sortIndexAsc.findByValue(io, log, records[2].fields.get("createdAt").?, null); // Record 3 (1 day ago)
 
     // Should find exactly one record with this date
     try std.testing.expectEqual(@as(usize, 1), result.len);
@@ -1446,33 +1508,34 @@ test "should find records by exact date value" {
 
     // Find a non-existent date
     const nonExistentDate = try isoString(allocator, DATE_TEST_NOW - 10 * DAY_MILLISECONDS); // 10 days ago
-    const noResult = try sortIndexAsc.findByValue(io, .{ .string = nonExistentDate }, null);
+    const noResult = try sortIndexAsc.findByValue(io, log, .{ .string = nonExistentDate }, null);
 
     // Should find no records
     try std.testing.expectEqual(@as(usize, 0), noResult.len);
 }
 
 test "should update records with new dates in the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try dateTestRecords(allocator);
-    const collection = try fixture.collection("test_collection", &records);
+    const collection = try fixture.collection(log, "test_collection", &records);
     const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Update a record with a new createdAt date
     const newDate = try isoString(allocator, DATE_TEST_NOW - 5 * DAY_MILLISECONDS); // 5 days ago
     // Clone Record 3, changing its date to 5 days ago (was 1 day ago)
     const updatedRecord = try makeDateRecord(allocator, 3, "Record 3", newDate, records[2].fields.get("updatedAt").?.string, "A");
 
-    try sortIndexAsc.updateRecord(io, updatedRecord, records[2]);
+    try sortIndexAsc.updateRecord(io, log, updatedRecord, records[2]);
 
     // Find records by the new date
-    const result = try sortIndexAsc.findByValue(io, .{ .string = newDate }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .string = newDate }, null);
 
     // Should find the updated record with the new date
     try std.testing.expectEqual(@as(usize, 1), result.len);
@@ -1480,42 +1543,43 @@ test "should update records with new dates in the index" {
     try std.testing.expectEqualStrings(newDate, result[0].get("createdAt").?.string);
 
     // Original date should no longer have this record
-    const oldDateResult = try sortIndexAsc.findByValue(io, records[2].fields.get("createdAt").?, null);
+    const oldDateResult = try sortIndexAsc.findByValue(io, log, records[2].fields.get("createdAt").?, null);
     try std.testing.expectEqual(@as(usize, 0), oldDateResult.len);
 
     // Get all records and verify proper sorting
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // First record should now be the updated Record 3 (5 days ago)
     try std.testing.expectEqualStrings(try recordId(allocator, 3), allRecords[0].get("_id").?.string);
 }
 
 test "should add a new record with a date to the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try dateTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try dateTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "createdAt", .asc, .date, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Add a new record with a specific date
     const newRecordDate = try isoString(allocator, DATE_TEST_NOW - 6 * DAY_MILLISECONDS); // 6 days ago
     const newRecord = try makeDateRecord(allocator, 6, "Record 6", newRecordDate, try isoString(allocator, DATE_TEST_NOW), "A");
 
-    try sortIndexAsc.addRecord(io, newRecord);
+    try sortIndexAsc.addRecord(io, log, newRecord);
 
     // Find the record by its date
-    const result = try sortIndexAsc.findByValue(io, .{ .string = newRecordDate }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .string = newRecordDate }, null);
 
     // Should find the new record
     try std.testing.expectEqual(@as(usize, 1), result.len);
     try std.testing.expectEqualStrings(try recordId(allocator, 6), result[0].get("_id").?.string);
 
     // Get all records and verify the new record is in the correct position
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // First record should now be Record 6 (6 days ago)
     try std.testing.expectEqualStrings(try recordId(allocator, 6), allRecords[0].get("_id").?.string);
@@ -1567,17 +1631,18 @@ fn numberTestRecords(allocator: std.mem.Allocator) ![6]IInternalRecord {
 }
 
 test "should initialize the number sort indexes with records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try numberTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
     const sortIndexDesc = try fixture.sortIndex("test_collection", "price", .desc, .number, null);
 
     // Initialize both indexes
-    try sortIndexAsc.build(io, collection);
-    try sortIndexDesc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
+    try sortIndexDesc.build(io, log, collection);
 
     // Check that tree files have been written
     try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/score_asc/tree.dat"));
@@ -1585,18 +1650,19 @@ test "should initialize the number sort indexes with records" {
 }
 
 test "should retrieve records in ascending numeric order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try numberTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Get all records by traversing pages
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify records are in ascending numeric order
     var recordIndex: usize = 1;
@@ -1617,18 +1683,19 @@ test "should retrieve records in ascending numeric order" {
 }
 
 test "should retrieve records in descending numeric order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try numberTestRecords(allocator));
     const sortIndexDesc = try fixture.sortIndex("test_collection", "price", .desc, .number, null);
 
     // Initialize the index
-    try sortIndexDesc.build(io, collection);
+    try sortIndexDesc.build(io, log, collection);
 
     // Get all records by traversing pages
-    const allRecords = try getAllRecords(allocator, sortIndexDesc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexDesc);
 
     // Verify records are in descending numeric order
     var recordIndex: usize = 1;
@@ -1649,18 +1716,19 @@ test "should retrieve records in descending numeric order" {
 }
 
 test "should find records by exact numeric value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try numberTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Find records with exact numeric match
-    const result = try sortIndexAsc.findByValue(io, .{ .number = 85.5 }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .number = 85.5 }, null);
 
     // Should find exactly one record with score 85.5
     try std.testing.expectEqual(@as(usize, 1), result.len);
@@ -1668,32 +1736,33 @@ test "should find records by exact numeric value" {
     try std.testing.expectEqual(@as(f64, 85.5), result[0].get("score").?.number);
 
     // Find a non-existent score
-    const noResult = try sortIndexAsc.findByValue(io, .{ .number = 90.0 }, null);
+    const noResult = try sortIndexAsc.findByValue(io, log, .{ .number = 90.0 }, null);
 
     // Should find no records
     try std.testing.expectEqual(@as(usize, 0), noResult.len);
 }
 
 test "should update records with new numeric values in the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try numberTestRecords(allocator);
-    const collection = try fixture.collection("test_collection", &records);
+    const collection = try fixture.collection(log, "test_collection", &records);
     const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Update a record with a new score
     // Clone Product C, changing its score from 78.3 to 90.5
     const updatedRecord = try makeProductRecord(allocator, 3, "Product C", 90.5, 99.99, 25, 3.5);
 
-    try sortIndexAsc.updateRecord(io, updatedRecord, records[2]);
+    try sortIndexAsc.updateRecord(io, log, updatedRecord, records[2]);
 
     // Find records by the new score
-    const result = try sortIndexAsc.findByValue(io, .{ .number = 90.5 }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .number = 90.5 }, null);
 
     // Should find the updated record with the new score
     try std.testing.expectEqual(@as(usize, 1), result.len);
@@ -1701,11 +1770,11 @@ test "should update records with new numeric values in the index" {
     try std.testing.expectEqual(@as(f64, 90.5), result[0].get("score").?.number);
 
     // Original score should no longer have this record
-    const oldScoreResult = try sortIndexAsc.findByValue(io, .{ .number = 78.3 }, null);
+    const oldScoreResult = try sortIndexAsc.findByValue(io, log, .{ .number = 78.3 }, null);
     try std.testing.expectEqual(@as(usize, 0), oldScoreResult.len);
 
     // Get all records and verify proper sorting
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify the updated record is in the correct position
     const updatedRecordIndex = findRecordIndexById(allRecords, try recordId(allocator, 3));
@@ -1722,30 +1791,31 @@ test "should update records with new numeric values in the index" {
 }
 
 test "should add a new record with a numeric value to the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try numberTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Add a new record with a specific score
     const newRecord = try makeProductRecord(allocator, 7, "Product G", 89.0, 22.50, 150, 4.3);
 
-    try sortIndexAsc.addRecord(io, newRecord);
+    try sortIndexAsc.addRecord(io, log, newRecord);
 
     // Find the record by its score
-    const result = try sortIndexAsc.findByValue(io, .{ .number = 89.0 }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .number = 89.0 }, null);
 
     // Should find the new record
     try std.testing.expectEqual(@as(usize, 1), result.len);
     try std.testing.expectEqualStrings(try recordId(allocator, 7), result[0].get("_id").?.string);
 
     // Get all records and verify the new record is in the correct position
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify the new record is in the correct numeric position
     var newRecordIndex: ?usize = null;
@@ -1769,18 +1839,19 @@ test "should add a new record with a numeric value to the index" {
 }
 
 test "should handle integer and floating point numbers correctly" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try numberTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try numberTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "score", .asc, .number, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Get all records sorted by score
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Extract scores in order
     const sortedScores = try allocator.alloc(f64, allRecords.len);
@@ -1844,17 +1915,18 @@ fn stringTestRecords(allocator: std.mem.Allocator) ![7]IInternalRecord {
 }
 
 test "should initialize the string sort indexes with records" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try stringTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
     const sortIndexDesc = try fixture.sortIndex("test_collection", "status", .desc, .string, null);
 
     // Initialize both indexes
-    try sortIndexAsc.build(io, collection);
-    try sortIndexDesc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
+    try sortIndexDesc.build(io, log, collection);
 
     // Check that tree files have been written
     try std.testing.expect(try fixture.storage.asStorage().fileExists(allocator, io, "db/indexes/test_collection/name_asc/tree.dat"));
@@ -1862,18 +1934,19 @@ test "should initialize the string sort indexes with records" {
 }
 
 test "should retrieve records in ascending string order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try stringTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Get all records by traversing pages
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify records are in ascending string order using localeCompare
     var recordIndex: usize = 1;
@@ -1907,18 +1980,19 @@ test "should retrieve records in ascending string order" {
 }
 
 test "should retrieve records in descending string order" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try stringTestRecords(allocator));
     const sortIndexDesc = try fixture.sortIndex("test_collection", "status", .desc, .string, null);
 
     // Initialize the index
-    try sortIndexDesc.build(io, collection);
+    try sortIndexDesc.build(io, log, collection);
 
     // Get all records by traversing pages
-    const allRecords = try getAllRecords(allocator, sortIndexDesc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexDesc);
 
     // Verify records are in descending string order
     var recordIndex: usize = 1;
@@ -1935,18 +2009,19 @@ test "should retrieve records in descending string order" {
 }
 
 test "should find records by exact string value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try stringTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Find records with exact string match
-    const result = try sortIndexAsc.findByValue(io, .{ .string = "apple" }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .string = "apple" }, null);
 
     // Should find exactly one record with lowercase 'apple'
     try std.testing.expectEqual(@as(usize, 1), result.len);
@@ -1954,7 +2029,7 @@ test "should find records by exact string value" {
     try std.testing.expectEqualStrings("apple", result[0].get("name").?.string);
 
     // Find records with exact string match for 'Apple' (different case)
-    const resultCaps = try sortIndexAsc.findByValue(io, .{ .string = "Apple" }, null);
+    const resultCaps = try sortIndexAsc.findByValue(io, log, .{ .string = "Apple" }, null);
 
     // Should find exactly one record with uppercase 'Apple'
     try std.testing.expectEqual(@as(usize, 1), resultCaps.len);
@@ -1962,32 +2037,33 @@ test "should find records by exact string value" {
     try std.testing.expectEqualStrings("Apple", resultCaps[0].get("name").?.string);
 
     // Find a non-existent string
-    const noResult = try sortIndexAsc.findByValue(io, .{ .string = "nonexistent" }, null);
+    const noResult = try sortIndexAsc.findByValue(io, log, .{ .string = "nonexistent" }, null);
 
     // Should find no records
     try std.testing.expectEqual(@as(usize, 0), noResult.len);
 }
 
 test "should update records with new string values in the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const records = try stringTestRecords(allocator);
-    const collection = try fixture.collection("test_collection", &records);
+    const collection = try fixture.collection(log, "test_collection", &records);
     const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Update a record with a new name
     // Clone the banana record, changing its name from 'banana' to 'kiwi'
     const updatedRecord = try makeStringRecord(allocator, 3, "kiwi", "fruit", "completed", "Yellow Banana");
 
-    try sortIndexAsc.updateRecord(io, updatedRecord, records[2]);
+    try sortIndexAsc.updateRecord(io, log, updatedRecord, records[2]);
 
     // Find records by the new name
-    const result = try sortIndexAsc.findByValue(io, .{ .string = "kiwi" }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .string = "kiwi" }, null);
 
     // Should find the updated record with the new name
     try std.testing.expectEqual(@as(usize, 1), result.len);
@@ -1995,11 +2071,11 @@ test "should update records with new string values in the index" {
     try std.testing.expectEqualStrings("kiwi", result[0].get("name").?.string);
 
     // Original name should no longer have this record
-    const oldNameResult = try sortIndexAsc.findByValue(io, .{ .string = "banana" }, null);
+    const oldNameResult = try sortIndexAsc.findByValue(io, log, .{ .string = "banana" }, null);
     try std.testing.expectEqual(@as(usize, 0), oldNameResult.len);
 
     // Get all records and verify proper sorting
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify the updated record is in the correct position
     const updatedRecordIndex = findRecordIndexById(allRecords, try recordId(allocator, 3));
@@ -2016,30 +2092,31 @@ test "should update records with new string values in the index" {
 }
 
 test "should add a new record with a string value to the index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try stringTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try stringTestRecords(allocator));
     const sortIndexAsc = try fixture.sortIndex("test_collection", "name", .asc, .string, null);
 
     // Initialize the index
-    try sortIndexAsc.build(io, collection);
+    try sortIndexAsc.build(io, log, collection);
 
     // Add a new record with a specific name
     const newRecord = try makeStringRecord(allocator, 8, "grape", "fruit", "active", "Purple Grape");
 
-    try sortIndexAsc.addRecord(io, newRecord);
+    try sortIndexAsc.addRecord(io, log, newRecord);
 
     // Find the record by its name
-    const result = try sortIndexAsc.findByValue(io, .{ .string = "grape" }, null);
+    const result = try sortIndexAsc.findByValue(io, log, .{ .string = "grape" }, null);
 
     // Should find the new record
     try std.testing.expectEqual(@as(usize, 1), result.len);
     try std.testing.expectEqualStrings(try recordId(allocator, 8), result[0].get("_id").?.string);
 
     // Get all records and verify the new record is in the correct position
-    const allRecords = try getAllRecords(allocator, sortIndexAsc);
+    const allRecords = try getAllRecords(log, allocator, sortIndexAsc);
 
     // Verify the new record is in the correct alphabetical position
     var grapeIndex: ?usize = null;
@@ -2088,18 +2165,19 @@ fn sortScores(allocator: std.mem.Allocator, records: []const ISortIndexRecord) !
 }
 
 test "should verify logical sort order is maintained after page split" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try pageSplitTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try pageSplitTestRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
     // Initialize the index with initial records
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Force metadata save
-    try index.commit(io);
+    try index.commit(io, log);
 
     // Add records that will cause a page split
     // These should be inserted in the middle of our sorted values
@@ -2107,15 +2185,15 @@ test "should verify logical sort order is maintained after page split" {
     const recordToSplit2 = try makeTestRecord(allocator, 7, "Record 7", 15, "D");
 
     // Add records that will trigger page splits
-    try index.addRecord(io, recordToSplit1); // Add score 25 (should go in middle)
-    try index.addRecord(io, recordToSplit2); // Add score 15 (should go near beginning)
+    try index.addRecord(io, log, recordToSplit1); // Add score 25 (should go in middle)
+    try index.addRecord(io, log, recordToSplit2); // Add score 15 (should go near beginning)
 
     // After adding these records, the tree file should still exist
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/tree.dat") != null);
 
     // Now request records in order and verify they come back sorted
     var allRecords: std.ArrayList(ISortIndexRecord) = .empty;
-    var currentPage = try index.getPage(io, "");
+    var currentPage = try index.getPage(io, log, "");
 
     // Check total record count and page count
     try std.testing.expectEqual(@as(i64, 7), currentPage.totalRecords);
@@ -2126,7 +2204,7 @@ test "should verify logical sort order is maintained after page split" {
 
     // Follow next page links until we've visited all pages
     while (currentPage.nextPageId) |nextPageId| {
-        currentPage = try index.getPage(io, nextPageId);
+        currentPage = try index.getPage(io, log, nextPageId);
         try allRecords.appendSlice(allocator, currentPage.records);
     }
 
@@ -2137,15 +2215,16 @@ test "should verify logical sort order is maintained after page split" {
 }
 
 test "should maintain correct page ordering when multiple pages are split" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try pageSplitTestRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try pageSplitTestRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
 
     // Initialize the index with initial records
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Add many records to cause multiple page splits
     const additionalRecords = [_]IInternalRecord{
@@ -2163,16 +2242,16 @@ test "should maintain correct page ordering when multiple pages are split" {
 
     // Add records that will cause multiple page splits
     for (additionalRecords) |record| {
-        try index.addRecord(io, record);
+        try index.addRecord(io, log, record);
     }
 
     // Now we should have multiple pages
     // Force metadata save
-    try index.commit(io);
+    try index.commit(io, log);
 
     // Get all records across all pages
     var allRecords: std.ArrayList(ISortIndexRecord) = .empty;
-    var currentPage = try index.getPage(io, "");
+    var currentPage = try index.getPage(io, log, "");
 
     try std.testing.expect(currentPage.totalPages >= 1);
 
@@ -2181,7 +2260,7 @@ test "should maintain correct page ordering when multiple pages are split" {
 
     // Follow next page links until we've visited all pages
     while (currentPage.nextPageId) |nextPageId| {
-        currentPage = try index.getPage(io, nextPageId);
+        currentPage = try index.getPage(io, log, nextPageId);
         try allRecords.appendSlice(allocator, currentPage.records);
     }
 
@@ -2196,7 +2275,7 @@ test "should maintain correct page ordering when multiple pages are split" {
     // Try several values to find one that works (B-tree traversal might be slightly different)
     var foundScore = false;
     for ([_]f64{ 31, 21, 11, 41, 51 }) |score| {
-        const result = try index.findByValue(io, .{ .number = score }, null);
+        const result = try index.findByValue(io, log, .{ .number = score }, null);
         if (result.len > 0) {
             try std.testing.expectEqual(score, result[0].get("score").?.number);
             foundScore = true;
@@ -2212,19 +2291,20 @@ test "should maintain correct page ordering when multiple pages are split" {
 // short) stays negative until commit, where `writeUInt32` refuses it with the runtime's RangeError.
 //
 test "a count that goes below zero is refused at commit like writeUInt32 refuses it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const record = try makeTestRecord(allocator, 1, "Record 1", 85, "A");
-    const collection = try fixture.collection("test_collection", &.{record});
+    const collection = try fixture.collection(log, "test_collection", &.{record});
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     index.totalEntries = 0;
 
-    try index.deleteRecord(io, record._id, record);
+    try index.deleteRecord(io, log, record._id, record);
     try std.testing.expectEqual(@as(i64, -1), index.totalEntries);
-    try std.testing.expectError(error.Thrown, index.commit(io));
+    try std.testing.expectError(error.Thrown, index.commit(io, log));
     try std.testing.expectEqualStrings("The value of \"value\" is out of range. It must be >= 0 and <= 4294967295. Received -1", errors.lastErrorMessage());
 }
 
@@ -2252,11 +2332,11 @@ fn multiPageRecords(allocator: std.mem.Allocator, sameScore: bool) ![]IInternalR
 //
 // Builds a sort index on score over the records, which must come out as two pages.
 //
-fn multiPageIndex(fixture: *Fixture, records: []const IInternalRecord) !*SortIndex {
-    const collection = try fixture.collection("test_collection", records);
+fn multiPageIndex(fixture: *Fixture, log: ILog, records: []const IInternalRecord) !*SortIndex {
+    const collection = try fixture.collection(log, "test_collection", records);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try std.testing.expectEqual(@as(u32, 2), (try index.getPage(io, null)).totalPages);
+    try index.build(io, log, collection);
+    try std.testing.expectEqual(@as(u32, 2), (try index.getPage(io, log, null)).totalPages);
     return index;
 }
 
@@ -2274,9 +2354,9 @@ const ITwoPages = struct {
 //
 // Reads the two pages of a two page index.
 //
-fn twoPages(index: *SortIndex) !ITwoPages {
-    const first = try index.getPage(io, "");
-    const second = try index.getPage(io, first.nextPageId.?);
+fn twoPages(index: *SortIndex, log: ILog) !ITwoPages {
+    const first = try index.getPage(io, log, "");
+    const second = try index.getPage(io, log, first.nextPageId.?);
     try std.testing.expect(second.nextPageId == null);
     return .{ .first = first.records, .second = second.records };
 }
@@ -2291,6 +2371,7 @@ fn internalRecordOf(allocator: std.mem.Allocator, record: ISortIndexRecord, scor
 }
 
 test "deleteRecord removes a page whose records are all deleted, from either end of the page chain" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2298,28 +2379,28 @@ test "deleteRecord removes a page whose records are all deleted, from either end
 
     // The last page.
     var fixture = try Fixture.init(allocator);
-    const index = try multiPageIndex(&fixture, records);
-    const pages = try twoPages(index);
+    const index = try multiPageIndex(&fixture, log, records);
+    const pages = try twoPages(index, log);
     for (pages.second) |record| {
-        try index.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
+        try index.deleteRecord(io, log, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
     }
-    const firstPage = try index.getPage(io, null);
+    const firstPage = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(u32, 1), firstPage.totalPages);
     try std.testing.expectEqual(@as(u32, @intCast(pages.first.len)), firstPage.totalRecords);
     try std.testing.expect(firstPage.nextPageId == null);
-    try std.testing.expectEqual(pages.first.len, (try getAllRecords(allocator, index)).len);
+    try std.testing.expectEqual(pages.first.len, (try getAllRecords(log, allocator, index)).len);
 
     // The first page, of a second index over the same records. (Known issue: the removed
     // leaf stays a child of its parent, so the listing from the first page, which starts at that child, comes back
     // empty. The page counts and the second page itself are right.)
     var secondFixture = try Fixture.init(allocator);
-    const secondIndex = try multiPageIndex(&secondFixture, records);
-    const secondPages = try twoPages(secondIndex);
-    const secondPageId = (try secondIndex.getPage(io, "")).nextPageId.?;
+    const secondIndex = try multiPageIndex(&secondFixture, log, records);
+    const secondPages = try twoPages(secondIndex, log);
+    const secondPageId = (try secondIndex.getPage(io, log, "")).nextPageId.?;
     for (secondPages.first) |record| {
-        try secondIndex.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
+        try secondIndex.deleteRecord(io, log, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
     }
-    const secondPage = try secondIndex.getPage(io, secondPageId);
+    const secondPage = try secondIndex.getPage(io, log, secondPageId);
     try std.testing.expectEqual(@as(u32, 1), secondPage.totalPages);
     try std.testing.expectEqual(@as(u32, @intCast(secondPages.second.len)), secondPage.totalRecords);
     try std.testing.expectEqual(secondPages.second.len, secondPage.records.len);
@@ -2327,77 +2408,81 @@ test "deleteRecord removes a page whose records are all deleted, from either end
 }
 
 test "updateRecord removes a page whose records all move to another value" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, false));
-    const pages = try twoPages(index);
+    const index = try multiPageIndex(&fixture, log, try multiPageRecords(allocator, false));
+    const pages = try twoPages(index, log);
 
     // Every record of the last page moves to the value 0, at the start of the first page.
     for (pages.second) |record| {
-        try index.updateRecord(io, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
+        try index.updateRecord(io, log, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
     }
-    const all = try getAllRecords(allocator, index);
+    const all = try getAllRecords(log, allocator, index);
     try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), all.len);
     try std.testing.expectEqual(@as(f64, 0), all[0].get("score").?.number);
     try std.testing.expectEqual(pages.first[pages.first.len - 1].get("score").?.number, all[all.len - 1].get("score").?.number);
-    try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, .{ .number = 0 }, null)).len);
+    try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, log, .{ .number = 0 }, null)).len);
 }
 
 test "deleteRecord finds the records of a value that spans pages outside the leaf the value leads to" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, true));
-    const pages = try twoPages(index);
+    const index = try multiPageIndex(&fixture, log, try multiPageRecords(allocator, true));
+    const pages = try twoPages(index, log);
 
     // Every record has the score 5, so the value leads to the first leaf and the records of the second leaf are
     // found by walking the page chain. Deleting them all removes the second page.
     for (pages.second) |record| {
-        try index.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, 5));
+        try index.deleteRecord(io, log, record.get("_id").?.string, try internalRecordOf(allocator, record, 5));
     }
-    const firstPage = try index.getPage(io, null);
+    const firstPage = try index.getPage(io, log, null);
     try std.testing.expectEqual(@as(u32, 1), firstPage.totalPages);
     try std.testing.expect(firstPage.nextPageId == null);
-    try std.testing.expectEqual(pages.first.len, (try getAllRecords(allocator, index)).len);
+    try std.testing.expectEqual(pages.first.len, (try getAllRecords(log, allocator, index)).len);
 }
 
 test "updateRecord finds the records of a value that spans pages outside the leaf the value leads to" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, true));
-    const secondPageId = (try index.getPage(io, "")).nextPageId.?;
-    const pages = try twoPages(index);
+    const index = try multiPageIndex(&fixture, log, try multiPageRecords(allocator, true));
+    const secondPageId = (try index.getPage(io, log, "")).nextPageId.?;
+    const pages = try twoPages(index, log);
 
     // Every record of the second page but the last moves to the value 4, which leaves the page in place.
     const last = pages.second[pages.second.len - 1];
     for (pages.second[0 .. pages.second.len - 1]) |record| {
-        try index.updateRecord(io, try internalRecordOf(allocator, record, 4), try internalRecordOf(allocator, record, 5));
+        try index.updateRecord(io, log, try internalRecordOf(allocator, record, 4), try internalRecordOf(allocator, record, 5));
     }
-    try std.testing.expectEqual(@as(u32, MULTI_PAGE_RECORD_COUNT), (try index.getPage(io, null)).totalRecords);
+    try std.testing.expectEqual(@as(u32, MULTI_PAGE_RECORD_COUNT), (try index.getPage(io, log, null)).totalRecords);
 
     // Moving the last one too empties the second page, which is removed.
-    try index.updateRecord(io, try internalRecordOf(allocator, last, 4), try internalRecordOf(allocator, last, 5));
-    const all = try getAllRecords(allocator, index);
+    try index.updateRecord(io, log, try internalRecordOf(allocator, last, 4), try internalRecordOf(allocator, last, 5));
+    const all = try getAllRecords(log, allocator, index);
     try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), all.len);
     try std.testing.expectEqual(@as(f64, 4), all[0].get("score").?.number);
 
     // The emptied page is gone (the first page may have split under the records that moved into it).
-    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, secondPageId)).records.len);
-    try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, .{ .number = 4 }, null)).len);
-    try std.testing.expectEqual(pages.first.len, (try index.findByValue(io, .{ .number = 5 }, null)).len);
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, log, secondPageId)).records.len);
+    try std.testing.expectEqual(pages.second.len, (try index.findByValue(io, log, .{ .number = 4 }, null)).len);
+    try std.testing.expectEqual(pages.first.len, (try index.findByValue(io, log, .{ .number = 5 }, null)).len);
 }
 
 test "should throw when a Date is compared with a value that is neither a Date nor a string" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("dated", &.{
+    const collection = try fixture.collection(log, "dated", &.{
         try makeValueRecord(allocator, 1, "value", .{
             .boolean = true,
         }),
@@ -2406,16 +2491,17 @@ test "should throw when a Date is compared with a value that is neither a Date n
         }),
     });
     const index = try fixture.sortIndex("dated", "value", .asc, null, null);
-    try std.testing.expectError(error.Thrown, index.build(io, collection));
+    try std.testing.expectError(error.Thrown, index.build(io, log, collection));
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Type mismatch in compareValues: first value is Date, second value is boolean,"));
 }
 
 test "should throw when a string is compared with a value that is not a string" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("named", &.{
+    const collection = try fixture.collection(log, "named", &.{
         try makeValueRecord(allocator, 1, "value", .{
             .boolean = false,
         }),
@@ -2424,16 +2510,17 @@ test "should throw when a string is compared with a value that is not a string" 
         }),
     });
     const index = try fixture.sortIndex("named", "value", .asc, null, null);
-    try std.testing.expectError(error.Thrown, index.build(io, collection));
+    try std.testing.expectError(error.Thrown, index.build(io, log, collection));
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Type mismatch in compareValues: first value is string, second value is boolean,"));
 }
 
 test "should put NaN before every number and keep NaNs together" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("scores", &.{
+    const collection = try fixture.collection(log, "scores", &.{
         try makeValueRecord(allocator, 1, "score", .{
             .number = 7,
         }),
@@ -2448,8 +2535,8 @@ test "should put NaN before every number and keep NaNs together" {
         }),
     });
     const index = try fixture.sortIndex("scores", "score", .asc, .number, null);
-    try index.build(io, collection);
-    const values = try scores(allocator, index, "score");
+    try index.build(io, log, collection);
+    const values = try scores(log, allocator, index, "score");
     try std.testing.expect(std.math.isNan(values[0]));
     try std.testing.expect(std.math.isNan(values[1]));
     try std.testing.expectEqual(@as(f64, 3), values[2]);
@@ -2457,11 +2544,12 @@ test "should put NaN before every number and keep NaNs together" {
 }
 
 test "a record whose indexed field is undefined is left out of the index, as a missing field is" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("undefined_values", &.{
+    const collection = try fixture.collection(log, "undefined_values", &.{
         try makeValueRecord(allocator, 1, "score", .{
             .number = 2,
         }),
@@ -2471,32 +2559,33 @@ test "a record whose indexed field is undefined is left out of the index, as a m
         }),
     });
     const index = try fixture.sortIndex("undefined_values", "score", .asc, null, null);
-    try index.build(io, collection);
-    try std.testing.expectEqualSlices(f64, &.{ 1, 2 }, try scores(allocator, index, "score"));
+    try index.build(io, log, collection);
+    try std.testing.expectEqualSlices(f64, &.{ 1, 2 }, try scores(log, allocator, index, "score"));
 
-    try index.addRecord(io, try makeValueRecord(allocator, 4, "score", .undefined));
+    try index.addRecord(io, log, try makeValueRecord(allocator, 4, "score", .undefined));
     try std.testing.expectEqual(@as(i64, 2), index.totalEntries);
 }
 
 test "an index of several pages is loaded from disk with its internal keys, and a page whose file is gone reads as empty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try multiPageIndex(&fixture, try multiPageRecords(allocator, false));
-    try index.commit(io);
+    const index = try multiPageIndex(&fixture, log, try multiPageRecords(allocator, false));
+    try index.commit(io, log);
 
     const loaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try std.testing.expect(try loaded.load(io));
+    try std.testing.expect(try loaded.load(io, log));
     try std.testing.expectEqual(@as(usize, 1), loaded.treeNodes.get(loaded.rootPageId.?).?.keys.items.len);
-    try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), (try getAllRecords(allocator, loaded)).len);
+    try std.testing.expectEqual(@as(usize, MULTI_PAGE_RECORD_COUNT), (try getAllRecords(log, allocator, loaded)).len);
 
     // The file of the second page is lost: the page is still in the tree, but has no records.
-    const secondPageId = (try loaded.getPage(io, null)).nextPageId.?;
+    const secondPageId = (try loaded.getPage(io, log, null)).nextPageId.?;
     _ = fixture.storage.files.orderedRemove(try storage_zig.storage_factory.pathJoin(allocator, &.{ "db", "indexes", "test_collection", "score_asc", secondPageId }));
     const reloaded = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try std.testing.expect(try reloaded.load(io));
-    const secondPage = try reloaded.getPage(io, secondPageId);
+    try std.testing.expect(try reloaded.load(io, log));
+    const secondPage = try reloaded.getPage(io, log, secondPageId);
     try std.testing.expectEqual(@as(usize, 0), secondPage.records.len);
     try std.testing.expectEqual(@as(u32, MULTI_PAGE_RECORD_COUNT), secondPage.totalRecords);
     try std.testing.expectEqual(@as(u32, 2), secondPage.totalPages);
@@ -2504,73 +2593,77 @@ test "an index of several pages is loaded from disk with its internal keys, and 
 }
 
 test "build starts afresh from a checkpoint that cannot be read" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "not json");
 
     // The checkpoint is ignored, so every shard is added to the loaded tree again.
     const resumed = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try resumed.build(io, collection);
+    try resumed.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 10), resumed.totalEntries);
     try std.testing.expect(fixture.storage.getFile("db/indexes/test_collection/score_asc/build.checkpoint") == null);
 }
 
 test "build resumes a shard from the record the checkpoint stopped at" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
     var shards = collection.iterateShards();
-    const firstShard = (try shards.next(io)).?;
+    const firstShard = (try shards.next(io, log)).?;
     try std.testing.expect(firstShard.len >= 1);
     try fixture.storage.putFile("db/indexes/test_collection/score_asc/build.checkpoint", "{\"completedShards\":[],\"currentShard\":0,\"currentShardRecordIndex\":1,\"totalRecordsProcessed\":0,\"lastUpdated\":0}");
 
     // The records of the first shard before the one the checkpoint names are not added again.
     const resumed = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try resumed.build(io, collection);
+    try resumed.build(io, log, collection);
     try std.testing.expectEqual(@as(i64, 5 + 5 - 1), resumed.totalEntries);
 }
 
 test "NaN sorts before a number whichever side of the comparison it is on, in either direction" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("nan_values", &.{});
+    const collection = try fixture.collection(log, "nan_values", &.{});
     const ascending = try fixture.sortIndex("nan_values", "score", .asc, .number, null);
-    try ascending.build(io, collection);
+    try ascending.build(io, log, collection);
     const descending = try fixture.sortIndex("nan_values", "score", .desc, .number, null);
-    try descending.build(io, collection);
+    try descending.build(io, log, collection);
     const values = [_]f64{ 3, std.math.nan(f64), 1, std.math.nan(f64), 2 };
     for (values, 0..) |value, valueIndex| {
         const record = try makeValueRecord(allocator, @intCast(valueIndex + 1), "score", .{
             .number = value,
         });
-        try ascending.addRecord(io, record);
-        try descending.addRecord(io, record);
+        try ascending.addRecord(io, log, record);
+        try descending.addRecord(io, log, record);
     }
-    const ascendingScores = try scores(allocator, ascending, "score");
+    const ascendingScores = try scores(log, allocator, ascending, "score");
     try std.testing.expect(std.math.isNan(ascendingScores[0]) and std.math.isNan(ascendingScores[1]));
     try std.testing.expectEqualSlices(f64, &.{ 1, 2, 3 }, ascendingScores[2..]);
-    const descendingScores = try scores(allocator, descending, "score");
+    const descendingScores = try scores(log, allocator, descending, "score");
     try std.testing.expectEqualSlices(f64, &.{ 3, 2, 1 }, descendingScores[0..3]);
     try std.testing.expect(std.math.isNan(descendingScores[3]) and std.math.isNan(descendingScores[4]));
 }
 
 test "values that are neither numbers, strings nor dates are compared as the < operator compares them" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("flags", &.{
+    const collection = try fixture.collection(log, "flags", &.{
         try makeValueRecord(allocator, 1, "flag", .{
             .boolean = true,
         }),
@@ -2582,22 +2675,23 @@ test "values that are neither numbers, strings nor dates are compared as the < o
         }),
     });
     const index = try fixture.sortIndex("flags", "flag", .asc, null, null);
-    try index.build(io, collection);
-    const values = try sort_index_walk.sortIndexValues(allocator, io, index);
+    try index.build(io, log, collection);
+    const values = try sort_index_walk.sortIndexValues(allocator, io, log, index);
     try std.testing.expectEqual(@as(usize, 3), values.len);
     try std.testing.expect(!values[0].boolean);
     try std.testing.expect(values[1].boolean and values[2].boolean);
 }
 
 test "should no-op when calling addRecord without loading" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.addRecord(io, try makeTestRecord(allocator, 1, "Record 1", 85, "A"));
+    try index.addRecord(io, log, try makeTestRecord(allocator, 1, "Record 1", 85, "A"));
     try std.testing.expect(!index.loaded);
-    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, null)).records.len);
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, log, null)).records.len);
 }
 
 //
@@ -2609,112 +2703,117 @@ const THREE_PAGE_RECORD_COUNT = 3600;
 // Builds a sort index on score over THREE_PAGE_RECORD_COUNT records with the scores 1 to THREE_PAGE_RECORD_COUNT,
 // which comes out as three pages or more.
 //
-fn threePageIndex(fixture: *Fixture) !*SortIndex {
+fn threePageIndex(fixture: *Fixture, log: ILog) !*SortIndex {
     const records = try fixture.allocator.alloc(IInternalRecord, THREE_PAGE_RECORD_COUNT);
     for (records, 0..) |*record, recordIndex| {
         const number: u32 = @intCast(recordIndex + 1);
         record.* = try makeTestRecord(fixture.allocator, number, "Record", @floatFromInt(number), "A");
     }
-    const collection = try fixture.collection("test_collection", records);
+    const collection = try fixture.collection(log, "test_collection", records);
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.build(io, collection);
-    try std.testing.expect((try index.getPage(io, null)).totalPages >= 3);
+    try index.build(io, log, collection);
+    try std.testing.expect((try index.getPage(io, log, null)).totalPages >= 3);
     return index;
 }
 
 //
 // Expects the pages of an index to link to each other both ways, and to hold every record.
 //
-fn expectLinkedPages(allocator: std.mem.Allocator, index: *SortIndex, recordCount: usize) !void {
-    var page = try index.getPage(io, null);
+fn expectLinkedPages(log: ILog, allocator: std.mem.Allocator, index: *SortIndex, recordCount: usize) !void {
+    var page = try index.getPage(io, log, null);
     var pageCount: u32 = 1;
     while (page.nextPageId) |nextPageId| {
-        const next = try index.getPage(io, nextPageId);
+        const next = try index.getPage(io, log, nextPageId);
         try std.testing.expectEqualStrings(page.currentPageId, next.previousPageId.?);
         page = next;
         pageCount += 1;
     }
     try std.testing.expectEqual(page.totalPages, pageCount);
-    try std.testing.expectEqual(recordCount, (try getAllRecords(allocator, index)).len);
+    try std.testing.expectEqual(recordCount, (try getAllRecords(log, allocator, index)).len);
 }
 
 test "updateRecord removes a page emptied in the middle of the page chain, linking its neighbours" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try threePageIndex(&fixture);
-    const first = try index.getPage(io, null);
-    const middle = try index.getPage(io, first.nextPageId.?);
+    const index = try threePageIndex(&fixture, log);
+    const first = try index.getPage(io, log, null);
+    const middle = try index.getPage(io, log, first.nextPageId.?);
 
     // Every record of the middle page moves to the value 0, at the start of the first page.
     for (middle.records) |record| {
-        try index.updateRecord(io, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
+        try index.updateRecord(io, log, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
     }
-    const all = try getAllRecords(allocator, index);
+    const all = try getAllRecords(log, allocator, index);
     try std.testing.expectEqual(@as(usize, THREE_PAGE_RECORD_COUNT), all.len);
-    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, middle.currentPageId)).records.len);
-    try std.testing.expectEqual(middle.records.len, (try index.findByValue(io, .{ .number = 0 }, null)).len);
-    try expectLinkedPages(allocator, index, THREE_PAGE_RECORD_COUNT);
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, log, middle.currentPageId)).records.len);
+    try std.testing.expectEqual(middle.records.len, (try index.findByValue(io, log, .{ .number = 0 }, null)).len);
+    try expectLinkedPages(log, allocator, index, THREE_PAGE_RECORD_COUNT);
 }
 
 test "deleteRecord removes a page emptied in the middle of the page chain, linking its neighbours" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try threePageIndex(&fixture);
-    const first = try index.getPage(io, null);
-    const middle = try index.getPage(io, first.nextPageId.?);
+    const index = try threePageIndex(&fixture, log);
+    const first = try index.getPage(io, log, null);
+    const middle = try index.getPage(io, log, first.nextPageId.?);
 
     for (middle.records) |record| {
-        try index.deleteRecord(io, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
+        try index.deleteRecord(io, log, record.get("_id").?.string, try internalRecordOf(allocator, record, record.get("score").?.number));
     }
-    try expectLinkedPages(allocator, index, THREE_PAGE_RECORD_COUNT - middle.records.len);
+    try expectLinkedPages(log, allocator, index, THREE_PAGE_RECORD_COUNT - middle.records.len);
 }
 
 test "updateRecord and deleteRecord of a record the index does not hold look through every page and change nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try threePageIndex(&fixture);
+    const index = try threePageIndex(&fixture, log);
     const stranger = try makeTestRecord(allocator, THREE_PAGE_RECORD_COUNT + 1, "Record", 5, "A");
 
-    try index.deleteRecord(io, stranger._id, stranger);
+    try index.deleteRecord(io, log, stranger._id, stranger);
     try std.testing.expectEqual(@as(i64, THREE_PAGE_RECORD_COUNT), index.totalEntries);
 
     // The update adds the record at its new value when the old one is not found.
-    try index.updateRecord(io, try makeTestRecord(allocator, THREE_PAGE_RECORD_COUNT + 1, "Record", 6, "A"), stranger);
+    try index.updateRecord(io, log, try makeTestRecord(allocator, THREE_PAGE_RECORD_COUNT + 1, "Record", 6, "A"), stranger);
     try std.testing.expectEqual(@as(i64, THREE_PAGE_RECORD_COUNT + 1), index.totalEntries);
 }
 
 test "findByValue of a value on a later page looks back at the page before it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try threePageIndex(&fixture);
-    const found = try index.findByValue(io, .{ .number = 3000 }, null);
+    const index = try threePageIndex(&fixture, log);
+    const found = try index.findByValue(io, log, .{ .number = 3000 }, null);
     try std.testing.expectEqual(@as(usize, 1), found.len);
     try std.testing.expectEqual(@as(f64, 3000), found[0].get("score").?.number);
 }
 
 test "an internal node below the root splits too, once enough pages are added under it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("deep", &.{});
+    const collection = try fixture.collection(log, "deep", &.{});
     const index = try fixture.sortIndex("deep", "score", .asc, .number, null);
-    try index.build(io, collection);
+    try index.build(io, log, collection);
 
     // Records added in order fill the last page, which splits in half again and again, until the root has split
     // and then the internal node on its right has split under it.
     const recordCount = 150_000;
     var number: u32 = 0;
     while (number < recordCount) : (number += 1) {
-        try index.addRecord(io, .{
+        try index.addRecord(io, log, .{
             ._id = try std.fmt.allocPrint(allocator, "record-{d}", .{number}),
             .fields = try BsonDocument.fromFields(allocator, &.{.{
                 .key = "score",
@@ -2733,41 +2832,43 @@ test "an internal node below the root splits too, once enough pages are added un
             try std.testing.expectEqualStrings(childId, index.treeNodes.get(leafId).?.parentId.?);
         }
     }
-    try expectLinkedPages(allocator, index, recordCount);
-    const found = try index.findByValue(io, .{ .number = 140_000 }, null);
+    try expectLinkedPages(log, allocator, index, recordCount);
+    const found = try index.findByValue(io, log, .{ .number = 140_000 }, null);
     try std.testing.expectEqual(@as(usize, 1), found.len);
 }
 
 test "updateRecord removes a page in the middle of the page chain emptied from its last record to its first" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const index = try threePageIndex(&fixture);
-    const first = try index.getPage(io, null);
-    const middle = try index.getPage(io, first.nextPageId.?);
+    const index = try threePageIndex(&fixture, log);
+    const first = try index.getPage(io, log, null);
+    const middle = try index.getPage(io, log, first.nextPageId.?);
 
     // The first record of the page, moved last, is found by walking the pages from the first.
     var recordIndex = middle.records.len;
     while (recordIndex > 0) {
         recordIndex -= 1;
         const record = middle.records[recordIndex];
-        try index.updateRecord(io, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
+        try index.updateRecord(io, log, try internalRecordOf(allocator, record, 0), try internalRecordOf(allocator, record, record.get("score").?.number));
     }
-    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, middle.currentPageId)).records.len);
-    try expectLinkedPages(allocator, index, THREE_PAGE_RECORD_COUNT);
+    try std.testing.expectEqual(@as(usize, 0), (try index.getPage(io, log, middle.currentPageId)).records.len);
+    try expectLinkedPages(log, allocator, index, THREE_PAGE_RECORD_COUNT);
 }
 
 test "ensure does nothing for an index that is already loaded" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var fixture = try Fixture.init(allocator);
-    const collection = try fixture.collection("test_collection", &try testRecords(allocator));
+    const collection = try fixture.collection(log, "test_collection", &try testRecords(allocator));
     const index = try fixture.sortIndex("test_collection", "score", .asc, null, null);
-    try index.ensure(io, collection, .number);
+    try index.ensure(io, log, collection, .number);
     const rootPageId = index.rootPageId.?;
-    try index.ensure(io, collection, .string);
+    try index.ensure(io, log, collection, .string);
     try std.testing.expectEqual(SortDataType.number, index.type.?);
     try std.testing.expectEqualStrings(rootPageId, index.rootPageId.?);
     try std.testing.expectEqual(@as(i64, 5), index.totalEntries);

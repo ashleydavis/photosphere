@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const api_zig = @import("api-zig");
 const utils = @import("utils-zig");
 const bdb = @import("bdb-zig");
@@ -82,15 +83,15 @@ fn makeAsset(allocator: std.mem.Allocator, overrides: []const IAssetOverride) !I
 // Builds a fresh BsonDatabase backed by an in-memory MockStorage and inserts the supplied
 // assets. Ensures the photoDate sort index so listAssetPage works.
 //
-fn buildDatabase(allocator: std.mem.Allocator, assets: []const IAsset) !*BsonDatabase {
+fn buildDatabase(log: ILog, allocator: std.mem.Allocator, assets: []const IAsset) !*BsonDatabase {
     const storage = try allocator.create(MemoryStorage);
     storage.* = MemoryStorage.init(allocator);
     const database = try BsonDatabase.init(allocator, storage.asStorage(), "", uuid_generator.uuidGenerator(), timestamp_provider.timestampProvider());
     const collection = try database.collection("metadata");
-    try (try collection.sortIndex("photoDate", .desc)).ensure(io, collection, .date);
+    try (try collection.sortIndex("photoDate", .desc)).ensure(io, log, collection, .date);
     for (assets) |asset| {
         var record = asset;
-        try collection.insertOne(io, &record, null);
+        try collection.insertOne(io, log, &record, null);
     }
     return database;
 }
@@ -134,6 +135,7 @@ fn expectIds(expected: []const []const u8, actual: []const []const u8) !void {
 }
 
 test "listAssetPage returns assets sorted by photoDate descending" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -142,14 +144,15 @@ test "listAssetPage returns assets sorted by photoDate descending" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "origFileName", .value = .{ .string = "b.jpg" } }, .{ .name = "photoDate", .value = .{ .string = "2024-06-15T00:00:00.000Z" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "origFileName", .value = .{ .string = "c.jpg" } }, .{ .name = "photoDate", .value = .{ .string = "2022-12-31T00:00:00.000Z" } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    const page = try listAssetPage(io, database, 10, null);
+    const page = try listAssetPage(io, log, database, 10, null);
 
     try expectIds(&.{ ID_B, ID_A, ID_C }, try assetIds(allocator, page.assets));
 }
 
 test "listAssetPage limits the page size" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -158,14 +161,15 @@ test "listAssetPage limits the page size" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "photoDate", .value = .{ .string = "2024-06-15T00:00:00.000Z" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "photoDate", .value = .{ .string = "2022-12-31T00:00:00.000Z" } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    const page = try listAssetPage(io, database, 2, null);
+    const page = try listAssetPage(io, log, database, 2, null);
 
     try std.testing.expectEqual(@as(usize, 2), page.assets.len);
 }
 
 test "searchAssets filters by case-insensitive substring on origFileName" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -174,14 +178,15 @@ test "searchAssets filters by case-insensitive substring on origFileName" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "origFileName", .value = .{ .string = "mountain.png" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "origFileName", .value = .{ .string = "BEACH_party.mp4" } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    const matches = try searchAssets(allocator, io, database, "beach", null, null, null, 10);
+    const matches = try searchAssets(allocator, io, log, database, "beach", null, null, null, 10);
 
     try expectIds(&.{ ID_A, ID_C }, try sortedAssetIds(allocator, matches));
 }
 
 test "searchAssets filters by content type prefix" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -190,14 +195,15 @@ test "searchAssets filters by content type prefix" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "contentType", .value = .{ .string = "video/mp4" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "contentType", .value = .{ .string = "image/png" } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    const matches = try searchAssets(allocator, io, database, "", "image/", null, null, 10);
+    const matches = try searchAssets(allocator, io, log, database, "", "image/", null, null, 10);
 
     try expectIds(&.{ ID_A, ID_C }, try sortedAssetIds(allocator, matches));
 }
 
 test "searchAssets filters by date range" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -206,14 +212,15 @@ test "searchAssets filters by date range" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "photoDate", .value = .{ .string = "2024-01-01T00:00:00.000Z" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "photoDate", .value = .{ .string = "2022-06-01T00:00:00.000Z" } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    const matches = try searchAssets(allocator, io, database, "", null, "2021-01-01", "2023-12-31", 10);
+    const matches = try searchAssets(allocator, io, log, database, "", null, "2021-01-01", "2023-12-31", 10);
 
     try expectIds(&.{ID_C}, try assetIds(allocator, matches));
 }
 
 test "searchAssets stops at the requested limit" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -222,36 +229,39 @@ test "searchAssets stops at the requested limit" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "origFileName", .value = .{ .string = "two.jpg" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "origFileName", .value = .{ .string = "three.jpg" } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    const matches = try searchAssets(allocator, io, database, ".jpg", null, null, null, 2);
+    const matches = try searchAssets(allocator, io, log, database, ".jpg", null, null, null, 2);
 
     try std.testing.expectEqual(@as(usize, 2), matches.len);
 }
 
 test "getAsset returns the asset when present" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const database = try buildDatabase(allocator, &.{try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "origFileName", .value = .{ .string = "found.jpg" } } })});
+    const database = try buildDatabase(log, allocator, &.{try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "origFileName", .value = .{ .string = "found.jpg" } } })});
 
-    const asset = try getAsset(io, database, ID_A);
+    const asset = try getAsset(io, log, database, ID_A);
 
     try std.testing.expectEqualStrings("found.jpg", asset.?.get("origFileName").?.string);
 }
 
 test "getAsset returns undefined when missing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const database = try buildDatabase(allocator, &.{});
+    const database = try buildDatabase(log, allocator, &.{});
 
-    const asset = try getAsset(io, database, ID_B);
+    const asset = try getAsset(io, log, database, ID_B);
 
     try std.testing.expect(asset == null);
 }
 
 test "streamAssetToFile streams bytes from storage to disk, creating parent directories" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -262,7 +272,7 @@ test "streamAssetToFile streams bytes from storage to disk, creating parent dire
     try storage.asStorage().write(allocator, io, "asset/original-asset-id", "application/octet-stream", payload);
 
     const outputPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "out", "nested", "original.bin" });
-    const bytes = try streamAssetToFile(allocator, io, storage.asStorage(), "original-asset-id", outputPath, "original");
+    const bytes = try streamAssetToFile(allocator, io, log, storage.asStorage(), "original-asset-id", outputPath, "original");
 
     try std.testing.expectEqual(@as(u64, payload.len), bytes);
     const written = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
@@ -270,6 +280,7 @@ test "streamAssetToFile streams bytes from storage to disk, creating parent dire
 }
 
 test "streamAssetToFile maps type 'display' to the display/ storage prefix" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -280,7 +291,7 @@ test "streamAssetToFile maps type 'display' to the display/ storage prefix" {
     try storage.asStorage().write(allocator, io, "display/display-asset-id", "image/jpeg", payload);
 
     const outputPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "display.bin" });
-    const bytes = try streamAssetToFile(allocator, io, storage.asStorage(), "display-asset-id", outputPath, "display");
+    const bytes = try streamAssetToFile(allocator, io, log, storage.asStorage(), "display-asset-id", outputPath, "display");
 
     try std.testing.expectEqual(@as(u64, payload.len), bytes);
 }
@@ -290,6 +301,7 @@ test "streamAssetToFile maps type 'display' to the display/ storage prefix" {
 // asset/ prefix. Only an asset stored under that prefix is found.
 //
 test "streamAssetToFile maps 'original' and an unrecognised type to the asset/ storage prefix" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -302,18 +314,18 @@ test "streamAssetToFile maps 'original' and an unrecognised type to the asset/ s
     try storage.asStorage().write(allocator, io, "display/shared-asset-id", "image/jpeg", displayBytes);
 
     const unknownPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "unknown.bin" });
-    const unknownBytes = try streamAssetToFile(allocator, io, storage.asStorage(), "shared-asset-id", unknownPath, "not-a-type");
+    const unknownBytes = try streamAssetToFile(allocator, io, log, storage.asStorage(), "shared-asset-id", unknownPath, "not-a-type");
     try std.testing.expectEqual(@as(u64, originalBytes.len), unknownBytes);
     try std.testing.expectEqualStrings(originalBytes, try std.Io.Dir.cwd().readFileAlloc(io, unknownPath, allocator, .unlimited));
 
     // The type name is matched exactly, so a different case of "display" reads the asset/ prefix too.
     const upperCasePath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "upper-case.bin" });
-    const upperCaseBytes = try streamAssetToFile(allocator, io, storage.asStorage(), "shared-asset-id", upperCasePath, "DISPLAY");
+    const upperCaseBytes = try streamAssetToFile(allocator, io, log, storage.asStorage(), "shared-asset-id", upperCasePath, "DISPLAY");
     try std.testing.expectEqual(@as(u64, originalBytes.len), upperCaseBytes);
 
     // And the exact name does read the display/ prefix, so the two above are not reading the only copy there is.
     const displayPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "display.bin" });
-    const displayBytesWritten = try streamAssetToFile(allocator, io, storage.asStorage(), "shared-asset-id", displayPath, "display");
+    const displayBytesWritten = try streamAssetToFile(allocator, io, log, storage.asStorage(), "shared-asset-id", displayPath, "display");
     try std.testing.expectEqual(@as(u64, displayBytes.len), displayBytesWritten);
 }
 
@@ -322,6 +334,7 @@ test "streamAssetToFile maps 'original' and an unrecognised type to the asset/ s
 // leaves an empty output file behind.
 //
 test "streamAssetToFile fails for a missing asset after creating the output file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -332,13 +345,14 @@ test "streamAssetToFile fails for a missing asset after creating the output file
     var assetStorage = try @import("storage-zig").storage_prefix_wrapper.StoragePrefixWrapper.init(allocator, fileStorage.storage(), databasePath);
 
     const outputPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "out", "missing.bin" });
-    try std.testing.expectError(error.Thrown, streamAssetToFile(allocator, io, assetStorage.storage(), "missing-asset-id", outputPath, "original"));
+    try std.testing.expectError(error.Thrown, streamAssetToFile(allocator, io, log, assetStorage.storage(), "missing-asset-id", outputPath, "original"));
 
     const written = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
     try std.testing.expectEqual(@as(usize, 0), written.len);
 }
 
 test "searchAssets leaves out assets whose photoDate is missing, empty, not a date or not text, and reads a Date" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -353,15 +367,16 @@ test "searchAssets leaves out assets whose photoDate is missing, empty, not a da
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_D } }, .{ .name = "photoDate", .value = .{ .string = "not a date" } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_E } }, .{ .name = "photoDate", .value = .{ .number = 1654041600000 } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, database, "", null, "2021-01-01", "2023-12-31", 10)));
+    try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, log, database, "", null, "2021-01-01", "2023-12-31", 10)));
 
     // The bound is inclusive of the Date once its milliseconds are dropped.
-    try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, database, "", null, "2022-06-01T00:00:00.000Z", "2022-06-01T00:00:00.000Z", 10)));
+    try expectIds(&.{ID_C}, try assetIds(allocator, try searchAssets(allocator, io, log, database, "", null, "2022-06-01T00:00:00.000Z", "2022-06-01T00:00:00.000Z", 10)));
 }
 
 test "searchAssets reads a text field that is null, false or zero as empty" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -370,39 +385,42 @@ test "searchAssets reads a text field that is null, false or zero as empty" {
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_B } }, .{ .name = "origFileName", .value = .{ .boolean = false } }, .{ .name = "location", .value = .{ .number = 0 } } }),
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_C } }, .{ .name = "origFileName", .value = .{ .int32 = 0 } }, .{ .name = "location", .value = .{ .int64 = 0 } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    try expectIds(&.{ID_A}, try assetIds(allocator, try searchAssets(allocator, io, database, "beach", null, null, null, 10)));
+    try expectIds(&.{ID_A}, try assetIds(allocator, try searchAssets(allocator, io, log, database, "beach", null, null, null, 10)));
 }
 
 test "searchAssets throws a TypeError for a text field that holds a number" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const assets = [_]IAsset{
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "origFileName", .value = .{ .number = 5 } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    try std.testing.expectError(error.Thrown, searchAssets(allocator, io, database, "beach", null, null, null, 10));
+    try std.testing.expectError(error.Thrown, searchAssets(allocator, io, log, database, "beach", null, null, null, 10));
     try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("(asset.origFileName || \"\").toLowerCase is not a function. (In '(asset.origFileName || \"\").toLowerCase()', '(asset.origFileName || \"\").toLowerCase' is undefined)", utils.errors.lastErrorMessage());
 }
 
 test "searchAssets throws a TypeError for a content type that holds a Date" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const assets = [_]IAsset{
         try makeAsset(allocator, &.{ .{ .name = "_id", .value = .{ .string = ID_A } }, .{ .name = "contentType", .value = .{ .date = 1654041600000 } } }),
     };
-    const database = try buildDatabase(allocator, &assets);
+    const database = try buildDatabase(log, allocator, &assets);
 
-    try std.testing.expectError(error.Thrown, searchAssets(allocator, io, database, "", "image/", null, null, 10));
+    try std.testing.expectError(error.Thrown, searchAssets(allocator, io, log, database, "", "image/", null, null, 10));
     try std.testing.expectEqualStrings("(asset.contentType || \"\").toLowerCase is not a function. (In '(asset.contentType || \"\").toLowerCase()', '(asset.contentType || \"\").toLowerCase' is undefined)", utils.errors.lastErrorMessage());
 }
 
 test "streamAssetToFile maps type 'thumb' to the thumb/ storage prefix" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -413,7 +431,7 @@ test "streamAssetToFile maps type 'thumb' to the thumb/ storage prefix" {
     try storage.asStorage().write(allocator, io, "thumb/thumb-asset-id", "image/jpeg", payload);
 
     const outputPath = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path, "thumb.bin" });
-    const bytes = try streamAssetToFile(allocator, io, storage.asStorage(), "thumb-asset-id", outputPath, "thumb");
+    const bytes = try streamAssetToFile(allocator, io, log, storage.asStorage(), "thumb-asset-id", outputPath, "thumb");
 
     try std.testing.expectEqual(@as(u64, payload.len), bytes);
     try std.testing.expectEqualStrings(payload, try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited));

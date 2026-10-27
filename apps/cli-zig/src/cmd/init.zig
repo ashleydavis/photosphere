@@ -1,10 +1,10 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const prompts = @import("../lib/clack/prompts.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const createDatabase = init_cmd.createDatabase;
 const ICreateCommandOptions = init_cmd.ICreateCommandOptions;
@@ -26,14 +26,14 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 //
 // Command that initializes a new Photosphere media file database.
 //
-pub fn initCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IInitCommandOptions) !void {
+pub fn initCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IInitCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
     try intro(io, try pc.blue(allocator, "Creating a new media file database..."), .{});
 
-    const databaseDir = (try createDatabase(allocator, io, options.base.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner)).databaseDir;
+    const databaseDir = (try createDatabase(allocator, io, log, options.base.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner)).databaseDir;
 
     const isCurrentDir = std.mem.eql(u8, databaseDir, ".") or std.mem.eql(u8, databaseDir, "./");
     const displayPath = if (isCurrentDir) "the current directory" else databaseDir;
@@ -82,5 +82,5 @@ pub fn initCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandCo
     log.info(try text(allocator, "    {s}  - Adds all media files in a directory", .{try pc.cyan(allocator, try text(allocator, "psi add{s} directory/", .{flags}))}));
     log.info("");
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

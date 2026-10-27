@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -19,7 +20,6 @@ const process_signals = @import("../lib/process-signals.zig");
 const getVault = vault_zig.get_vault.getVault;
 const getDefaultVaultType = vault_zig.get_vault.getDefaultVaultType;
 const IVault = vault_zig.vault.IVault;
-const log = &utils.log.log;
 const getDatabases = node_api.databases_config.getDatabases;
 const addDatabaseEntry = node_api.databases_config.addDatabaseEntry;
 const updateDatabaseEntry = node_api.databases_config.updateDatabaseEntry;
@@ -265,7 +265,7 @@ fn findDatabaseByIdentifier(allocator: std.mem.Allocator, io: std.Io, name: ?[]c
 //
 // Logs the "Did you mean" hint listing similar names, when there are any.
 //
-fn logDidYouMean(allocator: std.mem.Allocator, similarNames: []const []const u8) !void {
+fn logDidYouMean(allocator: std.mem.Allocator, log: ILog, similarNames: []const []const u8) !void {
     if (similarNames.len > 0) {
         var lines: std.ArrayList([]const u8) = .empty;
         for (similarNames) |similarName| {
@@ -279,12 +279,12 @@ fn logDidYouMean(allocator: std.mem.Allocator, similarNames: []const []const u8)
 // Logs the error for a name or path that matched no database, with the "Did you mean" hint when a name was given,
 // and exits with code 1 (the shared not-found branch of view, remove and send).
 //
-fn exitNoMatchingDatabase(allocator: std.mem.Allocator, io: std.Io, name: ?[]const u8) !noreturn {
+fn exitNoMatchingDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, name: ?[]const u8) !noreturn {
     log.@"error"(try pc.red(allocator, "\u{2717} No database matching the given name or path was found."));
     if (isGiven(name)) {
-        try logDidYouMean(allocator, try findSimilarDatabaseNames(allocator, io, name.?));
+        try logDidYouMean(allocator, log, try findSimilarDatabaseNames(allocator, io, name.?));
     }
-    exit(io, 1);
+    exit(io, log, 1);
 }
 
 //
@@ -292,14 +292,14 @@ fn exitNoMatchingDatabase(allocator: std.mem.Allocator, io: std.Io, name: ?[]con
 // checks of `dbs add --yes` and `dbs edit --yes`). Logs the error with the "Did you mean" hint and exits with code 1
 // for the first one that is missing.
 //
-fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, encryptionKey: ?[]const u8, s3Cred: ?[]const u8, geocodingKey: ?[]const u8) !void {
+fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, log: ILog, encryptionKey: ?[]const u8, s3Cred: ?[]const u8, geocodingKey: ?[]const u8) !void {
     if (isGiven(encryptionKey)) {
         const vault = try getVault(getDefaultVaultType());
         const encryptionKeySecret = try vault.get(allocator, io, encryptionKey.?);
         if (encryptionKeySecret == null) {
             log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} Encryption key \"{s}\" not found in vault.", .{encryptionKey.?})));
-            try logDidYouMean(allocator, try findSimilarKeyNames(allocator, io, encryptionKey.?));
-            exit(io, 1);
+            try logDidYouMean(allocator, log, try findSimilarKeyNames(allocator, io, encryptionKey.?));
+            exit(io, log, 1);
         }
     }
 
@@ -308,8 +308,8 @@ fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, encryptionKey: ?[
         const s3CredSecret = try vault.get(allocator, io, s3Cred.?);
         if (s3CredSecret == null) {
             log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} S3 credential \"{s}\" not found in vault.", .{s3Cred.?})));
-            try logDidYouMean(allocator, try findSimilarSecretNames(allocator, io, s3Cred.?, "s3-credentials"));
-            exit(io, 1);
+            try logDidYouMean(allocator, log, try findSimilarSecretNames(allocator, io, s3Cred.?, "s3-credentials"));
+            exit(io, log, 1);
         }
     }
 
@@ -318,8 +318,8 @@ fn checkSecretsExist(allocator: std.mem.Allocator, io: std.Io, encryptionKey: ?[
         const geocodingKeySecret = try vault.get(allocator, io, geocodingKey.?);
         if (geocodingKeySecret == null) {
             log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} Geocoding API key \"{s}\" not found in vault.", .{geocodingKey.?})));
-            try logDidYouMean(allocator, try findSimilarSecretNames(allocator, io, geocodingKey.?, "api-key"));
-            exit(io, 1);
+            try logDidYouMean(allocator, log, try findSimilarSecretNames(allocator, io, geocodingKey.?, "api-key"));
+            exit(io, log, 1);
         }
     }
 }
@@ -344,7 +344,7 @@ fn promptForSecretType(allocator: std.mem.Allocator, secretType: []const u8) ![]
 // Presents a select prompt to pick or create a shared secret of the given type.
 // Returns the secret name to store on the database entry, or undefined for "None".
 //
-fn pickOrCreateSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []const u8, dbName: []const u8, currentName: ?[]const u8) !?[]const u8 {
+fn pickOrCreateSecret(allocator: std.mem.Allocator, io: std.Io, log: ILog, secretType: []const u8, dbName: []const u8, currentName: ?[]const u8) !?[]const u8 {
     const vault = try getVault(getDefaultVaultType());
     const secrets = try vault.list(allocator, io);
 
@@ -380,7 +380,7 @@ fn pickOrCreateSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []co
 
     if (isCancel(selected)) {
         try outro(io, try pc.yellow(allocator, "Cancelled."), .{});
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     const selectedValue = selected.value;
@@ -390,7 +390,7 @@ fn pickOrCreateSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []co
     }
 
     if (std.mem.eql(u8, selectedValue, "__create__")) {
-        return try createSharedSecret(allocator, io, secretType, dbName);
+        return try createSharedSecret(allocator, io, log, secretType, dbName);
     }
 
     return selectedValue;
@@ -423,17 +423,17 @@ const IS3CredentialsValue = struct {
 // inferred name is already taken in the vault, the user is prompted
 // for a different one.
 //
-fn createSharedSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []const u8, dbName: []const u8) ![]const u8 {
+fn createSharedSecret(allocator: std.mem.Allocator, io: std.Io, log: ILog, secretType: []const u8, dbName: []const u8) ![]const u8 {
     const vault = try getVault(getDefaultVaultType());
 
     const inferredName = try inferSecretName(allocator, dbName, secretType);
-    const secretName = try resolveUniqueSecretName(allocator, io, vault, inferredName, secretType);
+    const secretName = try resolveUniqueSecretName(allocator, io, log, vault, inferredName, secretType);
 
     if (std.mem.eql(u8, secretType, "s3-credentials")) {
-        const endpoint = try promptOptional(allocator, io, "Endpoint URL (leave blank for AWS):");
-        const region = try promptRequired(allocator, io, "Region (e.g. us-east-1):");
-        const accessKeyId = try promptRequired(allocator, io, "Access Key ID:");
-        const secretAccessKey = try promptRequired(allocator, io, "Secret Access Key:");
+        const endpoint = try promptOptional(allocator, io, log, "Endpoint URL (leave blank for AWS):");
+        const region = try promptRequired(allocator, io, log, "Region (e.g. us-east-1):");
+        const accessKeyId = try promptRequired(allocator, io, log, "Access Key ID:");
+        const secretAccessKey = try promptRequired(allocator, io, log, "Secret Access Key:");
 
         const value: IS3CredentialsValue = .{
             .region = region,
@@ -469,7 +469,7 @@ fn createSharedSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []co
 
         if (isCancel(keyChoice)) {
             try outro(io, try pc.yellow(allocator, "Cancelled."), .{});
-            exit(io, 0);
+            exit(io, log, 0);
         }
 
         var privateKeyPem: []const u8 = undefined;
@@ -479,7 +479,7 @@ fn createSharedSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []co
             privateKeyPem = try exportPrivateKey(allocator, keyPair.privateKey, .pem);
         }
         else {
-            const privatePath = try promptRequired(allocator, io, "Path to private key (.key):");
+            const privatePath = try promptRequired(allocator, io, log, "Path to private key (.key):");
             privateKeyPem = try node_utils.node_fs.readFile(allocator, io, privatePath);
         }
 
@@ -492,7 +492,7 @@ fn createSharedSecret(allocator: std.mem.Allocator, io: std.Io, secretType: []co
         log.info(try pc.green(allocator, try format(allocator, "  \u{2713} Encryption key \"{s}\" created", .{secretName})));
     }
     else if (std.mem.eql(u8, secretType, "api-key")) {
-        const apiKey = try promptRequired(allocator, io, "API key value:");
+        const apiKey = try promptRequired(allocator, io, log, "API key value:");
 
         try vault.set(allocator, io, .{
             .name = secretName,
@@ -533,14 +533,14 @@ fn inferSecretName(allocator: std.mem.Allocator, dbName: []const u8, secretType:
 // Returns the inferred name when it is free in the vault, otherwise prompts the user
 // for a different name and rejects any that are already taken.
 //
-fn resolveUniqueSecretName(allocator: std.mem.Allocator, io: std.Io, vault: IVault, inferredName: []const u8, secretType: []const u8) ![]const u8 {
+fn resolveUniqueSecretName(allocator: std.mem.Allocator, io: std.Io, log: ILog, vault: IVault, inferredName: []const u8, secretType: []const u8) ![]const u8 {
     const existing = try vault.get(allocator, io, inferredName);
     if (existing == null) {
         return inferredName;
     }
     log.info(try pc.yellow(allocator, try format(allocator, "  \u{26a0} A secret named \"{s}\" already exists. Choose a different name.", .{inferredName})));
     while (true) {
-        const candidate = try promptRequired(allocator, io, try format(allocator, "Name for this {s}:", .{secretType}));
+        const candidate = try promptRequired(allocator, io, log, try format(allocator, "Name for this {s}:", .{secretType}));
         const conflict = try vault.get(allocator, io, candidate);
         if (conflict == null) {
             return candidate;
@@ -602,7 +602,7 @@ fn validatePairingCode(context: ?*anyopaque, value: ?[]const u8) ?[]const u8 {
 //
 // Prompts for a required text value and returns the trimmed string.
 //
-fn promptRequired(allocator: std.mem.Allocator, io: std.Io, message: []const u8) ![]const u8 {
+fn promptRequired(allocator: std.mem.Allocator, io: std.Io, log: ILog, message: []const u8) ![]const u8 {
     const value = try text(allocator, io, .{
         .message = message,
         .validate = .{
@@ -613,7 +613,7 @@ fn promptRequired(allocator: std.mem.Allocator, io: std.Io, message: []const u8)
 
     if (isCancel(value)) {
         try outro(io, try pc.yellow(allocator, "Cancelled."), .{});
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     return trim(value.value);
@@ -622,14 +622,14 @@ fn promptRequired(allocator: std.mem.Allocator, io: std.Io, message: []const u8)
 //
 // Prompts for an optional text value and returns the trimmed string, or undefined if blank.
 //
-fn promptOptional(allocator: std.mem.Allocator, io: std.Io, message: []const u8) !?[]const u8 {
+fn promptOptional(allocator: std.mem.Allocator, io: std.Io, log: ILog, message: []const u8) !?[]const u8 {
     const value = try text(allocator, io, .{
         .message = message,
     });
 
     if (isCancel(value)) {
         try outro(io, try pc.yellow(allocator, "Cancelled."), .{});
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     const trimmed = trim(value.value);
@@ -639,7 +639,7 @@ fn promptOptional(allocator: std.mem.Allocator, io: std.Io, message: []const u8)
 //
 // psi dbs list: table of all configured databases.
 //
-pub fn dbsList(allocator: std.mem.Allocator, io: std.Io) !void {
+pub fn dbsList(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
     const databases = try getDatabases(allocator, io);
 
     if (databases.len == 0) {
@@ -661,11 +661,11 @@ pub fn dbsList(allocator: std.mem.Allocator, io: std.Io) !void {
 //
 // psi dbs add: interactively add a new database entry.
 //
-pub fn dbsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsAddOptions) !void {
+pub fn dbsAdd(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsAddOptions) !void {
     if (cmdOptions.yes orelse false) {
         if (!isGiven(cmdOptions.name) or !isGiven(cmdOptions.path)) {
             log.@"error"(try pc.red(allocator, "\u{2717} --name and --path are required with --yes"));
-            exit(io, 1);
+            exit(io, log, 1);
         }
 
         cmdOptions.name = trim(cmdOptions.name.?);
@@ -685,10 +685,10 @@ pub fn dbsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsAddOpti
 
         if (try findDatabase(allocator, io, entry.name)) |existing| {
             log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ entry.name, existing.path })));
-            exit(io, 1);
+            exit(io, log, 1);
         }
 
-        try checkSecretsExist(allocator, io, cmdOptions.encryptionKey, cmdOptions.s3Cred, cmdOptions.geocodingKey);
+        try checkSecretsExist(allocator, io, log, cmdOptions.encryptionKey, cmdOptions.s3Cred, cmdOptions.geocodingKey);
 
         try addDatabaseEntry(allocator, io, entry);
         log.info(try pc.green(allocator, try format(allocator, "\u{2713} Database \"{s}\" added.", .{entry.name})));
@@ -697,19 +697,19 @@ pub fn dbsAdd(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsAddOpti
 
     try intro(io, try pc.cyan(allocator, "Add Database"), .{});
 
-    const name = try promptRequired(allocator, io, "Database name:");
-    const description = try promptOptional(allocator, io, "Description (optional):") orelse "";
-    const dbPath = try promptRequired(allocator, io, "Database path (filesystem or S3):");
+    const name = try promptRequired(allocator, io, log, "Database name:");
+    const description = try promptOptional(allocator, io, log, "Description (optional):") orelse "";
+    const dbPath = try promptRequired(allocator, io, log, "Database path (filesystem or S3):");
 
     if (try findDatabase(allocator, io, name)) |existing| {
         try outro(io, try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ name, existing.path })), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     // Secret linking
-    const s3Key = try pickOrCreateSecret(allocator, io, "s3-credentials", name, null);
-    const encryptionKey = try pickOrCreateSecret(allocator, io, "encryption-key", name, null);
-    const geocodingKey = try pickOrCreateSecret(allocator, io, "api-key", name, null);
+    const s3Key = try pickOrCreateSecret(allocator, io, log, "s3-credentials", name, null);
+    const encryptionKey = try pickOrCreateSecret(allocator, io, log, "encryption-key", name, null);
+    const geocodingKey = try pickOrCreateSecret(allocator, io, log, "api-key", name, null);
 
     const entry: IDatabaseEntry = .{
         .name = name,
@@ -775,13 +775,13 @@ fn selectDatabase(allocator: std.mem.Allocator, io: std.Io, databases: []const I
 //
 // psi dbs view [name]: show all fields of a database entry.
 //
-pub fn dbsView(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsViewOptions) !void {
+pub fn dbsView(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsViewOptions) !void {
     var entry: ?IDatabaseEntry = null;
 
     if (!isGiven(cmdOptions.name) and !isGiven(cmdOptions.path)) {
         if (cmdOptions.yes orelse false) {
             log.@"error"(try pc.red(allocator, "\u{2717} --name or --path is required with --yes"));
-            exit(io, 1);
+            exit(io, log, 1);
         }
 
         const databases = try getDatabases(allocator, io);
@@ -804,7 +804,7 @@ pub fn dbsView(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsViewOp
     }
 
     const found = entry orelse {
-        try exitNoMatchingDatabase(allocator, io, cmdOptions.name);
+        try exitNoMatchingDatabase(allocator, io, log, cmdOptions.name);
     };
 
     const none = try pc.dim(allocator, "(none)");
@@ -827,13 +827,13 @@ pub fn dbsView(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsViewOp
 //
 // psi dbs edit [name]: edit fields with current values pre-populated.
 //
-pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsEditOptions) !void {
+pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsEditOptions) !void {
     var entry: ?IDatabaseEntry = null;
 
     if (!isGiven(cmdOptions.name)) {
         if (cmdOptions.yes orelse false) {
             log.@"error"(try pc.red(allocator, "\u{2717} --name is required with --yes"));
-            exit(io, 1);
+            exit(io, log, 1);
         }
 
         const databases = try getDatabases(allocator, io);
@@ -857,8 +857,8 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsEditOp
 
     const found = entry orelse {
         log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} No database named \"{s}\" found.", .{cmdOptions.name orelse "undefined"})));
-        try logDidYouMean(allocator, try findSimilarDatabaseNames(allocator, io, cmdOptions.name orelse "undefined"));
-        exit(io, 1);
+        try logDidYouMean(allocator, log, try findSimilarDatabaseNames(allocator, io, cmdOptions.name orelse "undefined"));
+        exit(io, log, 1);
     };
 
     if (cmdOptions.yes orelse false) {
@@ -869,7 +869,7 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsEditOp
         cmdOptions.s3Cred = trimGiven(cmdOptions.s3Cred);
         cmdOptions.geocodingKey = trimGiven(cmdOptions.geocodingKey);
 
-        try checkSecretsExist(allocator, io, cmdOptions.encryptionKey, cmdOptions.s3Cred, cmdOptions.geocodingKey);
+        try checkSecretsExist(allocator, io, log, cmdOptions.encryptionKey, cmdOptions.s3Cred, cmdOptions.geocodingKey);
 
         const updated: IDatabaseEntry = .{
             .name = if (isGiven(cmdOptions.newName)) cmdOptions.newName.? else found.name,
@@ -929,9 +929,9 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsEditOp
 
     // Secret linking (with current selections highlighted).
     const updatedName = trim(newName.value);
-    const s3Key = try pickOrCreateSecret(allocator, io, "s3-credentials", updatedName, found.s3Key);
-    const encryptionKey = try pickOrCreateSecret(allocator, io, "encryption-key", updatedName, found.encryptionKey);
-    const geocodingKey = try pickOrCreateSecret(allocator, io, "api-key", updatedName, found.geocodingKey);
+    const s3Key = try pickOrCreateSecret(allocator, io, log, "s3-credentials", updatedName, found.s3Key);
+    const encryptionKey = try pickOrCreateSecret(allocator, io, log, "encryption-key", updatedName, found.encryptionKey);
+    const geocodingKey = try pickOrCreateSecret(allocator, io, log, "api-key", updatedName, found.geocodingKey);
 
     const updated: IDatabaseEntry = .{
         .name = updatedName,
@@ -953,13 +953,13 @@ pub fn dbsEdit(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsEditOp
 //
 // psi dbs remove [name]: remove a database entry after confirmation.
 //
-pub fn dbsRemove(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRemoveOptions) !void {
+pub fn dbsRemove(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsRemoveOptions) !void {
     var entry: ?IDatabaseEntry = null;
 
     if (!isGiven(cmdOptions.name) and !isGiven(cmdOptions.path)) {
         if (cmdOptions.yes orelse false) {
             log.@"error"(try pc.red(allocator, "\u{2717} --name or --path is required with --yes"));
-            exit(io, 1);
+            exit(io, log, 1);
         }
 
         const databases = try getDatabases(allocator, io);
@@ -982,7 +982,7 @@ pub fn dbsRemove(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRemo
     }
 
     const found = entry orelse {
-        try exitNoMatchingDatabase(allocator, io, cmdOptions.name);
+        try exitNoMatchingDatabase(allocator, io, log, cmdOptions.name);
     };
 
     if (!(cmdOptions.yes orelse false)) {
@@ -1004,7 +1004,7 @@ pub fn dbsRemove(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRemo
 //
 // psi dbs clear: remove all database entries after confirmation.
 //
-pub fn dbsClear(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsClearOptions) !void {
+pub fn dbsClear(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsClearOptions) !void {
     const databases = try getDatabases(allocator, io);
 
     if (databases.len == 0) {
@@ -1063,7 +1063,7 @@ fn networkRequirementNote(allocator: std.mem.Allocator, io: std.Io) !void {
 //
 // Logs the fields of a database share payload under a heading (the shared display of send and receive).
 //
-fn logPayloadFields(allocator: std.mem.Allocator, heading: []const u8, payload: IDatabaseSharePayload) !void {
+fn logPayloadFields(log: ILog, allocator: std.mem.Allocator, heading: []const u8, payload: IDatabaseSharePayload) !void {
     log.info(try pc.cyan(allocator, heading));
     log.info(try std.mem.concat(allocator, u8, &.{ try pc.cyan(allocator, "  Name:        "), payload.name }));
     log.info(try std.mem.concat(allocator, u8, &.{ try pc.cyan(allocator, "  Description: "), if (payload.description.len > 0) payload.description else try pc.dim(allocator, "(none)") }));
@@ -1207,10 +1207,10 @@ fn cancelReceiver(context: *anyopaque) void {
 //
 // psi dbs send [name]: share a database config with secrets over the LAN.
 //
-pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOptions) !void {
+pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsSendOptions) !void {
     const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
     try intro(io, try pc.cyan(allocator, "Send Database"), .{});
@@ -1223,7 +1223,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
 
     if (isGiven(cmdOptions.name) or isGiven(cmdOptions.path)) {
         entry = try findDatabaseByIdentifier(allocator, io, cmdOptions.name, cmdOptions.path) orelse {
-            try exitNoMatchingDatabase(allocator, io, cmdOptions.name);
+            try exitNoMatchingDatabase(allocator, io, log, cmdOptions.name);
         };
     }
     else {
@@ -1262,7 +1262,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
         }
         entry = selectedEntry orelse {
             log.@"error"(try pc.red(allocator, "\u{2717} Database not found."));
-            exit(io, 1);
+            exit(io, log, 1);
         };
     }
 
@@ -1278,7 +1278,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     }, null);
 
     // Display resolved fields
-    try logPayloadFields(allocator, "\nDatabase to send:", payload);
+    try logPayloadFields(log, allocator, "\nDatabase to send:", payload);
 
     if (isLocalPath(payload.path)) {
         try note(
@@ -1312,7 +1312,7 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     log.info("");
 
     const spin = try spinner(allocator, io, !skipPrompts);
-    try spin.start("Waiting for other device on local network... (Ctrl+C to cancel)");
+    try spin.start(log, "Waiting for other device on local network... (Ctrl+C to cancel)");
 
     // TODO: Ctrl+C is taken over only
     // after the pairing code and the waiting message are shown. A SIGINT that lands in between is not the command's
@@ -1344,15 +1344,15 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
         // A device that announced a different pairing code is a mistyped code, not an absent
         // device, and saying so saves the user hunting the wrong problem.
         if (sender.sawMismatchedReceiver) {
-            try spin.stop(try pc.yellow(allocator, "Pairing code rejected: a device was found but it is using a different code."));
+            try spin.stop(log, try pc.yellow(allocator, "Pairing code rejected: a device was found but it is using a different code."));
         }
         else {
-            try spin.stop(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No device found within {d} seconds.", .{timeoutSeconds})));
+            try spin.stop(log, try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No device found within {d} seconds.", .{timeoutSeconds})));
         }
         return;
     }
 
-    try spin.stop(try pc.green(allocator, "Device found!"));
+    try spin.stop(log, try pc.green(allocator, "Device found!"));
 
     const success = try sender.send(endpoint.?);
 
@@ -1361,12 +1361,12 @@ pub fn dbsSend(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsSendOp
     }
     else {
         log.@"error"(try pc.red(allocator, "\u{2717} Pairing code rejected by other device."));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 }
 
 //
-// The state of the conflict resolver buildConflictResolver builds: whether to skip the prompts, and the Io the
+// The state of the conflict resolver buildConflictResolver builds: whether to skip the prompts, and the Io and the log the
 // prompts use.
 //
 const IConflictResolverContext = struct {
@@ -1375,6 +1375,9 @@ const IConflictResolverContext = struct {
 
     // The Io the prompts use.
     io: std.Io,
+
+    // The log the resolver writes to.
+    log: ILog,
 };
 
 //
@@ -1383,6 +1386,7 @@ const IConflictResolverContext = struct {
 fn resolveSecretConflict(context: ?*anyopaque, allocator: std.mem.Allocator, secretName: []const u8, secretType: []const u8) anyerror!IConflictResolution {
     const resolverContext: *IConflictResolverContext = @ptrCast(@alignCast(context.?));
     const io = resolverContext.io;
+    const log = resolverContext.log;
 
     if (resolverContext.skipPrompts) {
         log.info(try pc.yellow(allocator, try format(allocator, "  \u{26a0} Secret \"{s}\" already exists \u{2014} reusing existing.", .{secretName})));
@@ -1413,7 +1417,7 @@ fn resolveSecretConflict(context: ?*anyopaque, allocator: std.mem.Allocator, sec
 
     if (isCancel(choice)) {
         try outro(io, try pc.yellow(allocator, "Cancelled."), .{});
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     if (std.mem.eql(u8, choice.value, "rename")) {
@@ -1428,7 +1432,7 @@ fn resolveSecretConflict(context: ?*anyopaque, allocator: std.mem.Allocator, sec
 
         if (isCancel(newName)) {
             try outro(io, try pc.yellow(allocator, "Cancelled."), .{});
-            exit(io, 0);
+            exit(io, log, 0);
         }
 
         return .{
@@ -1453,10 +1457,11 @@ fn resolveSecretConflict(context: ?*anyopaque, allocator: std.mem.Allocator, sec
 // existing secret without prompting.  Otherwise it presents an interactive
 // menu offering replace, reuse, or rename.
 //
-fn buildConflictResolver(allocator: std.mem.Allocator, io: std.Io, skipPrompts: bool) !ConflictResolver {
+fn buildConflictResolver(allocator: std.mem.Allocator, io: std.Io, log: ILog, skipPrompts: bool) !ConflictResolver {
     const resolverContext = try allocator.create(IConflictResolverContext);
     resolverContext.* = .{
         .skipPrompts = skipPrompts,
+        .log = log,
         .io = io,
     };
     return .{
@@ -1481,10 +1486,10 @@ fn toDatabaseSharePayload(allocator: std.mem.Allocator, rawPayload: std.json.Val
 //
 // psi dbs receive: receive a database config with secrets from another device.
 //
-pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsReceiveOptions) !void {
+pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, log: ILog, cmdOptions: *IDbsReceiveOptions) !void {
     const timeoutSeconds = init_cmd.parseShareTimeoutSeconds(cmdOptions.timeout) catch |err| {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} {s}", .{utils.errors.errorMessage(err)})));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
     try intro(io, try pc.cyan(allocator, "Receive Database"), .{});
@@ -1500,7 +1505,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     if (skipPrompts) {
         if (!isGiven(cmdOptions.code)) {
             log.@"error"(try pc.red(allocator, "\u{2717} --code is required with --yes"));
-            exit(io, 1);
+            exit(io, log, 1);
         }
         code = cmdOptions.code.?;
     }
@@ -1526,7 +1531,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     try receiver.start(code);
 
     const spin = try spinner(allocator, io, !skipPrompts);
-    try spin.start("Waiting for sender on the local network... (Ctrl+C to cancel)");
+    try spin.start(log, "Waiting for sender on the local network... (Ctrl+C to cancel)");
 
     // TODO: the share-cancel hang explained at the TODO in dbsSend. Ctrl+C is taken over only after the waiting
     // message is shown, so a SIGINT between the two is lost when SIGINT was inherited as ignored.
@@ -1536,20 +1541,20 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     };
     try process_signals.on(.SIGINT, sigintHandler);
 
-    const rawPayload = try receiver.receive();
+    const rawPayload = try receiver.receive(log);
     try process_signals.removeListener(.SIGINT, sigintHandler);
 
     if (rawPayload == null) {
-        try spin.stop(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No device connected within {d} seconds.", .{timeoutSeconds})));
+        try spin.stop(log, try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "No device connected within {d} seconds.", .{timeoutSeconds})));
         return;
     }
 
-    try spin.stop(try pc.green(allocator, "Payload received!"));
+    try spin.stop(log, try pc.green(allocator, "Payload received!"));
 
     var payload = try toDatabaseSharePayload(allocator, rawPayload.?);
 
     // Display received fields
-    try logPayloadFields(allocator, "\nReceived database:", payload);
+    try logPayloadFields(log, allocator, "\nReceived database:", payload);
 
     if (isLocalPath(payload.path)) {
         try note(
@@ -1574,7 +1579,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     }
 
     // Resolve any database-name collision before importing.
-    const resolution = try resolveDatabaseNameConflict(allocator, io, payload.name, skipPrompts) orelse {
+    const resolution = try resolveDatabaseNameConflict(allocator, io, log, payload.name, skipPrompts) orelse {
         return;
     };
     payload.name = resolution.finalName;
@@ -1583,7 +1588,7 @@ pub fn dbsReceive(allocator: std.mem.Allocator, io: std.Io, cmdOptions: *IDbsRec
     }
 
     // Import the payload
-    const dbEntry = try importDatabasePayload(allocator, io, payload, try buildConflictResolver(allocator, io, skipPrompts), null);
+    const dbEntry = try importDatabasePayload(allocator, io, payload, try buildConflictResolver(allocator, io, log, skipPrompts), null);
     try addDatabaseEntry(allocator, io, .{
         .name = dbEntry.name,
         .description = dbEntry.description,
@@ -1614,7 +1619,7 @@ const IDatabaseNameResolution = struct {
 // (caller should print its own outro and return). In --skip-prompts mode, errors out on
 // any collision rather than silently overwriting.
 //
-fn resolveDatabaseNameConflict(allocator: std.mem.Allocator, io: std.Io, proposedName: []const u8, skipPrompts: bool) !?IDatabaseNameResolution {
+fn resolveDatabaseNameConflict(allocator: std.mem.Allocator, io: std.Io, log: ILog, proposedName: []const u8, skipPrompts: bool) !?IDatabaseNameResolution {
     const collision = try findDatabase(allocator, io, proposedName) orelse {
         return .{
             .finalName = proposedName,
@@ -1624,7 +1629,7 @@ fn resolveDatabaseNameConflict(allocator: std.mem.Allocator, io: std.Io, propose
 
     if (skipPrompts) {
         log.@"error"(try pc.red(allocator, try format(allocator, "\u{2717} A database named \"{s}\" already exists ({s}). Use a different name or remove the existing entry first.", .{ proposedName, collision.path })));
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     log.info("");

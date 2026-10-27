@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const bdb = @import("bdb-zig");
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
@@ -154,8 +155,8 @@ fn jsonInteger(value: std.json.Value) i64 {
 //
 // Checks a merkle tree file against the summary recorded with the golden files.
 //
-fn expectTreeMatches(allocator: std.mem.Allocator, storage: *MemoryStorage, filePath: []const u8, typeCode: []const u8, expected: std.json.Value) !void {
-    const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, io, filePath, storage.asStorage(), typeCode)).?;
+fn expectTreeMatches(log: ILog, allocator: std.mem.Allocator, storage: *MemoryStorage, filePath: []const u8, typeCode: []const u8, expected: std.json.Value) !void {
+    const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, io, log, filePath, storage.asStorage(), typeCode)).?;
     try std.testing.expectEqualStrings(expected.object.get("id").?.string, tree.id);
     try std.testing.expectEqual(jsonInteger(expected.object.get("version").?), @as(i64, tree.version));
 
@@ -200,7 +201,7 @@ fn pathLessThan(context: void, left: []const u8, right: []const u8) bool {
 //
 // Checks every file of the storage against the scenario fixture and returns the parsed fixture.
 //
-fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, fixtureName: []const u8) !std.json.Value {
+fn expectMatchesSnapshot(log: ILog, allocator: std.mem.Allocator, storage: *MemoryStorage, fixtureName: []const u8) !std.json.Value {
     const fixture = try fixtures.readJsonFixture(allocator, io, fixtureName);
     const expectedFiles = fixture.object.get("files").?.array.items;
     const trees = fixture.object.get("trees").?.object;
@@ -221,7 +222,7 @@ fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, 
         const filePath = expectedFile.object.get("path").?.string;
         const data = storage.getFile(filePath).?;
         if (trees.get(filePath)) |expectedTree| {
-            expectTreeMatches(allocator, storage, filePath, data[4..8], expectedTree) catch |err| {
+            expectTreeMatches(log, allocator, storage, filePath, data[4..8], expectedTree) catch |err| {
                 std.debug.print("{s}: merkle tree {s} differs\n", .{ fixtureName, filePath });
                 return err;
             };
@@ -238,7 +239,7 @@ fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, 
     try std.testing.expectEqual(@as(usize, 0), mismatches);
 
     const rootHash = fixture.object.get("rootHash").?;
-    const databaseTree = try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, storage.asStorage(), ".db/bson");
+    const databaseTree = try bdb.merkle_tree.loadDatabaseMerkleTree(allocator, io, log, storage.asStorage(), ".db/bson");
     if (rootHash == .null) {
         try std.testing.expect(databaseTree == null or databaseTree.?.merkle == null);
     }
@@ -251,12 +252,13 @@ fn expectMatchesSnapshot(allocator: std.mem.Allocator, storage: *MemoryStorage, 
 //
 // Ensures the media file database sort indexes (node-api's ensureSortIndex).
 //
-fn ensureMediaSortIndexes(collection: *bdb.collection.BsonCollection) !void {
-    try (try collection.sortIndex("hash", .asc)).ensure(io, collection, .string);
-    try (try collection.sortIndex("photoDate", .desc)).ensure(io, collection, .date);
+fn ensureMediaSortIndexes(log: ILog, collection: *bdb.collection.BsonCollection) !void {
+    try (try collection.sortIndex("hash", .asc)).ensure(io, log, collection, .string);
+    try (try collection.sortIndex("photoDate", .desc)).ensure(io, log, collection, .date);
 }
 
 test "scenario create: sort indexes ensured on an empty collection, then records set and committed" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -267,14 +269,14 @@ test "scenario create: sort indexes ensured on an empty collection, then records
 
     const database = try openDatabase(allocator, &storage, &uuidGenerator);
     const collection = try database.collection("metadata");
-    try ensureMediaSortIndexes(collection);
+    try ensureMediaSortIndexes(log, collection);
     var index: i64 = 0;
     while (index < SCENARIO_RECORD_COUNT) : (index += 1) {
         try ids.append(allocator, try recordIdGenerator.generate(allocator));
-        try collection.setInternalRecord(io, try makeRecord(allocator, ids.items[@intCast(index)], index, 0, 1700000000000 + index));
+        try collection.setInternalRecord(io, log, try makeRecord(allocator, ids.items[@intCast(index)], index, 0, 1700000000000 + index));
     }
-    try database.commit(io);
-    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-create.json");
+    try database.commit(io, log);
+    _ = try expectMatchesSnapshot(log, allocator, &storage, "scenario-create.json");
 
     // Scenario update: a new database instance over the same storage, continuing the same uuid generators.
     const updateDatabase = try openDatabase(allocator, &storage, &uuidGenerator);
@@ -282,25 +284,26 @@ test "scenario create: sort indexes ensured on an empty collection, then records
     index = 0;
     while (index < SCENARIO_RECORD_COUNT) : (index += 1) {
         if (@mod(index, 3) == 0) {
-            try updateCollection.setInternalRecord(io, try makeRecord(allocator, ids.items[@intCast(index)], index, 1, 1800000000000 + index));
+            try updateCollection.setInternalRecord(io, log, try makeRecord(allocator, ids.items[@intCast(index)], index, 1, 1800000000000 + index));
         }
     }
     index = 0;
     while (index < SCENARIO_RECORD_COUNT) : (index += 1) {
         if (index < 1000 or (@mod(index, 3) != 0 and index < 1400)) {
-            _ = try updateCollection.deleteOne(io, ids.items[@intCast(index)]);
+            _ = try updateCollection.deleteOne(io, log, ids.items[@intCast(index)]);
         }
     }
     index = SCENARIO_RECORD_COUNT;
     while (index < SCENARIO_RECORD_COUNT + 300) : (index += 1) {
         try ids.append(allocator, try recordIdGenerator.generate(allocator));
-        try updateCollection.setInternalRecord(io, try makeRecord(allocator, ids.items[@intCast(index)], index, 0, 1700000000000 + index));
+        try updateCollection.setInternalRecord(io, log, try makeRecord(allocator, ids.items[@intCast(index)], index, 0, 1700000000000 + index));
     }
-    try updateDatabase.commit(io);
-    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-update.json");
+    try updateDatabase.commit(io, log);
+    _ = try expectMatchesSnapshot(log, allocator, &storage, "scenario-update.json");
 }
 
 test "scenario build: sort indexes built from existing shards" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -312,18 +315,19 @@ test "scenario build: sort indexes built from existing shards" {
     const collection = try database.collection("metadata");
     var index: i64 = 0;
     while (index < SCENARIO_RECORD_COUNT) : (index += 1) {
-        try collection.setInternalRecord(io, try makeRecord(allocator, try recordIdGenerator.generate(allocator), index, 0, 1700000000000 + index));
+        try collection.setInternalRecord(io, log, try makeRecord(allocator, try recordIdGenerator.generate(allocator), index, 0, 1700000000000 + index));
     }
-    try database.commit(io);
+    try database.commit(io, log);
 
     const buildDatabase = try openDatabase(allocator, &storage, &uuidGenerator);
     const buildCollection = try buildDatabase.collection("metadata");
-    try ensureMediaSortIndexes(buildCollection);
-    try buildDatabase.commit(io);
-    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-build.json");
+    try ensureMediaSortIndexes(log, buildCollection);
+    try buildDatabase.commit(io, log);
+    _ = try expectMatchesSnapshot(log, allocator, &storage, "scenario-build.json");
 }
 
 test "scenario existing: records updated, deleted and added in the 50-assets test database" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -336,7 +340,7 @@ test "scenario existing: records updated, deleted and added in the 50-assets tes
 
     var records: std.ArrayList(IInternalRecord) = .empty;
     var iterator = collection.iterateRecords();
-    while (try iterator.next(io)) |record| {
+    while (try iterator.next(io, log)) |record| {
         try records.append(allocator, record);
     }
     for (records.items, 0..) |record, recordIndex| {
@@ -346,27 +350,28 @@ test "scenario existing: records updated, deleted and added in the 50-assets tes
             var fields: BsonDocument = .empty;
             try fields.fields.appendSlice(allocator, record.fields.fields.items);
             try fields.put(allocator, "hash", .{ .string = try sha256Hex(allocator, try std.fmt.allocPrint(allocator, "changed-{d}", .{index})) });
-            try collection.setInternalRecord(io, .{ ._id = record._id, .fields = fields, .metadata = record.metadata });
+            try collection.setInternalRecord(io, log, .{ ._id = record._id, .fields = fields, .metadata = record.metadata });
         }
         else if (@mod(index, 4) == 1) {
             var fields: BsonDocument = .empty;
             try fields.fields.appendSlice(allocator, record.fields.fields.items);
             try fields.put(allocator, "photoDate", .{ .date = BASE_TIME + index * 86400000 });
-            try collection.setInternalRecord(io, .{ ._id = record._id, .fields = fields, .metadata = record.metadata });
+            try collection.setInternalRecord(io, log, .{ ._id = record._id, .fields = fields, .metadata = record.metadata });
         }
         else if (@mod(index, 4) == 2 and index < 20) {
-            _ = try collection.deleteOne(io, record._id);
+            _ = try collection.deleteOne(io, log, record._id);
         }
     }
     var newIndex: i64 = 0;
     while (newIndex < 5) : (newIndex += 1) {
-        try collection.setInternalRecord(io, try makeRecord(allocator, try recordIdGenerator.generate(allocator), newIndex, 0, 1700000000000 + newIndex));
+        try collection.setInternalRecord(io, log, try makeRecord(allocator, try recordIdGenerator.generate(allocator), newIndex, 0, 1700000000000 + newIndex));
     }
-    try database.commit(io);
-    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-existing.json");
+    try database.commit(io, log);
+    _ = try expectMatchesSnapshot(log, allocator, &storage, "scenario-existing.json");
 }
 
 test "scenario leaves: deleting the first leaf of a sort index" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -377,30 +382,31 @@ test "scenario leaves: deleting the first leaf of a sort index" {
 
     const database = try openDatabase(allocator, &storage, &uuidGenerator);
     const collection = try database.collection("metadata");
-    try (try collection.sortIndex("hash", .asc)).ensure(io, collection, .string);
+    try (try collection.sortIndex("hash", .asc)).ensure(io, log, collection, .string);
     var index: i64 = 0;
     while (index < 1600) : (index += 1) {
         try ids.append(allocator, try recordIdGenerator.generate(allocator));
-        try collection.setInternalRecord(io, try makeHashRecord(allocator, ids.items[@intCast(index)], index, true));
+        try collection.setInternalRecord(io, log, try makeHashRecord(allocator, ids.items[@intCast(index)], index, true));
     }
-    try database.commit(io);
+    try database.commit(io, log);
 
     const updateDatabase = try openDatabase(allocator, &storage, &uuidGenerator);
     const updateCollection = try updateDatabase.collection("metadata");
     index = 0;
     while (index < 800) : (index += 1) {
-        _ = try updateCollection.deleteOne(io, ids.items[@intCast(index)]);
+        _ = try updateCollection.deleteOne(io, log, ids.items[@intCast(index)]);
     }
     index = 1600;
     while (index < 1650) : (index += 1) {
         try ids.append(allocator, try recordIdGenerator.generate(allocator));
-        try updateCollection.setInternalRecord(io, try makeHashRecord(allocator, ids.items[@intCast(index)], index, true));
+        try updateCollection.setInternalRecord(io, log, try makeHashRecord(allocator, ids.items[@intCast(index)], index, true));
     }
-    try updateDatabase.commit(io);
-    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-leaves.json");
+    try updateDatabase.commit(io, log);
+    _ = try expectMatchesSnapshot(log, allocator, &storage, "scenario-leaves.json");
 }
 
 test "scenario large: enough leaf splits to split the root internal node" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -411,28 +417,28 @@ test "scenario large: enough leaf splits to split the root internal node" {
     const database = try openDatabase(allocator, &storage, &uuidGenerator);
     const collection = try database.collection("metadata");
     const sortIndex = try collection.sortIndex("hash", .asc);
-    try sortIndex.ensure(io, collection, .string);
+    try sortIndex.ensure(io, log, collection, .string);
     var records: std.ArrayList(IInternalRecord) = .empty;
     var index: i64 = 0;
     while (index < LARGE_RECORD_COUNT) : (index += 1) {
         try records.append(allocator, try makeHashRecord(allocator, try recordIdGenerator.generate(allocator), index, false));
-        try sortIndex.addRecord(io, records.items[@intCast(index)]);
+        try sortIndex.addRecord(io, log, records.items[@intCast(index)]);
     }
     index = 0;
     while (index < 2100) : (index += 7) {
         var fields: BsonDocument = .empty;
         try fields.put(allocator, "hash", .{ .string = try std.fmt.allocPrint(allocator, "g{d:0>8}", .{@as(u64, @intCast(index))}) });
         const updated: IInternalRecord = .{ ._id = records.items[@intCast(index)]._id, .fields = fields, .metadata = .empty };
-        try sortIndex.updateRecord(io, updated, records.items[@intCast(index)]);
+        try sortIndex.updateRecord(io, log, updated, records.items[@intCast(index)]);
         records.items[@intCast(index)] = updated;
     }
     index = 5000;
     while (index < 6000) : (index += 1) {
         const record = records.items[@intCast(index)];
-        try sortIndex.deleteRecord(io, record._id, record);
+        try sortIndex.deleteRecord(io, log, record._id, record);
     }
-    try sortIndex.commit(io);
+    try sortIndex.commit(io, log);
     const rootNode = sortIndex.treeNodes.get(sortIndex.rootPageId.?).?;
     try std.testing.expectEqual(@as(usize, 2), rootNode.children.items.len);
-    _ = try expectMatchesSnapshot(allocator, &storage, "scenario-large.json");
+    _ = try expectMatchesSnapshot(log, allocator, &storage, "scenario-large.json");
 }

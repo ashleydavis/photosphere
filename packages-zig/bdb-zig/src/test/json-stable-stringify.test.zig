@@ -29,6 +29,7 @@ test "stringify matches json-stable-stringify for the synthetic records" {
 }
 
 test "stringify matches json-stable-stringify for every record in the test databases" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -50,7 +51,7 @@ test "stringify matches json-stable-stringify for every record in the test datab
             const database = try bdb.database.BsonDatabase.init(allocator, storage.asStorage(), ".db/bson", testUuidGenerator.uuidGenerator(), test_clock.timestamp_provider.timestampProvider());
             const collection = try database.collection("metadata");
             var iterator = collection.iterateRecords();
-            while (try iterator.next(io)) |record| {
+            while (try iterator.next(io, log)) |record| {
                 try records.put(allocator, record._id, record);
             }
         }

@@ -34,6 +34,7 @@ pub fn createDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -49,10 +50,10 @@ pub fn createDatabaseHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const credentials = try resolveStorageCredentials(allocator, io, data.databasePath, null, null, context.nativeCaller);
+    const credentials = try resolveStorageCredentials(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const created = try createStorage(allocator, io, data.databasePath, credentials.s3Config, loadedKeys.options);
     const database = try createMediaFileDatabase(allocator, created.storage, context.uuidGenerator, context.timestampProvider);
-    try createDatabase(allocator, io, created.storage, created.rawStorage, context.uuidGenerator, database.metadataCollection, null);
+    try createDatabase(allocator, io, log, created.storage, created.rawStorage, context.uuidGenerator, database.metadataCollection, null);
     return .null;
 }

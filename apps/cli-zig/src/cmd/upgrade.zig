@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -14,7 +15,6 @@ const storage_helper = @import("../lib/storage-helper.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const ensure_tools = @import("../lib/ensure-tools.zig");
 const prompts = @import("../lib/clack/prompts.zig");
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const throwError = utils.errors.throwError;
 const errorMessage = utils.errors.errorMessage;
@@ -94,8 +94,8 @@ fn LoadTreeOperation(comptime sourceText: []const u8) type {
         //
         // Loads the tree.
         //
-        pub fn run(self: *@This(), io: std.Io) !?IMerkleTree {
-            return loadTree(self.allocator, io, self.filePath, self.storage, "FTRE");
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?IMerkleTree {
+            return loadTree(self.allocator, io, log, self.filePath, self.storage, "FTRE");
         }
     };
 }
@@ -119,8 +119,8 @@ const SaveTreeOperation = struct {
     //
     // Saves the tree.
     //
-    pub fn run(self: *SaveTreeOperation, io: std.Io) !void {
-        return saveTree(self.allocator, io, ".db/files.dat", self.merkleTree, self.storage, "FTRE");
+    pub fn run(self: *SaveTreeOperation, io: std.Io, log: ILog) !void {
+        return saveTree(self.allocator, io, log, ".db/files.dat", self.merkleTree, self.storage, "FTRE");
     }
 };
 
@@ -141,7 +141,7 @@ const IFillLastModifiedContext = struct {
 //
 // Fills in the missing lastModified of a leaf from its file information.
 //
-fn fillLastModified(context: *const IFillLastModifiedContext, node: *SortNode) anyerror!bool {
+fn fillLastModified(context: *const IFillLastModifiedContext, _: ILog, node: *SortNode) anyerror!bool {
     if (node.name) |name| {
         if (node.lastModified == null or node.lastModified.? == 0) {
             const fileInfo = try context.assetStorage.info(context.allocator, context.io, name);
@@ -157,8 +157,8 @@ fn fillLastModified(context: *const IFillLastModifiedContext, node: *SortNode) a
 //
 // Computes the hash of a file in storage.
 //
-fn computeStorageHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileName: []const u8) ![32]u8 {
-    const stream = try storage.readStream(allocator, io, fileName);
+fn computeStorageHash(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, fileName: []const u8) ![32]u8 {
+    const stream = try storage.readStream(allocator, io, log, fileName);
     defer stream.destroy(io);
     return computeHash(stream.reader());
 }
@@ -166,7 +166,7 @@ fn computeStorageHash(allocator: std.mem.Allocator, io: std.Io, storage: IStorag
 //
 // Command that upgrades a Photosphere media file database to the latest format.
 //
-pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IUpgradeCommandOptions) !void {
+pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IUpgradeCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
@@ -174,7 +174,7 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     try intro(io, try pc.blue(allocator, "Upgrading media file database..."), .{});
 
     const nonInteractive = options.base.yes orelse false;
-    try ensureMediaProcessingTools(allocator, io, context.toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log, context.toolRunner);
 
     var databaseDir: []const u8 = undefined;
     if (options.base.db) |db| {
@@ -182,18 +182,18 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
     }
     else {
         const cwd = if (options.base.cwd != null and options.base.cwd.?.len > 0) options.base.cwd.? else try std.process.currentPathAlloc(io, allocator);
-        databaseDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+        databaseDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
     }
 
     const metaPath = try pathJoin(allocator, &.{ databaseDir, ".db" });
     if (std.mem.startsWith(u8, databaseDir, "s3:") or std.mem.startsWith(u8, metaPath, "s3:")) {
-        _ = try configureS3IfNeeded(allocator, io, nonInteractive);
+        _ = try configureS3IfNeeded(allocator, io, log, nonInteractive);
     }
 
     var keyPems: []const IEncryptionKeyPem = try resolveKeyPemsWithPrompt(allocator, io, options.base.key, nonInteractive, false);
     if (options.base.key != null and options.base.key.?.len > 0 and keyPems.len == 0) {
         try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Encryption key \"{s}\" not found.\n  Use \"psi secrets list\" to see available keys.", .{options.base.key.?})), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
     var storageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
     const created = try createStorageForPath(allocator, io, databaseDir, storageOptions);
@@ -207,17 +207,17 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
             try pc.cyan(allocator, databaseDir),
             try pc.cyan(allocator, try std.fmt.allocPrint(allocator, "psi init --db {s}", .{databaseDir})),
         })), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     if (try assetStorage.fileExists(allocator, io, ".db/encryption.pub")) {
         if (keyPems.len == 0) {
             if (nonInteractive) {
                 try outro(io, try pc.red(allocator, "\u{2717} This database is encrypted and requires a private key to access.\n  Please provide the private key using the --key option."), .{});
-                exit(io, 1);
+                exit(io, log, 1);
             }
             log.info(try pc.yellow(allocator, "This database is encrypted and requires a private key to access."));
-            const selectedKey = try selectEncryptionKey(allocator, io, "Select the encryption key for this database:");
+            const selectedKey = try selectEncryptionKey(allocator, io, log, "Select the encryption key for this database:");
             options.base.key = selectedKey;
             keyPems = try resolveKeyPems(allocator, io, options.base.key);
             storageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
@@ -231,14 +231,14 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
         .filePath = ".db/files.dat",
         .storage = assetStorage,
     };
-    var loadedTree = try retry(io, &loadFilesOperation, 3, 1_000, 2, 30_000, null);
+    var loadedTree = try retry(io, log, &loadFilesOperation, 3, 1_000, 2, 30_000, null);
     if (loadedTree == null) {
         var loadLegacyOperation: LoadTreeOperation("() => loadTree(\".db/tree.dat\", assetStorage)") = .{
             .allocator = allocator,
             .filePath = ".db/tree.dat",
             .storage = assetStorage,
         };
-        loadedTree = try retry(io, &loadLegacyOperation, 3, 1_000, 2, 30_000, null);
+        loadedTree = try retry(io, log, &loadLegacyOperation, 3, 1_000, 2, 30_000, null);
     }
     var merkleTree = loadedTree orelse {
         return throwError("Failed to load merkle tree (no .db/files.dat or .db/tree.dat found)", .{});
@@ -250,11 +250,11 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
 
     if (currentVersion == CURRENT_DATABASE_VERSION) {
         log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Database is already at the latest version ({d})", .{CURRENT_DATABASE_VERSION})));
-        exit(io, 0);
+        exit(io, log, 0);
     }
     else if (currentVersion >= CURRENT_DATABASE_VERSION) {
         try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Database version {d} is newer than the current supported version {d}.\n  Please update your Photosphere CLI tool.", .{ currentVersion, CURRENT_DATABASE_VERSION })), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     log.warn(try pc.yellow(allocator, "\u{26A0}\u{FE0F}  IMPORTANT: Database upgrade will modify your database files."));
@@ -288,23 +288,23 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
 
     if (!shouldProceed) {
         try outro(io, "Database upgrade cancelled.", .{});
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     log.info(try std.fmt.allocPrint(allocator, "Upgrading database from version {d} to version {d}...", .{ currentVersion, CURRENT_DATABASE_VERSION }));
 
     // Acquire write lock before making changes
-    if (!try acquireWriteLock(allocator, io, assetStorage, sessionId, 3)) {
+    if (!try acquireWriteLock(allocator, io, log, assetStorage, sessionId, 3)) {
         return throwError("Failed to acquire write lock for database upgrade.", .{});
     }
 
-    upgradeLocked(allocator, io, uuidGenerator, timestampProvider, assetStorage, rawStorage, keyPems, currentVersion, &merkleTree, databaseDir) catch |err| {
-        try releaseWriteLock(allocator, io, assetStorage);
+    upgradeLocked(allocator, io, log, uuidGenerator, timestampProvider, assetStorage, rawStorage, keyPems, currentVersion, &merkleTree, databaseDir) catch |err| {
+        try releaseWriteLock(allocator, io, log, assetStorage);
         return err;
     };
-    try releaseWriteLock(allocator, io, assetStorage);
+    try releaseWriteLock(allocator, io, log, assetStorage);
 
-    exit(io, 0);
+    exit(io, log, 0);
 }
 
 //
@@ -313,6 +313,7 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, context: IComman
 fn upgradeLocked(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     uuidGenerator: utils.uuid_generator.IUuidGenerator,
     timestampProvider: utils.timestamp_provider.ITimestampProvider,
     assetStorage: IStorage,
@@ -330,7 +331,7 @@ fn upgradeLocked(
         .io = io,
         .assetStorage = assetStorage,
     };
-    try traverseTreeAsync(SortNode, merkleTree.sort, &fillContext, fillLastModified);
+    try traverseTreeAsync(SortNode, merkleTree.sort, log, &fillContext, fillLastModified);
 
     if (try assetStorage.dirExists(allocator, io, "assets")) {
 
@@ -352,15 +353,15 @@ fn upgradeLocked(
                 // Get file info and compute hash of source file
                 const fileInfo = try assetStorage.info(allocator, io, sourceFile);
                 if (fileInfo) |info| {
-                    const sourceHash = try computeStorageHash(allocator, io, assetStorage, sourceFile);
+                    const sourceHash = try computeStorageHash(allocator, io, log, assetStorage, sourceFile);
 
                     // Copy file from assets/ to asset/
-                    const readStream = try assetStorage.readStream(allocator, io, sourceFile);
+                    const readStream = try assetStorage.readStream(allocator, io, log, sourceFile);
                     defer readStream.destroy(io);
                     try assetStorage.writeStream(allocator, io, destFile, info.contentType, readStream.reader(), null);
 
                     // Verify the copied file has the same hash
-                    const destHash = try computeStorageHash(allocator, io, assetStorage, destFile);
+                    const destHash = try computeStorageHash(allocator, io, log, assetStorage, destFile);
 
                     if (!std.mem.eql(u8, &sourceHash, &destHash)) {
                         return throwError("Hash mismatch during file move from {s} to {s}: source={s}, dest={s}", .{ sourceFile, destFile, &std.fmt.bytesToHex(sourceHash, .lower), &std.fmt.bytesToHex(destHash, .lower) });
@@ -399,9 +400,9 @@ fn upgradeLocked(
         .storage = assetStorage,
         .fileName = "README.md",
     };
-    const existingReadme = try retry(io, &readmeInfoOperation, 3, 1_000, 2, 30_000, null);
+    const existingReadme = try retry(io, log, &readmeInfoOperation, 3, 1_000, 2, 30_000, null);
     if (existingReadme == null) {
-        merkleTree = try createReadme(allocator, io, rawStorage, merkleTree);
+        merkleTree = try createReadme(allocator, io, log, rawStorage, merkleTree);
     }
 
     // Check if database is encrypted and ensure public key is in .db directory
@@ -423,9 +424,9 @@ fn upgradeLocked(
         //
         if (currentVersion < FIRST_VERSION_WITH_ENCRYPTED_DOT_DB) {
             var walker = try walkDirectory(allocator, io, assetStorage, ".db", &.{});
-            while (try walker.next()) |file| {
+            while (try walker.next(log)) |file| {
                 const filePath = file.fileName;
-                const data = try assetStorage.read(allocator, io, filePath);
+                const data = try assetStorage.read(allocator, io, log, filePath);
                 if (data) |bytes| {
                     const info = try assetStorage.info(allocator, io, filePath);
                     try assetStorage.write(allocator, io, filePath, if (info) |fileInfo| fileInfo.contentType else null, bytes);
@@ -462,7 +463,7 @@ fn upgradeLocked(
         .merkleTree = &merkleTree,
         .storage = assetStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
     if (try assetStorage.fileExists(allocator, io, ".db/tree.dat")) {
         try assetStorage.deleteFile(allocator, io, ".db/tree.dat");
     }
@@ -471,7 +472,7 @@ fn upgradeLocked(
     // Migrate BSON from metadata/ to .db/bson/ when metadata/ exists (copy only; rest of upgrade still uses metadata/)
     if (try assetStorage.dirExists(allocator, io, "metadata")) {
         log.info(try pc.blue(allocator, "Migrating BSON from metadata/ to .db/bson/."));
-        try migrateBsonV5ToV6(allocator, io, assetStorage, "metadata", ".db/bson");
+        try migrateBsonV5ToV6(allocator, io, log, assetStorage, "metadata", ".db/bson");
         log.info(try pc.green(allocator, "\u{2713} BSON migrated to .db/bson/"));
     }
 
@@ -480,6 +481,7 @@ fn upgradeLocked(
     var bsonDatabaseTree = try buildDatabaseMerkleTree(
         allocator,
         io,
+        log,
         assetStorage,
         ".db/bson",
         uuidGenerator,
@@ -491,7 +493,7 @@ fn upgradeLocked(
         try deleteDatabaseMerkleTree(allocator, io, assetStorage, ".db/bson");
     }
     else {
-        try saveDatabaseMerkleTree(allocator, io, assetStorage, ".db/bson", &bsonDatabaseTree);
+        try saveDatabaseMerkleTree(allocator, io, log, assetStorage, ".db/bson", &bsonDatabaseTree);
     }
     log.info(try pc.green(allocator, "\u{2713} BSON database merkle tree built successfully"));
 
@@ -503,7 +505,7 @@ fn upgradeLocked(
     for (existingIndexes) |index| {
         _ = try (try v6MetadataCollection.sortIndex(index.fieldName, index.direction)).drop(io);
     }
-    try ensureSortIndex(io, v6MetadataCollection);
+    try ensureSortIndex(io, log, v6MetadataCollection);
     log.info(try pc.green(allocator, "\u{2713} Sort indexes rebuilt successfully"));
 
     // Remove the old metadata/ directory now that everything is in .db/bson/
@@ -513,9 +515,9 @@ fn upgradeLocked(
     }
 
     // Ensure .db/config.json exists (create empty if not present)
-    const existingConfig = try loadDatabaseConfig(allocator, io, rawStorage);
+    const existingConfig = try loadDatabaseConfig(allocator, io, log, rawStorage);
     if (existingConfig == null) {
-        try saveDatabaseConfig(allocator, io, rawStorage, .{});
+        try saveDatabaseConfig(allocator, io, log, rawStorage, .{});
         log.info(try pc.green(allocator, "\u{2713} Created .db/config.json"));
     }
 
@@ -532,8 +534,8 @@ fn upgradeLocked(
 //
 // Copies a file within the same storage.
 //
-fn copyStorageFile(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, src: []const u8, dest: []const u8) !void {
-    const data = try storage.read(allocator, io, src);
+fn copyStorageFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, src: []const u8, dest: []const u8) !void {
+    const data = try storage.read(allocator, io, log, src);
     if (data) |bytes| {
         try storage.write(allocator, io, dest, null, bytes);
     }
@@ -544,11 +546,12 @@ fn copyStorageFile(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, 
 // with v6 layout (collections/, shards/, indexes/). Does not copy sort_indexes (rebuilt later).
 // Does not delete srcPrefix so callers that still use the source root keep working.
 //
-fn migrateBsonV5ToV6(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, srcPrefix: []const u8, destPrefix: []const u8) !void {
+fn migrateBsonV5ToV6(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, srcPrefix: []const u8, destPrefix: []const u8) !void {
     if (try storage.fileExists(allocator, io, try pathJoin(allocator, &.{ srcPrefix, "db.dat" }))) {
         try copyStorageFile(
             allocator,
             io,
+            log,
             storage,
             try pathJoin(allocator, &.{ srcPrefix, "db.dat" }),
             try pathJoin(allocator, &.{ destPrefix, "db.dat" }),
@@ -582,6 +585,7 @@ fn migrateBsonV5ToV6(allocator: std.mem.Allocator, io: std.Io, storage: IStorage
                     try copyStorageFile(
                         allocator,
                         io,
+                        log,
                         storage,
                         srcPath,
                         try pathJoin(allocator, &.{ destPrefix, "collections", collectionName, "collection.dat" }),
@@ -591,6 +595,7 @@ fn migrateBsonV5ToV6(allocator: std.mem.Allocator, io: std.Io, storage: IStorage
                     try copyStorageFile(
                         allocator,
                         io,
+                        log,
                         storage,
                         srcPath,
                         try pathJoin(allocator, &.{ destPrefix, "collections", collectionName, "shards", fileName }),

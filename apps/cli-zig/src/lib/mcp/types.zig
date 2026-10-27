@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -70,6 +71,11 @@ pub const IMcpToolContext = struct {
     // Runs the ImageMagick and FFmpeg built into the program, for open_database's check of them.
     //
     toolRunner: InProcessRunner,
+
+    //
+    // The log the tools write to.
+    //
+    log: ILog,
 
     //
     // Session identifier used for write lock tracking.

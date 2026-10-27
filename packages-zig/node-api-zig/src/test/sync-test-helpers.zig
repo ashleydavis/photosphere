@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -43,7 +44,7 @@ pub const IFileToStore = struct {
 //
 // Fills a storage with the given files and a merkle tree describing exactly them, under the length of each file's
 // contents, recording the given asset ids as deleted (none when empty). The tree is saved to `.db/files.dat`.//
-pub fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, databaseId: []const u8, files: []const IFileToStore, deletedAssetIds: []const []const u8) !void {
+pub fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, databaseId: []const u8, files: []const IFileToStore, deletedAssetIds: []const []const u8) !void {
     var tree = merkle_tree.createTree(databaseId);
     for (files) |file| {
         try storage.write(allocator, io, file.name, "image/jpeg", file.contents);
@@ -66,7 +67,7 @@ pub fn fillDatabase(allocator: std.mem.Allocator, io: std.Io, storage: IStorage,
     tree.databaseMetadata = databaseMetadata;
     tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
     tree.dirty = false;
-    try merkle_tree.saveTree(allocator, io, ".db/files.dat", &tree, storage, "FTRE");
+    try merkle_tree.saveTree(allocator, io, log, ".db/files.dat", &tree, storage, "FTRE");
 }
 
 //
@@ -262,7 +263,8 @@ pub const ThrowingStorage = struct {
     //
     // Throws.
     //
-    pub fn read(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = filePath;
@@ -284,7 +286,8 @@ pub const ThrowingStorage = struct {
     //
     // Throws.
     //
-    pub fn readStream(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = filePath;
@@ -348,7 +351,8 @@ pub const ThrowingStorage = struct {
     //
     // Throws.
     //
-    pub fn acquireWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
+    pub fn acquireWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = filePath;
@@ -359,7 +363,8 @@ pub const ThrowingStorage = struct {
     //
     // Throws.
     //
-    pub fn releaseWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+    pub fn releaseWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = filePath;
@@ -369,7 +374,8 @@ pub const ThrowingStorage = struct {
     //
     // Throws.
     //
-    pub fn refreshWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
+    pub fn refreshWriteLock(self: *ThrowingStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        _ = log;
         _ = allocator;
         _ = io;
         _ = filePath;
@@ -541,8 +547,8 @@ pub const SpyStorage = struct {
     //
     // Passes read through.
     //
-    pub fn read(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]u8 {
-        return self.inner.read(allocator, io, filePath);
+    pub fn read(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        return self.inner.read(allocator, io, log, filePath);
     }
 
     //
@@ -558,9 +564,9 @@ pub const SpyStorage = struct {
     //
     // Records the path, then passes readStream through.
     //
-    pub fn readStream(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
         try self.readStreamPaths.append(self.allocator, try self.allocator.dupe(u8, filePath));
-        return self.inner.readStream(allocator, io, filePath);
+        return self.inner.readStream(allocator, io, log, filePath);
     }
 
     //
@@ -606,22 +612,22 @@ pub const SpyStorage = struct {
     //
     // Passes acquireWriteLock through.
     //
-    pub fn acquireWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !bool {
-        return self.inner.acquireWriteLock(allocator, io, filePath, owner);
+    pub fn acquireWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        return self.inner.acquireWriteLock(allocator, io, log, filePath, owner);
     }
 
     //
     // Passes releaseWriteLock through.
     //
-    pub fn releaseWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
-        return self.inner.releaseWriteLock(allocator, io, filePath);
+    pub fn releaseWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        return self.inner.releaseWriteLock(allocator, io, log, filePath);
     }
 
     //
     // Passes refreshWriteLock through.
     //
-    pub fn refreshWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) !void {
-        return self.inner.refreshWriteLock(allocator, io, filePath, owner);
+    pub fn refreshWriteLock(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        return self.inner.refreshWriteLock(allocator, io, log, filePath, owner);
     }
 
     //

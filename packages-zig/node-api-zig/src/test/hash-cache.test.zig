@@ -6,7 +6,6 @@ const ziggy = @import("ziggy");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
-const mock_log = @import("mock-log.zig");
 const hash_cache = node_api.hash_cache;
 const HashCache = hash_cache.HashCache;
 const IHashCacheEntry = hash_cache.IHashCacheEntry;
@@ -76,20 +75,22 @@ const CacheTest = struct {
 };
 
 test "should initialize with empty cache" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
-    const loaded = try context.hashCache.load(std.testing.io);
+    const loaded = try context.hashCache.load(std.testing.io, log);
     try std.testing.expectEqual(false, loaded);
     try std.testing.expectEqual(@as(u32, 0), context.hashCache.getEntryCount());
 }
 
 test "should add and retrieve hash" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     const filePath = "test/file1.txt";
     const hash = try createHash(allocator, "file content");
@@ -110,11 +111,12 @@ test "should add and retrieve hash" {
 }
 
 test "should update existing hash" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     const filePath = "test/file2.txt";
     try context.hashCache.addHash(filePath, .{
@@ -139,12 +141,13 @@ test "should update existing hash" {
 }
 
 test "should save and load cache" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
 
     // Add some hashes
     const hash1 = try createHash(allocator, "content 1");
@@ -161,12 +164,12 @@ test "should save and load cache" {
     });
 
     // Save the cache
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     // Create a new cache instance and load
     var newCache = try HashCache.init(context.cacheDir, false);
     defer newCache.deinit();
-    const loaded = try newCache.load(io);
+    const loaded = try newCache.load(io, log);
 
     try std.testing.expectEqual(true, loaded);
     try std.testing.expectEqual(@as(u32, 2), newCache.getEntryCount());
@@ -184,20 +187,22 @@ test "should save and load cache" {
 }
 
 test "should handle non-existent hashes" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     try std.testing.expect(try context.hashCache.getHash(context.arena.allocator(), "non-existent-file.txt") == null);
 }
 
 test "should remove hash" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     const filePath = "test/file3.txt";
     try context.hashCache.addHash(filePath, .{
@@ -216,20 +221,22 @@ test "should remove hash" {
 }
 
 test "should return false when removing non-existent hash" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     try std.testing.expectEqual(false, try context.hashCache.removeHash("non-existent-file.txt"));
 }
 
 test "should properly handle paths with different slashes" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     const hash = try createHash(allocator, "content");
     try context.hashCache.addHash("test\\file4.txt", .{
@@ -244,12 +251,13 @@ test "should properly handle paths with different slashes" {
 }
 
 test "should maintain sorted order when adding hashes" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
 
     // Add hashes in non-alphabetical order
     const files = [_][]const u8{
@@ -268,11 +276,11 @@ test "should maintain sorted order when adding hashes" {
     }
 
     // Save and reload to verify order
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     var newCache = try HashCache.init(context.cacheDir, false);
     defer newCache.deinit();
-    _ = try newCache.load(io);
+    _ = try newCache.load(io, log);
 
     // Verify all hashes can be retrieved
     for (files) |file| {
@@ -282,11 +290,12 @@ test "should maintain sorted order when adding hashes" {
 }
 
 test "should handle buffer resizing for large entries" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     // Add a large number of entries to force buffer resizing
     const largeEntryCount = 1000;
@@ -313,12 +322,13 @@ test "should handle buffer resizing for large entries" {
 }
 
 test "should correctly calculate entry size" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
 
     // Add entries with different path lengths
     const shortPath = "a.txt";
@@ -336,11 +346,11 @@ test "should correctly calculate entry size" {
     });
 
     // Save and reload to verify
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     var newCache = try HashCache.init(context.cacheDir, false);
     defer newCache.deinit();
-    _ = try newCache.load(io);
+    _ = try newCache.load(io, log);
 
     // Verify both entries
     try std.testing.expectEqualSlices(u8, try createHash(allocator, "short"), (try newCache.getHash(allocator, shortPath)).?.hash);
@@ -348,10 +358,11 @@ test "should correctly calculate entry size" {
 }
 
 test "should validate hash length" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     try std.testing.expectError(error.Thrown, context.hashCache.addHash("test/file.txt", .{
         .hash = "too-short", // Not 32 bytes
@@ -362,11 +373,12 @@ test "should validate hash length" {
 }
 
 test "addHash refuses a length that does not fit 48 bits with a RangeError" {
+    const log = utils.mute_log.MuteLog.init();
     // Writing a 48 bit integer throws a RangeError for a value of 2 ** 48 or more.
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     try std.testing.expectError(error.Thrown, context.hashCache.addHash("test/file.txt", .{
         .hash = try createHash(context.arena.allocator(), "content"),
@@ -378,11 +390,12 @@ test "addHash refuses a length that does not fit 48 bits with a RangeError" {
 }
 
 test "should handle binary search edge cases" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     // Add entries to test binary search
     var index: u64 = 0;
@@ -565,6 +578,7 @@ fn addEntry(cache: *HashCache, entry: IHashCacheEntry) !void {
 }
 
 test "merges its own additions onto entries already on disk" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -575,15 +589,16 @@ test "merges its own additions onto entries already on disk" {
 
     var hashCache = try HashCache.init(cacheDir, false);
     defer hashCache.deinit();
-    _ = try hashCache.load(io);
+    _ = try hashCache.load(io, log);
     try addEntry(&hashCache, try makeEntry(allocator, "c/three.txt"));
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
     const onDisk = (try readCacheFile(allocator, cacheDir)).?;
     try expectStrings(&.{ "a/one.txt", "b/two.txt", "c/three.txt" }, try entryKeys(allocator, onDisk));
 }
 
 test "keeps entries another instance added after this one loaded" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -596,14 +611,14 @@ test "keeps entries another instance added after this one loaded" {
     defer firstCache.deinit();
     var secondCache = try HashCache.init(cacheDir, false);
     defer secondCache.deinit();
-    _ = try firstCache.load(io);
-    _ = try secondCache.load(io);
+    _ = try firstCache.load(io, log);
+    _ = try secondCache.load(io, log);
 
     try addEntry(&firstCache, try makeEntry(allocator, "first/file.txt"));
-    try firstCache.save(io);
+    try firstCache.save(io, log);
 
     try addEntry(&secondCache, try makeEntry(allocator, "second/file.txt"));
-    try secondCache.save(io);
+    try secondCache.save(io, log);
 
     // Before merge-on-save the second save overwrote the first instance's entry.
     const onDisk = (try readCacheFile(allocator, cacheDir)).?;
@@ -615,6 +630,7 @@ test "keeps entries another instance added after this one loaded" {
 }
 
 test "loses no entries when many instances load together and save one after another" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -627,7 +643,7 @@ test "loses no entries when many instances load together and save one after anot
     // Every instance loads before any of them saves, the situation that used to lose entries.
     for (&caches) |*cache| {
         cache.* = try HashCache.init(cacheDir, false);
-        _ = try cache.load(io);
+        _ = try cache.load(io, log);
     }
     defer {
         for (&caches) |*cache| {
@@ -637,7 +653,7 @@ test "loses no entries when many instances load together and save one after anot
 
     for (&caches, 0..) |*cache, writerIndex| {
         try addEntry(cache, try makeEntry(allocator, try std.fmt.allocPrint(allocator, "writer{d}/file.txt", .{writerIndex})));
-        try cache.save(io);
+        try cache.save(io, log);
     }
 
     const onDisk = (try readCacheFile(allocator, cacheDir)).?;
@@ -656,6 +672,7 @@ test "loses no entries when many instances load together and save one after anot
 }
 
 test "applies removals to the on-disk cache instead of resurrecting them" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -666,9 +683,9 @@ test "applies removals to the on-disk cache instead of resurrecting them" {
 
     var hashCache = try HashCache.init(cacheDir, false);
     defer hashCache.deinit();
-    _ = try hashCache.load(io);
+    _ = try hashCache.load(io, log);
     try std.testing.expectEqual(true, try hashCache.removeHash("a/one.txt"));
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
     const onDisk = (try readCacheFile(allocator, cacheDir)).?;
     try expectStrings(&.{"b/two.txt"}, try entryKeys(allocator, onDisk));
@@ -693,6 +710,8 @@ const ISaverStart = struct {
 // entry to and saves.
 //
 fn saveOverlapping(start: ISaverStart) void {
+    // The thread's own log, which writes to the console.
+    const log = utils.mute_log.MuteLog.init();
     var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
@@ -706,7 +725,7 @@ fn saveOverlapping(start: ISaverStart) void {
         std.debug.panic("init failed: {s}", .{@errorName(err)});
     };
     defer cache.deinit();
-    _ = cache.load(io) catch |err| {
+    _ = cache.load(io, log) catch |err| {
         std.debug.panic("load failed: {s}", .{@errorName(err)});
     };
     const key = std.fmt.allocPrint(allocator, "overlap{d}/file.txt", .{start.writerIndex}) catch |err| {
@@ -718,7 +737,7 @@ fn saveOverlapping(start: ISaverStart) void {
     addEntry(&cache, entry) catch |err| {
         std.debug.panic("adding the entry failed: {s}", .{@errorName(err)});
     };
-    cache.save(io) catch |err| {
+    cache.save(io, log) catch |err| {
         std.debug.panic("save failed: {s}", .{@errorName(err)});
     };
 }
@@ -753,6 +772,7 @@ test "never publishes a corrupt file when saves overlap" {
 }
 
 test "clears the changeset after a save so later saves only apply later changes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -761,15 +781,15 @@ test "clears the changeset after a save so later saves only apply later changes"
     defer temp_dirs.removeTempDir(io, cacheDir);
     var hashCache = try HashCache.init(cacheDir, false);
     defer hashCache.deinit();
-    _ = try hashCache.load(io);
+    _ = try hashCache.load(io, log);
     try addEntry(&hashCache, try makeEntry(allocator, "first/file.txt"));
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
     // Another instance replaces the file wholesale, dropping the first entry.
     try writeCacheFile(allocator, cacheDir, &.{try makeEntry(allocator, "other/file.txt")});
 
     try addEntry(&hashCache, try makeEntry(allocator, "second/file.txt"));
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
     // Only the change made since the last save is applied, not the whole in-memory snapshot.
     const onDisk = (try readCacheFile(allocator, cacheDir)).?;
@@ -777,6 +797,7 @@ test "clears the changeset after a save so later saves only apply later changes"
 }
 
 test "clears the changeset on load so pre-load changes are not re-applied" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -785,14 +806,14 @@ test "clears the changeset on load so pre-load changes are not re-applied" {
     defer temp_dirs.removeTempDir(io, cacheDir);
     var hashCache = try HashCache.init(cacheDir, false);
     defer hashCache.deinit();
-    _ = try hashCache.load(io);
+    _ = try hashCache.load(io, log);
     try addEntry(&hashCache, try makeEntry(allocator, "discarded/file.txt"));
 
     // Reloading throws away everything that was not saved.
-    _ = try hashCache.load(io);
+    _ = try hashCache.load(io, log);
 
     try addEntry(&hashCache, try makeEntry(allocator, "kept/file.txt"));
-    try hashCache.save(io);
+    try hashCache.save(io, log);
 
     const onDisk = (try readCacheFile(allocator, cacheDir)).?;
     try expectStrings(&.{"kept/file.txt"}, try entryKeys(allocator, onDisk));
@@ -837,12 +858,13 @@ test "makes a directory name out of a database path that could never be one" {
 }
 
 test "sits under the platform cache directory, not the process temp directory" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     // Everything the cache knows can be recomputed, but recomputing it for a photo library means
     // copying and hashing every photo already imported. Under the process temp directory that
     // happened at every reboot on Linux, and after a few untouched days on macOS, with nothing
@@ -872,12 +894,13 @@ test "sits inside the database cache directory, which is where anything else abo
 }
 
 test "is still found once the process temp directory has been taken away" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     // This is the restart, as far as a test can stage one: the scratch directory is gone and the
     // cache is read back anyway. Every platform gets this, because every platform's temp
     // directory is swept by something the app never hears about.
@@ -895,13 +918,13 @@ test "is still found once the process temp directory has been taken away" {
 
     var writer = try HashCache.init(try getHashCacheDir(allocator, "/photos/one"), false);
     defer writer.deinit();
-    _ = try writer.load(io);
+    _ = try writer.load(io, log);
     try writer.addSourceHash("device-item-1", .{
         .hash = try createHash(allocator, "photo"),
         .length = 4096,
         .lastModified = 1700000000000,
     });
-    try writer.save(io);
+    try writer.save(io, log);
 
     // The process temp directory itself goes, exactly as a boot-time sweep of /tmp takes it.
     // Nothing put anything in it, so removing the directory alone is the whole of it.
@@ -909,17 +932,18 @@ test "is still found once the process temp directory has been taken away" {
 
     var reader = try HashCache.init(try getHashCacheDir(allocator, "/photos/one"), false);
     defer reader.deinit();
-    _ = try reader.load(io);
+    _ = try reader.load(io, log);
 
     try std.testing.expectEqual(@as(u64, 4096), (try reader.getHash(allocator, "device-item-1")).?.length);
 }
 
 test "a new entry has no asset id until one is recorded" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     try context.hashCache.addHash("photos/one.jpg", .{
         .hash = try createHash(allocator, "one"),
@@ -931,11 +955,12 @@ test "a new entry has no asset id until one is recorded" {
 }
 
 test "records an asset id against an entry" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addHash("photos/one.jpg", .{
         .hash = try createHash(allocator, "one"),
         .length = 10,
@@ -948,42 +973,45 @@ test "records an asset id against an entry" {
 }
 
 test "an asset id survives a save and a load, which is the whole point of recording it" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
     try context.hashCache.addHash("photos/one.jpg", .{
         .hash = try createHash(allocator, "one"),
         .length = 10,
         .lastModified = 1000,
     });
     _ = try context.hashCache.setAssetId("photos/one.jpg", "2f1c4a2e-0000-4000-8000-00000000abcd");
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     var reloaded = try HashCache.init(context.cacheDir, false);
     defer reloaded.deinit();
-    _ = try reloaded.load(io);
+    _ = try reloaded.load(io, log);
 
     try std.testing.expectEqualStrings("2f1c4a2e-0000-4000-8000-00000000abcd", (try reloaded.getHash(allocator, "photos/one.jpg")).?.assetId.?);
 }
 
 test "reports that nothing was recorded when there is no entry to record it against" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     try std.testing.expectEqual(false, try context.hashCache.setAssetId("photos/missing.jpg", "some-asset-id"));
 }
 
 test "re-hashing a file clears its asset id, because the id described the old content" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addHash("photos/one.jpg", .{
         .hash = try createHash(allocator, "one"),
         .length = 10,
@@ -1001,11 +1029,12 @@ test "re-hashing a file clears its asset id, because the id described the old co
 }
 
 test "refuses an asset id too long to fit the space the format reserves" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addHash("photos/one.jpg", .{
         .hash = try createHash(allocator, "one"),
         .length = 10,
@@ -1017,11 +1046,12 @@ test "refuses an asset id too long to fit the space the format reserves" {
 }
 
 test "files an item under its source id, and finds it there" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
 
     // A MediaStore id, which is what a source id looks like on Android. There is no path here at
     // all: the photo has not been copied out of the library and never will be.
@@ -1036,12 +1066,13 @@ test "files an item under its source id, and finds it there" {
 }
 
 test "remembers which entries are keyed by a source id and which by a path" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
     try context.hashCache.addSourceHash("1000000042", .{
         .hash = try createHash(allocator, "library photo"),
         .length = 4096,
@@ -1052,7 +1083,7 @@ test "remembers which entries are keyed by a source id and which by a path" {
         .length = 10,
         .lastModified = 1000,
     });
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     const onDisk = (try readCacheFile(allocator, context.cacheDir)).?;
     for (onDisk) |entry| {
@@ -1070,11 +1101,12 @@ test "remembers which entries are keyed by a source id and which by a path" {
 }
 
 test "drops source-keyed entries the library no longer holds" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addSourceHash("still-here", .{
         .hash = try createHash(allocator, "a"),
         .length = 1,
@@ -1094,6 +1126,7 @@ test "drops source-keyed entries the library no longer holds" {
 }
 
 test "never drops a path-keyed entry, however absent it is from the library" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
@@ -1101,7 +1134,7 @@ test "never drops a path-keyed entry, however absent it is from the library" {
     // This is the case that would throw away the desktop's whole cache the first time automatic
     // import walked a folder: a manual import's entries are not photo library items and cannot be
     // judged by whether the library still lists them.
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addHash("photos/manual-import.jpg", .{
         .hash = try createHash(allocator, "a"),
         .length = 1,
@@ -1115,6 +1148,7 @@ test "never drops a path-keyed entry, however absent it is from the library" {
 }
 
 test "keeps an entry the walk saw at an absolute path" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
@@ -1123,7 +1157,7 @@ test "keeps an entry the walk saw at an absolute path" {
     // slash taken off. Compared raw, the stored "photos/one.jpg" never matched the live
     // "/photos/one.jpg", so on Linux and macOS every entry automatic import wrote was swept at
     // the end of the very run that wrote it and the whole folder was hashed again on the next.
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addSourceHash("/photos/one.jpg", .{
         .hash = try createHash(allocator, "a"),
         .length = 1,
@@ -1137,13 +1171,14 @@ test "keeps an entry the walk saw at an absolute path" {
 }
 
 test "keeps an entry the walk saw at a Windows path" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     // The same failure on the other separator: stored as "C:/photos/one.jpg", walked as
     // "C:\photos\one.jpg".
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addSourceHash("C:\\photos\\one.jpg", .{
         .hash = try createHash(allocator, "a"),
         .length = 1,
@@ -1157,11 +1192,12 @@ test "keeps an entry the walk saw at a Windows path" {
 }
 
 test "still drops an absolute path the walk did not see" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
-    _ = try context.hashCache.load(std.testing.io);
+    _ = try context.hashCache.load(std.testing.io, log);
     try context.hashCache.addSourceHash("/photos/gone.jpg", .{
         .hash = try createHash(allocator, "a"),
         .length = 1,
@@ -1173,12 +1209,13 @@ test "still drops an absolute path the walk did not see" {
 }
 
 test "a sweep survives a save, so the dropped entries are gone for the next run too" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-asset-id-test");
     defer context.deinit();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
     try context.hashCache.addSourceHash("still-here", .{
         .hash = try createHash(allocator, "a"),
         .length = 1,
@@ -1189,23 +1226,21 @@ test "a sweep survives a save, so the dropped entries are gone for the next run 
         .length = 2,
         .lastModified = 2000,
     });
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     _ = try context.hashCache.removeSourceEntriesNotIn(&.{"still-here"});
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     const onDisk = (try readCacheFile(allocator, context.cacheDir)).?;
     try expectStrings(&.{"still-here"}, try entryKeys(allocator, onDisk));
 }
 
 test "is discarded rather than read, whatever its version number says" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-version-test");
     defer context.deinit();
     // The load logs that the cache is unusable; a passing test must write nothing to stderr, so the log is muted.
-    var mutedLog: mock_log.MutedLog = .{};
-    mutedLog.install();
-    defer mutedLog.uninstall();
     const allocator = context.arena.allocator();
     const io = std.testing.io;
     // The cache is throwaway: everything in it can be recomputed, so a file written by any other
@@ -1217,13 +1252,14 @@ test "is discarded rather than read, whatever its version number says" {
     // being corrupt instead, which would prove nothing about the version check.
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ context.cacheDir, "hash-cache-x.dat" }), try rechecksum(allocator, fileBytes));
 
-    const loaded = try context.hashCache.load(io);
+    const loaded = try context.hashCache.load(io, log);
 
     try std.testing.expectEqual(false, loaded);
     try std.testing.expectEqual(@as(u32, 0), context.hashCache.getEntryCount());
 }
 
 test "HashCache.save returns quietly when the update lock is held by somebody else" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-save-test");
     defer context.deinit();
@@ -1232,7 +1268,7 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
     virtual_time.init(std.testing.allocator);
     defer virtual_time.deinit();
     const io = virtual_time.io();
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
     try context.hashCache.addHash("a/one.txt", .{
         .hash = &([_]u8{7} ** 32),
         .length = 11,
@@ -1245,24 +1281,25 @@ test "HashCache.save returns quietly when the update lock is held by somebody el
     const lockPath = try std.mem.concat(allocator, u8, &.{ cachePath, ".lock" });
     try test_files.writeFile(io, lockPath, "");
 
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
 
     // Nothing was published, because the save never got in.
     try std.testing.expect(!test_files.fileExists(io, cachePath));
 
     // The changeset was kept, so the entry lands as soon as the lock is free.
     try std.Io.Dir.cwd().deleteFile(io, lockPath);
-    try context.hashCache.save(io);
+    try context.hashCache.save(io, log);
     try std.testing.expect(test_files.fileExists(io, cachePath));
 }
 
 
 test "HashCache.save rethrows when the update fails for a reason that is not contention" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CacheTest = undefined;
     try context.init("hash-cache-save-test");
     defer context.deinit();
     const io = std.testing.io;
-    _ = try context.hashCache.load(io);
+    _ = try context.hashCache.load(io, log);
     try context.hashCache.addHash("a/one.txt", .{
         .hash = &([_]u8{7} ** 32),
         .length = 11,
@@ -1282,5 +1319,5 @@ test "HashCache.save rethrows when the update fails for a reason that is not con
         };
     }
 
-    try std.testing.expect(std.meta.isError(context.hashCache.save(io)));
+    try std.testing.expect(std.meta.isError(context.hashCache.save(io, log)));
 }

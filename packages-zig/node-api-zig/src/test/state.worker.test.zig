@@ -18,7 +18,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const temp_dirs = @import("temp-dirs.zig");
-const mock_log = @import("mock-log.zig");
+const ILog = @import("utils-zig").log.ILog;
 const test_task_context = @import("test-task-context.zig");
 const errors = utils.errors;
 const state_worker = node_api.state_worker;
@@ -57,8 +57,6 @@ const Sandbox = struct {
     // The task context the handlers take.
     taskContext: TestTaskContext,
 
-    // Swallows what the code under test logs.
-    mutedLog: mock_log.MutedLog,
 
     //
     // Makes the temporary directory and changes into it.
@@ -72,15 +70,12 @@ const Sandbox = struct {
         try std.process.setCurrentPath(self.io, self.tempDir);
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.taskContext.init(self.uuidGenerator.uuidGenerator());
-        self.mutedLog = .{};
-        self.mutedLog.install();
     }
 
     //
     // Changes back to the directory the test started in and removes the temporary one.
     //
     fn deinit(self: *Sandbox) void {
-        self.mutedLog.uninstall();
         std.process.setCurrentPath(self.io, self.previousCwd) catch {
             @panic("The working directory could not be put back after a test.");
         };
@@ -123,12 +118,12 @@ const Sandbox = struct {
     //
     // Runs the read-state handler for the state path and returns its result.
     //
-    fn readState(self: *Sandbox, statePath: []const u8) !std.json.Value {
+    fn readState(self: *Sandbox, log: ILog, statePath: []const u8) !std.json.Value {
         var object: std.json.ObjectMap = .empty;
         try object.put(self.arenaAllocator(), "statePath", .{
             .string = statePath,
         });
-        return readStateHandler(self.arenaAllocator(), self.io, test_timers.timers(), .{
+        return readStateHandler(self.arenaAllocator(), self.io, test_timers.timers(), log, .{
             .object = object,
         }, self.taskContext.context.taskContext());
     }
@@ -136,8 +131,8 @@ const Sandbox = struct {
     //
     // Runs the write-state handler with the JSON text as its data.
     //
-    fn writeState(self: *Sandbox, dataJson: []const u8) !void {
-        const result = try writeStateHandler(self.arenaAllocator(), self.io, test_timers.timers(), try self.json(dataJson), self.taskContext.context.taskContext());
+    fn writeState(self: *Sandbox, log: ILog, dataJson: []const u8) !void {
+        const result = try writeStateHandler(self.arenaAllocator(), self.io, test_timers.timers(), log, try self.json(dataJson), self.taskContext.context.taskContext());
         try std.testing.expect(result == .null);
     }
 };
@@ -238,10 +233,11 @@ fn expectThrown(expectedMessage: []const u8, result: anytype) !void {
 
 test "reading a sandbox with no state file yields nothing remembered rather than throwing" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
 
     try expectEmptyObject(result, "settings");
     try expectStrings(&.{}, result, "news.shownNewsIds");
@@ -253,37 +249,40 @@ test "reading a sandbox with no state file yields nothing remembered rather than
 // the app writes a fresh one as soon as anything is touched.
 test "a corrupt state file reads as nothing remembered rather than throwing" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeStateText("gallery:\n  sort: name\n   this: [is not yaml");
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
 
     try expectEmptyObject(result, "settings");
 }
 
 test "a key the format declares is written into its own section and read back by name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
 
     try expectString("name", try sandbox.readStateDocument(), "gallery.sort");
-    try expectString("name", try sandbox.readState(STATE_PATH), "settings.gallerySort");
+    try expectString("name", try sandbox.readState(log, STATE_PATH), "settings.gallerySort");
 }
 
 test "a key the format places in the desktop section goes there rather than to the top level" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"lastFolder\",\"value\":\"/photos\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"lastFolder\",\"value\":\"/photos\"}]}");
 
     const document = try sandbox.readStateDocument();
     try expectString("/photos", document, "desktop.last_folder");
     try expectMissing(document, "last_folder");
-    try expectString("/photos", try sandbox.readState(STATE_PATH), "settings.lastFolder");
+    try expectString("/photos", try sandbox.readState(log, STATE_PATH), "settings.lastFolder");
 }
 
 // The interface builds these keys from a component's id, so they cannot be declared in advance. Before the ui section
@@ -291,10 +290,11 @@ test "a key the format places in the desktop section goes there rather than to t
 // survived a restart.
 test "a key the format does not name is kept in the ui section rather than dropped" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState(
+    try sandbox.writeState(log, 
         \\{"statePath":"state.yaml","entries":[
         \\{"key":"sidebar-collapsed-databases","value":true},
         \\{"key":"right-sidebar-collapsed-selection","value":false}]}
@@ -304,48 +304,51 @@ test "a key the format does not name is kept in the ui section rather than dropp
     try expectBool(true, document, "ui.sidebar-collapsed-databases");
     try expectBool(false, document, "ui.right-sidebar-collapsed-selection");
 
-    const settings = try sandbox.readState(STATE_PATH);
+    const settings = try sandbox.readState(log, STATE_PATH);
     try expectBool(true, settings, "settings.sidebar-collapsed-databases");
     try expectBool(false, settings, "settings.right-sidebar-collapsed-selection");
 }
 
 test "an entry with no value clears the key rather than leaving it as it was" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\"}]}");
 
     try expectMissing(try sandbox.readStateDocument(), "gallery");
-    try expectMissing(try sandbox.readState(STATE_PATH), "settings.gallerySort");
+    try expectMissing(try sandbox.readState(log, STATE_PATH), "settings.gallerySort");
 }
 
 test "clearing the last ui key takes the section with it" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"sidebar-collapsed-databases\",\"value\":true}]}");
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"sidebar-collapsed-databases\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"sidebar-collapsed-databases\",\"value\":true}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"sidebar-collapsed-databases\"}]}");
 
     try expectMissing(try sandbox.readStateDocument(), "ui");
 }
 
 test "writing one key leaves every other one as it was" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState(
+    try sandbox.writeState(log, 
         \\{"statePath":"state.yaml","entries":[
         \\{"key":"lastFolder","value":"/photos"},
         \\{"key":"recentSearches","value":["beach"]}]}
     );
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
 
-    const settings = try sandbox.readState(STATE_PATH);
+    const settings = try sandbox.readState(log, STATE_PATH);
     try expectString("/photos", settings, "settings.lastFolder");
     try expectStrings(&.{"beach"}, settings, "settings.recentSearches");
     try expectString("name", settings, "settings.gallerySort");
@@ -353,10 +356,11 @@ test "writing one key leaves every other one as it was" {
 
 test "a written news state is read back" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try sandbox.writeState(
+    try sandbox.writeState(log, 
         \\{"statePath":"state.yaml","news":{
         \\"shownNewsIds":["release-1","survey-2"],
         \\"lastShownUpdateVersion":"0.9.1",
@@ -368,7 +372,7 @@ test "a written news state is read back" {
     try expectString("0.9.1", document, "news.last_shown_update_version");
     try expectOneFeedItem("release-1", "A new release", document, "news.feed");
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
     try expectStrings(&.{ "release-1", "survey-2" }, result, "news.shownNewsIds");
     try expectString("0.9.1", result, "news.lastShownUpdateVersion");
     try expectOneFeedItem("release-1", "A new release", result, "news.feed");
@@ -378,6 +382,7 @@ test "a written news state is read back" {
 // would be announced forever or announced as an empty box.
 test "a feed item with no id or no message is dropped rather than announced" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeStateText(
@@ -390,13 +395,14 @@ test "a feed item with no id or no message is dropped rather than announced" {
         \\
     );
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
 
     try expectOneFeedItem("good", "A real item", result, "news.feed");
 }
 
 test "a feed item naming a colour nobody defined loses the colour and keeps the item" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeStateText(
@@ -408,13 +414,14 @@ test "a feed item naming a colour nobody defined loses the colour and keeps the 
         \\
     );
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
 
     try expectOneFeedItem("good", "A real item", result, "news.feed");
 }
 
 test "a feed item's colour, duration and link are read back with it" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeStateText(
@@ -428,7 +435,7 @@ test "a feed item's colour, duration and link are read back with it" {
         \\
     );
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
 
     const feed = at(result, "news.feed").?.array.items;
     try std.testing.expectEqual(@as(usize, 1), feed.len);
@@ -443,75 +450,82 @@ test "a feed item's colour, duration and link are read back with it" {
 
 test "writing the news state leaves the interface's keys alone" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"news\":{\"shownNewsIds\":[\"release-1\"],\"feed\":[]}}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"news\":{\"shownNewsIds\":[\"release-1\"],\"feed\":[]}}");
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
     try expectString("name", result, "settings.gallerySort");
     try expectStrings(&.{"release-1"}, result, "news.shownNewsIds");
 }
 
 test "writing a key leaves the news state alone" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"news\":{\"shownNewsIds\":[\"release-1\"],\"feed\":[]}}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"news\":{\"shownNewsIds\":[\"release-1\"],\"feed\":[]}}");
 
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"gallerySort\",\"value\":\"name\"}]}");
 
-    const result = try sandbox.readState(STATE_PATH);
+    const result = try sandbox.readState(log, STATE_PATH);
     try expectStrings(&.{"release-1"}, result, "news.shownNewsIds");
     try expectString("name", result, "settings.gallerySort");
 }
 
 test "a read with no path fails rather than reading nothing quietly" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("statePath is required", sandbox.readState(""));
+    try expectThrown("statePath is required", sandbox.readState(log, ""));
 }
 
 test "a write with no path fails rather than writing nowhere quietly" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("statePath is required", writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"statePath\":\"\"}"), sandbox.taskContext.context.taskContext()));
+    try expectThrown("statePath is required", writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json("{\"statePath\":\"\"}"), sandbox.taskContext.context.taskContext()));
 }
 
 test "a write with nothing to write fails rather than doing nothing quietly" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
     try expectThrown(
         "write-state was given no settings and no news section, so there is nothing to write.",
-        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"statePath\":\"state.yaml\"}"), sandbox.taskContext.context.taskContext()),
+        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json("{\"statePath\":\"state.yaml\"}"), sandbox.taskContext.context.taskContext()),
     );
 }
 
 test "a key with no name fails rather than being written under an empty name" {
     var sandbox: Sandbox = undefined;
+    const log = utils.mute_log.MuteLog.init();
     try sandbox.init();
     defer sandbox.deinit();
 
     try expectThrown(
         "write-state was given a setting with no key.",
-        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"\",\"value\":true}]}"), sandbox.taskContext.context.taskContext()),
+        writeStateHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), log, try sandbox.json("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"\",\"value\":true}]}"), sandbox.taskContext.context.taskContext()),
     );
 }
 
 test "the file on disk is readable by the plain reader, so a phone and a desktop agree on it" {
     var sandbox: Sandbox = undefined;
     try sandbox.init();
+    const log = utils.mute_log.MuteLog.init();
     defer sandbox.deinit();
-    try sandbox.writeState("{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"lastFolder\",\"value\":\"/photos\"}]}");
+    try sandbox.writeState(log, "{\"statePath\":\"state.yaml\",\"entries\":[{\"key\":\"lastFolder\",\"value\":\"/photos\"}]}");
 
-    const contents = try readStateFromStorage(sandbox.arenaAllocator(), sandbox.io, STATE_PATH);
+    const contents = try readStateFromStorage(sandbox.arenaAllocator(), sandbox.io, log, STATE_PATH);
 
     try std.testing.expectEqualStrings("/photos", contents.state.desktop.lastFolder.?);
 }

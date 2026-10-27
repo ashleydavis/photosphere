@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
@@ -9,7 +10,6 @@ const tree = @import("tree.zig");
 const sync = @import("sync.zig");
 const bson_json = @import("bson-json.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IJobTag = task_queue_zig.types.IJobTag;
 const sendJobProgress = task_queue_zig.job_progress.sendJobProgress;
@@ -87,7 +87,7 @@ const SyncBatcher = struct {
     //
     // Sends the pending changes as one sync-batch message.
     //
-    fn flushBatch(self: *SyncBatcher, io: std.Io) !void {
+    fn flushBatch(self: *SyncBatcher, io: std.Io, log: utils.log.ILog) !void {
         if (self.pendingBatch.items.len == 0) {
             return;
         }
@@ -115,10 +115,10 @@ const SyncBatcher = struct {
             .updated = updated.items,
             .deletedIds = deletedIds.items,
         };
-        self.context.sendEvent(io, self.allocator, try messageToJson(self.allocator, batchMessage));
+        self.context.sendEvent(io, self.allocator, log, try messageToJson(self.allocator, batchMessage));
 
         self.changesSynced += added.items.len + updated.items.len + deletedIds.items.len;
-        try sendJobProgress(self.allocator, io, self.context, self.job, self.runStartedAt, try std.fmt.allocPrint(self.allocator, "{d} changes synced", .{self.changesSynced}));
+        try sendJobProgress(self.allocator, io, log, self.context, self.job, self.runStartedAt, try std.fmt.allocPrint(self.allocator, "{d} changes synced", .{self.changesSynced}));
 
         self.pendingBatch = .empty;
     }
@@ -126,11 +126,11 @@ const SyncBatcher = struct {
     //
     // Adds a change to the pending batch, flushing the batch when it is full.
     //
-    fn onLocalChange(callbackContext: ?*anyopaque, io: std.Io, change: ISyncChange) anyerror!void {
+    fn onLocalChange(callbackContext: ?*anyopaque, io: std.Io, log: utils.log.ILog, change: ISyncChange) anyerror!void {
         const self: *SyncBatcher = @ptrCast(@alignCast(callbackContext.?));
         try self.pendingBatch.append(self.allocator, change);
         if (self.pendingBatch.items.len >= SYNC_BATCH_SIZE) {
-            try self.flushBatch(io);
+            try self.flushBatch(io, log);
         }
     }
 };
@@ -142,6 +142,7 @@ const SyncBatcher = struct {
 fn syncDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     data: ISyncDatabaseData,
     context: ITaskContext,
     runStartedAt: i64,
@@ -150,11 +151,11 @@ fn syncDatabase(
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const local = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const localRawStorage = local.rawStorage;
 
-    const config = try loadDatabaseConfig(allocator, io, localRawStorage);
+    const config = try loadDatabaseConfig(allocator, io, log, localRawStorage);
     const origin = configOrigin(config) orelse {
         const reason = "no origin configured";
         log.info(try std.fmt.allocPrint(allocator, "Sync skipped for \"{s}\": {s}", .{ data.databasePath, reason }));
@@ -163,7 +164,7 @@ fn syncDatabase(
             .databasePath = data.databasePath,
             .reason = reason,
         };
-        context.sendEvent(io, allocator, try messageToJson(allocator, skippedMessage));
+        context.sendEvent(io, allocator, log, try messageToJson(allocator, skippedMessage));
         return;
     };
 
@@ -171,7 +172,7 @@ fn syncDatabase(
     // the standard openStorage path. The connectivity check then runs against that storage,
     // which avoids false-negative skips when the origin needs credentials the worker would not
     // otherwise have (e.g. S3 origins registered in databases.toml with an s3_key).
-    const originOpened = try openStorage(allocator, io, origin, null, null, context.nativeCaller);
+    const originOpened = try openStorage(allocator, io, log, origin, null, null, context.nativeCaller);
     const originStorage = originOpened.storage;
     const originRawStorage = originOpened.rawStorage;
 
@@ -184,13 +185,13 @@ fn syncDatabase(
             .databasePath = data.databasePath,
             .reason = reason,
         };
-        context.sendEvent(io, allocator, try messageToJson(allocator, skippedMessage));
+        context.sendEvent(io, allocator, log, try messageToJson(allocator, skippedMessage));
         return;
     }
 
     log.info(try std.fmt.allocPrint(allocator, "Sync started for \"{s}\" (origin: {s})", .{ data.databasePath, origin }));
 
-    context.sendEvent(io, allocator, try messageToJson(allocator, .{
+    context.sendEvent(io, allocator, log, try messageToJson(allocator, .{
         .type = "sync-started",
         .databasePath = data.databasePath,
     }));
@@ -198,7 +199,7 @@ fn syncDatabase(
     // The job the interface lists. Sent here rather than at the top of the handler so a sync
     // that returns early, having found no origin or an unreachable one, never puts a row up for
     // work it did not do.
-    try sendJobProgress(allocator, io, context, data.job, runStartedAt, null);
+    try sendJobProgress(allocator, io, log, context, data.job, runStartedAt, null);
 
     const localDb = try createMediaFileDatabase(allocator, localStorage, uuidGenerator, timestampProvider);
 
@@ -219,6 +220,7 @@ fn syncDatabase(
     const result = try syncDatabases(
         allocator,
         io,
+        log,
         localStorage,
         localRawStorage,
         localDb.bsonDatabase,
@@ -233,7 +235,7 @@ fn syncDatabase(
     );
 
     // Flush any remaining changes that didn't fill a full batch.
-    try batcher.flushBatch(io);
+    try batcher.flushBatch(io, log);
 
     if (result.synced) {
         log.info(try std.fmt.allocPrint(allocator, "Sync completed for \"{s}\"", .{data.databasePath}));
@@ -247,7 +249,7 @@ fn syncDatabase(
         .databasePath = data.databasePath,
         .synced = result.synced,
     };
-    context.sendEvent(io, allocator, try messageToJson(allocator, completedMessage));
+    context.sendEvent(io, allocator, log, try messageToJson(allocator, completedMessage));
 }
 
 //
@@ -263,6 +265,7 @@ pub fn syncDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -276,7 +279,7 @@ pub fn syncDatabaseHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    syncDatabase(allocator, io, data, context, runStartedAt) catch |err| {
+    syncDatabase(allocator, io, log, data, context, runStartedAt) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Sync failed for \"{s}\"", .{data.databasePath}), err);
         return err;
     };

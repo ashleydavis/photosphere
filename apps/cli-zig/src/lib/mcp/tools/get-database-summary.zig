@@ -39,12 +39,13 @@ pub fn registerGetDatabaseSummaryTool(server: *McpServer, allocator: std.mem.All
 fn getDatabaseSummaryHandler(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
     _ = arguments;
     const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
     const database = switch (try requireDatabase(allocator, toolContext)) {
         .database => |database| database,
         .result => |noDatabase| {
             return noDatabase;
         },
     };
-    const summary = try getDatabaseSummary(allocator, io, database.assetStorage);
+    const summary = try getDatabaseSummary(allocator, io, log, database.assetStorage);
     return textResult(allocator, try jsonStringifyIndented(allocator, try toJsValue(allocator, summary)));
 }

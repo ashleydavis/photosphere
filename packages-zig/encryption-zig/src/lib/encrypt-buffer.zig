@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const crypto = @import("node-crypto.zig");
 const constants = @import("encryption-constants.zig");
@@ -9,7 +10,6 @@ const encryption_types = @import("encryption-types.zig");
 // Names used from other files.
 //
 const errors = utils.errors;
-const log = utils.log;
 const hashPublicKey = key_utils.hashPublicKey;
 const IPrivateKeyMap = encryption_types.IPrivateKeyMap;
 const ENCRYPTION_TAG = constants.ENCRYPTION_TAG;
@@ -83,7 +83,7 @@ pub fn requireWrappableKey(wrappedKeyLength: usize) !void {
 // serialization while the fault is the key, so it sends a reader to the wrong place entirely.
 // (The returned slice is `data` itself when the data is returned unchanged.)
 //
-pub fn decryptBuffer(allocator: std.mem.Allocator, data: []const u8, privateKeyMap: *const IPrivateKeyMap) ![]const u8 {
+pub fn decryptBuffer(log: ILog, allocator: std.mem.Allocator, data: []const u8, privateKeyMap: *const IPrivateKeyMap) ![]const u8 {
     if (data.len < 4) {
         return data;
     }
@@ -109,7 +109,7 @@ pub fn decryptBuffer(allocator: std.mem.Allocator, data: []const u8, privateKeyM
             const causeMessage = try allocator.dupe(u8, errors.lastErrorMessage());
             return errors.throwErrorWithCause("Could not decrypt data that says it is encrypted: {s}", .{causeMessage});
         }
-        log.log.verbose("decryptBuffer: new format decryption failed, trying legacy");
+        log.verbose("decryptBuffer: new format decryption failed, trying legacy");
     }
 
     //
@@ -123,7 +123,7 @@ pub fn decryptBuffer(allocator: std.mem.Allocator, data: []const u8, privateKeyM
             if (err == error.OutOfMemory) {
                 return err;
             }
-            log.log.verbose("decryptBuffer: legacy decryption failed, returning data unchanged");
+            log.verbose("decryptBuffer: legacy decryption failed, returning data unchanged");
         }
     }
 

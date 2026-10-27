@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const storage_zig = @import("storage-zig");
@@ -6,7 +7,6 @@ const encryption = @import("encryption-zig");
 const vault_zig = @import("vault-zig");
 const databases_config = @import("databases-config.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const process_env = node_utils.process_env;
 const node_crypto = encryption.node_crypto;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
@@ -89,6 +89,7 @@ fn jsonString(object: std.json.ObjectMap, key: []const u8) ?[]const u8 {
 pub fn resolveStorageCredentials(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
@@ -174,7 +175,7 @@ pub fn resolveStorageCredentials(
                 if (trimmedKeyName.len == 0) {
                     continue;
                 }
-                try pems.append(allocator, try resolveEncryptionKeyValue(allocator, io, vault, trimmedKeyName, "-k flag"));
+                try pems.append(allocator, try resolveEncryptionKeyValue(allocator, io, log, vault, trimmedKeyName, "-k flag"));
             }
             encryptionKeyPems = pems.items;
         }
@@ -188,7 +189,7 @@ pub fn resolveStorageCredentials(
             log.verbose(try std.fmt.allocPrint(allocator, "Encryption key: loaded from vault (key \"{s}\", via databases.json entry)", .{entryEncryptionKey.?}));
         }
         else if (isTruthy(psiEncryptionKey)) {
-            const pem = try resolveEncryptionKeyValue(allocator, io, vault, psiEncryptionKey.?, "PSI_ENCRYPTION_KEY");
+            const pem = try resolveEncryptionKeyValue(allocator, io, log, vault, psiEncryptionKey.?, "PSI_ENCRYPTION_KEY");
             const pems = try allocator.alloc(IEncryptionKeyPem, 1);
             pems[0] = pem;
             encryptionKeyPems = pems;
@@ -240,6 +241,7 @@ pub fn resolveStorageCredentials(
 pub fn resolveEncryptionKeyValue(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     vault: IVault,
     value: []const u8,
     source: []const u8,

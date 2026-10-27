@@ -21,8 +21,9 @@ pub fn logExceptions(comptime handler: TaskHandler, comptime message: []const u8
         // Runs the handler and logs the error it returns.
         //
         fn run(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, payload: std.json.Value) anyerror!?[]const u8 {
+            const log = services.log;
             return handler(services, timers, io, allocator, context, payload) catch |err| {
-                utils.log.log.exception(message, err);
+                log.exception(message, err);
                 return err;
             };
         }

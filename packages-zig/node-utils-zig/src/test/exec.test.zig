@@ -5,6 +5,7 @@ const utils = @import("utils-zig");
 const exec = node_utils.exec.exec;
 
 test "exec runs the command in the shell and returns its output" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -15,13 +16,14 @@ test "exec runs the command in the shell and returns its output" {
         try std.testing.expectEqualStrings("oops\r\n", result.stderr);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, null, "echo hello && echo oops 1>&2");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "echo hello && echo oops 1>&2");
         try std.testing.expectEqualStrings("hello\n", result.stdout);
         try std.testing.expectEqualStrings("oops\n", result.stderr);
     }
 }
 
 test "exec fails with Node's message when the command exits with a non-zero code" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -31,12 +33,13 @@ test "exec fails with Node's message when the command exits with a non-zero code
         try std.testing.expectEqualStrings("Command failed: echo broken>&2& exit 3\nbroken\r\n", utils.errors.lastErrorMessage());
     }
     else {
-        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, null, "echo broken 1>&2; exit 3"));
+        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, log, null, "echo broken 1>&2; exit 3"));
         try std.testing.expectEqualStrings("Command failed: echo broken 1>&2; exit 3\nbroken\n", utils.errors.lastErrorMessage());
     }
 }
 
 test "exec passes process.env to the command" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var environ_map = std.process.Environ.Map.init(arena.allocator());
@@ -50,27 +53,25 @@ test "exec passes process.env to the command" {
         try std.testing.expectEqualStrings("from-env\r\n", result.stdout);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, null, "echo $PHOTOSPHERE_EXEC_TEST");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "echo $PHOTOSPHERE_EXEC_TEST");
         try std.testing.expectEqualStrings("from-env\n", result.stdout);
     }
 }
 
 test "execLogged returns the output of the command" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const result = try node_utils.exec.execLogged(arena.allocator(), std.testing.io, null, "echo", "echo hello", null);
+    const result = try node_utils.exec.execLogged(arena.allocator(), std.testing.io, log, null, "echo", "echo hello", null);
     const expected = if (builtin.os.tag == .windows) "hello\r\n" else "hello\n";
     try std.testing.expectEqualStrings(expected, result.stdout);
 }
 
 test "execLogged reports a command that fails as a failure to execute it" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    // Captured so that nothing reaches stderr.
-    var output = std.Io.Writer.Allocating.init(arena.allocator());
-    utils.console.setCapture(&output.writer, &output.writer);
-    defer utils.console.setCapture(null, null);
-    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, null, "sh", "exit 3", null));
+    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, log, null, "sh", "exit 3", null));
     try std.testing.expectEqualStrings("Failed to execute command: exit 3", utils.errors.lastErrorMessage());
 }
 
@@ -85,18 +86,16 @@ fn failValidation(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io)
 }
 
 test "execLogged reports a failed validation as a failure to execute the command" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    // The failure is reported on stdout, which the test runner reads its own messages from.
-    var output = std.Io.Writer.Allocating.init(arena.allocator());
-    utils.console.setCapture(&output.writer, &output.writer);
-    defer utils.console.setCapture(null, null);
     var unused: u8 = 0;
-    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, null, "echo", "echo hello", .{ .context = &unused, .function = failValidation }));
+    try std.testing.expectError(error.Thrown, node_utils.exec.execLogged(arena.allocator(), std.testing.io, log, null, "echo", "echo hello", .{ .context = &unused, .function = failValidation }));
     try std.testing.expectEqualStrings("Failed to execute command: echo hello", utils.errors.lastErrorMessage());
 }
 
 test "exec hands the quotes in the command to the shell untouched" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -107,12 +106,13 @@ test "exec hands the quotes in the command to the shell untouched" {
         try std.testing.expectEqualStrings("\"%w %h\" \"file name.jpg\"\r\n", result.stdout);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, null, "echo \"%w %h\" \"file name.jpg\"");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "echo \"%w %h\" \"file name.jpg\"");
         try std.testing.expectEqualStrings("%w %h file name.jpg\n", result.stdout);
     }
 }
 
 test "exec reads stdout and stderr together so a command filling stderr does not block" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -123,7 +123,7 @@ test "exec reads stdout and stderr together so a command filling stderr does not
         try std.testing.expect(result.stderr.len > 128 * 1024);
     }
     else {
-        const result = try exec(arena.allocator(), std.testing.io, null, "i=0; while [ $i -lt 10000 ]; do echo stderr line $i 1>&2; i=$((i+1)); done; echo done");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "i=0; while [ $i -lt 10000 ]; do echo stderr line $i 1>&2; i=$((i+1)); done; echo done");
         try std.testing.expectEqualStrings("done\n", result.stdout);
         try std.testing.expect(result.stderr.len > 128 * 1024);
     }
@@ -153,6 +153,7 @@ fn printFileCommand(allocator: std.mem.Allocator, filePath: []const u8, toStderr
 }
 
 test "exec takes up to maxBuffer (1 MiB) of output, as Bun's exec does" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -160,13 +161,14 @@ test "exec takes up to maxBuffer (1 MiB) of output, as Bun's exec does" {
     const filePath = try writeFileOfSize(allocator, io, 1024 * 1024);
     defer std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
 
-    const toStdout = try exec(allocator, io, null, try printFileCommand(allocator, filePath, false));
+    const toStdout = try exec(allocator, io, log, null, try printFileCommand(allocator, filePath, false));
     try std.testing.expectEqual(@as(usize, 1024 * 1024), toStdout.stdout.len);
-    const toStderr = try exec(allocator, io, null, try printFileCommand(allocator, filePath, true));
+    const toStderr = try exec(allocator, io, log, null, try printFileCommand(allocator, filePath, true));
     try std.testing.expectEqual(@as(usize, 1024 * 1024), toStderr.stderr.len);
 }
 
 test "exec fails with Bun's RangeError when the command writes more than maxBuffer to stdout or stderr" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -174,11 +176,11 @@ test "exec fails with Bun's RangeError when the command writes more than maxBuff
     const filePath = try writeFileOfSize(allocator, io, 1024 * 1024 + 1);
     defer std.Io.Dir.cwd().deleteFile(io, filePath) catch {};
 
-    try std.testing.expectError(error.Thrown, exec(allocator, io, null, try printFileCommand(allocator, filePath, false)));
+    try std.testing.expectError(error.Thrown, exec(allocator, io, log, null, try printFileCommand(allocator, filePath, false)));
     try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("stdout maxBuffer length exceeded", utils.errors.lastErrorMessage());
 
-    try std.testing.expectError(error.Thrown, exec(allocator, io, null, try printFileCommand(allocator, filePath, true)));
+    try std.testing.expectError(error.Thrown, exec(allocator, io, log, null, try printFileCommand(allocator, filePath, true)));
     try std.testing.expectEqualStrings("RangeError", utils.errors.lastErrorName());
     try std.testing.expectEqualStrings("stderr maxBuffer length exceeded", utils.errors.lastErrorMessage());
 }

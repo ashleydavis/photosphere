@@ -1,5 +1,7 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const node_utils = @import("node-utils-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
 const api = @import("api-zig");
@@ -48,7 +50,7 @@ const TestDatabase = struct {
 //
 // Creates a new database in a temporary directory.
 //
-fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8) !TestDatabase {
+fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, name: []const u8) !TestDatabase {
     const generators = try allocator.create(Generators);
     generators.* = .{
         .uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator),
@@ -57,18 +59,19 @@ fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, name: []const u8
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
     const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, dir, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
-    try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
+    try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
     return .{ .dir = dir, .assetStorage = created.storage, .rawStorage = created.rawStorage, .database = database };
 }
 
 test "bumps lastModifiedAt when records are repaired" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const testDatabase = try createTestDatabase(allocator, io, "repair-bump");
+    const testDatabase = try createTestDatabase(allocator, io, log, "repair-bump");
     defer temp_dirs.removeTempDir(io, testDatabase.dir);
     const assetStorage = testDatabase.assetStorage;
 
@@ -79,20 +82,20 @@ test "bumps lastModifiedAt when records are repaired" {
     const assetFileName = "asset/" ++ ASSET_ID;
     try assetStorage.write(allocator, io, assetFileName, "application/octet-stream", "fake asset bytes for repair test");
     const assetInfo = (try assetStorage.info(allocator, io, assetFileName)).?;
-    const stream = try assetStorage.readStream(allocator, io, assetFileName);
+    const stream = try assetStorage.readStream(allocator, io, log, assetFileName);
     const assetHash = try node_api.hash.computeHash(stream.reader());
     stream.destroy(io);
 
-    var merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, assetStorage)).?;
+    var merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, log, assetStorage)).?;
     merkleTree = try merkle_tree_zig.merkle_tree.addItem(allocator, &merkleTree, .{
         .name = assetFileName,
         .hash = &assetHash,
         .length = assetInfo.length,
         .lastModified = assetInfo.lastModified,
     });
-    try node_api.tree.saveMerkleTree(allocator, io, &merkleTree, assetStorage);
+    try node_api.tree.saveMerkleTree(allocator, io, log, &merkleTree, assetStorage);
 
-    const result = try repair(allocator, io, assetStorage, testDatabase.rawStorage, assetStorage, testDatabase.database.bsonDatabase, testDatabase.database.metadataCollection, .{
+    const result = try repair(allocator, io, log, assetStorage, testDatabase.rawStorage, assetStorage, testDatabase.database.bsonDatabase, testDatabase.database.metadataCollection, .{
         .source = testDatabase.dir,
     }, null);
 
@@ -104,32 +107,33 @@ test "bumps lastModifiedAt when records are repaired" {
     }
     try std.testing.expect(found);
 
-    const state = (try api.database_state.loadDatabaseState(allocator, io, testDatabase.rawStorage)).?;
+    const state = (try api.database_state.loadDatabaseState(allocator, io, log, testDatabase.rawStorage)).?;
     try std.testing.expect(state.lastModifiedAt != null);
     try std.testing.expect(!std.math.isNan(@import("serialization-zig").js_date.parseDate(state.lastModifiedAt.?)));
 }
 
 test "does not bump lastModifiedAt when no repairs were needed" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
-    const testDatabase = try createTestDatabase(allocator, io, "repair-no-bump");
+    const testDatabase = try createTestDatabase(allocator, io, log, "repair-no-bump");
     defer temp_dirs.removeTempDir(io, testDatabase.dir);
 
-    const before = try api.database_state.loadDatabaseState(allocator, io, testDatabase.rawStorage);
+    const before = try api.database_state.loadDatabaseState(allocator, io, log, testDatabase.rawStorage);
     try std.testing.expect(before == null or before.?.lastModifiedAt == null);
 
-    const result = try repair(allocator, io, testDatabase.assetStorage, testDatabase.rawStorage, testDatabase.assetStorage, testDatabase.database.bsonDatabase, testDatabase.database.metadataCollection, .{
+    const result = try repair(allocator, io, log, testDatabase.assetStorage, testDatabase.rawStorage, testDatabase.assetStorage, testDatabase.database.bsonDatabase, testDatabase.database.metadataCollection, .{
         .source = testDatabase.dir,
     }, null);
 
     try std.testing.expectEqual(@as(usize, 0), result.recordsRepaired.len);
     try std.testing.expectEqual(@as(usize, 0), result.repaired.len);
 
-    const after = try api.database_state.loadDatabaseState(allocator, io, testDatabase.rawStorage);
+    const after = try api.database_state.loadDatabaseState(allocator, io, log, testDatabase.rawStorage);
     try std.testing.expect(after == null or after.?.lastModifiedAt == null);
 }
 
@@ -173,7 +177,7 @@ fn copyV6(allocator: std.mem.Allocator, io: std.Io) !IV6Copy {
 //
 // Records the progress messages of a repair.
 //
-fn recordProgress(context: ?*anyopaque, _: std.Io, message: ?[]const u8) void {
+fn recordProgress(context: ?*anyopaque, _: std.Io, _: ILog, message: ?[]const u8) void {
     const recorder: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
     recorder.record(message.?);
 }
@@ -191,8 +195,9 @@ fn containsName(names: []const []const u8, name: []const u8) bool {
 }
 
 test "restores a missing file and a corrupted one from the source database" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -209,7 +214,7 @@ test "restores a missing file and a corrupted one from the source database" {
     try target.storage.write(allocator, io, displayPath, "image/jpeg", "corrupted bytes");
 
     var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
-    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+    const result = try repair(allocator, io, log, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
     }, .{ .context = &recorder, .function = recordProgress });
 
@@ -221,12 +226,18 @@ test "restores a missing file and a corrupted one from the source database" {
     try std.testing.expect(containsName(recorder.messages.items, "Repairing corrupted file: " ++ displayPath));
 
     // A repair was made, so the database is stamped as modified.
-    try std.testing.expect((try api.database_state.loadDatabaseState(allocator, io, target.storage)).?.lastModifiedAt != null);
+    try std.testing.expect((try api.database_state.loadDatabaseState(allocator, io, log, target.storage)).?.lastModifiedAt != null);
 }
 
 test "reports what the source cannot restore: a file it does not have, or has with other bytes" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(memory.log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -244,11 +255,7 @@ test "reports what the source cannot restore: a file it does not have, or has wi
     try target.storage.write(allocator, io, thumbPath, "image/jpeg", "corrupted bytes");
     try source.storage.write(allocator, io, thumbPath, "image/jpeg", "other corrupted bytes");
 
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    console_capture.captureStderr(&stderr_capture.writer);
-    defer console_capture.endConsoleCapture();
-
-    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+    const result = try repair(allocator, io, memory.log, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
     }, null);
 
@@ -257,13 +264,14 @@ test "reports what the source cannot restore: a file it does not have, or has wi
     try std.testing.expect(containsName(result.unrepaired, assetPath));
     try std.testing.expect(containsName(result.unrepaired, thumbPath));
     try std.testing.expectEqual(@as(usize, 0), result.repaired.len);
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Source file not found for repair: " ++ assetPath) != null);
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Source file hash mismatch for: " ++ thumbPath) != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Source file not found for repair: " ++ assetPath) != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Source file hash mismatch for: " ++ thumbPath) != null);
 }
 
 test "a full repair hashes every file, and puts right the hash of a record" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -274,13 +282,13 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     // The record's hash is wrong.
     var updates: @import("serialization-zig").bson.BsonDocument = .empty;
     try updates.put(allocator, "hash", .{ .string = "0000" });
-    try std.testing.expect(try target.database.metadataCollection.updateOne(io, V6_ASSET_ID, updates, .{}));
-    try target.database.bsonDatabase.commit(io);
+    try std.testing.expect(try target.database.metadataCollection.updateOne(io, log, V6_ASSET_ID, updates, .{}));
+    try target.database.bsonDatabase.commit(io, log);
 
     // The thumb's bytes change while its size and modification time stay as the tree has them, which only a
     // full repair notices.
     const thumbName = "thumb/" ++ V6_ASSET_ID;
-    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, target.storage)).?;
+    const filesTree = (try node_api.tree.loadMerkleTree(allocator, io, log, target.storage)).?;
     const thumbNode = merkle_tree_zig.merkle_tree.findItemInTree(filesTree.sort, thumbName).?;
     const thumbPath = try std.fs.path.join(allocator, &.{ target.dir, thumbName });
     const thumb = try test_files.readFile(allocator, io, thumbPath);
@@ -294,7 +302,7 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     console_capture.captureStderr(&stderr_capture.writer);
     defer console_capture.endConsoleCapture();
 
-    const result = try repair(allocator, io, target.storage, target.storage, target.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+    const result = try repair(allocator, io, log, target.storage, target.storage, target.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = target.dir,
         .full = true,
     }, null);
@@ -302,14 +310,20 @@ test "a full repair hashes every file, and puts right the hash of a record" {
     try std.testing.expectEqual(result.filesProcessed - 1, result.numUnmodified);
     try std.testing.expect(containsName(result.modified, thumbName));
     try std.testing.expect(containsName(result.recordsRepaired, "asset/" ++ V6_ASSET_ID));
-    const record = (try target.database.metadataCollection.getOne(io, V6_ASSET_ID)).?;
+    const record = (try target.database.metadataCollection.getOne(io, log, V6_ASSET_ID)).?;
     try std.testing.expect(!std.mem.eql(u8, "0000", record.get("hash").?.string));
 }
 
 // The error of a copy that fails is logged and the file is reported as unrepaired.
 test "reports a file as unrepaired when it cannot be copied into the database" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(memory.log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -324,23 +338,25 @@ test "reports a file as unrepaired when it cannot be copied into the database" {
     try target.storage.deleteFile(allocator, io, assetPath);
     try std.Io.Dir.cwd().createDirPath(io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ target.dir, assetPath }));
 
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    console_capture.captureStderr(&stderr_capture.writer);
-    defer console_capture.endConsoleCapture();
-
-    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+    const result = try repair(allocator, io, memory.log, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
     }, null);
 
     try std.testing.expect(containsName(result.removed, assetPath));
     try std.testing.expect(containsName(result.unrepaired, assetPath));
     try std.testing.expectEqual(@as(usize, 0), result.repaired.len);
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Error repairing file " ++ assetPath) != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Error repairing file " ++ assetPath) != null);
 }
 
 test "logs a file whose restore fails part way and reports it as unrepaired" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(memory.log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -355,15 +371,11 @@ test "logs a file whose restore fails part way and reports it as unrepaired" {
     try target.storage.deleteFile(allocator, io, thumbPath);
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ target.dir, thumbPath, "in-the-way" }), "in the way");
 
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    console_capture.captureStderr(&stderr_capture.writer);
-    defer console_capture.endConsoleCapture();
-
-    const result = try repair(allocator, io, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
+    const result = try repair(allocator, io, memory.log, target.storage, target.storage, source.storage, target.database.bsonDatabase, target.database.metadataCollection, .{
         .source = source.dir,
     }, null);
 
     try std.testing.expect(containsName(result.unrepaired, thumbPath));
     try std.testing.expect(!containsName(result.repaired, thumbPath));
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Error repairing file " ++ thumbPath ++ ": ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Error repairing file " ++ thumbPath ++ ": ") != null);
 }

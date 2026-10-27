@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -50,105 +51,111 @@ const TestContext = struct {
 //
 // Runs the handler for a path and reads its result.
 //
-fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestContext, databasePath: []const u8) !ICheckDatabaseExistsResult {
+fn run(allocator: std.mem.Allocator, io: std.Io, log: ILog, testContext: *TestContext, databasePath: []const u8) !ICheckDatabaseExistsResult {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{
         .string = databasePath,
     });
-    const output = try checkDatabaseExistsHandler(allocator, io, test_timers.timers(), .{
+    const output = try checkDatabaseExistsHandler(allocator, io, test_timers.timers(), log, .{
         .object = object,
     }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(ICheckDatabaseExistsResult, allocator, output, .{});
 }
 
 test "reports exists=true when the database's merkle tree file is present" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
-    const result = try run(allocator, io, &testContext, databaseDir);
+    const result = try run(allocator, io, log, &testContext, databaseDir);
 
     try std.testing.expect(result.exists);
 }
 
 test "reports exists=false when the directory exists but holds no database" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "check-db-exists-empty");
     defer temp_dirs.removeTempDir(io, emptyDir);
 
-    const result = try run(allocator, io, &testContext, emptyDir);
+    const result = try run(allocator, io, log, &testContext, emptyDir);
 
     try std.testing.expect(!result.exists);
 }
 
 test "reports exists=false when the path does not exist at all" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-db-exists-missing");
     defer temp_dirs.removeTempDir(io, tempDir);
 
-    const result = try run(allocator, io, &testContext, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }));
+    const result = try run(allocator, io, log, &testContext, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }));
 
     try std.testing.expect(!result.exists);
 }
 
 test "throws when no database path is supplied" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
 
-    try std.testing.expectError(error.Thrown, run(allocator, io, &testContext, ""));
+    try std.testing.expectError(error.Thrown, run(allocator, io, log, &testContext, ""));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
 test "throws when the task data has no database path" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
 
-    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, test_timers.timers(), .{
+    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, test_timers.timers(), log, .{
         .object = .empty,
     }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
 test "throws a descriptive error when the database path is not a string" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var testContext: TestContext = undefined;
     try testContext.init(allocator);
     var object: std.json.ObjectMap = .empty;
@@ -156,7 +163,7 @@ test "throws a descriptive error when the database path is not a string" {
         .integer = 5,
     });
 
-    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, test_timers.timers(), .{
+    try std.testing.expectError(error.Thrown, checkDatabaseExistsHandler(allocator, io, test_timers.timers(), log, .{
         .object = object,
     }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The check-database-exists task data is not valid: databasePath must be a string", errors.lastErrorMessage());

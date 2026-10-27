@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const cli = @import("cli-zig");
 const utils = @import("utils-zig");
 const sync_watch = cli.sync_watch;
@@ -36,7 +37,7 @@ const ISyncCounter = struct {
 //
 // Counts a sync, failing the first one when asked to.
 //
-fn countSync(context: ?*anyopaque, io: std.Io) anyerror!bool {
+fn countSync(context: ?*anyopaque, io: std.Io, _: ILog) anyerror!bool {
     _ = io;
     const counter: *ISyncCounter = @ptrCast(@alignCast(context.?));
     counter.syncs += 1;
@@ -78,6 +79,7 @@ test "parseWatchInterval refuses an interval of zero or less" {
 }
 
 test "runSyncWatch keeps syncing until it is stopped" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var counter: ISyncCounter = .{ .stopAfter = 3 };
@@ -85,7 +87,7 @@ test "runSyncWatch keeps syncing until it is stopped" {
     utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
     defer utils.console.setCapture(null, null);
 
-    try runSyncWatch(arena.allocator(), std.testing.io, .{
+    try runSyncWatch(arena.allocator(), std.testing.io, log, .{
         .intervalSeconds = 0.001,
         .context = &counter,
         .syncOnce = countSync,
@@ -100,12 +102,15 @@ test "runSyncWatch a sync that failed does not stop the watch" {
     // again until someone notices.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
+    const memory = try utils.memory_log.MemoryLog.init(arena.allocator(), .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var counter: ISyncCounter = .{ .stopAfter = 3, .failFirst = true };
-    var capture = Capture{ .stdout = .init(arena.allocator()), .stderr = .init(arena.allocator()) };
-    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
-    defer utils.console.setCapture(null, null);
 
-    try runSyncWatch(arena.allocator(), std.testing.io, .{
+    try runSyncWatch(arena.allocator(), std.testing.io, memory.log, .{
         .intervalSeconds = 0.001,
         .context = &counter,
         .syncOnce = countSync,
@@ -114,10 +119,11 @@ test "runSyncWatch a sync that failed does not stop the watch" {
 
     try std.testing.expectEqual(@as(u32, 3), counter.syncs);
     try std.testing.expectEqual(@as(u32, 2), counter.succeeded);
-    try std.testing.expect(std.mem.indexOf(u8, capture.stderr.written(), "\u{2717} Sync failed: the network is down") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "\u{2717} Sync failed: the network is down") != null);
 }
 
 test "runSyncWatch does not sync at all when it is stopped before it starts" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var counter: ISyncCounter = .{ .stopAfter = 0 };
@@ -125,7 +131,7 @@ test "runSyncWatch does not sync at all when it is stopped before it starts" {
     utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
     defer utils.console.setCapture(null, null);
 
-    try runSyncWatch(arena.allocator(), std.testing.io, .{
+    try runSyncWatch(arena.allocator(), std.testing.io, log, .{
         .intervalSeconds = 0.001,
         .context = &counter,
         .syncOnce = countSync,
@@ -138,23 +144,26 @@ test "runSyncWatch does not sync at all when it is stopped before it starts" {
 test "runSyncWatch writes the interval as a number is written in a message and waits as a timer does" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var capture = Capture{ .stdout = .init(arena.allocator()), .stderr = .init(arena.allocator()) };
-    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
-    defer utils.console.setCapture(null, null);
+    const memory = try utils.memory_log.MemoryLog.init(arena.allocator(), .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     // picocolors turns colour on for every process on Windows, and the expected line here has none.
     cli.picocolors.setColorSupportOverride(false);
     defer cli.picocolors.setColorSupportOverride(null);
 
     // The timer waits 1 ms for a delay under 1 ms or past 2147483647 ms.
     var tiny: ISyncCounter = .{ .stopAfter = 2 };
-    try runSyncWatch(arena.allocator(), std.testing.io, .{
+    try runSyncWatch(arena.allocator(), std.testing.io, memory.log, .{
         .intervalSeconds = 1e-7,
         .context = &tiny,
         .syncOnce = countSync,
         .isStopped = stoppedAfterEnough,
     });
     var huge: ISyncCounter = .{ .stopAfter = 2 };
-    try runSyncWatch(arena.allocator(), std.testing.io, .{
+    try runSyncWatch(arena.allocator(), std.testing.io, memory.log, .{
         .intervalSeconds = 1e21,
         .context = &huge,
         .syncOnce = countSync,
@@ -162,6 +171,6 @@ test "runSyncWatch writes the interval as a number is written in a message and w
     });
 
     try std.testing.expectEqual(@as(u32, 2), huge.syncs);
-    try std.testing.expect(std.mem.indexOf(u8, capture.stdout.written(), "Syncing every 1e-7 second(s). Press Ctrl-C to stop.\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, capture.stdout.written(), "Syncing every 1e+21 second(s). Press Ctrl-C to stop.\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stdout(), "Syncing every 1e-7 second(s). Press Ctrl-C to stop.\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stdout(), "Syncing every 1e+21 second(s). Press Ctrl-C to stop.\n") != null);
 }

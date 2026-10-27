@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -68,7 +69,7 @@ const CleanupTest = struct {
     //
     // Makes the folder, points the temp and cache directories at the test's own and creates the database.
     //
-    fn init(self: *CleanupTest) !void {
+    fn init(self: *CleanupTest, log: ILog) !void {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         const io = std.testing.io;
@@ -89,7 +90,7 @@ const CleanupTest = struct {
         self.databaseDir = try path.join(allocator, &.{ self.tempDir, "db" });
         const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, self.databaseDir, null, null);
         self.database = try node_api.media_file_database.createMediaFileDatabase(allocator, created.storage, self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider());
-        try node_api.media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
+        try node_api.media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "cleanup-task", .{
             .context = null,
             .function = ignoreMessage,
@@ -99,7 +100,7 @@ const CleanupTest = struct {
     //
     // Puts the environment back and removes the directory.
     //
-    fn deinit(self: *CleanupTest) void {
+    fn deinit(self: *CleanupTest, log: ILog) void {
         test_environment.restoreTmpDir() catch |err| {
             std.debug.panic("PHOTOSPHERE_TMP_DIR could not be put back: {s}", .{@errorName(err)});
         };
@@ -108,7 +109,7 @@ const CleanupTest = struct {
         };
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
         self.arena.deinit();
-        self.test_env.deinit();
+        self.test_env.deinit(log);
     }
 
     //
@@ -124,7 +125,7 @@ const CleanupTest = struct {
     // Records against a file what an earlier import would have: the hash of its contents, filed
     // under the source id a folder source gives it, which is its own path.
     //
-    fn seedCacheEntry(self: *CleanupTest, filePath: []const u8, contents: []const u8, assetId: ?[]const u8) !void {
+    fn seedCacheEntry(self: *CleanupTest, log: ILog, filePath: []const u8, contents: []const u8, assetId: ?[]const u8) !void {
         const io = std.testing.io;
         var hash: [32]u8 = undefined;
         Sha256.hash(contents, &hash, .{});
@@ -132,7 +133,7 @@ const CleanupTest = struct {
 
         var hashCache = try HashCache.init(try getHashCacheDir(self.arena.allocator(), self.databaseDir), false);
         defer hashCache.deinit();
-        _ = try hashCache.load(io);
+        _ = try hashCache.load(io, log);
         try hashCache.addSourceHash(filePath, .{
             .hash = &hash,
             .length = fileStat.size,
@@ -141,13 +142,13 @@ const CleanupTest = struct {
         if (assetId) |id| {
             _ = try hashCache.setAssetId(filePath, id);
         }
-        try hashCache.save(io);
+        try hashCache.save(io, log);
     }
 
     //
     // Puts an asset holding the hash of the contents in the database.
     //
-    fn holdInDatabase(self: *CleanupTest, contents: []const u8) !void {
+    fn holdInDatabase(self: *CleanupTest, log: ILog, contents: []const u8) !void {
         const allocator = self.arena.allocator();
         var hash: [32]u8 = undefined;
         Sha256.hash(contents, &hash, .{});
@@ -161,14 +162,14 @@ const CleanupTest = struct {
                 .value = .{ .string = try allocator.dupe(u8, &std.fmt.bytesToHex(hash, .lower)) },
             },
         });
-        try self.database.metadataCollection.insertOne(std.testing.io, &record, null);
-        try self.database.bsonDatabase.commit(std.testing.io);
+        try self.database.metadataCollection.insertOne(std.testing.io, log, &record, null);
+        try self.database.bsonDatabase.commit(std.testing.io, log);
     }
 
     //
     // Runs the handler over the watched folder.
     //
-    fn run(self: *CleanupTest, dryRun: bool, withSources: bool) !ICleanupSourcesResult {
+    fn run(self: *CleanupTest, log: ILog, dryRun: bool, withSources: bool) !ICleanupSourcesResult {
         const allocator = self.arena.allocator();
         var descriptor: std.json.ObjectMap = .empty;
         try descriptor.put(allocator, "databasePath", .{ .string = self.databaseDir });
@@ -187,7 +188,7 @@ const CleanupTest = struct {
         try data.put(allocator, "storageDescriptor", .{ .object = descriptor });
         try data.put(allocator, "settings", .{ .object = settings });
         try data.put(allocator, "dryRun", .{ .bool = dryRun });
-        const output = try cleanupSourcesHandler(allocator, std.testing.io, test_timers.timers(), .{ .object = data }, self.context.taskContext());
+        const output = try cleanupSourcesHandler(allocator, std.testing.io, test_timers.timers(), log, .{ .object = data }, self.context.taskContext());
         return std.json.parseFromValueLeaky(ICleanupSourcesResult, allocator, output, .{});
     }
 };
@@ -203,128 +204,137 @@ fn expectStrings(expected: []const []const u8, actual: []const []const u8) !void
 }
 
 test "offers a photo the database holds" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const filePath = try context.writePhoto("in-the-database.jpg", "one");
-    try context.seedCacheEntry(filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    try context.holdInDatabase("one");
+    try context.seedCacheEntry(log, filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.holdInDatabase(log, "one");
 
-    const result = try context.run(true, true);
+    const result = try context.run(log, true, true);
 
     try std.testing.expectEqual(@as(u64, 1), result.considered);
     try expectStrings(&.{filePath}, result.deletableSourceIds);
 }
 
 test "leaves a photo the database does not hold, whatever the cache says" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // The cache says this device hashed it and recorded an asset id, but the database is the only
     // thing that counts here: this deletes the user's only copy.
     const filePath = try context.writePhoto("not-in-the-database.jpg", "one");
-    try context.seedCacheEntry(filePath, "one", "b1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.seedCacheEntry(log, filePath, "one", "b1b2c3d4-e5f6-4890-abcd-ef1234567890");
 
-    const result = try context.run(true, true);
+    const result = try context.run(log, true, true);
 
     try std.testing.expectEqual(@as(usize, 0), result.deletableSourceIds.len);
 }
 
 test "asks the database even when an asset id is recorded" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // (The database holds the photo under an asset id other than the one recorded, and the photo is offered, which
     // only asking the database can find out.)
     const filePath = try context.writePhoto("in-the-database.jpg", "one");
-    try context.seedCacheEntry(filePath, "one", "b1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    try context.holdInDatabase("one");
+    try context.seedCacheEntry(log, filePath, "one", "b1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.holdInDatabase(log, "one");
 
-    const result = try context.run(true, true);
+    const result = try context.run(log, true, true);
 
     try expectStrings(&.{filePath}, result.deletableSourceIds);
 }
 
 test "leaves a photo this device has never hashed" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // A photo imported on another device and synced in. This device has no entry for it, and
     // finding out would mean hashing the whole library, which is the cost this all exists to
     // avoid. So it stays. (The database holds it, so only the missing cache entry keeps it.)
     _ = try context.writePhoto("from-another-device.jpg", "one");
-    try context.holdInDatabase("one");
+    try context.holdInDatabase(log, "one");
 
-    const result = try context.run(true, true);
+    const result = try context.run(log, true, true);
 
     try std.testing.expectEqual(@as(u64, 1), result.considered);
     try std.testing.expectEqual(@as(usize, 0), result.deletableSourceIds.len);
 }
 
 test "leaves a photo whose cache entry no longer describes it" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     // A photo library may hand a deleted item's id to a new one, and deleting the wrong photo is
     // not recoverable.
     const filePath = try context.writePhoto("changed.jpg", "one");
-    try context.seedCacheEntry(filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.seedCacheEntry(log, filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
     try test_files.writeFile(std.testing.io, filePath, "a completely different photo");
-    try context.holdInDatabase("one");
+    try context.holdInDatabase(log, "one");
 
-    const result = try context.run(true, true);
+    const result = try context.run(log, true, true);
 
     try std.testing.expectEqual(@as(usize, 0), result.deletableSourceIds.len);
 }
 
 test "a counting pass deletes nothing" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const filePath = try context.writePhoto("in-the-database.jpg", "one");
-    try context.seedCacheEntry(filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    try context.holdInDatabase("one");
+    try context.seedCacheEntry(log, filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.holdInDatabase(log, "one");
 
-    const result = try context.run(true, true);
+    const result = try context.run(log, true, true);
 
     try std.testing.expectEqual(@as(usize, 0), result.deletedSourceIds.len);
     try std.testing.expect(test_files.fileExists(std.testing.io, filePath));
 }
 
 test "a deleting pass deletes what it offered" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const filePath = try context.writePhoto("in-the-database.jpg", "one");
-    try context.seedCacheEntry(filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    try context.holdInDatabase("one");
+    try context.seedCacheEntry(log, filePath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.holdInDatabase(log, "one");
 
-    const result = try context.run(false, true);
+    const result = try context.run(log, false, true);
 
     try expectStrings(&.{filePath}, result.deletedSourceIds);
     try std.testing.expect(!test_files.fileExists(std.testing.io, filePath));
 }
 
 test "a deleting pass leaves the photos it did not offer" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
     const keptPath = try context.writePhoto("not-in-the-database.jpg", "two");
     const deletedPath = try context.writePhoto("in-the-database.jpg", "one");
-    try context.seedCacheEntry(deletedPath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
-    try context.holdInDatabase("one");
+    try context.seedCacheEntry(log, deletedPath, "one", "a1b2c3d4-e5f6-4890-abcd-ef1234567890");
+    try context.holdInDatabase(log, "one");
 
-    _ = try context.run(false, true);
+    _ = try context.run(log, false, true);
 
     try std.testing.expect(test_files.fileExists(std.testing.io, keptPath));
     try std.testing.expect(!test_files.fileExists(std.testing.io, deletedPath));
 }
 
 test "refuses to run with no sources configured, rather than looking nowhere and reporting success" {
+    const log = utils.mute_log.MuteLog.init();
     var context: CleanupTest = undefined;
-    try context.init();
-    defer context.deinit();
+    try context.init(log);
+    defer context.deinit(log);
 
-    try std.testing.expectError(error.Thrown, context.run(true, false));
+    try std.testing.expectError(error.Thrown, context.run(log, true, false));
     try std.testing.expect(std.ascii.indexOfIgnoreCase(errors.lastErrorMessage(), "no sources configured") != null);
 }

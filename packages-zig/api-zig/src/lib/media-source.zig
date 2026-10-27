@@ -8,6 +8,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const ziggy = @import("ziggy");
 const errors = utils.errors;
@@ -66,7 +67,7 @@ pub const IMediaSource = struct {
     //
     pub const VTable = struct {
         // Returns one page of the source's contents.
-        listPage: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage,
+        listPage: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage,
 
         // Returns a path the importer can read the item's bytes from.
         openItem: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, item: IMediaItem) anyerror![]const u8,
@@ -82,8 +83,8 @@ pub const IMediaSource = struct {
     // Returns one page of the source's contents. Pass undefined as the cursor to start at the
     // beginning, and the previous page's nextCursor to continue.
     //
-    pub fn listPage(self: IMediaSource, allocator: std.mem.Allocator, io: std.Io, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
-        return self.vtable.listPage(self.ptr, allocator, io, cursor, pageSize);
+    pub fn listPage(self: IMediaSource, allocator: std.mem.Allocator, io: std.Io, log: ILog, cursor: ?[]const u8, pageSize: usize) anyerror!IMediaSourceListPage {
+        return self.vtable.listPage(self.ptr, allocator, io, log, cursor, pageSize);
     }
 
     //

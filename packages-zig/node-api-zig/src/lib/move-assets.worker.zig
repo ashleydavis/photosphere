@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
@@ -66,8 +67,8 @@ const GetMetadataOperation = struct {
     //
     // Gets the record.
     //
-    pub fn run(self: *GetMetadataOperation, io: std.Io) !?BsonDocument {
-        return self.metadataCollection.getOne(io, self.assetId);
+    pub fn run(self: *GetMetadataOperation, io: std.Io, log: ILog) !?BsonDocument {
+        return self.metadataCollection.getOne(io, log, self.assetId);
     }
 };
 
@@ -90,8 +91,8 @@ const UpsertMetadataOperation = struct {
     //
     // Writes the record, creating it when it does not exist.
     //
-    pub fn run(self: *UpsertMetadataOperation, io: std.Io) !bool {
-        return self.metadataCollection.updateOne(io, self.newAssetId, self.updates, .{
+    pub fn run(self: *UpsertMetadataOperation, io: std.Io, log: ILog) !bool {
+        return self.metadataCollection.updateOne(io, log, self.newAssetId, self.updates, .{
             .upsert = true,
         });
     }
@@ -109,6 +110,7 @@ pub fn moveAssetsHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -124,24 +126,24 @@ pub fn moveAssetsHandler(
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const source = try openStorage(allocator, io, sourceDatabasePath, null, null, context.nativeCaller);
+    const source = try openStorage(allocator, io, log, sourceDatabasePath, null, null, context.nativeCaller);
     const sourceStorage = source.storage;
     const sourceRawStorage = source.rawStorage;
     const sourceDb = try createMediaFileDatabase(allocator, sourceStorage, uuidGenerator, timestampProvider);
-    try loadSortIndexes(allocator, sourceStorage, sourceDb.metadataCollection);
+    try loadSortIndexes(allocator, log, sourceStorage, sourceDb.metadataCollection);
 
-    const dest = try openStorage(allocator, io, destDatabasePath, null, null, context.nativeCaller);
+    const dest = try openStorage(allocator, io, log, destDatabasePath, null, null, context.nativeCaller);
     const destStorage = dest.storage;
     const destRawStorage = dest.rawStorage;
     const destDb = try createMediaFileDatabase(allocator, destStorage, uuidGenerator, timestampProvider);
-    try loadSortIndexes(allocator, destStorage, destDb.metadataCollection);
+    try loadSortIndexes(allocator, log, destStorage, destDb.metadataCollection);
 
     for (assetIds) |assetId| {
         var getMetadataOperation: GetMetadataOperation = .{
             .metadataCollection = sourceDb.metadataCollection,
             .assetId = assetId,
         };
-        const metadata = try retry(io, &getMetadataOperation, 3, 1_000, 2, 30_000, null) orelse {
+        const metadata = try retry(io, log, &getMetadataOperation, 3, 1_000, 2, 30_000, null) orelse {
             return errors.throwError("Asset \"{s}\" not found in source database \"{s}\".", .{ assetId, sourceDatabasePath });
         };
 
@@ -156,12 +158,13 @@ pub fn moveAssetsHandler(
                     .storage = sourceStorage,
                     .fileName = assetPath,
                 };
-                const info = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null);
-                const stream = try streamAsset(allocator, io, sourceStorage, assetId, assetType);
+                const info = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null);
+                const stream = try streamAsset(allocator, io, log, sourceStorage, assetId, assetType);
                 defer stream.destroy(io);
                 try writeAssetStreamVerified(
                     allocator,
                     io,
+                    log,
                     sourceStorage,
                     destStorage,
                     destRawStorage,
@@ -186,12 +189,13 @@ pub fn moveAssetsHandler(
             .newAssetId = newAssetId,
             .updates = newMetadata,
         };
-        _ = try retry(io, &upsertOperation, 3, 1_000, 2, 30_000, null);
-        try destDb.bsonDatabase.commit(io);
+        _ = try retry(io, log, &upsertOperation, 3, 1_000, 2, 30_000, null);
+        try destDb.bsonDatabase.commit(io, log);
 
         try removeAsset(
             allocator,
             io,
+            log,
             sourceStorage,
             sourceRawStorage,
             sessionId,

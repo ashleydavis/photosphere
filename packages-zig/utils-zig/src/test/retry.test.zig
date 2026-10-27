@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const retry = utils.retry;
 const errors = utils.errors;
@@ -37,7 +38,7 @@ const MockOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *MockOperation, io: std.Io) ![]const u8 {
+    pub fn run(self: *MockOperation, io: std.Io, _: ILog) ![]const u8 {
         self.calls += 1;
         if (self.neverResolves) {
             try io.sleep(.fromSeconds(3600), .awake);
@@ -65,7 +66,7 @@ const NumberOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *NumberOperation, io: std.Io) !u32 {
+    pub fn run(self: *NumberOperation, io: std.Io, _: ILog) !u32 {
         _ = io;
         return self.value;
     }
@@ -84,7 +85,7 @@ const VoidOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *VoidOperation, io: std.Io) !void {
+    pub fn run(self: *VoidOperation, io: std.Io, _: ILog) !void {
         _ = io;
         self.calls += 1;
     }
@@ -103,7 +104,7 @@ const RuntimeErrorOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *RuntimeErrorOperation, io: std.Io) ![]const u8 {
+    pub fn run(self: *RuntimeErrorOperation, io: std.Io, _: ILog) ![]const u8 {
         _ = self;
         _ = io;
         return error.FileNotFound;
@@ -126,7 +127,7 @@ const SequenceOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *SequenceOperation, io: std.Io) ![]const u8 {
+    pub fn run(self: *SequenceOperation, io: std.Io, _: ILog) ![]const u8 {
         _ = io;
         self.calls += 1;
         if (self.calls <= self.failureMessages.len) {
@@ -150,7 +151,7 @@ const LongSourceOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *LongSourceOperation, io: std.Io) ![]const u8 {
+    pub fn run(self: *LongSourceOperation, io: std.Io, _: ILog) ![]const u8 {
         _ = self;
         try io.sleep(.fromSeconds(3600), .awake);
         return "never";
@@ -171,7 +172,7 @@ const BusyOperation = struct {
     //
     // Runs the operation.
     //
-    pub fn run(self: *BusyOperation, io: std.Io) ![]const u8 {
+    pub fn run(self: *BusyOperation, io: std.Io, _: ILog) ![]const u8 {
         const start = std.Io.Clock.awake.now(io);
         while (elapsedMilliseconds(io, start) < self.busyMilliseconds) {
             std.atomic.spinLoopHint();
@@ -220,13 +221,14 @@ const StderrCapture = struct {
 };
 
 test "should succeed on first attempt" {
+    const log = utils.mute_log.MuteLog.init();
     var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
     const io = backoff_time.io();
     var operation: MockOperation = .{};
 
-    const result = try retry.retry(io, &operation, 3, 1_000, 2, 30_000, null);
+    const result = try retry.retry(io, log, &operation, 3, 1_000, 2, 30_000, null);
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
@@ -239,12 +241,11 @@ test "should succeed after retries" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
 
-    const result = try retry.retry(io, &operation, 3, 20, 2, 30_000, null);
+    const result = try retry.retry(io, log, &operation, 3, 20, 2, 30_000, null);
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
@@ -259,15 +260,14 @@ test "should throw error after all retries exhausted" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
 
-    try std.testing.expectError(error.Thrown, retry.retry(io, &operation, 3, 20, 2, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry.retry(io, log, &operation, 3, 20, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
@@ -278,15 +278,14 @@ test "should throw error after all retries exhausted" {
 test "should use default maxAttempts of 3" {
     const io = std.testing.io;
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
 
-    try std.testing.expectError(error.Thrown, retry.retry(io, &operation, 3, 1, 2, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry.retry(io, log, &operation, 3, 1, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 3), operation.calls);
@@ -298,12 +297,11 @@ test "should use default waitTimeMS of 1000" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 1 };
 
-    _ = try retry.retry(io, &operation, 2, 1_000, 2, 30_000, null);
+    _ = try retry.retry(io, log, &operation, 2, 1_000, 2, 30_000, null);
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
     try std.testing.expectEqual(@as(i64, 1_000), sleptMilliseconds(&backoff_time));
@@ -315,12 +313,11 @@ test "should use default waitTimeScale of 2" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
 
-    _ = try retry.retry(io, &operation, 3, 100, 2, 30_000, null);
+    _ = try retry.retry(io, log, &operation, 3, 100, 2, 30_000, null);
 
     // Slept for 100ms then 200ms.
     try std.testing.expectEqual(@as(i64, 300), sleptMilliseconds(&backoff_time));
@@ -332,12 +329,11 @@ test "should work with custom waitTimeScale" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var operation: MockOperation = .{ .failuresBeforeSuccess = 2 };
 
-    _ = try retry.retry(io, &operation, 3, 100, 3, 30_000, null);
+    _ = try retry.retry(io, log, &operation, 3, 100, 3, 30_000, null);
 
     // Slept for 100ms then 300ms.
     try std.testing.expectEqual(@as(i64, 400), sleptMilliseconds(&backoff_time));
@@ -349,15 +345,14 @@ test "should not sleep on last attempt" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
 
-    try std.testing.expectError(error.Thrown, retry.retry(io, &operation, 2, 100, 2, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry.retry(io, log, &operation, 2, 100, 2, 30_000, null));
 
     try std.testing.expectEqual(@as(u32, 2), operation.calls);
 
@@ -371,81 +366,86 @@ test "should throw error immediately when maxAttempts is 1" {
     defer backoff_time.deinit();
     const io = backoff_time.io();
     // Mock log so the retry warnings do not reach stderr.
-    var log: ExceptionLog = .{};
-    log.install();
-    defer log.uninstall();
+    var mockLog: ExceptionLog = .{};
+    const log = mockLog.ilog();
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true };
 
-    try std.testing.expectError(error.Thrown, retry.retry(io, &operation, 1, 100, 2, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry.retry(io, log, &operation, 1, 100, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
     try std.testing.expectEqual(@as(i64, 0), sleptMilliseconds(&backoff_time));
-    try std.testing.expectEqual(@as(u32, 0), log.exceptionCalls);
+    try std.testing.expectEqual(@as(u32, 0), mockLog.exceptionCalls);
     try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: Error: Operation failed\n", capture.allocating.written());
 }
 
 test "should throw expected error when maxAttempts is 0" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var operation: MockOperation = .{};
 
-    try std.testing.expectError(error.Thrown, retry.retry(io, &operation, 0, 1_000, 2, 30_000, null));
+    try std.testing.expectError(error.Thrown, retry.retry(io, log, &operation, 0, 1_000, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Expected there to be an error!", errors.lastErrorMessage());
     try std.testing.expectEqual(@as(u32, 0), operation.calls);
 }
 
 test "should preserve error type and message" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true, .failsWithFatalError = true, .failureMessage = "Custom error message" };
 
-    try std.testing.expectError(error.FatalError, retry.retry(io, &operation, 1, 1_000, 2, 30_000, null));
+    try std.testing.expectError(error.FatalError, retry.retry(io, log, &operation, 1, 1_000, 2, 30_000, null));
     try std.testing.expectEqualStrings("Custom error message", errors.lastErrorMessage());
     try std.testing.expectEqualStrings("FatalError", errors.lastErrorName());
 }
 
 test "should work with different return types" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var string_operation: MockOperation = .{ .result = "string result" };
     var number_operation: NumberOperation = .{ .value = 42 };
 
-    try std.testing.expectEqualStrings("string result", try retry.retry(io, &string_operation, 3, 1_000, 2, 30_000, null));
-    try std.testing.expectEqual(@as(u32, 42), try retry.retry(io, &number_operation, 3, 1_000, 2, 30_000, null));
+    try std.testing.expectEqualStrings("string result", try retry.retry(io, log, &string_operation, 3, 1_000, 2, 30_000, null));
+    try std.testing.expectEqual(@as(u32, 42), try retry.retry(io, log, &number_operation, 3, 1_000, 2, 30_000, null));
 }
 
 test "should handle operations that return undefined" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var operation: VoidOperation = .{};
 
-    try retry.retry(io, &operation, 3, 1_000, 2, 30_000, null);
+    try retry.retry(io, log, &operation, 3, 1_000, 2, 30_000, null);
 
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
 }
 
 test "should succeed if operation completes before timeout" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var operation: MockOperation = .{};
 
-    const result = try retry.retry(io, &operation, 3, 100, 2, 50, null);
+    const result = try retry.retry(io, log, &operation, 3, 100, 2, 50, null);
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
 }
 
 test "should wrap error with errorContext when provided" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true, .failureMessage = "original error" };
 
-    const result = retry.retry(io, &operation, 1, 100, 2, 30_000, "context message");
+    const result = retry.retry(io, log, &operation, 1, 100, 2, 30_000, "context message");
 
     try std.testing.expectError(error.Thrown, result);
     try std.testing.expect(utils.wrapped_error.WrappedError.isInstance(error.Thrown));
@@ -454,26 +454,28 @@ test "should wrap error with errorContext when provided" {
 }
 
 test "should wrap a runtime error with errorContext" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: RuntimeErrorOperation = .{};
 
-    try std.testing.expectError(error.Thrown, retry.retry(io, &operation, 1, 100, 2, 30_000, "context message"));
+    try std.testing.expectError(error.Thrown, retry.retry(io, log, &operation, 1, 100, 2, 30_000, "context message"));
 
     try std.testing.expectEqualStrings("context message: FileNotFound", errors.lastErrorMessage());
     try std.testing.expectEqualStrings("FileNotFound", errors.lastErrorCauseMessage());
 }
 
 test "should throw original error when errorContext is not provided" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: RuntimeErrorOperation = .{};
 
-    try std.testing.expectError(error.FileNotFound, retry.retry(io, &operation, 1, 1_000, 2, 30_000, null));
+    try std.testing.expectError(error.FileNotFound, retry.retry(io, log, &operation, 1, 1_000, 2, 30_000, null));
 }
 
 test "rejectAfter should reject with timeout message" {
@@ -499,29 +501,32 @@ test "rejectAfter should wait for the given duration" {
 }
 
 test "retryOnce should resolve with the operation result" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var operation: MockOperation = .{};
 
-    const result = try retry.retryOnce(io, &operation, 1_000);
+    const result = try retry.retryOnce(io, log, &operation, 1_000);
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqual(@as(u32, 1), operation.calls);
 }
 
 test "retryOnce should reject with the operation error" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var operation: MockOperation = .{ .alwaysFails = true, .failureMessage = "operation failed" };
 
-    try std.testing.expectError(error.Thrown, retry.retryOnce(io, &operation, 1_000));
+    try std.testing.expectError(error.Thrown, retry.retryOnce(io, log, &operation, 1_000));
 
     try std.testing.expectEqualStrings("operation failed", errors.lastErrorMessage());
 }
 
 test "retryOnce should resolve with correct value when operation completes before timeout" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var operation: NumberOperation = .{ .value = 42 };
 
-    const result = try retry.retryOnce(io, &operation, 50);
+    const result = try retry.retryOnce(io, log, &operation, 50);
 
     try std.testing.expectEqual(@as(u32, 42), result);
 }
@@ -560,6 +565,7 @@ const VerboseLog = struct {
         .event = ignoreMessage,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 
     //
@@ -623,6 +629,14 @@ const VerboseLog = struct {
         _ = io;
         return utils.log.noLogDetails;
     }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
 };
 test "should log the error of a failed attempt when verbose logging is enabled" {
     const io = std.testing.io;
@@ -633,12 +647,9 @@ test "should log the error of a failed attempt when verbose logging is enabled" 
     };
     defer verbose_log.messages.deinit();
     defer verbose_log.warnings.deinit();
-    const original_log = utils.log.currentLog();
-    utils.log.setLog(verbose_log.ilog());
-    defer utils.log.setLog(original_log);
     var operation: MockOperation = .{ .failuresBeforeSuccess = 1, .failureMessage = "First \"failure\"" };
 
-    _ = try retry.retry(io, &operation, 2, 1, 2, 30_000, null);
+    _ = try retry.retry(io, verbose_log.ilog(), &operation, 2, 1, 2, 30_000, null);
 
     try std.testing.expectEqualStrings(
         "Error: {\n  \"name\": \"Error\",\n  \"message\": \"First \\\"failure\\\"\"\n}\n",
@@ -663,12 +674,9 @@ test "each attempt that will be tried again says what went wrong" {
     };
     defer warn_log.messages.deinit();
     defer warn_log.warnings.deinit();
-    const original_log = utils.log.currentLog();
-    utils.log.setLog(warn_log.ilog());
-    defer utils.log.setLog(original_log);
     var operation: SequenceOperation = .{ .failureMessages = &.{ "First failure", "Second failure" } };
 
-    const result = try retry.retry(io, &operation, 3, 1, 2, 30_000, "Failed to copy a file");
+    const result = try retry.retry(io, warn_log.ilog(), &operation, 3, 1, 2, 30_000, "Failed to copy a file");
 
     try std.testing.expectEqualStrings("success", result);
     try std.testing.expectEqualStrings(
@@ -687,24 +695,22 @@ test "a retried attempt without errorContext says an operation failed" {
     };
     defer warn_log.messages.deinit();
     defer warn_log.warnings.deinit();
-    const original_log = utils.log.currentLog();
-    utils.log.setLog(warn_log.ilog());
-    defer utils.log.setLog(original_log);
     var operation: MockOperation = .{ .failuresBeforeSuccess = 1, .failureMessage = "First failure" };
 
-    _ = try retry.retry(io, &operation, 2, 1, 2, 30_000, null);
+    _ = try retry.retry(io, warn_log.ilog(), &operation, 2, 1, 2, 30_000, null);
 
     try std.testing.expectEqualStrings("An operation failed. Retrying after: First failure\n", warn_log.warnings.written());
 }
 
 test "the last error is reported with its own name, as the first line of its stack shows it" {
+    const log = utils.mute_log.MuteLog.init();
     const io = std.testing.io;
     var capture: StderrCapture = undefined;
     capture.begin();
     defer capture.end();
     var operation: MockOperation = .{ .alwaysFails = true, .failsWithFatalError = true };
 
-    try std.testing.expectError(error.FatalError, retry.retry(io, &operation, 1, 10, 2, 30_000, null));
+    try std.testing.expectError(error.FatalError, retry.retry(io, log, &operation, 1, 10, 2, 30_000, null));
 
     try std.testing.expectEqualStrings("Operation failed, no more retries allowed. Last error: FatalError: Operation failed\n", capture.allocating.written());
 }

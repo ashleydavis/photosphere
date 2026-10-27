@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -10,7 +11,6 @@ const retry_operations = @import("retry-operations.zig");
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const merkle_diff = merkle_tree_zig.merkle_diff;
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const IStorage = storage_zig.storage.IStorage;
 const walkDirectory = storage_zig.walk_directory.walkDirectory;
@@ -125,13 +125,13 @@ pub const IReplicateOptions = struct {
 //
 // Formats a progress message into a buffer (the messages are only valid during the progress callback).
 //
-fn reportProgress(io: std.Io, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
+fn reportProgress(io: std.Io, log: ILog, progressCallback: ?ProgressCallback, comptime format: []const u8, args: anytype) void {
     const callback = progressCallback orelse {
         return;
     };
     var buffer: [256]u8 = undefined;
     const message = std.fmt.bufPrint(&buffer, format, args) catch buffer[0..];
-    callback.call(io, message);
+    callback.call(io, log, message);
 }
 
 //
@@ -194,7 +194,7 @@ const ReplicateFilesState = struct {
     // Copies an asset from the source storage to the destination storage.
     // But only when necessary.
     //
-    fn copyAsset(self: *ReplicateFilesState, fileName: []const u8, sourceHash: []const u8) !void {
+    fn copyAsset(self: *ReplicateFilesState, log: ILog, fileName: []const u8, sourceHash: []const u8) !void {
         const allocator = self.allocator;
         const io = self.io;
 
@@ -205,14 +205,14 @@ const ReplicateFilesState = struct {
 
             // File already exists with correct hash, skip copying.
             // This assumes the file is non-corrupted. To find corrupted files, a verify would be needed.
-            reportProgress(self.io, self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
+            reportProgress(self.io, log, self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
             return;
         }
 
         log.verbose(try std.fmt.allocPrint(allocator, "Copying file: {s}", .{fileName}));
         const assetStorage = self.sourceAssetStorage;
         var srcInfoOperation: retry_operations.InfoOperation("() => assetStorage.info(fileName)") = .{ .allocator = allocator, .storage = assetStorage, .fileName = fileName };
-        const srcFileInfo = try retry(io, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        const srcFileInfo = try retry(io, log, &srcInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
             // A partial replica's merkle tree is the whole origin's, so it describes files the
             // replica does not hold: that is what makes it partial, and it is what every phone has.
             // Treating the first of those as fatal made a partial replica impossible to replicate or
@@ -242,7 +242,7 @@ const ReplicateFilesState = struct {
             .fileName = fileName,
             .contentType = srcFileInfo.contentType,
         };
-        try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+        try retry(io, log, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
 
         log.verbose(try std.fmt.allocPrint(allocator, "Copied file: {s}", .{fileName}));
 
@@ -250,7 +250,7 @@ const ReplicateFilesState = struct {
         // Compute hash for the copied file.
         //
         var hashOperation: retry_operations.ComputeStorageHashOperation("async () => computeHash(await destAssetStorage.readStream(fileName))") = .{ .allocator = allocator, .storage = self.destAssetStorage, .fileName = fileName };
-        const copiedHash = try retry(io, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+        const copiedHash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
         if (!std.mem.eql(u8, &copiedHash, sourceHash)) {
             return errors.throwError(
                 "Copied file \"{s}\" hash does not match the source hash.\nSource hash: {x}\nCopied hash: {x}\n",
@@ -264,7 +264,7 @@ const ReplicateFilesState = struct {
         // Get the info for the copied file.
         //
         var copiedInfoOperation: retry_operations.InfoOperation("() => destAssetStorage.info(fileName)") = .{ .allocator = allocator, .storage = self.destAssetStorage, .fileName = fileName };
-        const copiedFileInfo = try retry(io, &copiedInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+        const copiedFileInfo = try retry(io, log, &copiedInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
             return errors.throwError("Failed to read dest info for file: {s}", .{fileName});
         };
 
@@ -282,13 +282,13 @@ const ReplicateFilesState = struct {
 
         log.verbose(try std.fmt.allocPrint(allocator, "Added file to destination merkle tree: {s}", .{fileName}));
 
-        reportProgress(self.io, self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
+        reportProgress(self.io, log, self.progressCallback, "Copied {d}", .{self.result.copiedFiles});
     }
 
     //
     // Copies one of the files the comparison named.
     //
-    fn processFile(self: *ReplicateFilesState, fileName: []const u8) !void {
+    fn processFile(self: *ReplicateFilesState, log: ILog, fileName: []const u8) !void {
         try throwIfCancelled(self.io, self.allocator, if (self.options) |options| options.isCancelled else null);
 
         // Skip files that don't match the path filter
@@ -317,14 +317,14 @@ const ReplicateFilesState = struct {
         // copy ended there. sync.zig already passes the long timeout at exactly this point,
         // for the same reason.
         var copyAssetOperation: CopyAssetOperation = .{ .state = self, .fileName = fileName, .sourceHash = sourceFileInfo.hash };
-        try retry(self.io, &copyAssetOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to copy file {s}", .{fileName}));
+        try retry(self.io, log, &copyAssetOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(self.allocator, "Failed to copy file {s}", .{fileName}));
 
         if (self.result.copiedFiles % 100 == 0 and self.result.copiedFiles != self.copiedFilesAtLastSave) {
             // Save the destination merkle tree periodically. The tree of a large database is
             // itself a large file, so it gets the same allowance as one.
             self.copiedFilesAtLastSave = self.result.copiedFiles;
             var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(destMerkleTree, destMetadataStorage)") = .{ .allocator = self.allocator, .merkleTree = self.destMerkleTree, .storage = self.destMetadataStorage };
-            try retry(self.io, &saveOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the destination merkle tree part way through a replication");
+            try retry(self.io, log, &saveOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, "Failed to save the destination merkle tree part way through a replication");
         }
     }
 };
@@ -348,9 +348,9 @@ const CopyAssetOperation = struct {
     //
     // Copies the asset.
     //
-    pub fn run(self: *CopyAssetOperation, io: std.Io) !void {
+    pub fn run(self: *CopyAssetOperation, io: std.Io, log: ILog) !void {
         _ = io;
-        return self.state.copyAsset(self.fileName, self.sourceHash);
+        return self.state.copyAsset(log, self.fileName, self.sourceHash);
     }
 };
 
@@ -361,6 +361,7 @@ const CopyAssetOperation = struct {
 fn replicateFiles(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     merkleTree: *IMerkleTree,
     destMerkleTree: *IMerkleTree,
     destAssetStorage: IStorage,
@@ -394,7 +395,7 @@ fn replicateFiles(
     // visited second and pruned whichever it visited second, which is the wrong one half the time.
     // The sync's push had the same fault, measured at 243 files left behind on a phone.
     //
-    const comparison = try compareTrees(allocator, merkleTree, destMerkleTree, null);
+    const comparison = try compareTrees(allocator, log, merkleTree, destMerkleTree, null);
     const namesToCopy = try std.mem.concat(allocator, []const u8, &.{ comparison.onlyInA, comparison.modified });
     log.verbose(try std.fmt.allocPrint(allocator, "Found {d} files to copy, {d} files to prune", .{ namesToCopy.len, comparison.onlyInB.len }));
 
@@ -423,7 +424,7 @@ fn replicateFiles(
         //
 
         for (namesToCopy) |fileName| {
-            try state.processFile(fileName);
+            try state.processFile(log, fileName);
         }
 
         //
@@ -438,7 +439,7 @@ fn replicateFiles(
         // Saves the dest database.
         //
         var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(destMerkleTree, destMetadataStorage)") = .{ .allocator = allocator, .merkleTree = destMerkleTree, .storage = destMetadataStorage };
-        try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
     }
 }
 
@@ -533,8 +534,8 @@ fn LoadShardMerkleTreeOperation(comptime sourceText: []const u8) type {
         //
         // Loads the shard tree.
         //
-        pub fn run(self: *@This(), io: std.Io) !?IMerkleTree {
-            return loadShardMerkleTree(self.allocator, io, self.storage, self.collectionName, self.shardId);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?IMerkleTree {
+            return loadShardMerkleTree(self.allocator, io, log, self.storage, self.collectionName, self.shardId);
         }
     };
 }
@@ -559,8 +560,8 @@ fn LoadCollectionMerkleTreeOperation(comptime sourceText: []const u8) type {
         //
         // Loads the collection tree.
         //
-        pub fn run(self: *@This(), io: std.Io) !?IMerkleTree {
-            return loadCollectionMerkleTree(self.allocator, io, self.storage, self.collectionName);
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?IMerkleTree {
+            return loadCollectionMerkleTree(self.allocator, io, log, self.storage, self.collectionName);
         }
     };
 }
@@ -582,8 +583,8 @@ fn LoadDatabaseMerkleTreeOperation(comptime sourceText: []const u8) type {
         //
         // Loads the database tree.
         //
-        pub fn run(self: *@This(), io: std.Io) !?IMerkleTree {
-            return loadDatabaseMerkleTree(self.allocator, io, self.storage, ".db/bson");
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?IMerkleTree {
+            return loadDatabaseMerkleTree(self.allocator, io, log, self.storage, ".db/bson");
         }
     };
 }
@@ -598,20 +599,21 @@ fn LoadDatabaseMerkleTreeOperation(comptime sourceText: []const u8) type {
 pub fn iterateShardDifferences(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     collectionName: []const u8,
     shardId: []const u8,
     tree1Storage: IStorage,
     tree2Storage: IStorage,
 ) !ShardDifferenceIterator {
     var tree1Operation: LoadShardMerkleTreeOperation("() => loadShardMerkleTree(tree1Storage, collectionName, shardId)") = .{ .allocator = allocator, .storage = tree1Storage, .collectionName = collectionName, .shardId = shardId };
-    const tree1 = try retry(io, &tree1Operation, 3, 1_000, 2, 30_000, null);
+    const tree1 = try retry(io, log, &tree1Operation, 3, 1_000, 2, 30_000, null);
     if (tree1 == null or tree1.?.merkle == null) {
         // If primary tree doesn't exist, no records to process.
         return .{ .collectionName = collectionName, .recordIds = iterateLeaves(allocator, &.{}) };
     }
 
     var tree2Operation: LoadShardMerkleTreeOperation("() => loadShardMerkleTree(tree2Storage, collectionName, shardId)") = .{ .allocator = allocator, .storage = tree2Storage, .collectionName = collectionName, .shardId = shardId };
-    const tree2 = try retry(io, &tree2Operation, 3, 1_000, 2, 30_000, null);
+    const tree2 = try retry(io, log, &tree2Operation, 3, 1_000, 2, 30_000, null);
     if (tree2 == null or tree2.?.merkle == null) {
         // If comparison tree doesn't exist, all records in primary tree need to be processed
         const nodes = try allocator.alloc(*MerkleNode, 1);
@@ -638,7 +640,7 @@ pub const ShardDifferenceIterator = struct {
     //
     // Returns the next differing record, or null when there are no more.
     //
-    pub fn next(self: *ShardDifferenceIterator) !?ICollectionRecord {
+    pub fn next(self: *ShardDifferenceIterator, _: ILog) !?ICollectionRecord {
         const recordId = try self.recordIds.next() orelse {
             return null;
         };
@@ -659,6 +661,7 @@ pub const ShardDifferenceIterator = struct {
 pub fn iterateCollectionDifferences(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     collectionName: []const u8,
     tree1Storage: IStorage,
     tree2Storage: IStorage,
@@ -674,14 +677,14 @@ pub fn iterateCollectionDifferences(
     };
 
     var tree1Operation: LoadCollectionMerkleTreeOperation("() => loadCollectionMerkleTree(tree1Storage, collectionName)") = .{ .allocator = allocator, .storage = tree1Storage, .collectionName = collectionName };
-    const tree1 = try retry(io, &tree1Operation, 3, 1_000, 2, 30_000, null);
+    const tree1 = try retry(io, log, &tree1Operation, 3, 1_000, 2, 30_000, null);
     if (tree1 == null or tree1.?.merkle == null) {
         // If primary collection tree doesn't exist, no records to process.
         return iterator;
     }
 
     var tree2Operation: LoadCollectionMerkleTreeOperation("() => loadCollectionMerkleTree(tree2Storage, collectionName)") = .{ .allocator = allocator, .storage = tree2Storage, .collectionName = collectionName };
-    const tree2 = try retry(io, &tree2Operation, 3, 1_000, 2, 30_000, null);
+    const tree2 = try retry(io, log, &tree2Operation, 3, 1_000, 2, 30_000, null);
     if (tree2 == null or tree2.?.merkle == null) {
         // If comparison collection tree doesn't exist, process all shards in primary tree
         const nodes = try allocator.alloc(*MerkleNode, 1);
@@ -725,10 +728,10 @@ pub const CollectionDifferenceIterator = struct {
     //
     // Returns the next differing record, or null when there are no more.
     //
-    pub fn next(self: *CollectionDifferenceIterator) !?ICollectionRecord {
+    pub fn next(self: *CollectionDifferenceIterator, log: ILog) !?ICollectionRecord {
         while (true) {
             if (self.current) |*current| {
-                if (try current.next()) |record| {
+                if (try current.next(log)) |record| {
                     return record;
                 }
                 self.current = null;
@@ -736,7 +739,7 @@ pub const CollectionDifferenceIterator = struct {
             const shardId = try self.shardIds.next() orelse {
                 return null;
             };
-            self.current = try iterateShardDifferences(self.allocator, self.io, self.collectionName, shardId, self.tree1Storage, self.tree2Storage);
+            self.current = try iterateShardDifferences(self.allocator, self.io, log, self.collectionName, shardId, self.tree1Storage, self.tree2Storage);
         }
     }
 };
@@ -749,7 +752,7 @@ pub const CollectionDifferenceIterator = struct {
 // Loads the database trees and returns an iterator; the collection and shard trees are loaded as the iterator
 // reaches them.
 //
-pub fn iterateDatabaseDifferences(allocator: std.mem.Allocator, io: std.Io, tree1Storage: IStorage, tree2Storage: IStorage) !DatabaseDifferenceIterator {
+pub fn iterateDatabaseDifferences(allocator: std.mem.Allocator, io: std.Io, log: ILog, tree1Storage: IStorage, tree2Storage: IStorage) !DatabaseDifferenceIterator {
     var iterator: DatabaseDifferenceIterator = .{
         .allocator = allocator,
         .io = io,
@@ -760,14 +763,14 @@ pub fn iterateDatabaseDifferences(allocator: std.mem.Allocator, io: std.Io, tree
     };
 
     var tree1Operation: LoadDatabaseMerkleTreeOperation("() => loadDatabaseMerkleTree(tree1Storage, \".db/bson\")") = .{ .allocator = allocator, .storage = tree1Storage };
-    const tree1 = try retry(io, &tree1Operation, 3, 1_000, 2, 30_000, null);
+    const tree1 = try retry(io, log, &tree1Operation, 3, 1_000, 2, 30_000, null);
     if (tree1 == null or tree1.?.merkle == null) {
         // If primary database tree doesn't exist, no records to process.
         return iterator;
     }
 
     var tree2Operation: LoadDatabaseMerkleTreeOperation("() => loadDatabaseMerkleTree(tree2Storage, \".db/bson\")") = .{ .allocator = allocator, .storage = tree2Storage };
-    const tree2 = try retry(io, &tree2Operation, 3, 1_000, 2, 30_000, null);
+    const tree2 = try retry(io, log, &tree2Operation, 3, 1_000, 2, 30_000, null);
     if (tree2 == null or tree2.?.merkle == null) {
         // If comparison database tree doesn't exist, process all collections in primary tree
         const nodes = try allocator.alloc(*MerkleNode, 1);
@@ -808,10 +811,10 @@ pub const DatabaseDifferenceIterator = struct {
     //
     // Returns the next differing record, or null when there are no more.
     //
-    pub fn next(self: *DatabaseDifferenceIterator) !?ICollectionRecord {
+    pub fn next(self: *DatabaseDifferenceIterator, log: ILog) !?ICollectionRecord {
         while (true) {
             if (self.current) |*current| {
-                if (try current.next()) |record| {
+                if (try current.next(log)) |record| {
                     return record;
                 }
                 self.current = null;
@@ -819,7 +822,7 @@ pub const DatabaseDifferenceIterator = struct {
             const collectionName = try self.collectionNames.next() orelse {
                 return null;
             };
-            self.current = try iterateCollectionDifferences(self.allocator, self.io, collectionName, self.tree1Storage, self.tree2Storage);
+            self.current = try iterateCollectionDifferences(self.allocator, self.io, log, collectionName, self.tree1Storage, self.tree2Storage);
         }
     }
 };
@@ -850,8 +853,8 @@ const SetInternalRecordOperation = struct {
     //
     // Sets the record.
     //
-    pub fn run(self: *SetInternalRecordOperation, io: std.Io) !void {
-        return self.collection.setInternalRecord(io, self.record);
+    pub fn run(self: *SetInternalRecordOperation, io: std.Io, log: ILog) !void {
+        return self.collection.setInternalRecord(io, log, self.record);
     }
 };
 
@@ -871,8 +874,8 @@ const DeleteOneOperation = struct {
     //
     // Deletes the record.
     //
-    pub fn run(self: *DeleteOneOperation, io: std.Io) !bool {
-        return self.collection.deleteOne(io, self.recordId);
+    pub fn run(self: *DeleteOneOperation, io: std.Io, log: ILog) !bool {
+        return self.collection.deleteOne(io, log, self.recordId);
     }
 };
 
@@ -884,6 +887,7 @@ const DeleteOneOperation = struct {
 fn replicateBsonDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceBsonDatabase: *BsonDatabase,
     destBsonDatabase: *BsonDatabase,
     sourceAssetStorage: IStorage,
@@ -903,8 +907,8 @@ fn replicateBsonDatabase(
     var toCopyByCollection: RecordIdSetsByCollection = .empty;
     var toDeleteByCollection: RecordIdSetsByCollection = .empty;
 
-    var copyDifferences = try iterateDatabaseDifferences(allocator, io, sourceAssetStorage, destAssetStorage);
-    while (try copyDifferences.next()) |diff| {
+    var copyDifferences = try iterateDatabaseDifferences(allocator, io, log, sourceAssetStorage, destAssetStorage);
+    while (try copyDifferences.next(log)) |diff| {
         const entry = try toCopyByCollection.getOrPut(allocator, diff.collectionName);
         if (!entry.found_existing) {
             entry.value_ptr.* = .empty;
@@ -912,8 +916,8 @@ fn replicateBsonDatabase(
         try entry.value_ptr.put(allocator, diff.recordId, {});
     }
 
-    var deleteDifferences = try iterateDatabaseDifferences(allocator, io, destAssetStorage, sourceAssetStorage);
-    while (try deleteDifferences.next()) |diff| {
+    var deleteDifferences = try iterateDatabaseDifferences(allocator, io, log, destAssetStorage, sourceAssetStorage);
+    while (try deleteDifferences.next(log)) |diff| {
         const entry = try toDeleteByCollection.getOrPut(allocator, diff.collectionName);
         if (!entry.found_existing) {
             entry.value_ptr.* = .empty;
@@ -940,36 +944,36 @@ fn replicateBsonDatabase(
             try throwIfCancelled(io, allocator, isCancelled);
             const shardId = try sourceColl.getShardId(recordId);
             const sourceShard = try sourceColl.shard(shardId);
-            const sourceRecord = try sourceShard.record(io, recordId) orelse {
+            const sourceRecord = try sourceShard.record(io, log, recordId) orelse {
                 continue;
             };
             var setOperation: SetInternalRecordOperation = .{ .collection = destColl, .record = sourceRecord };
-            try retry(io, &setOperation, 3, 1_000, 2, 30_000, null); //todo: maybe database retries should below the api.
+            try retry(io, log, &setOperation, 3, 1_000, 2, 30_000, null); //todo: maybe database retries should below the api.
             result.copiedRecords += 1;
         }
 
         for (toDelete.keys()) |recordId| {
             try throwIfCancelled(io, allocator, isCancelled);
             var deleteOperation: DeleteOneOperation = .{ .collection = destColl, .recordId = recordId };
-            _ = try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
+            _ = try retry(io, log, &deleteOperation, 3, 1_000, 2, 30_000, null);
             result.copiedRecords += 1;
         }
 
-        reportProgress(io, progressCallback, "Copied {d} files, {d} records", .{ result.copiedFiles, result.copiedRecords });
+        reportProgress(io, log, progressCallback, "Copied {d} files, {d} records", .{ result.copiedFiles, result.copiedRecords });
     }
 
-    try destBsonDatabase.commit(io);
+    try destBsonDatabase.commit(io, log);
 }
 
 //
 // Copies a single file from source to dest storage if it exists in source.
 //
-fn copyFileIfExists(allocator: std.mem.Allocator, io: std.Io, fileName: []const u8, sourceStorage: IStorage, destStorage: IStorage) !void {
+fn copyFileIfExists(allocator: std.mem.Allocator, io: std.Io, log: ILog, fileName: []const u8, sourceStorage: IStorage, destStorage: IStorage) !void {
     if (!try sourceStorage.fileExists(allocator, io, fileName)) {
         return;
     }
     var infoOperation: retry_operations.InfoOperation("() => sourceStorage.info(fileName)") = .{ .allocator = allocator, .storage = sourceStorage, .fileName = fileName };
-    const info = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const info = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return;
     };
     var copyOperation: retry_operations.CopyStreamOperation("async () => {\n    const readStream = await sourceStorage.readStream(fileName);\n    await destStorage.writeStream(fileName, info.contentType, readStream);\n  }") = .{
@@ -979,18 +983,18 @@ fn copyFileIfExists(allocator: std.mem.Allocator, io: std.Io, fileName: []const 
         .fileName = fileName,
         .contentType = info.contentType,
     };
-    try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
+    try retry(io, log, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
 }
 
 //
 // Copies all BSON database merkle tree files (.dat) from source to dest storage.
 // Skips shard data files (no extension): only the merkle trees are needed for a partial replica.
 //
-fn copyBsonMerkleTrees(allocator: std.mem.Allocator, io: std.Io, sourceStorage: IStorage, destStorage: IStorage) !void {
+fn copyBsonMerkleTrees(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourceStorage: IStorage, destStorage: IStorage) !void {
     var walker = try walkDirectory(allocator, io, sourceStorage, ".db/bson", &.{});
-    while (try walker.next()) |orderedFile| {
+    while (try walker.next(log)) |orderedFile| {
         if (std.mem.endsWith(u8, orderedFile.fileName, ".dat")) {
-            try copyFileIfExists(allocator, io, orderedFile.fileName, sourceStorage, destStorage);
+            try copyFileIfExists(allocator, io, log, orderedFile.fileName, sourceStorage, destStorage);
         }
     }
 }
@@ -1002,6 +1006,7 @@ fn copyBsonMerkleTrees(allocator: std.mem.Allocator, io: std.Io, sourceStorage: 
 pub fn replicate(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourcePath: []const u8,
     sourceAssetStorage: IStorage,
     sourceBsonDatabase: *BsonDatabase,
@@ -1014,7 +1019,7 @@ pub fn replicate(
 ) !IReplicationResult {
 
     var loadSourceOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(sourceAssetStorage)") = .{ .allocator = allocator, .storage = sourceAssetStorage };
-    var merkleTree = try retry(io, &loadSourceOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var merkleTree = try retry(io, log, &loadSourceOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load merkle tree", .{});
     };
 
@@ -1040,24 +1045,24 @@ pub fn replicate(
     );
 
     var existsOperation: retry_operations.MerkleTreeExistsOperation("() => merkleTreeExists(destAssetStorage)") = .{ .allocator = allocator, .storage = destAssetStorage };
-    const treeExists = try retry(io, &existsOperation, 3, 1_000, 2, 30_000, null);
+    const treeExists = try retry(io, log, &existsOperation, 3, 1_000, 2, 30_000, null);
     if (treeExists) {
         log.verbose("Loading existing destination database...");
-        try loadSortIndexes(allocator, destDb.assetStorage, destDb.metadataCollection);
+        try loadSortIndexes(allocator, log, destDb.assetStorage, destDb.metadataCollection);
     }
     else {
         log.verbose("Creating new destination database...");
         //
         // This is need because it will create the sort indexes and other things.
         //
-        try createDatabase(allocator, io, destAssetStorage, destRawAssetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
+        try createDatabase(allocator, io, log, destAssetStorage, destRawAssetStorage, sourceUuidGenerator, destDb.metadataCollection, merkleTree.id);
     }
 
     //
     // Load the destination database that might have been just created.
     //
     var loadDestOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(destAssetStorage)") = .{ .allocator = allocator, .storage = destAssetStorage };
-    var destMerkleTree = try retry(io, &loadDestOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var destMerkleTree = try retry(io, log, &loadDestOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwFatalError("Failed to load merkle tree from destination database.", .{});
     };
 
@@ -1085,15 +1090,15 @@ pub fn replicate(
         // Partial mode: directly copy only the known small set of files rather than
         // traversing the entire merkle tree (which could be 100k+ entries).
         //
-        try copyFileIfExists(allocator, io, "README.md", sourceAssetStorage, destAssetStorage);
-        try copyFileIfExists(allocator, io, ".db/files.dat", sourceAssetStorage, destAssetStorage);
-        try copyBsonMerkleTrees(allocator, io, sourceAssetStorage, destAssetStorage);
+        try copyFileIfExists(allocator, io, log, "README.md", sourceAssetStorage, destAssetStorage);
+        try copyFileIfExists(allocator, io, log, ".db/files.dat", sourceAssetStorage, destAssetStorage);
+        try copyBsonMerkleTrees(allocator, io, log, sourceAssetStorage, destAssetStorage);
 
         //
         // Reload the dest merkle tree (now a copy of the source tree) and mark it partial.
         //
         var reloadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(destAssetStorage)") = .{ .allocator = allocator, .storage = destAssetStorage };
-        destMerkleTree = try retry(io, &reloadOperation, 3, 1_000, 2, 30_000, null) orelse {
+        destMerkleTree = try retry(io, log, &reloadOperation, 3, 1_000, 2, 30_000, null) orelse {
             return errors.throwFatalError("Failed to load merkle tree from destination database after partial copy.", .{});
         };
         if (merkleTree.databaseMetadata) |sourceMetadata| {
@@ -1107,7 +1112,7 @@ pub fn replicate(
             destMerkleTree.databaseMetadata = partialMetadata;
         }
         var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(destMerkleTree, destAssetStorage)") = .{ .allocator = allocator, .merkleTree = &destMerkleTree, .storage = destAssetStorage };
-        try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
     }
     else {
         //
@@ -1133,6 +1138,7 @@ pub fn replicate(
         try replicateFiles(
             allocator,
             io,
+            log,
             &merkleTree,
             &destMerkleTree,
             destAssetStorage,
@@ -1146,6 +1152,7 @@ pub fn replicate(
         try replicateBsonDatabase(
             allocator,
             io,
+            log,
             sourceBsonDatabase,
             destDb.bsonDatabase,
             sourceAssetStorage,
@@ -1160,14 +1167,14 @@ pub fn replicate(
     //
     // Generate or update config.json in the destination database (configuration only).
     //
-    try updateDatabaseConfig(allocator, io, destRawAssetStorage, .{
+    try updateDatabaseConfig(allocator, io, log, destRawAssetStorage, .{
         .origin = sourcePath,
     });
 
     //
     // Record the replication time and refresh the content hash in the destination state file.
     //
-    try stampDatabaseStateLocked(allocator, io, destAssetStorage, destRawAssetStorage, "replicate", .{
+    try stampDatabaseStateLocked(allocator, io, log, destAssetStorage, destRawAssetStorage, "replicate", .{
         .lastReplicatedAt = try sourceTimestampProvider.dateNow(io).toISOString(allocator),
     });
 

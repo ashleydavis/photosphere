@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const file_scanner = @import("file-scanner.zig");
 const import_scanner = @import("import-scanner.zig");
@@ -73,9 +74,9 @@ pub const ManualImportScanner = struct {
     //
     // IImportScanner.scan for this implementation.
     //
-    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, _: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
+    fn scanErased(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, _: Timers, visitFile: VisitImportFile, onProgress: ScanProgressCallback) anyerror!void {
         const self: *ManualImportScanner = @ptrCast(@alignCast(ptr));
-        return self.scan(allocator, io, visitFile, onProgress);
+        return self.scan(allocator, io, log, visitFile, onProgress);
     }
 
     //
@@ -89,18 +90,19 @@ pub const ManualImportScanner = struct {
     //
     // Hands each scanned file on without a cache identity.
     //
-    fn visitScannedFile(context: ?*anyopaque, result: FileScannedResult) anyerror!void {
+    fn visitScannedFile(context: ?*anyopaque, log: ILog, result: FileScannedResult) anyerror!void {
         const visitFile: *const VisitImportFile = @ptrCast(@alignCast(context.?));
-        try visitFile.call(IScannedImportFile.fromScanned(result, null));
+        try visitFile.call(log, IScannedImportFile.fromScanned(result, null));
     }
 
     //
     // Walks the paths once and returns, which is what ends the import.
     //
-    pub fn scan(self: *ManualImportScanner, allocator: std.mem.Allocator, io: std.Io, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
+    pub fn scan(self: *ManualImportScanner, allocator: std.mem.Allocator, io: std.Io, log: ILog, visitFile: VisitImportFile, onProgress: ScanProgressCallback) !void {
         try scanPaths(
             allocator,
             io,
+            log,
             self.paths,
             // No cache identity: a file the user picked is identified by its own path, exactly as it
             // always was. Only a photo library item needs anything else.

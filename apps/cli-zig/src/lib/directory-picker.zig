@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const pc = @import("picocolors.zig");
@@ -9,7 +10,6 @@ const isCancel = prompts.isCancel;
 const outro = prompts.outro;
 const exit = node_utils.termination.exit;
 const pathExists = node_utils.fs.pathExists;
-const log = &utils.log.log;
 
 //
 // Joins path segments (`path.join`).
@@ -326,6 +326,7 @@ pub const CommandType = enum {
 pub fn getDirectoryForCommand(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     commandType: CommandType,
     nonInteractive: bool,
     cwd: []const u8,
@@ -341,7 +342,7 @@ pub fn getDirectoryForCommand(
             // Current directory is not empty, skip asking and go straight to picker in interactive mode
             if (nonInteractive) {
                 log.@"error"(try pc.red(allocator, "Current directory is not empty. Please specify an empty directory or use a different location."));
-                exit(io, 1);
+                exit(io, log, 1);
             }
         }
     }
@@ -359,7 +360,7 @@ pub fn getDirectoryForCommand(
         else {
             log.@"error"(try pc.red(allocator, "Current directory is not a media database. Please specify a valid media database directory."));
         }
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     // Interactive mode: show directory picker
@@ -377,7 +378,7 @@ pub fn getDirectoryForCommand(
 
     if (selectedDir == null) {
         try outro(io, try pc.red(allocator, "No directory selected"), .{});
-        exit(io, 1);
+        exit(io, log, 1);
     }
 
     return selectedDir.?;

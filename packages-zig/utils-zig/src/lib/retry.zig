@@ -1,13 +1,13 @@
 const std = @import("std");
 const errors = @import("ziggy").task_queue.utils.errors;
 const console = @import("ziggy").task_queue.utils.console;
-const log = @import("ziggy").task_queue.utils.log;
+const ILog = @import("ziggy").task_queue.utils.log.ILog;
 const sleep = @import("ziggy").task_queue.utils.sleep;
 const wrapped_error = @import("ziggy").task_queue.utils.wrapped_error;
 
 //
 // An operation is a value (usually a pointer to a struct)
-// with a method `run(self, io: std.Io) !ReturnT`. This gets ReturnT for an operation type.
+// with a method `run(self, io: std.Io, log: ILog) !ReturnT`. This gets ReturnT for an operation type.
 //
 pub fn OperationResult(comptime OperationT: type) type {
     const ContextT = switch (@typeInfo(OperationT)) {
@@ -32,43 +32,43 @@ pub fn rejectAfter(comptime ReturnT: type, io: std.Io, ms: u64) anyerror!ReturnT
 // second thread to run one of them, and a task runs only on its own thread, so here the operation runs to its end and gives its own
 // result. timeoutMS is kept so the callers read as the TypeScript does.
 //
-pub fn retryOnce(io: std.Io, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
+pub fn retryOnce(io: std.Io, log: ILog, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
     _ = timeoutMS;
-    return operation.run(io);
+    return operation.run(io, log);
 }
 
 //
-// Logs the error of a failed attempt as an indented JSON object holding its name and message (a Zig error has no stack to include).
+// Logs, to the log given, the error of a failed attempt as an indented JSON object holding its name and message (a Zig error has no stack to include).
 //
-fn logVerboseError(err: anyerror) void {
+fn logVerboseError(log: ILog, err: anyerror) void {
     var buffer: [16 * 1024]u8 = undefined;
     var fixed_writer = std.Io.Writer.fixed(&buffer);
     fixed_writer.print("Error: {{\n  \"name\": {f},\n  \"message\": {f}\n}}", .{ std.json.fmt(errors.errorName(err), .{}), std.json.fmt(errors.errorMessage(err), .{}) }) catch {};
-    log.log.verbose(fixed_writer.buffered());
+    log.verbose(fixed_writer.buffered());
 }
 
 //
 // Logs the context of the operation (or "An operation failed" when it has none), then ". Retrying after: " and the message of the error,
 // as a warning.
 //
-fn logRetryWarning(errorContext: ?[]const u8, err: anyerror) void {
+fn logRetryWarning(log: ILog, errorContext: ?[]const u8, err: anyerror) void {
     var buffer: [32 * 1024]u8 = undefined;
     var fixed_writer = std.Io.Writer.fixed(&buffer);
     fixed_writer.print("{s}. Retrying after: {s}", .{ errorContext orelse "An operation failed", errors.errorMessage(err) }) catch {};
-    log.log.warn(fixed_writer.buffered());
+    log.warn(fixed_writer.buffered());
 }
 
 //
-// Retrys a failing operation a number of times.
+// Retrys a failing operation a number of times, logging each failure that is retried to the log given.
 // Each attempt is raced against a timeout and rejected if it doesn't complete in time.
 //
-pub fn retry(io: std.Io, operation: anytype, maxAttempts: u32, waitTimeMS: u64, waitTimeScale: u64, timeoutMS: u64, errorContext: ?[]const u8) anyerror!OperationResult(@TypeOf(operation)) {
+pub fn retry(io: std.Io, log: ILog, operation: anytype, maxAttempts: u32, waitTimeMS: u64, waitTimeScale: u64, timeoutMS: u64, errorContext: ?[]const u8) anyerror!OperationResult(@TypeOf(operation)) {
     var attempts_left = maxAttempts;
     var wait_time_ms = waitTimeMS;
 
     while (attempts_left > 0) {
         attempts_left -= 1;
-        if (retryOnce(io, operation, timeoutMS)) |result| {
+        if (retryOnce(io, log, operation, timeoutMS)) |result| {
             return result;
         }
         else |err| {
@@ -78,10 +78,10 @@ pub fn retry(io: std.Io, operation: anytype, maxAttempts: u32, waitTimeMS: u64, 
                 // anyone ever saw: on a phone that made a failure that takes three attempts and a
                 // minute and a half look like a single event with a single cause, and hid that the
                 // first attempt failed differently from the ones that followed it.
-                logRetryWarning(errorContext, err);
+                logRetryWarning(log, errorContext, err);
 
-                if (log.log.verboseEnabled()) {
-                    logVerboseError(err);
+                if (log.verboseEnabled()) {
+                    logVerboseError(log, err);
                 }
 
                 try sleep.sleep(io, wait_time_ms);

@@ -3,7 +3,9 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const serialization_zig = @import("serialization-zig");
 const memory_storage = @import("memory-storage.zig");
 const serialization = serialization_zig.serialization;
@@ -188,6 +190,7 @@ fn readFixture(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should save data with version header" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -197,9 +200,9 @@ test "should save data with version header" {
     const filePath = "test.bin";
     const version = 1;
 
-    try serialization.save(allocator, io, &storage, filePath, data, version, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, filePath, data, version, "TEST", serializeV1);
 
-    const savedBuffer = (try storage.read(allocator, io, filePath)).?;
+    const savedBuffer = (try storage.read(allocator, io, log, filePath)).?;
     try std.testing.expect(savedBuffer.len > 40); // Version (4) + type (4) + data + checksum (32)
 
     // Check version header
@@ -217,6 +220,7 @@ test "should save data with version header" {
 }
 
 test "should handle different data types" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -237,9 +241,9 @@ test "should handle different data types" {
         }
     };
 
-    try serialization.save(allocator, io, &storage, "string.bin", @as([]const u8, "hello world"), 1, "TEST", Serializers.stringSerializer);
-    try serialization.save(allocator, io, &storage, "number.bin", @as(i32, 12345), 2, "TEST", Serializers.numberSerializer);
-    try serialization.save(allocator, io, &storage, "object.bin", objectData, 3, "TEST", ObjectSerializer.objectSerializer);
+    try serialization.save(allocator, io, log, &storage, "string.bin", @as([]const u8, "hello world"), 1, "TEST", Serializers.stringSerializer);
+    try serialization.save(allocator, io, log, &storage, "number.bin", @as(i32, 12345), 2, "TEST", Serializers.numberSerializer);
+    try serialization.save(allocator, io, log, &storage, "object.bin", objectData, 3, "TEST", ObjectSerializer.objectSerializer);
 
     try std.testing.expect(storage.fileExists("string.bin"));
     try std.testing.expect(storage.fileExists("number.bin"));
@@ -247,6 +251,7 @@ test "should handle different data types" {
 }
 
 test "should handle large version numbers" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -255,23 +260,25 @@ test "should handle large version numbers" {
     const data: TestDataV1 = .{ .name = "test", .value = 42 };
     const largeVersion: u32 = 0xFFFFFFFF; // Maximum 32-bit unsigned integer
 
-    try serialization.save(allocator, io, &storage, "large-version.bin", data, largeVersion, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "large-version.bin", data, largeVersion, "TEST", serializeV1);
 
-    const savedBuffer = (try storage.read(allocator, io, "large-version.bin")).?;
+    const savedBuffer = (try storage.read(allocator, io, log, "large-version.bin")).?;
     try std.testing.expectEqual(largeVersion, std.mem.readInt(u32, savedBuffer[0..4], .little));
 }
 
 test "save throws when the type code is not 4 characters" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
     const data: TestDataV1 = .{ .name = "test", .value = 42 };
-    try expectThrownContaining(serialization.save(allocator, io, &storage, "bad.bin", data, 1, "TOOLONG", serializeV1), "Type code must be exactly 4 ASCII characters, got \"TOOLONG\" (length 7)");
+    try expectThrownContaining(serialization.save(allocator, io, log, &storage, "bad.bin", data, 1, "TOOLONG", serializeV1), "Type code must be exactly 4 ASCII characters, got \"TOOLONG\" (length 7)");
 }
 
 test "save counts the type code in UTF-16 code units and writes the low byte of each, like Buffer.from(typeCode, \"ascii\")" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -280,14 +287,14 @@ test "save counts the type code in UTF-16 code units and writes the low byte of 
     const data: TestDataV1 = .{ .name = "test", .value = 42 };
 
     // "aé€" is three characters and seven bytes of UTF-8; "a😀" is three UTF-16 code units (the emoji is two).
-    try expectThrownContaining(serialization.save(allocator, io, &storage, "short.bin", data, 1, "aé€", serializeV1), "Type code must be exactly 4 ASCII characters, got \"aé€\" (length 3)");
-    try expectThrownContaining(serialization.save(allocator, io, &storage, "emoji.bin", data, 1, "a😀", serializeV1), "Type code must be exactly 4 ASCII characters, got \"a😀\" (length 3)");
+    try expectThrownContaining(serialization.save(allocator, io, log, &storage, "short.bin", data, 1, "aé€", serializeV1), "Type code must be exactly 4 ASCII characters, got \"aé€\" (length 3)");
+    try expectThrownContaining(serialization.save(allocator, io, log, &storage, "emoji.bin", data, 1, "a😀", serializeV1), "Type code must be exactly 4 ASCII characters, got \"a😀\" (length 3)");
 
     // U+00E9 becomes 0xE9, U+20AC becomes 0xAC, and the two halves of U+1F600 (D83D DE00) become 0x3D and 0x00.
-    try serialization.save(allocator, io, &storage, "wide.bin", data, 1, "aé€x", serializeV1);
-    try std.testing.expectEqualSlices(u8, &.{ 0x61, 0xE9, 0xAC, 0x78 }, (try storage.read(allocator, io, "wide.bin")).?[4..8]);
-    try serialization.save(allocator, io, &storage, "pair.bin", data, 1, "a😀b", serializeV1);
-    try std.testing.expectEqualSlices(u8, &.{ 0x61, 0x3D, 0x00, 0x62 }, (try storage.read(allocator, io, "pair.bin")).?[4..8]);
+    try serialization.save(allocator, io, log, &storage, "wide.bin", data, 1, "aé€x", serializeV1);
+    try std.testing.expectEqualSlices(u8, &.{ 0x61, 0xE9, 0xAC, 0x78 }, (try storage.read(allocator, io, log, "wide.bin")).?[4..8]);
+    try serialization.save(allocator, io, log, &storage, "pair.bin", data, 1, "a😀b", serializeV1);
+    try std.testing.expectEqualSlices(u8, &.{ 0x61, 0x3D, 0x00, 0x62 }, (try storage.read(allocator, io, log, "pair.bin")).?[4..8]);
 }
 
 test "readString replaces each ill-formed UTF-8 sequence with U+FFFD, like toString(\"utf8\")" {
@@ -306,16 +313,17 @@ test "readString replaces each ill-formed UTF-8 sequence with U+FFFD, like toStr
 }
 
 test "save output matches the golden fixture" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
     const data: TestDataV1 = .{ .name = "test", .value = 42 };
-    try serialization.save(allocator, io, &storage, "save.bin", data, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "save.bin", data, 1, "TEST", serializeV1);
 
     const expected = try readFixture(allocator, "save-v6.bin");
-    const actual = (try storage.read(allocator, io, "save.bin")).?;
+    const actual = (try storage.read(allocator, io, log, "save.bin")).?;
     try std.testing.expectEqualSlices(u8, expected, actual);
 }
 
@@ -324,6 +332,7 @@ test "save output matches the golden fixture" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should load data using correct deserializer based on version" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -338,20 +347,21 @@ test "should load data using correct deserializer based on version" {
     };
 
     // Save v1 data
-    try serialization.save(allocator, io, &storage, "data-v1.bin", dataV1, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "data-v1.bin", dataV1, 1, "TEST", serializeV1);
     // Save v2 data
-    try serialization.save(allocator, io, &storage, "data-v2.bin", dataV2, 2, "TEST", serializeV2);
+    try serialization.save(allocator, io, log, &storage, "data-v2.bin", dataV2, 2, "TEST", serializeV2);
 
     // Load and verify v1 data
-    const loadedV1 = try serialization.load(TestData, allocator, io, &storage, "data-v1.bin", "TEST", {}, &deserializers);
+    const loadedV1 = try serialization.load(TestData, allocator, io, log, &storage, "data-v1.bin", "TEST", {}, &deserializers);
     try expectTestData(.{ .name = "test", .value = 42 }, loadedV1);
 
     // Load and verify v2 data
-    const loadedV2 = try serialization.load(TestData, allocator, io, &storage, "data-v2.bin", "TEST", {}, &deserializers);
+    const loadedV2 = try serialization.load(TestData, allocator, io, log, &storage, "data-v2.bin", "TEST", {}, &deserializers);
     try expectTestData(.{ .name = "test", .value = 42, .description = "a test object" }, loadedV2);
 }
 
 test "should throw UnsupportedVersionError for unknown version" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -365,7 +375,7 @@ test "should throw UnsupportedVersionError for unknown version" {
     };
 
     // Save with version 3
-    try serialization.save(allocator, io, &storage, "data-v3.bin", data, 3, "TEST", serializeV3);
+    try serialization.save(allocator, io, log, &storage, "data-v3.bin", data, 3, "TEST", serializeV3);
 
     // Try to load with deserializers that only support v1 and v2
     const deserializers = [_]Entry{
@@ -373,13 +383,14 @@ test "should throw UnsupportedVersionError for unknown version" {
         .{ .version = 2, .deserializer = deserializeV2 },
     };
 
-    const result = serialization.load(TestData, allocator, io, &storage, "data-v3.bin", "TEST", {}, &deserializers);
+    const result = serialization.load(TestData, allocator, io, log, &storage, "data-v3.bin", "TEST", {}, &deserializers);
     try expectThrownContaining(result, "No deserializer found for version 3");
     try expectString("UnsupportedVersionError", errors.lastErrorName());
     try expectString("No deserializer found for version 3 from file data-v3.bin. Available versions: 2, 1", errors.lastErrorMessage());
 }
 
 test "should throw error for empty or too small files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -391,15 +402,16 @@ test "should throw error for empty or too small files" {
 
     // Test with completely empty file (hits minimum 4-byte check)
     try storage.write(allocator, io, "empty.bin", null, "");
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "empty.bin", "TEST", {}, &deserializers), "too small");
+    try expectThrownContaining(serialization.load(TestData, allocator, io, log, &storage, "empty.bin", "TEST", {}, &deserializers), "too small");
     try expectString("File 'empty.bin' is too small. File has 0 bytes, minimum 4.", errors.lastErrorMessage());
 
     // Test with file smaller than v6 minimum (40 bytes); treated as legacy and fails checksum
     try storage.write(allocator, io, "small.bin", null, &([_]u8{0} ** 39));
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "small.bin", "TEST", {}, &deserializers), "Checksum mismatch");
+    try expectThrownContaining(serialization.load(TestData, allocator, io, log, &storage, "small.bin", "TEST", {}, &deserializers), "Checksum mismatch");
 }
 
 test "should return undefined for non-existent files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -409,11 +421,12 @@ test "should return undefined for non-existent files" {
         .{ .version = 1, .deserializer = deserializeV1 },
     };
 
-    const result = try serialization.load(TestData, allocator, io, &storage, "non-existent.bin", "TEST", {}, &deserializers);
+    const result = try serialization.load(TestData, allocator, io, log, &storage, "non-existent.bin", "TEST", {}, &deserializers);
     try std.testing.expect(result == null);
 }
 
 test "should handle files with minimal data" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -436,11 +449,12 @@ test "should handle files with minimal data" {
 
     try storage.write(allocator, io, "minimal.bin", null, fileBuffer);
 
-    const result = try serialization.load([]const u8, allocator, io, &storage, "minimal.bin", "TEST", {}, &deserializers);
+    const result = try serialization.load([]const u8, allocator, io, log, &storage, "minimal.bin", "TEST", {}, &deserializers);
     try expectString("", result.?);
 }
 
 test "load passes the context to the deserializer" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -454,17 +468,18 @@ test "load passes the context to the deserializer" {
             try serializer.writeUInt32(data);
         }
     };
-    try serialization.save(allocator, io, &storage, "value.bin", @as(u32, 5), 1, "TEST", Deserializers.writeValue);
+    try serialization.save(allocator, io, log, &storage, "value.bin", @as(u32, 5), 1, "TEST", Deserializers.writeValue);
 
     const offset: u32 = 100;
     const deserializers = [_]serialization.DeserializerEntry(u32, *const u32){
         .{ .version = 1, .deserializer = Deserializers.readWithOffset },
     };
-    const result = try serialization.load(u32, allocator, io, &storage, "value.bin", "TEST", &offset, &deserializers);
+    const result = try serialization.load(u32, allocator, io, log, &storage, "value.bin", "TEST", &offset, &deserializers);
     try std.testing.expectEqual(@as(?u32, 105), result);
 }
 
 test "load reads legacy files with and without checksum (golden fixtures)" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -479,9 +494,9 @@ test "load reads legacy files with and without checksum (golden fixtures)" {
     try storage.write(allocator, io, "legacy-short.bin", null, try readFixture(allocator, "legacy-short.bin"));
     try storage.write(allocator, io, "save-v6.bin", null, try readFixture(allocator, "save-v6.bin"));
 
-    try expectTestData(.{ .name = "legacy with checksum", .value = 1 }, try serialization.load(TestData, allocator, io, &storage, "legacy-checksum.bin", "TEST", {}, &deserializers));
-    try expectTestData(.{ .name = "legacy without checksum", .value = 2 }, try serialization.load(TestData, allocator, io, &storage, "legacy-no-checksum.bin", "TEST", {}, &deserializers));
-    try expectTestData(.{ .name = "test", .value = 42 }, try serialization.load(TestData, allocator, io, &storage, "save-v6.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "legacy with checksum", .value = 1 }, try serialization.load(TestData, allocator, io, log, &storage, "legacy-checksum.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "legacy without checksum", .value = 2 }, try serialization.load(TestData, allocator, io, log, &storage, "legacy-no-checksum.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "test", .value = 42 }, try serialization.load(TestData, allocator, io, log, &storage, "save-v6.bin", "TEST", {}, &deserializers));
 
     const ShortDeserializer = struct {
         fn readShort(_: std.mem.Allocator, _: void, deserializer: IDeserializer) anyerror![]const u8 {
@@ -491,24 +506,25 @@ test "load reads legacy files with and without checksum (golden fixtures)" {
     const shortDeserializers = [_]serialization.DeserializerEntry([]const u8, void){
         .{ .version = 1, .deserializer = ShortDeserializer.readShort },
     };
-    const short = try serialization.load([]const u8, allocator, io, &storage, "legacy-short.bin", "TEST", {}, &shortDeserializers);
+    const short = try serialization.load([]const u8, allocator, io, log, &storage, "legacy-short.bin", "TEST", {}, &shortDeserializers);
     try expectString("{\"a\":1}", short.?);
 }
 
 test "load of a v6 file with a different type code falls back to the legacy layout" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
     const data: TestDataV1 = .{ .name = "test", .value = 42 };
-    try serialization.save(allocator, io, &storage, "other.bin", data, 1, "OTHR", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "other.bin", data, 1, "OTHR", serializeV1);
 
     // The checksum matches, so the legacy path reads [version][payload] where the payload starts with "OTHR".
     const deserializers = [_]Entry{
         .{ .version = 1, .deserializer = deserializeV1 },
     };
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "other.bin", "TEST", {}, &deserializers), "Cannot read");
+    try expectThrownContaining(serialization.load(TestData, allocator, io, log, &storage, "other.bin", "TEST", {}, &deserializers), "Cannot read");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -516,6 +532,7 @@ test "load of a v6 file with a different type code falls back to the legacy layo
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should maintain data integrity across save/load cycles" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -527,16 +544,17 @@ test "should maintain data integrity across save/load cycles" {
         .{ .version = 3, .deserializer = deserializeV3 },
     };
 
-    try serialization.save(allocator, io, &storage, "roundtrip-v1.bin", TestDataV1{ .name = "simple", .value = 123 }, 1, "TEST", serializeV1);
-    try serialization.save(allocator, io, &storage, "roundtrip-v2.bin", TestDataV2{ .name = "complex", .value = 456, .description = "test description" }, 2, "TEST", serializeV2);
-    try serialization.save(allocator, io, &storage, "roundtrip-v3.bin", TestDataV3{ .name = "full", .value = 789, .description = "full test", .tags = &.{ "a", "b", "c" } }, 3, "TEST", serializeV3);
+    try serialization.save(allocator, io, log, &storage, "roundtrip-v1.bin", TestDataV1{ .name = "simple", .value = 123 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "roundtrip-v2.bin", TestDataV2{ .name = "complex", .value = 456, .description = "test description" }, 2, "TEST", serializeV2);
+    try serialization.save(allocator, io, log, &storage, "roundtrip-v3.bin", TestDataV3{ .name = "full", .value = 789, .description = "full test", .tags = &.{ "a", "b", "c" } }, 3, "TEST", serializeV3);
 
-    try expectTestData(.{ .name = "simple", .value = 123 }, try serialization.load(TestData, allocator, io, &storage, "roundtrip-v1.bin", "TEST", {}, &deserializers));
-    try expectTestData(.{ .name = "complex", .value = 456, .description = "test description" }, try serialization.load(TestData, allocator, io, &storage, "roundtrip-v2.bin", "TEST", {}, &deserializers));
-    try expectTestData(.{ .name = "full", .value = 789, .description = "full test", .tags = &.{ "a", "b", "c" } }, try serialization.load(TestData, allocator, io, &storage, "roundtrip-v3.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "simple", .value = 123 }, try serialization.load(TestData, allocator, io, log, &storage, "roundtrip-v1.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "complex", .value = 456, .description = "test description" }, try serialization.load(TestData, allocator, io, log, &storage, "roundtrip-v2.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "full", .value = 789, .description = "full test", .tags = &.{ "a", "b", "c" } }, try serialization.load(TestData, allocator, io, log, &storage, "roundtrip-v3.bin", "TEST", {}, &deserializers));
 }
 
 test "should handle special characters and binary data" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -549,8 +567,8 @@ test "should handle special characters and binary data" {
         .{ .version = 1, .deserializer = deserializeV3 },
     };
 
-    try serialization.save(allocator, io, &storage, "special.bin", data, 1, "TEST", serializeV3);
-    const loadedData = try serialization.load(TestData, allocator, io, &storage, "special.bin", "TEST", {}, &deserializers);
+    try serialization.save(allocator, io, log, &storage, "special.bin", data, 1, "TEST", serializeV3);
+    const loadedData = try serialization.load(TestData, allocator, io, log, &storage, "special.bin", "TEST", {}, &deserializers);
 
     try expectTestData(.{ .name = specialName, .value = 9007199254740991, .description = "", .tags = &.{ "many levels", "" } }, loadedData);
 }
@@ -560,6 +578,7 @@ test "should handle special characters and binary data" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should detect corrupted data with checksum mismatch" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -570,19 +589,20 @@ test "should detect corrupted data with checksum mismatch" {
     };
 
     // Save valid data
-    try serialization.save(allocator, io, &storage, "valid.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "valid.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
 
-    const corruptedBuffer = (try storage.read(allocator, io, "valid.bin")).?;
+    const corruptedBuffer = (try storage.read(allocator, io, log, "valid.bin")).?;
     if (corruptedBuffer.len > 12) {
         corruptedBuffer[8] = corruptedBuffer[8] ^ 0xFF;
     }
 
     try storage.write(allocator, io, "corrupted.bin", null, corruptedBuffer);
 
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "corrupted.bin", "TEST", {}, &deserializers), "Checksum mismatch");
+    try expectThrownContaining(serialization.load(TestData, allocator, io, log, &storage, "corrupted.bin", "TEST", {}, &deserializers), "Checksum mismatch");
 }
 
 test "should detect corrupted checksum header" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -592,19 +612,20 @@ test "should detect corrupted checksum header" {
         .{ .version = 1, .deserializer = deserializeV1 },
     };
 
-    try serialization.save(allocator, io, &storage, "valid.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "valid.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
 
-    const corruptedBuffer = (try storage.read(allocator, io, "valid.bin")).?;
+    const corruptedBuffer = (try storage.read(allocator, io, log, "valid.bin")).?;
     var badChecksum: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&badChecksum, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
     @memcpy(corruptedBuffer[corruptedBuffer.len - 32 ..], &badChecksum);
 
     try storage.write(allocator, io, "bad-checksum.bin", null, corruptedBuffer);
 
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "bad-checksum.bin", "TEST", {}, &deserializers), "Checksum mismatch");
+    try expectThrownContaining(serialization.load(TestData, allocator, io, log, &storage, "bad-checksum.bin", "TEST", {}, &deserializers), "Checksum mismatch");
 }
 
 test "should show exact checksum values in error message" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -614,16 +635,16 @@ test "should show exact checksum values in error message" {
         .{ .version = 1, .deserializer = deserializeV1 },
     };
 
-    try serialization.save(allocator, io, &storage, "valid.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "valid.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
 
-    const corruptedBuffer = (try storage.read(allocator, io, "valid.bin")).?;
+    const corruptedBuffer = (try storage.read(allocator, io, log, "valid.bin")).?;
     var badChecksum: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&badChecksum, "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
     @memcpy(corruptedBuffer[corruptedBuffer.len - 32 ..], &badChecksum);
 
     try storage.write(allocator, io, "bad-checksum.bin", null, corruptedBuffer);
 
-    try expectThrownContaining(serialization.load(TestData, allocator, io, &storage, "bad-checksum.bin", "TEST", {}, &deserializers), "Checksum mismatch");
+    try expectThrownContaining(serialization.load(TestData, allocator, io, log, &storage, "bad-checksum.bin", "TEST", {}, &deserializers), "Checksum mismatch");
 
     // Verify it contains the expected and actual checksums in hex (32-byte format)
     var calculated: [32]u8 = undefined;
@@ -637,6 +658,7 @@ test "should show exact checksum values in error message" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should handle serializer errors gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -648,11 +670,12 @@ test "should handle serializer errors gracefully" {
         }
     };
 
-    try expectThrownContaining(serialization.save(allocator, io, &storage, "bad.bin", TestDataV1{ .name = "data", .value = 1 }, 1, "TEST", Serializers.badSerializer), "Serializer error");
+    try expectThrownContaining(serialization.save(allocator, io, log, &storage, "bad.bin", TestDataV1{ .name = "data", .value = 1 }, 1, "TEST", Serializers.badSerializer), "Serializer error");
     try std.testing.expect(!storage.fileExists("bad.bin"));
 }
 
 test "should handle deserializer errors gracefully" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -668,13 +691,13 @@ test "should handle deserializer errors gracefully" {
     };
 
     // Save valid data
-    try serialization.save(allocator, io, &storage, "good-data.bin", @as([]const u8, "test"), 1, "TEST", Functions.goodSerializer);
+    try serialization.save(allocator, io, log, &storage, "good-data.bin", @as([]const u8, "test"), 1, "TEST", Functions.goodSerializer);
 
     const deserializers = [_]serialization.DeserializerEntry([]const u8, void){
         .{ .version = 1, .deserializer = Functions.badDeserializer },
     };
 
-    try expectThrownContaining(serialization.load([]const u8, allocator, io, &storage, "good-data.bin", "TEST", {}, &deserializers), "Deserializer error");
+    try expectThrownContaining(serialization.load([]const u8, allocator, io, log, &storage, "good-data.bin", "TEST", {}, &deserializers), "Deserializer error");
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -856,19 +879,20 @@ test "should detect corrupted BSON data" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should work without migrations when versions match" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
     // Save v2 data
-    try serialization.save(allocator, io, &storage, "data-v2.bin", TestDataV2{ .name = "test", .value = 42, .description = "v2 data" }, 2, "TEST", serializeV2);
+    try serialization.save(allocator, io, log, &storage, "data-v2.bin", TestDataV2{ .name = "test", .value = 42, .description = "v2 data" }, 2, "TEST", serializeV2);
 
     const deserializers = [_]Entry{
         .{ .version = 2, .deserializer = deserializeV2 },
     };
 
-    const result = try serialization.load(TestData, allocator, io, &storage, "data-v2.bin", "TEST", {}, &deserializers);
+    const result = try serialization.load(TestData, allocator, io, log, &storage, "data-v2.bin", "TEST", {}, &deserializers);
     try expectTestData(.{ .name = "test", .value = 42, .description = "v2 data" }, result);
 }
 
@@ -877,6 +901,7 @@ test "should work without migrations when versions match" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should enable checksum by default when options is undefined" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -886,15 +911,16 @@ test "should enable checksum by default when options is undefined" {
         .{ .version = 1, .deserializer = deserializeV1 },
     };
 
-    try serialization.save(allocator, io, &storage, "default.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "default.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
 
-    const savedBuffer = (try storage.read(allocator, io, "default.bin")).?;
+    const savedBuffer = (try storage.read(allocator, io, log, "default.bin")).?;
     try std.testing.expect(savedBuffer.len > 40); // Version (4) + type (4) + data + checksum (32)
 
-    try expectTestData(.{ .name = "test", .value = 42 }, try serialization.load(TestData, allocator, io, &storage, "default.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "test", .value = 42 }, try serialization.load(TestData, allocator, io, log, &storage, "default.bin", "TEST", {}, &deserializers));
 }
 
 test "should always write v6 format with type and checksum" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -904,17 +930,18 @@ test "should always write v6 format with type and checksum" {
         .{ .version = 1, .deserializer = deserializeV1 },
     };
 
-    try serialization.save(allocator, io, &storage, "v6-format.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "v6-format.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
 
-    const savedBuffer = (try storage.read(allocator, io, "v6-format.bin")).?;
+    const savedBuffer = (try storage.read(allocator, io, log, "v6-format.bin")).?;
     try std.testing.expect(savedBuffer.len >= 40);
     try std.testing.expectEqual(@as(u32, 1), std.mem.readInt(u32, savedBuffer[0..4], .little));
     try expectString("TEST", savedBuffer[4..8]);
 
-    try expectTestData(.{ .name = "test", .value = 42 }, try serialization.load(TestData, allocator, io, &storage, "v6-format.bin", "TEST", {}, &deserializers));
+    try expectTestData(.{ .name = "test", .value = 42 }, try serialization.load(TestData, allocator, io, log, &storage, "v6-format.bin", "TEST", {}, &deserializers));
 }
 
 test "should maintain data integrity with checksum" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -925,8 +952,8 @@ test "should maintain data integrity with checksum" {
         .{ .version = 1, .deserializer = deserializeV3 },
     };
 
-    try serialization.save(allocator, io, &storage, "special-checksum.bin", TestDataV3{ .name = specialName, .value = -1, .description = "deeply nested value", .tags = &.{"42"} }, 1, "TEST", serializeV3);
-    const result = try serialization.load(TestData, allocator, io, &storage, "special-checksum.bin", "TEST", {}, &deserializers);
+    try serialization.save(allocator, io, log, &storage, "special-checksum.bin", TestDataV3{ .name = specialName, .value = -1, .description = "deeply nested value", .tags = &.{"42"} }, 1, "TEST", serializeV3);
+    const result = try serialization.load(TestData, allocator, io, log, &storage, "special-checksum.bin", "TEST", {}, &deserializers);
 
     try expectTestData(.{ .name = specialName, .value = -1, .description = "deeply nested value", .tags = &.{"42"} }, result);
 }
@@ -936,69 +963,74 @@ test "should maintain data integrity with checksum" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "should return valid: false for non-existent file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    const result = try serialization.verify(allocator, io, &storage, "nonexistent.bin");
+    const result = try serialization.verify(allocator, io, log, &storage, "nonexistent.bin");
     try std.testing.expect(!result.valid);
     try std.testing.expectEqual(@as(u64, 0), result.size);
     try expectString("File not found or empty", result.@"error".?);
 }
 
 test "should verify v6 file successfully" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try serialization.save(allocator, io, &storage, "verify-checksum.bin", TestDataV1{ .name = "verify test", .value = 99 }, 1, "TEST", serializeV1);
-    const result = try serialization.verify(allocator, io, &storage, "verify-checksum.bin");
+    try serialization.save(allocator, io, log, &storage, "verify-checksum.bin", TestDataV1{ .name = "verify test", .value = 99 }, 1, "TEST", serializeV1);
+    const result = try serialization.verify(allocator, io, log, &storage, "verify-checksum.bin");
     try std.testing.expect(result.valid);
     try std.testing.expect(result.size > 40);
     try std.testing.expect(result.@"error" == null);
 }
 
 test "should return valid: false when file is too small for v6 format" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
     try storage.write(allocator, io, "tiny.bin", null, &([_]u8{0} ** 10));
-    const result = try serialization.verify(allocator, io, &storage, "tiny.bin");
+    const result = try serialization.verify(allocator, io, log, &storage, "tiny.bin");
     try std.testing.expect(!result.valid);
     try std.testing.expectEqual(@as(u64, 10), result.size);
     try expectString("File too small for v6 format (10 bytes, minimum 40)", result.@"error".?);
 }
 
 test "should return valid: false on checksum mismatch" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try serialization.save(allocator, io, &storage, "good-checksum.bin", TestDataV1{ .name = "verify test", .value = 99 }, 1, "TEST", serializeV1);
-    const buffer = (try storage.read(allocator, io, "good-checksum.bin")).?;
+    try serialization.save(allocator, io, log, &storage, "good-checksum.bin", TestDataV1{ .name = "verify test", .value = 99 }, 1, "TEST", serializeV1);
+    const buffer = (try storage.read(allocator, io, log, "good-checksum.bin")).?;
     // Corrupt the last byte (checksum)
     buffer[buffer.len - 1] ^= 0xff;
     try storage.write(allocator, io, "corrupt-checksum.bin", null, buffer);
-    const result = try serialization.verify(allocator, io, &storage, "corrupt-checksum.bin");
+    const result = try serialization.verify(allocator, io, log, &storage, "corrupt-checksum.bin");
     try std.testing.expect(!result.valid);
     try std.testing.expectEqual(@as(u64, buffer.len), result.size);
     try std.testing.expect(std.mem.startsWith(u8, result.@"error".?, "Checksum mismatch: expected "));
 }
 
 test "should report correct size for valid v6 file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try serialization.save(allocator, io, &storage, "size-check.bin", TestDataV1{ .name = "verify test", .value = 99 }, 1, "TEST", serializeV1);
-    const expectedBuffer = (try storage.read(allocator, io, "size-check.bin")).?;
-    const result = try serialization.verify(allocator, io, &storage, "size-check.bin");
+    try serialization.save(allocator, io, log, &storage, "size-check.bin", TestDataV1{ .name = "verify test", .value = 99 }, 1, "TEST", serializeV1);
+    const expectedBuffer = (try storage.read(allocator, io, log, "size-check.bin")).?;
+    const result = try serialization.verify(allocator, io, log, &storage, "size-check.bin");
     try std.testing.expect(result.valid);
     try std.testing.expectEqual(@as(u64, expectedBuffer.len), result.size);
 }
@@ -1008,25 +1040,27 @@ test "should report correct size for valid v6 file" {
 // ---------------------------------------------------------------------------------------------------------------
 
 test "loadVersion reads the version header" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
-    try serialization.save(allocator, io, &storage, "versioned.bin", TestDataV1{ .name = "test", .value = 42 }, 6, "TEST", serializeV1);
-    try std.testing.expectEqual(@as(?u32, 6), serialization.loadVersion(allocator, io, &storage, "versioned.bin"));
+    try serialization.save(allocator, io, log, &storage, "versioned.bin", TestDataV1{ .name = "test", .value = 42 }, 6, "TEST", serializeV1);
+    try std.testing.expectEqual(@as(?u32, 6), serialization.loadVersion(allocator, io, log, &storage, "versioned.bin"));
     try std.testing.expectEqual(@as(usize, 0), storage.openStreams);
 }
 
 test "loadVersion returns undefined for short or missing files" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var storage = MemoryStorage.init(allocator);
 
     try storage.write(allocator, io, "short.bin", null, &.{ 1, 2, 3 });
-    try std.testing.expectEqual(@as(?u32, null), serialization.loadVersion(allocator, io, &storage, "short.bin"));
-    try std.testing.expectEqual(@as(?u32, null), serialization.loadVersion(allocator, io, &storage, "missing.bin"));
+    try std.testing.expectEqual(@as(?u32, null), serialization.loadVersion(allocator, io, log, &storage, "short.bin"));
+    try std.testing.expectEqual(@as(?u32, null), serialization.loadVersion(allocator, io, log, &storage, "missing.bin"));
     try std.testing.expectEqual(@as(usize, 0), storage.openStreams);
 }
 
@@ -1216,6 +1250,7 @@ fn readV6Summary(allocator: std.mem.Allocator) !V6Summary {
 }
 
 test "load reads a real shard from test/dbs/v6 and its BSON re-encodes to the same bytes" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1228,7 +1263,7 @@ test "load reads a real shard from test/dbs/v6 and its BSON re-encodes to the sa
     const deserializers = [_]serialization.DeserializerEntry([]ShardRecord, void){
         .{ .version = 1, .deserializer = deserializeShardV1 },
     };
-    const records = (try serialization.load([]ShardRecord, allocator, io, &storage, "shard", "SHAR", {}, &deserializers)).?;
+    const records = (try serialization.load([]ShardRecord, allocator, io, log, &storage, "shard", "SHAR", {}, &deserializers)).?;
 
     const summary = try readV6Summary(allocator);
     try std.testing.expectEqual(summary.shardRecords.len, records.len);
@@ -1254,6 +1289,7 @@ test "load reads a real shard from test/dbs/v6 and its BSON re-encodes to the sa
 }
 
 test "load reads the real files tree from test/dbs/v6 including its gzip string table" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1290,7 +1326,7 @@ test "load reads the real files tree from test/dbs/v6 including its gzip string 
     const deserializers = [_]serialization.DeserializerEntry(Tree, void){
         .{ .version = 6, .deserializer = Tree.deserialize },
     };
-    const tree = (try serialization.load(Tree, allocator, io, &storage, "files.dat", "FTRE", {}, &deserializers)).?;
+    const tree = (try serialization.load(Tree, allocator, io, log, &storage, "files.dat", "FTRE", {}, &deserializers)).?;
 
     const summary = try readV6Summary(allocator);
     try std.testing.expectEqual(@as(f64, 1), tree.filesImported);
@@ -1300,9 +1336,9 @@ test "load reads the real files tree from test/dbs/v6 including its gzip string 
         try expectString(expected, actual);
     }
 
-    const verifyResult = try serialization.verify(allocator, io, &storage, "files.dat");
+    const verifyResult = try serialization.verify(allocator, io, log, &storage, "files.dat");
     try std.testing.expect(verifyResult.valid);
-    try std.testing.expectEqual(@as(?u32, 6), serialization.loadVersion(allocator, io, &storage, "files.dat"));
+    try std.testing.expectEqual(@as(?u32, 6), serialization.loadVersion(allocator, io, log, &storage, "files.dat"));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1316,7 +1352,8 @@ const FailingStorage = struct {
     //
     // Fails to read.
     //
-    pub fn read(self: *FailingStorage, allocator: std.mem.Allocator, ioArgument: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *FailingStorage, allocator: std.mem.Allocator, ioArgument: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = self;
         _ = allocator;
         _ = ioArgument;
@@ -1337,6 +1374,12 @@ const FailingStorage = struct {
 };
 
 test "save names the file it could not write once every retry has failed" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
@@ -1346,17 +1389,23 @@ test "save names the file it could not write once every retry has failed" {
     const allocator = arena.allocator();
     var storage: FailingStorage = .{};
 
-    // (The retry warnings are captured, because the test runner fails a test that writes to stderr.)
+    // (Retry's final error, which it writes straight to the console, is captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
     const testData: TestDataV1 = .{ .name = "test", .value = 42 };
-    try expectThrownContaining(serialization.save(allocator, backoff_io, &storage, "data.bin", testData, 1, "TEST", serializeV1), "Failed to write data.bin: cannot write data.bin");
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to write data.bin. Retrying after: cannot write data.bin") != null);
+    try expectThrownContaining(serialization.save(allocator, backoff_io, memory.log, &storage, "data.bin", testData, 1, "TEST", serializeV1), "Failed to write data.bin: cannot write data.bin");
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to write data.bin. Retrying after: cannot write data.bin") != null);
 }
 
 test "load names the file it could not read once every retry has failed" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
@@ -1366,7 +1415,7 @@ test "load names the file it could not read once every retry has failed" {
     const allocator = arena.allocator();
     var storage: FailingStorage = .{};
 
-    // (The retry warnings are captured, because the test runner fails a test that writes to stderr.)
+    // (Retry's final error, which it writes straight to the console, is captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
@@ -1374,11 +1423,17 @@ test "load names the file it could not read once every retry has failed" {
     const deserializers = [_]Entry{
         .{ .version = 1, .deserializer = deserializeV1 },
     };
-    try expectThrownContaining(serialization.load(TestData, allocator, backoff_io, &storage, "data.bin", "TEST", {}, &deserializers), "Failed to read data.bin: cannot read data.bin");
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
+    try expectThrownContaining(serialization.load(TestData, allocator, backoff_io, memory.log, &storage, "data.bin", "TEST", {}, &deserializers), "Failed to read data.bin: cannot read data.bin");
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
 }
 
 test "verify names the file it could not read once every retry has failed" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var backoff_time: virtual_time_io.VirtualTimeIo = undefined;
     backoff_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.backoff);
     defer backoff_time.deinit();
@@ -1388,13 +1443,13 @@ test "verify names the file it could not read once every retry has failed" {
     const allocator = arena.allocator();
     var storage: FailingStorage = .{};
 
-    // (The retry warnings are captured, because the test runner fails a test that writes to stderr.)
+    // (Retry's final error, which it writes straight to the console, is captured, because the test runner fails a test that writes to stderr.)
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(null, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    try expectThrownContaining(serialization.verify(allocator, backoff_io, &storage, "data.bin"), "Failed to read data.bin: cannot read data.bin");
-    try std.testing.expect(std.mem.indexOf(u8, stderr_capture.written(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
+    try expectThrownContaining(serialization.verify(allocator, backoff_io, memory.log, &storage, "data.bin"), "Failed to read data.bin: cannot read data.bin");
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to read data.bin. Retrying after: cannot read data.bin") != null);
 }
 
 //
@@ -1410,6 +1465,7 @@ test "checkUInt32 accepts 0 to 4294967295 and refuses anything else like writeUI
 }
 
 test "the type code is read as toString(\"ascii\") reads it, which drops the high bit of each byte" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1417,10 +1473,10 @@ test "the type code is read as toString(\"ascii\") reads it, which drops the hig
     const deserializers = [_]Entry{
         .{ .version = 1, .deserializer = deserializeV1 },
     };
-    try serialization.save(allocator, io, &storage, "data.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
+    try serialization.save(allocator, io, log, &storage, "data.bin", TestDataV1{ .name = "test", .value = 42 }, 1, "TEST", serializeV1);
 
     // Set the high bit of each byte of the type code and write the checksum again.
-    const saved = (try storage.read(allocator, io, "data.bin")).?;
+    const saved = (try storage.read(allocator, io, log, "data.bin")).?;
     const data = saved[0 .. saved.len - 32];
     for (data[4..8]) |*byte| {
         byte.* |= 0x80;
@@ -1430,11 +1486,12 @@ test "the type code is read as toString(\"ascii\") reads it, which drops the hig
     @memcpy(saved[saved.len - 32 ..], &checksum);
     try storage.write(allocator, io, "data.bin", null, saved);
 
-    const loaded = try serialization.load(TestData, allocator, io, &storage, "data.bin", "TEST", {}, &deserializers);
+    const loaded = try serialization.load(TestData, allocator, io, log, &storage, "data.bin", "TEST", {}, &deserializers);
     try expectTestData(.{ .name = "test", .value = 42 }, loaded);
 }
 
 test "load reports the checksum mismatch when a legacy file's deserializer fails" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1460,7 +1517,7 @@ test "load reports the checksum mismatch when a legacy file's deserializer fails
     const deserializers = [_]serialization.DeserializerEntry([]const u8, void){
         .{ .version = 1, .deserializer = Functions.failToRead },
     };
-    try expectThrownContaining(serialization.load([]const u8, allocator, io, &storage, "legacy-fail.bin", "TEST", {}, &deserializers), "Checksum mismatch");
+    try expectThrownContaining(serialization.load([]const u8, allocator, io, log, &storage, "legacy-fail.bin", "TEST", {}, &deserializers), "Checksum mismatch");
     var calculated: [Sha256.digest_length]u8 = undefined;
     Sha256.hash(legacy.getBuffer(), &calculated, .{});
     try expectString(try std.fmt.allocPrint(allocator, "Checksum mismatch: expected {x}, got {x}", .{ &([_]u8{0xab} ** 32), &calculated }), errors.lastErrorMessage());

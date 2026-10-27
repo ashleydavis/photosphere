@@ -121,12 +121,12 @@ const Sandbox = struct {
     //
     // Runs the read-databases-config handler for the config path and returns its result.
     //
-    fn read(self: *Sandbox, configPath: []const u8) !std.json.Value {
+    fn read(self: *Sandbox, log: utils.log.ILog, configPath: []const u8) !std.json.Value {
         var object: std.json.ObjectMap = .empty;
         try object.put(self.arenaAllocator(), "configPath", .{
             .string = configPath,
         });
-        return readDatabasesConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), .{
+        return readDatabasesConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), log, .{
             .object = object,
         }, self.taskContext.context.taskContext());
     }
@@ -134,8 +134,8 @@ const Sandbox = struct {
     //
     // Runs the write-databases-config handler with the JSON text as its data.
     //
-    fn write(self: *Sandbox, dataJson: []const u8) !void {
-        const result = try writeDatabasesConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), try self.json(dataJson), self.taskContext.context.taskContext());
+    fn write(self: *Sandbox, log: utils.log.ILog, dataJson: []const u8) !void {
+        const result = try writeDatabasesConfigHandler(self.arenaAllocator(), self.io, test_timers.timers(), log, try self.json(dataJson), self.taskContext.context.taskContext());
         try std.testing.expect(result == .null);
     }
 
@@ -280,24 +280,26 @@ const existingConfig =
 
 // A fresh install has no file, and that must read as "no databases" rather than fail.
 test "mobile databases.toml: reading a config that does not exist yields empty lists" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
 
-    const result = try sandbox.read("databases.toml");
+    const result = try sandbox.read(log, "databases.toml");
 
     try sandbox.expectJson("{\"databases\":[],\"recentDatabaseNames\":[]}", result);
 }
 
 test "mobile databases.toml: writing then reading round-trips the databases and recents" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.write(
+    try sandbox.write(log, 
         \\{"configPath":"databases.toml","databases":[{"name":"50-assets","description":"","path":"50-assets"},{"name":"Holiday","description":"Trip photos","path":"holiday"}],"recentDatabaseNames":["Holiday","50-assets"]}
     );
 
-    const result = try sandbox.read("databases.toml");
+    const result = try sandbox.read(log, "databases.toml");
 
     try sandbox.expectJson(
         \\[{"name":"50-assets","description":"","path":"50-assets"},{"name":"Holiday","description":"Trip photos","path":"holiday"}]
@@ -306,10 +308,11 @@ test "mobile databases.toml: writing then reading round-trips the databases and 
 }
 
 test "mobile databases.toml: the file written uses the same snake_case TOML shape as desktop" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.write(
+    try sandbox.write(log, 
         \\{"configPath":"databases.toml","databases":[{"name":"Encrypted","description":"","path":"enc","origin":"s3:bucket:/x","s3Key":"default:s3","encryptionKey":"default:key","geocodingKey":"default:geo"}],"recentDatabaseNames":["Encrypted"]}
     );
 
@@ -326,6 +329,7 @@ test "mobile databases.toml: the file written uses the same snake_case TOML shap
 // Written by hand in the layout desktop produces, to prove mobile reads desktop's file rather
 // than only its own output.
 test "mobile databases.toml: a config written by desktop is read back with the optional fields mapped" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
@@ -343,7 +347,7 @@ test "mobile databases.toml: a config written by desktop is read back with the o
         \\
     );
 
-    const result = try sandbox.read("databases.toml");
+    const result = try sandbox.read(log, "databases.toml");
 
     try expectStrings(&.{"Photos"}, result, "recentDatabaseNames");
     try sandbox.expectJson(
@@ -352,10 +356,11 @@ test "mobile databases.toml: a config written by desktop is read back with the o
 }
 
 test "mobile databases.toml: optional fields absent from an entry stay absent" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.write(
+    try sandbox.write(log, 
         \\{"configPath":"databases.toml","databases":[{"name":"Plain","description":"","path":"plain"}],"recentDatabaseNames":[]}
     );
 
@@ -365,36 +370,39 @@ test "mobile databases.toml: optional fields absent from an entry stay absent" {
     try std.testing.expect(std.mem.indexOf(u8, raw, "geocoding_key") == null);
     try std.testing.expect(std.mem.indexOf(u8, raw, "origin") == null);
 
-    const result = try sandbox.read("databases.toml");
+    const result = try sandbox.read(log, "databases.toml");
     try sandbox.expectJson(
         \\{"name":"Plain","description":"","path":"plain"}
     , (try field(result, "databases")).array.items[0]);
 }
 
 test "mobile databases.toml: writing replaces the previous contents rather than appending" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.write(
+    try sandbox.write(log, 
         \\{"configPath":"databases.toml","databases":[{"name":"First","description":"","path":"first"}],"recentDatabaseNames":["First"]}
     );
-    try sandbox.write(
+    try sandbox.write(log, 
         \\{"configPath":"databases.toml","databases":[{"name":"Second","description":"","path":"second"}],"recentDatabaseNames":[]}
     );
 
-    const result = try sandbox.read("databases.toml");
+    const result = try sandbox.read(log, "databases.toml");
 
     try expectNames(&.{"Second"}, result, "databases");
     try expectStrings(&.{}, result, "recentDatabaseNames");
 }
 
 test "mobile databases.toml: a missing configPath is rejected" {
+    const log = utils.mute_log.MuteLog.init();
+    const console_log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
 
-    try expectThrown("configPath is required", sandbox.read(""));
-    try expectThrown("configPath is required", writeDatabasesConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), try sandbox.json(
+    try expectThrown("configPath is required", sandbox.read(log, ""));
+    try expectThrown("configPath is required", writeDatabasesConfigHandler(sandbox.arenaAllocator(), sandbox.io, test_timers.timers(), console_log, try sandbox.json(
         \\{"configPath":"","databases":[],"recentDatabaseNames":[]}
     ), sandbox.taskContext.context.taskContext()));
 }
@@ -509,12 +517,13 @@ test "registering a test database in a config: malformed TOML throws rather than
 }
 
 test "registering a test database in a config: the result is readable by the handler that reads it on device" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
     try sandbox.writeTomlText(try sandbox.register(existingConfig, "50-assets"));
 
-    const read = try sandbox.read("databases.toml");
+    const read = try sandbox.read(log, "databases.toml");
 
     try expectNames(&.{ "My photos", "Holiday", "test-50-assets" }, read, "databases");
     try expectStrings(&.{ "test-50-assets", "My photos" }, read, "recentDatabaseNames");
@@ -549,6 +558,7 @@ test "buildDatabasesConfigToml: renders empty lists for a config with nothing in
 }
 
 test "buildDatabasesConfigToml: the result is readable by the handler that reads it on device" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
@@ -556,7 +566,7 @@ test "buildDatabasesConfigToml: the result is readable by the handler that reads
         \\[{"name":"Alpha","description":"","path":"alpha"}]
     , &.{"Alpha"}, null));
 
-    const read = try sandbox.read("databases.toml");
+    const read = try sandbox.read(log, "databases.toml");
 
     try sandbox.expectJson(
         \\[{"name":"Alpha","description":"","path":"alpha"}]
@@ -565,6 +575,7 @@ test "buildDatabasesConfigToml: the result is readable by the handler that reads
 }
 
 test "the last opened database: is absent from a file that names none" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
@@ -572,20 +583,21 @@ test "the last opened database: is absent from a file that names none" {
         \\[{"name":"Alpha","description":"","path":"alpha"}]
     , &.{"Alpha"}, null));
 
-    const read = try sandbox.read("databases.toml");
+    const read = try sandbox.read(log, "databases.toml");
 
     try std.testing.expect(read.object.get("lastDatabase") == null);
 }
 
 test "the last opened database: is written and read back as the path it was given" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
-    try sandbox.write(
+    try sandbox.write(log, 
         \\{"configPath":"databases.toml","databases":[{"name":"Alpha","description":"","path":"alpha"}],"recentDatabaseNames":["Alpha"],"lastDatabase":"alpha"}
     );
 
-    const read = try sandbox.read("databases.toml");
+    const read = try sandbox.read(log, "databases.toml");
 
     try std.testing.expectEqualStrings("alpha", (try field(read, "lastDatabase")).string);
 }
@@ -593,6 +605,7 @@ test "the last opened database: is written and read back as the path it was give
 // The deploy script has just been told to put this fixture in front of the user, so it
 // replaces whatever the file named, rather than leaving the app to open something else.
 test "the last opened database: is taken over by a test fixture registered beside it" {
+    const log = utils.mute_log.MuteLog.init();
     var sandbox: Sandbox = undefined;
     try sandbox.init();
     defer sandbox.deinit();
@@ -603,7 +616,7 @@ test "the last opened database: is taken over by a test fixture registered besid
     const rewritten = try sandbox.register(existing, "50-assets");
 
     try sandbox.writeTomlText(rewritten);
-    const read = try sandbox.read("databases.toml");
+    const read = try sandbox.read(log, "databases.toml");
     try std.testing.expectEqualStrings("50-assets", (try field(read, "lastDatabase")).string);
     // The user's own database and their place in the recents list are still there.
     try expectNames(&.{ "Alpha", "test-50-assets" }, read, "databases");

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const storage = storage_zig.storage;
 const IStorage = storage.IStorage;
@@ -186,7 +187,7 @@ pub const MemoryStorage = struct {
     //
     // Reads a whole file (null when it does not exist).
     //
-    fn read(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!?[]u8 {
+    fn read(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, _: ILog, filePath: []const u8) anyerror!?[]u8 {
         _ = io;
         const data = fromPointer(pointer).files.get(filePath) orelse {
             return null;
@@ -207,7 +208,8 @@ pub const MemoryStorage = struct {
     //
     // Opens a stream that reads a file.
     //
-    fn readStream(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!IReadStream {
+    fn readStream(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!IReadStream {
+        _ = log;
         _ = io;
         const data = fromPointer(pointer).files.get(filePath) orelse {
             return error.FileNotFound;
@@ -277,7 +279,8 @@ pub const MemoryStorage = struct {
     //
     // Not implemented.
     //
-    fn acquireWriteLock(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!bool {
+    fn acquireWriteLock(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!bool {
+        _ = log;
         _ = pointer;
         _ = allocator;
         _ = io;
@@ -289,7 +292,8 @@ pub const MemoryStorage = struct {
     //
     // Not implemented.
     //
-    fn releaseWriteLock(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) anyerror!void {
+    fn releaseWriteLock(pointer: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!void {
+        _ = log;
         _ = pointer;
         _ = allocator;
         _ = io;
@@ -300,7 +304,8 @@ pub const MemoryStorage = struct {
     //
     // Not implemented.
     //
-    fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, owner: []const u8) anyerror!void {
+    fn refreshWriteLock(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) anyerror!void {
+        _ = log;
         _ = ptr;
         _ = allocator;
         _ = io;

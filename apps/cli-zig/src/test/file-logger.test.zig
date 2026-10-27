@@ -22,6 +22,12 @@ test "the file logger writes the headers, entries and footers" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const io = std.testing.io;
     const tmpDir = try helpers.makeTempDir(allocator, "file-logger");
     defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
@@ -40,12 +46,8 @@ test "the file logger writes the headers, entries and footers" {
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify --db x");
+    const consoleLog = memory.log;
+    const logger = try FileLogger.create(allocator, io, memory.log, mediaTools.runner(), consoleLog, "verify --db x");
     defer node_utils.termination.clearTerminationCallbacks();
 
     const logFile = logger.getLogFilePath();
@@ -90,10 +92,10 @@ test "the file logger writes the headers, entries and footers" {
     try std.testing.expect(std.mem.indexOf(u8, errorContent, "hello info") == null);
     try std.testing.expect(std.mem.indexOf(u8, errorContent, "\n--- Error Log End ---\n") != null);
 
-    try std.testing.expect(std.mem.indexOf(u8, stdout_capture.written(), "hello info\n") != null);
-    try std.testing.expect(std.mem.indexOf(u8, stdout_capture.written(), "hidden verbose") == null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stdout(), "hello info\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stdout(), "hidden verbose") == null);
     try std.testing.expect(std.mem.indexOf(u8, stdout_capture.written(), try std.fmt.allocPrint(allocator, "\nErrors, warnings, and exceptions were logged to: {s}\n", .{logger.getErrorLogFilePath()})) != null);
-    try std.testing.expectEqualStrings("bad thing\n", stderr_capture.written());
+    try std.testing.expectEqualStrings("bad thing\n", memory.stderr());
 
     const details = try logger.getLogDetails(allocator, io);
     try std.testing.expectEqualStrings(logFile, details.logFilePath.?);
@@ -101,6 +103,7 @@ test "the file logger writes the headers, entries and footers" {
 }
 
 test "the error log footer is only written when errors were logged" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -120,12 +123,15 @@ test "the error log footer is only written when errors were logged" {
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = true,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "unknown");
+    // A memory log rather than a mute one, because the logger's verboseEnabled reads it and a mute log has verbose off.
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
+    const consoleLog = memory.log;
+    const logger = try FileLogger.create(allocator, io, log, mediaTools.runner(), consoleLog, "unknown");
     defer node_utils.termination.clearTerminationCallbacks();
     try std.testing.expect(logger.verboseEnabled());
     logger.close();
@@ -135,6 +141,7 @@ test "the error log footer is only written when errors were logged" {
 }
 
 test "the log files go under the process temporary directory when PHOTOSPHERE_TMP_DIR is set" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -155,12 +162,8 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
+    const consoleLog = utils.mute_log.MuteLog.init();
+    const logger = try FileLogger.create(allocator, io, log, mediaTools.runner(), consoleLog, "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     defer logger.close();
 
@@ -169,6 +172,7 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
 }
 
 test "the log directory is joined as path.join joins it, and a long exception is logged whole" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -190,12 +194,8 @@ test "the log directory is joined as path.join joins it, and a long exception is
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
+    const consoleLog = utils.mute_log.MuteLog.init();
+    const logger = try FileLogger.create(allocator, io, log, mediaTools.runner(), consoleLog, "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     try std.testing.expect(std.mem.startsWith(u8, logger.getLogFilePath(), try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "logs", "psi-" })));
 
@@ -221,6 +221,7 @@ fn headerLineValue(content: []const u8, prefix: []const u8) ![]const u8 {
 }
 
 test "the log header names the versions of the ImageMagick and FFmpeg built into the program" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -241,19 +242,15 @@ test "the log header names the versions of the ImageMagick and FFmpeg built into
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    var consoleLog: utils.log.ConsoleLog = .{
-        .verbose_enabled = false,
-        .debug_enabled = false,
-        .tools_enabled = false,
-    };
-    const logger = try FileLogger.create(allocator, io, mediaTools.runner(), consoleLog.ilog(), "verify");
+    const consoleLog = utils.mute_log.MuteLog.init();
+    const logger = try FileLogger.create(allocator, io, log, mediaTools.runner(), consoleLog, "verify");
     defer node_utils.termination.clearTerminationCallbacks();
     logger.close();
     const logContent = try std.Io.Dir.cwd().readFileAlloc(io, logger.getLogFilePath(), allocator, .unlimited);
 
     // The versions are the ones the built-in libraries report, read here from the libraries themselves.
     const imageMagickVersion = try headerLineValue(logContent, "\nImageMagick: ");
-    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, allocator, &.{"-version"})).output;
+    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, log, allocator, &.{"-version"})).output;
     try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{imageMagickVersion})) != null);
     const ffmpegVersion = try headerLineValue(logContent, "\nFFmpeg: ");
     try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffmpeg")).output, try std.fmt.allocPrint(allocator, "ffmpeg version {s}\n", .{ffmpegVersion})));

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
@@ -47,10 +48,10 @@ pub const AssetExportType = enum {
 //
 // Returns one page of assets from the metadata collection, sorted by photoDate descending.
 //
-pub fn listAssetPage(io: std.Io, bsonDatabase: *IBsonDatabase, limit: usize, pageId: ?[]const u8) !IListAssetsResult {
+pub fn listAssetPage(io: std.Io, log: ILog, bsonDatabase: *IBsonDatabase, limit: usize, pageId: ?[]const u8) !IListAssetsResult {
     const metadataCollection = try bsonDatabase.collection("metadata");
     const sortIndex = try metadataCollection.sortIndex("photoDate", .desc);
-    const page = try sortIndex.getPage(io, pageId);
+    const page = try sortIndex.getPage(io, log, pageId);
     const assets = page.records[0..@min(limit, page.records.len)];
     return .{
         .assets = assets,
@@ -67,6 +68,7 @@ pub fn listAssetPage(io: std.Io, bsonDatabase: *IBsonDatabase, limit: usize, pag
 pub fn searchAssets(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     bsonDatabase: *IBsonDatabase,
     query: []const u8,
     contentType: ?[]const u8,
@@ -86,7 +88,7 @@ pub fn searchAssets(
 
     var nextToken: ?[]const u8 = null;
     while (true) {
-        const pageResult = try metadataCollection.getAll(io, nextToken);
+        const pageResult = try metadataCollection.getAll(io, log, nextToken);
         for (pageResult.records) |asset| {
             if (!try matchesAsset(allocator, asset, queryLower, contentTypePrefix, dateFromMs, dateToMs)) {
                 continue;
@@ -207,9 +209,9 @@ fn matchesAsset(
 //
 // Returns a single asset by id, or null (undefined) if not found.
 //
-pub fn getAsset(io: std.Io, bsonDatabase: *IBsonDatabase, assetId: []const u8) !?IAsset {
+pub fn getAsset(io: std.Io, log: ILog, bsonDatabase: *IBsonDatabase, assetId: []const u8) !?IAsset {
     const metadataCollection = try bsonDatabase.collection("metadata");
-    return metadataCollection.getOne(io, assetId);
+    return metadataCollection.getOne(io, log, assetId);
 }
 
 //
@@ -219,6 +221,7 @@ pub fn getAsset(io: std.Io, bsonDatabase: *IBsonDatabase, assetId: []const u8) !
 pub fn streamAssetToFile(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     assetId: []const u8,
     outputPath: []const u8,
@@ -232,7 +235,7 @@ pub fn streamAssetToFile(
     const outputFile = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
     defer outputFile.close(io);
 
-    const readStream = try assetStorage.readStream(allocator, io, storageKey);
+    const readStream = try assetStorage.readStream(allocator, io, log, storageKey);
     defer readStream.destroy(io);
     var writeBuffer: [64 * 1024]u8 = undefined;
     var fileWriter = outputFile.writerStreaming(io, &writeBuffer);

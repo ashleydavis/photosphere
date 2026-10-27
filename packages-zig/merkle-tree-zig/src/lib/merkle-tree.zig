@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
@@ -2178,7 +2179,7 @@ fn deserializeMerkleTreeV2(allocator: std.mem.Allocator, context: void, deserial
 // Saves a merkle tree to storage (v6 layout with type code and checksum).
 // (Callers pass the type code explicitly, normally 'FTRE'.)
 //
-pub fn saveTree(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, tree: *const IMerkleTree, storage: IStorage, typeCode: []const u8) !void {
+pub fn saveTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, tree: *const IMerkleTree, storage: IStorage, typeCode: []const u8) !void {
 
     if (tree.dirty) {
         return errors.throwError("Tree is dirty. Cannot save. Make sure to rebuild the tree before saving.", .{});
@@ -2187,6 +2188,7 @@ pub fn saveTree(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, 
     try serialization.save(
         allocator,
         io,
+        log,
         storage,
         filePath,
         tree,
@@ -2201,8 +2203,8 @@ pub fn saveTree(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, 
 // This is useful for version compatibility checks before full database loading.
 // Uses the serialization library so the version header is read in one place.
 //
-pub fn loadTreeVersion(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, storage: IStorage) ?u32 {
-    return serialization.loadVersion(allocator, io, storage, filePath);
+pub fn loadTreeVersion(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, storage: IStorage) ?u32 {
+    return serialization.loadVersion(allocator, io, log, storage, filePath);
 }
 
 //
@@ -2220,11 +2222,12 @@ const tree_deserializers = [_]serialization.DeserializerEntry(IMerkleTree, void)
 // Loads a merkle tree from storage (null when the file does not exist).
 // (Callers pass the type code explicitly, normally 'FTRE'.)
 //
-pub fn loadTree(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, storage: IStorage, typeCode: []const u8) !?IMerkleTree {
+pub fn loadTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, storage: IStorage, typeCode: []const u8) !?IMerkleTree {
     return serialization.load(
         IMerkleTree,
         allocator,
         io,
+        log,
         storage,
         filePath,
         typeCode,

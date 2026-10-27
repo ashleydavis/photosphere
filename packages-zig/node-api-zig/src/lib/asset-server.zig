@@ -7,6 +7,7 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
@@ -14,7 +15,6 @@ const asset_server_core = @import("asset-server-core.zig");
 const asset_server_routes = @import("asset-server-routes.zig");
 const http_server = node_utils.http_server;
 const json = ziggy.json;
-const log = &utils.log.log;
 
 //
 // The asset server serves local content and must only be reachable from this machine, so it always listens on the loopback address.
@@ -66,7 +66,7 @@ pub const AssetServer = struct {
     // connection threads are given copies of the session id and of the calling thread's environment, which they read to find the
     // vault that holds a database's credentials.
     //
-    pub fn start(allocator: std.mem.Allocator, io: std.Io, listener: http_server.Listener, options: IAssetServerOptions) !*AssetServer {
+    pub fn start(allocator: std.mem.Allocator, io: std.Io, log: ILog, listener: http_server.Listener, options: IAssetServerOptions) !*AssetServer {
         const self = try allocator.create(AssetServer);
         errdefer allocator.destroy(self);
         const config = try json.stringify(allocator, IConnectionConfig{

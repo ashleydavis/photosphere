@@ -1,10 +1,10 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const pc = @import("../lib/picocolors.zig");
 const config = @import("../lib/config.zig");
 const check_for_updates = @import("../lib/check-for-updates.zig");
 const check_for_news = @import("../lib/check-for-news.zig");
-const log = &utils.log.log;
 const version = config.version;
 const getLatestVersion = check_for_updates.getLatestVersion;
 const markUpdateAsShown = check_for_updates.markUpdateAsShown;
@@ -24,7 +24,7 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 // item is recorded so the standard pre-command notification (oldest unseen news) does
 // not re-display the same items on subsequent commands.
 //
-pub fn newsCommand(allocator: std.mem.Allocator, io: std.Io) !void {
+pub fn newsCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
     log.info("");
     log.info(try pc.bold(allocator, "\u{1F4CB} Photosphere News\n"));
 
@@ -42,7 +42,7 @@ pub fn newsCommand(allocator: std.mem.Allocator, io: std.Io) !void {
     }
     log.info("");
 
-    const allNews = getAllNews(allocator, io);
+    const allNews = getAllNews(allocator, io, log);
     if (allNews.len == 0) {
         log.info(try pc.dim(allocator, "No news items available."));
         return;

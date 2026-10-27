@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const test_timers = @import("test-timers.zig");
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
@@ -80,9 +81,9 @@ const World = struct {
     //
     // Creates the databases.
     //
-    fn init(world: *World, allocator: std.mem.Allocator, io: std.Io) !void {
-        try world.local.init(allocator, io, "evict-originals-local");
-        try world.origin.init(allocator, io, "evict-originals-origin");
+    fn init(world: *World, allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
+        try world.local.init(allocator, io, log, "evict-originals-local");
+        try world.origin.init(allocator, io, log, "evict-originals-origin");
         world.emptyDir = try temp_dirs.makeTempDir(allocator, io, "evict-originals-empty");
         world.testContext.init(world.local.uuidGenerator.uuidGenerator());
     }
@@ -90,9 +91,9 @@ const World = struct {
     //
     // Deletes the directories.
     //
-    fn deinit(world: *World, io: std.Io) void {
-        world.local.deinit(io);
-        world.origin.deinit(io);
+    fn deinit(world: *World, io: std.Io, log: ILog) void {
+        world.local.deinit(io, log);
+        world.origin.deinit(io, log);
         temp_dirs.removeTempDir(io, world.emptyDir);
     }
 };
@@ -100,8 +101,8 @@ const World = struct {
 //
 // Puts the files in a database's merkle tree, with the given database metadata.
 //
-fn writeTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, files: []const TreeFile, filesImported: f64, isPartial: bool) !void {
-    var merkleTree = (try loadMerkleTree(allocator, io, storage)).?;
+fn writeTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, files: []const TreeFile, filesImported: f64, isPartial: bool) !void {
+    var merkleTree = (try loadMerkleTree(allocator, io, log, storage)).?;
     const nowMs = std.Io.Clock.real.now(io).toMilliseconds();
     for (files) |file| {
         const hash = try allocator.alloc(u8, 32);
@@ -119,7 +120,7 @@ fn writeTree(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, files:
         try metadata.put(allocator, "isPartial", .{ .boolean = true });
     }
     merkleTree.databaseMetadata = metadata;
-    try saveMerkleTree(allocator, io, &merkleTree, storage);
+    try saveMerkleTree(allocator, io, log, &merkleTree, storage);
 }
 
 //
@@ -151,6 +152,7 @@ const OriginSetUp = enum {
 fn setUpDatabases(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     world: *World,
     localFiles: []const TreeFile,
     originFiles: []const TreeFile,
@@ -159,18 +161,18 @@ fn setUpDatabases(
     localIsPartial: bool,
 ) !void {
     try writeFiles(allocator, io, world.local.database.assetStorage, localFiles);
-    try writeTree(allocator, io, world.local.database.assetStorage, localFiles, localFilesImported, localIsPartial);
+    try writeTree(allocator, io, log, world.local.database.assetStorage, localFiles, localFilesImported, localIsPartial);
     switch (originSetUp) {
         .none => {},
         .database => {
             try writeFiles(allocator, io, world.origin.database.assetStorage, originFiles);
-            try writeTree(allocator, io, world.origin.database.assetStorage, originFiles, @floatFromInt(originFiles.len), false);
-            try api.database_config.saveDatabaseConfig(allocator, io, world.local.rawStorage, .{
+            try writeTree(allocator, io, log, world.origin.database.assetStorage, originFiles, @floatFromInt(originFiles.len), false);
+            try api.database_config.saveDatabaseConfig(allocator, io, log, world.local.rawStorage, .{
                 .origin = world.origin.dir,
             });
         },
         .unreadable => {
-            try api.database_config.saveDatabaseConfig(allocator, io, world.local.rawStorage, .{
+            try api.database_config.saveDatabaseConfig(allocator, io, log, world.local.rawStorage, .{
                 .origin = world.emptyDir,
             });
         },
@@ -180,22 +182,22 @@ fn setUpDatabases(
 //
 // Runs the handler for the local database, with a budget when one is given.
 //
-fn runWithBudget(allocator: std.mem.Allocator, io: std.Io, world: *World, budgetBytes: ?f64) !IEvictOriginalsResult {
+fn runWithBudget(allocator: std.mem.Allocator, io: std.Io, log: ILog, world: *World, budgetBytes: ?f64) !IEvictOriginalsResult {
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .string = world.local.dir });
     try object.put(allocator, "sessionId", .{ .string = "session-1" });
     if (budgetBytes) |budget| {
         try object.put(allocator, "localOriginalBudgetBytes", .{ .float = budget });
     }
-    const output = try evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext());
+    const output = try evictOriginalsHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, world.testContext.context.taskContext());
     return std.json.parseFromValueLeaky(IEvictOriginalsResult, allocator, output, .{});
 }
 
 //
 // Runs the handler for the local database with the active retention policy.
 //
-fn run(allocator: std.mem.Allocator, io: std.Io, world: *World) !IEvictOriginalsResult {
-    return runWithBudget(allocator, io, world, null);
+fn run(allocator: std.mem.Allocator, io: std.Io, log: ILog, world: *World) !IEvictOriginalsResult {
+    return runWithBudget(allocator, io, log, world, null);
 }
 
 //
@@ -244,17 +246,18 @@ fn localTreeUntouched(io: std.Io, allocator: std.mem.Allocator, world: *World) !
 }
 
 test "evicts nothing when there is no origin" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &localFiles, &.{}, .none, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &.{}, .none, 1, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expectEqualStrings("no origin configured", result.skippedReason.?);
@@ -262,17 +265,18 @@ test "evicts nothing when there is no origin" {
 }
 
 test "evicts nothing when the origin cannot be read" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &localFiles, &.{}, .unreadable, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &.{}, .unreadable, 1, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "origin not accessible ({s})", .{world.emptyDir}), result.skippedReason.?);
@@ -280,34 +284,36 @@ test "evicts nothing when the origin cannot be read" {
 }
 
 test "evicts nothing when the local database has no merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
-    try setUpDatabases(allocator, io, &world, &.{}, &.{}, .database, 0, false);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
+    try setUpDatabases(allocator, io, log, &world, &.{}, &.{}, .database, 0, false);
     try world.local.database.assetStorage.deleteFile(allocator, io, node_api.tree.FILES_TREE_PATH);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expectEqualStrings("no local merkle tree", result.skippedReason.?);
 }
 
 test "evicts an original the origin holds with a matching hash" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{"one"}, result);
     try std.testing.expect(result.skippedReason == null);
@@ -316,48 +322,51 @@ test "evicts an original the origin holds with a matching hash" {
 }
 
 test "never evicts an original the origin does not hold" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &localFiles, &.{}, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &.{}, .database, 1, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expect(try localHas(allocator, io, &world, "asset/one"));
 }
 
 test "never evicts an original whose hash on the origin is different" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
     const originFiles = [_]TreeFile{try hugeOriginal("one", 0xbb, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &localFiles, &originFiles, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &originFiles, .database, 1, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expect(try localHas(allocator, io, &world, "asset/one"));
 }
 
 test "leaves the thumbnail and the micro thumbnail in place" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{
         try hugeOriginal("one", 0xaa, 10, allocator),
         .{
@@ -379,9 +388,9 @@ test "leaves the thumbnail and the micro thumbnail in place" {
             .daysAgo = 10,
         },
     };
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, false);
 
-    _ = try run(allocator, io, &world);
+    _ = try run(allocator, io, log, &world);
 
     try std.testing.expect(!try localHas(allocator, io, &world, "asset/one"));
     try std.testing.expect(!try localHas(allocator, io, &world, "display/one"));
@@ -390,13 +399,14 @@ test "leaves the thumbnail and the micro thumbnail in place" {
 }
 
 test "keeps the display copy when the origin does not hold a matching one" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{
         try hugeOriginal("one", 0xaa, 10, allocator),
         .{
@@ -415,77 +425,81 @@ test "keeps the display copy when the origin does not hold a matching one" {
             .daysAgo = 10,
         },
     };
-    try setUpDatabases(allocator, io, &world, &localFiles, &originFiles, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &originFiles, .database, 1, false);
 
-    _ = try run(allocator, io, &world);
+    _ = try run(allocator, io, log, &world);
 
     try std.testing.expect(!try localHas(allocator, io, &world, "asset/one"));
     try std.testing.expect(try localHas(allocator, io, &world, "display/one"));
 }
 
 test "marks the database partial once something has been evicted" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, false);
 
-    _ = try run(allocator, io, &world);
+    _ = try run(allocator, io, log, &world);
 
-    const savedTree = (try loadMerkleTree(allocator, io, world.local.database.assetStorage)).?;
+    const savedTree = (try loadMerkleTree(allocator, io, log, world.local.database.assetStorage)).?;
     try std.testing.expect(media_file_database.isPartialDatabase(savedTree.databaseMetadata));
     try std.testing.expectEqual(@as(u64, 1), media_file_database.getFilesImported(savedTree.databaseMetadata));
 }
 
 test "does not rewrite the tree when nothing was evicted" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &localFiles, &.{}, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &.{}, .database, 1, false);
     try markLocalTree(io, allocator, &world);
 
-    _ = try run(allocator, io, &world);
+    _ = try run(allocator, io, log, &world);
 
     try std.testing.expect(try localTreeUntouched(io, allocator, &world));
-    const savedTree = (try loadMerkleTree(allocator, io, world.local.database.assetStorage)).?;
+    const savedTree = (try loadMerkleTree(allocator, io, log, world.local.database.assetStorage)).?;
     try std.testing.expect(!media_file_database.isPartialDatabase(savedTree.databaseMetadata));
 }
 
 test "does not rewrite the tree when the database is already partial" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, true);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, true);
     try markLocalTree(io, allocator, &world);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{"one"}, result);
     try std.testing.expect(try localTreeUntouched(io, allocator, &world));
 }
 
 test "evicts the oldest first and stops once the budget is met" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     // Three originals of one gigabyte each, against a two gigabyte budget: one has to go, and it
     // is the oldest.
     const files = [_]TreeFile{
@@ -508,21 +522,22 @@ test "evicts the oldest first and stops once the budget is met" {
             .daysAgo = 50,
         },
     };
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 3, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 3, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{"oldest"}, result);
 }
 
 test "evicts nothing when the originals are already under the budget" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{
         .{
             .name = "asset/one",
@@ -531,40 +546,42 @@ test "evicts nothing when the originals are already under the budget" {
             .daysAgo = 100,
         },
     };
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, false);
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expect(try localHas(allocator, io, &world, "asset/one"));
 }
 
 test "an original already gone from disk frees nothing and is not an error" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, false);
     try world.local.database.assetStorage.deleteFile(allocator, io, "asset/one");
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{"one"}, result);
     try std.testing.expectEqual(@as(f64, 0), result.freedBytes);
 }
 
 test "a budget given in the task data is used instead of the active policy" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     // Small originals that the active two gigabyte policy would never touch.
     const files = [_]TreeFile{
         .{
@@ -580,21 +597,22 @@ test "a budget given in the task data is used instead of the active policy" {
             .daysAgo = 1,
         },
     };
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 2, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 2, false);
 
-    const result = try runWithBudget(allocator, io, &world, 1000);
+    const result = try runWithBudget(allocator, io, log, &world, 1000);
 
     try expectEvicted(&.{"one"}, result);
 }
 
 test "a budget of zero drops every confirmed original" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{
         .{
             .name = "asset/one",
@@ -609,21 +627,22 @@ test "a budget of zero drops every confirmed original" {
             .daysAgo = 1,
         },
     };
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 2, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 2, false);
 
-    const result = try runWithBudget(allocator, io, &world, 0);
+    const result = try runWithBudget(allocator, io, log, &world, 0);
 
     try expectEvicted(&.{ "one", "two" }, result);
 }
 
 test "a budget does not override the rule about the origin" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const localFiles = [_]TreeFile{
         .{
             .name = "asset/one",
@@ -632,63 +651,66 @@ test "a budget does not override the rule about the origin" {
             .daysAgo = 100,
         },
     };
-    try setUpDatabases(allocator, io, &world, &localFiles, &.{}, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &localFiles, &.{}, .database, 1, false);
 
-    const result = try runWithBudget(allocator, io, &world, 0);
+    const result = try runWithBudget(allocator, io, log, &world, 0);
 
     try expectEvicted(&.{}, result);
     try std.testing.expect(try localHas(allocator, io, &world, "asset/one"));
 }
 
 test "stops evicting once the task is cancelled" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     const files = [_]TreeFile{try hugeOriginal("one", 0xaa, 10, allocator)};
-    try setUpDatabases(allocator, io, &world, &files, &files, .database, 1, false);
+    try setUpDatabases(allocator, io, log, &world, &files, &files, .database, 1, false);
     world.testContext.context.cancel();
 
-    const result = try run(allocator, io, &world);
+    const result = try run(allocator, io, log, &world);
 
     try expectEvicted(&.{}, result);
     try std.testing.expect(try localHas(allocator, io, &world, "asset/one"));
 }
 
 test "refuses a database path that is not given" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .string = "" });
     try object.put(allocator, "sessionId", .{ .string = "s" });
 
-    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 
-    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = .empty }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), log, .{ .object = .empty }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("databasePath is required", errors.lastErrorMessage());
 }
 
 test "throws a descriptive error when the task data is not valid" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var world: World = undefined;
-    try world.init(allocator, io);
-    defer world.deinit(io);
+    try world.init(allocator, io, log);
+    defer world.deinit(io, log);
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "databasePath", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), .{ .object = object }, world.testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, evictOriginalsHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, world.testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The evict-originals task data is not valid: databasePath and sessionId must be strings, and localOriginalBudgetBytes must be a number", errors.lastErrorMessage());
 }
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const api_zig = @import("api-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const utils = @import("utils-zig");
@@ -72,7 +73,7 @@ const RecordingQueueBackend = struct {
     //
     // Records the task.
     //
-    fn addTaskErased(ptr: *anyopaque, allocator: std.mem.Allocator, _: std.Io, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
+    fn addTaskErased(ptr: *anyopaque, allocator: std.mem.Allocator, _: std.Io, _: ILog, taskType: []const u8, data: std.json.Value, source: []const u8, taskId: ?[]const u8, priority: ?TaskPriority) anyerror![]const u8 {
         _ = source;
         const self: *RecordingQueueBackend = @ptrCast(@alignCast(ptr));
         try self.addedTasks.append(self.allocator, .{
@@ -144,7 +145,7 @@ const RecordingQueueBackend = struct {
     //
     // Nothing is ever running here, so there is nothing to cancel.
     //
-    fn cancelTasksErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, source: []const u8) void {
+    fn cancelTasksErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: ILog, source: []const u8) void {
         _ = ptr;
         _ = source;
     }
@@ -169,13 +170,14 @@ const RecordingQueueBackend = struct {
     //
     // loadAssets only queues and never waits for a task, and no message ever comes here, so a wait would never end.
     //
-    fn waitForMessageErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: @import("ziggy").timers.Timers) void {
+    fn waitForMessageErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: @import("ziggy").timers.Timers, _: ILog) void {
         _ = ptr;
         @panic("loadAssets waited for a message, which a backend that only records tasks never sends");
     }
 };
 
 test "loadAssets queues the load as interactive, because the user is waiting on an empty gallery" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -186,15 +188,16 @@ test "loadAssets queues the load as interactive, because the user is waiting on 
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
     const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
-    defer queue.deinit(io, allocator);
+    defer queue.deinit(io, allocator, log);
 
-    try loadAssets(allocator, io, queue, "/photos/db");
+    try loadAssets(allocator, io, log, queue, "/photos/db");
 
     try std.testing.expectEqual(@as(usize, 1), backend.addedTasks.items.len);
     try std.testing.expectEqual(TaskPriority.Interactive, backend.addedTasks.items[0].priority.?);
 }
 
 test "loadAssets queues a load-assets task naming the database" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -205,9 +208,9 @@ test "loadAssets queues a load-assets task naming the database" {
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
     const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
-    defer queue.deinit(io, allocator);
+    defer queue.deinit(io, allocator, log);
 
-    try loadAssets(allocator, io, queue, "/photos/db");
+    try loadAssets(allocator, io, log, queue, "/photos/db");
 
     try std.testing.expectEqualStrings("load-assets", backend.addedTasks.items[0].type);
     try std.testing.expectEqualStrings("/photos/db", backend.addedTasks.items[0].taskId.?);
@@ -218,6 +221,7 @@ test "loadAssets queues a load-assets task naming the database" {
 }
 
 test "loadAssets cancels by the database path, which is the source its caller's queue is tagged with" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -228,9 +232,9 @@ test "loadAssets cancels by the database path, which is the source its caller's 
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
     const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
-    defer queue.deinit(io, allocator);
+    defer queue.deinit(io, allocator, log);
 
-    try loadAssets(allocator, io, queue, "/photos/db");
+    try loadAssets(allocator, io, log, queue, "/photos/db");
 
     // Callers build their TaskQueue with the database path as its source, and cancelTasks() takes a source. A cancel source that
     // did not match it would leave the Cancel button doing nothing at all.

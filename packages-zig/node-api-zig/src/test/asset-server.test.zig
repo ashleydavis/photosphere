@@ -5,7 +5,9 @@
 //
 
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
 const http_requests = @import("http-requests.zig");
@@ -26,10 +28,10 @@ const ASSET_BYTES = "hello-asset-bytes";
 //
 // A database with one asset in it.
 //
-fn makeDatabase(fixture: *DatabaseFixture, allocator: std.mem.Allocator, name: []const u8) !void {
-    try fixture.init(allocator, io, name);
+fn makeDatabase(fixture: *DatabaseFixture, log: ILog, allocator: std.mem.Allocator, name: []const u8) !void {
+    try fixture.init(allocator, io, log, name);
     var stream = std.Io.Reader.fixed(ASSET_BYTES);
-    try media_file_database.writeAssetStream(allocator, io, fixture.database.assetStorage, fixture.rawStorage, "putter", "asset-1", "thumb", "image/jpeg", &stream, ASSET_BYTES.len);
+    try media_file_database.writeAssetStream(allocator, io, log, fixture.database.assetStorage, fixture.rawStorage, "putter", "asset-1", "thumb", "image/jpeg", &stream, ASSET_BYTES.len);
 }
 
 //
@@ -58,27 +60,28 @@ fn encodeComponent(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 //
 // Starts an asset server on a free port of the loopback address.
 //
-fn startServer() !*AssetServer {
+fn startServer(log: ILog) !*AssetServer {
     const listener = try http_server.open(io, asset_server.HOST, 0);
-    return AssetServer.start(std.testing.allocator, io, listener, .{
+    return AssetServer.start(std.testing.allocator, io, log, listener, .{
         .sessionId = "test-session",
         .nativeCallbacks = null,
     });
 }
 
 test "the asset server serves GET /asset from a database on its port, and no longer once it is stopped" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var database: DatabaseFixture = undefined;
-    try makeDatabase(&database, allocator, "asset-server-serve");
-    defer database.deinit(io);
+    try makeDatabase(&database, log, allocator, "asset-server-serve");
+    defer database.deinit(io, log);
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer console_capture.endConsoleCapture();
 
-    const server = try startServer();
+    const server = try startServer(log);
     const port = server.port;
     try std.testing.expect(port > 0);
 
@@ -99,6 +102,7 @@ test "the asset server serves GET /asset from a database on its port, and no lon
 }
 
 test "the asset server answers 400 when the id parameter is missing" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -107,7 +111,7 @@ test "the asset server answers 400 when the id parameter is missing" {
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer console_capture.endConsoleCapture();
 
-    const server = try startServer();
+    const server = try startServer(log);
     defer server.stop(io, std.testing.allocator);
 
     const reply = try http_requests.send(allocator, io, .GET, server.port, "/asset?type=thumb&db=%2Fdb%2Fpath", .{
@@ -118,23 +122,26 @@ test "the asset server answers 400 when the id parameter is missing" {
 }
 
 test "the asset server logs the address it is listening on" {
+    const memory = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
-    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
-    utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
-    defer console_capture.endConsoleCapture();
 
-    const server = try startServer();
+    const server = try startServer(memory.log);
     const port = server.port;
     server.stop(io, std.testing.allocator);
 
     const listening = try std.fmt.allocPrint(allocator, "Asset server listening on http://127.0.0.1:{d}", .{port});
-    try std.testing.expect(std.mem.indexOf(u8, stdout_capture.written(), listening) != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stdout(), listening) != null);
 }
 
 test "the asset server listens on the port its socket was opened on" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -149,7 +156,7 @@ test "the asset server listens on the port its socket was opened on" {
     probe_listener.deinit(io);
 
     const listener = try http_server.open(io, asset_server.HOST, freePort);
-    const server = try AssetServer.start(std.testing.allocator, io, listener, .{
+    const server = try AssetServer.start(std.testing.allocator, io, log, listener, .{
         .sessionId = "test-session",
         .nativeCallbacks = null,
     });

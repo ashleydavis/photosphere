@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
@@ -24,7 +25,7 @@ pub const AddPathsProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void,
+    function: *const fn (context: ?*anyopaque, log: ILog, currentlyScanning: ?[]const u8, summary: *const IAddSummary) void,
 };
 
 //
@@ -49,7 +50,7 @@ const AddPathsState = struct {
     //
     // Counts one task event.
     //
-    fn onAnyTaskEvent(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, data: ITaskEventData) anyerror!void {
+    fn onAnyTaskEvent(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator, _: Timers, log: ILog, data: ITaskEventData) anyerror!void {
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));
         // A message that is not an object has no type.
         const message: std.json.ObjectMap = if (data.event == .object) data.event.object else .empty;
@@ -86,17 +87,17 @@ const AddPathsState = struct {
         }
 
         if (self.onProgress) |onProgress| {
-            onProgress.function(onProgress.context, self.currentlyScanning, &self.summary);
+            onProgress.function(onProgress.context, log, self.currentlyScanning, &self.summary);
         }
     }
 
     //
     // Ctrl-C has to reach the task, not just this process.
     //
-    fn shutdownOnTermination(context: ?*anyopaque, io: std.Io, exitCode: u8) anyerror!void {
+    fn shutdownOnTermination(context: ?*anyopaque, io: std.Io, log: ILog, exitCode: u8) anyerror!void {
         _ = exitCode;
         const self: *AddPathsState = @ptrCast(@alignCast(context.?));
-        self.queue.shutdown(io, self.allocator);
+        self.queue.shutdown(io, self.allocator, log);
     }
 };
 
@@ -115,6 +116,7 @@ const AddPathsState = struct {
 pub fn addPaths(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     timers: Timers,
     uuidGenerator: IUuidGenerator,
     storageDescriptor: IDatabaseDescriptor,
@@ -178,7 +180,7 @@ pub fn addPaths(
     try job.put(allocator, "cancelSource", .{ .string = storageDescriptor.databasePath });
     try taskData.put(allocator, "job", .{ .object = job });
 
-    const taskId = try queue.addTask(io, allocator, "import-assets", .{ .object = taskData }, null, null);
+    const taskId = try queue.addTask(io, allocator, log, "import-assets", .{ .object = taskData }, null, null);
 
     // Ctrl-C has to reach the task, not just this process: the task is what holds the temporary
     // directory, and shutting the queue down is what tells it to stop. An automatic import only ends
@@ -188,9 +190,9 @@ pub fn addPaths(
         .function = AddPathsState.shutdownOnTermination,
     });
 
-    _ = try queue.awaitTask(io, allocator, timers, taskId);
+    _ = try queue.awaitTask(io, allocator, timers, log, taskId);
 
-    queue.shutdown(io, allocator);
+    queue.shutdown(io, allocator, log);
 
     state.summary.averageSize = if (state.summary.filesAdded > 0)
         @floor(state.summary.totalSize / state.summary.filesAdded)

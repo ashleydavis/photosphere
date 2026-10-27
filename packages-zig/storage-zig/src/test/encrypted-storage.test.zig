@@ -1,5 +1,6 @@
 const test_files = @import("test-files.zig");
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const storage_zig = @import("storage-zig");
 const encryption = @import("encryption-zig");
 const RecordingStorage = @import("recording-storage.zig").RecordingStorage;
@@ -33,6 +34,7 @@ fn makeEncryptedStorage(allocator: std.mem.Allocator, inner: storage_zig.storage
 }
 
 test "write encrypts, read decrypts and info returns the raw on-disk length" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -48,15 +50,16 @@ test "write encrypts, read decrypts and info returns the raw on-disk length" {
     const filePath = try std.fs.path.join(allocator, &.{ tempDir, "file.bin" });
     try storage.write(allocator, io, filePath, null, plain);
 
-    const raw = (try fileStorage.read(allocator, io, filePath)).?;
+    const raw = (try fileStorage.read(allocator, io, log, filePath)).?;
     try std.testing.expectEqualStrings(encryption.encryption_constants.ENCRYPTION_TAG, raw[0..4]);
     try std.testing.expectEqual(computeEncryptedLength(plain.len), raw.len);
-    try std.testing.expectEqualSlices(u8, plain, (try storage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualSlices(u8, plain, (try storage.read(allocator, io, log, filePath)).?);
     try std.testing.expectEqual(@as(u64, raw.len), (try storage.info(allocator, io, filePath)).?.length);
-    try std.testing.expect((try storage.read(allocator, io, try std.fs.path.join(allocator, &.{ tempDir, "missing" }))) == null);
+    try std.testing.expect((try storage.read(allocator, io, log, try std.fs.path.join(allocator, &.{ tempDir, "missing" }))) == null);
 }
 
 test "readStream decrypts and writeStream encrypts" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -70,15 +73,16 @@ test "readStream decrypts and writeStream encrypts" {
     const filePath = try std.fs.path.join(allocator, &.{ tempDir, "stream.bin" });
     var input = std.Io.Reader.fixed(plain);
     try encryptedStorage.writeStream(allocator, io, filePath, null, &input, plain.len);
-    const raw = (try fileStorage.read(allocator, io, filePath)).?;
+    const raw = (try fileStorage.read(allocator, io, log, filePath)).?;
     try std.testing.expectEqual(computeEncryptedLength(plain.len), raw.len);
 
-    const stream = try encryptedStorage.readStream(allocator, io, filePath);
+    const stream = try encryptedStorage.readStream(allocator, io, log, filePath);
     defer stream.destroy(io);
     try std.testing.expectEqualSlices(u8, plain, try test_files.readAll(allocator, stream.reader()));
 }
 
 test "unencrypted files are read unchanged" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -89,10 +93,11 @@ test "unencrypted files are read unchanged" {
     const encryptedStorage = try makeEncryptedStorage(allocator, fileStorage.storage());
     const filePath = try std.fs.path.join(allocator, &.{ tempDir, "plain.txt" });
     try fileStorage.write(allocator, io, filePath, null, "not encrypted");
-    try std.testing.expectEqualStrings("not encrypted", (try encryptedStorage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualStrings("not encrypted", (try encryptedStorage.read(allocator, io, log, filePath)).?);
 }
 
 test "the other methods forward to the wrapped storage unchanged" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -110,9 +115,9 @@ test "the other methods forward to the wrapped storage unchanged" {
     try storage.deleteDir(allocator, io, "p");
     try storage.copyTo(allocator, io, "p", "q");
     try std.testing.expect((try storage.checkWriteLock(allocator, io, "p")) == null);
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, "p", "owner-1"));
-    try storage.releaseWriteLock(allocator, io, "p");
-    try storage.refreshWriteLock(allocator, io, "p", "owner-1");
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, "p", "owner-1"));
+    try storage.releaseWriteLock(allocator, io, log, "p");
+    try storage.refreshWriteLock(allocator, io, log, "p", "owner-1");
     const expected = [_][]const u8{
         "isEmpty p",
         "listFiles p",
@@ -185,6 +190,7 @@ fn makeFixturePlaintext(allocator: std.mem.Allocator, size: usize) ![]u8 {
 }
 
 test "EncryptedStorage reads the files in the golden fixtures" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -206,8 +212,8 @@ test "EncryptedStorage reads the files in the golden fixtures" {
         try created.rawStorage.write(allocator, io, goldenFile.fileName, null, encrypted);
 
         const plain = try makeFixturePlaintext(allocator, goldenFile.plainSize);
-        try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, goldenFile.fileName)).?);
-        const stream = try created.storage.readStream(allocator, io, goldenFile.fileName);
+        try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, log, goldenFile.fileName)).?);
+        const stream = try created.storage.readStream(allocator, io, log, goldenFile.fileName);
         defer stream.destroy(io);
         try std.testing.expectEqualSlices(u8, plain, try test_files.readAll(allocator, stream.reader()));
         try std.testing.expectEqual(@as(u64, goldenFile.encryptedLength), (try created.storage.info(allocator, io, goldenFile.fileName)).?.length);
@@ -215,6 +221,7 @@ test "EncryptedStorage reads the files in the golden fixtures" {
 }
 
 test "EncryptedStorage writes files with the header and length of the golden fixtures" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -232,10 +239,10 @@ test "EncryptedStorage writes files with the header and length of the golden fix
         try created.storage.writeStream(allocator, io, streamName, null, &input, null);
 
         for ([_][]const u8{ writeName, streamName }) |fileName| {
-            const raw = (try created.rawStorage.read(allocator, io, fileName)).?;
+            const raw = (try created.rawStorage.read(allocator, io, log, fileName)).?;
             try std.testing.expectEqual(goldenFile.encryptedLength, raw.len);
             try std.testing.expectEqualSlices(u8, ts_key_header, raw[0..ts_key_header.len]);
-            try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, fileName)).?);
+            try std.testing.expectEqualSlices(u8, plain, (try created.storage.read(allocator, io, log, fileName)).?);
             try std.testing.expectEqual(@as(u64, goldenFile.encryptedLength), (try created.storage.info(allocator, io, fileName)).?.length);
         }
     }
@@ -262,6 +269,7 @@ test "readableLength is undefined, because the plaintext length cannot be worked
 // For writeStreamHashed, the hash is not handed down and the bytes still make the trip.
 //
 test "writeStreamHashed writes the stream without the hash, and the bytes make the trip" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -277,7 +285,7 @@ test "writeStreamHashed writes the stream without the hash, and the bytes make t
     try std.testing.expectEqual(false, try encryptedStorage.writeStreamHashed(allocator, io, filePath, "image/jpeg", &input, null, &([_]u8{7} ** 32)));
 
     // The bytes still made the trip, and come back out as what went in.
-    try std.testing.expectEqualStrings(contents, (try encryptedStorage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualStrings(contents, (try encryptedStorage.read(allocator, io, log, filePath)).?);
 }
 
 //
@@ -369,6 +377,7 @@ test "it will not say how long a read is, because the stored length cannot say" 
 }
 
 test "a write given no length declares none to the store underneath" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -387,7 +396,7 @@ test "a write given no length declares none to the store underneath" {
     try std.testing.expectEqual(@as(?u64, null), underlying.declaredLengths.get(filePath).?);
 
     // The bytes still made the trip, and come back out as what went in.
-    try std.testing.expectEqualStrings(contents, (try encryptedStorage.read(allocator, io, filePath)).?);
+    try std.testing.expectEqualStrings(contents, (try encryptedStorage.read(allocator, io, log, filePath)).?);
 }
 
 //
@@ -395,6 +404,7 @@ test "a write given no length declares none to the store underneath" {
 // declared, which is what lets a write stream instead of being counted first.
 //
 test "a write given a length declares what the ciphertext will come to" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -412,6 +422,6 @@ test "a write given a length declares what the ciphertext will come to" {
 
     try std.testing.expectEqual(@as(?u64, computeEncryptedLength(contents.len)), underlying.declaredLengths.get(filePath).?);
 
-    const stored = (try underlying.inner.read(allocator, io, filePath)).?;
+    const stored = (try underlying.inner.read(allocator, io, log, filePath)).?;
     try std.testing.expectEqual(computeEncryptedLength(contents.len), stored.len);
 }

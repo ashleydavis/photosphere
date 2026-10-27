@@ -22,7 +22,7 @@ const errors = utils.errors;
 //
 // Runs the handler for a list of assets and reads its result.
 //
-fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestTaskContext, assets: []const ISaveAssetItem, folderPath: []const u8, databasePath: []const u8) !ISaveAssetsBatchResult {
+fn run(allocator: std.mem.Allocator, io: std.Io, log: utils.log.ILog, testContext: *TestTaskContext, assets: []const ISaveAssetItem, folderPath: []const u8, databasePath: []const u8) !ISaveAssetsBatchResult {
     var items: std.json.Array = .init(allocator);
     for (assets) |asset| {
         var item: std.json.ObjectMap = .empty;
@@ -35,18 +35,19 @@ fn run(allocator: std.mem.Allocator, io: std.Io, testContext: *TestTaskContext, 
     try object.put(allocator, "assets", .{ .array = items });
     try object.put(allocator, "folderPath", .{ .string = folderPath });
     try object.put(allocator, "databasePath", .{ .string = databasePath });
-    const output = try saveAssetsBatchHandler(allocator, io, test_timers.timers(), .{ .object = object }, testContext.context.taskContext());
+    const output = try saveAssetsBatchHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, testContext.context.taskContext());
     return std.json.parseFromValueLeaky(ISaveAssetsBatchResult, allocator, output, .{});
 }
 
 test "saves every asset into the folder under its filename" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "save-assets-batch-worker");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "save-assets-batch-worker");
+    defer fixture.deinit(io, log);
     var testContext: TestTaskContext = undefined;
     testContext.init(fixture.uuidGenerator.uuidGenerator());
     const folderPath = try temp_dirs.makeTempDir(allocator, io, "save-assets-batch-worker-output");
@@ -54,7 +55,7 @@ test "saves every asset into the folder under its filename" {
     try fixture.database.assetStorage.write(allocator, io, "asset/asset-1", null, "first original");
     try fixture.database.assetStorage.write(allocator, io, "display/asset-2", null, "second display copy");
 
-    const result = try run(allocator, io, &testContext, &.{
+    const result = try run(allocator, io, log, &testContext, &.{
         .{
             .assetId = "asset-1",
             .assetType = "asset",
@@ -77,13 +78,14 @@ test "saves every asset into the folder under its filename" {
 }
 
 test "records an asset that is not in the database as a failure and carries on with the rest" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "save-assets-batch-worker");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "save-assets-batch-worker");
+    defer fixture.deinit(io, log);
     var testContext: TestTaskContext = undefined;
     testContext.init(fixture.uuidGenerator.uuidGenerator());
     const folderPath = try temp_dirs.makeTempDir(allocator, io, "save-assets-batch-worker-output");
@@ -91,7 +93,7 @@ test "records an asset that is not in the database as a failure and carries on w
     try fixture.database.assetStorage.write(allocator, io, "asset/asset-1", null, "first original");
     try fixture.database.assetStorage.write(allocator, io, "asset/asset-3", null, "third original");
 
-    const result = try run(allocator, io, &testContext, &.{
+    const result = try run(allocator, io, log, &testContext, &.{
         .{
             .assetId = "asset-1",
             .assetType = "asset",
@@ -121,13 +123,14 @@ test "records an asset that is not in the database as a failure and carries on w
 }
 
 test "records every asset as a failure when the folder does not exist" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "save-assets-batch-worker");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "save-assets-batch-worker");
+    defer fixture.deinit(io, log);
     var testContext: TestTaskContext = undefined;
     testContext.init(fixture.uuidGenerator.uuidGenerator());
     const outputDir = try temp_dirs.makeTempDir(allocator, io, "save-assets-batch-worker-output");
@@ -135,7 +138,7 @@ test "records every asset as a failure when the folder does not exist" {
     try fixture.database.assetStorage.write(allocator, io, "asset/asset-1", null, "first original");
     const folderPath = try std.fs.path.join(allocator, &.{ outputDir, "missing-folder" });
 
-    const result = try run(allocator, io, &testContext, &.{
+    const result = try run(allocator, io, log, &testContext, &.{
         .{
             .assetId = "asset-1",
             .assetType = "asset",
@@ -149,19 +152,20 @@ test "records every asset as a failure when the folder does not exist" {
 }
 
 test "saves nothing and reports nothing for an empty list" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "save-assets-batch-worker");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "save-assets-batch-worker");
+    defer fixture.deinit(io, log);
     var testContext: TestTaskContext = undefined;
     testContext.init(fixture.uuidGenerator.uuidGenerator());
     const folderPath = try temp_dirs.makeTempDir(allocator, io, "save-assets-batch-worker-output");
     defer temp_dirs.removeTempDir(io, folderPath);
 
-    const result = try run(allocator, io, &testContext, &.{}, folderPath, fixture.dir);
+    const result = try run(allocator, io, log, &testContext, &.{}, folderPath, fixture.dir);
 
     try std.testing.expectEqualStrings(folderPath, result.folderPath);
     try std.testing.expectEqual(@as(usize, 0), result.succeededFiles.len);
@@ -169,18 +173,19 @@ test "saves nothing and reports nothing for an empty list" {
 }
 
 test "throws a descriptive error when the task data is not valid" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var fixture: DatabaseFixture = undefined;
-    try fixture.init(allocator, io, "save-assets-batch-worker");
-    defer fixture.deinit(io);
+    try fixture.init(allocator, io, log, "save-assets-batch-worker");
+    defer fixture.deinit(io, log);
     var testContext: TestTaskContext = undefined;
     testContext.init(fixture.uuidGenerator.uuidGenerator());
     var object: std.json.ObjectMap = .empty;
     try object.put(allocator, "assets", .{ .integer = 5 });
 
-    try std.testing.expectError(error.Thrown, saveAssetsBatchHandler(allocator, io, test_timers.timers(), .{ .object = object }, testContext.context.taskContext()));
+    try std.testing.expectError(error.Thrown, saveAssetsBatchHandler(allocator, io, test_timers.timers(), log, .{ .object = object }, testContext.context.taskContext()));
     try std.testing.expectEqualStrings("The save-assets-batch task data is not valid: assets must be a list of items with assetId, assetType and filename, and folderPath and databasePath must be strings", errors.lastErrorMessage());
 }

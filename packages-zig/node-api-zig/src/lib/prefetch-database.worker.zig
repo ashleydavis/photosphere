@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
@@ -119,7 +120,7 @@ const MissingFilesIterator = struct {
     //
     // Returns the next missing file, or null when every directory has been walked.
     //
-    pub fn next(self: *MissingFilesIterator) !?[]const u8 {
+    pub fn next(self: *MissingFilesIterator, log: ILog) !?[]const u8 {
         while (true) {
             if (self.walker == null) {
                 if (self.dirIndex >= self.dirs.len) {
@@ -128,7 +129,7 @@ const MissingFilesIterator = struct {
                 self.walker = try walkDirectory(self.allocator, self.io, self.originStorage, self.dirs[self.dirIndex], &walk_directory.default_ignore_patterns);
                 self.dirIndex += 1;
             }
-            const file = try self.walker.?.next() orelse {
+            const file = try self.walker.?.next(log) orelse {
                 self.walker = null;
                 continue;
             };
@@ -161,10 +162,10 @@ const FetchFileTask = struct {
     //
     // Fetches the file, recording the error when it fails.
     //
-    fn run(self: *FetchFileTask, io: std.Io) void {
+    fn run(self: *FetchFileTask, io: std.Io, log: ILog) void {
         var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer arena.deinit();
-        self.fetch(arena.allocator(), io) catch |err| {
+        self.fetch(arena.allocator(), io, log) catch |err| {
             self.failure = err;
             errors.captureError(&self.errorRecord);
         };
@@ -173,7 +174,7 @@ const FetchFileTask = struct {
     //
     // Fetches the file.
     //
-    fn fetch(self: *FetchFileTask, allocator: std.mem.Allocator, io: std.Io) !void {
+    fn fetch(self: *FetchFileTask, allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
         // The long timeout, because this is a file copy and a file copy is allowed to take a
         // while. `retry`'s thirty second default was what applied here, and the metadata hash
         // index of a real database is nine files of about 13 MB each: a phone cannot pull one of
@@ -192,14 +193,14 @@ const FetchFileTask = struct {
             .fileName = self.filePath,
             .contentType = null,
         };
-        try retry(io, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to prefetch {s}", .{self.filePath}));
+        try retry(io, log, &copyOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, try std.fmt.allocPrint(allocator, "Failed to prefetch {s}", .{self.filePath}));
     }
 };
 
 //
 // Fetches a batch of files, one after another, and throws the error of the first one that failed.
 //
-fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, originStorage: IStorage, localStorage: IStorage, batch: []const []const u8) !void {
+fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, log: ILog, originStorage: IStorage, localStorage: IStorage, batch: []const []const u8) !void {
     const tasks = try allocator.alloc(FetchFileTask, batch.len);
     for (batch, tasks) |filePath, *task| {
         task.* = .{
@@ -211,7 +212,7 @@ fn fetchBatch(allocator: std.mem.Allocator, io: std.Io, originStorage: IStorage,
 
     // The files of a batch are fetched one after another, on the task's own thread.
     for (tasks) |*task| {
-        task.run(io);
+        task.run(io, log);
     }
 
     for (tasks) |*task| {
@@ -243,6 +244,7 @@ pub fn prefetchDatabaseHandler(
     allocator: std.mem.Allocator,
     io: std.Io,
     _: Timers,
+    log: utils.log.ILog,
     taskData: std.json.Value,
     context: ITaskContext,
 ) anyerror!std.json.Value {
@@ -266,10 +268,10 @@ pub fn prefetchDatabaseHandler(
     //
     // Check whether this is a partial database. Skip immediately for full databases.
     //
-    const local = try openStorage(allocator, io, data.databasePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const rawStorage = local.rawStorage;
-    const merkleTree = try loadMerkleTree(allocator, io, localStorage);
+    const merkleTree = try loadMerkleTree(allocator, io, log, localStorage);
     if (merkleTree == null or !media_file_database.isPartialDatabase(merkleTree.?.databaseMetadata)) {
         return prefetchResultToJson(allocator, nothingToFetch);
     }
@@ -277,12 +279,12 @@ pub fn prefetchDatabaseHandler(
     //
     // Load the database config to find the origin URL.
     //
-    const config = try loadDatabaseConfig(allocator, io, rawStorage);
+    const config = try loadDatabaseConfig(allocator, io, log, rawStorage);
     const origin = configOrigin(config) orelse {
         return prefetchResultToJson(allocator, nothingToFetch);
     };
 
-    const originStorage = (try openStorage(allocator, io, origin, null, null, context.nativeCaller)).storage;
+    const originStorage = (try openStorage(allocator, io, log, origin, null, null, context.nativeCaller)).storage;
 
     var missingFiles: MissingFilesIterator = .{
         .allocator = allocator,
@@ -297,23 +299,23 @@ pub fn prefetchDatabaseHandler(
     // The job the interface lists. Sent before the walk starts, because walking the origin is itself
     // minutes of work on a phone and a job that appears only once bytes move looks like nothing is
     // happening.
-    try sendJobProgress(allocator, io, context, data.job, runStartedAt, null);
+    try sendJobProgress(allocator, io, log, context, data.job, runStartedAt, null);
 
     //
     // Fetch missing files PREFETCH_CONCURRENCY at a time without accumulating them in memory.
     //
     var batches = batchGenerator([]const u8, allocator, &missingFiles, PREFETCH_CONCURRENCY);
-    while (try batches.next()) |batch| {
+    while (try batches.next(log)) |batch| {
         if (context.isCancelled(io, allocator)) {
             // The batch was drawn from the walk and is not going to be fetched, so it is left behind.
             // Reporting it is what stops the loop reading a cancelled pass as a finished one.
             filesStillMissing += batch.len;
             break;
         }
-        try fetchBatch(allocator, io, originStorage, localStorage, batch);
+        try fetchBatch(allocator, io, log, originStorage, localStorage, batch);
         filesFetched += batch.len;
 
-        try sendJobProgress(allocator, io, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} files fetched", .{filesFetched}));
+        try sendJobProgress(allocator, io, log, context, data.job, runStartedAt, try std.fmt.allocPrint(allocator, "{d} files fetched", .{filesFetched}));
     }
 
     return prefetchResultToJson(allocator, .{

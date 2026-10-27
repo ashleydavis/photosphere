@@ -18,7 +18,6 @@ const HandlerServices = ziggy.core.HandlerServices;
 const Timers = ziggy.timers.Timers;
 const json = ziggy.json;
 const databases_config = node_api.databases_config;
-const log = &utils.log.log;
 const logExceptions = @import("log-exceptions.zig").logExceptions;
 
 //
@@ -49,7 +48,7 @@ fn getLastDatabase(services: TaskServices, timers: Timers, io: std.Io, allocator
 // remove-recent-database-name: the payload is a database name. Removes it from the recents only, not the database entry itself.
 //
 fn removeRecentDatabaseName(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
-    _ = services;
+    const log = services.log;
     _ = timers;
     _ = context;
     if (data != .string) {

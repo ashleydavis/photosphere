@@ -90,7 +90,7 @@ fn resultToJson(allocator: std.mem.Allocator, result: ICheckFileResult) !std.jso
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 // (Zig: the task data and output are JSON values holding ICheckFileData and ICheckFileResult.)
 //
-pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
+pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
     const data = try std.json.parseFromValueLeaky(ICheckFileData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -111,7 +111,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, tas
     // Load hash cache (read-only)
     var localHashCache = try HashCache.init(hashCacheDir, true); // readonly = true
     defer localHashCache.deinit();
-    _ = try localHashCache.load(io);
+    _ = try localHashCache.load(io, log);
 
     // Check cache first
     // No cache identity: checking runs over real files, which are identified by their own paths.
@@ -121,7 +121,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, tas
     if (hashedFile == null) {
         // Not in cache - compute hash
         // filePath is always a valid file (already extracted if from zip)
-        hashedFile = try validateAndHash(allocator, io, toolRunner, filePath, fileStat, contentType, data.logicalPath);
+        hashedFile = try validateAndHash(allocator, io, log, toolRunner, filePath, fileStat, contentType, data.logicalPath);
         if (hashedFile == null) {
             return resultToJson(allocator, .{
                 .hashedFile = null,
@@ -132,13 +132,13 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, tas
     }
 
     // Recreate storage and metadata collection in the worker
-    const opened = try openStorage(allocator, io, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const database = try createMediaFileDatabase(allocator, opened.storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 
     // Check if file is already in database
     const localHashStr = try std.fmt.allocPrint(allocator, "{x}", .{hashedFile.?.hash});
-    const records = try (try metadataCollection.sortIndex("hash", .asc)).findByValue(io, .{
+    const records = try (try metadataCollection.sortIndex("hash", .asc)).findByValue(io, log, .{
         .string = localHashStr,
     }, null); //TODO: This is very slow, especially when the hash is not found.
     const matchingRecordsCount = records.len;

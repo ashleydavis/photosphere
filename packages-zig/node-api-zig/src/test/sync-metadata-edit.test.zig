@@ -3,6 +3,8 @@
 //
 
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const ILog = @import("utils-zig").log.ILog;
 const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const api = @import("api-zig");
@@ -31,14 +33,14 @@ const assetId = "11111111-2222-3333-4444-555555555555";
 // two are not interchangeable in a merge: an absent field loses to any present one outright,
 // while an empty string is a value that competes on its timestamp like any other.
 //
-fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8, clock: *SettableTimestampProvider, originDescription: ?[]const u8) ![]const u8 {
+fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDir: []const u8, clock: *SettableTimestampProvider, originDescription: ?[]const u8) ![]const u8 {
     const originPath = try std.fs.path.join(allocator, &.{ workingDir, "origin" });
     try std.Io.Dir.cwd().createDirPath(io, originPath);
 
     const uuidGenerator = try sync_helpers.testUuidGenerator(allocator);
     const created = try createStorage(allocator, io, originPath, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, uuidGenerator, clock.timestampProvider());
-    try media_file_database.createDatabase(allocator, io, created.storage, created.rawStorage, uuidGenerator, database.metadataCollection, null);
+    try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, uuidGenerator, database.metadataCollection, null);
 
     var originRecord = try BsonDocument.fromFields(allocator, &.{
         .{
@@ -58,8 +60,8 @@ fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, workingDir: []co
         try originRecord.put(allocator, "description", .{ .string = description });
     }
 
-    try database.metadataCollection.insertOne(io, &originRecord, null);
-    try database.bsonDatabase.commit(io);
+    try database.metadataCollection.insertOne(io, log, &originRecord, null);
+    try database.bsonDatabase.commit(io, log);
     try database.bsonDatabase.flush();
 
     return originPath;
@@ -69,19 +71,19 @@ fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, workingDir: []co
 // Applies a "set" op to a record of the metadata collection of the database at a path.
 // (This is what applyDatabaseOps does for a "set" op on the metadata collection.)
 //
-fn applySetOp(allocator: std.mem.Allocator, io: std.Io, clock: *SettableTimestampProvider, databasePath: []const u8, recordId: []const u8, fields: BsonDocument) !void {
+fn applySetOp(allocator: std.mem.Allocator, io: std.Io, log: ILog, clock: *SettableTimestampProvider, databasePath: []const u8, recordId: []const u8, fields: BsonDocument) !void {
     const created = try createStorage(allocator, io, databasePath, null, null);
-    const assetStorage = try media_file_database.openLazyOriginStorage(allocator, io, created.storage, created.rawStorage, null);
+    const assetStorage = try media_file_database.openLazyOriginStorage(allocator, io, log, created.storage, created.rawStorage, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, assetStorage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
-    try media_file_database.loadSortIndexes(allocator, assetStorage, database.metadataCollection);
+    try media_file_database.loadSortIndexes(allocator, log, assetStorage, database.metadataCollection);
 
-    if (!try api.write_lock.acquireWriteLock(allocator, io, created.rawStorage, "session-edit", 3)) {
+    if (!try api.write_lock.acquireWriteLock(allocator, io, log, created.rawStorage, "session-edit", 3)) {
         return error.FailedToAcquireWriteLock;
     }
-    _ = try database.metadataCollection.updateOne(io, recordId, fields, .{ .upsert = true });
-    try database.bsonDatabase.commit(io);
-    try tree.stampDatabaseModified(allocator, io, assetStorage, created.rawStorage);
-    try api.write_lock.releaseWriteLock(allocator, io, created.rawStorage);
+    _ = try database.metadataCollection.updateOne(io, log, recordId, fields, .{ .upsert = true });
+    try database.bsonDatabase.commit(io, log);
+    try tree.stampDatabaseModified(allocator, io, log, assetStorage, created.rawStorage);
+    try api.write_lock.releaseWriteLock(allocator, io, log, created.rawStorage);
 }
 
 //
@@ -91,11 +93,11 @@ fn applySetOp(allocator: std.mem.Allocator, io: std.Io, clock: *SettableTimestam
 // a device running behind the machine that wrote the origin can be expressed directly.
 // `originDescription` is what the origin's record holds before the edit.
 //
-fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const u8, partial: bool, editClockOffsetMs: i64, originDescription: ?[]const u8) !?[]const u8 {
+fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDir: []const u8, partial: bool, editClockOffsetMs: i64, originDescription: ?[]const u8) !?[]const u8 {
     // The origin is written first, so its record carries the earlier timestamp.
     const clock = try allocator.create(SettableTimestampProvider);
     clock.* = .{ .current = 1767225600000 }; // 2026-01-01T00:00:00.000Z
-    const originPath = try makeOriginDatabase(allocator, io, workingDir, clock, originDescription);
+    const originPath = try makeOriginDatabase(allocator, io, log, workingDir, clock, originDescription);
 
     // The replica, exactly as the app makes it: a replicate of the origin, which records the
     // origin path in the replica's own config.
@@ -106,6 +108,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const 
     _ = try replicate(
         allocator,
         io,
+        log,
         originPath,
         sourceForReplicate.storage,
         sourceDbForReplicate.bsonDatabase,
@@ -121,7 +124,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const 
     // unless the caller has asked for a clock far enough behind to change that.
     clock.advance(60_000 + editClockOffsetMs);
 
-    try applySetOp(allocator, io, clock, replicaPath, assetId, try BsonDocument.fromFields(allocator, &.{
+    try applySetOp(allocator, io, log, clock, replicaPath, assetId, try BsonDocument.fromFields(allocator, &.{
         .{
             .key = "description",
             .value = .{ .string = "Edited on the replica" },
@@ -138,6 +141,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const 
     const result = try syncDatabases(
         allocator,
         io,
+        log,
         replicaStorage.storage,
         replicaStorage.rawStorage,
         replicaDb.bsonDatabase,
@@ -157,7 +161,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const 
 
     const verifyStorage = try createStorage(allocator, io, originPath, null, null);
     const verifyDb = try media_file_database.createMediaFileDatabase(allocator, verifyStorage.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
-    const originRecord = try verifyDb.metadataCollection.getOne(io, assetId);
+    const originRecord = try verifyDb.metadataCollection.getOne(io, log, assetId);
     try verifyDb.bsonDatabase.flush();
 
     const record = originRecord orelse {
@@ -172,7 +176,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, workingDir: []const 
 //
 // Runs the journey in a fresh working directory and checks the edit reached the origin.
 //
-fn expectEditReachesTheOrigin(partial: bool, editClockOffsetMs: i64, originDescription: ?[]const u8) !void {
+fn expectEditReachesTheOrigin(log: ILog, partial: bool, editClockOffsetMs: i64, originDescription: ?[]const u8) !void {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -183,38 +187,42 @@ fn expectEditReachesTheOrigin(partial: bool, editClockOffsetMs: i64, originDescr
     const workingDir = try temp_dirs.makeTempDir(allocator, io, "psphere-sync-edit");
     defer temp_dirs.removeTempDir(io, workingDir);
 
-    const description = try runEditAndSync(allocator, io, workingDir, partial, editClockOffsetMs, originDescription);
+    const description = try runEditAndSync(allocator, io, log, workingDir, partial, editClockOffsetMs, originDescription);
     try std.testing.expectEqualStrings("Edited on the replica", description.?);
 }
 
 test "a description set on a full replica reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
-    try expectEditReachesTheOrigin(false, 0, null);
+    defer test_env.deinit(log);
+    try expectEditReachesTheOrigin(log, false, 0, null);
 }
 
 test "a description set on a partial replica reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
-    try expectEditReachesTheOrigin(true, 0, null);
+    defer test_env.deinit(log);
+    try expectEditReachesTheOrigin(log, true, 0, null);
 }
 
 test "a description set on a device whose clock is behind still reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     // The emulator the mobile suite runs on was measured 30 seconds behind the host that wrote
     // the origin. The edit is made a minute after the origin, so even 30 seconds behind it is
     // still the later write and must win.
-    try expectEditReachesTheOrigin(true, -30_000, null);
+    try expectEditReachesTheOrigin(log, true, -30_000, null);
 }
 
 test "a description set on a device whose clock is far behind still reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     // The failure this guards against is silent: last-write-wins compares timestamps taken from
     // two different machines' clocks, so a device far enough behind loses an edit it genuinely
     // made later, and the sync still reports that it pushed changes.
-    try expectEditReachesTheOrigin(true, -600_000, null);
+    try expectEditReachesTheOrigin(log, true, -600_000, null);
 }
 
 // The four cases above all leave the description off the origin record, and an absent field wins
@@ -225,23 +233,26 @@ test "a description set on a device whose clock is far behind still reaches the 
 // These are the cases test 45 actually exercises.
 
 test "a description set over an empty one reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
-    try expectEditReachesTheOrigin(true, 0, "");
+    defer test_env.deinit(log);
+    try expectEditReachesTheOrigin(log, true, 0, "");
 }
 
 test "a description set over an empty one on a device whose clock is behind reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
-    try expectEditReachesTheOrigin(true, -30_000, "");
+    defer test_env.deinit(log);
+    try expectEditReachesTheOrigin(log, true, -30_000, "");
 }
 
 test "a description set over an empty one on a device whose clock is far behind reaches the origin" {
+    const log = MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     // This is smoke test 45's failure, reproduced on the host in a second. The device edits the
     // description a minute after the origin was written, but its clock is far enough behind that
     // the edit is stamped earlier than the origin's record, so the origin's empty string wins and
     // the edit is dropped. The sync still reports that it pushed changes, so nothing fails loudly.
-    try expectEditReachesTheOrigin(true, -600_000, "");
+    try expectEditReachesTheOrigin(log, true, -600_000, "");
 }

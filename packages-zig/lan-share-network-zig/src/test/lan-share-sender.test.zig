@@ -182,6 +182,7 @@ test "full send-receive round trip" {
 // the share for good, so any unrelated share announcing during the test's discovery window failed
 // it.
 test "discovery ignores a receiver whose pairing code is not the one being looked for" {
+    const log = utils.mute_log.MuteLog.init();
     const discoveryPort = try lan_share.socket.freeUdpPort();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -225,7 +226,7 @@ test "discovery ignores a receiver whose pairing code is not the one being looke
     try std.testing.expect(sender.sawMismatchedReceiver);
 
     foreignReceiver.cancel();
-    _ = try foreignReceiver.receive();
+    _ = try foreignReceiver.receive(log);
 }
 
 test "send returns false when the receiver it is given has a different pairing code" {

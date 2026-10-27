@@ -1,4 +1,6 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const cli = @import("cli-zig");
 const helpers = @import("test-helpers.zig");
 const createProgram = cli.createProgram;
@@ -372,6 +374,12 @@ test "handleError reports fatal errors in red without the bug report hint" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const utils = @import("utils-zig");
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
@@ -381,8 +389,8 @@ test "handleError reports fatal errors in red without the bug report hint" {
     defer cli.picocolors.setColorSupportOverride(null);
 
     const fatal = utils.errors.throwFatalError("Something fatal", .{});
-    cli.handleError(allocator, fatal, null);
-    try std.testing.expectEqualStrings("\n\nSomething fatal\n", stderr_capture.written());
+    cli.handleError(allocator, memory.log, fatal, null);
+    try std.testing.expectEqualStrings("\n\nSomething fatal\n", memory.stderr());
     try std.testing.expectEqualStrings("", stdout_capture.written());
 }
 
@@ -390,6 +398,12 @@ test "handleError reports other errors with the bug report hint" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
+    const memory = try MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
     const utils = @import("utils-zig");
     var stdout_capture = std.Io.Writer.Allocating.init(allocator);
     var stderr_capture = std.Io.Writer.Allocating.init(allocator);
@@ -399,13 +413,14 @@ test "handleError reports other errors with the bug report hint" {
     defer cli.picocolors.setColorSupportOverride(null);
 
     const thrown = utils.errors.throwError("Broken", .{});
-    cli.handleError(allocator, thrown, null);
-    try std.testing.expectEqualStrings("An unknown error occurred\nError: Broken\n", stderr_capture.written());
+    cli.handleError(allocator, memory.log, thrown, null);
+    try std.testing.expectEqualStrings("An unknown error occurred\nError: Broken\n", memory.stderr());
     try std.testing.expectEqualStrings("\nIf you believe this behaviour is a bug, please report it with the following command:\n   psi bug\n", stdout_capture.written());
 
-    stderr_capture.clearRetainingCapacity();
-    cli.handleError(allocator, error.OutOfMemory, "uncaught exception");
-    try std.testing.expectEqualStrings("An uncaught exception error occurred\nError: OutOfMemory\n", stderr_capture.written());
+    // What the second call logs starts where the first call's text ends.
+    const secondStart = memory.stderr().len;
+    cli.handleError(allocator, memory.log, error.OutOfMemory, "uncaught exception");
+    try std.testing.expectEqualStrings("An uncaught exception error occurred\nError: OutOfMemory\n", memory.stderr()[secondStart..]);
 }
 
 test "--version is handled in Zig wherever it is given" {

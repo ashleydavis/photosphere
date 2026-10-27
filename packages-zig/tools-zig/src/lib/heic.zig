@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const exec = node_utils.exec.exec;
@@ -96,12 +97,12 @@ fn sizeOf(value: std.json.Value, what: []const u8) !Dimensions {
 // Reads the size of a HEIC with ffprobe. The rest of what AssetInfo holds is not known for a still picture, and the date is read from
 // the file's EXIF, not here.
 //
-pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner, filePath: []const u8) !AssetInfo {
+pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, filePath: []const u8) !AssetInfo {
     if (!pathExists(io, filePath)) {
         return errors.throwError("File not found: {s}", .{filePath});
     }
     const command = try std.fmt.allocPrint(allocator, "ffprobe -v error -print_format json -show_streams -show_stream_groups \"{s}\"", .{filePath});
-    const result = try exec(allocator, io, tools, command);
+    const result = try exec(allocator, io, log, tools, command);
     return .{
         .filePath = filePath,
         .dimensions = try dimensionsFromProbe(allocator, result.stdout),
@@ -117,7 +118,7 @@ pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRun
 // says. The JPEG is made at FFmpeg's best quality (-q:v 2), because the pictures the app keeps are made from it, and it has no EXIF.
 // JPEG because it is the one picture encoder the bundled FFmpeg is built with.
 //
-pub fn decodeHeic(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunner, filePath: []const u8, outputPath: []const u8) !void {
+pub fn decodeHeic(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, filePath: []const u8, outputPath: []const u8) !void {
     if (!pathExists(io, filePath)) {
         return errors.throwError("File not found: {s}", .{filePath});
     }
@@ -125,7 +126,7 @@ pub fn decodeHeic(allocator: std.mem.Allocator, io: std.Io, tools: InProcessRunn
         return errors.throwError("Output file already exists: {s}", .{outputPath});
     }
     const command = try std.fmt.allocPrint(allocator, "ffmpeg -v error -i \"{s}\" -frames:v 1 -q:v 2 \"{s}\"", .{ filePath, outputPath });
-    _ = execLogged(allocator, io, tools, "ffmpeg", command, null) catch |err| {
+    _ = execLogged(allocator, io, log, tools, "ffmpeg", command, null) catch |err| {
         return errors.throwError("Failed to decode the HEIC {s}: {s}", .{ filePath, try utils.errors.errorToString(allocator, err) });
     };
     if (!pathExists(io, outputPath)) {

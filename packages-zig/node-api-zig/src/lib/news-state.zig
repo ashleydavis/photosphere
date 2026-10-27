@@ -1,9 +1,9 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const state_file = @import("state-file.zig");
 const state_format = @import("state-format.zig");
 const errors = utils.errors;
-const log = &utils.log.log;
 const loadStateFile = state_file.loadStateFile;
 const updateStateFile = state_file.updateStateFile;
 const IStateFile = state_format.IStateFile;
@@ -45,7 +45,7 @@ fn loadNewsStateUnsafe(allocator: std.mem.Allocator, io: std.Io) !INewsState {
 // A file that cannot be read is reported rather than swallowed: it means something else has written a
 // broken file, and the notifications going quiet is the only symptom anyone would otherwise see.
 //
-pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io) !INewsState {
+pub fn loadNewsState(allocator: std.mem.Allocator, io: std.Io, log: ILog) !INewsState {
     return loadNewsStateUnsafe(allocator, io) catch |err| {
         log.@"error"(try std.fmt.allocPrint(allocator, "The news state could not be read, carrying on with an empty one: {s}: {s}", .{
             if (err == error.Thrown or err == error.FatalError) errors.lastErrorName() else "Error",
@@ -95,8 +95,8 @@ pub fn saveNewsState(allocator: std.mem.Allocator, io: std.Io, state: INewsState
 //
 // Returns the list of news item ids that have already been shown on this install.
 //
-pub fn getShownNewsIds(allocator: std.mem.Allocator, io: std.Io) ![]const []const u8 {
-    const state = try loadNewsState(allocator, io);
+pub fn getShownNewsIds(allocator: std.mem.Allocator, io: std.Io, log: ILog) ![]const []const u8 {
+    const state = try loadNewsState(allocator, io, log);
     return state.shownNewsIds;
 }
 
@@ -147,8 +147,8 @@ pub fn addShownNewsIds(allocator: std.mem.Allocator, io: std.Io, ids: []const []
 // Returns the latest update version the user has already been notified about,
 // or undefined when no update has been shown yet.
 //
-pub fn getLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
-    const state = try loadNewsState(allocator, io);
+pub fn getLastShownUpdateVersion(allocator: std.mem.Allocator, io: std.Io, log: ILog) !?[]const u8 {
+    const state = try loadNewsState(allocator, io, log);
     return state.lastShownUpdateVersion;
 }
 

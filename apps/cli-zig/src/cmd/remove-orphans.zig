@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -8,7 +9,6 @@ const terminal_utils = @import("../lib/terminal-utils.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
 const find_orphans = @import("../lib/find-orphans.zig");
 const prompts = @import("../lib/clack/prompts.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const errorMessage = utils.errors.errorMessage;
 const loadDatabase = init_cmd.loadDatabase;
@@ -34,7 +34,7 @@ pub const IRemoveOrphansCommandOptions = struct {
 //
 // Command that finds and removes files that are no longer in the merkle tree.
 //
-pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IRemoveOrphansCommandOptions) !void {
+pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IRemoveOrphansCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
@@ -44,11 +44,11 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: I
     var dbDir = options.base.db;
     if (dbDir == null) {
         const cwd = if (options.base.cwd != null and options.base.cwd.?.len > 0) options.base.cwd.? else try std.process.currentPathAlloc(io, allocator);
-        dbDir = try getDirectoryForCommand(allocator, io, .existing, nonInteractive, cwd);
+        dbDir = try getDirectoryForCommand(allocator, io, log, .existing, nonInteractive, cwd);
     }
 
     // Load the database
-    const loaded = try loadDatabase(allocator, io, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const assetStorage = loaded.assetStorage;
 
     log.info("");
@@ -57,17 +57,17 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: I
     log.info("");
 
     // Load merkle tree
-    writeProgress("Loading merkle tree...");
-    const merkleTree = try loadMerkleTree(allocator, io, assetStorage) orelse {
-        clearProgressMessage();
+    writeProgress(log, "Loading merkle tree...");
+    const merkleTree = try loadMerkleTree(allocator, io, log, assetStorage) orelse {
+        clearProgressMessage(log);
         log.info(try pc.red(allocator, "Error: Failed to load merkle tree"));
-        exit(io, 1);
+        exit(io, log, 1);
     };
 
     // Find orphans
-    writeProgress("Scanning for orphaned files...");
-    const orphans = try findOrphans(allocator, io, assetStorage, &merkleTree);
-    clearProgressMessage();
+    writeProgress(log, "Scanning for orphaned files...");
+    const orphans = try findOrphans(allocator, io, log, assetStorage, &merkleTree);
+    clearProgressMessage(log);
 
     log.info("");
     log.info(try pc.bold(allocator, try pc.blue(allocator, "\u{1F5D1}\u{FE0F}  Remove Orphaned Files")));
@@ -75,7 +75,7 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: I
 
     if (orphans.len == 0) {
         log.info(try pc.green(allocator, "\u{2713} No orphaned files found"));
-        exit(io, 0);
+        exit(io, log, 0);
     }
 
     for (orphans) |file| {
@@ -92,12 +92,12 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: I
 
         if (isCancel(shouldDelete) or !shouldDelete.value) {
             log.info(try pc.yellow(allocator, "Cancelled. No files were deleted."));
-            exit(io, 0);
+            exit(io, log, 0);
         }
     }
 
     // Delete orphaned files
-    writeProgress("Deleting orphaned files...");
+    writeProgress(log, "Deleting orphaned files...");
     var deletedCount: usize = 0;
     var errorCount: usize = 0;
 
@@ -114,7 +114,7 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: I
         }
     }
 
-    clearProgressMessage();
+    clearProgressMessage(log);
 
     log.info("");
     if (errorCount == 0) {
@@ -124,5 +124,5 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, context: I
         log.info(try pc.yellow(allocator, try std.fmt.allocPrint(allocator, "\u{26A0}\u{FE0F}  Deleted {d} file(s), {d} error(s)", .{ deletedCount, errorCount })));
     }
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

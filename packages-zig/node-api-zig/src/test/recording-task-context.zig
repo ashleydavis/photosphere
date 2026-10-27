@@ -92,7 +92,7 @@ pub const RecordingTaskContext = struct {
     //
     // Records a message, failing the test run loudly when it cannot be copied.
     //
-    fn sendEventErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, message: std.json.Value) void {
+    fn sendEventErased(ptr: *anyopaque, _: std.Io, _: std.mem.Allocator, _: utils.log.ILog, message: std.json.Value) void {
         const self: *RecordingTaskContext = @ptrCast(@alignCast(ptr));
         const text = std.json.Stringify.valueAlloc(self.allocator, message, .{}) catch @panic("could not copy a task message");
         const copy = std.json.parseFromSliceLeaky(std.json.Value, self.allocator, text, .{}) catch @panic("could not copy a task message");

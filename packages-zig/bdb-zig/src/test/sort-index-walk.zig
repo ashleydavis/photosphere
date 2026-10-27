@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const serialization_zig = @import("serialization-zig");
 const bdb = @import("bdb-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
@@ -7,7 +8,7 @@ const BsonValue = serialization_zig.bson.BsonValue;
 // Returns the record ids of a sort index in page order (a stand in for walking getPage), reading
 // the leaves from the leaf cache or from storage.
 //
-pub fn walkSortIndex(allocator: std.mem.Allocator, io: std.Io, sortIndex: *bdb.sort_index.SortIndex) ![]const []const u8 {
+pub fn walkSortIndex(allocator: std.mem.Allocator, io: std.Io, log: ILog, sortIndex: *bdb.sort_index.SortIndex) ![]const []const u8 {
     var ids: std.ArrayList([]const u8) = .empty;
     var currentId = sortIndex.rootPageId orelse {
         return ids.items;
@@ -25,7 +26,7 @@ pub fn walkSortIndex(allocator: std.mem.Allocator, io: std.Io, sortIndex: *bdb.s
         }
         else {
             // Leaf pages are loaded through findByValue, which caches every leaf it reads.
-            _ = try sortIndex.findByValue(io, .{ .string = "\x00never-matches" }, null);
+            _ = try sortIndex.findByValue(io, log, .{ .string = "\x00never-matches" }, null);
             if (sortIndex.leafCache.get(currentId)) |loaded| {
                 for (loaded.records.items) |entry| {
                     try ids.append(allocator, entry._id);
@@ -44,8 +45,8 @@ pub fn walkSortIndex(allocator: std.mem.Allocator, io: std.Io, sortIndex: *bdb.s
 //
 // Returns the values of a sort index in page order.
 //
-pub fn sortIndexValues(allocator: std.mem.Allocator, io: std.Io, sortIndex: *bdb.sort_index.SortIndex) ![]const BsonValue {
-    _ = try walkSortIndex(allocator, io, sortIndex);
+pub fn sortIndexValues(allocator: std.mem.Allocator, io: std.Io, log: ILog, sortIndex: *bdb.sort_index.SortIndex) ![]const BsonValue {
+    _ = try walkSortIndex(allocator, io, log, sortIndex);
     var values: std.ArrayList(BsonValue) = .empty;
     var currentId = sortIndex.rootPageId orelse {
         return values.items;

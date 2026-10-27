@@ -124,8 +124,9 @@ fn setAutoImportSettings(config: *IAppConfig) void {
 }
 
 test "loadAppConfig returns an empty config when no file exists, and writes nothing" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -141,8 +142,9 @@ test "loadAppConfig returns an empty config when no file exists, and writes noth
 }
 
 test "loadAppConfig returns the config from the document when the file exists" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -158,8 +160,9 @@ test "loadAppConfig returns the config from the document when the file exists" {
 }
 
 test "loadAppConfig converts snake_case document keys to camelCase fields" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -183,8 +186,9 @@ test "loadAppConfig converts snake_case document keys to camelCase fields" {
 }
 
 test "loadAppConfig throws when the config file is not YAML" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -197,8 +201,9 @@ test "loadAppConfig throws when the config file is not YAML" {
 }
 
 test "updateAppConfig writes the theme at the top level" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -214,8 +219,9 @@ test "updateAppConfig writes the theme at the top level" {
 }
 
 test "updateAppConfig converts camelCase fields to snake_case keys in their own sections" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -238,8 +244,9 @@ test "updateAppConfig converts camelCase fields to snake_case keys in their own 
 }
 
 test "the automatic import settings are written with snake_case keys under auto_import" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -268,8 +275,9 @@ test "the automatic import settings are written with snake_case keys under auto_
 }
 
 test "getTheme returns system when the theme is unset" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -282,8 +290,9 @@ test "getTheme returns system when the theme is unset" {
 }
 
 test "getTheme returns system when there is no file" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -296,8 +305,9 @@ test "getTheme returns system when there is no file" {
 }
 
 test "getTheme returns the stored value" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -310,8 +320,9 @@ test "getTheme returns the stored value" {
 }
 
 test "getTheme returns system when the file names a theme nobody defined" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -324,8 +335,9 @@ test "getTheme returns system when the file names a theme nobody defined" {
 }
 
 test "setTheme sets the theme and saves" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -342,8 +354,9 @@ test "setTheme sets the theme and saves" {
 }
 
 test "loadAppConfig reads show_fps_indicator from the top level and updateAppConfig writes showFpsIndicator to it" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -365,8 +378,9 @@ test "loadAppConfig reads show_fps_indicator from the top level and updateAppCon
 // Saved searches are the searches the user deliberately kept, so they are a setting and belong here. The ones merely run
 // are in the state file instead.
 test "loadAppConfig reads saved_searches from the top level" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -383,8 +397,9 @@ test "loadAppConfig reads saved_searches from the top level" {
 }
 
 test "loadAppConfig reads enabled and only_on_wifi from the sync section" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -400,8 +415,9 @@ test "loadAppConfig reads enabled and only_on_wifi from the sync section" {
 }
 
 test "updateAppConfig writes sync settings into the sync section" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -420,8 +436,9 @@ test "updateAppConfig writes sync settings into the sync section" {
 // to arrive as nothing. Handing back the file reader's defaults instead would silently switch syncing off on a fresh
 // install.
 test "loadAppConfig leaves sync settings unset when the file has no sync section so the UI applies defaults" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -437,8 +454,9 @@ test "loadAppConfig leaves sync settings unset when the file has no sync section
 }
 
 test "developerMode is read from developer_mode, written to it and round-trips through save and load" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -458,8 +476,9 @@ test "developerMode is read from developer_mode, written to it and round-trips t
 }
 
 test "updateAppConfig reads the current config, applies the mutation, and writes it back nested" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -480,8 +499,9 @@ test "updateAppConfig reads the current config, applies the mutation, and writes
 // same document and appear nowhere in this view, so a desktop write that rebuilt the document from the flat view alone
 // would delete them.
 test "updateAppConfig leaves the parts of the file this view does not own exactly as they were" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -554,8 +574,9 @@ const InterferingMutator = struct {
 // write is still there afterwards. The load-then-save this replaced wrote back a whole config read earlier, so it
 // discarded anything changed in the meantime.
 test "updateAppConfig keeps a key written by someone else while this edit was being made" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -580,8 +601,9 @@ test "updateAppConfig keeps a key written by someone else while this edit was be
 
 // A mutator that throws is left to throw, and the file is left as it was.
 test "updateAppConfig leaves the file as it was when the mutator throws" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -613,8 +635,9 @@ const ThrowingMutator = struct {
 };
 
 test "the names app-config re-exports from app-config-format are available from it" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -631,8 +654,9 @@ test "the names app-config re-exports from app-config-format are available from 
 }
 
 test "the automatic import settings are absent from a config that does not mention them" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -646,8 +670,9 @@ test "the automatic import settings are absent from a config that does not menti
 }
 
 test "updateAppConfig writes savedSearches to saved_searches" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -664,8 +689,9 @@ test "updateAppConfig writes savedSearches to saved_searches" {
 }
 
 test "loadAppConfig leaves sync settings undefined when absent so the UI applies defaults" {
+    const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit();
+    defer test_env.deinit(log);
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();

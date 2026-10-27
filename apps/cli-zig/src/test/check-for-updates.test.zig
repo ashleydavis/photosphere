@@ -42,12 +42,11 @@ test "markUpdateAsShown persists the supplied version" {
     try setConfigDir(allocator, try std.fs.path.join(allocator, &.{ root, "config" }));
     defer node_utils.process_env.setEnvironMap(null);
     var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
+    const log = mock.ilog();
 
     check_for_updates.markUpdateAsShown(allocator, std.testing.io, "1.3.0");
 
-    const lastShown = try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io);
+    const lastShown = try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log);
     try std.testing.expectEqualStrings("1.3.0", lastShown.?);
 }
 
@@ -61,9 +60,6 @@ test "markUpdateAsShown swallows persistence errors" {
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = blocker, .data = "not a directory" });
     try setConfigDir(allocator, blocker);
     defer node_utils.process_env.setEnvironMap(null);
-    var mock = MockLog.init(allocator);
-    mock.install();
-    defer mock.uninstall();
 
     // A file where the config dir should be, so the state file cannot be written (as when the disk is full).
     check_for_updates.markUpdateAsShown(allocator, std.testing.io, "1.3.0");

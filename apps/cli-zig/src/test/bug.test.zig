@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const builtin = @import("builtin");
 const cli = @import("cli-zig");
 const node_utils = @import("node-utils-zig");
@@ -167,18 +168,19 @@ test "generateBugReportTemplate fills in the details of the bug and the system" 
 }
 
 test "getToolVersions reports the versions of the ImageMagick and FFmpeg built into the program" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
-    const versions = try bug.getToolVersions(allocator, std.testing.io, mediaTools.runner());
+    const versions = try bug.getToolVersions(allocator, std.testing.io, log, mediaTools.runner());
 
     // The versions are the ones the built-in libraries report, read here from the libraries themselves.
     const imageMagickPrefix = "ImageMagick v";
     try std.testing.expect(std.mem.startsWith(u8, versions.imagemagick, imageMagickPrefix));
-    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, allocator, &.{"-version"})).output;
+    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, log, allocator, &.{"-version"})).output;
     try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{versions.imagemagick[imageMagickPrefix.len..]})) != null);
     const ffmpegPrefix = "ffmpeg v";
     try std.testing.expect(std.mem.startsWith(u8, versions.ffmpeg, ffmpegPrefix));

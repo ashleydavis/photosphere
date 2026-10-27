@@ -1,4 +1,6 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const ILog = @import("utils-zig").log.ILog;
 const node_api = @import("node-api-zig");
 const storage_zig = @import("storage-zig");
 const temp_dirs = @import("temp-dirs.zig");
@@ -212,7 +214,8 @@ const MockStorage = struct {
         return error.NotImplemented;
     }
 
-    pub fn read(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8) !?[]u8 {
+    pub fn read(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        _ = log;
         _ = storageIo;
         self.readCalled = true;
         const data = self.get(filePath) orelse return null;
@@ -225,7 +228,8 @@ const MockStorage = struct {
         try self.put(filePath, data);
     }
 
-    pub fn readStream(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8) !IReadStream {
+    pub fn readStream(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        _ = log;
         _ = storageIo;
         self.readStreamCalled = true;
         if (self.readStreamFails) {
@@ -272,17 +276,17 @@ const MockStorage = struct {
         return error.NotImplemented;
     }
 
-    pub fn acquireWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8, owner: []const u8) !bool {
+    pub fn acquireWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, _: ILog, filePath: []const u8, owner: []const u8) !bool {
         _ = .{ self, allocator, storageIo, filePath, owner };
         return error.NotImplemented;
     }
 
-    pub fn releaseWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8) !void {
+    pub fn releaseWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, _: ILog, filePath: []const u8) !void {
         _ = .{ self, allocator, storageIo, filePath };
         return error.NotImplemented;
     }
 
-    pub fn refreshWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, filePath: []const u8, owner: []const u8) !void {
+    pub fn refreshWriteLock(self: *MockStorage, allocator: std.mem.Allocator, storageIo: std.Io, _: ILog, filePath: []const u8, owner: []const u8) !void {
         _ = .{ self, allocator, storageIo, filePath, owner };
         return error.NotImplemented;
     }
@@ -297,6 +301,7 @@ fn readAll(allocator: std.mem.Allocator, stream: IReadStream) ![]u8 {
 }
 
 test "read() returns local data without calling origin when local has the file" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -307,13 +312,14 @@ test "read() returns local data without calling origin when local has the file" 
     try origin.put("foo.txt", "origin");
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const result = try lazy.storage().read(arena.allocator(), io, "foo.txt");
+    const result = try lazy.storage().read(arena.allocator(), io, log, "foo.txt");
 
     try std.testing.expectEqualStrings("local", result.?);
     try std.testing.expect(!origin.readCalled);
 }
 
 test "read() fetches from origin when local returns undefined, caches locally, and returns data" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -323,7 +329,7 @@ test "read() fetches from origin when local returns undefined, caches locally, a
     try origin.put("bar.txt", "from-origin");
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const result = try lazy.storage().read(arena.allocator(), io, "bar.txt");
+    const result = try lazy.storage().read(arena.allocator(), io, log, "bar.txt");
 
     try std.testing.expectEqualStrings("from-origin", result.?);
 
@@ -332,6 +338,7 @@ test "read() fetches from origin when local returns undefined, caches locally, a
 }
 
 test "read() returns undefined when both local and origin have nothing" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -339,10 +346,11 @@ test "read() returns undefined when both local and origin have nothing" {
     var origin: MockStorage = .{};
     defer origin.deinit();
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    try std.testing.expect((try lazy.storage().read(arena.allocator(), io, "missing.txt")) == null);
+    try std.testing.expect((try lazy.storage().read(arena.allocator(), io, log, "missing.txt")) == null);
 }
 
 test "readStream() returns local stream directly when file exists locally" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -354,13 +362,14 @@ test "readStream() returns local stream directly when file exists locally" {
     origin.readStreamFails = true;
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const data = try readAll(arena.allocator(), try lazy.storage().readStream(arena.allocator(), io, "img.jpg"));
+    const data = try readAll(arena.allocator(), try lazy.storage().readStream(arena.allocator(), io, log, "img.jpg"));
 
     try std.testing.expectEqualStrings("localdata", data);
     try std.testing.expect(!origin.readStreamCalled);
 }
 
 test "readStream() fetches from origin and tees when file is missing locally" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -370,7 +379,7 @@ test "readStream() fetches from origin and tees when file is missing locally" {
     try origin.put("vid.mp4", "videodata");
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const data = try readAll(arena.allocator(), try lazy.storage().readStream(arena.allocator(), io, "vid.mp4"));
+    const data = try readAll(arena.allocator(), try lazy.storage().readStream(arena.allocator(), io, log, "vid.mp4"));
 
     try std.testing.expectEqualStrings("videodata", data);
 
@@ -379,6 +388,7 @@ test "readStream() fetches from origin and tees when file is missing locally" {
 }
 
 test "readStream() streams data correctly even if local cache write fails" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -391,12 +401,13 @@ test "readStream() streams data correctly even if local cache write fails" {
     local.writeStreamFails = true;
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const data = try readAll(arena.allocator(), try lazy.storage().readStream(arena.allocator(), io, "doc.pdf"));
+    const data = try readAll(arena.allocator(), try lazy.storage().readStream(arena.allocator(), io, log, "doc.pdf"));
 
     try std.testing.expectEqualStrings("pdfdata", data);
 }
 
 test "readStream() tees a file larger than the stream buffers" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -411,7 +422,7 @@ test "readStream() tees a file larger than the stream buffers" {
     try origin.put("big.bin", big);
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const data = try readAll(allocator, try lazy.storage().readStream(allocator, io, "big.bin"));
+    const data = try readAll(allocator, try lazy.storage().readStream(allocator, io, log, "big.bin"));
 
     try std.testing.expectEqualSlices(u8, big, data);
     try std.testing.expectEqualSlices(u8, big, local.get("big.bin").?);
@@ -419,6 +430,7 @@ test "readStream() tees a file larger than the stream buffers" {
 
 // Nothing may be left stalled waiting for the cache stream to drain after the cache write fails.
 test "readStream() streams a file larger than the stream buffers in full when the local cache write fails" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -434,7 +446,7 @@ test "readStream() streams a file larger than the stream buffers in full when th
     local.writeStreamFails = true;
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const data = try readAll(allocator, try lazy.storage().readStream(allocator, io, "big.bin"));
+    const data = try readAll(allocator, try lazy.storage().readStream(allocator, io, log, "big.bin"));
 
     try std.testing.expectEqualSlices(u8, big, data);
 }
@@ -442,6 +454,7 @@ test "readStream() streams a file larger than the stream buffers in full when th
 // TypeScript: the callerStream emits the origin's error, and the cacheStream is destroyed with it, so nothing partial
 // is cached.
 test "readStream() fails the caller's read and caches nothing when the origin stream fails" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var local: MockStorage = .{};
@@ -452,7 +465,7 @@ test "readStream() fails the caller's read and caches nothing when the origin st
     origin.streamReadFails = true;
 
     var lazy = LazyOriginStorage.init(local.storage(), origin.storage());
-    const stream = try lazy.storage().readStream(arena.allocator(), io, "broken.bin");
+    const stream = try lazy.storage().readStream(arena.allocator(), io, log, "broken.bin");
     try std.testing.expectError(error.ReadFailed, stream.reader().allocRemaining(arena.allocator(), .unlimited));
 
     // Destroying the stream waits for the cache write, which ended with the failure.
@@ -492,6 +505,7 @@ test "writeStream() writes to local only and never touches origin" {
 }
 
 test "every other operation goes to the local storage and never to the origin" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -522,13 +536,13 @@ test "every other operation goes to the local storage and never to the origin" {
     try std.testing.expect((try storage.storedHash(allocator, io, "dir/file.txt")) == null);
 
     try storage.copyTo(allocator, io, "dir/file.txt", "dir/copy.txt");
-    try std.testing.expectEqualStrings("content", (try local.read(allocator, io, "dir/copy.txt")).?);
+    try std.testing.expectEqualStrings("content", (try local.read(allocator, io, log, "dir/copy.txt")).?);
     try storage.deleteFile(allocator, io, "dir/copy.txt");
     try std.testing.expect(!try local.fileExists(allocator, io, "dir/copy.txt"));
 
-    try std.testing.expect(try storage.acquireWriteLock(allocator, io, "write.lock", "owner"));
+    try std.testing.expect(try storage.acquireWriteLock(allocator, io, log, "write.lock", "owner"));
     try std.testing.expectEqualStrings("owner", (try storage.checkWriteLock(allocator, io, "write.lock")).?.owner);
-    try storage.releaseWriteLock(allocator, io, "write.lock");
+    try storage.releaseWriteLock(allocator, io, log, "write.lock");
     try std.testing.expect((try local.checkWriteLock(allocator, io, "write.lock")) == null);
 
     try storage.deleteDir(allocator, io, "dir");

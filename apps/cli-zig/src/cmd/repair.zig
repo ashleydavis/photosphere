@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
@@ -7,7 +8,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
-const log = &utils.log.log;
 const exit = node_utils.termination.exit;
 const clearProgressMessage = terminal_utils.clearProgressMessage;
 const writeProgress = terminal_utils.writeProgress;
@@ -43,15 +43,14 @@ pub const IRepairCommandOptions = struct {
 };
 
 //
-// Writes each repair progress message.
+// Writes each repair progress message to the log.
 //
-fn onProgress(context: ?*anyopaque, io: std.Io, progress: ?[]const u8) void {
+fn onProgress(_: ?*anyopaque, io: std.Io, log: ILog, progress: ?[]const u8) void {
     _ = io;
-    _ = context;
     var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
     defer arena.deinit();
     const message = std.fmt.allocPrint(arena.allocator(), "\u{1F527} {s}", .{progress orelse "undefined"}) catch @panic("out of memory writing the progress line");
-    writeProgress(message);
+    writeProgress(log, message);
 }
 
 //
@@ -90,7 +89,7 @@ fn listCount(allocator: std.mem.Allocator, list: []const []const u8, comptime pr
 //
 // Shows the first ten entries of a list under a title, and how many more there are.
 //
-fn showList(allocator: std.mem.Allocator, title: []const u8, list: []const []const u8, marker: []const u8, moreInGray: bool) !void {
+fn showList(log: ILog, allocator: std.mem.Allocator, title: []const u8, list: []const []const u8, marker: []const u8, moreInGray: bool) !void {
     if (list.len == 0) {
         return;
     }
@@ -108,21 +107,21 @@ fn showList(allocator: std.mem.Allocator, title: []const u8, list: []const []con
 //
 // Command that repairs the integrity of the Photosphere media file database by restoring files from a source database.
 //
-pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommandContext, options: *IRepairCommandOptions) !void {
+pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IRepairCommandOptions) !void {
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const target = try loadDatabase(allocator, io, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const target = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const targetDir = target.databaseDir;
 
     var sourcePath = options.source;
     if (sourcePath == null) {
-        const config = try loadDatabaseConfig(allocator, io, target.rawAssetStorage);
+        const config = try loadDatabaseConfig(allocator, io, log, target.rawAssetStorage);
         sourcePath = configOrigin(config);
         if (sourcePath == null) {
             log.@"error"(try pc.red(allocator, "Source database path is required for repair command. Specify --source or set an origin (psi set-origin <path>)."));
-            exit(io, 1);
+            exit(io, log, 1);
         }
     }
     // The source database is loaded from options.source, not sourcePath, so when the source is the origin from the config, the database in
@@ -133,7 +132,7 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
         .verbose = options.base.verbose,
         .yes = options.base.yes,
     };
-    const source = try loadDatabase(allocator, io, options.source, &sourceOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const source = try loadDatabase(allocator, io, log, options.source, &sourceOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
     const sourceDir = source.databaseDir;
 
     log.info("");
@@ -142,15 +141,15 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     log.info(try std.fmt.allocPrint(allocator, "  Target:    {s}", .{try pc.cyan(allocator, targetDir)}));
     log.info("");
 
-    writeProgress("\u{1F527} Repairing database...");
+    writeProgress(log, "\u{1F527} Repairing database...");
 
-    const result = try repair(allocator, io, target.assetStorage, target.rawAssetStorage, source.assetStorage, target.bsonDatabase, target.metadataCollection, .{
+    const result = try repair(allocator, io, log, target.assetStorage, target.rawAssetStorage, source.assetStorage, target.bsonDatabase, target.metadataCollection, .{
         .source = sourcePath.?,
         .sourceKey = options.sourceKey,
         .full = options.full,
     }, .{ .context = null, .function = onProgress });
 
-    clearProgressMessage(); // Flush the progress message.
+    clearProgressMessage(log); // Flush the progress message.
 
     log.info("");
     log.info(try pc.bold(allocator, try pc.blue(allocator, try std.fmt.allocPrint(allocator, "\u{1F527} Repair completed - processed {d} files.", .{result.totalFiles}))));
@@ -169,16 +168,16 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     log.info(try std.fmt.allocPrint(allocator, "Records repaired: {s}", .{try listCount(allocator, result.recordsRepaired, pc.green)}));
 
     // Show details for repaired files
-    try showList(allocator, try pc.green(allocator, "Repaired files:"), result.repaired, try pc.green(allocator, "\u{2713}"), false);
+    try showList(log, allocator, try pc.green(allocator, "Repaired files:"), result.repaired, try pc.green(allocator, "\u{2713}"), false);
 
     // Show details for unrepaired files
-    try showList(allocator, try pc.red(allocator, "Unrepaired files:"), result.unrepaired, try pc.red(allocator, "\u{2717}"), false);
+    try showList(log, allocator, try pc.red(allocator, "Unrepaired files:"), result.unrepaired, try pc.red(allocator, "\u{2717}"), false);
 
     // Show details for problematic files
-    try showList(allocator, try pc.red(allocator, "Modified files:"), result.modified, try pc.red(allocator, "\u{25CF}"), false);
-    try showList(allocator, try pc.yellow(allocator, "New files:"), result.new, try pc.yellow(allocator, "+"), false);
-    try showList(allocator, try pc.red(allocator, "Removed files:"), result.removed, try pc.red(allocator, "-"), false);
-    try showList(allocator, try pc.green(allocator, "Database records repaired:"), result.recordsRepaired, try pc.green(allocator, "\u{2713}"), true);
+    try showList(log, allocator, try pc.red(allocator, "Modified files:"), result.modified, try pc.red(allocator, "\u{25CF}"), false);
+    try showList(log, allocator, try pc.yellow(allocator, "New files:"), result.new, try pc.yellow(allocator, "+"), false);
+    try showList(log, allocator, try pc.red(allocator, "Removed files:"), result.removed, try pc.red(allocator, "-"), false);
+    try showList(log, allocator, try pc.green(allocator, "Database records repaired:"), result.recordsRepaired, try pc.green(allocator, "\u{2713}"), true);
 
     log.info("");
     if (result.repaired.len == 0 and result.unrepaired.len == 0 and result.modified.len == 0 and result.new.len == 0 and result.removed.len == 0 and result.recordsRepaired.len == 0) {
@@ -200,5 +199,5 @@ pub fn repairCommand(allocator: std.mem.Allocator, io: std.Io, context: ICommand
     log.info("    # View database summary and tree hash");
     log.info(try std.fmt.allocPrint(allocator, "    psi summary --db {s}", .{targetDir}));
 
-    exit(io, 0);
+    exit(io, log, 0);
 }

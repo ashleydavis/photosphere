@@ -1,4 +1,5 @@
 const std = @import("std");
+const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const tools = @import("tools-zig");
 const media_tools = @import("media-tools-zig");
 const fake_tool_runner = @import("fake-tool-runner.zig");
@@ -6,6 +7,7 @@ const MediaTools = media_tools.MediaTools;
 const FakeToolRunner = fake_tool_runner.FakeToolRunner;
 
 test "verifyFfprobe and verifyFfmpeg report unknown when their output has no version in it" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -21,18 +23,19 @@ test "verifyFfprobe and verifyFfmpeg report unknown when their output has no ver
         },
     });
 
-    const ffprobeStatus = try tools.Video.verifyFfprobe(allocator, io, fakeTools.runner());
+    const ffprobeStatus = try tools.Video.verifyFfprobe(allocator, io, log, fakeTools.runner());
     try std.testing.expect(ffprobeStatus.available);
     try std.testing.expectEqualStrings("unknown", ffprobeStatus.version.?);
     try std.testing.expect(ffprobeStatus.@"error" == null);
 
-    const ffmpegStatus = try tools.Video.verifyFfmpeg(allocator, io, fakeTools.runner());
+    const ffmpegStatus = try tools.Video.verifyFfmpeg(allocator, io, log, fakeTools.runner());
     try std.testing.expect(ffmpegStatus.available);
     try std.testing.expectEqualStrings("unknown", ffmpegStatus.version.?);
     try std.testing.expect(ffmpegStatus.@"error" == null);
 }
 
 test "verifyTools reports every tool with its version when ImageMagick, ffprobe and ffmpeg run" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -52,7 +55,7 @@ test "verifyTools reports every tool with its version when ImageMagick, ffprobe 
         },
     });
 
-    const status = try tools.verifyTools(allocator, io, fakeTools.runner());
+    const status = try tools.verifyTools(allocator, io, log, fakeTools.runner());
 
     try std.testing.expect(status.allAvailable);
     try std.testing.expectEqual(@as(usize, 0), status.missingTools.len);
@@ -62,6 +65,7 @@ test "verifyTools reports every tool with its version when ImageMagick, ffprobe 
 }
 
 test "verifyImageMagick reports unknown when the version cannot be found" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -73,20 +77,21 @@ test "verifyImageMagick reports unknown when the version cannot be found" {
         },
     });
 
-    const status = try tools.Image.verifyImageMagick(allocator, io, fakeTools.runner());
+    const status = try tools.Image.verifyImageMagick(allocator, io, log, fakeTools.runner());
 
     try std.testing.expect(status.available);
     try std.testing.expectEqualStrings("unknown", status.version.?);
 }
 
 test "verifyTools lists every missing tool when no tool runs" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     const io = std.testing.io;
     var fakeTools = FakeToolRunner.init(allocator, &.{});
 
-    const status = try tools.verifyTools(allocator, io, fakeTools.runner());
+    const status = try tools.verifyTools(allocator, io, log, fakeTools.runner());
 
     try std.testing.expect(!status.allAvailable);
     try std.testing.expectEqual(@as(usize, 3), status.missingTools.len);
@@ -104,6 +109,7 @@ test "verifyTools lists every missing tool when no tool runs" {
 }
 
 test "verifyTools lists only the missing tools" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -119,7 +125,7 @@ test "verifyTools lists only the missing tools" {
         },
     });
 
-    const status = try tools.verifyTools(allocator, io, fakeTools.runner());
+    const status = try tools.verifyTools(allocator, io, log, fakeTools.runner());
 
     try std.testing.expect(!status.allAvailable);
     try std.testing.expectEqual(@as(usize, 1), status.missingTools.len);
@@ -129,6 +135,7 @@ test "verifyTools lists only the missing tools" {
 }
 
 test "verifyTools reports every tool built into the program available" {
+    const log = MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -136,7 +143,7 @@ test "verifyTools reports every tool built into the program available" {
     var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
 
-    const status = try tools.verifyTools(allocator, io, mediaTools.runner());
+    const status = try tools.verifyTools(allocator, io, log, mediaTools.runner());
 
     try std.testing.expect(status.allAvailable);
     try std.testing.expectEqual(@as(usize, 0), status.missingTools.len);

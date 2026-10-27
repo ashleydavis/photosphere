@@ -44,6 +44,7 @@ const AUTO_IMPORT_TASK_SOURCE = node_api.auto_import_desktop.AUTO_IMPORT_TASK_SO
 // Ziggy's menu is written once and the page decides what each item does, so there is no menu to rebuild when a database is opened.
 //
 fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+    const log = services.log;
     _ = timers;
     _ = context;
     const arena = allocator;
@@ -54,7 +55,7 @@ fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allo
     const all_databases = try databases_config.getDatabases(arena, io);
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     const opened = try databases.openDatabaseStorage(arena, io, all_databases, database_path, services.nativeCaller(&requester_storage));
-    const database_config = try api_zig.database_config.loadDatabaseConfig(arena, io, opened.rawStorage);
+    const database_config = try api_zig.database_config.loadDatabaseConfig(arena, io, log, opened.rawStorage);
     const origin: ?[]const u8 = if (database_config) |config| json.getString(config, "origin") else null;
     if (opened.entry) |existing| {
         if (!optionalStringsEqual(existing.origin, origin)) {
@@ -78,7 +79,7 @@ fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allo
     // Recorded beside the recents update above, because it is the same fact written twice: this is the database the user is in, so it
     // is the one to reopen next time the app starts.
     try databases_config.setLastDatabase(arena, io, database_path);
-    utils.log.log.event(try std.fmt.allocPrint(arena, "Database opened: {s}", .{node_utils.path.basename(database_path)}));
+    log.event(try std.fmt.allocPrint(arena, "Database opened: {s}", .{node_utils.path.basename(database_path)}));
     return try arena.dupe(u8, "null");
 }
 
@@ -147,10 +148,10 @@ pub fn notifyDatabaseClosedMessageHandler(services: HandlerServices, timers: Tim
 // notify-database-edited: no payload and no reply. Schedules a debounced sync.
 //
 pub fn notifyDatabaseEditedHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, payload: NoRequest) !void {
-    _ = services;
+    const log = services.log;
     _ = allocator;
     _ = payload;
-    try main_state.current().scheduleSync(timers, io);
+    try main_state.current().scheduleSync(timers, io, log);
 }
 
 //
@@ -174,6 +175,7 @@ pub const MainCommandRequest = std.json.Value;
 // A payload with no command name is an unknown command called "undefined".
 //
 pub fn mainCommandHandler(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, payload: MainCommandRequest) !void {
+    const log = services.log;
     const command: []const u8 = switch (payload) {
         .string => |text| text,
         else => json.getString(payload, "command") orelse "undefined",
@@ -189,10 +191,10 @@ pub fn mainCommandHandler(services: HandlerServices, timers: Timers, io: std.Io,
         const allowed = payload == .object and payload.object.get("allowed") != null and payload.object.get("allowed").? == .bool and payload.object.get("allowed").?.bool;
         state.sync_allowed = allowed;
         // The smoke tests wait for this line, so its wording must not change.
-        utils.log.log.info(try std.fmt.allocPrint(allocator, "Sync gate set to {s}", .{if (allowed) "true" else "false"}));
+        log.info(try std.fmt.allocPrint(allocator, "Sync gate set to {s}", .{if (allowed) "true" else "false"}));
         // Catch up a pending sync as soon as syncing is allowed.
         if (allowed) {
-            try state.scheduleSync(timers, io);
+            try state.scheduleSync(timers, io, log);
         }
     }
     else if (std.mem.eql(u8, command, "cancel-tasks")) {
@@ -246,6 +248,7 @@ const ISyncInputs = struct {
 // page) and notifies the user.
 //
 fn handleReplicateSucceeded(services: HandlerServices, io: std.Io, arena: std.mem.Allocator, inputs: IReplicateInputs) !void {
+    const log = services.log;
     const existing_databases = try databases_config.getDatabases(arena, io);
     var already_registered = false;
     for (existing_databases) |entry| {
@@ -268,7 +271,7 @@ fn handleReplicateSucceeded(services: HandlerServices, io: std.Io, arena: std.me
         try events.sendDatabasesChanged(services, io, arena);
     }
     const message = try std.fmt.allocPrint(arena, "Replication completed for \"{s}\"", .{node_utils.path.basename(inputs.destPath)});
-    utils.log.log.event(message);
+    log.event(message);
     try events.sendShowNotification(services, io, arena, .{
         .message = message,
         .color = "success",
@@ -300,7 +303,8 @@ fn enqueueEvictOriginals(state: *MainState, services: HandlerServices, io: std.I
 // The task is a child of the one running ensureAutoImport, so it takes that task's source.
 //
 fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, database_path: []const u8) !void {
-    utils.log.log.info(try std.fmt.allocPrint(arena, "Creating the default photo database at \"{s}\".", .{database_path}));
+    const log = services.log;
+    log.info(try std.fmt.allocPrint(arena, "Creating the default photo database at \"{s}\".", .{database_path}));
     const task_id = try services.queueChild(io, arena, timers, "create-default-database", .{
         .databasePath = database_path,
         .configPath = try node_api.config_file.getConfigPath(arena),
@@ -342,6 +346,7 @@ pub const IEnsureAutoImportResult = struct {
 // task ends (see applyEnsureAutoImport).
 //
 pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, context: TaskContext, given: main_state.IEnsureAutoImportData) !IEnsureAutoImportResult {
+    const log = services.log;
     // A phone does not watch folders. Its automatic import is the background work the page starts and stops (startBackgroundImport and
     // stopBackgroundImport), which reads the device photo library.
     if (builtin.os.tag == .ios or builtin.abi.isAndroid()) {
@@ -369,7 +374,7 @@ pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, aren
     }
 
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
-    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, plan.databasePath, services.nativeCaller(&requester_storage)))) {
+    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, log, plan.databasePath, services.nativeCaller(&requester_storage)))) {
         try createDefaultDatabase(services, timers, io, arena, plan.databasePath);
     }
     return .{
@@ -411,13 +416,14 @@ fn clearAutoImportState(state: *MainState, allocator: std.mem.Allocator) bool {
 // Does what an ensure-auto-import task found automatic import should do: stops it, or starts it into the database it named.
 //
 fn applyEnsureAutoImport(state: *MainState, services: HandlerServices, io: std.Io, arena: std.mem.Allocator, result_json: []const u8) !void {
+    const log = services.log;
     const allocator = main_state.stateAllocator();
     const found = try std.json.parseFromSliceLeaky(IEnsureAutoImportResult, arena, result_json, .{
         .ignore_unknown_fields = true,
     });
     if (std.mem.eql(u8, found.action, "stop")) {
         if (clearAutoImportState(state, allocator)) {
-            utils.log.log.info("Stopping automatic import.");
+            log.info("Stopping automatic import.");
             services.cancelTasks(io, arena, AUTO_IMPORT_TASK_SOURCE);
         }
         return;
@@ -432,7 +438,7 @@ fn applyEnsureAutoImport(state: *MainState, services: HandlerServices, io: std.I
         services.cancelTasks(io, arena, AUTO_IMPORT_TASK_SOURCE);
     }
 
-    utils.log.log.info(try std.fmt.allocPrint(arena, "Starting automatic import into \"{s}\".", .{database_path}));
+    log.info(try std.fmt.allocPrint(arena, "Starting automatic import into \"{s}\".", .{database_path}));
     // The import task itself, fed by a scanner that watches the configured folders. There used to be a separate `auto-import` task that
     // ran a loop and started one of these for every handful of photos it released; one task doing both is what removed that cost.
     const session_id = try state.uuid_generator.uuidGenerator().generate(arena, io);
@@ -477,8 +483,9 @@ fn applyEnsureAutoImport(state: *MainState, services: HandlerServices, io: std.I
 // stops. The page is told of every task's end by the core.
 //
 pub fn onTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, end: ziggy.types.TaskEnd) void {
+    const log = services.log;
     handleTaskEnd(services, timers, io, allocator, end) catch |err| {
-        utils.log.log.exception("Error handling the end of a task", err);
+        log.exception("Error handling the end of a task", err);
     };
 }
 
@@ -499,6 +506,7 @@ fn errorMessageOrUnknown(error_message: ?[]const u8) []const u8 {
 // What the main process does when a task ends.
 //
 fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: std.mem.Allocator, end: ziggy.types.TaskEnd) !void {
+    const log = services.log;
     const allocator = main_state.stateAllocator();
     const state = main_state.current();
     if (background_work.Pass.fromTaskType(end.task_type)) |pass| {
@@ -511,7 +519,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
             }
         }
         else if (end.status == .failed) {
-            utils.log.log.@"error"(try std.fmt.allocPrint(arena, "The background {s} pass failed: {s}", .{ pass.label(), errorMessageOrUnknown(end.error_message) }));
+            log.@"error"(try std.fmt.allocPrint(arena, "The background {s} pass failed: {s}", .{ pass.label(), errorMessageOrUnknown(end.error_message) }));
         }
         state.backgroundPassEnded(services, timers, io, allocator, pass, result);
     }
@@ -528,7 +536,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
     }
     if (std.mem.eql(u8, end.task_type, "startBackgroundImport") and end.status == .succeeded) {
         state.startBackgroundWork(services, timers, io, allocator);
-        utils.log.log.info("Started the background automatic import.");
+        log.info("Started the background automatic import.");
     }
     if (std.mem.eql(u8, end.task_type, "ensure-auto-import")) {
         state.auto_import_starting = false;
@@ -539,7 +547,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
                 .ignore_unknown_fields = true,
             }) catch main_state.IEnsureAutoImportData{};
             const what = if (given.restarting) "restarting" else "starting";
-            utils.log.log.@"error"(try std.fmt.allocPrint(arena, "Error {s} automatic import: {s}", .{ what, errorMessageOrUnknown(end.error_message) }));
+            log.@"error"(try std.fmt.allocPrint(arena, "Error {s} automatic import: {s}", .{ what, errorMessageOrUnknown(end.error_message) }));
         }
         else if (end.status == .succeeded) {
             if (end.result_json) |text| {
@@ -580,12 +588,12 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
             main_state.freeOwned(allocator, &state.auto_import_database_path);
             main_state.freeOwned(allocator, &state.auto_import_settings_json);
             if (end.status != .succeeded) {
-                utils.log.log.@"error"(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
+                log.@"error"(try std.fmt.allocPrint(arena, "Automatic import stopped: {s}", .{errorMessageOrUnknown(end.error_message)}));
             }
             return;
         }
         if (end.status == .succeeded) {
-            utils.log.log.event("Import task completed");
+            log.event("Import task completed");
         }
         else {
             try events.sendShowNotification(services, io, arena, .{
@@ -601,7 +609,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
                 .ignore_unknown_fields = true,
             });
             handleReplicateSucceeded(services, io, arena, inputs) catch |err| {
-                utils.log.log.exception("Error finalising replicate-database", err);
+                log.exception("Error finalising replicate-database", err);
             };
         }
         else {
@@ -613,7 +621,7 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
         }
     }
     if (std.mem.eql(u8, end.task_type, "add-paths") and end.status == .succeeded) {
-        utils.log.log.info("Import task completed");
+        log.info("Import task completed");
     }
 }
 
@@ -623,12 +631,14 @@ fn handleTaskEnd(services: HandlerServices, timers: Timers, io: std.Io, arena: s
 // MacOS, and tells the page when a sync starts and when it completes. The page is told of every task event by the core.
 //
 pub fn onTaskEvent(services: HandlerServices, _: Timers, io: std.Io, allocator: std.mem.Allocator, sent: ziggy.types.TaskSentEvent) void {
+    const log = services.log;
     handleTaskEvent(services, io, allocator, sent) catch |err| {
-        utils.log.log.exception("Error handling a task event", err);
+        log.exception("Error handling a task event", err);
     };
 }
 
 fn handleTaskEvent(services: HandlerServices, io: std.Io, arena: std.mem.Allocator, sent: ziggy.types.TaskSentEvent) !void {
+    const log = services.log;
     const event = try std.json.parseFromSliceLeaky(std.json.Value, arena, sent.event_json, .{});
     const event_type = json.getString(event, "type") orelse {
         return;
@@ -657,7 +667,7 @@ fn handleTaskEvent(services: HandlerServices, io: std.Io, arena: std.mem.Allocat
         try main_state.current().holdAwake(arena, try json.stringify(arena, request));
     }
     else if (std.mem.eql(u8, event_type, "sync-started")) {
-        utils.log.log.event("Sync started");
+        log.event("Sync started");
         try events.sendSyncStarted(services, io, arena);
     }
     else if (std.mem.eql(u8, event_type, "sync-completed")) {
@@ -667,10 +677,10 @@ fn handleTaskEvent(services: HandlerServices, io: std.Io, arena: std.mem.Allocat
         const synced_field = if (event == .object) event.object.get("synced") else null;
         const moved_changes = synced_field != null and synced_field.? == .bool and synced_field.?.bool;
         if (moved_changes) {
-            utils.log.log.event("Sync completed: changes synced");
+            log.event("Sync completed: changes synced");
         }
         else {
-            utils.log.log.event("Sync completed: nothing to sync");
+            log.event("Sync completed: nothing to sync");
         }
         try events.sendSyncCompleted(services, io, arena);
     }

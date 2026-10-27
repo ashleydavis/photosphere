@@ -237,7 +237,9 @@ log_success "The photo was imported into the replica on the device"
 send_command "$APP_PORT" notify-database-edited '{}' || exit 1
 
 wait_for_log "$TMP_DIR" "Sync started"
-wait_for_log "$TMP_DIR" "Sync completed"
+# The event the main thread logs once the sync task has finished. The worker's own "Sync completed: N records merged." comes
+# earlier, while the sync still holds the origin's write lock and is still writing to the bucket.
+wait_for_log "$TMP_DIR" "Sync completed: changes synced"
 
 # That line is not the assertion and cannot be: syncDatabases catches a file it could not copy,
 # counts it as left behind and finishes the pass reporting that it synced changes. The measured

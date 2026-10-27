@@ -11,26 +11,6 @@ pub const MockLog = struct {
     // How many times exception has been called.
     exceptionCalls: u32 = 0,
 
-    // The log that was active before this one was installed.
-    previousLog: ?utils.log.ILog = null,
-
-    //
-    // Makes this the global log.
-    //
-    pub fn install(self: *MockLog) void {
-        self.previousLog = utils.log.currentLog();
-        utils.log.setLog(self.ilog());
-    }
-
-    //
-    // Restores the log that was active before install.
-    //
-    pub fn uninstall(self: *MockLog) void {
-        if (self.previousLog) |previous| {
-            utils.log.setLog(previous);
-        }
-    }
-
     //
     // Gets the ILog interface for this log.
     //
@@ -56,6 +36,7 @@ const mock_log_vtable: utils.log.ILog.VTable = .{
     .event = mockIgnoreMessage,
     .verboseEnabled = mockVerboseEnabled,
     .getLogDetails = mockGetLogDetails,
+    .logFilePath = mockLogFilePath,
 };
 
 //
@@ -110,4 +91,12 @@ fn mockGetLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) 
     _ = allocator;
     _ = io;
     return utils.log.noLogDetails;
+}
+
+//
+// This log writes no file.
+//
+fn mockLogFilePath(ptr: *anyopaque) ?[]const u8 {
+    _ = ptr;
+    return null;
 }

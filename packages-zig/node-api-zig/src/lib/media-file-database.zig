@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const storage_zig = @import("storage-zig");
 const merkle_tree_zig = @import("merkle-tree-zig");
@@ -15,7 +16,6 @@ const LazyOriginStorage = lazy_origin_storage.LazyOriginStorage;
 const merkle_tree = merkle_tree_zig.merkle_tree;
 const bson = serialization_zig.bson;
 const errors = utils.errors;
-const log = &utils.log.log;
 const retry = utils.retry.retry;
 const retryOnce = utils.retry.retryOnce;
 const DATABASE_REACHABLE_TIMEOUT = api.constants.DATABASE_REACHABLE_TIMEOUT;
@@ -36,9 +36,9 @@ const ILocation = utils.reverse_geocode.ILocation;
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
 //
-pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, inputPath: []const u8) !?[3]f64 {
+pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8) !?[3]f64 {
     var image = Image.init(inputPath);
-    return try image.getDominantColor(allocator, io, toolRunner);
+    return try image.getDominantColor(allocator, io, log, toolRunner);
 }
 
 //
@@ -69,13 +69,13 @@ pub const ProgressCallback = struct {
     context: ?*anyopaque,
 
     // The callback function.
-    function: *const fn (context: ?*anyopaque, io: std.Io, currentlyScanning: ?[]const u8) void,
+    function: *const fn (context: ?*anyopaque, io: std.Io, log: ILog, currentlyScanning: ?[]const u8) void,
 
     //
     // Invokes the callback.
     //
-    pub fn call(self: ProgressCallback, io: std.Io, currentlyScanning: ?[]const u8) void {
-        self.function(self.context, io, currentlyScanning);
+    pub fn call(self: ProgressCallback, io: std.Io, log: ILog, currentlyScanning: ?[]const u8) void {
+        self.function(self.context, io, log, currentlyScanning);
     }
 };
 
@@ -374,6 +374,7 @@ const WriteReadmeOperation = retry_operations.WriteOperation("() => rawStorage.w
 pub fn createReadme(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     rawStorage: IStorage,
     merkleTree: IMerkleTree,
 ) !IMerkleTree {
@@ -385,14 +386,14 @@ pub fn createReadme(
         .contentType = "text/markdown",
         .data = DATABASE_README_CONTENT,
     };
-    try retry(io, &writeOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &writeOperation, 3, 1_000, 2, 30_000, null);
 
     var infoOperation: retry_operations.InfoOperation("() => rawStorage.info(\"README.md\")") = .{
         .allocator = allocator,
         .storage = rawStorage,
         .fileName = "README.md",
     };
-    const readmeInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const readmeInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("README.md file not found after creation.", .{});
     };
 
@@ -401,7 +402,7 @@ pub fn createReadme(
         .storage = rawStorage,
         .fileName = "README.md",
     };
-    const readmeHash = try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
+    const readmeHash = try retry(io, log, &hashOperation, 3, 1_000, 2, 30_000, null);
 
     return try merkle_tree.addItem(allocator, &merkleTree, .{
         .name = "README.md",
@@ -453,6 +454,7 @@ pub fn createMediaFileDatabase(
 pub fn createDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     uuidGenerator: IUuidGenerator,
@@ -468,18 +470,18 @@ pub fn createDatabase(
     var merkleTree = merkle_tree.createTree(treeId);
     merkleTree.databaseMetadata = try emptyDatabaseMetadata(allocator);
 
-    try ensureSortIndex(io, metadataCollection);
+    try ensureSortIndex(io, log, metadataCollection);
 
-    merkleTree = try createReadme(allocator, io, rawStorage, merkleTree);
+    merkleTree = try createReadme(allocator, io, log, rawStorage, merkleTree);
 
     var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
         .allocator = allocator,
         .merkleTree = &merkleTree,
         .storage = assetStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
 
-    try api.database_config.saveDatabaseConfig(allocator, io, rawStorage, api.database_config.IDatabaseConfig{});
+    try api.database_config.saveDatabaseConfig(allocator, io, log, rawStorage, api.database_config.IDatabaseConfig{});
 
     log.verbose("Created new media file database.");
 }
@@ -489,6 +491,7 @@ pub fn createDatabase(
 //
 pub fn loadSortIndexes(
     allocator: std.mem.Allocator,
+    log: ILog,
     assetStorage: IStorage,
     _metadataCollection: *IBsonCollection,
 ) !void {
@@ -519,9 +522,9 @@ fn EnsureSortIndexOperation(comptime sourceText: []const u8) type {
         //
         // Loads the sort index, building it when it does not exist.
         //
-        pub fn run(self: *@This(), io: std.Io) !void {
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
             const sortIndex = try self.metadataCollection.sortIndex(self.fieldName, self.direction);
-            try sortIndex.ensure(io, self.metadataCollection, self.sortDataType);
+            try sortIndex.ensure(io, log, self.metadataCollection, self.sortDataType);
         }
     };
 }
@@ -529,21 +532,21 @@ fn EnsureSortIndexOperation(comptime sourceText: []const u8) type {
 //
 // Ensures the sort index exists.
 //
-pub fn ensureSortIndex(io: std.Io, metadataCollection: *IBsonCollection) !void {
+pub fn ensureSortIndex(io: std.Io, log: ILog, metadataCollection: *IBsonCollection) !void {
     var hashOperation: EnsureSortIndexOperation("() => metadataCollection.sortIndex(\"hash\", \"asc\").ensure(metadataCollection, \"string\")") = .{
         .metadataCollection = metadataCollection,
         .fieldName = "hash",
         .direction = .asc,
         .sortDataType = .string,
     };
-    try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &hashOperation, 3, 1_000, 2, 30_000, null);
     var photoDateOperation: EnsureSortIndexOperation("() => metadataCollection.sortIndex(\"photoDate\", \"desc\").ensure(metadataCollection, \"date\")") = .{
         .metadataCollection = metadataCollection,
         .fieldName = "photoDate",
         .direction = .desc,
         .sortDataType = .date,
     };
-    try retry(io, &photoDateOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &photoDateOperation, 3, 1_000, 2, 30_000, null);
 }
 
 //
@@ -562,20 +565,20 @@ const GetDatabaseRootHashOperation = struct {
     //
     // Gets the root hash of the BSON database tree.
     //
-    pub fn run(self: *@This(), io: std.Io) !?[]const u8 {
-        return bdb.merkle_tree.getDatabaseRootHash(self.allocator, io, self.assetStorage, ".db/bson");
+    pub fn run(self: *@This(), io: std.Io, log: ILog) !?[]const u8 {
+        return bdb.merkle_tree.getDatabaseRootHash(self.allocator, io, log, self.assetStorage, ".db/bson");
     }
 };
 
 //
 // Gets a summary of the entire media file database.
 //
-pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage) !IDatabaseSummary {
+pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage) !IDatabaseSummary {
     var loadOperation: retry_operations.LoadMerkleTreeOperation("() => loadMerkleTree(assetStorage)") = .{
         .allocator = allocator,
         .storage = assetStorage,
     };
-    const merkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const merkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load merkle tree.", .{});
     };
 
@@ -587,7 +590,7 @@ pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage
         .allocator = allocator,
         .assetStorage = assetStorage,
     };
-    const databaseRootHash = try retry(io, &rootHashOperation, 3, 1_000, 2, 30_000, null);
+    const databaseRootHash = try retry(io, log, &rootHashOperation, 3, 1_000, 2, 30_000, null);
 
     // Compute aggregate root hash
     var fullHash: []const u8 = undefined;
@@ -623,9 +626,9 @@ pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, assetStorage
 // This is used by the REST API server to read assets.
 // (Zig: the stream is destroyed by the caller, with IReadStream.destroy.)
 //
-pub fn streamAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStorage, assetId: []const u8, assetType: []const u8) !storage_zig.storage.IReadStream {
+pub fn streamAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, assetStorage: IStorage, assetId: []const u8, assetType: []const u8) !storage_zig.storage.IReadStream {
     const assetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, assetId });
-    return assetStorage.readStream(allocator, io, assetPath);
+    return assetStorage.readStream(allocator, io, log, assetPath);
 }
 
 //
@@ -637,6 +640,7 @@ pub fn streamAsset(allocator: std.mem.Allocator, io: std.Io, assetStorage: IStor
 pub fn writeAsset(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -647,11 +651,11 @@ pub fn writeAsset(
 ) !void {
     const assetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, assetId });
 
-    if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+    if (!try api.write_lock.acquireWriteLock(allocator, io, log, rawStorage, sessionId, 3)) {
         return errors.throwError("Failed to acquire write lock.", .{});
     }
-    const result = writeAssetUnderLock(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, buffer);
-    try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+    const result = writeAssetUnderLock(allocator, io, log, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, buffer);
+    try api.write_lock.releaseWriteLock(allocator, io, log, rawStorage);
     return result;
 }
 
@@ -663,6 +667,7 @@ pub fn writeAsset(
 fn writeAssetUnderLock(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -671,14 +676,14 @@ fn writeAssetUnderLock(
     contentType: ?[]const u8,
     buffer: []const u8,
 ) !void {
-    writeAssetTry(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, buffer) catch |err| {
+    writeAssetTry(allocator, io, log, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, buffer) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Failed to add asset \"{s}\" from buffer", .{assetPath}), err);
         var deleteOperation: retry_operations.DeleteFileOperation("() => assetStorage.deleteFile(assetPath)") = .{
             .allocator = allocator,
             .storage = assetStorage,
             .filePath = assetPath,
         };
-        try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &deleteOperation, 3, 1_000, 2, 30_000, null);
         return err;
     };
 }
@@ -689,6 +694,7 @@ fn writeAssetUnderLock(
 fn writeAssetTry(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -701,7 +707,7 @@ fn writeAssetTry(
         .allocator = allocator,
         .storage = assetStorage,
     };
-    var merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var merkleTree: IMerkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load media file database.", .{});
     };
 
@@ -712,14 +718,14 @@ fn writeAssetTry(
         .contentType = contentType,
         .data = buffer,
     };
-    try retry(io, &writeOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &writeOperation, 3, 1_000, 2, 30_000, null);
 
     var infoOperation: retry_operations.InfoOperation("() => assetStorage.info(assetPath)") = .{
         .allocator = allocator,
         .storage = assetStorage,
         .fileName = assetPath,
     };
-    const assetInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const assetInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to get info for file \"{s}\"", .{assetPath});
     };
 
@@ -729,9 +735,9 @@ fn writeAssetTry(
         .fileName = assetPath,
         .fileInfo = assetInfo,
     };
-    const hashedAsset = try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
+    const hashedAsset = try retry(io, log, &hashOperation, 3, 1_000, 2, 30_000, null);
 
-    try api.write_lock.refreshWriteLock(allocator, io, rawStorage, sessionId);
+    try api.write_lock.refreshWriteLock(allocator, io, log, rawStorage, sessionId);
 
     merkleTree = try merkle_tree.addItem(allocator, &merkleTree, .{
         .name = assetPath,
@@ -755,8 +761,8 @@ fn writeAssetTry(
         .merkleTree = &merkleTree,
         .storage = assetStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
-    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try tree.stampDatabaseModified(allocator, io, log, assetStorage, rawStorage);
 }
 
 //
@@ -768,6 +774,7 @@ fn writeAssetTry(
 pub fn writeAssetStream(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -779,11 +786,11 @@ pub fn writeAssetStream(
 ) !void {
     const assetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, assetId });
 
-    if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+    if (!try api.write_lock.acquireWriteLock(allocator, io, log, rawStorage, sessionId, 3)) {
         return errors.throwError("Failed to acquire write lock.", .{});
     }
-    const result = writeAssetStreamUnderLock(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, inputStream, contentLength);
-    try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+    const result = writeAssetStreamUnderLock(allocator, io, log, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, inputStream, contentLength);
+    try api.write_lock.releaseWriteLock(allocator, io, log, rawStorage);
     return result;
 }
 
@@ -793,6 +800,7 @@ pub fn writeAssetStream(
 fn writeAssetStreamUnderLock(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -802,14 +810,14 @@ fn writeAssetStreamUnderLock(
     inputStream: *std.Io.Reader,
     contentLength: ?u64,
 ) !void {
-    writeAssetStreamTry(allocator, io, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, inputStream, contentLength) catch |err| {
+    writeAssetStreamTry(allocator, io, log, assetStorage, rawStorage, sessionId, assetType, assetPath, contentType, inputStream, contentLength) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Failed to add asset \"{s}\" from stream", .{assetPath}), err);
         var deleteOperation: retry_operations.DeleteFileOperation("() => assetStorage.deleteFile(assetPath)") = .{
             .allocator = allocator,
             .storage = assetStorage,
             .filePath = assetPath,
         };
-        try retry(io, &deleteOperation, 3, 1_000, 2, 30_000, null);
+        try retry(io, log, &deleteOperation, 3, 1_000, 2, 30_000, null);
         return err;
     };
 }
@@ -820,6 +828,7 @@ fn writeAssetStreamUnderLock(
 fn writeAssetStreamTry(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -833,7 +842,7 @@ fn writeAssetStreamTry(
         .allocator = allocator,
         .storage = assetStorage,
     };
-    var merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var merkleTree: IMerkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load media file database.", .{});
     };
 
@@ -845,14 +854,14 @@ fn writeAssetStreamTry(
         .inputStream = inputStream,
         .contentLength = contentLength,
     };
-    try retry(io, &writeOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &writeOperation, 3, 1_000, 2, 30_000, null);
 
     var infoOperation: retry_operations.InfoOperation("() => assetStorage.info(assetPath)") = .{
         .allocator = allocator,
         .storage = assetStorage,
         .fileName = assetPath,
     };
-    const assetInfo = try retry(io, &infoOperation, 3, 1_000, 2, 30_000, null);
+    const assetInfo = try retry(io, log, &infoOperation, 3, 1_000, 2, 30_000, null);
     if (assetInfo == null or assetInfo.?.length == 0) {
         return errors.throwError("Asset data is empty", .{});
     }
@@ -863,9 +872,9 @@ fn writeAssetStreamTry(
         .fileName = assetPath,
         .fileInfo = assetInfo.?,
     };
-    const hashedAsset = try retry(io, &hashOperation, 3, 1_000, 2, 30_000, null);
+    const hashedAsset = try retry(io, log, &hashOperation, 3, 1_000, 2, 30_000, null);
 
-    try api.write_lock.refreshWriteLock(allocator, io, rawStorage, sessionId);
+    try api.write_lock.refreshWriteLock(allocator, io, log, rawStorage, sessionId);
 
     merkleTree = try merkle_tree.addItem(allocator, &merkleTree, .{
         .name = assetPath,
@@ -889,8 +898,8 @@ fn writeAssetStreamTry(
         .merkleTree = &merkleTree,
         .storage = assetStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
-    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try tree.stampDatabaseModified(allocator, io, log, assetStorage, rawStorage);
 }
 
 //
@@ -902,6 +911,7 @@ fn writeAssetStreamTry(
 pub fn writeAssetStreamVerified(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     sourceStorage: IStorage,
     destStorage: IStorage,
     destRawStorage: IStorage,
@@ -913,7 +923,7 @@ pub fn writeAssetStreamVerified(
     inputStream: *std.Io.Reader,
     contentLength: ?u64,
 ) !void {
-    try writeAssetStream(allocator, io, destStorage, destRawStorage, sessionId, destAssetId, assetType, contentType, inputStream, contentLength);
+    try writeAssetStream(allocator, io, log, destStorage, destRawStorage, sessionId, destAssetId, assetType, contentType, inputStream, contentLength);
 
     const sourceAssetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, sourceAssetId });
     const destAssetPath = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ assetType, destAssetId });
@@ -923,7 +933,7 @@ pub fn writeAssetStreamVerified(
         .storage = sourceStorage,
         .fileName = sourceAssetPath,
     };
-    const sourceInfo = try retry(io, &sourceInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const sourceInfo = try retry(io, log, &sourceInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Verification failed: source file \"{s}\" is no longer accessible after write.", .{sourceAssetPath});
     };
 
@@ -932,7 +942,7 @@ pub fn writeAssetStreamVerified(
         .storage = destStorage,
         .fileName = destAssetPath,
     };
-    const destInfo = try retry(io, &destInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
+    const destInfo = try retry(io, log, &destInfoOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Verification failed: destination file \"{s}\" not found after write.", .{destAssetPath});
     };
 
@@ -942,7 +952,7 @@ pub fn writeAssetStreamVerified(
         .fileName = sourceAssetPath,
         .fileInfo = sourceInfo,
     };
-    const sourceHash = try retry(io, &sourceHashOperation, 3, 1_000, 2, 30_000, null);
+    const sourceHash = try retry(io, log, &sourceHashOperation, 3, 1_000, 2, 30_000, null);
 
     var destHashOperation: retry_operations.ComputeAssetHashOperation("async () => computeAssetHash(await destStorage.readStream(destAssetPath), destInfo)") = .{
         .allocator = allocator,
@@ -950,7 +960,7 @@ pub fn writeAssetStreamVerified(
         .fileName = destAssetPath,
         .fileInfo = destInfo,
     };
-    const destHash = try retry(io, &destHashOperation, 3, 1_000, 2, 30_000, null);
+    const destHash = try retry(io, log, &destHashOperation, 3, 1_000, 2, 30_000, null);
 
     if (!std.mem.eql(u8, sourceHash.hash, destHash.hash)) {
         return errors.throwError("Verification failed: hash mismatch for \"{s}\" of asset \"{s}\" -- destination copy is corrupt.", .{ assetType, sourceAssetId });
@@ -964,6 +974,7 @@ pub fn writeAssetStreamVerified(
 pub fn removeAsset(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     sessionId: []const u8,
@@ -977,11 +988,11 @@ pub fn removeAsset(
     //
     try bsonDatabase.flush();
 
-    if (!try api.write_lock.acquireWriteLock(allocator, io, rawStorage, sessionId, 3)) {
+    if (!try api.write_lock.acquireWriteLock(allocator, io, log, rawStorage, sessionId, 3)) {
         return errors.throwError("Failed to acquire write lock.", .{});
     }
-    const result = removeAssetUnderLock(allocator, io, assetStorage, rawStorage, bsonDatabase, metadataCollection, assetId, recordDeleted);
-    try api.write_lock.releaseWriteLock(allocator, io, rawStorage);
+    const result = removeAssetUnderLock(allocator, io, log, assetStorage, rawStorage, bsonDatabase, metadataCollection, assetId, recordDeleted);
+    try api.write_lock.releaseWriteLock(allocator, io, log, rawStorage);
     return result;
 }
 
@@ -993,6 +1004,7 @@ pub fn removeAsset(
 fn removeAssetUnderLock(
     allocator: std.mem.Allocator,
     io: std.Io,
+    log: ILog,
     assetStorage: IStorage,
     rawStorage: IStorage,
     bsonDatabase: *BsonDatabase,
@@ -1004,7 +1016,7 @@ fn removeAssetUnderLock(
         .allocator = allocator,
         .storage = assetStorage,
     };
-    var merkleTree: IMerkleTree = try retry(io, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
+    var merkleTree: IMerkleTree = try retry(io, log, &loadOperation, 3, 1_000, 2, 30_000, null) orelse {
         return errors.throwError("Failed to load media file database.", .{});
     };
 
@@ -1020,7 +1032,7 @@ fn removeAssetUnderLock(
     try merkle_tree.deleteItem(allocator, &merkleTree, displayPath);
     try merkle_tree.deleteItem(allocator, &merkleTree, thumbPath);
 
-    const removed = try metadataCollection.deleteOne(io, assetId);
+    const removed = try metadataCollection.deleteOne(io, log, assetId);
     if (removed) {
         var databaseMetadata = merkleTree.databaseMetadata orelse try emptyDatabaseMetadata(allocator);
         const filesImported = databaseMetadata.get("filesImported") orelse BsonValue.undefined;
@@ -1058,7 +1070,7 @@ fn removeAssetUnderLock(
     }
 
     // Commit accumulated changes to bsondb.
-    try bsonDatabase.commit(io);
+    try bsonDatabase.commit(io, log);
 
     // Merkle tree has to be saved after all modifications to it are made.
     var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(merkleTree, assetStorage)") = .{
@@ -1066,7 +1078,7 @@ fn removeAssetUnderLock(
         .merkleTree = &merkleTree,
         .storage = assetStorage,
     };
-    try retry(io, &saveOperation, 3, 1_000, 2, 30_000, null);
+    try retry(io, log, &saveOperation, 3, 1_000, 2, 30_000, null);
 
     //
     // Delete the files from storage.
@@ -1078,7 +1090,7 @@ fn removeAssetUnderLock(
     //
     // Record the modification in the state file.
     //
-    try tree.stampDatabaseModified(allocator, io, assetStorage, rawStorage);
+    try tree.stampDatabaseModified(allocator, io, log, assetStorage, rawStorage);
 }
 
 //
@@ -1086,9 +1098,9 @@ fn removeAssetUnderLock(
 // Checks the isPartial flag stored in the merkle tree's database metadata.
 // (Zig: s3Config and storageOptions are passed as null when absent.)
 //
-pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !bool {
+pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !bool {
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
-    const merkleTree = try tree.loadMerkleTree(allocator, io, created.storage);
+    const merkleTree = try tree.loadMerkleTree(allocator, io, log, created.storage);
     return merkleTree != null and isPartialDatabase(merkleTree.?.databaseMetadata);
 }
 
@@ -1099,20 +1111,20 @@ pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, databasePath:
 // (Zig: resolveStorageCredentials is given null for its optional encryptionKey and s3Key, and the LazyOriginStorage is allocated
 // with the allocator and keeps it.)
 //
-pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.native_caller.INativeCaller) !IStorage {
+pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.native_caller.INativeCaller) !IStorage {
     const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
 
-    const config = try api.database_config.loadDatabaseConfig(allocator, io, created.rawStorage);
+    const config = try api.database_config.loadDatabaseConfig(allocator, io, log, created.rawStorage);
     const origin = configOrigin(config) orelse {
         return created.storage;
     };
 
-    const merkleTree = try tree.loadMerkleTree(allocator, io, created.storage);
+    const merkleTree = try tree.loadMerkleTree(allocator, io, log, created.storage);
     if (merkleTree == null or !isPartialDatabase(merkleTree.?.databaseMetadata)) {
         return created.storage;
     }
 
-    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null, host);
+    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, log, origin, null, null, host);
     const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
     const lazyStorage = try allocator.create(LazyOriginStorage);
@@ -1133,18 +1145,18 @@ pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, datab
 // compare the local database against its origin, and a local read that falls back to the origin
 // makes the two look identical when they are not.
 //
-pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.native_caller.INativeCaller) !IStorage {
-    const config = try api.database_config.loadDatabaseConfig(allocator, io, localRawStorage);
+pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.native_caller.INativeCaller) !IStorage {
+    const config = try api.database_config.loadDatabaseConfig(allocator, io, log, localRawStorage);
     const origin = configOrigin(config) orelse {
         return localStorage;
     };
 
-    const merkleTree = try tree.loadMerkleTree(allocator, io, localStorage);
+    const merkleTree = try tree.loadMerkleTree(allocator, io, log, localStorage);
     if (merkleTree == null or !isPartialDatabase(merkleTree.?.databaseMetadata)) {
         return localStorage;
     }
 
-    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, origin, null, null, host);
+    const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, log, origin, null, null, host);
     const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
     const lazyStorage = try allocator.create(LazyOriginStorage);
@@ -1193,8 +1205,8 @@ const OpenAndCheckMerkleTreeOperation = struct {
     //
     // Opens the storage for the path and asks whether it holds a merkle tree.
     //
-    pub fn run(self: *OpenAndCheckMerkleTreeOperation, io: std.Io) !bool {
-        const opened = try open_storage.openStorage(self.allocator, io, self.databasePath, null, null, self.host);
+    pub fn run(self: *OpenAndCheckMerkleTreeOperation, io: std.Io, log: ILog) !bool {
+        const opened = try open_storage.openStorage(self.allocator, io, log, self.databasePath, null, null, self.host);
         return tree.merkleTreeExists(self.allocator, io, opened.storage);
     }
 };
@@ -1208,7 +1220,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
 // an automatic sync may run is a separate question, decided by computeSyncAllowed from the platform's
 // reported network status.
 //
-pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !bool {
+pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !bool {
     // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
     // from the database's own config, so the existence check and the actual load agree on what is
     // reachable rather than probing with no credentials.
@@ -1237,7 +1249,7 @@ pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, databasePat
     };
     storage_zig.s3_client.setRequestTimeout(DATABASE_REACHABLE_TIMEOUT);
     defer storage_zig.s3_client.setRequestTimeout(null);
-    return retryOnce(io, &operation, DATABASE_REACHABLE_TIMEOUT) catch |err| {
+    return retryOnce(io, log, &operation, DATABASE_REACHABLE_TIMEOUT) catch |err| {
         if (storage_zig.s3_client.takeRequestTimedOut()) {
             return errors.throwError("Operation timed out after {d}ms: {s}", .{ DATABASE_REACHABLE_TIMEOUT, OpenAndCheckMerkleTreeOperation.source });
         }

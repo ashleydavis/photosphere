@@ -167,7 +167,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 ## Guides
 
 - [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) - Ziggy's parts, message protocol, how to add a message type, a task type or a native host callback, and the test hooks.
-- [Photosphere on Ziggy](photosphere-on-ziggy.md) - How Photosphere takes Ziggy from the local checkout beside this repository, and how Photosphere is built on it.
+- [Photosphere on Ziggy](photosphere-on-ziggy.md) - How Photosphere takes Ziggy at a version tag, how to move to a newer one, and how Photosphere is built on it.
 - [Photosphere App](../apps/photosphere/README.md) - Building and running the app on each platform.
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.

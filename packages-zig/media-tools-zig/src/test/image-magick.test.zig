@@ -1,4 +1,5 @@
 const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const media_tools = @import("media-tools-zig");
@@ -16,19 +17,20 @@ fn tempFilePath(allocator: std.mem.Allocator, tmp_dir: std.testing.TmpDir, name:
 //
 // Makes an image of one colour with ImageMagick, in the format the name's extension says, and returns its path.
 //
-fn makeImage(allocator: std.mem.Allocator, tmp_dir: std.testing.TmpDir, name: []const u8, size: []const u8, color: []const u8) ![]const u8 {
+fn makeImage(log: ILog, allocator: std.mem.Allocator, tmp_dir: std.testing.TmpDir, name: []const u8, size: []const u8, color: []const u8) ![]const u8 {
     const path = try tempFilePath(allocator, tmp_dir, name);
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "-size", size, color, path });
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "-size", size, color, path });
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     return path;
 }
 
 test "magick -version names the version, the quantum depth and the delegates the library was built with" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const result = try ImageMagick.runMagick(std.testing.io, arena.allocator(), &.{"-version"});
+    const result = try ImageMagick.runMagick(std.testing.io, log, arena.allocator(), &.{"-version"});
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     try std.testing.expect(std.mem.indexOf(u8, result.output, "Version: ImageMagick 7.") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.output, "Q16-HDRI") != null);
@@ -38,6 +40,7 @@ test "magick -version names the version, the quantum depth and the delegates the
 }
 
 test "identify -format hands back the size of a JPEG written by the JPEG delegate" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -45,13 +48,14 @@ test "identify -format hands back the size of a JPEG written by the JPEG delegat
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const path = try makeImage(allocator, tmp_dir, "red.jpg", "20x10", "xc:red");
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "identify", "-format", "%w %h", path });
+    const path = try makeImage(log, allocator, tmp_dir, "red.jpg", "20x10", "xc:red");
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%w %h", path });
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     try std.testing.expectEqualStrings("20 10", result.output);
 }
 
 test "a command that ends in info: hands back what it printed, for a PNG written by the PNG delegate" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -59,13 +63,14 @@ test "a command that ends in info: hands back what it printed, for a PNG written
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const path = try makeImage(allocator, tmp_dir, "red.png", "30x20", "xc:red");
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ path, "-format", "%w %h", "info:" });
+    const path = try makeImage(log, allocator, tmp_dir, "red.png", "30x20", "xc:red");
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ path, "-format", "%w %h", "info:" });
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     try std.testing.expectEqualStrings("30 20", result.output);
 }
 
 test "resizing writes a file of the new size" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -73,15 +78,16 @@ test "resizing writes a file of the new size" {
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const path = try makeImage(allocator, tmp_dir, "big.jpg", "200x100", "xc:blue");
+    const path = try makeImage(log, allocator, tmp_dir, "big.jpg", "200x100", "xc:blue");
     const resized_path = try tempFilePath(allocator, tmp_dir, "small.jpg");
-    const resize_result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ path, "-resize", "40x40", "-quality", "80", "-strip", try std.fmt.allocPrint(allocator, "jpeg:{s}", .{resized_path}) });
+    const resize_result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ path, "-resize", "40x40", "-quality", "80", "-strip", try std.fmt.allocPrint(allocator, "jpeg:{s}", .{resized_path}) });
     try std.testing.expectEqual(@as(i32, 0), resize_result.exit_code);
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ resized_path, "-format", "%w %h", "info:" });
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ resized_path, "-format", "%w %h", "info:" });
     try std.testing.expectEqualStrings("40 20", result.output);
 }
 
 test "the dominant colour command averages the image to one pixel" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -89,12 +95,13 @@ test "the dominant colour command averages the image to one pixel" {
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const path = try makeImage(allocator, tmp_dir, "red.png", "8x8", "xc:red");
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ path, "-resize", "1x1!", "-format", "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]", "info:" });
+    const path = try makeImage(log, allocator, tmp_dir, "red.png", "8x8", "xc:red");
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ path, "-resize", "1x1!", "-format", "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]", "info:" });
     try std.testing.expectEqualStrings("255,0,0", result.output);
 }
 
 test "the histogram command lists the colours of the image" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -102,13 +109,14 @@ test "the histogram command lists the colours of the image" {
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const path = try makeImage(allocator, tmp_dir, "green.png", "8x8", "xc:#00ff00");
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ path, "-resize", "500x500", "-kmeans", "3", "-format", "%c", "histogram:info:" });
+    const path = try makeImage(log, allocator, tmp_dir, "green.png", "8x8", "xc:#00ff00");
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ path, "-resize", "500x500", "-kmeans", "3", "-format", "%c", "histogram:info:" });
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     try std.testing.expect(std.mem.indexOf(u8, result.output, "#00FF00") != null);
 }
 
 test "a file that is not there makes the command fail, with ImageMagick's error naming the file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -117,13 +125,14 @@ test "a file that is not there makes the command fail, with ImageMagick's error 
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
     const path = try tempFilePath(allocator, tmp_dir, "missing.jpg");
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ path, "-format", "%w", "info:" });
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ path, "-format", "%w", "info:" });
     try std.testing.expectEqual(@as(i32, 1), result.exit_code);
     try std.testing.expect(std.mem.startsWith(u8, result.output, "magick: "));
     try std.testing.expect(std.mem.indexOf(u8, result.output, path) != null);
 }
 
 test "identify of a file that is not an image fails with ImageMagick's error" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -132,7 +141,7 @@ test "identify of a file that is not an image fails with ImageMagick's error" {
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
     const path = try writeTextFile(allocator, tmp_dir, "broken.png", "not an image");
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "identify", "-format", "%w %h", path });
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%w %h", path });
     try std.testing.expectEqual(@as(i32, 1), result.exit_code);
     try std.testing.expect(std.mem.startsWith(u8, result.output, "identify: ImproperImageHeader"));
     try std.testing.expect(std.mem.indexOf(u8, result.output, path) != null);
@@ -193,6 +202,14 @@ const IToolLog = struct {
         return utils.log.noLogDetails;
     }
 
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
+
     // The ILog functions of the log.
     const vtable: utils.log.ILog.VTable = .{
         .info = ignoreMessage,
@@ -205,6 +222,7 @@ const IToolLog = struct {
         .event = ignoreMessage,
         .verboseEnabled = verboseEnabled,
         .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
     };
 };
 
@@ -218,24 +236,22 @@ test "the warnings of a command that works go to the log as the tool's standard 
         .stderr = .empty,
         .allocator = allocator,
     };
-    const previous_log = utils.log.currentLog();
-    utils.log.setLog(.{
+    const log: utils.log.ILog = .{
         .ptr = &tool_log,
         .vtable = &IToolLog.vtable,
-    });
-    defer utils.log.setLog(previous_log);
+    };
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
 
     // The JPEG fixture holds an XMP profile, which ImageMagick warns it cannot check without the XML library it is built without.
     // `identify` leaves the warning with the command, and `magick` hands it to ImageMagick's warning handler as it goes.
-    const identified = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "identify", "-format", "%m", "../test/test.jpg" });
+    const identified = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%m", "../test/test.jpg" });
     try std.testing.expectEqual(@as(i32, 0), identified.exit_code);
     try std.testing.expectEqualStrings("JPEG", identified.output);
     try std.testing.expect(std.mem.indexOf(u8, tool_log.stderr.items, "magick: identify: DelegateLibrarySupportNotBuiltIn") != null);
     tool_log.stderr.clearRetainingCapacity();
     const png_path = try tempFilePath(allocator, tmp_dir, "from-jpeg.png");
-    const converted = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "../test/test.jpg", "-resize", "16x16", try std.fmt.allocPrint(allocator, "png:{s}", .{png_path}) });
+    const converted = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "../test/test.jpg", "-resize", "16x16", try std.fmt.allocPrint(allocator, "png:{s}", .{png_path}) });
     try std.testing.expectEqual(@as(i32, 0), converted.exit_code);
     try std.testing.expectEqualStrings("", converted.output);
     try std.testing.expect(std.mem.indexOf(u8, tool_log.stderr.items, "magick: magick: DelegateLibrarySupportNotBuiltIn") != null);
@@ -247,6 +263,7 @@ test "the warnings of a command that works go to the log as the tool's standard 
 //
 const StandardErrorTests = struct {
     test "ImageMagick prints none of its warnings or errors to the standard error" {
+        const log = utils.mute_log.MuteLog.init();
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         defer arena.deinit();
         const allocator = arena.allocator();
@@ -264,10 +281,10 @@ const StandardErrorTests = struct {
         try std.testing.expect(saved_stderr >= 0);
         try std.testing.expect(std.c.dup2(stderr_file.handle, 2) == 2);
         // A warning from `identify`, a warning from `magick`, an error from `magick` and an error from `identify`.
-        const identified = ImageMagick.runMagick(std.testing.io, allocator, &.{ "identify", "-format", "%m", "../test/test.jpg" });
-        const converted = ImageMagick.runMagick(std.testing.io, allocator, &.{ "../test/test.jpg", "-resize", "16x16", try std.fmt.allocPrint(allocator, "png:{s}", .{png_path}) });
-        const missing = ImageMagick.runMagick(std.testing.io, allocator, &.{ missing_path, "-format", "%w", "info:" });
-        const broken = ImageMagick.runMagick(std.testing.io, allocator, &.{ "identify", "-format", "%w %h", broken_path });
+        const identified = ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%m", "../test/test.jpg" });
+        const converted = ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "../test/test.jpg", "-resize", "16x16", try std.fmt.allocPrint(allocator, "png:{s}", .{png_path}) });
+        const missing = ImageMagick.runMagick(std.testing.io, log, allocator, &.{ missing_path, "-format", "%w", "info:" });
+        const broken = ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%w %h", broken_path });
         const restored = std.c.dup2(saved_stderr, 2);
         _ = std.c.close(saved_stderr);
         stderr_file.close(std.testing.io);
@@ -302,6 +319,8 @@ const IWorker = struct {
     // Reads the size of the image over and over, as tasks that hash files do at the same time.
     //
     fn run(worker: *IWorker) void {
+        // The thread's own log, which writes to the console.
+        const log = utils.mute_log.MuteLog.init();
         var threaded: std.Io.Threaded = .init_single_threaded;
         threaded.allocator = std.heap.page_allocator;
         defer threaded.deinit();
@@ -309,7 +328,7 @@ const IWorker = struct {
         while (round < 20) : (round += 1) {
             var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
             defer arena.deinit();
-            const result = ImageMagick.runMagick(threaded.io(), arena.allocator(), &.{ worker.path, "-format", "%w %h", "info:" }) catch {
+            const result = ImageMagick.runMagick(threaded.io(), log, arena.allocator(), &.{ worker.path, "-format", "%w %h", "info:" }) catch {
                 return;
             };
             if (result.exit_code == 0 and std.mem.eql(u8, result.output, "30 20")) {
@@ -320,6 +339,7 @@ const IWorker = struct {
 };
 
 test "commands run on several threads at once all give their own answer" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -327,7 +347,7 @@ test "commands run on several threads at once all give their own answer" {
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const path = try makeImage(allocator, tmp_dir, "shared.jpg", "30x20", "xc:red");
+    const path = try makeImage(log, allocator, tmp_dir, "shared.jpg", "30x20", "xc:red");
     var workers: [8]IWorker = undefined;
     var threads: [8]std.Thread = undefined;
     for (&workers, &threads) |*worker, *thread| {
@@ -346,6 +366,7 @@ test "commands run on several threads at once all give their own answer" {
 }
 
 test "a WebP picture is read, and written, through the WebP delegate" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -353,7 +374,7 @@ test "a WebP picture is read, and written, through the WebP delegate" {
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const read = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "../test/test.webp", "-format", "%w %h", "info:" });
+    const read = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "../test/test.webp", "-format", "%w %h", "info:" });
     try std.testing.expectEqual(@as(i32, 0), read.exit_code);
     var sizes = std.mem.splitScalar(u8, read.output, ' ');
     try std.testing.expect(try std.fmt.parseInt(u32, sizes.next().?, 10) > 0);
@@ -361,12 +382,12 @@ test "a WebP picture is read, and written, through the WebP delegate" {
 
     // The app turns a picture into a JPEG of another size, and may write WebP.
     const jpeg_path = try tempFilePath(allocator, tmp_dir, "from-webp.jpg");
-    const resized = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "../test/test.webp", "-resize", "8x8", "-quality", "80", "-strip", try std.fmt.allocPrint(allocator, "jpeg:{s}", .{jpeg_path}) });
+    const resized = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "../test/test.webp", "-resize", "8x8", "-quality", "80", "-strip", try std.fmt.allocPrint(allocator, "jpeg:{s}", .{jpeg_path}) });
     try std.testing.expectEqual(@as(i32, 0), resized.exit_code);
     const webp_path = try tempFilePath(allocator, tmp_dir, "written.webp");
-    const written = try ImageMagick.runMagick(std.testing.io, allocator, &.{ jpeg_path, "-quality", "80", try std.fmt.allocPrint(allocator, "webp:{s}", .{webp_path}) });
+    const written = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ jpeg_path, "-quality", "80", try std.fmt.allocPrint(allocator, "webp:{s}", .{webp_path}) });
     try std.testing.expectEqual(@as(i32, 0), written.exit_code);
-    const again = try ImageMagick.runMagick(std.testing.io, allocator, &.{ webp_path, "-format", "%m", "info:" });
+    const again = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ webp_path, "-format", "%m", "info:" });
     try std.testing.expectEqualStrings("WEBP", again.output);
 }
 
@@ -385,8 +406,8 @@ fn writeTextFile(allocator: std.mem.Allocator, tmp_dir: std.testing.TmpDir, name
 //
 // Asks ImageMagick for the size of the input and expects the command to fail, because the security policy refuses the read.
 //
-fn expectReadRefused(allocator: std.mem.Allocator, input: []const u8) !void {
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ input, "-format", "%w %h", "info:" });
+fn expectReadRefused(log: ILog, allocator: std.mem.Allocator, input: []const u8) !void {
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ input, "-format", "%w %h", "info:" });
     if (result.exit_code != 1) {
         std.debug.print("The read of {s} was not refused: exit code {d}, output \"{s}\"\n", .{ input, result.exit_code, result.output });
     }
@@ -396,8 +417,8 @@ fn expectReadRefused(allocator: std.mem.Allocator, input: []const u8) !void {
 //
 // Asks ImageMagick for the size of the input and expects it to be read, with a size above zero.
 //
-fn expectReadAllowed(allocator: std.mem.Allocator, input: []const u8) !void {
-    const result = try ImageMagick.runMagick(std.testing.io, allocator, &.{ input, "-format", "%w %h", "info:" });
+fn expectReadAllowed(log: ILog, allocator: std.mem.Allocator, input: []const u8) !void {
+    const result = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ input, "-format", "%w %h", "info:" });
     if (result.exit_code != 0) {
         std.debug.print("The read of {s} failed with exit code {d}\n", .{ input, result.exit_code });
     }
@@ -408,6 +429,7 @@ fn expectReadAllowed(allocator: std.mem.Allocator, input: []const u8) !void {
 }
 
 test "with the security policy set, a JPEG still converts and identifies" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -416,12 +438,12 @@ test "with the security policy set, a JPEG still converts and identifies" {
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
     const png_path = try tempFilePath(allocator, tmp_dir, "from-jpeg.png");
-    const converted = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "../test/test.jpg", "-resize", "16x16", try std.fmt.allocPrint(allocator, "png:{s}", .{png_path}) });
+    const converted = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "../test/test.jpg", "-resize", "16x16", try std.fmt.allocPrint(allocator, "png:{s}", .{png_path}) });
     try std.testing.expectEqual(@as(i32, 0), converted.exit_code);
-    const identified = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "identify", "-format", "%m", "../test/test.jpg" });
+    const identified = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%m", "../test/test.jpg" });
     try std.testing.expectEqual(@as(i32, 0), identified.exit_code);
     try std.testing.expectEqualStrings("JPEG", identified.output);
-    const again = try ImageMagick.runMagick(std.testing.io, allocator, &.{ png_path, "-format", "%m", "info:" });
+    const again = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ png_path, "-format", "%m", "info:" });
     try std.testing.expectEqualStrings("PNG", again.output);
 }
 
@@ -429,7 +451,7 @@ test "with the security policy set, a JPEG still converts and identifies" {
 // Writes the text to a file of the name and expects ImageMagick to refuse to read it as an image, with the prefix (a coder name and
 // a colon) in front of its path.
 //
-fn expectTextFileRefused(name: []const u8, text: []const u8, prefix: []const u8) !void {
+fn expectTextFileRefused(log: ILog, name: []const u8, text: []const u8, prefix: []const u8) !void {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -438,22 +460,26 @@ fn expectTextFileRefused(name: []const u8, text: []const u8, prefix: []const u8)
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
     const path = try writeTextFile(allocator, tmp_dir, name, text);
-    try expectReadRefused(allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, path }));
+    try expectReadRefused(log, allocator, try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, path }));
 }
 
 test "the security policy refuses an MVG drawing" {
-    try expectTextFileRefused("drawing.mvg", "viewbox 0 0 10 10\nfill red\nrectangle 0 0 9 9\n", "mvg:");
+    const log = utils.mute_log.MuteLog.init();
+    try expectTextFileRefused(log, "drawing.mvg", "viewbox 0 0 10 10\nfill red\nrectangle 0 0 9 9\n", "mvg:");
 }
 
 test "the security policy refuses a picture written as ImageMagick's text listing of its pixels" {
-    try expectTextFileRefused("pixels.txt", "# ImageMagick pixel enumeration: 2,1,255,srgb\n0,0: (255,0,0)  #FF0000  red\n1,0: (255,0,0)  #FF0000  red\n", "txt:");
+    const log = utils.mute_log.MuteLog.init();
+    try expectTextFileRefused(log, "pixels.txt", "# ImageMagick pixel enumeration: 2,1,255,srgb\n0,0: (255,0,0)  #FF0000  red\n1,0: (255,0,0)  #FF0000  red\n", "txt:");
 }
 
 test "the security policy refuses text drawn as an image" {
-    try expectTextFileRefused("words.txt", "hello\n", "text:");
+    const log = utils.mute_log.MuteLog.init();
+    try expectTextFileRefused(log, "words.txt", "hello\n", "text:");
 }
 
 test "the security policy refuses an indirect read of the paths listed in a file" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -461,9 +487,9 @@ test "the security policy refuses an indirect read of the paths listed in a file
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    const image_path = try makeImage(allocator, tmp_dir, "listed.png", "6x4", "xc:red");
+    const image_path = try makeImage(log, allocator, tmp_dir, "listed.png", "6x4", "xc:red");
     const list_path = try writeTextFile(allocator, tmp_dir, "list.txt", image_path);
-    try expectReadRefused(allocator, try std.fmt.allocPrint(allocator, "@{s}", .{list_path}));
+    try expectReadRefused(log, allocator, try std.fmt.allocPrint(allocator, "@{s}", .{list_path}));
 }
 
 test "the security policy denies every coder that reaches outside the file, and every delegate" {
@@ -494,6 +520,7 @@ test "the security policy denies every coder that reaches outside the file, and 
 }
 
 test "with the security policy set, every image type the import accepts that has a fixture still reads, and so does a PSD" {
+    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -501,18 +528,18 @@ test "with the security policy set, every image type the import accepts that has
     defer tmp_dir.cleanup();
     var started = try media_tools.image_magick.Started.start();
     defer started.stop();
-    try expectReadAllowed(allocator, "../test/test.jpg");
-    try expectReadAllowed(allocator, "../test/multiple-files/test-1.jpeg");
-    try expectReadAllowed(allocator, "../test/test.png");
-    try expectReadAllowed(allocator, "../test/test.webp");
-    try expectReadAllowed(allocator, "../apps/photosphere/icons/photosphere.ico");
+    try expectReadAllowed(log, allocator, "../test/test.jpg");
+    try expectReadAllowed(log, allocator, "../test/multiple-files/test-1.jpeg");
+    try expectReadAllowed(log, allocator, "../test/test.png");
+    try expectReadAllowed(log, allocator, "../test/test.webp");
+    try expectReadAllowed(log, allocator, "../apps/photosphere/icons/photosphere.ico");
 
     // The repository has no GIF, PSD, TIFF or BMP picture, so each is made from the JPEG fixture and read back.
     const made = [_][]const u8{ "made.gif", "made.psd", "made.tif", "made.bmp" };
     for (made) |name| {
         const path = try tempFilePath(allocator, tmp_dir, name);
-        const written = try ImageMagick.runMagick(std.testing.io, allocator, &.{ "../test/test.jpg", "-resize", "16x16", path });
+        const written = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "../test/test.jpg", "-resize", "16x16", path });
         try std.testing.expectEqual(@as(i32, 0), written.exit_code);
-        try expectReadAllowed(allocator, path);
+        try expectReadAllowed(log, allocator, path);
     }
 }
