@@ -6,15 +6,18 @@ Test that `consolidate` joins a local database to a remote that holds a differen
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, and create two unrelated databases, each with its own file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, point the CLI at an empty config directory, and create two unrelated databases, each with its own file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/local --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/local --yes
-bun run start -- init --db /tmp/psi-test/remote --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/remote --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-origin-consolidate-unrelated-remote
+mkdir -p /tmp/psi-cli-origin-consolidate-unrelated-remote/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-origin-consolidate-unrelated-remote/config
+psi init --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --yes
+psi add test/test.jpg --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --yes
+psi init --db /tmp/psi-cli-origin-consolidate-unrelated-remote/remote --yes
+psi add test/test.png --db /tmp/psi-cli-origin-consolidate-unrelated-remote/remote --yes
 ```
 
 Expected:
@@ -25,7 +28,7 @@ Expected:
 ### 1. Confirm sync refuses the two before they are joined
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/local --dest /tmp/psi-test/remote --yes
+psi sync --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --dest /tmp/psi-cli-origin-consolidate-unrelated-remote/remote --yes
 ```
 
 Expected:
@@ -36,7 +39,7 @@ Expected:
 ### 2. Consolidate the local database with the remote
 
 ```bash
-bun run start -- consolidate --db /tmp/psi-test/local /tmp/psi-test/remote --yes
+psi consolidate --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local /tmp/psi-cli-origin-consolidate-unrelated-remote/remote --yes
 ```
 
 Expected:
@@ -47,7 +50,7 @@ Expected:
 ### 3. Sync without naming a destination
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/local --yes
+psi sync --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --yes
 ```
 
 Expected:
@@ -58,14 +61,14 @@ Expected:
 ### 4. Confirm neither side lost a file and the two match
 
 ```bash
-bun run start -- origin --db /tmp/psi-test/local
-bun run start -- list --db /tmp/psi-test/local --yes
-bun run start -- list --db /tmp/psi-test/remote --yes
-bun run start -- compare --db /tmp/psi-test/local --dest /tmp/psi-test/remote --yes
-bun run start -- verify --db /tmp/psi-test/local --yes
+psi origin --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local
+psi list --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --yes
+psi list --db /tmp/psi-cli-origin-consolidate-unrelated-remote/remote --yes
+psi compare --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --dest /tmp/psi-cli-origin-consolidate-unrelated-remote/remote --yes
+psi verify --db /tmp/psi-cli-origin-consolidate-unrelated-remote/local --yes
 ```
 
 Expected:
-- `origin` prints `/tmp/psi-test/remote`.
+- `origin` prints `/tmp/psi-cli-origin-consolidate-unrelated-remote/remote`.
 - Both sides list `test.jpg` and `test.png`.
 - `compare` reports `No differences detected`, and the local database verifies.

@@ -6,24 +6,25 @@ Test that `upgrade` brings a v5 database to the current schema version (6).
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and copy the v5 fixture to a working directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and copy the v5 fixture to a working directory:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v5 /tmp/psi-test/upgrade
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-upgrade-upgrade-v5-to-v6
+mkdir -p /tmp/psi-cli-upgrade-upgrade-v5-to-v6
+cp -r test/dbs/v5 /tmp/psi-cli-upgrade-upgrade-v5-to-v6/upgrade
 ```
 
 Expected:
-- The fixture is copied to `/tmp/psi-test/upgrade`.
+- The fixture is copied to `/tmp/psi-cli-upgrade-upgrade-v5-to-v6/upgrade`.
 
 ## Test
 
 ### 1. Run upgrade
 
 ```bash
-bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
+psi upgrade --db /tmp/psi-cli-upgrade-upgrade-v5-to-v6/upgrade --yes
 ```
 
 Expected:
@@ -34,7 +35,7 @@ Expected:
 ### 2. Confirm the database is now version 6
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/upgrade --yes
+psi summary --db /tmp/psi-cli-upgrade-upgrade-v5-to-v6/upgrade --yes
 ```
 
 Expected:
@@ -45,7 +46,7 @@ Expected:
 ### 3. Verify the upgraded database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/upgrade --yes
+psi verify --db /tmp/psi-cli-upgrade-upgrade-v5-to-v6/upgrade --yes
 ```
 
 Expected:

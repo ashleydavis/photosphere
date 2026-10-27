@@ -6,14 +6,15 @@ Test that a second replication with no intervening changes copies zero files.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file and replicate it:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file and replicate it:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-replication-replicate-no-changes
+psi init --db /tmp/psi-cli-replication-replicate-no-changes/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-replication-replicate-no-changes/source --yes
+psi replicate --db /tmp/psi-cli-replication-replicate-no-changes/source --dest /tmp/psi-cli-replication-replicate-no-changes/replica --yes --force
 ```
 
 Expected:
@@ -24,7 +25,7 @@ Expected:
 ### 1. Run the same replicate command again immediately
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+psi replicate --db /tmp/psi-cli-replication-replicate-no-changes/source --dest /tmp/psi-cli-replication-replicate-no-changes/replica --yes --force
 ```
 
 Expected:
@@ -36,8 +37,8 @@ Expected:
 ### 2. Confirm the replica is still consistent with the source
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/source
-bun run start -- root-hash --db /tmp/psi-test/replica
+psi root-hash --db /tmp/psi-cli-replication-replicate-no-changes/source
+psi root-hash --db /tmp/psi-cli-replication-replicate-no-changes/replica
 ```
 
 Expected:

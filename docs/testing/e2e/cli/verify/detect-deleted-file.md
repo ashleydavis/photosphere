@@ -6,15 +6,16 @@ Test that `verify` reports a missing asset file as `Removed`.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, then delete its asset file from disk:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, then delete its asset file from disk:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-ls /tmp/psi-test/source/asset
-rm /tmp/psi-test/source/asset/$(ls /tmp/psi-test/source/asset)
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-verify-detect-deleted-file
+psi init --db /tmp/psi-cli-verify-detect-deleted-file/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-verify-detect-deleted-file/source --yes
+ls /tmp/psi-cli-verify-detect-deleted-file/source/asset
+rm /tmp/psi-cli-verify-detect-deleted-file/source/asset/$(ls /tmp/psi-cli-verify-detect-deleted-file/source/asset)
 ```
 
 Expected:
@@ -26,7 +27,7 @@ Expected:
 ### 1. Run verify
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-verify-detect-deleted-file/source
 ```
 
 Expected:

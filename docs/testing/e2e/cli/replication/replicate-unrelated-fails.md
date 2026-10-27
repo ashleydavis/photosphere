@@ -7,13 +7,14 @@ different database.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and create two independent databases:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and create two independent databases:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/first --yes
-bun run start -- init --db /tmp/psi-test/second --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-replication-replicate-unrelated-fails
+psi init --db /tmp/psi-cli-replication-replicate-unrelated-fails/first --yes
+psi init --db /tmp/psi-cli-replication-replicate-unrelated-fails/second --yes
 ```
 
 Expected:
@@ -24,8 +25,8 @@ Expected:
 ### 1. Confirm the two databases have different IDs
 
 ```bash
-bun run start -- database-id --db /tmp/psi-test/first --yes
-bun run start -- database-id --db /tmp/psi-test/second --yes
+psi database-id --db /tmp/psi-cli-replication-replicate-unrelated-fails/first --yes
+psi database-id --db /tmp/psi-cli-replication-replicate-unrelated-fails/second --yes
 ```
 
 Expected:
@@ -36,7 +37,7 @@ Expected:
 ### 2. Attempt to replicate the first over the second
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/first --dest /tmp/psi-test/second --yes
+psi replicate --db /tmp/psi-cli-replication-replicate-unrelated-fails/first --dest /tmp/psi-cli-replication-replicate-unrelated-fails/second --yes
 ```
 
 Expected:

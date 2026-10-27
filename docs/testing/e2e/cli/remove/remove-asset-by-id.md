@@ -6,14 +6,15 @@ Test that `remove` deletes an asset from the database and from on-disk storage.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file and read its asset ID:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file and read its asset ID:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-ls /tmp/psi-test/source/asset
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-remove-remove-asset-by-id
+psi init --db /tmp/psi-cli-remove-remove-asset-by-id/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-remove-remove-asset-by-id/source --yes
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/asset
 ```
 
 Expected:
@@ -25,7 +26,7 @@ Expected:
 ### 1. Remove the asset
 
 ```bash
-bun run start -- remove --db /tmp/psi-test/source <asset-id> --verbose --yes
+psi remove --db /tmp/psi-cli-remove-remove-asset-by-id/source <asset-id> --verbose --yes
 ```
 
 Expected:
@@ -36,9 +37,9 @@ Expected:
 ### 2. Confirm the asset files are gone from storage
 
 ```bash
-ls /tmp/psi-test/source/asset
-ls /tmp/psi-test/source/display
-ls /tmp/psi-test/source/thumb
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/asset
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/display
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/thumb
 ```
 
 Expected:
@@ -49,7 +50,7 @@ Expected:
 ### 3. Confirm the database listing no longer shows the asset
 
 ```bash
-bun run start -- list --db /tmp/psi-test/source
+psi list --db /tmp/psi-cli-remove-remove-asset-by-id/source
 ```
 
 Expected:
@@ -60,7 +61,7 @@ Expected:
 ### 4. Verify the database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-remove-remove-asset-by-id/source
 ```
 
 Expected:

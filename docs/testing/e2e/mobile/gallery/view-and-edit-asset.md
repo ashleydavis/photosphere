@@ -9,8 +9,8 @@ Test opening a photo from the gallery, reading its details, editing them, and th
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open with at least one photo in it.

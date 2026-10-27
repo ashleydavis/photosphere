@@ -34,11 +34,12 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory and pre-create a database:
+In the CLI terminal, build the CLI, put it on the PATH and pre-create a database:
 
 ```bash
-cd apps/cli/
-bun run start -- init --db /tmp/psi-desktop-edit-database-origin/db --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+psi init --db /tmp/psi-desktop-edit-database-origin/db --yes
 ```
 
 Expected:
@@ -61,7 +62,7 @@ Expected:
 ### 2. Check the origin before the change with the CLI
 
 ```bash
-bun run start -- origin --db /tmp/psi-desktop-edit-database-origin/db
+psi origin --db /tmp/psi-desktop-edit-database-origin/db
 ```
 
 Expected:
@@ -82,7 +83,7 @@ Expected:
 ### 4. Check the origin after the change with the CLI
 
 ```bash
-bun run start -- origin --db /tmp/psi-desktop-edit-database-origin/db
+psi origin --db /tmp/psi-desktop-edit-database-origin/db
 ```
 
 Expected:

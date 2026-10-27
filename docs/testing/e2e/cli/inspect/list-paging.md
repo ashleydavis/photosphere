@@ -6,14 +6,15 @@ Test that `list` splits a database with more files than the page size into pages
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and copy the 50-asset fixture to a working directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and copy the 50-asset fixture to a working directory:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/50-assets /tmp/psi-test/db
-bun run start -- summary --db /tmp/psi-test/db --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-inspect-list-paging
+mkdir -p /tmp/psi-cli-inspect-list-paging
+cp -r test/dbs/50-assets /tmp/psi-cli-inspect-list-paging/db
+psi summary --db /tmp/psi-cli-inspect-list-paging/db --yes
 ```
 
 Expected:
@@ -24,7 +25,7 @@ Expected:
 ### 1. List with a page size of 20
 
 ```bash
-bun run start -- list --db /tmp/psi-test/db --page-size 20 --yes
+psi list --db /tmp/psi-cli-inspect-list-paging/db --page-size 20 --yes
 ```
 
 Expected:
@@ -36,8 +37,8 @@ Expected:
 ### 2. Count the files shown
 
 ```bash
-bun run start -- list --db /tmp/psi-test/db --page-size 20 --yes | grep -cE '^[0-9a-f-]{36} '
-bun run start -- list --db /tmp/psi-test/db --page-size 20 --yes | grep -oE '^[0-9a-f-]{36}' | sort | uniq -d
+psi list --db /tmp/psi-cli-inspect-list-paging/db --page-size 20 --yes | grep -cE '^[0-9a-f-]{36} '
+psi list --db /tmp/psi-cli-inspect-list-paging/db --page-size 20 --yes | grep -oE '^[0-9a-f-]{36}' | sort | uniq -d
 ```
 
 Expected:

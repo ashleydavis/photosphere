@@ -5,19 +5,20 @@
 Test that a field edit made via `bdb-cli` on the original database is reflected
 in the copy after `sync`.
 
-`bdb-cli` is the BSON database CLI the smoke tests use to change records directly. From `apps/cli/` it runs as `bun run ../bdb-cli/src/index.ts`.
+`bdb-cli` is the BSON database CLI the smoke tests use to change records directly. From the repo root it runs as `bun run apps/bdb-cli/src/index.ts`.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then edit a field on a known record in the original (the v6 fixture ships record id `89171cd9-a652-4047-b869-1154bf2c95a1`):
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then edit a field on a known record in the original (the v6 fixture ships record id `89171cd9-a652-4047-b869-1154bf2c95a1`):
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
-bun run ../bdb-cli/src/index.ts edit /tmp/psi-test/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 description string "Edited on original"
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-edit-field-original
+mkdir -p /tmp/psi-cli-sync-sync-edit-field-original
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-edit-field-original/original
+psi replicate --db /tmp/psi-cli-sync-sync-edit-field-original/original --dest /tmp/psi-cli-sync-sync-edit-field-original/copy --yes --force
+bun run apps/bdb-cli/src/index.ts edit /tmp/psi-cli-sync-sync-edit-field-original/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 description string "Edited on original"
 ```
 
 Expected:
@@ -29,7 +30,7 @@ Expected:
 ### 1. Read the field back to confirm
 
 ```bash
-bun run ../bdb-cli/src/index.ts record /tmp/psi-test/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
+bun run apps/bdb-cli/src/index.ts record /tmp/psi-cli-sync-sync-edit-field-original/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
 ```
 
 Expected:
@@ -40,8 +41,8 @@ Expected:
 ### 2. Confirm root hashes now differ
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-original/original
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-original/copy
 ```
 
 Expected:
@@ -52,7 +53,7 @@ Expected:
 ### 3. Sync
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-edit-field-original/original --dest /tmp/psi-cli-sync-sync-edit-field-original/copy --yes
 ```
 
 Expected:
@@ -63,9 +64,9 @@ Expected:
 ### 4. Confirm the field is now also present on the copy
 
 ```bash
-bun run ../bdb-cli/src/index.ts record /tmp/psi-test/copy/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+bun run apps/bdb-cli/src/index.ts record /tmp/psi-cli-sync-sync-edit-field-original/copy/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-original/original
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-original/copy
 ```
 
 Expected:

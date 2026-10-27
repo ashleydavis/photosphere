@@ -9,8 +9,8 @@ Test pulling photos out of a database onto the phone, one at a time and several 
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open with several photos in it.

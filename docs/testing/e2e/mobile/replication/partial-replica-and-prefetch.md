@@ -11,8 +11,8 @@ This is what lets a phone carry a collection larger than the phone.
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database on the phone whose origin is a remote copy holding photos the phone has not downloaded, as in [edit-database-origin](../database/edit-database-origin.md). An S3 database is the easiest way to get one.
@@ -62,10 +62,10 @@ Expected:
 
 1. Turn the network back on and let it sync.
 
-From `apps/cli/`:
+From the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- summary --db <the remote>
+psi summary --db <the remote>
 ```
 
 Expected: The remote still holds everything it did. A phone that holds part of a database must never delete from the remote what it chose not to download.

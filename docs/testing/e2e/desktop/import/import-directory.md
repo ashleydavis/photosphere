@@ -33,10 +33,11 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory:
+In the CLI terminal, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Expected:
@@ -48,11 +49,12 @@ Expected:
 ### 1. Create a new database
 
 1. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
-2. Choose the following as the database directory (`database-path-input`):
+2. Enter `source` (`database-name-input`) as the name.
+3. Choose the following as the database directory (`database-path-input`):
    ```
    /tmp/psi-desktop-import-directory/source
    ```
-3. Click **Create** (`create-database-confirm`).
+4. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
@@ -76,7 +78,7 @@ Expected:
 ### 3. List files in the database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-import-directory/source
+psi list --db /tmp/psi-desktop-import-directory/source
 ```
 
 Expected:
@@ -87,7 +89,7 @@ Expected:
 ### 4. Check that the database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-import-directory/source
+psi verify --db /tmp/psi-desktop-import-directory/source
 ```
 
 Expected:

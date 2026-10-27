@@ -7,16 +7,17 @@ and does not overwrite the original.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories, then add a secret the first time:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then add a secret the first time:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-add-duplicate-fails
+mkdir -p /tmp/psi-cli-vault-plaintext-add-duplicate-fails/config /tmp/psi-cli-vault-plaintext-add-duplicate-fails/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-add-duplicate-fails/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-add-duplicate-fails/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-bun run start -- secrets add --yes --name dup-secret --type plain --value first
+psi secrets add --yes --name dup-secret --type plain --value first
 ```
 
 Expected:
@@ -27,7 +28,7 @@ Expected:
 ### 1. Attempt to add a second secret with the same name
 
 ```bash
-bun run start -- secrets add --yes --name dup-secret --type plain --value second
+psi secrets add --yes --name dup-secret --type plain --value second
 ```
 
 Expected:
@@ -39,7 +40,7 @@ Expected:
 ### 2. Confirm the original secret is intact
 
 ```bash
-bun run start -- secrets view --name dup-secret --yes
+psi secrets view --name dup-secret --yes
 ```
 
 Expected:

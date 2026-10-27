@@ -7,13 +7,14 @@ and `--path`.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at an empty config directory:
+From the repo root, build the CLI, put it on the PATH and point the CLI at an empty config directory:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-add-via-flags
+mkdir -p /tmp/psi-cli-dbs-add-via-flags/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-via-flags/config
 ```
 
 Expected: no output.
@@ -23,7 +24,7 @@ Expected: no output.
 ### 1. Add a database entry via CLI flags
 
 ```bash
-bun run start -- dbs add --yes --name cli-db --path /tmp/psi-test/cli-db-path
+psi dbs add --yes --name cli-db --path /tmp/psi-cli-dbs-add-via-flags/cli-db-path
 ```
 
 Expected:
@@ -34,9 +35,9 @@ Expected:
 ### 2. Confirm the new entry is listed
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:
 - Output contains `cli-db`.
-- Output contains `/tmp/psi-test/cli-db-path`.
+- Output contains `/tmp/psi-cli-dbs-add-via-flags/cli-db-path`.

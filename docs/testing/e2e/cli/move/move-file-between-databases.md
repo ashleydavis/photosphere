@@ -8,18 +8,19 @@ Test that a file can be imported into one database and moved to another using th
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a source database, import a file and create a second database:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a source database, import a file and create a second database:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source
-bun run start -- init --db /tmp/psi-test/dest --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-move-move-file-between-databases
+psi init --db /tmp/psi-cli-move-move-file-between-databases/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-move-move-file-between-databases/source
+psi init --db /tmp/psi-cli-move-move-file-between-databases/dest --yes
 ```
 
 Expected:
-- Output confirms new media file databases were created in `/tmp/psi-test/source` and `/tmp/psi-test/dest`.
+- Output confirms new media file databases were created in `/tmp/psi-cli-move-move-file-between-databases/source` and `/tmp/psi-cli-move-move-file-between-databases/dest`.
 - The file is reported as added, with no errors.
 
 ## Test
@@ -27,7 +28,7 @@ Expected:
 ### 1. Move the file to the destination database
 
 ```bash
-bun run start -- move ../../test/test.jpg --db /tmp/psi-test/source --dest /tmp/psi-test/dest
+psi move test/test.jpg --db /tmp/psi-cli-move-move-file-between-databases/source --dest /tmp/psi-cli-move-move-file-between-databases/dest
 ```
 
 Expected:
@@ -39,7 +40,7 @@ Expected:
 ### 2. Check that the file is no longer in the source database
 
 ```bash
-bun run start -- list --db /tmp/psi-test/source
+psi list --db /tmp/psi-cli-move-move-file-between-databases/source
 ```
 
 Expected:
@@ -50,7 +51,7 @@ Expected:
 ### 3. Check that the file is now in the destination database
 
 ```bash
-bun run start -- list --db /tmp/psi-test/dest
+psi list --db /tmp/psi-cli-move-move-file-between-databases/dest
 ```
 
 Expected:

@@ -11,8 +11,8 @@ This test destroys photos on the device, on purpose. Run it on a test device or 
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 Automatic import already working, as in [the new remote test](auto-import-new-remote.md). Put two throwaway photos in the device library that you can tell apart from the rest.
@@ -67,10 +67,10 @@ This is the case that matters most: deletion has to follow the photo actually be
 
 ### 5. Check what survived
 
-Share or replicate the database to your development machine, then from `apps/cli/`:
+Share or replicate the database to your development machine, then from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- verify --db <path to the copy>
+psi verify --db <path to the copy>
 ```
 
 Expected:

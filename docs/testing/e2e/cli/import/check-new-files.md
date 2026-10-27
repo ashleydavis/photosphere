@@ -6,14 +6,15 @@ Test that `check` reports files that are not in the database as still to add, an
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database and add one file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database and add one file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
-bun run start -- root-hash --db /tmp/psi-test/source
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-check-new-files
+psi init --db /tmp/psi-cli-import-check-new-files/source --yes
+psi add test/test.png --db /tmp/psi-cli-import-check-new-files/source --yes
+psi root-hash --db /tmp/psi-cli-import-check-new-files/source
 ```
 
 Expected:
@@ -24,7 +25,7 @@ Expected:
 ### 1. Check a file that has not been added
 
 ```bash
-bun run start -- check ../../test/test.jpg --db /tmp/psi-test/source --yes
+psi check test/test.jpg --db /tmp/psi-cli-import-check-new-files/source --yes
 ```
 
 Expected:
@@ -35,7 +36,7 @@ Expected:
 ### 2. Check a mix of an added file and a file that has not been added
 
 ```bash
-bun run start -- check ../../test/test.png ../../test/test.jpg --db /tmp/psi-test/source --yes
+psi check test/test.png test/test.jpg --db /tmp/psi-cli-import-check-new-files/source --yes
 ```
 
 Expected:
@@ -46,8 +47,8 @@ Expected:
 ### 3. Confirm check changed nothing
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/source
-bun run start -- summary --db /tmp/psi-test/source
+psi root-hash --db /tmp/psi-cli-import-check-new-files/source
+psi summary --db /tmp/psi-cli-import-check-new-files/source
 ```
 
 Expected:

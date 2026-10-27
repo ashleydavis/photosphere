@@ -5,14 +5,15 @@
 Test that `secrets send` and `secrets receive` transfer a secret between two
 machines (or two terminals on the same machine).
 
-Two terminals are needed, each running the CLI from `apps/cli/`, both on the same LAN. The sender and receiver each get an isolated vault through their own `PHOTOSPHERE_VAULT_DIR` and `PHOTOSPHERE_CONFIG_DIR`.
+Two terminals are needed, each at the repo root with the CLI built and on the PATH, both on the same LAN. The sender and receiver each get an isolated vault through their own `PHOTOSPHERE_VAULT_DIR` and `PHOTOSPHERE_CONFIG_DIR`.
 
 ## Prep
 
 In terminal A, set up the sender:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-sender
 mkdir -p /tmp/psi-sender/config /tmp/psi-sender/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
@@ -26,7 +27,8 @@ EOF
 In terminal B, set up the receiver:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-receiver
 mkdir -p /tmp/psi-receiver/config /tmp/psi-receiver/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-receiver/config
@@ -43,7 +45,7 @@ Expected: no output in either terminal.
 In terminal A:
 
 ```bash
-bun run start -- secrets send --name test-secret
+psi secrets send --name test-secret
 ```
 
 Expected:
@@ -58,7 +60,7 @@ Record that 4-digit code as `<code>` in the next step.
 In terminal B:
 
 ```bash
-bun run start -- secrets receive --yes --code <code>
+psi secrets receive --yes --code <code>
 ```
 
 Expected:
@@ -73,7 +75,7 @@ Expected:
 In terminal B:
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 cat /tmp/psi-receiver/vault/vault.json
 ```
 

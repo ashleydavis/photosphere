@@ -9,8 +9,8 @@ Test that news published for the app reaches the phone, is readable, and does no
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 The desktop test uses a local feed through `PHOTOSPHERE_NEWS_URL` (see `docs/testing/e2e/desktop/news/setup-news-feed.sh`). On the phone, run against the published feed unless you can point the build at your own.

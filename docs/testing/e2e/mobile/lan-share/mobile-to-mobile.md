@@ -9,8 +9,8 @@ Test one phone sending a database entry and a secret to another phone on the sam
 Two devices, both running the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 Both must be on the same local network, on Wi-Fi rather than mobile data. This does not work over the internet.

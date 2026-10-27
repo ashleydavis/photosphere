@@ -8,15 +8,16 @@ The database lives in a local MinIO server started by `bun run s3-emulator` (`sc
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, start the local S3 server and point the CLI at it:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, start the local S3 server and point the CLI at it:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-(cd ../.. && bun run s3-emulator start /tmp/psi-test/s3)
-source /tmp/psi-test/s3/env
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-s3-s3-database
+mkdir -p /tmp/psi-cli-s3-s3-database/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-s3-s3-database/config
+bun run s3-emulator start /tmp/psi-cli-s3-s3-database/s3
+source /tmp/psi-cli-s3-s3-database/s3/env
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
 export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
@@ -24,14 +25,14 @@ export S3_DB="s3:$S3_EMULATOR_BUCKET/manual-test"
 ```
 
 Expected:
-- The emulator starts and `/tmp/psi-test/s3/env` exists.
+- The emulator starts and `/tmp/psi-cli-s3-s3-database/s3/env` exists.
 
 ## Test
 
 ### 1. Create a database on S3
 
 ```bash
-bun run start -- init --db "$S3_DB" --yes
+psi init --db "$S3_DB" --yes
 ```
 
 Expected:
@@ -42,7 +43,7 @@ Expected:
 ### 2. Add a file to it
 
 ```bash
-bun run start -- add ../../test/test.jpg --db "$S3_DB" --yes
+psi add test/test.jpg --db "$S3_DB" --yes
 ```
 
 Expected:
@@ -53,8 +54,8 @@ Expected:
 ### 3. List and verify the S3 database
 
 ```bash
-bun run start -- list --db "$S3_DB" --yes
-bun run start -- verify --db "$S3_DB" --yes
+psi list --db "$S3_DB" --yes
+psi verify --db "$S3_DB" --yes
 ```
 
 Expected:
@@ -68,7 +69,7 @@ Expected:
 Run this even when an earlier step failed:
 
 ```bash
-(cd ../.. && bun run s3-emulator stop /tmp/psi-test/s3)
+bun run s3-emulator stop /tmp/psi-cli-s3-s3-database/s3
 ```
 
 Expected:

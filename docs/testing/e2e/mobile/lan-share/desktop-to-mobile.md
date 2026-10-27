@@ -9,8 +9,8 @@ Test the desktop app sending a database entry and a secret to the phone on the s
 The phone running the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 The desktop app running on a machine on the same local network, started from the repo root with the script for its platform: `bun run linux`, `bun run macos` or `bun run windows`:

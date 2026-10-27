@@ -7,24 +7,25 @@ and leaves the database unchanged.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and copy the v6 fixture to a working directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and copy the v6 fixture to a working directory:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v6 /tmp/psi-test/upgrade
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-upgrade-v6-upgrade-noop
+mkdir -p /tmp/psi-cli-upgrade-v6-upgrade-noop
+cp -r test/dbs/v6 /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade
 ```
 
 Expected:
-- The fixture is copied to `/tmp/psi-test/upgrade`.
+- The fixture is copied to `/tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade`.
 
 ## Test
 
 ### 1. Run upgrade
 
 ```bash
-bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
+psi upgrade --db /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade --yes
 ```
 
 Expected:
@@ -35,8 +36,8 @@ Expected:
 ### 2. Confirm version and integrity
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/upgrade --yes
-bun run start -- verify --db /tmp/psi-test/upgrade --yes
+psi summary --db /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade --yes
+psi verify --db /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade --yes
 ```
 
 Expected:

@@ -6,14 +6,15 @@ Test that `repair` is a no-op when the target database has no issues.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, then replicate it:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, then replicate it:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-verify-repair-clean-database
+psi init --db /tmp/psi-cli-verify-repair-clean-database/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-verify-repair-clean-database/source --yes
+psi replicate --db /tmp/psi-cli-verify-repair-clean-database/source --dest /tmp/psi-cli-verify-repair-clean-database/replica --yes --force
 ```
 
 Expected:
@@ -24,7 +25,7 @@ Expected:
 ### 1. Run repair against the clean source using the replica as the recovery source
 
 ```bash
-bun run start -- repair --db /tmp/psi-test/source --source /tmp/psi-test/replica --yes
+psi repair --db /tmp/psi-cli-verify-repair-clean-database/source --source /tmp/psi-cli-verify-repair-clean-database/replica --yes
 ```
 
 Expected:
@@ -36,7 +37,7 @@ Expected:
 ### 2. Verify the source database is still intact
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-verify-repair-clean-database/source
 ```
 
 Expected:

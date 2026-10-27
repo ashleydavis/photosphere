@@ -2,23 +2,24 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test that a database can be created, populated, verified, and partially replicated to a new directory using the CLI source.
+Test that a database can be created, populated, verified, and partially replicated to a new directory using the CLI.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, import a file, list it and verify the source:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, import a file, list it and verify the source:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source
-bun run start -- list --db /tmp/psi-test/source
-bun run start -- verify --db /tmp/psi-test/source
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-replication-replicate-partial-copy
+psi init --db /tmp/psi-cli-replication-replicate-partial-copy/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-replication-replicate-partial-copy/source
+psi list --db /tmp/psi-cli-replication-replicate-partial-copy/source
+psi verify --db /tmp/psi-cli-replication-replicate-partial-copy/source
 ```
 
 Expected:
-- Output confirms a new media file database was created in `/tmp/psi-test/source`.
+- Output confirms a new media file database was created in `/tmp/psi-cli-replication-replicate-partial-copy/source`.
 - The file is reported as added, with no errors.
 - `test.jpg` is listed.
 - Verification completes without errors and all files pass integrity checks.
@@ -28,7 +29,7 @@ Expected:
 ### 1. Replicate a partial copy to a new directory
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --partial --yes
+psi replicate --db /tmp/psi-cli-replication-replicate-partial-copy/source --dest /tmp/psi-cli-replication-replicate-partial-copy/replica --partial --yes
 ```
 
 Expected:
@@ -40,7 +41,7 @@ Expected:
 ### 2. List files in the replica database
 
 ```bash
-bun run start -- list --db /tmp/psi-test/replica
+psi list --db /tmp/psi-cli-replication-replicate-partial-copy/replica
 ```
 
 Expected:
@@ -53,7 +54,7 @@ Expected:
 ### 3. Check that the replica database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/replica
+psi verify --db /tmp/psi-cli-replication-replicate-partial-copy/replica
 ```
 
 Expected:
@@ -65,8 +66,8 @@ Expected:
 ### 4. Check the origin of the replica
 
 ```bash
-bun run start -- origin --db /tmp/psi-test/replica
+psi origin --db /tmp/psi-cli-replication-replicate-partial-copy/replica
 ```
 
 Expected:
-- The origin is shown as `/tmp/psi-test/source`.
+- The origin is shown as `/tmp/psi-cli-replication-replicate-partial-copy/source`.

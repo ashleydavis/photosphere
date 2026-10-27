@@ -9,8 +9,8 @@ Test storing S3 credentials on the phone and using them to reach a database in a
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 An S3 bucket, its region and endpoint, and a key pair that can read and write it.

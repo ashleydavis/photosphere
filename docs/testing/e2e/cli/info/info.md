@@ -6,14 +6,17 @@ Test that `info` shows details of a media file on disk, and the database record 
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file and read its asset ID:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, point the CLI at an empty config directory, create a database, add a file and read its asset ID:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-ls /tmp/psi-test/source/asset
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-info-info
+mkdir -p /tmp/psi-cli-info-info/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-info-info/config
+psi init --db /tmp/psi-cli-info-info/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-info-info/source --yes
+ls /tmp/psi-cli-info-info/source/asset
 ```
 
 Expected:
@@ -24,7 +27,7 @@ Expected:
 ### 1. Info on a file on disk
 
 ```bash
-bun run start -- info ../../test/test.jpg --yes
+psi info test/test.jpg --yes
 ```
 
 Expected:
@@ -35,7 +38,7 @@ Expected:
 ### 2. Info on an asset by ID
 
 ```bash
-bun run start -- info <asset-id> --db /tmp/psi-test/source --yes
+psi info <asset-id> --db /tmp/psi-cli-info-info/source --yes
 ```
 
 Expected:
@@ -46,7 +49,7 @@ Expected:
 ### 3. Info on a file that does not exist
 
 ```bash
-bun run start -- info ../../test/no-such-file.jpg --yes
+psi info test/no-such-file.jpg --yes
 ```
 
 Expected:

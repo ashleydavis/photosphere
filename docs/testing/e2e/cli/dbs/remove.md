@@ -7,25 +7,26 @@ the other entries untouched.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at an empty config directory and seed two database entries:
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory and seed two database entries:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-cat > /tmp/psi-test/config/databases.toml <<'TOML'
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-remove
+mkdir -p /tmp/psi-cli-dbs-remove/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-remove/config
+cat > /tmp/psi-cli-dbs-remove/config/databases.toml <<'TOML'
 recent_database_names = []
 
 [[databases]]
 name = "keep-db"
 description = ""
-path = "/tmp/psi-test/keep-db"
+path = "/tmp/psi-cli-dbs-remove/keep-db"
 
 [[databases]]
 name = "remove-db"
 description = ""
-path = "/tmp/psi-test/remove-db"
+path = "/tmp/psi-cli-dbs-remove/remove-db"
 TOML
 ```
 
@@ -36,7 +37,7 @@ Expected: no output.
 ### 1. Remove one entry
 
 ```bash
-bun run start -- dbs remove --name remove-db --yes
+psi dbs remove --name remove-db --yes
 ```
 
 Expected:
@@ -47,7 +48,7 @@ Expected:
 ### 2. Confirm the listing
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:

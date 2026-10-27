@@ -33,12 +33,13 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory and create a database with one asset in it:
+In the CLI terminal, build the CLI, put it on the PATH and create a database with one asset in it:
 
 ```bash
-cd apps/cli/
-bun run start -- init --db /tmp/psi-desktop-open-existing-database/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-desktop-open-existing-database/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+psi init --db /tmp/psi-desktop-open-existing-database/source --yes
+psi add test/test.jpg --db /tmp/psi-desktop-open-existing-database/source --yes
 ```
 
 Expected:
@@ -73,7 +74,7 @@ Expected:
 ### 2. Confirm the database is healthy from the CLI
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-open-existing-database/source
+psi verify --db /tmp/psi-desktop-open-existing-database/source
 ```
 
 Expected:

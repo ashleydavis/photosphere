@@ -7,13 +7,14 @@ suggest running `psi upgrade`.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and copy the v2 fixture to a working directory, so that nothing can change the fixture in the repository:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and copy the v2 fixture to a working directory, so that nothing can change the fixture in the repository:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v2 /tmp/psi-test/v2
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-upgrade-v2-readonly
+mkdir -p /tmp/psi-cli-upgrade-v2-readonly
+cp -r test/dbs/v2 /tmp/psi-cli-upgrade-v2-readonly/v2
 ```
 
 Expected: no output.
@@ -23,7 +24,7 @@ Expected: no output.
 ### 1. Run `summary` on the v2 copy
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/v2 --yes
+psi summary --db /tmp/psi-cli-upgrade-v2-readonly/v2 --yes
 ```
 
 Expected:
@@ -35,7 +36,7 @@ Expected:
 ### 2. Run `verify` on the v2 copy
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/v2 --yes
+psi verify --db /tmp/psi-cli-upgrade-v2-readonly/v2 --yes
 ```
 
 Expected:

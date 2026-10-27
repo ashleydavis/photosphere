@@ -9,15 +9,15 @@ Test that a database encrypted with a key opens on the phone when the key is in 
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
-An encrypted database and its key. Create one from `apps/cli/`:
+An encrypted database and its key. Create one from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- init --db /tmp/psi-encrypted --key manual-test-key --generate-key --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-encrypted --key manual-test-key
+psi init --db /tmp/psi-encrypted --key manual-test-key --generate-key --yes
+psi add test/test.jpg --db /tmp/psi-encrypted --key manual-test-key
 ```
 
 Then send the key and the database entry to the phone over the LAN, as in [cli-to-mobile](../lan-share/cli-to-mobile.md).

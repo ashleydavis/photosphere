@@ -6,14 +6,15 @@ Test that `secrets list` reports an empty vault.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-list-empty
+mkdir -p /tmp/psi-cli-vault-plaintext-list-empty/config /tmp/psi-cli-vault-plaintext-list-empty/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-list-empty/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-list-empty/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
@@ -24,7 +25,7 @@ Expected: no output.
 ### 1. List secrets
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:

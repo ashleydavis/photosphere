@@ -6,15 +6,16 @@ Test that `verify` reports a tampered asset file as `Modified`.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, then append data to its asset file (do not delete it):
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, then append data to its asset file (do not delete it):
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-ls /tmp/psi-test/source/asset
-echo "tampered" >> /tmp/psi-test/source/asset/$(ls /tmp/psi-test/source/asset)
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-verify-detect-modified-file
+psi init --db /tmp/psi-cli-verify-detect-modified-file/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-verify-detect-modified-file/source --yes
+ls /tmp/psi-cli-verify-detect-modified-file/source/asset
+echo "tampered" >> /tmp/psi-cli-verify-detect-modified-file/source/asset/$(ls /tmp/psi-cli-verify-detect-modified-file/source/asset)
 ```
 
 Expected:
@@ -26,7 +27,7 @@ Expected:
 ### 1. Run verify
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-verify-detect-modified-file/source
 ```
 
 Expected:

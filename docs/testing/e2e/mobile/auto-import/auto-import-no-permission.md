@@ -11,8 +11,8 @@ A user who taps "Don't allow" and then sees the toggle sitting on has been told 
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 Start with the app's data cleared, and with the photo permission not yet granted. On Android: **Settings > Apps > Photosphere > Permissions > Photos and videos > Don't allow**. On iOS: **Settings > Photosphere > Photos > None**.

@@ -7,41 +7,42 @@ linked encryption key from the shared vault.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at empty config and vault directories, initialise an encrypted database with a generated key, add a file, republish the key under a shared id in the same `vault.json`, and register the database with that shared id:
+From the repo root, build the CLI, put it on the PATH, point the CLI at empty config and vault directories, initialise an encrypted database with a generated key, add a file, republish the key under a shared id in the same `vault.json`, and register the database with that shared id:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-resolve-by-name
+mkdir -p /tmp/psi-cli-dbs-resolve-by-name/config /tmp/psi-cli-dbs-resolve-by-name/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-resolve-by-name/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-dbs-resolve-by-name/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-bun run start -- init --db /tmp/psi-test/db --key dbs-enc-key --generate-key --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/db --key dbs-enc-key --yes
+psi init --db /tmp/psi-cli-dbs-resolve-by-name/db --key dbs-enc-key --generate-key --yes
+psi add test/test.png --db /tmp/psi-cli-dbs-resolve-by-name/db --key dbs-enc-key --yes
 jq -c '. + {"enc00001":{"name":"enc00001","type":"encryption-key","value":.["dbs-enc-key"].value}}' \
-    /tmp/psi-test/vault/vault.json > /tmp/psi-test/vault/vault.json.new
-mv /tmp/psi-test/vault/vault.json.new /tmp/psi-test/vault/vault.json
-cat > /tmp/psi-test/config/databases.toml <<'TOML'
+    /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json > /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json.new
+mv /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json.new /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json
+cat > /tmp/psi-cli-dbs-resolve-by-name/config/databases.toml <<'TOML'
 recent_database_names = []
 
 [[databases]]
 name = "resolve-name-db"
 description = ""
-path = "/tmp/psi-test/db"
+path = "/tmp/psi-cli-dbs-resolve-by-name/db"
 encryption_key = "enc00001"
 TOML
 ```
 
 Expected:
 - The database is initialised and the asset is added.
-- `/tmp/psi-test/vault/vault.json` holds both a `dbs-enc-key` key and an `enc00001` key.
+- `/tmp/psi-cli-dbs-resolve-by-name/vault/vault.json` holds both a `dbs-enc-key` key and an `enc00001` key.
 
 ## Test
 
 ### 1. Run `summary` by name
 
 ```bash
-bun run start -- summary --db resolve-name-db --yes
+psi summary --db resolve-name-db --yes
 ```
 
 Expected:

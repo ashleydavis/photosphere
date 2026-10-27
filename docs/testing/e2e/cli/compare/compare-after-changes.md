@@ -6,15 +6,16 @@ Test that `compare` detects differences when one database is ahead of the other.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, replicate it, then add a second file to the source only:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, replicate it, then add a second file to the source only:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
-bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-compare-compare-after-changes
+psi init --db /tmp/psi-cli-compare-compare-after-changes/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-compare-compare-after-changes/source --yes
+psi replicate --db /tmp/psi-cli-compare-compare-after-changes/source --dest /tmp/psi-cli-compare-compare-after-changes/replica --yes --force
+psi add test/test.png --db /tmp/psi-cli-compare-compare-after-changes/source --yes
 ```
 
 Expected:
@@ -26,7 +27,7 @@ Expected:
 ### 1. Compare source and replica
 
 ```bash
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
+psi compare --db /tmp/psi-cli-compare-compare-after-changes/source --dest /tmp/psi-cli-compare-compare-after-changes/replica --yes
 ```
 
 Expected:

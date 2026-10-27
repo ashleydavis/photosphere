@@ -6,15 +6,16 @@ Test that `export --type display` and `export --type thumb` write the smaller ve
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, read its asset ID and make the export directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, read its asset ID and make the export directory:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-ls /tmp/psi-test/source/asset
-mkdir -p /tmp/psi-test/exports
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-inspect-export-display-and-thumb
+psi init --db /tmp/psi-cli-inspect-export-display-and-thumb/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-inspect-export-display-and-thumb/source --yes
+ls /tmp/psi-cli-inspect-export-display-and-thumb/source/asset
+mkdir -p /tmp/psi-cli-inspect-export-display-and-thumb/exports
 ```
 
 Expected:
@@ -25,7 +26,7 @@ Expected:
 ### 1. Export the display version
 
 ```bash
-bun run start -- export --db /tmp/psi-test/source <asset-id> /tmp/psi-test/exports/display.jpg --type display --yes
+psi export --db /tmp/psi-cli-inspect-export-display-and-thumb/source <asset-id> /tmp/psi-cli-inspect-export-display-and-thumb/exports/display.jpg --type display --yes
 ```
 
 Expected:
@@ -36,7 +37,7 @@ Expected:
 ### 2. Export the thumbnail version
 
 ```bash
-bun run start -- export --db /tmp/psi-test/source <asset-id> /tmp/psi-test/exports/thumb.jpg --type thumb --yes
+psi export --db /tmp/psi-cli-inspect-export-display-and-thumb/source <asset-id> /tmp/psi-cli-inspect-export-display-and-thumb/exports/thumb.jpg --type thumb --yes
 ```
 
 Expected:
@@ -47,10 +48,10 @@ Expected:
 ### 3. Confirm the exports are the stored display and thumbnail files
 
 ```bash
-ls -l ../../test/test.jpg /tmp/psi-test/exports/
-cmp /tmp/psi-test/exports/display.jpg /tmp/psi-test/source/display/<asset-id>
-cmp /tmp/psi-test/exports/thumb.jpg /tmp/psi-test/source/thumb/<asset-id>
-bun run start -- info /tmp/psi-test/exports/display.jpg /tmp/psi-test/exports/thumb.jpg --yes
+ls -l test/test.jpg /tmp/psi-cli-inspect-export-display-and-thumb/exports/
+cmp /tmp/psi-cli-inspect-export-display-and-thumb/exports/display.jpg /tmp/psi-cli-inspect-export-display-and-thumb/source/display/<asset-id>
+cmp /tmp/psi-cli-inspect-export-display-and-thumb/exports/thumb.jpg /tmp/psi-cli-inspect-export-display-and-thumb/source/thumb/<asset-id>
+psi info /tmp/psi-cli-inspect-export-display-and-thumb/exports/display.jpg /tmp/psi-cli-inspect-export-display-and-thumb/exports/thumb.jpg --yes
 ```
 
 Expected:

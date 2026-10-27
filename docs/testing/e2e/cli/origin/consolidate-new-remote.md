@@ -6,13 +6,16 @@ Test that `consolidate` creates the remote when nothing is there, records it as 
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and create a local database with a file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, point the CLI at an empty config directory and create a local database with a file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/local --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/local --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-origin-consolidate-new-remote
+mkdir -p /tmp/psi-cli-origin-consolidate-new-remote/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-origin-consolidate-new-remote/config
+psi init --db /tmp/psi-cli-origin-consolidate-new-remote/local --yes
+psi add test/test.jpg --db /tmp/psi-cli-origin-consolidate-new-remote/local --yes
 ```
 
 Expected:
@@ -23,7 +26,7 @@ Expected:
 ### 1. Consolidate into a remote that does not exist
 
 ```bash
-bun run start -- consolidate --db /tmp/psi-test/local /tmp/psi-test/remote --yes
+psi consolidate --db /tmp/psi-cli-origin-consolidate-new-remote/local /tmp/psi-cli-origin-consolidate-new-remote/remote --yes
 ```
 
 Expected:
@@ -34,8 +37,8 @@ Expected:
 ### 2. Add a file locally and sync without naming a destination
 
 ```bash
-bun run start -- add ../../test/test.png --db /tmp/psi-test/local --yes
-bun run start -- sync --db /tmp/psi-test/local --yes
+psi add test/test.png --db /tmp/psi-cli-origin-consolidate-new-remote/local --yes
+psi sync --db /tmp/psi-cli-origin-consolidate-new-remote/local --yes
 ```
 
 Expected:
@@ -46,13 +49,13 @@ Expected:
 ### 3. Confirm the origin and that the remote matches
 
 ```bash
-bun run start -- origin --db /tmp/psi-test/local
-bun run start -- list --db /tmp/psi-test/remote --yes
-bun run start -- compare --db /tmp/psi-test/local --dest /tmp/psi-test/remote --yes
-bun run start -- verify --db /tmp/psi-test/remote --yes
+psi origin --db /tmp/psi-cli-origin-consolidate-new-remote/local
+psi list --db /tmp/psi-cli-origin-consolidate-new-remote/remote --yes
+psi compare --db /tmp/psi-cli-origin-consolidate-new-remote/local --dest /tmp/psi-cli-origin-consolidate-new-remote/remote --yes
+psi verify --db /tmp/psi-cli-origin-consolidate-new-remote/remote --yes
 ```
 
 Expected:
-- `origin` prints `/tmp/psi-test/remote`.
+- `origin` prints `/tmp/psi-cli-origin-consolidate-new-remote/remote`.
 - The remote lists `test.jpg` and `test.png`.
 - `compare` reports `No differences detected`, and the remote verifies.

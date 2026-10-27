@@ -6,7 +6,7 @@ description: Run every test in the manual e2e testing checklist without the huma
 
 Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST.md` yourself, from start to finish, and mark each one passed or failed. Skip tests already marked `- [x]` (passed) or `- [-]` (failed). The human is not following along and gives no input during the run.
 
-`$ARGUMENTS` is the number of subagents to use. Use exactly that many, and never more.
+`$ARGUMENTS` is the number of subagents to use. Use exactly that many, and never more. When it is empty, ask the human how many subagents to use before doing anything else, and wait for the answer.
 
 ## Before you start
 
@@ -21,7 +21,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 - **Do not skip prep.** Run every command in every code block of the Prep section. A skipped prep command makes a test fail for no reason.
 - Every test keeps its data in its own `/tmp/psi-…` folder, named in its Prep, so tests in different subagents never share state. Do not use any other folder.
 - Desktop steps: start the test-hooks build hidden under `xvfb-run`, with the test's export block plus the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets, and drive it through its control connection the way `apps/photosphere-smoke-tests/lib/common.sh` does (`click`, `type`, `navigate`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot`, `quit`). Elements are found only by `data-id`, in `packages/user-interface/src`. Use bash for the control connection, since zsh has no `/dev/tcp`. Take a screenshot and look at it for every step whose expectation is about what the window shows.
-- CLI steps: run them from `apps/cli` with the test's export block, through `mise exec --`.
+- CLI steps: run them from the repo root with the test's export block, through `mise exec --`. `psi` is the Zig CLI the test's Prep builds into `zig-out/bin`.
 - Android steps run only when the pool check says the pool is up, driven the way `apps/photosphere-smoke-tests` drives Android. iOS steps run only on macOS.
 - Record the pid of every app you start, quit it with the control connection's `quit` as soon as its test is done, and check it has exited. Never kill by name or command line.
 

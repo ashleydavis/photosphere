@@ -9,11 +9,11 @@ Test adding an encryption key to the phone's vault and using it to open an encry
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
-An encryption key in PEM form. Generate one from `apps/cli/`:
+An encryption key in PEM form. Generate one from the repo root, with the CLI on the PATH:
 
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/manual-test.pem

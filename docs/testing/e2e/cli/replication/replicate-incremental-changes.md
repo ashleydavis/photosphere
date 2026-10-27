@@ -7,15 +7,16 @@ files.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, replicate it, then add a new file to the source:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, replicate it, then add a new file to the source:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
-bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-replication-replicate-incremental-changes
+psi init --db /tmp/psi-cli-replication-replicate-incremental-changes/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-replication-replicate-incremental-changes/source --yes
+psi replicate --db /tmp/psi-cli-replication-replicate-incremental-changes/source --dest /tmp/psi-cli-replication-replicate-incremental-changes/replica --yes --force
+psi add test/test.png --db /tmp/psi-cli-replication-replicate-incremental-changes/source --yes
 ```
 
 Expected:
@@ -27,7 +28,7 @@ Expected:
 ### 1. Re-replicate
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+psi replicate --db /tmp/psi-cli-replication-replicate-incremental-changes/source --dest /tmp/psi-cli-replication-replicate-incremental-changes/replica --yes --force
 ```
 
 Expected:
@@ -39,9 +40,9 @@ Expected:
 ### 2. Confirm the databases are equivalent again
 
 ```bash
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
-bun run start -- root-hash --db /tmp/psi-test/source
-bun run start -- root-hash --db /tmp/psi-test/replica
+psi compare --db /tmp/psi-cli-replication-replicate-incremental-changes/source --dest /tmp/psi-cli-replication-replicate-incremental-changes/replica --yes
+psi root-hash --db /tmp/psi-cli-replication-replicate-incremental-changes/source
+psi root-hash --db /tmp/psi-cli-replication-replicate-incremental-changes/replica
 ```
 
 Expected:

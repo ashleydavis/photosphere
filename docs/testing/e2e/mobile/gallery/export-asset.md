@@ -9,8 +9,8 @@ Test sending a photo from the database back out to the device, through the syste
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open with at least one photo in it.

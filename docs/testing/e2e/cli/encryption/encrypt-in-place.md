@@ -4,22 +4,23 @@
 
 Test that `encrypt` turns a plain database into an encrypted one that can only be read with its key.
 
-The key is generated into a plaintext vault under `/tmp/psi-test/vault`, so the test never touches the OS keychain.
+The key is generated into a plaintext vault under `/tmp/psi-cli-encryption-encrypt-in-place/vault`, so the test never touches the OS keychain.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at empty config and vault directories, create a plain database and add a file:
+From the repo root, build the CLI, put it on the PATH, point the CLI at empty config and vault directories, create a plain database and add a file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-encryption-encrypt-in-place
+mkdir -p /tmp/psi-cli-encryption-encrypt-in-place/config /tmp/psi-cli-encryption-encrypt-in-place/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-encryption-encrypt-in-place/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-encryption-encrypt-in-place/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-bun run start -- init --db /tmp/psi-test/db --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/db --yes
-head -c 4 /tmp/psi-test/db/asset/$(ls /tmp/psi-test/db/asset); echo
+psi init --db /tmp/psi-cli-encryption-encrypt-in-place/db --yes
+psi add test/test.png --db /tmp/psi-cli-encryption-encrypt-in-place/db --yes
+head -c 4 /tmp/psi-cli-encryption-encrypt-in-place/db/asset/$(ls /tmp/psi-cli-encryption-encrypt-in-place/db/asset); echo
 ```
 
 Expected:
@@ -31,7 +32,7 @@ Expected:
 ### 1. Encrypt the database in place with a generated key
 
 ```bash
-bun run start -- encrypt --db /tmp/psi-test/db --key enc-test-key --generate-key --yes
+psi encrypt --db /tmp/psi-cli-encryption-encrypt-in-place/db --key enc-test-key --generate-key --yes
 ```
 
 Expected:
@@ -42,8 +43,8 @@ Expected:
 ### 2. Confirm the stored bytes are encrypted
 
 ```bash
-ls /tmp/psi-test/db/.db
-head -c 4 /tmp/psi-test/db/asset/$(ls /tmp/psi-test/db/asset); echo
+ls /tmp/psi-cli-encryption-encrypt-in-place/db/.db
+head -c 4 /tmp/psi-cli-encryption-encrypt-in-place/db/asset/$(ls /tmp/psi-cli-encryption-encrypt-in-place/db/asset); echo
 ```
 
 Expected:
@@ -55,8 +56,8 @@ Expected:
 ### 3. Read the database with the key
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/db --key enc-test-key --yes
-bun run start -- list --db /tmp/psi-test/db --key enc-test-key --yes
+psi verify --db /tmp/psi-cli-encryption-encrypt-in-place/db --key enc-test-key --yes
+psi list --db /tmp/psi-cli-encryption-encrypt-in-place/db --key enc-test-key --yes
 ```
 
 Expected:
@@ -68,7 +69,7 @@ Expected:
 ### 4. Try to read the database without the key
 
 ```bash
-bun run start -- list --db /tmp/psi-test/db --yes
+psi list --db /tmp/psi-cli-encryption-encrypt-in-place/db --yes
 ```
 
 Expected:

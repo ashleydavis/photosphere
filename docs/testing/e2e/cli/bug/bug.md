@@ -8,10 +8,11 @@ Test that `bug` builds a bug report with system information, without opening a b
 
 ## Prep
 
-Move into the CLI source directory:
+From the repo root, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Expected: no output.
@@ -21,7 +22,7 @@ Expected: no output.
 ### 1. Generate a bug report without opening a browser
 
 ```bash
-bun run start -- bug --no-browser --yes
+psi bug --no-browser --yes
 ```
 
 Expected:

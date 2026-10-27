@@ -7,13 +7,14 @@ quick scan.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database and add a file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database and add a file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-verify-verify-full
+psi init --db /tmp/psi-cli-verify-verify-full/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-verify-verify-full/source --yes
 ```
 
 Expected:
@@ -24,7 +25,7 @@ Expected:
 ### 1. Run a quick verify
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-verify-verify-full/source
 ```
 
 Expected:
@@ -36,7 +37,7 @@ Expected:
 ### 2. Run a full verify
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source --full
+psi verify --db /tmp/psi-cli-verify-verify-full/source --full
 ```
 
 Expected:

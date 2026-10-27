@@ -21,4 +21,10 @@ Manual test scripts for the `psi` CLI tool.
 - [encryption/](encryption/) - Tests covering encrypting, decrypting, replicating and syncing encrypted databases
 - [s3/](s3/) - Tests covering databases stored on S3, against a local MinIO server
 - [origin/](origin/) - Tests covering `set-origin` and `consolidate`
-- [misc/](misc/) - Other CLI tests (config timestamps, MCP server, utility commands)
+- [mcp/](mcp/) - Tests covering the `psi mcp` server
+- [info/](info/) - Tests covering the `psi info` command
+- [hash/](hash/) - Tests covering the `psi hash` command
+- [tools/](tools/) - Tests covering the `psi tools` command
+- [version/](version/) - Tests covering the `psi version` command
+- [news/](news/) - Tests covering the `psi news` command
+- [bug/](bug/) - Tests covering the `psi bug` command

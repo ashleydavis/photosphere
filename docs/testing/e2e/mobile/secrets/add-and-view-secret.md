@@ -9,8 +9,8 @@ Test that a secret can be added to the app's vault on the device, viewed, rename
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 ## Steps

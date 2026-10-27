@@ -7,14 +7,15 @@ Test that deleting an asset on the original removes it from the copy after
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture and replicate it to a copy:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture and replicate it to a copy:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-delete-asset-original
+mkdir -p /tmp/psi-cli-sync-sync-delete-asset-original
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-delete-asset-original/original
+psi replicate --db /tmp/psi-cli-sync-sync-delete-asset-original/original --dest /tmp/psi-cli-sync-sync-delete-asset-original/copy --yes --force
 ```
 
 Expected:
@@ -27,20 +28,20 @@ Expected:
 The v6 fixture ships a known asset id `89171cd9-a652-4047-b869-1154bf2c95a1`.
 
 ```bash
-bun run start -- remove --db /tmp/psi-test/original 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
+psi remove --db /tmp/psi-cli-sync-sync-delete-asset-original/original 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
 ```
 
 Expected:
 - Output includes `Successfully removed asset`.
-- The asset files are gone from `/tmp/psi-test/original/asset/`, `display/`, and `thumb/`.
-- The asset files are still present in `/tmp/psi-test/copy/asset/`.
+- The asset files are gone from `/tmp/psi-cli-sync-sync-delete-asset-original/original/asset/`, `display/`, and `thumb/`.
+- The asset files are still present in `/tmp/psi-cli-sync-sync-delete-asset-original/copy/asset/`.
 
 ---
 
 ### 2. Sync
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-delete-asset-original/original --dest /tmp/psi-cli-sync-sync-delete-asset-original/copy --yes
 ```
 
 Expected:
@@ -51,9 +52,9 @@ Expected:
 ### 3. Confirm the asset is gone from the copy
 
 ```bash
-ls /tmp/psi-test/copy/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+ls /tmp/psi-cli-sync-sync-delete-asset-original/copy/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
+psi root-hash --db /tmp/psi-cli-sync-sync-delete-asset-original/original
+psi root-hash --db /tmp/psi-cli-sync-sync-delete-asset-original/copy
 ```
 
 Expected:

@@ -24,15 +24,20 @@ Manual test scripts for the Photosphere mobile app on Android and iOS.
 Run the app from source on a connected device or emulator:
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 Both commands rebuild before they launch, so the app you are testing is always built from the current source.
 
 For Android, `bun run emu:and:status` says whether an emulator is attached. A physical device needs USB debugging on and `adb devices` should list it.
 
-Where a test needs the CLI to check what the app did, run the CLI from `apps/cli/` on the development machine, against a database the app has shared or replicated to it. The mobile app's own storage is not reachable from the host filesystem.
+Where a test needs the CLI to check what the app did, run the CLI on the development machine, from the repo root, against a database the app has shared or replicated to it. The mobile app's own storage is not reachable from the host filesystem. Build the CLI and put it on the PATH first, in each terminal that runs it:
+
+```bash
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+```
 
 ## What is different about mobile
 

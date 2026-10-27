@@ -6,15 +6,16 @@ Test that two files with identical content are imported as a single asset.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and create a new database:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and create a new database:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-add-duplicate-content
+psi init --db /tmp/psi-cli-import-add-duplicate-content/source --yes
 ```
 
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-add-duplicate-content/source`.
 
 ## Test
 
@@ -23,7 +24,7 @@ Expected: Output confirms a new media file database was created in `/tmp/psi-tes
 The repo ships a `test/duplicate-images/` directory with `a.png` and `b.png` (same content, different file names).
 
 ```bash
-bun run start -- add ../../test/duplicate-images/ --db /tmp/psi-test/source --yes
+psi add test/duplicate-images/ --db /tmp/psi-cli-import-add-duplicate-content/source --yes
 ```
 
 Expected:
@@ -34,7 +35,7 @@ Expected:
 ### 2. Check the database summary
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/source
+psi summary --db /tmp/psi-cli-import-add-duplicate-content/source
 ```
 
 Expected:
@@ -45,7 +46,7 @@ Expected:
 ### 3. Verify the database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-add-duplicate-content/source
 ```
 
 Expected:

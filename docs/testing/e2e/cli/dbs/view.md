@@ -7,20 +7,21 @@ database entry.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at an empty config directory and seed a database entry with linked secrets:
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory and seed a database entry with linked secrets:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-cat > /tmp/psi-test/config/databases.toml <<'TOML'
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-view
+mkdir -p /tmp/psi-cli-dbs-view/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-view/config
+cat > /tmp/psi-cli-dbs-view/config/databases.toml <<'TOML'
 recent_database_names = []
 
 [[databases]]
 name = "view-db"
 description = "A test database"
-path = "/tmp/psi-test/view-db"
+path = "/tmp/psi-cli-dbs-view/view-db"
 encryption_key = "enc00001"
 s3_key = "s3test01"
 TOML
@@ -33,12 +34,12 @@ Expected: no output.
 ### 1. View the entry
 
 ```bash
-bun run start -- dbs view --name view-db
+psi dbs view --name view-db
 ```
 
 Expected output contains all of:
 - `view-db` (the name).
-- `/tmp/psi-test/view-db` (the path).
+- `/tmp/psi-cli-dbs-view/view-db` (the path).
 - `enc00001` (the encryption key id).
 - `s3test01` (the S3 credential id).
 

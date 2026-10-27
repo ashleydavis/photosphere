@@ -7,14 +7,15 @@ fails and does not overwrite the original.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at an empty config directory and add a database the first time:
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory and add a database the first time:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-bun run start -- dbs add --yes --name dup-db --path /tmp/psi-test/dup-db-1
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-add-duplicate-fails
+mkdir -p /tmp/psi-cli-dbs-add-duplicate-fails/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-duplicate-fails/config
+psi dbs add --yes --name dup-db --path /tmp/psi-cli-dbs-add-duplicate-fails/dup-db-1
 ```
 
 Expected:
@@ -25,7 +26,7 @@ Expected:
 ### 1. Attempt to add a second database with the same name
 
 ```bash
-bun run start -- dbs add --yes --name dup-db --path /tmp/psi-test/dup-db-2
+psi dbs add --yes --name dup-db --path /tmp/psi-cli-dbs-add-duplicate-fails/dup-db-2
 ```
 
 Expected:
@@ -37,9 +38,9 @@ Expected:
 ### 2. Confirm the original entry is intact
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:
-- Output contains `/tmp/psi-test/dup-db-1`.
-- Output does not contain `/tmp/psi-test/dup-db-2`.
+- Output contains `/tmp/psi-cli-dbs-add-duplicate-fails/dup-db-1`.
+- Output does not contain `/tmp/psi-cli-dbs-add-duplicate-fails/dup-db-2`.

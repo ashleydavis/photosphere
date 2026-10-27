@@ -9,18 +9,19 @@ an `encryption-key` secret.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories, then generate a PEM private key:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then generate a PEM private key:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-import-pem
+mkdir -p /tmp/psi-cli-vault-plaintext-import-pem/config /tmp/psi-cli-vault-plaintext-import-pem/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-import-pem/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-import-pem/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-mkdir -p /tmp/psi-test/keys
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/psi-test/keys/test-import.key
-head -1 /tmp/psi-test/keys/test-import.key
+mkdir -p /tmp/psi-cli-vault-plaintext-import-pem/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/psi-cli-vault-plaintext-import-pem/keys/test-import.key
+head -1 /tmp/psi-cli-vault-plaintext-import-pem/keys/test-import.key
 ```
 
 Expected:
@@ -31,7 +32,7 @@ Expected:
 ### 1. Import it
 
 ```bash
-bun run start -- secrets import --yes --private-key /tmp/psi-test/keys/test-import.key
+psi secrets import --yes --private-key /tmp/psi-cli-vault-plaintext-import-pem/keys/test-import.key
 ```
 
 Expected:
@@ -42,7 +43,7 @@ Expected:
 ### 2. Confirm the imported secret is listed
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:

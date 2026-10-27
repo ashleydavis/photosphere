@@ -2,15 +2,16 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test that a database can be created, a file imported, and the database verified using the CLI source.
+Test that a database can be created, a file imported, and the database verified using the CLI.
 
 ## Prep
 
-Move into the CLI source directory and clean up any previous test run:
+From the repo root, build the CLI, put it on the PATH and clean up any previous test run:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-add-and-verify
 ```
 
 Expected: no output.
@@ -20,17 +21,17 @@ Expected: no output.
 ### 1. Create a new database
 
 ```bash
-bun run start -- init --db /tmp/psi-test/source --yes
+psi init --db /tmp/psi-cli-import-add-and-verify/source --yes
 ```
 
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-add-and-verify/source`.
 
 ---
 
 ### 2. Import a file
 
 ```bash
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source
+psi add test/test.jpg --db /tmp/psi-cli-import-add-and-verify/source
 ```
 
 Expected:
@@ -42,7 +43,7 @@ Expected:
 ### 3. List files in the database
 
 ```bash
-bun run start -- list --db /tmp/psi-test/source
+psi list --db /tmp/psi-cli-import-add-and-verify/source
 ```
 
 Expected:
@@ -53,7 +54,7 @@ Expected:
 ### 4. Check that the database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-add-and-verify/source
 ```
 
 Expected:

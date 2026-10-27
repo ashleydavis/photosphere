@@ -7,31 +7,32 @@ source of truth.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database, add a file, replicate it, take a working copy, then damage the working copy by deleting its asset file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, replicate it, take a working copy, then damage the working copy by deleting its asset file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
-cp -r /tmp/psi-test/source /tmp/psi-test/damaged
-ls /tmp/psi-test/damaged/asset
-rm /tmp/psi-test/damaged/asset/$(ls /tmp/psi-test/damaged/asset)
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-verify-repair-damaged-database
+psi init --db /tmp/psi-cli-verify-repair-damaged-database/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-verify-repair-damaged-database/source --yes
+psi replicate --db /tmp/psi-cli-verify-repair-damaged-database/source --dest /tmp/psi-cli-verify-repair-damaged-database/replica --yes --force
+cp -r /tmp/psi-cli-verify-repair-damaged-database/source /tmp/psi-cli-verify-repair-damaged-database/damaged
+ls /tmp/psi-cli-verify-repair-damaged-database/damaged/asset
+rm /tmp/psi-cli-verify-repair-damaged-database/damaged/asset/$(ls /tmp/psi-cli-verify-repair-damaged-database/damaged/asset)
 ```
 
 Expected:
 - Database created, file added, replica completed, and the `damaged/` copy exists.
 - `ls` lists one UUID, and that asset file is then deleted from the working copy.
 
-If the database contains more than one asset, also corrupt another one with `echo "CORRUPTED" > /tmp/psi-test/damaged/asset/<other-asset-id>`. With the one asset this test adds, there is nothing else to corrupt.
+If the database contains more than one asset, also corrupt another one with `echo "CORRUPTED" > /tmp/psi-cli-verify-repair-damaged-database/damaged/asset/<other-asset-id>`. With the one asset this test adds, there is nothing else to corrupt.
 
 ## Test
 
 ### 1. Confirm verify detects the damage
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/damaged --full
+psi verify --db /tmp/psi-cli-verify-repair-damaged-database/damaged --full
 ```
 
 Expected:
@@ -42,7 +43,7 @@ Expected:
 ### 2. Repair the damaged database from the replica
 
 ```bash
-bun run start -- repair --db /tmp/psi-test/damaged --source /tmp/psi-test/replica --yes --full
+psi repair --db /tmp/psi-cli-verify-repair-damaged-database/damaged --source /tmp/psi-cli-verify-repair-damaged-database/replica --yes --full
 ```
 
 Expected:
@@ -54,7 +55,7 @@ Expected:
 ### 3. Verify the repaired database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/damaged
+psi verify --db /tmp/psi-cli-verify-repair-damaged-database/damaged
 ```
 
 Expected:

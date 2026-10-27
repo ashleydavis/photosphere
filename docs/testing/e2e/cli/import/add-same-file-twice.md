@@ -6,17 +6,18 @@ Test that adding the same file twice does not duplicate the asset.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a new database and add the PNG file for the first time:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a new database and add the PNG file for the first time:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-add-same-file-twice
+psi init --db /tmp/psi-cli-import-add-same-file-twice/source --yes
+psi add test/test.png --db /tmp/psi-cli-import-add-same-file-twice/source --yes
 ```
 
 Expected:
-- Output confirms a new media file database was created in `/tmp/psi-test/source`.
+- Output confirms a new media file database was created in `/tmp/psi-cli-import-add-same-file-twice/source`.
 - The first `add` shows `Files added: 1`.
 
 ## Test
@@ -24,7 +25,7 @@ Expected:
 ### 1. Add the same PNG file again
 
 ```bash
-bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
+psi add test/test.png --db /tmp/psi-cli-import-add-same-file-twice/source --yes
 ```
 
 Expected:
@@ -35,7 +36,7 @@ Expected:
 ### 2. Confirm the database still contains exactly one asset
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/source
+psi summary --db /tmp/psi-cli-import-add-same-file-twice/source
 ```
 
 Expected:
@@ -46,7 +47,7 @@ Expected:
 ### 3. Verify the database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-add-same-file-twice/source
 ```
 
 Expected:

@@ -6,27 +6,28 @@ Test that `dbs clear --yes` empties the database list entirely.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at an empty config directory, seed two database entries and confirm both are listed:
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory, seed two database entries and confirm both are listed:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-cat > /tmp/psi-test/config/databases.toml <<'TOML'
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-clear
+mkdir -p /tmp/psi-cli-dbs-clear/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-clear/config
+cat > /tmp/psi-cli-dbs-clear/config/databases.toml <<'TOML'
 recent_database_names = []
 
 [[databases]]
 name = "db-one"
 description = ""
-path = "/tmp/psi-test/db-one"
+path = "/tmp/psi-cli-dbs-clear/db-one"
 
 [[databases]]
 name = "db-two"
 description = ""
-path = "/tmp/psi-test/db-two"
+path = "/tmp/psi-cli-dbs-clear/db-two"
 TOML
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:
@@ -37,7 +38,7 @@ Expected:
 ### 1. Clear all entries
 
 ```bash
-bun run start -- dbs clear --yes
+psi dbs clear --yes
 ```
 
 Expected:
@@ -48,7 +49,7 @@ Expected:
 ### 2. Confirm the list is empty
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:

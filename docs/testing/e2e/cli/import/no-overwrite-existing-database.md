@@ -6,22 +6,23 @@ Test that `init` refuses to overwrite an existing database directory.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run and create a new database:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and create a new database:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-no-overwrite-existing-database
+psi init --db /tmp/psi-cli-import-no-overwrite-existing-database/source --yes
 ```
 
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-no-overwrite-existing-database/source`.
 
 ## Test
 
 ### 1. Attempt to create a second database in the same directory
 
 ```bash
-bun run start -- init --db /tmp/psi-test/source --yes
+psi init --db /tmp/psi-cli-import-no-overwrite-existing-database/source --yes
 ```
 
 Expected:
@@ -33,7 +34,7 @@ Expected:
 ### 2. Confirm the original database is intact
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-no-overwrite-existing-database/source
 ```
 
 Expected:

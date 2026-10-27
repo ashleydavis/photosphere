@@ -8,13 +8,14 @@ This needs an internet connection: the news comes from the Photosphere feed.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at an empty config directory, so no news item counts as seen yet:
+From the repo root, build the CLI, put it on the PATH and point the CLI at an empty config directory, so no news item counts as seen yet:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-news-news
+mkdir -p /tmp/psi-cli-news-news/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-news-news/config
 ```
 
 Expected: no output.
@@ -24,7 +25,7 @@ Expected: no output.
 ### 1. Show the news
 
 ```bash
-bun run start -- news
+psi news
 ```
 
 Expected:
@@ -35,7 +36,7 @@ Expected:
 ### 2. Show the news again
 
 ```bash
-bun run start -- news
+psi news
 ```
 
 Expected:

@@ -9,14 +9,15 @@ Test the `psi` CLI sending a database entry and a secret to the phone on the sam
 The phone running the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
-The CLI on a machine on the same local network, run from `apps/cli/`:
+The CLI on a machine on the same local network, run from the repo root, with the CLI on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 The phone must be on Wi-Fi, not mobile data.
@@ -29,7 +30,7 @@ The phone must be on Wi-Fi, not mobile data.
 2. On the machine:
 
    ```bash
-   bun run start -- secrets send --name <secret name> --yes --code <pairing code>
+   psi secrets send --name <secret name> --yes --code <pairing code>
    ```
 
 Expected:
@@ -44,7 +45,7 @@ Expected:
 2. On the machine:
 
    ```bash
-   bun run start -- dbs send --name <database name> --yes --code <pairing code>
+   psi dbs send --name <database name> --yes --code <pairing code>
    ```
 
 Expected:
@@ -76,7 +77,7 @@ Expected: The CLI says a device was found but is using a different code, rather 
 For a secret, compare it against the machine's copy:
 
 ```bash
-bun run start -- secrets view --name <secret name>
+psi secrets view --name <secret name>
 ```
 
 Expected: The value on the phone matches character for character. A secret that arrives truncated or re-encoded fails later, when a database will not open, and is much harder to trace from there.

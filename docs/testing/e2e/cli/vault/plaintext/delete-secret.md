@@ -7,16 +7,17 @@ the vault intact.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories, then seed two secrets:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then seed two secrets:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-delete-secret
+mkdir -p /tmp/psi-cli-vault-plaintext-delete-secret/config /tmp/psi-cli-vault-plaintext-delete-secret/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-delete-secret/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-delete-secret/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-cat > /tmp/psi-test/vault/vault.json <<'JSON'
+cat > /tmp/psi-cli-vault-plaintext-delete-secret/vault/vault.json <<'JSON'
 {
   "keep-secret": {"name":"keep-secret","type":"plain","value":"keep-me"},
   "delete-secret": {"name":"delete-secret","type":"plain","value":"delete-me"}
@@ -31,7 +32,7 @@ Expected: no output.
 ### 1. Delete one of them
 
 ```bash
-bun run start -- secrets remove --name delete-secret --yes
+psi secrets remove --name delete-secret --yes
 ```
 
 Expected:
@@ -42,10 +43,10 @@ Expected:
 ### 2. Confirm the list and the vault file
 
 ```bash
-bun run start -- secrets list
-jq 'keys' /tmp/psi-test/vault/vault.json
+psi secrets list
+jq 'keys' /tmp/psi-cli-vault-plaintext-delete-secret/vault/vault.json
 ```
 
 Expected:
 - The list contains `keep-secret` and does not contain `delete-secret`.
-- `/tmp/psi-test/vault/vault.json` no longer holds a `delete-secret` key, and still holds `keep-secret`.
+- `/tmp/psi-cli-vault-plaintext-delete-secret/vault/vault.json` no longer holds a `delete-secret` key, and still holds `keep-secret`.

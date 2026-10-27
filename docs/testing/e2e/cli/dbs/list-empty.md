@@ -11,24 +11,25 @@ auto-cleared temp dir. Use the same approach below.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at an empty config directory:
+From the repo root, build the CLI, put it on the PATH and point the CLI at an empty config directory:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-list-empty
+mkdir -p /tmp/psi-cli-dbs-list-empty/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-list-empty/config
 ```
 
 Expected:
-- `/tmp/psi-test/config` exists and contains no `databases.toml` file.
+- `/tmp/psi-cli-dbs-list-empty/config` exists and contains no `databases.toml` file.
 
 ## Test
 
 ### 1. List databases
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:

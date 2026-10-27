@@ -9,8 +9,8 @@ Test importing media the user picks, which is the path automatic import does not
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open, as in [create-and-open-database](../database/create-and-open-database.md). The device needs at least one photo and one video.

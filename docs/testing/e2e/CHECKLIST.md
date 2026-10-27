@@ -26,12 +26,12 @@ Run a basic manual test of the CLI and desktop app on each platform.
 - [ ] Linux (.zip portable)
 - [ ] macOS (.dmg installer)
 - [ ] macOS (.zip portable) - there is none for x86 yet.
-- [ ] Windows (.exe installer)
+- [ ] Windows (.msi installer)
 - [ ] Windows (.zip portable)
 
 ### UI stories
 
-Run the story player and check every story cycles through without failures, then review the generated screenshot index for pages that look wrong or do not fit the screen. `bun run stories` (Electron), `bun run stories:and`, `bun run stories:ios`. See [the stories README](../../../packages/user-interface/src/stories/README.md).
+Run the story player and check every story cycles through without failures, then review the generated screenshot index for pages that look wrong or do not fit the screen. `bun run stories:ziggy` (desktop), `bun run stories:ziggy:and`, `bun run stories:ziggy:ios`. See [the stories README](../../../packages/user-interface/src/stories/README.md).
 
 - [ ] Linux
 - [ ] macOS
@@ -43,9 +43,9 @@ Run the story player and check every story cycles through without failures, then
 
 ### Import
 - [x] [add-and-verify](cli/import/add-and-verify.md)
-- [x] [add-duplicate-content](cli/import/add-duplicate-content.md)
+- [-] [add-duplicate-content](cli/import/add-duplicate-content.md)
 - [x] [add-mp4](cli/import/add-mp4.md)
-- [-] [add-multiple-files](cli/import/add-multiple-files.md)
+- [x] [add-multiple-files](cli/import/add-multiple-files.md)
 - [x] [add-png](cli/import/add-png.md)
 - [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
 - [-] [add-zip](cli/import/add-zip.md)
@@ -148,15 +148,26 @@ Run the story player and check every story cycles through without failures, then
 - [x] [consolidate-new-remote](cli/origin/consolidate-new-remote.md)
 - [x] [consolidate-unrelated-remote](cli/origin/consolidate-unrelated-remote.md)
 
-### Misc
-- [-] [config-timestamps](cli/misc/config-timestamps.md)
-- [x] [mcp-server](cli/misc/mcp-server.md)
-- [-] [info](cli/misc/info.md)
-- [x] [hash](cli/misc/hash.md)
-- [x] [tools](cli/misc/tools.md)
-- [x] [version](cli/misc/version.md)
-- [x] [news](cli/misc/news.md)
-- [-] [bug](cli/misc/bug.md)
+### MCP
+- [x] [mcp-server](cli/mcp/mcp-server.md)
+
+### Info
+- [-] [info](cli/info/info.md)
+
+### Hash
+- [x] [hash](cli/hash/hash.md)
+
+### Tools
+- [x] [tools](cli/tools/tools.md)
+
+### Version
+- [x] [version](cli/version/version.md)
+
+### News
+- [x] [news](cli/news/news.md)
+
+### Bug
+- [-] [bug](cli/bug/bug.md)
 
 ## Desktop
 
@@ -164,7 +175,7 @@ Run the story player and check every story cycles through without failures, then
 - [x] [import-directory](desktop/import/import-directory.md)
 - [x] [import-files](desktop/import/import-files.md)
 - [x] [import-video](desktop/import/import-video.md)
-- [x] [import-zip](desktop/import/import-zip.md)
+- [-] [import-zip](desktop/import/import-zip.md)
 
 ### Move
 - [x] [move-file-between-databases](desktop/move/move-file-between-databases.md)

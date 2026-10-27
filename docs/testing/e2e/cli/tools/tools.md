@@ -1,31 +1,32 @@
-# CLI Manual Test: Version
+# CLI Manual Test: Tools
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test that `version` prints the CLI's version and the versions of what it depends on.
+Test that `tools` reports the media tools the CLI needs and whether each was found.
 
 ## Prep
 
-Move into the CLI source directory:
+From the repo root, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Expected: no output.
 
 ## Test
 
-### 1. Print the version
+### 1. Check the tools
 
 ```bash
-bun run start -- version
+psi tools --yes
 ```
 
 Expected:
-- The psi version is printed, with the versions of the media tools.
+- ImageMagick, ffmpeg and ffprobe are each listed with a version and shown as found.
 - The command exits successfully.
 
 ## Check
 
-The version output in step 1 is the check.
+The tools output in step 1 is the check.

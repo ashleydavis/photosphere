@@ -9,8 +9,8 @@ Test setting a database's origin on the phone, so it syncs with a remote copy.
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open on the phone, and a second copy reachable from it, either an S3 bucket or a database shared from the desktop.
@@ -43,10 +43,10 @@ Expected:
 - Photos on the phone appear in the remote copy.
 - Photos added to the remote appear on the phone.
 
-Check the remote from `apps/cli/`:
+Check the remote from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- summary --db <remote>
+psi summary --db <remote>
 ```
 
 ---

@@ -6,20 +6,21 @@ Test that adding an entry makes it appear in the listing.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at an empty config directory and add a database entry by seeding `databases.toml` directly (the smoke-test runner does the same with a `seed_databases_config` helper):
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory and add a database entry by seeding `databases.toml` directly (the smoke-test runner does the same with a `seed_databases_config` helper):
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-cat > /tmp/psi-test/config/databases.toml <<'TOML'
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-add-and-list
+mkdir -p /tmp/psi-cli-dbs-add-and-list/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-and-list/config
+cat > /tmp/psi-cli-dbs-add-and-list/config/databases.toml <<'TOML'
 recent_database_names = []
 
 [[databases]]
 name = "smoke-db"
 description = "Smoke test database"
-path = "/tmp/psi-test/smoke-db"
+path = "/tmp/psi-cli-dbs-add-and-list/smoke-db"
 TOML
 ```
 
@@ -31,12 +32,12 @@ Expected:
 ### 1. List databases
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:
 - Output contains `smoke-db`.
-- Output contains `/tmp/psi-test/smoke-db`.
+- Output contains `/tmp/psi-cli-dbs-add-and-list/smoke-db`.
 
 ## Check
 

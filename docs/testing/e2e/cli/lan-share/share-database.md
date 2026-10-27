@@ -5,14 +5,15 @@
 Test that `dbs send` and `dbs receive` transfer a database configuration plus
 its linked secrets from one CLI to another.
 
-Two terminals are needed, each running the CLI from `apps/cli/`, both on the same LAN.
+Two terminals are needed, each at the repo root with the CLI built and on the PATH, both on the same LAN.
 
 ## Prep
 
 In terminal A, set up the sender with a database entry and a linked secret:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-sender
 mkdir -p /tmp/psi-sender/config /tmp/psi-sender/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-sender/config
@@ -35,7 +36,8 @@ EOF
 In terminal B, set up the receiver:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 rm -rf /tmp/psi-receiver
 mkdir -p /tmp/psi-receiver/config /tmp/psi-receiver/vault
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-receiver/config
@@ -52,7 +54,7 @@ Expected: no output in either terminal.
 In terminal A:
 
 ```bash
-bun run start -- dbs send --name test-db --yes
+psi dbs send --name test-db --yes
 ```
 
 Expected:
@@ -67,7 +69,7 @@ Record the pairing code as `<code>` for the next step.
 In terminal B:
 
 ```bash
-bun run start -- dbs receive --yes --code <code>
+psi dbs receive --yes --code <code>
 ```
 
 Expected:
@@ -82,8 +84,8 @@ Expected:
 In terminal B:
 
 ```bash
-bun run start -- dbs list
-bun run start -- secrets list
+psi dbs list
+psi secrets list
 ```
 
 Expected:

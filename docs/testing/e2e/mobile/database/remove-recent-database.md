@@ -9,8 +9,8 @@ Test removing a database entry from the app, and that a database whose files hav
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 At least two databases listed in the app.

@@ -11,8 +11,8 @@ The end state is the same as the other test's: one database in two places, the b
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 **A Photosphere database that already exists in an S3 bucket, with photos in it**, and its credentials: endpoint, region, access key id and secret access key. If it is encrypted you need its encryption key as well. The database must be reachable from both the phone and the development machine.
@@ -29,19 +29,19 @@ If the app has been used before, remove its data first so the test starts with n
 
 ### 1. Register the existing database on the development machine
 
-From `apps/cli/`, naming secrets that are already in the keychain (`bun run start -- secrets list` prints their names):
+From the repo root, with the CLI on the PATH, naming secrets that are already in the keychain (`psi secrets list` prints their names):
 
 ```bash
-bun run start -- dbs add --yes --name existing-remote-test \
+psi dbs add --yes --name existing-remote-test \
   --path s3:<bucket>/<prefix> --s3-cred <s3 secret name> --encryption-key <key name>
 ```
 
-Leave `--encryption-key` off if the database is not encrypted. Run `bun run start -- dbs add` with no arguments to be walked through creating the secrets instead.
+Leave `--encryption-key` off if the database is not encrypted. Run `psi dbs add` with no arguments to be walked through creating the secrets instead.
 
 Check it reads, which also proves those are the right secrets:
 
 ```bash
-bun run start -- summary --db s3:<bucket>/<prefix>
+psi summary --db s3:<bucket>/<prefix>
 ```
 
 Expected: a summary rather than a report that no database was found. **Write down the number of photos it holds.** Later steps compare against it.
@@ -67,10 +67,10 @@ Pick any four digits. On the phone:
 2. Press the **⋮** at the top of the page and choose **Receive database**.
 3. Enter the four digits and press **Start**.
 
-Then, on the development machine, inside that minute, from `apps/cli/`:
+Then, on the development machine, inside that minute, from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- dbs send --name existing-remote-test --code <the four digits> --yes
+psi dbs send --name existing-remote-test --code <the four digits> --yes
 ```
 
 Back on the phone:
@@ -172,10 +172,10 @@ Expected:
 
 Expected:
 - The photo appears in the gallery within about half a minute, without you importing it.
-- After a sync pass it is in the bucket. Passes run every five minutes by default. Check from `apps/cli/`:
+- After a sync pass it is in the bucket. Passes run every five minutes by default. Check from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- summary --db s3:<bucket>/<prefix>
+psi summary --db s3:<bucket>/<prefix>
 ```
 
 - The photo count is higher than the number written down in step 1, by what the phone has imported.
@@ -206,10 +206,10 @@ Expected: the list still shows what this device imported, including from before 
 
 ### 13. Check the photos are really there
 
-Automatic import and syncing must both have caught up first. From `apps/cli/`:
+Automatic import and syncing must both have caught up first. From the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- verify --db s3:<bucket>/<prefix>
+psi verify --db s3:<bucket>/<prefix>
 ```
 
 Expected:
@@ -225,10 +225,10 @@ A photo that shows in the gallery but fails verification has been recorded witho
 The phone goes back to having nothing, and the bucket keeps whatever the phone put in it, which is the point of the test rather than something to undo. Only remove those photos from the bucket if it is a test bucket rather than a real library.
 
 1. On the phone, remove the app's data. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app.
-2. Take the database entry off the development machine, from `apps/cli/`:
+2. Take the database entry off the development machine, from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- dbs remove --yes --name existing-remote-test
+psi dbs remove --yes --name existing-remote-test
 ```
 
     The secrets are left alone: they were already in the keychain before this test and are not this test's to remove.

@@ -6,16 +6,17 @@ Test that `secrets clear --yes` empties the vault entirely.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories, then seed two secrets:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then seed two secrets:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-clear
+mkdir -p /tmp/psi-cli-vault-plaintext-clear/config /tmp/psi-cli-vault-plaintext-clear/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-clear/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-clear/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-cat > /tmp/psi-test/vault/vault.json <<'JSON'
+cat > /tmp/psi-cli-vault-plaintext-clear/vault/vault.json <<'JSON'
 {
   "clear-secret-one": {"name":"clear-secret-one","type":"plain","value":"value-one"},
   "clear-secret-two": {"name":"clear-secret-two","type":"plain","value":"value-two"}
@@ -30,7 +31,7 @@ Expected: no output.
 ### 1. Clear all secrets
 
 ```bash
-bun run start -- secrets clear --yes
+psi secrets clear --yes
 ```
 
 Expected:
@@ -41,7 +42,7 @@ Expected:
 ### 2. Confirm the vault is empty
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:

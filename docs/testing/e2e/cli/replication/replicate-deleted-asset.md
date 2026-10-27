@@ -7,26 +7,27 @@ replica that also lacks the deleted asset.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, take a working copy of the v6 fixture and remove its known asset `89171cd9-a652-4047-b869-1154bf2c95a1`:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, take a working copy of the v6 fixture and remove its known asset `89171cd9-a652-4047-b869-1154bf2c95a1`:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v6 /tmp/psi-test/source
-bun run start -- remove --db /tmp/psi-test/source 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-replication-replicate-deleted-asset
+mkdir -p /tmp/psi-cli-replication-replicate-deleted-asset
+cp -r test/dbs/v6 /tmp/psi-cli-replication-replicate-deleted-asset/source
+psi remove --db /tmp/psi-cli-replication-replicate-deleted-asset/source 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
 ```
 
 Expected:
 - Output includes `Successfully removed asset`.
-- The asset files are gone from `/tmp/psi-test/source/asset/`, `display/`, and `thumb/`.
+- The asset files are gone from `/tmp/psi-cli-replication-replicate-deleted-asset/source/asset/`, `display/`, and `thumb/`.
 
 ## Test
 
 ### 1. Replicate the source to a fresh destination
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+psi replicate --db /tmp/psi-cli-replication-replicate-deleted-asset/source --dest /tmp/psi-cli-replication-replicate-deleted-asset/replica --yes --force
 ```
 
 Expected:
@@ -37,20 +38,20 @@ Expected:
 ### 2. Confirm the deleted asset is also absent from the replica
 
 ```bash
-ls /tmp/psi-test/replica/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
+find /tmp/psi-cli-replication-replicate-deleted-asset/replica -name '89171cd9-a652-4047-b869-1154bf2c95a1*'
 ```
 
 Expected:
-- The command produces no output.
+- The command produces no output. The v6 fixture holds only this one asset, so the replica has no `asset/`, `display/` or `thumb/` file for it, and those folders may not exist at all.
 
 ---
 
 ### 3. Confirm the replica matches the source
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/source
-bun run start -- root-hash --db /tmp/psi-test/replica
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
+psi root-hash --db /tmp/psi-cli-replication-replicate-deleted-asset/source
+psi root-hash --db /tmp/psi-cli-replication-replicate-deleted-asset/replica
+psi compare --db /tmp/psi-cli-replication-replicate-deleted-asset/source --dest /tmp/psi-cli-replication-replicate-deleted-asset/replica --yes
 ```
 
 Expected:

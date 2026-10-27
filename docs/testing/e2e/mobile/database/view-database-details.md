@@ -9,8 +9,8 @@ Test the database summary: what the app says a database holds, and that it agree
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open with a few photos in it.
@@ -40,10 +40,10 @@ Expected: The asset count has gone up by one, and the size has grown.
 
 ### 3. Check it against the CLI
 
-Share or replicate the database to your development machine, then from `apps/cli/`:
+Share or replicate the database to your development machine, then from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- summary --db <path to the copy>
+psi summary --db <path to the copy>
 ```
 
 Expected: The counts agree with what the phone showed. A phone that reports more assets than the database holds is reporting its own memory rather than the database.

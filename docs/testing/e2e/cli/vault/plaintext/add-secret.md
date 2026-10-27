@@ -7,14 +7,15 @@ Test that `secrets add` writes a secret that subsequently appears in
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-add-secret
+mkdir -p /tmp/psi-cli-vault-plaintext-add-secret/config /tmp/psi-cli-vault-plaintext-add-secret/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-add-secret/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-add-secret/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
@@ -25,7 +26,7 @@ Expected: no output.
 ### 1. Add a plain secret via CLI flags
 
 ```bash
-bun run start -- secrets add --yes --name test-secret --type plain --value hello123
+psi secrets add --yes --name test-secret --type plain --value hello123
 ```
 
 Expected:
@@ -36,10 +37,10 @@ Expected:
 ### 2. Confirm it is in the vault file and the list
 
 ```bash
-jq 'keys' /tmp/psi-test/vault/vault.json
-bun run start -- secrets list
+jq 'keys' /tmp/psi-cli-vault-plaintext-add-secret/vault/vault.json
+psi secrets list
 ```
 
 Expected:
-- `/tmp/psi-test/vault/vault.json` holds a `test-secret` key.
+- `/tmp/psi-cli-vault-plaintext-add-secret/vault/vault.json` holds a `test-secret` key.
 - The list output contains `test-secret`.

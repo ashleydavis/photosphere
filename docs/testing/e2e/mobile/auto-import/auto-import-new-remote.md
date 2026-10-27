@@ -11,8 +11,8 @@ This is the flow the feature exists for, so it is worth running as one sitting r
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 The device needs at least two photos in its photo library before you start, and you need to be able to take one more with the camera partway through.
@@ -129,20 +129,20 @@ The phone needs credentials for the bucket, and no environment variables reach i
 
 Typing an access key and a secret on a phone keyboard is the slowest part of this test. The CLI can hold them instead and hand them over the local network. Both devices must be on the same network.
 
-From `apps/cli/`, make the secret and a database entry to carry it:
+From the repo root, with the CLI on the PATH, make the secret and a database entry to carry it:
 
 ```bash
-bun run start -- secrets add --yes --name auto-sync-test-s3 --type s3-credentials \
+psi secrets add --yes --name auto-sync-test-s3 --type s3-credentials \
   --value '{"endpoint":"https://<region>.digitaloceanspaces.com","region":"us-east-1","accessKeyId":"<access key id>","secretAccessKey":"<secret access key>"}'
 
-bun run start -- dbs add --yes --name auto-sync-test \
+psi dbs add --yes --name auto-sync-test \
   --path s3:cloud-storage-tests/auto-sync-test --s3-cred auto-sync-test-s3
 ```
 
 Then send them together. `dbs send` carries the database entry and the secrets attached to it, so the secret does not have to be sent separately:
 
 ```bash
-bun run start -- dbs send --name auto-sync-test --yes
+psi dbs send --name auto-sync-test --yes
 ```
 
 `--yes` is what makes it go straight to a pairing code. Without it the command walks through the name, description and path one field at a time, offering to edit each, before it sends anything.
@@ -159,15 +159,15 @@ Two databases can sync only when they share an identity, a single uuid held in t
 
 This is deliberately not a replication. Replicating a whole library from a phone is a long transfer that has to survive the app being backgrounded, and it copies everything before syncing has done anything useful. An empty remote is one small write, and the sync that follows is incremental and resumable by design.
 
-Get the phone's database id, then from `apps/cli/`:
+Get the phone's database id, then from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- init --db s3:cloud-storage-tests/auto-sync-test --database-id <the phone's database id> --yes
+psi init --db s3:cloud-storage-tests/auto-sync-test --database-id <the phone's database id> --yes
 ```
 
 Expected:
 - It reports that it created the database.
-- `bun run start -- database-id --db s3:cloud-storage-tests/auto-sync-test` prints the same id the phone has.
+- `psi database-id --db s3:cloud-storage-tests/auto-sync-test` prints the same id the phone has.
 
 A mistyped id is refused rather than accepted, because a remote with the wrong identity looks perfectly fine and then refuses to sync minutes later.
 
@@ -202,10 +202,10 @@ Expected:
 
 1. Leave the app open and wait. Passes run every five minutes by default, so give it that long before deciding nothing is happening.
 
-Check the bucket from `apps/cli/`:
+Check the bucket from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- summary --db s3:cloud-storage-tests/auto-sync-test
+psi summary --db s3:cloud-storage-tests/auto-sync-test
 ```
 
 Expected:
@@ -235,10 +235,10 @@ Expected:
 
 Automatic import and syncing must both have caught up before the counts can match. Step 11 has just switched importing off, so wait for one more sync pass and note the count in the gallery you are comparing against.
 
-From `apps/cli/`:
+From the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- verify --db s3:cloud-storage-tests/auto-sync-test
+psi verify --db s3:cloud-storage-tests/auto-sync-test
 ```
 
 Expected:
@@ -259,10 +259,10 @@ This one needs a quiet phone: the existing library fully imported and the bucket
 
 Expected:
 - The photo appears in the gallery within about half a minute. Nothing is queued ahead of it now, so it does not wait for a batch to fill the way it does while the library is still being imported.
-- After a sync pass it is in the bucket. Check from `apps/cli/`:
+- After a sync pass it is in the bucket. Check from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- list --db s3:cloud-storage-tests/auto-sync-test
+psi list --db s3:cloud-storage-tests/auto-sync-test
 ```
 
 Camera to cloud, with the app only ever left open. This is what the feature is for, and it is the step to run when the earlier ones have been slow: a phone that has finished backfilling should handle a new photo promptly even if importing the library took hours.
@@ -284,19 +284,19 @@ aws s3 rm s3://cloud-storage-tests/auto-sync-test/ --recursive
     `InvalidAccessKeyId` from this means the request went to real AWS rather than to the bucket. `aws` does not read `AWS_ENDPOINT`, which is the variable the `psi` commands elsewhere in this test use, so the endpoint has to be in `AWS_ENDPOINT_URL` as well.
 
 2. On the phone, remove the app's data. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app.
-3. Take the bucket's credentials off the development machine, and the database entry with them. Route B put them there, and a live access key left in a keychain outlives the test that needed it. From `apps/cli/`:
+3. Take the bucket's credentials off the development machine, and the database entry with them. Route B put them there, and a live access key left in a keychain outlives the test that needed it. From the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- dbs remove --yes --name auto-sync-test
-bun run start -- secrets remove --yes --name auto-sync-test-s3
+psi dbs remove --yes --name auto-sync-test
+psi secrets remove --yes --name auto-sync-test-s3
 ```
 
     Skip this if you took Route A, which never put anything on the development machine.
 
-Confirm the bucket is clear, from `apps/cli/`:
+Confirm the bucket is clear, from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- summary --db s3:cloud-storage-tests/auto-sync-test
+psi summary --db s3:cloud-storage-tests/auto-sync-test
 ```
 
 Expected: it reports that no database was found at that path, which is the state step 8 starts from.

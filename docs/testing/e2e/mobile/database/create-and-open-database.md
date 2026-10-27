@@ -9,8 +9,8 @@ Test that a database can be created on the device, closed and opened again, and 
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 ## Steps

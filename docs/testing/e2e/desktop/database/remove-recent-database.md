@@ -35,12 +35,13 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory and pre-create two databases:
+In the CLI terminal, build the CLI, put it on the PATH and pre-create two databases:
 
 ```bash
-cd apps/cli/
-bun run start -- init --db /tmp/psi-desktop-remove-recent-database/db-a --yes
-bun run start -- init --db /tmp/psi-desktop-remove-recent-database/db-b --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+psi init --db /tmp/psi-desktop-remove-recent-database/db-a --yes
+psi init --db /tmp/psi-desktop-remove-recent-database/db-b --yes
 ```
 
 Expected:

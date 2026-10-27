@@ -34,10 +34,11 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory:
+In the CLI terminal, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Expected:
@@ -69,7 +70,7 @@ Expected:
 Then run in the CLI terminal:
 
 ```bash
-bun run start -- secrets view --name api-key-1 --yes
+psi secrets view --name api-key-1 --yes
 ```
 
 Expected:
@@ -97,7 +98,7 @@ Expected:
 Then run in the CLI terminal:
 
 ```bash
-bun run start -- secrets view --name api-key-1 --yes
+psi secrets view --name api-key-1 --yes
 ```
 
 Expected:

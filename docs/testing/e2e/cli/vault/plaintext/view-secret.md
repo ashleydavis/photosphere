@@ -6,16 +6,17 @@ Test that `secrets view --yes` prints the full secret value.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories, then seed a secret:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then seed a secret:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-view-secret
+mkdir -p /tmp/psi-cli-vault-plaintext-view-secret/config /tmp/psi-cli-vault-plaintext-view-secret/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-view-secret/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-view-secret/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-cat > /tmp/psi-test/vault/vault.json <<'JSON'
+cat > /tmp/psi-cli-vault-plaintext-view-secret/vault/vault.json <<'JSON'
 {"view-secret":{"name":"view-secret","type":"plain","value":"my-secret-value"}}
 JSON
 ```
@@ -27,7 +28,7 @@ Expected: no output.
 ### 1. View the secret
 
 ```bash
-bun run start -- secrets view --name view-secret --yes
+psi secrets view --name view-secret --yes
 ```
 
 Expected output contains all of:

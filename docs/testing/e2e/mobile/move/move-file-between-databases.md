@@ -9,8 +9,8 @@ Test moving a photo from one database to another, and that it arrives whole and 
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 Two databases listed on the phone, the first with a photo you will recognise.
@@ -48,11 +48,11 @@ Expected: The photo is still gone, after the database has been closed and reopen
 
 ### 4. Check both databases are sound
 
-Share or replicate both to your development machine, then from `apps/cli/`:
+Share or replicate both to your development machine, then from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- verify --db <the first>
-bun run start -- verify --db <the second>
+psi verify --db <the first>
+psi verify --db <the second>
 ```
 
 Expected: Both verify with no failures. A move that leaves the source database referring to content it no longer has is the failure this step catches.

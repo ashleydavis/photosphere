@@ -9,15 +9,15 @@ Test the app against a database large enough to show whether the gallery scrolls
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
-A database with at least fifty photos in it. Build one from `apps/cli/`:
+A database with at least fifty photos in it. Build one from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- init --db /tmp/psi-large --yes
-bun run start -- add ../../test/multiple-files --db /tmp/psi-large
+psi init --db /tmp/psi-large --yes
+psi add test/multiple-files --db /tmp/psi-large
 ```
 
 Send the entry to the phone, or point the phone at it in S3.
@@ -65,4 +65,4 @@ Expected: The gallery is where you left it and is still usable, rather than relo
 
 1. Open the database summary.
 
-Expected: The count matches what the CLI reports for the same database with `bun run start -- summary`.
+Expected: The count matches what the CLI reports for the same database with `psi summary`.

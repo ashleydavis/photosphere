@@ -9,8 +9,8 @@ Test copying a database from the phone to another location, and that the copy is
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open on the phone with a few photos in it, and somewhere to replicate to that the phone can reach: an S3 bucket, or a database shared from the desktop.
@@ -30,11 +30,11 @@ Expected:
 
 ### 2. Check the copy
 
-From `apps/cli/`:
+From the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- verify --db <the destination>
-bun run start -- compare --db <the source, if reachable> --dest <the destination>
+psi verify --db <the destination>
+psi compare --db <the source, if reachable> --dest <the destination>
 ```
 
 Expected:

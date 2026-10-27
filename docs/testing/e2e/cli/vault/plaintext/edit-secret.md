@@ -6,16 +6,17 @@ Test that `secrets edit` can update the value of a secret and rename it.
 
 ## Prep
 
-Move into the CLI source directory and point the CLI at empty config and vault directories, then seed a secret:
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then seed a secret:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-edit-secret
+mkdir -p /tmp/psi-cli-vault-plaintext-edit-secret/config /tmp/psi-cli-vault-plaintext-edit-secret/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-edit-secret/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-edit-secret/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-cat > /tmp/psi-test/vault/vault.json <<'JSON'
+cat > /tmp/psi-cli-vault-plaintext-edit-secret/vault/vault.json <<'JSON'
 {"edit-secret":{"name":"edit-secret","type":"plain","value":"original-value"}}
 JSON
 ```
@@ -27,7 +28,7 @@ Expected: no output.
 ### 1. Update the value
 
 ```bash
-bun run start -- secrets edit --name edit-secret --yes --value updated-value
+psi secrets edit --name edit-secret --yes --value updated-value
 ```
 
 Expected:
@@ -38,7 +39,7 @@ Expected:
 ### 2. Confirm the value updated
 
 ```bash
-bun run start -- secrets view --name edit-secret --yes
+psi secrets view --name edit-secret --yes
 ```
 
 Expected:
@@ -49,7 +50,7 @@ Expected:
 ### 3. Rename the secret
 
 ```bash
-bun run start -- secrets edit --name edit-secret --yes --new-name renamed-secret
+psi secrets edit --name edit-secret --yes --new-name renamed-secret
 ```
 
 Expected:
@@ -60,7 +61,7 @@ Expected:
 ### 4. Confirm the rename
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:

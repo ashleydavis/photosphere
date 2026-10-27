@@ -9,8 +9,8 @@ Test that changes made on the phone reach another copy of the database, and that
 Run the app from source (from the repo root):
 
 ```bash
-bun run and    # Android
-bun run ios    # iOS
+bun run android    # Android
+bun run ios        # iOS
 ```
 
 A database open on the phone with its origin set to a copy you can reach from your development machine, as in [edit-database-origin](../database/edit-database-origin.md).
@@ -22,10 +22,10 @@ A database open on the phone with its origin set to a copy you can reach from yo
 1. Import a photo you will recognise.
 2. Let the phone sync.
 
-Check the other copy from `apps/cli/`:
+Check the other copy from the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- list --db <the other copy>
+psi list --db <the other copy>
 ```
 
 Expected: The photo is listed there.
@@ -34,10 +34,10 @@ Expected: The photo is listed there.
 
 ### 2. Add a photo on the other side
 
-From `apps/cli/`:
+From the repo root, with the CLI on the PATH:
 
 ```bash
-bun run start -- add ../../test/test.jpg --db <the other copy>
+psi add test/test.jpg --db <the other copy>
 ```
 
 Then let the phone sync and open the gallery.

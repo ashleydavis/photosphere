@@ -8,18 +8,19 @@ errors.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at empty config and vault directories, create a plain (unencrypted) database, add a file and make sure `databases.toml` has no matching entry:
+From the repo root, build the CLI, put it on the PATH, point the CLI at empty config and vault directories, create a plain (unencrypted) database, add a file and make sure `databases.toml` has no matching entry:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-no-match-fallback
+mkdir -p /tmp/psi-cli-dbs-no-match-fallback/config /tmp/psi-cli-dbs-no-match-fallback/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-no-match-fallback/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-dbs-no-match-fallback/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-bun run start -- init --db /tmp/psi-test/db --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/db --yes
-printf 'recent_database_names = []\n' > /tmp/psi-test/config/databases.toml
+psi init --db /tmp/psi-cli-dbs-no-match-fallback/db --yes
+psi add test/test.png --db /tmp/psi-cli-dbs-no-match-fallback/db --yes
+printf 'recent_database_names = []\n' > /tmp/psi-cli-dbs-no-match-fallback/config/databases.toml
 ```
 
 Expected:
@@ -30,7 +31,7 @@ Expected:
 ### 1. Run `summary` against the unregistered database
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/db --yes
+psi summary --db /tmp/psi-cli-dbs-no-match-fallback/db --yes
 ```
 
 Expected:

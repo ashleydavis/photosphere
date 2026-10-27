@@ -33,10 +33,11 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory:
+In the CLI terminal, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Expected:
@@ -129,7 +130,7 @@ Expected:
 ### 8. Check that the file is no longer in the source database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-move-file-between-databases/source
+psi list --db /tmp/psi-desktop-move-file-between-databases/source
 ```
 
 Expected:
@@ -140,7 +141,7 @@ Expected:
 ### 9. Check that the file is now in the destination database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-move-file-between-databases/dest
+psi list --db /tmp/psi-desktop-move-file-between-databases/dest
 ```
 
 Expected:

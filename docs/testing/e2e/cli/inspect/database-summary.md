@@ -6,13 +6,14 @@ Test that `summary` reports the expected fields for a populated database.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create a database and add a file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database and add a file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-inspect-database-summary
+psi init --db /tmp/psi-cli-inspect-database-summary/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-inspect-database-summary/source --yes
 ```
 
 Expected:
@@ -23,7 +24,7 @@ Expected:
 ### 1. Show the database summary
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/source
+psi summary --db /tmp/psi-cli-inspect-database-summary/source
 ```
 
 Expected output contains all of these fields:

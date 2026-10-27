@@ -8,21 +8,22 @@ The database lives in a local MinIO server started by `bun run s3-emulator` (`sc
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, start the local S3 server, point the CLI at it, and create a local database with a file:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, start the local S3 server, point the CLI at it, and create a local database with a file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-(cd ../.. && bun run s3-emulator start /tmp/psi-test/s3)
-source /tmp/psi-test/s3/env
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-s3-s3-replicate-and-sync
+mkdir -p /tmp/psi-cli-s3-s3-replicate-and-sync/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-s3-s3-replicate-and-sync/config
+bun run s3-emulator start /tmp/psi-cli-s3-s3-replicate-and-sync/s3
+source /tmp/psi-cli-s3-s3-replicate-and-sync/s3/env
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
 export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
 export S3_DB="s3:$S3_EMULATOR_BUCKET/manual-test"
-bun run start -- init --db /tmp/psi-test/local --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/local --yes
+psi init --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --yes
+psi add test/test.jpg --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --yes
 ```
 
 Expected:
@@ -33,7 +34,7 @@ Expected:
 ### 1. Replicate the local database to S3
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/local --dest "$S3_DB" --yes
+psi replicate --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --dest "$S3_DB" --yes
 ```
 
 Expected:
@@ -44,7 +45,7 @@ Expected:
 ### 2. Compare the two
 
 ```bash
-bun run start -- compare --db /tmp/psi-test/local --dest "$S3_DB" --yes
+psi compare --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --dest "$S3_DB" --yes
 ```
 
 Expected:
@@ -55,9 +56,9 @@ Expected:
 ### 3. Add a file on each side, then sync
 
 ```bash
-bun run start -- add ../../test/test.png --db /tmp/psi-test/local --yes
-bun run start -- add ../../test/multiple-files/test-1.jpeg --db "$S3_DB" --yes
-bun run start -- sync --db /tmp/psi-test/local --dest "$S3_DB" --yes
+psi add test/test.png --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --yes
+psi add test/multiple-files/test-1.jpeg --db "$S3_DB" --yes
+psi sync --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --dest "$S3_DB" --yes
 ```
 
 Expected:
@@ -69,10 +70,10 @@ Expected:
 ### 4. Confirm both sides hold all three files and match
 
 ```bash
-bun run start -- list --db /tmp/psi-test/local --yes
-bun run start -- list --db "$S3_DB" --yes
-bun run start -- root-hash --db /tmp/psi-test/local
-bun run start -- root-hash --db "$S3_DB"
+psi list --db /tmp/psi-cli-s3-s3-replicate-and-sync/local --yes
+psi list --db "$S3_DB" --yes
+psi root-hash --db /tmp/psi-cli-s3-s3-replicate-and-sync/local
+psi root-hash --db "$S3_DB"
 ```
 
 Expected:
@@ -86,7 +87,7 @@ Expected:
 Run this even when an earlier step failed:
 
 ```bash
-(cd ../.. && bun run s3-emulator stop /tmp/psi-test/s3)
+bun run s3-emulator stop /tmp/psi-cli-s3-s3-replicate-and-sync/s3
 ```
 
 Expected:

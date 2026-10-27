@@ -33,10 +33,11 @@ In the app's terminal, start the desktop app from the repo root. Use the script 
 bun run linux
 ```
 
-In the CLI terminal, move into the CLI source directory:
+In the CLI terminal, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Expected:
@@ -76,7 +77,7 @@ Expected:
 ### 3. List files in the source database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-replicate-full-copy/source
+psi list --db /tmp/psi-desktop-replicate-full-copy/source
 ```
 
 Expected:
@@ -87,7 +88,7 @@ Expected:
 ### 4. Check that the source database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-replicate-full-copy/source
+psi verify --db /tmp/psi-desktop-replicate-full-copy/source
 ```
 
 Expected:
@@ -116,7 +117,7 @@ Expected:
 ### 6. List files in the replica database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-replicate-full-copy/replica
+psi list --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
@@ -127,7 +128,7 @@ Expected:
 ### 7. Check that the replica database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-replicate-full-copy/replica
+psi verify --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
@@ -139,7 +140,7 @@ Expected:
 ### 8. Check the origin of the replica
 
 ```bash
-bun run start -- origin --db /tmp/psi-desktop-replicate-full-copy/replica
+psi origin --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:

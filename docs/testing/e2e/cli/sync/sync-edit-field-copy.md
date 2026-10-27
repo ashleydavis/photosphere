@@ -5,19 +5,20 @@
 Test that a field edit made via `bdb-cli` on the **copy** database is reflected
 in the original after `sync`.
 
-`bdb-cli` is the BSON database CLI the smoke tests use to change records directly. From `apps/cli/` it runs as `bun run ../bdb-cli/src/index.ts`.
+`bdb-cli` is the BSON database CLI the smoke tests use to change records directly. From the repo root it runs as `bun run apps/bdb-cli/src/index.ts`.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then edit a field on a known record in the **copy**:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then edit a field on a known record in the **copy**:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
-bun run ../bdb-cli/src/index.ts edit /tmp/psi-test/copy/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 description string "Edited on copy"
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-edit-field-copy
+mkdir -p /tmp/psi-cli-sync-sync-edit-field-copy
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-edit-field-copy/original
+psi replicate --db /tmp/psi-cli-sync-sync-edit-field-copy/original --dest /tmp/psi-cli-sync-sync-edit-field-copy/copy --yes --force
+bun run apps/bdb-cli/src/index.ts edit /tmp/psi-cli-sync-sync-edit-field-copy/copy/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 description string "Edited on copy"
 ```
 
 Expected:
@@ -29,8 +30,8 @@ Expected:
 ### 1. Confirm root hashes now differ
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/copy
 ```
 
 Expected:
@@ -41,7 +42,7 @@ Expected:
 ### 2. Sync
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-edit-field-copy/original --dest /tmp/psi-cli-sync-sync-edit-field-copy/copy --yes
 ```
 
 Expected:
@@ -52,9 +53,9 @@ Expected:
 ### 3. Confirm the field is now also present on the original
 
 ```bash
-bun run ../bdb-cli/src/index.ts record /tmp/psi-test/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+bun run apps/bdb-cli/src/index.ts record /tmp/psi-cli-sync-sync-edit-field-copy/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/copy
 ```
 
 Expected:

@@ -4,21 +4,22 @@
 
 Test that an encrypted database replicates to a copy that stays encrypted with the same key and matches the source.
 
-The key is generated into a plaintext vault under `/tmp/psi-test/vault`, so the test never touches the OS keychain.
+The key is generated into a plaintext vault under `/tmp/psi-cli-encryption-replicate-encrypted/vault`, so the test never touches the OS keychain.
 
 ## Prep
 
-Move into the CLI source directory, point the CLI at empty config and vault directories, create an encrypted database and add a file:
+From the repo root, build the CLI, put it on the PATH, point the CLI at empty config and vault directories, create an encrypted database and add a file:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-encryption-replicate-encrypted
+mkdir -p /tmp/psi-cli-encryption-replicate-encrypted/config /tmp/psi-cli-encryption-replicate-encrypted/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-encryption-replicate-encrypted/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-encryption-replicate-encrypted/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-bun run start -- init --db /tmp/psi-test/source --key rep-enc-key --generate-key --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --key rep-enc-key --yes
+psi init --db /tmp/psi-cli-encryption-replicate-encrypted/source --key rep-enc-key --generate-key --yes
+psi add test/test.jpg --db /tmp/psi-cli-encryption-replicate-encrypted/source --key rep-enc-key --yes
 ```
 
 Expected:
@@ -29,7 +30,7 @@ Expected:
 ### 1. Replicate the encrypted database
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --key rep-enc-key --dk rep-enc-key --yes
+psi replicate --db /tmp/psi-cli-encryption-replicate-encrypted/source --dest /tmp/psi-cli-encryption-replicate-encrypted/replica --key rep-enc-key --dk rep-enc-key --yes
 ```
 
 Expected:
@@ -40,8 +41,8 @@ Expected:
 ### 2. Confirm the replica is encrypted
 
 ```bash
-ls /tmp/psi-test/replica/.db
-head -c 4 /tmp/psi-test/replica/asset/$(ls /tmp/psi-test/replica/asset); echo
+ls /tmp/psi-cli-encryption-replicate-encrypted/replica/.db
+head -c 4 /tmp/psi-cli-encryption-replicate-encrypted/replica/asset/$(ls /tmp/psi-cli-encryption-replicate-encrypted/replica/asset); echo
 ```
 
 Expected:
@@ -52,9 +53,9 @@ Expected:
 ### 3. Read the replica with the key and compare it with the source
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/replica --key rep-enc-key --yes
-bun run start -- list --db /tmp/psi-test/replica --key rep-enc-key --yes
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --key rep-enc-key --dk rep-enc-key --yes
+psi verify --db /tmp/psi-cli-encryption-replicate-encrypted/replica --key rep-enc-key --yes
+psi list --db /tmp/psi-cli-encryption-replicate-encrypted/replica --key rep-enc-key --yes
+psi compare --db /tmp/psi-cli-encryption-replicate-encrypted/source --dest /tmp/psi-cli-encryption-replicate-encrypted/replica --key rep-enc-key --dk rep-enc-key --yes
 ```
 
 Expected:

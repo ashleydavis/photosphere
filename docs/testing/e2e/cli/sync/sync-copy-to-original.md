@@ -7,15 +7,16 @@ the original through the same `sync` command.
 
 ## Prep
 
-Move into the CLI source directory, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then add a new file to the **copy**:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then add a new file to the **copy**:
 
 ```bash
-cd apps/cli/
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
-bun run start -- add ../../test/test.png --db /tmp/psi-test/copy --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-copy-to-original
+mkdir -p /tmp/psi-cli-sync-sync-copy-to-original
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-copy-to-original/original
+psi replicate --db /tmp/psi-cli-sync-sync-copy-to-original/original --dest /tmp/psi-cli-sync-sync-copy-to-original/copy --yes --force
+psi add test/test.png --db /tmp/psi-cli-sync-sync-copy-to-original/copy --yes
 ```
 
 Expected:
@@ -27,7 +28,7 @@ Expected:
 ### 1. Sync the two databases
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-copy-to-original/original --dest /tmp/psi-cli-sync-sync-copy-to-original/copy --yes
 ```
 
 Expected:
@@ -38,8 +39,8 @@ Expected:
 ### 2. Confirm the root hashes match
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-copy-to-original/original
+psi root-hash --db /tmp/psi-cli-sync-sync-copy-to-original/copy
 ```
 
 Expected:
