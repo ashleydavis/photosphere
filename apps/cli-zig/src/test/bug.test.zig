@@ -280,7 +280,7 @@ test "on Windows the opener is started attached, so it ends when the CLI's job h
         .stderr = .ignore,
     });
     const process = child.id.?;
-    const job = cli.open.startAttachedToThisProcess(allocator, process) orelse return error.OpenerNotPutInAJob;
+    const job = cli.open.startAttachedToThisProcess(MuteLog.init(), allocator, process) orelse return error.OpenerNotPutInAJob;
 
     var inJob: std.os.windows.BOOL = .FALSE;
     try std.testing.expect(IsProcessInJob(process, job, &inJob).toBool());

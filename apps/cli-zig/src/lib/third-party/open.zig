@@ -109,7 +109,9 @@ pub fn open(allocator: std.mem.Allocator, io: std.Io, log: ILog, target: []const
     };
 
     if (builtin.os.tag == .windows) {
-        _ = startAttachedToThisProcess(allocator, opener.id.?);
+        // The log is passed on: without it the Windows build of the CLI in the Release Zig Windows workflow (run 40499050357) failed
+        // with "expected 3 argument(s), found 2", a call this Windows-only branch kept when the log became a parameter.
+        _ = startAttachedToThisProcess(log, allocator, opener.id.?);
     }
 
     // `subprocess.unref()`: the opener is not waited for.
