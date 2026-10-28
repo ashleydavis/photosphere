@@ -317,6 +317,11 @@ test "the messages of an ffprobe run that worked go to the log as the tool's sta
 
     // At the info level ffprobe describes the file it opened ("Input #0, ...") through FFmpeg's log.
     const result = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "info", "-hide_banner", "-print_format", "json", "-show_format", test_video });
+    // On Windows every in-process ffmpeg and ffprobe run in these tests exited 1 while psi read videos there, and the failure said
+    // only "expected 0, found 1", so what FFmpeg said about it is printed with the failure.
+    if (result.exit_code != 0) {
+        std.debug.print("ffprobe exited with {d}. Its messages:\n{s}\nIts errors:\n{s}\n", .{ result.exit_code, captured.stderr.items, captured.errors.items });
+    }
     try std.testing.expectEqual(@as(i32, 0), result.exit_code);
     try std.testing.expect(std.mem.indexOf(u8, captured.stderr.items, "ffprobe: Input #0") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.output, "Input #0") == null);
