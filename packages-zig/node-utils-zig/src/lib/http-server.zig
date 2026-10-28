@@ -657,6 +657,13 @@ fn wakeConnection(io: std.Io, connection: *ConnectionThread) void {
         return;
     }
     if (builtin.os.tag == .windows) {
+        // A thread that has read its request is serving it, not reading, and takes its stop from its queue. Closing its socket
+        // under it broke the response it was still writing: an event stream ended with WriteFailed when the server stopped, and
+        // its client's read failed (mcp-zig's "a GET that accepts an event stream gets a stream that ends when the server stops",
+        // on Windows).
+        if (connection.requested) {
+            return;
+        }
         stream.close(io);
         connection.closed = true;
         return;
