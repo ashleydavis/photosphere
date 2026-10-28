@@ -43,5 +43,8 @@ FRONTEND_DIR="$(cd "$APP_DIR/../photosphere-frontend" && pwd)"
 PAGE_DIR="$(mktemp -d "$FRONTEND_DIR/page.XXXXXX")"
 trap 'find "$PAGE_DIR" -type f -delete; find "$PAGE_DIR" -depth -type d -empty -delete' EXIT
 (cd "$APP_DIR" && bun run bundle:ui --out-dir "$PAGE_DIR" "${BUNDLE_ARGUMENTS[@]+"${BUNDLE_ARGUMENTS[@]}"}")
-(cd "$APP_DIR/../.." && zig build photosphere-linux "-Doptimize=$OPTIMIZE" "-Dstrip=$STRIP" "-Dui-directory=apps/photosphere-frontend/$(basename "$PAGE_DIR")" --prefix "$PREFIX")
+# For the baseline CPU, as the other platforms are by naming their target. Built for the machine's own CPU, the release workflow's
+# app ran on a smoke test runner with an older CPU and every scenario ended with "Illegal instruction (core dumped)", and a
+# package of such a build runs only on CPUs as new as the one it was built on.
+(cd "$APP_DIR/../.." && zig build photosphere-linux -Dcpu=baseline "-Doptimize=$OPTIMIZE" "-Dstrip=$STRIP" "-Dui-directory=apps/photosphere-frontend/$(basename "$PAGE_DIR")" --prefix "$PREFIX")
 echo "Built $PREFIX/bin/photosphere"
