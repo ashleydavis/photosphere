@@ -1,4 +1,5 @@
 const std = @import("std");
+const inherited_environment = @import("inherited-environment.zig");
 const ILog = @import("utils-zig").log.ILog;
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
@@ -106,6 +107,8 @@ test "getInfo reads a video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -121,6 +124,8 @@ test "getInfo fails for a file that is not a video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -135,6 +140,8 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -166,6 +173,8 @@ test "getFileInfo reads images and videos and nothing else" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -209,6 +218,8 @@ test "getInfo reads the creation time of a silent video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -239,6 +250,8 @@ test "getInfo fails for a file with no video stream" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -258,6 +271,8 @@ test "getInfo and extractScreenshot fail for a file that does not exist" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -273,6 +288,8 @@ test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();
@@ -290,6 +307,8 @@ test "getFileInfo fails loudly for a video it cannot read" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     const runner = mediaTools.runner();
     const allocator = arena.allocator();

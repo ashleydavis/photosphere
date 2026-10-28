@@ -1,4 +1,5 @@
 const std = @import("std");
+const inherited_environment = @import("inherited-environment.zig");
 const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
@@ -54,6 +55,8 @@ test "ffprobe -version and ffmpeg -version give the version in the line the app 
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const ffprobe = try Ffmpeg.runFfprobe(std.testing.io, log, arena.allocator(), &.{"-version"});
     try std.testing.expectEqual(@as(i32, 0), ffprobe.exit_code);
@@ -69,6 +72,8 @@ test "ffprobe reports the streams and the format of a video as JSON" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const probed = try probe(log, arena.allocator(), test_video);
     try std.testing.expect(probed.width > 0);
@@ -84,6 +89,8 @@ test "ffmpeg writes a JPEG of a frame of a video that ImageMagick reads at the v
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const probed = try probe(log, allocator, test_video);
     const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
@@ -101,6 +108,8 @@ test "ffmpeg scales the frame it writes" {
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const picture_path = try tempFilePath(allocator, tmp_dir, "small.jpg");
     const result = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-vf", "scale=64:48", "-q:v", "5", "-y", picture_path });
@@ -117,6 +126,8 @@ test "commands run one after another, the same command and different ones, witho
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const first = try probe(log, allocator, test_video);
     var round: usize = 0;
@@ -142,6 +153,8 @@ test "a command that fails ends with a non-zero exit code and the next command s
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
     const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
@@ -274,6 +287,8 @@ test "a failed ffmpeg run sends FFmpeg's errors, naming the file, to the log's e
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
     const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
@@ -292,6 +307,8 @@ test "a failed ffprobe hands back FFmpeg's error in its output, and a probe that
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
     const failed = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", missing_path });
@@ -313,6 +330,8 @@ test "the messages of an ffprobe run that worked go to the log as the tool's sta
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
 
     // At the info level ffprobe describes the file it opened ("Input #0, ...") through FFmpeg's log.
@@ -344,6 +363,8 @@ const StandardErrorTests = struct {
         var captured = ICapturedLog.init(allocator);
         const log = captured.ilog();
         var tools = try MediaTools.init();
+        const environment = try inherited_environment.inherit(std.testing.allocator);
+        defer inherited_environment.restore(std.testing.allocator, environment);
         defer tools.deinit();
         const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
         const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
@@ -491,6 +512,8 @@ test "ffmpeg and ffprobe run on several threads at once, each run giving the ans
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const expected = try probe(log, allocator, test_video);
     const directory = try tempFilePath(allocator, tmp_dir, "");
@@ -532,6 +555,8 @@ const SignalTests = struct {
         var tmp_dir = std.testing.tmpDir(.{});
         defer tmp_dir.cleanup();
         var tools = try MediaTools.init();
+        const environment = try inherited_environment.inherit(std.testing.allocator);
+        defer inherited_environment.restore(std.testing.allocator, environment);
         defer tools.deinit();
         const signals = [_]std.posix.SIG{ .INT, .TERM, .XCPU, .PIPE };
         var previous: [signals.len]std.posix.Sigaction = undefined;
@@ -579,6 +604,8 @@ test "ffprobe that fails before it writes its report gives a non-zero exit code 
     var captured = ICapturedLog.init(arena.allocator());
     const log = captured.ilog();
     var tools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer tools.deinit();
     const result = try Ffmpeg.runFfprobe(std.testing.io, log, arena.allocator(), &.{ "-no-such-option", test_video });
     try std.testing.expect(result.exit_code != 0);

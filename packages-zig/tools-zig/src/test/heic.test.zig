@@ -1,4 +1,5 @@
 const std = @import("std");
+const inherited_environment = @import("inherited-environment.zig");
 const MuteLog = @import("utils-zig").mute_log.MuteLog;
 const tools = @import("tools-zig");
 const media_tools = @import("media-tools-zig");
@@ -67,6 +68,8 @@ test "getHeicInfo reads the size of a tiled HEIC with the bundled ffprobe" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
 
     const info = try heic.getHeicInfo(arena.allocator(), std.testing.io, log, mediaTools.runner(), test_heic);
@@ -80,6 +83,8 @@ test "decodeHeic joins and trims the tiles of a HEIC into a JPEG of the picture'
     defer arena.deinit();
     const allocator = arena.allocator();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
@@ -101,6 +106,8 @@ test "getFileInfo reads a HEIC with ffprobe rather than ImageMagick" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
     defer mediaTools.deinit();
 
     const info = (try tools.getFileInfo(arena.allocator(), std.testing.io, log, mediaTools.runner(), test_heic, "image/heic")).?;
