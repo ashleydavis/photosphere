@@ -88,7 +88,14 @@ wait_for_log "$TMP_DIR" "$("${PLATFORM}_auto_import_started_log")" || exit 1
 send_command "$APP_PORT" click '{"dataId":"configuration-dialog-close"}' || exit 1
 
 # The worker says it has recorded the database...
-wait_for_log "$TMP_DIR" "Databases changed" 180 || exit 1
+#
+# Looked for in the whole log, not after the line above. The database is made by a child of the task whose end logs "Starting automatic
+# import into", and the interface logs "Databases changed" when the child's end reaches the web view, by a different path from the one
+# the main thread logs its line on, so either can land first. In a Release Windows smoke run the wait sat out its 180 seconds with the
+# tail of the app log showing the database made and being imported into, which is what the line landing behind the cursor looks like
+# (that run kept no more of the log than its tail). Nothing can have logged it earlier: the list was asserted empty before automatic
+# import was switched on, and the wait for the list below is what checks the refresh happened.
+wait_for_log_anywhere "$TMP_DIR" "Databases changed" 180 || exit 1
 
 # ...and the still-open dialog is now listing it. Nothing between the dialog opening and here closed it, reopened it, or asked it to
 # refresh.
