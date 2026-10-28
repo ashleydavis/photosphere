@@ -4,6 +4,7 @@ const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const media_tools = @import("media-tools-zig");
+const node_utils = @import("node-utils-zig");
 const ziggy = @import("ziggy");
 
 const MediaTools = media_tools.MediaTools;
@@ -464,7 +465,7 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
                 outcome.failure = "ffprobe's report is not JSON, and running it again at the error level failed to run";
                 return;
             };
-            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "ffprobe's report is not JSON: exit code {d}, report \"{s}\", errors \"{s}\", messages \"{s}\"; run again at the error level it exited {d}", .{ probed.exit_code, probed.output, captured.errors.items, captured.stderr.items, again.exit_code }) catch @panic("out of memory");
+            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "ffprobe's report is not JSON: exit code {d}, report \"{s}\", errors \"{s}\", messages \"{s}\"; run again at the error level it exited {d}; this thread sees an environment: {}, with TEMP \"{s}\"", .{ probed.exit_code, probed.output, captured.errors.items, captured.stderr.items, again.exit_code, node_utils.process_env.getEnvironMap() != null, node_utils.process_env.getEnv("TEMP") orelse "(unset)" }) catch @panic("out of memory");
             return;
         };
         var probed_width: i64 = 0;
