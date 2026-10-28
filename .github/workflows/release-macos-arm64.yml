@@ -183,7 +183,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
@@ -261,7 +263,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
@@ -386,7 +390,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
       - name: Cache Bun dependencies
@@ -482,7 +488,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
@@ -658,7 +666,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
@@ -699,7 +709,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', '**/build.zig.zon') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
@@ -759,7 +769,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/zig/p
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-
 
