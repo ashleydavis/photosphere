@@ -364,6 +364,30 @@ jobs:
           PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
         run: bun run test:ziggy:ios
 
+      # Scenarios 30 (the app never became ready, its log ending at "Main window created") and 58 (syncing was never held back for
+      # the prefetch, which logged nothing) failed here with nothing kept to say why. A failed scenario keeps its directory, which
+      # holds the app's log and the core's own log, and macOS writes a crash report for a process that crashed, the simulator's
+      # apps included.
+      - name: Collect the logs of failed scenarios and any crash reports
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+          if [ -d "${TMPDIR%/}/photosphere-tests" ]; then
+              cp -R "${TMPDIR%/}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"
+          fi
+          if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
+              cp -R "$HOME/Library/Logs/DiagnosticReports/." "$RUNNER_TEMP/app-smoke-logs/crash-reports/"
+          fi
+          ls -R "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+
+      - name: Upload the logs of failed scenarios and any crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-smoke-logs-ios
+          path: ${{ runner.temp }}/app-smoke-logs
+
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:
     timeout-minutes: 20
