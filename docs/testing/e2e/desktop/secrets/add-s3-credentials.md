@@ -110,3 +110,8 @@ Expected:
 - `accessKeyId` is `AKIAOLD` (preserved).
 - `secretAccessKey` is `OLDSECRET` (preserved).
 - There is no `label` field (the UI must not add one on save).
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.

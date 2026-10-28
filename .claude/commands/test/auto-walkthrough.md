@@ -28,10 +28,11 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 ## Deciding the result
 
 - A test passes when every step's result matches what the test file expects. Compare each step on its own.
+- A step that cannot be run fails the test. Mark it `- [-]` and say in the note which step could not be run and why.
 - When an expectation contradicts the fixture (the files it names are not the ones the fixture holds) or names a button, field or page the app does not have under any name, the test is wrong: fix the test file, keeping what it checks, record the fix in the notes, and run the test again from Prep.
 - Before calling a test failed, check that every prep command ran. If one did not, run the test again from Prep.
 - When the app does something different from what the test expects, the test fails. Never change a test's expectation to match what the app did.
-- Leave a test unmarked, and say why at the end, only when it cannot run on this machine: another platform's installer, Android with the pool down, iOS off macOS, or a test that adds or removes secrets in the real OS keychain.
+- Leave a test unmarked, and say why at the end, only when it cannot run on this machine: another platform's installer, Android with the pool down, iOS off macOS, or a test that adds or removes secrets in the real OS keychain. These reasons cover a whole test that cannot start on this machine, never a single step: no other reason leaves a test unmarked.
 
 ## Checklist and notes
 

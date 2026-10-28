@@ -15,6 +15,7 @@ This directory is "the testing manual". When the human says "the testing manual"
 - [mobile/](mobile/) - Test scripts for the Photosphere mobile app on Android and iOS
 - [CHECKLIST.md](CHECKLIST.md) - Every test, with its result for the upcoming version
 - [CHECKLIST-NOTES.md](CHECKLIST-NOTES.md) - Notes from test runs: what failed and why, and anything else seen along the way
+- [agent-driving.md](agent-driving.md) - How an agent performs the UI steps itself on Android, iOS and the desktop app
 
 ## The testing process
 
@@ -25,6 +26,8 @@ Each test is a markdown file in three parts:
 - **Prep**: setup and cleanup commands. Every test keeps its data in its own `/tmp/psi-…` folder, named in its Prep, so tests never share state.
 - **Test**: the steps under test, each with what to expect.
 - **Check**: the commands that check the results.
+
+A mobile test starts by wiping the app on the emulator or simulator with `bun run android:reset` or `bun run ios:reset`. `bun run android:50` and `bun run ios:50` (or `:1`, `:0`) start the app with a test database open, and `bun run android:add-fixtures` and `bun run ios:add-fixtures` put photos and videos in the device's photo library. A test that needs S3 gets a fresh bucket on a local MinIO server: see [MinIO for the manual tests](minio.md).
 
 ### The checklist
 

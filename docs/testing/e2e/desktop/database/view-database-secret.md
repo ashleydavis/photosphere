@@ -99,3 +99,7 @@ Expected:
 Expected:
 - The API key value `test-api-key-12345` is shown.
 - No error toasts are visible.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.

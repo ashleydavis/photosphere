@@ -10,3 +10,4 @@ It resolves a JDK 17 and the Android SDK by sourcing `apps/android-frontend/scri
 - `photosphere_android_gradle <arguments...>`: runs Photosphere project's Gradle wrapper.
 - `photosphere_android_version`: the version in Photosphere's `package.json`.
 - `photosphere_android_abi <x86_64|arm64>`: the Android ABI directory name.
+- `photosphere_android_pick_device <serial or empty>`: chooses the device a script works on, the one named, else a plugged-in device, then the hand-testing emulator, then a free pool emulator whose device lock it takes and holds, and sets `PHOTOSPHERE_ANDROID_SERIAL`. The caller sources `apps/android-frontend/scripts/emulator-config.sh` first.

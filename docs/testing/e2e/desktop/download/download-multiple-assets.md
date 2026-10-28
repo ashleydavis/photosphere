@@ -134,3 +134,11 @@ file /tmp/psi-desktop-download-multiple-assets/downloads/*
 
 Expected:
 - Each file is identified as the correct image or video type.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Create the database by typing its path into `database-path-input` with the `type` command rather than browsing for it.
+- **Import files** opens a file picker: queue `pick-answer` with `{"paths": ["<absolute path of the file>"]}` before clicking `import-files-button`.
+- Step 3 selects by hovering, which the control connection cannot do: select each thumbnail with `long-press` on it instead.
+- Step 5's folder picker: queue `pick-answer` with the `downloads` folder's path before clicking `download-selected-button`, in place of the Ctrl+L typing.

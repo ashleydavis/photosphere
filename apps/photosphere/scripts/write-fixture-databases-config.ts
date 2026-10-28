@@ -1,6 +1,7 @@
 //
 // Writes the app's databases.toml with one test database registered, merged into the file the device already had, for
-// run-android.sh, which reads the existing file off the device, runs this and pushes the result back. The fixture is named
+// run-android.sh, which reads the existing file off the device, runs this and pushes the result back, and for run-ios.sh, which
+// copies it out of the simulator's container and has this write straight back into it. The fixture is named
 // test-<name>, made the most recent database and made the one reopened on launch, so the app starts in it. Every other test-
 // entry is removed first, so fixtures do not pile up, and the user's own entries and recents are left as they were. The entry's
 // path is the database's full path on the device, because the app opens no relative path against its storage. The file is
