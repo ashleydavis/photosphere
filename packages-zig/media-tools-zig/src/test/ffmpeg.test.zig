@@ -447,6 +447,11 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
     const log = captured.ilog();
     var tools = media_tools.ThreadTools.init();
     const runner = tools.runner();
+    // The environment is each thread's own (process_env is Ziggy's, which keeps it per thread), so this thread takes the inherited
+    // one for itself. Without it the thread had none, the OS temp directory came out as "undefined\temp" on Windows, and ffprobe
+    // could not write its report there.
+    const environment = inherited_environment.inherit(thread_allocator.allocator()) catch @panic("out of memory giving a thread its environment");
+    defer inherited_environment.restore(thread_allocator.allocator(), environment);
     const width = 16 * (index + 1);
     const height = 12 * (index + 1);
     var round: usize = 0;

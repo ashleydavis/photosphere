@@ -2,9 +2,10 @@ const std = @import("std");
 const node_utils = @import("node-utils-zig");
 
 //
-// Gives the code under test the environment the test program inherited, which it reads through process_env, until restore is
-// called. The bundled FFmpeg writes its report under the OS temp directory, which on Windows comes from TEMP: with no environment
-// set it was "undefined\temp", and every ffprobe and ffmpeg run in these tests failed there.
+// Gives the code under test on the calling thread the environment the test program inherited, which it reads through process_env,
+// until restore is called; process_env keeps one per thread. The bundled FFmpeg writes its report under the OS temp directory,
+// which on Windows comes from TEMP: with no environment set it was "undefined\temp", and every ffprobe and ffmpeg run in these
+// tests failed there.
 //
 pub fn inherit(allocator: std.mem.Allocator) !*std.process.Environ.Map {
     const map = try allocator.create(std.process.Environ.Map);
