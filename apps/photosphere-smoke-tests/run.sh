@@ -59,13 +59,23 @@ if ! photosphere_platform_prepare "$RUN_DIR"; then
     exit 1
 fi
 
-# The psi CLI the scenarios run on this host as the other side of a LAN share, built from the Zig source.
-echo "Building the psi CLI..."
-if ! (cd "$REPO_ROOT" && zig build -p "$RUN_DIR/psi"); then
-    echo "FAILED: could not build the psi CLI." >&2
-    exit 1
+# The psi CLI the scenarios run on this host as the other side of a LAN share: the binary PHOTOSPHERE_SMOKE_PSI names, which a
+# release workflow's cli-build job has already built, else one built here from the Zig source.
+PHOTOSPHERE_SMOKE_PSI="${PHOTOSPHERE_SMOKE_PSI:-}"
+if [ -n "$PHOTOSPHERE_SMOKE_PSI" ]; then
+    if [ ! -f "$PHOTOSPHERE_SMOKE_PSI" ]; then
+        echo "FAILED: PHOTOSPHERE_SMOKE_PSI names $PHOTOSPHERE_SMOKE_PSI, which does not exist." >&2
+        exit 1
+    fi
+    export PHOTOSPHERE_ZIG_CLI="$PHOTOSPHERE_SMOKE_PSI"
+else
+    echo "Building the psi CLI..."
+    if ! (cd "$REPO_ROOT" && zig build -p "$RUN_DIR/psi"); then
+        echo "FAILED: could not build the psi CLI." >&2
+        exit 1
+    fi
+    export PHOTOSPHERE_ZIG_CLI="$RUN_DIR/psi/bin/psi"
 fi
-export PHOTOSPHERE_ZIG_CLI="$RUN_DIR/psi/bin/psi"
 
 #
 # Prints the scenario directories this platform runs, one per line, in numeric order. A scenario that cannot run on a platform exits

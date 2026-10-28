@@ -24,8 +24,8 @@ It sources `scripts/lib/test-lib.sh` for the per-test temporary directory alloca
 |----------|--------------|
 | `build_test_cli_binaries` | Allocates a directory with `photosphere_test_temp_dir cli-binaries`, builds `psi`, `mk` and `bdb` into `psi/`, `mk/` and `bdb/` inside it with the same `bun build` flags as the package scripts, and exports it as `PHOTOSPHERE_CLI_BIN_DIR`. Builds once per shell; a second call returns at once. Returns non-zero if any build fails. |
 | `test_cli_binary_path <psi\|mk\|bdb>` | Prints the path of that executable under `PHOTOSPHERE_CLI_BIN_DIR`, with `.exe` on Windows. Fails with a message naming what is missing when no run built them. |
-| `build_test_zig_cli` | Allocates a directory with `photosphere_test_temp_dir zig-cli`, runs `zig build --prefix <dir>` in the repository root, and exports it as `PHOTOSPHERE_ZIG_CLI_DIR`. Builds once per shell. Returns non-zero if the build fails. |
-| `test_zig_cli_path` | Prints `<PHOTOSPHERE_ZIG_CLI_DIR>/bin/psi`, with `.exe` on Windows. Fails with a message when no run built it. |
+| `build_test_zig_cli` | When `PHOTOSPHERE_SMOKE_PSI` names a `psi` already built (what a release workflow's `cli-build` job makes), checks it exists and builds nothing. Otherwise allocates a directory with `photosphere_test_temp_dir zig-cli`, runs `zig build --prefix <dir>` in the repository root, and exports it as `PHOTOSPHERE_ZIG_CLI_DIR`. Builds once per shell. Returns non-zero if the build fails. |
+| `test_zig_cli_path` | Prints `PHOTOSPHERE_SMOKE_PSI` when it is set, else `<PHOTOSPHERE_ZIG_CLI_DIR>/bin/psi`, with `.exe` on Windows. Fails with a message when no run built it. |
 | `remove_test_cli_binaries` | Removes, by name, the executables and source maps this shell built, and the Zig `psi` (with its `.pdb` on Windows) through `remove_test_zig_cli`, then the emptied directories. Does nothing in a shell that built none, so a test never removes its runner's executables. Anything that will not go is reported on stderr. |
 | `remove_test_zig_cli` | The Zig half of the above, called by it. |
 | `test_cli_executable_name <name>` | Prints the name with `.exe` on Windows, unchanged elsewhere. |

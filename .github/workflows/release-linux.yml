@@ -434,7 +434,8 @@ jobs:
         timeout-minutes: 30
         working-directory: ./apps/cli
         shell: bash
-        run: ./smoke-tests-zig.sh --binary
+        # The suites run the psi cli-build built, put in place above, rather than building another.
+        run: PHOTOSPHERE_SMOKE_PSI="$PWD/../../zig-out/bin/psi" ./smoke-tests-zig.sh --binary
       - name: Test the Zig version command
         working-directory: ./apps/cli
         shell: bash
@@ -444,9 +445,9 @@ jobs:
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on Linux, run under xvfb, on the app app-build built, which PHOTOSPHERE_SMOKE_BUILD names.
-    # The CLI that makes the scenarios' fixtures is built by the smoke runner over the libraries app-build saved.
+    # The CLI that makes the scenarios' fixtures is the one cli-build built.
     timeout-minutes: 75
-    needs: [app-build]
+    needs: [app-build, cli-build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -512,10 +513,28 @@ jobs:
           key: photosphere-app-linux-${{ github.sha }}-${{ github.run_id }}
           fail-on-cache-miss: true
 
+      # The psi the scenarios run as the other side of a LAN share is the one cli-build built, so the smoke runner does not
+      # build it again. The paths are the ones cli-build saves, since the cache only matches a restore that lists the same.
+      - name: Restore the Zig CLI build
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-linux-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
+
       - name: Run the Photosphere App smoke tests
         timeout-minutes: 60
         shell: bash
-        run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" bun run test:ziggy
+        run: |
+          # cli-smoke-tests runs this same restored psi only after giving it the executable bit (exit 126 without it), so this does too.
+          chmod +x out/photosphere-cli-zig-linux-x64
+          PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" bun run test:ziggy
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:

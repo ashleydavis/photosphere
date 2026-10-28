@@ -126,7 +126,17 @@ build_test_cli_binaries() {
 # Builds once per shell, like build_test_cli_binaries, recording what it built in
 # TEST_ZIG_CLI_OWNED_DIR (not exported) for remove_test_cli_binaries.
 #
+# PHOTOSPHERE_SMOKE_PSI names a psi already built (what a release workflow's cli-build job makes), which is used instead of
+# building another.
+#
 build_test_zig_cli() {
+    if [ -n "${PHOTOSPHERE_SMOKE_PSI:-}" ]; then
+        if [ ! -f "$PHOTOSPHERE_SMOKE_PSI" ]; then
+            echo "PHOTOSPHERE_SMOKE_PSI names $PHOTOSPHERE_SMOKE_PSI, which does not exist." >&2
+            return 1
+        fi
+        return 0
+    fi
     if [ -n "${TEST_ZIG_CLI_OWNED_DIR:-}" ]; then
         return 0
     fi
@@ -149,6 +159,10 @@ build_test_zig_cli() {
 # Prints the path of the Zig psi build_test_zig_cli installed, failing loudly when this run built none.
 #
 test_zig_cli_path() {
+    if [ -n "${PHOTOSPHERE_SMOKE_PSI:-}" ]; then
+        printf '%s\n' "$PHOTOSPHERE_SMOKE_PSI"
+        return 0
+    fi
     if [ -z "${PHOTOSPHERE_ZIG_CLI_DIR:-}" ]; then
         echo "The Zig CLI was asked for, but PHOTOSPHERE_ZIG_CLI_DIR is not set: nothing built it for this run." >&2
         return 1
