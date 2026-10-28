@@ -8,11 +8,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/windows-common.sh"
 
 arch="x64"
 output_dir=""
+app=""
 version="$(windows_app_version)"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --output-dir)
             output_dir="$2"
+            shift 2
+            ;;
+        --binary)
+            app="$2"
             shift 2
             ;;
         --version)
@@ -44,15 +49,26 @@ fi
 artifact_base="photosphere-$version-windows-$arch"
 mkdir -p "$package_dir"
 
-bash "$WINDOWS_SCRIPTS_DIR/sync-windows.sh" --arch "$arch" --prefix "$prefix" --optimize ReleaseSafe --strip --minify
+# The app --binary names is packaged as it is, so the release workflow packages the build its app-build job made and smoke tested
+# rather than compiling the app a second time. Without it the release build is made here. The installer's object file goes in
+# the install prefix either way, so nothing is written into the app given.
+mkdir -p "$prefix"
+if [ -z "$app" ]; then
+    app="$prefix"
+    bash "$WINDOWS_SCRIPTS_DIR/sync-windows.sh" --arch "$arch" --prefix "$app" --optimize ReleaseSafe --strip --minify
+fi
+if [ ! -d "$app/$WINDOWS_APP_DIR_NAME" ]; then
+    echo "$app has no $WINDOWS_APP_DIR_NAME directory." >&2
+    exit 1
+fi
 
-windows_zip "$package_dir/$artifact_base.zip" "$prefix" "$WINDOWS_APP_DIR_NAME"
+windows_zip "$package_dir/$artifact_base.zip" "$app" "$WINDOWS_APP_DIR_NAME"
 echo "Created $package_dir/$artifact_base.zip"
 
 # candle compiles the installer's description into an object file in the install prefix, and light links it into the MSI.
 "$WINDOWS_WIX_DIR/candle.exe" -nologo -arch "$arch" \
     "-dVersion=$msi_version" \
-    "-dSourceDir=$prefix/$WINDOWS_APP_DIR_NAME" \
+    "-dSourceDir=$app/$WINDOWS_APP_DIR_NAME" \
     "-dIconFile=$WINDOWS_APP_DIR/icons/photosphere.ico" \
     -out "$prefix/package-windows.wixobj" \
     "$WINDOWS_SCRIPTS_DIR/package-windows.wxs"

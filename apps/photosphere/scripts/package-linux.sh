@@ -10,10 +10,15 @@ SHELL_DIR="$APP_DIR/native/linux"
 OUTPUT_DIR="$APP_DIR/out/linux"
 
 VERSION="$(jq -r '.version' "$APP_DIR/package.json")"
+APP_PREFIX=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --output-dir)
             OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --binary)
+            APP_PREFIX="$2"
             shift 2
             ;;
         --version)
@@ -21,7 +26,7 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "package-linux.sh: unknown argument '$1'. Options: --output-dir, --version." >&2
+            echo "package-linux.sh: unknown argument '$1'. Options: --binary, --output-dir, --version." >&2
             exit 1
             ;;
     esac
@@ -51,25 +56,28 @@ case "$ARCHITECTURE" in
 esac
 BASE_NAME="photosphere-$VERSION-linux-$ARCHITECTURE"
 
-# The page is bundled into a directory of this build's own and embedded from there, so a build of another platform running at the
-# same moment cannot replace it mid-build. Removed afterwards.
-FRONTEND_DIR="$(cd "$APP_DIR/../photosphere-frontend" && pwd)"
-PAGE_DIR="$(mktemp -d "$FRONTEND_DIR/page.XXXXXX")"
-trap 'find "$PAGE_DIR" -type f -delete; find "$PAGE_DIR" -depth -type d -empty -delete' EXIT
-(cd "$APP_DIR" && bun run bundle:ui --minify --out-dir "$PAGE_DIR")
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/photosphere-package-XXXXXX")"
-(cd "$APP_DIR/../.." && zig build photosphere-linux -Doptimize=ReleaseSafe -Dstrip=true "-Dui-directory=apps/photosphere-frontend/$(basename "$PAGE_DIR")" -p "$STAGE_DIR/prefix")
+# The app --binary names is packaged as it is, so the release workflow packages the build its app-build job made and smoke tested
+# rather than compiling the app a second time. Without it the release build is made here.
+if [ -z "$APP_PREFIX" ]; then
+    APP_PREFIX="$STAGE_DIR/prefix"
+    bash "$SCRIPT_DIR/sync-linux.sh" --prefix "$APP_PREFIX" --optimize ReleaseSafe --minify --strip
+fi
+if [ ! -f "$APP_PREFIX/bin/photosphere" ]; then
+    echo "package-linux.sh: $APP_PREFIX has no bin/photosphere." >&2
+    exit 1
+fi
 mkdir -p "$OUTPUT_DIR"
 
 # The zip holds the executable, which has the page embedded, in one folder.
 mkdir -p "$STAGE_DIR/zip/photosphere"
-cp "$STAGE_DIR/prefix/bin/photosphere" "$STAGE_DIR/zip/photosphere/"
+cp "$APP_PREFIX/bin/photosphere" "$STAGE_DIR/zip/photosphere/"
 rm -f "$OUTPUT_DIR/$BASE_NAME.zip"
 (cd "$STAGE_DIR/zip" && zip -q -r "$OUTPUT_DIR/$BASE_NAME.zip" photosphere)
 
 # The deb installs under /opt, puts a link in /usr/bin and adds a menu entry so the app shows in the applications menu.
 mkdir -p "$STAGE_DIR/deb/DEBIAN" "$STAGE_DIR/deb/opt/photosphere" "$STAGE_DIR/deb/usr/bin" "$STAGE_DIR/deb/usr/share/applications" "$STAGE_DIR/deb/usr/share/icons/hicolor/512x512/apps"
-cp "$STAGE_DIR/prefix/bin/photosphere" "$STAGE_DIR/deb/opt/photosphere/"
+cp "$APP_PREFIX/bin/photosphere" "$STAGE_DIR/deb/opt/photosphere/"
 ln -s /opt/photosphere/photosphere "$STAGE_DIR/deb/usr/bin/photosphere"
 cp "$APP_DIR/icons/photosphere-512.png" "$STAGE_DIR/deb/usr/share/icons/hicolor/512x512/apps/au.com.codecapers.photosphere.png"
 cat > "$STAGE_DIR/deb/usr/share/applications/au.com.codecapers.photosphere.desktop" <<DESKTOP

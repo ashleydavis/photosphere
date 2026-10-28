@@ -223,7 +223,9 @@ jobs:
       # it from.
       - name: Build
         shell: bash
-        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app"
+        # The release build, minified and stripped, so the smoke tests run what ships and the package job packages this build
+        # rather than compiling the app again.
+        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --minify --strip
 
       - name: Save the Photosphere App build
         uses: actions/cache/save@v4
@@ -775,7 +777,7 @@ jobs:
 
       - name: Package
         shell: bash
-        run: bun run --filter=ziggy package:linux -- --version "$VERSION" --output-dir "$PWD/out/package"
+        run: bun run --filter=ziggy package:linux -- --binary "$PWD/out/app" --version "$VERSION" --output-dir "$PWD/out/package"
 
       - name: Save the Photosphere App package
         uses: actions/cache/save@v4

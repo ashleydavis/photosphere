@@ -222,7 +222,9 @@ jobs:
       # it from. Only the app is saved, not the rest of Xcode's derived data.
       - name: Build
         shell: bash
-        run: bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+        # The release build, with the page minified, so the smoke tests run what ships and the package job packages this build
+        # rather than compiling the app again.
+        run: bun run --filter=ziggy build:macos -- --configuration Release --minify --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
 
       - name: Save the Photosphere App build
         uses: actions/cache/save@v4
@@ -791,7 +793,7 @@ jobs:
 
       - name: Package
         shell: bash
-        run: bun run --filter=ziggy package:macos -- --version "$VERSION" --output-dir "$PWD/out/package"
+        run: bun run --filter=ziggy package:macos -- --binary "$PWD/out/app/xcode/Build/Products/Release/Photosphere.app" --version "$VERSION" --output-dir "$PWD/out/package"
 
       - name: Save the Photosphere App package
         uses: actions/cache/save@v4

@@ -253,7 +253,9 @@ jobs:
       # it from. The directory is given in the drive-letter form, because the build script hands it to zig.
       - name: Build
         shell: bash
-        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")"
+        # The release build, stripped and minified, so the smoke tests run what ships and the package job packages this build
+        # rather than compiling the app again.
+        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --strip --minify
 
       - name: Save the Photosphere App build
         uses: actions/cache/save@v4
@@ -826,7 +828,7 @@ jobs:
       # The output directory is given in the drive-letter form, because the package script hands it to WiX.
       - name: Package
         shell: bash
-        run: bun run --filter=ziggy package:windows -- x64 --version "$VERSION" --output-dir "$(cygpath -m "$PWD/out/package")"
+        run: bun run --filter=ziggy package:windows -- x64 --binary "$(cygpath -m "$PWD/out/app")" --version "$VERSION" --output-dir "$(cygpath -m "$PWD/out/package")"
 
       # The package script leaves the install prefix it packaged from beside the packages, so only the packages are saved.
       - name: Save the Photosphere App package

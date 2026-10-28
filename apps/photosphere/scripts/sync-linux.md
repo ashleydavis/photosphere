@@ -4,7 +4,7 @@ Builds Photosphere's page (`bun run bundle:ui`) and its Linux native app (the `p
 
 ## Usage
 
-`bun run --filter=ziggy sync:linux -- [--prefix <dir>] [--optimize <mode>]`
+`bun run --filter=ziggy sync:linux -- [--prefix <dir>] [--optimize <mode>] [--minify] [--strip]`
 
 Run it through the root `package.json` script, not directly.
 
@@ -12,3 +12,5 @@ Run it through the root `package.json` script, not directly.
 
 - `--prefix <dir>`: the install prefix; the executable goes to `<dir>/bin/photosphere`. Give an absolute path, because the script runs `zig build` from the repository root. Default `native/linux/zig-out`. The smoke tests and CI build into a directory of their own with it.
 - `--optimize <Debug|ReleaseSafe|ReleaseFast|ReleaseSmall>`: the Zig optimize mode. Default `ReleaseSafe`.
+- `--minify`: minifies the page, as the release does.
+- `--strip`: strips debug symbols from the executable, as the release does.

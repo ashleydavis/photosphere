@@ -10,11 +10,21 @@ SHELL_DIR="$APP_DIR/native/linux"
 
 OPTIMIZE="ReleaseSafe"
 PREFIX="$SHELL_DIR/zig-out"
+STRIP="false"
+BUNDLE_ARGUMENTS=()
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --prefix)
             PREFIX="$2"
             shift 2
+            ;;
+        --minify)
+            BUNDLE_ARGUMENTS=(--minify)
+            shift
+            ;;
+        --strip)
+            STRIP="true"
+            shift
             ;;
         --optimize)
             OPTIMIZE="$2"
@@ -32,6 +42,6 @@ done
 FRONTEND_DIR="$(cd "$APP_DIR/../photosphere-frontend" && pwd)"
 PAGE_DIR="$(mktemp -d "$FRONTEND_DIR/page.XXXXXX")"
 trap 'find "$PAGE_DIR" -type f -delete; find "$PAGE_DIR" -depth -type d -empty -delete' EXIT
-(cd "$APP_DIR" && bun run bundle:ui --out-dir "$PAGE_DIR")
-(cd "$APP_DIR/../.." && zig build photosphere-linux "-Doptimize=$OPTIMIZE" "-Dui-directory=apps/photosphere-frontend/$(basename "$PAGE_DIR")" --prefix "$PREFIX")
+(cd "$APP_DIR" && bun run bundle:ui --out-dir "$PAGE_DIR" "${BUNDLE_ARGUMENTS[@]+"${BUNDLE_ARGUMENTS[@]}"}")
+(cd "$APP_DIR/../.." && zig build photosphere-linux "-Doptimize=$OPTIMIZE" "-Dstrip=$STRIP" "-Dui-directory=apps/photosphere-frontend/$(basename "$PAGE_DIR")" --prefix "$PREFIX")
 echo "Built $PREFIX/bin/photosphere"

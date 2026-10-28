@@ -293,7 +293,9 @@ jobs:
       # smoke tests take it from.
       - name: Build (Android)
         shell: bash
-        run: bun run --filter=ziggy build:android -- --output-dir "$PWD/out/app"
+        # The page is minified as the release's is, so the package job makes the release APKs from the Zig libraries built here rather
+        # than compiling them again.
+        run: bun run --filter=ziggy build:android -- --minify --output-dir "$PWD/out/app"
 
       - name: Save the Photosphere App build
         uses: actions/cache/save@v4
@@ -680,7 +682,7 @@ jobs:
 
       - name: Package (Android)
         shell: bash
-        run: bun run --filter=ziggy package:android -- --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))" --output-dir "$PWD/out/package"
+        run: bun run --filter=ziggy package:android -- --binary "$PWD/out/app" --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))" --output-dir "$PWD/out/package"
 
       - name: Save the Photosphere App package
         uses: actions/cache/save@v4

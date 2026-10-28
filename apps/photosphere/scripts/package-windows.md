@@ -2,9 +2,10 @@
 
 Builds a ReleaseSafe app and packages it twice, unsigned: a zip and an MSI installer. Both go in `apps/photosphere/out/windows/` (gitignored) and are named `photosphere-<version>-windows-<arch>.zip` and `.msi`, with the version from `--version`, or from `apps/photosphere/package.json` when it is not given. The build they are made from is installed in `apps/photosphere/native/windows/package/<arch>/`, along with the installer's WiX object file.
 
-Run it as `bun run --filter=ziggy package:windows -- [arch] [--version <version>] [--output-dir <dir>]`.
+Run it as `bun run --filter=ziggy package:windows -- [arch] [--binary <prefix>] [--version <version>] [--output-dir <dir>]`.
 
 - `--version <version>`: the version in the file names, such as `1.2.3` for the tag `windows-v1.2.3` or `dev-nightly.20260101` for a nightly. Default: the version in `apps/photosphere/package.json`. The MSI needs a numeric `major.minor.build` version, so any version of another kind gives the MSI the version `0.0.0`.
+- `--binary <prefix>`: an app already built for release (`build:windows -- --prefix <prefix> --strip --minify`, what the release workflow's `app-build` job makes) to package as it is. Without it the script makes that build itself.
 - `--output-dir <dir>`: where the zip and the MSI go, in place of `out/windows`. The build they are made from is then installed in `<dir>/prefix/<arch>/`. The smoke tests give each run a directory of its own, so two runs in one checkout never write the same file.
 - `arch`: `x64`. The default. `arm64` is refused, because the WebView2 loader is linked statically and that needs the `aarch64-windows-msvc` target, which Zig 0.16's standard library does not compile.
 

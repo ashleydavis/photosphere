@@ -18,8 +18,12 @@ while [ $# -gt 0 ]; do
             sync_arguments+=("$1" "$2")
             shift 2
             ;;
+        --minify)
+            sync_arguments+=("$1")
+            shift
+            ;;
         *)
-            echo "Usage: build-android.sh [--arch \"x86_64 arm64\"] [--optimize <mode>] [--output-dir <dir>]" >&2
+            echo "Usage: build-android.sh [--arch \"x86_64 arm64\"] [--optimize <mode>] [--minify] [--output-dir <dir>]" >&2
             exit 2
             ;;
     esac
@@ -32,4 +36,11 @@ if [ -n "$output_dir" ]; then
     mkdir -p "$output_dir"
     cp "$PHOTOSPHERE_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$output_dir/photosphere.apk"
     echo "Copied the APK to $output_dir/photosphere.apk"
+    # The Zig libraries go with it, so package-android.sh --binary can make the release APKs from them without building them again.
+    for library in "$PHOTOSPHERE_ANDROID_PROJECT_DIR"/app/build/ziggy/jniLibs/*/libphotosphere.so; do
+        abi="$(basename "$(dirname "$library")")"
+        mkdir -p "$output_dir/jniLibs/$abi"
+        cp "$library" "$output_dir/jniLibs/$abi/libphotosphere.so"
+    done
+    echo "Copied the Zig libraries to $output_dir/jniLibs"
 fi
