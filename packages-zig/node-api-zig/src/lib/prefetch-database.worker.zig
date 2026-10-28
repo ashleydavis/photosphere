@@ -255,6 +255,11 @@ pub fn prefetchDatabaseHandler(
 
     const runStartedAt = std.Io.Clock.real.now(io).toMilliseconds();
 
+    // Each stage before the first progress message is logged. In the Release iOS app smoke job scenario 58's prefetch logged
+    // "Filling in" and then nothing for three minutes, never reaching that message, which left no way to tell a task that never
+    // started from one stuck opening the replica or the origin.
+    log.verbose(try std.fmt.allocPrint(allocator, "Prefetch started for \"{s}\"", .{data.databasePath}));
+
     //
     // Nothing to fetch is a result, not a failure, and both of the ways of having nothing to fetch
     // are answered the same way: no files copied and none left behind, which is what tells the
@@ -271,6 +276,7 @@ pub fn prefetchDatabaseHandler(
     const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const rawStorage = local.rawStorage;
+    log.verbose(try std.fmt.allocPrint(allocator, "Prefetch opened the replica \"{s}\"", .{data.databasePath}));
     const merkleTree = try loadMerkleTree(allocator, io, log, localStorage);
     if (merkleTree == null or !media_file_database.isPartialDatabase(merkleTree.?.databaseMetadata)) {
         return prefetchResultToJson(allocator, nothingToFetch);
@@ -284,7 +290,9 @@ pub fn prefetchDatabaseHandler(
         return prefetchResultToJson(allocator, nothingToFetch);
     };
 
+    log.verbose(try std.fmt.allocPrint(allocator, "Prefetch opening the origin {s}", .{origin}));
     const originStorage = (try openStorage(allocator, io, log, origin, null, null, context.nativeCaller)).storage;
+    log.verbose(try std.fmt.allocPrint(allocator, "Prefetch opened the origin {s}", .{origin}));
 
     var missingFiles: MissingFilesIterator = .{
         .allocator = allocator,

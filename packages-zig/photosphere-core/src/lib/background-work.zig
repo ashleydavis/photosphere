@@ -598,7 +598,16 @@ fn readPlanOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, tim
 
 fn runStepOfTask(ptr: *anyopaque, io: std.Io, allocator: std.mem.Allocator, timers: Timers, pass: Pass, step: IStep) anyerror!IStepResult {
     const services = servicesOf(ptr);
+    // The prefetch's task is logged as it is queued and as it ends: in the Release iOS app smoke job scenario 58's prefetch pass
+    // reported "Filling in" and then nothing for three minutes while syncs ran every second, and nothing said whether its task was
+    // waiting in the queue or running.
+    if (pass == .prefetch) {
+        services.log.verbose(std.fmt.allocPrint(allocator, "Queueing the {s} task", .{step.@"type"}) catch "Queueing a prefetch task");
+    }
     const completion = try runChildOfTask(services, io, allocator, timers, step.@"type", step.data);
+    if (pass == .prefetch) {
+        services.log.verbose(std.fmt.allocPrint(allocator, "The {s} task ended: {s}", .{ step.@"type", @tagName(completion.status) }) catch "A prefetch task ended");
+    }
     if (completion.status != .succeeded) {
         sendBackgroundLog(services, io, allocator, timers, std.fmt.allocPrint(allocator, "Background {s} task \"{s}\" failed: {s}", .{ pass.label(), step.@"type", completion.error_message orelse "no reason given" }) catch "A background task failed.", true);
         return .{
