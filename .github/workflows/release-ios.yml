@@ -482,6 +482,10 @@ jobs:
         uses: ./.github/actions/third-party-libraries
         with:
           platform: macos-arm64
+          # The same build-args as the library jobs, so the cache key matches theirs: with none the key differed, nothing was
+          # restored and the libraries were built from source here, 13 to 15 minutes a run. The library directory is named by
+          # architecture and OS only, so the tests find these 11.0-target libraries where they look for the native ones.
+          build-args: -Dtarget=aarch64-macos.11.0
 
       # Zig skips any compile step whose inputs are unchanged and already in .zig-cache. Without this the test binaries and psi are
       # compiled from nothing every run, which is most of this job's time. The key changes with any Zig source, and the newest
