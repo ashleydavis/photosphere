@@ -458,7 +458,13 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
             // On Windows a thread failed here, saying only that the report was not JSON, so the failure carries ffprobe's exit code,
             // its report and what it logged. Allocated with the page allocator, because the test thread reads it after this thread's
             // own allocator is gone; it is never freed.
-            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "ffprobe's report is not JSON: exit code {d}, report \"{s}\", errors \"{s}\", messages \"{s}\"", .{ probed.exit_code, probed.output, captured.errors.items, captured.stderr.items }) catch @panic("out of memory");
+            // That run was quiet, and on Windows it exited 1 having logged nothing, so the same probe is run once more at the error
+            // level to say why.
+            const again = runner.run(runner.context, threaded.io(), log, allocator, "ffprobe", &.{ "-v", "error", "-print_format", "json", "-show_streams", test_video }) catch {
+                outcome.failure = "ffprobe's report is not JSON, and running it again at the error level failed to run";
+                return;
+            };
+            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "ffprobe's report is not JSON: exit code {d}, report \"{s}\", errors \"{s}\", messages \"{s}\"; run again at the error level it exited {d}", .{ probed.exit_code, probed.output, captured.errors.items, captured.stderr.items, again.exit_code }) catch @panic("out of memory");
             return;
         };
         var probed_width: i64 = 0;
