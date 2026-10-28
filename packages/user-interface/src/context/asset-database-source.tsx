@@ -550,9 +550,10 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // Closes the current database.
     //
     async function closeDatabase(): Promise<void> {
-        if (databasePath) {
-            cancelDatabaseLoad(databasePath);
-        }
+        // The load is cancelled whatever path this render's closure holds. A handler registered in an
+        // earlier render can call this with databasePath unset while a load runs, and leaving that load
+        // subscribed let its completion tear down the next load of the same database.
+        cancelDatabaseLoad(databasePath ?? "");
 
         setIsLoading(false);
         setIsSyncing(false);
@@ -785,6 +786,15 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                     log.error(`Load assets task failed: ${result.errorMessage}`);
                 }
 
+                // Only the current load may finish the loading state. Matching on the path alone let a
+                // superseded load of the same database, finishing after its replacement had started,
+                // unsubscribe the replacement's listeners (they were in unsubscribeCurrentLoad by then), so
+                // the replacement's pages never arrived and the gallery stayed empty: scenario 26 on macOS
+                // arm64 timed out on "Gallery loaded: 2 assets" with "Gallery loaded: 0 assets" in the log.
+                if (currentLoadQueue.current !== queue) {
+                    return;
+                }
+
                 if (result.inputs?.databasePath === currentDatabasePath) {
                     loadingDatabasePath.current = undefined;
                     setIsLoading(false);
@@ -810,6 +820,12 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         const unsubscribeMessage = queue.onTaskMessage("asset-page", data => {
             // Discard messages that belong to a different (now-closed) database.
             if (data.message.databasePath !== currentDatabasePath) {
+                return;
+            }
+
+            // Pages of a superseded load of the same database are not added to the gallery the
+            // current load is filling.
+            if (currentLoadQueue.current !== queue) {
                 return;
             }
 
