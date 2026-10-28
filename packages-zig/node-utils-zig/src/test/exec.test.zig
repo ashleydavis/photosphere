@@ -11,7 +11,7 @@ test "exec runs the command in the shell and returns its output" {
 
     // The command runs in cmd.exe on Windows, which has its own syntax and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, null, "echo hello&& echo oops>&2");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "echo hello&& echo oops>&2");
         try std.testing.expectEqualStrings("hello\r\n", result.stdout);
         try std.testing.expectEqualStrings("oops\r\n", result.stderr);
     }
@@ -29,7 +29,7 @@ test "exec fails with Node's message when the command exits with a non-zero code
 
     // The command runs in cmd.exe on Windows, which has its own syntax and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, null, "echo broken>&2& exit 3"));
+        try std.testing.expectError(error.Thrown, exec(arena.allocator(), std.testing.io, log, null, "echo broken>&2& exit 3"));
         try std.testing.expectEqualStrings("Command failed: echo broken>&2& exit 3\nbroken\r\n", utils.errors.lastErrorMessage());
     }
     else {
@@ -49,7 +49,7 @@ test "exec passes process.env to the command" {
 
     // cmd.exe on Windows expands %NAME% and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, null, "echo %PHOTOSPHERE_EXEC_TEST%");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "echo %PHOTOSPHERE_EXEC_TEST%");
         try std.testing.expectEqualStrings("from-env\r\n", result.stdout);
     }
     else {
@@ -102,7 +102,7 @@ test "exec hands the quotes in the command to the shell untouched" {
     // Quoted arguments holding spaces and %, like `magick identify -format "%w %h" "<file>"`. cmd.exe on
     // Windows echoes the arguments as they reach it, quotes included, and ends lines with CRLF.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, null, "echo \"%w %h\" \"file name.jpg\"");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "echo \"%w %h\" \"file name.jpg\"");
         try std.testing.expectEqualStrings("\"%w %h\" \"file name.jpg\"\r\n", result.stdout);
     }
     else {
@@ -118,7 +118,7 @@ test "exec reads stdout and stderr together so a command filling stderr does not
 
     // More than a pipe buffer holds goes to stderr before anything goes to stdout.
     if (builtin.os.tag == .windows) {
-        const result = try exec(arena.allocator(), std.testing.io, null, "(for /L %i in (1,1,10000) do @echo stderr line %i>&2)& echo done");
+        const result = try exec(arena.allocator(), std.testing.io, log, null, "(for /L %i in (1,1,10000) do @echo stderr line %i>&2)& echo done");
         try std.testing.expectEqualStrings("done\r\n", result.stdout);
         try std.testing.expect(result.stderr.len > 128 * 1024);
     }
