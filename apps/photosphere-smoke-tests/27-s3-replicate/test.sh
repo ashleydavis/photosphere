@@ -162,12 +162,22 @@ send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}' || exit 1
 
 # The database's own files must exist as objects under the destination prefix. A replication that
 # reported success having written nothing would still pass the log wait above.
-REPLICA_OBJECT_COUNT=$(bun "$REPO_DIR/scripts/s3-object.ts" count \
-    --endpoint "$S3_ENDPOINT" \
+# The count runs on this machine, so it reaches MinIO at 127.0.0.1, not at S3_ENDPOINT, the address the app reaches it at. On
+# Android that is 10.0.2.2, which this machine cannot reach: in the Release Android workflow the count spent seven minutes retrying
+# ECONNREFUSED, came back empty, and `[ "" -lt 1 ]` failed as an error, so the scenario passed without checking the bucket.
+if ! REPLICA_OBJECT_COUNT=$(bun "$REPO_DIR/scripts/s3-object.ts" count \
+    --endpoint "http://127.0.0.1:$S3_EMULATOR_PORT" \
     --bucket "$S3_EMULATOR_BUCKET" \
     --access-key "$S3_EMULATOR_ACCESS_KEY" \
     --secret-key "$S3_EMULATOR_SECRET_KEY" \
-    --prefix "replica")
+    --prefix "replica"); then
+    log_error "Could not count the objects under replica in the bucket"
+    exit 1
+fi
+if ! [[ "$REPLICA_OBJECT_COUNT" =~ ^[0-9]+$ ]]; then
+    log_error "Counting the objects under replica in the bucket gave \"$REPLICA_OBJECT_COUNT\", not a number"
+    exit 1
+fi
 if [ "$REPLICA_OBJECT_COUNT" -lt 1 ]; then
     log_error "Replication reported success but wrote no objects under replica in the bucket"
     exit 1
