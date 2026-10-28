@@ -455,7 +455,10 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
             return;
         };
         const report = std.json.parseFromSliceLeaky(std.json.Value, allocator, probed.output, .{}) catch {
-            outcome.failure = "ffprobe's report is not JSON";
+            // On Windows a thread failed here, saying only that the report was not JSON, so the failure carries ffprobe's exit code,
+            // its report and what it logged. Allocated with the page allocator, because the test thread reads it after this thread's
+            // own allocator is gone; it is never freed.
+            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "ffprobe's report is not JSON: exit code {d}, report \"{s}\", errors \"{s}\", messages \"{s}\"", .{ probed.exit_code, probed.output, captured.errors.items, captured.stderr.items }) catch @panic("out of memory");
             return;
         };
         var probed_width: i64 = 0;
