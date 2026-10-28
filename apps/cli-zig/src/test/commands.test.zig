@@ -1251,8 +1251,11 @@ test "consolidate joins an unrelated remote" {
     // The warning is the local write lock that replicating the remote down cannot take while consolidation holds it.
     var result = try normalize(allocator, try runZig(allocator, environment, &.{ "consolidate", "--db", db, other, "--yes" }), root, "<root>");
     result.stderr = try maskLockHolder(allocator, result.stderr);
-    // The worker's warning is written to the error log file too, so the run ends naming it, after a blank line.
-    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "\n\nErrors, warnings and exceptions were logged to: <root>/tmp/photosphere/logs/psi-") != null);
+    // The worker's warning is written to the error log file too, so the run ends naming it, after a blank line. The CLI joins the
+    // path with node_path.join, which uses backslashes on Windows, so the expected path is joined the same way: written with
+    // forward slashes, it failed the Release Windows zig-unit-tests job, the first to run this test on Windows.
+    const errorLogPrefix = try std.mem.replaceOwned(u8, allocator, try node_path.join(allocator, &.{ root, "tmp", "photosphere", "logs", "psi-" }), root, "<root>");
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, try std.mem.concat(allocator, u8, &.{ "\n\nErrors, warnings and exceptions were logged to: ", errorLogPrefix })) != null);
     result.stdout = try withoutErrorLogLine(allocator, result.stdout);
     try expectResult(result, try std.mem.concat(allocator, u8, &.{ try consolidateHeader(allocator, "other"),
         \\The remote holds a different database, so the two are being consolidated.
