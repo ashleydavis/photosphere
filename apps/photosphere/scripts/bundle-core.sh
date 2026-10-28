@@ -9,14 +9,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 TARGET=""
 OPTIMIZE="ReleaseSafe"
-HOOKS_ARGUMENT="-Dtest-hooks=false"
 PREFIX_ARGUMENTS=()
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --test-hooks)
-            HOOKS_ARGUMENT="-Dtest-hooks=true"
-            shift
-            ;;
         --optimize)
             OPTIMIZE="$2"
             shift 2
@@ -41,4 +36,4 @@ if [ -z "$TARGET" ]; then
     exit 2
 fi
 
-(cd "$REPO_ROOT" && zig build photosphere-backend "-Dtarget=$TARGET" "-Doptimize=$OPTIMIZE" "$HOOKS_ARGUMENT" "${PREFIX_ARGUMENTS[@]+"${PREFIX_ARGUMENTS[@]}"}")
+(cd "$REPO_ROOT" && zig build photosphere-backend "-Dtarget=$TARGET" "-Doptimize=$OPTIMIZE" "${PREFIX_ARGUMENTS[@]+"${PREFIX_ARGUMENTS[@]}"}")

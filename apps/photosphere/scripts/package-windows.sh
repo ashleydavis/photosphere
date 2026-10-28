@@ -7,9 +7,14 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/windows-common.sh"
 
 arch="x64"
+output_dir=""
 version="$(windows_app_version)"
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        --output-dir)
+            output_dir="$2"
+            shift 2
+            ;;
         --version)
             version="$2"
             shift 2
@@ -31,6 +36,11 @@ if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 package_dir="$WINDOWS_APP_DIR/out/windows"
 prefix="$WINDOWS_SHELL_DIR/package/$arch"
+if [ -n "$output_dir" ]; then
+    package_dir="$output_dir"
+    # The install prefix goes with the package, so two runs given different directories share nothing.
+    prefix="$output_dir/prefix/$arch"
+fi
 artifact_base="photosphere-$version-windows-$arch"
 mkdir -p "$package_dir"
 

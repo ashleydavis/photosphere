@@ -4,7 +4,7 @@ The Linux platform library of Photosphere's smoke tests. [common.sh](common.md) 
 
 It implements the `photosphere_platform_*` functions `common.sh` lists, and the `linux_*` helpers scenarios call as `${PLATFORM}_<name>`.
 
-The app runs on a virtual display of its own, so a run shows no window and two runs never share a display. WebKitGTK's bubblewrap sandbox is switched off for these test processes only, through the environment WebKitGTK documents for it, because some Linux setups do not let an unprivileged program create it. The app is started in test mode with its settings, vault, cache and logs inside the scenario's directory, and the control connection's port is read from the file the core writes.
+The app runs on a virtual display of its own, so a run shows no window and two runs never share a display. WebKitGTK's bubblewrap sandbox is switched off for these test processes only, through the environment WebKitGTK documents for it, because some Linux setups do not let an unprivileged program create it. The app is started in test mode with its settings, vault, cache and logs inside the scenario's directory. It is started with `--remote-control` and the app port of the scenario's remote control server.
 
 ## Environment
 

@@ -9,7 +9,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/windows-common.sh"
 arch="x64"
 prefix="$WINDOWS_SHELL_DIR/zig-out"
 optimize="ReleaseSafe"
-test_hooks="false"
 strip="false"
 bundle_arguments=()
 
@@ -35,10 +34,6 @@ while [ "$#" -gt 0 ]; do
             strip="true"
             shift
             ;;
-        --test-hooks)
-            test_hooks="true"
-            shift
-            ;;
         *)
             echo "Unknown argument $1. See sync-windows.md." >&2
             exit 2
@@ -56,6 +51,11 @@ if [ ! -f "$WINDOWS_SDK_DIR/include/WebView2.h" ] || [ ! -f "$WINDOWS_SDK_DIR/$a
     exit 1
 fi
 
-(cd "$WINDOWS_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}")
-(cd "$WINDOWS_APP_DIR/../.." && zig build photosphere-windows "-Dtarget=$zig_target" "-Doptimize=$optimize" "-Dtest-hooks=$test_hooks" "-Dstrip=$strip" -p "$prefix")
+# The page is bundled into a directory of this build's own and embedded from there, so a build of another platform running at the
+# same moment cannot replace it mid-build. Removed afterwards.
+frontend_dir="$(cd "$WINDOWS_APP_DIR/../photosphere-frontend" && pwd)"
+page_dir="$(mktemp -d "$frontend_dir/page.XXXXXX")"
+trap 'find "$page_dir" -type f -delete; find "$page_dir" -depth -type d -empty -delete' EXIT
+(cd "$WINDOWS_APP_DIR" && bun run bundle:ui --out-dir "$page_dir" "${bundle_arguments[@]+"${bundle_arguments[@]}"}")
+(cd "$WINDOWS_APP_DIR/../.." && zig build photosphere-windows "-Dtarget=$zig_target" "-Doptimize=$optimize" "-Dstrip=$strip" "-Dui-directory=apps/photosphere-frontend/$(basename "$page_dir")" -p "$prefix")
 echo "Built into $prefix/$WINDOWS_APP_DIR_NAME"

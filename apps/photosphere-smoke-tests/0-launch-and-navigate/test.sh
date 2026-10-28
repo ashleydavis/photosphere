@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# The app launches, a navigate command sent over the test control connection reaches the page's shared test driver, and a screenshot
+# The app launches, a navigate command sent over the remote control connection reaches the page's shared test driver, and a screenshot
 # command writes a picture of the window to the path it is given.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

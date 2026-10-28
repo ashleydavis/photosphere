@@ -160,7 +160,7 @@ export class ZiggyQueueBackend implements IQueueBackend {
     // Sent as the cancel-tasks main-command rather than on Ziggy's own cancelTasks, which cancels in the core's runner alone:
     // a task still waiting for a worker is dropped there without a word, so a task queue in the core that counted it (an import
     // waiting on its children) waited for it for good. The main-command cancels through the core's queue backend, which also tells
-    // those task queues that their source was cancelled. Found by 33-import-cancel in the Release Zig workflow's desktop smoke tests on
+    // those task queues that their source was cancelled. Found by 33-import-cancel in the Release workflow's desktop smoke tests on
     // ubuntu-latest, where the cancelled import held a worker for good and the import after it timed out waiting for "1 assets imported".
     //
     cancelTasks(source: string): void {

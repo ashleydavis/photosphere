@@ -35,11 +35,12 @@ Take the human through `docs/testing/e2e/CHECKLIST.md`, one test at a time and o
 
 ## Driving the desktop app yourself
 
-When the human asks you to run desktop steps yourself, drive a test-hooks build of the app through its control connection, the way `apps/photosphere-smoke-tests` does.
+When the human asks you to run desktop steps yourself, drive the app through a remote control server, the way `apps/photosphere-smoke-tests` does.
 
-- Build it into the project's `tmp/`: `bun run --filter=ziggy bundle:ui`, then `zig build photosphere-linux -Dtest-hooks=true -p tmp/desktop-hooks/test`. Rebuild after any UI change.
-- Start it in the background with the test's own export block plus the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`, `PHOTOSPHERE_TEST_MODE=1`, `ZIGGY_TEST_MODE=1`, `ZIGGY_TEST_PORT_FILE`). When you are taking the human through a test, including a step they answer with "y", start it with a visible window. Only when you run tests on your own, without the human following along, wrap it in `xvfb-run` for a hidden window.
-- Send commands the way `control_command`, `send_command` and `read_value` in `apps/photosphere-smoke-tests/lib/common.sh` do: `click`, `type`, `navigate`, `menu`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot` and `quit`. Elements are found only by `data-id`, in `packages/user-interface/src`.
+- Build it into the project's `tmp/`: `bun run --filter=ziggy bundle:ui`, then `zig build photosphere-linux -p tmp/desktop-hooks/test`. Rebuild after any UI change.
+- Start a remote control server in the background with `bun run ziggy-remote-control-server --app-port 0 --script-port 0`. It prints the two ports it listens on: the app connects to the first and your commands go to the second.
+- Start it in the background with the test's own export block plus the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`, `PHOTOSPHERE_TEST_MODE=1`), and with `--remote-control 127.0.0.1:<app port>` after the executable. When you are taking the human through a test, including a step they answer with "y", start it with a visible window. Only when you run tests on your own, without the human following along, wrap it in `xvfb-run` for a hidden window.
+- Send commands to the script port the way `control_command`, `send_command` and `read_value` in `apps/photosphere-smoke-tests/lib/common.sh` do: `click`, `type`, `navigate`, `menu`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot` and `quit`. Elements are found only by `data-id`, in `packages/user-interface/src`.
 - Queue `pick-answer` before clicking the button that opens a picker or a save dialog. Open an asset with `long-press-click` on `gallery-thumb`, and select one with `long-press`, since there is no hover command.
 - Exporting `XDG_DATA_HOME` also moves mise's data folder, so set `MISE_DATA_DIR` back to the normal one for your own `mise exec` commands.
 - Quit every instance as soon as its test is done, and check that none is left running. Use at most one subagent for a run of many tests.

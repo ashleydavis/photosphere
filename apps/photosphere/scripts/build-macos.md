@@ -11,5 +11,4 @@ Run it on a Mac with Xcode: `bun run --filter=ziggy build:macos`.
 - `--build-dir <dir>`: Xcode's derived data directory. Default: `native/macos/zig-out/xcode`.
 - `--configuration <Debug|Release>`: default: `Debug`.
 - `--minify`: minify the page, for a release package.
-- `--test-hooks`: build with the test control connection (the smoke tests use this).
 - `--optimize <mode>`: the Zig optimize mode. Default: `ReleaseSafe`.

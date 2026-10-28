@@ -1,6 +1,6 @@
 # package-android.sh
 
-Builds the release APK per architecture. Each is synced with `ReleaseSafe` and no test hooks, then built with `gradlew assembleRelease`. The release variant is signed with the debug key so that it installs; it is not a store build.
+Builds the release APK per architecture. Each is synced with `ReleaseSafe`, then built with `gradlew assembleRelease`. The release variant is signed with the debug key so that it installs; it is not a store build.
 
 Invoke: `bun run --filter=ziggy package:android -- [--arch "<list>"] [--output-dir <dir>] [--version-name <name>] [--version-code <number>]`
 

@@ -13,7 +13,6 @@ ARCH="$(apple_host_arch)"
 NATIVE_DIR="$APPLE_APP_DIR/native/macos/zig-out"
 BUILD_DIR="$APPLE_APP_DIR/native/macos/zig-out/xcode"
 CONFIGURATION="Debug"
-TEST_HOOKS="no"
 MINIFY="no"
 OPTIMIZE="ReleaseSafe"
 
@@ -39,24 +38,17 @@ while [ $# -gt 0 ]; do
             MINIFY="yes"
             shift
             ;;
-        --test-hooks)
-            TEST_HOOKS="yes"
-            shift
-            ;;
         --optimize)
             OPTIMIZE="$2"
             shift 2
             ;;
         *)
-            apple_fail "unknown argument '$1'. Options: --arch, --native-dir, --build-dir, --configuration, --test-hooks, --minify, --optimize."
+            apple_fail "unknown argument '$1'. Options: --arch, --native-dir, --build-dir, --configuration, --minify, --optimize."
             ;;
     esac
 done
 
 SYNC_ARGUMENTS=(--arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE")
-if [ "$TEST_HOOKS" = "yes" ]; then
-    SYNC_ARGUMENTS+=(--test-hooks)
-fi
 if [ "$MINIFY" = "yes" ]; then
     SYNC_ARGUMENTS+=(--minify)
 fi

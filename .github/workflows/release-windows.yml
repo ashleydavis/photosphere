@@ -1,4 +1,11 @@
-name: Release Zig Windows
+# The Photosphere App and the Zig CLI for Windows, each built once and then tested, packaged and released. prepare-tag resolves the
+# release tag, and each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and
+# caches it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
+# each saves what it built in the cache under a key of its own for this run. The later jobs restore that instead of building:
+# app-smoke-tests runs the app build, package packages the app over the restored Zig build cache and cli-smoke-tests runs the CLI.
+# zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every other job has passed, publishes the
+# package and the CLI.
+name: Release Windows
 
 env:
   BUN_VERSION: "1.3.14"
@@ -33,6 +40,8 @@ on:
         default: none
 
 jobs:
+  # Resolves the release tag once, before anything is built, because it can create and push a tag. Its outputs, the tag and
+  # whether this run is a release, are read by app-build, cli-build, package and create-release, so the two builds run side by side.
   prepare-tag:
     timeout-minutes: 5
     runs-on: ubuntu-latest
@@ -100,7 +109,7 @@ jobs:
         with:
           platform: windows-x64
 
-      - name: Build the AWS SDK for C for the MSVC ABI
+      - name: Build the AWS SDK for C for the second architecture or ABI
         uses: ./.github/actions/build-aws-sdk
         with:
           platform: windows-x64
@@ -118,7 +127,7 @@ jobs:
         with:
           platform: windows-x64
 
-      - name: Build zlib-ng for the MSVC ABI
+      - name: Build zlib-ng for the second architecture or ABI
         uses: ./.github/actions/build-zlib-ng
         with:
           platform: windows-x64
@@ -136,7 +145,7 @@ jobs:
         with:
           platform: windows-x64
 
-      - name: Build ImageMagick for the MSVC ABI
+      - name: Build ImageMagick for the second architecture or ABI
         uses: ./.github/actions/build-imagemagick
         with:
           platform: windows-x64
@@ -154,19 +163,120 @@ jobs:
         with:
           platform: windows-x64
 
-      - name: Build FFmpeg for the MSVC ABI
+      - name: Build FFmpeg for the second architecture or ABI
         uses: ./.github/actions/build-ffmpeg
         with:
           platform: windows-x64
           build-args: -Dtarget=x86_64-windows-msvc
 
-  build-zig-windows-x64:
-    # Builds the Zig CLI for Windows x64 on a runner of that platform, and publishes the binary. Nothing here
-    # cross-compiles, so a build that works is a build that runs on the platform it names.
+
+  # Restores the third-party libraries the library jobs built and builds the Photosphere App for Windows by the same build script
+  # a developer runs. The version comes from the release tag: windows-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>.
+  # Windows needs the WebView2 SDK, which the setup step fetches. The library jobs build each library twice: for x86_64-windows-msvc, which the
+  # app builds for, and for the runner (x86_64-windows-gnu), which the CLI that makes the smoke tests' fixtures builds for. Each
+  # library job caches its library, so this job restores it. The build, the Zig build cache and
+  # the libraries are saved under photosphere-app-windows-<commit>-<run>, which app-smoke-tests and package restore.
+  app-build:
+    timeout-minutes: 150
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Fetch the WebView2 SDK and the WiX Toolset (Windows)
+        shell: bash
+        run: bun run --filter=ziggy setup
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
+
+      - name: Restore the third-party libraries for the MSVC ABI
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
+          build-args: -Dtarget=x86_64-windows-msvc
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      # The app is built into out/app, laid out as apps/photosphere-smoke-tests/run.md describes, which is where the smoke tests take
+      # it from. The directory is given in the drive-letter form, because the build script hands it to zig.
+      - name: Build
+        shell: bash
+        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")"
+
+      - name: Save the Photosphere App build
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+
+  cli-build:
+    # Restores the third-party libraries the library jobs built and builds the Zig CLI for Windows x64 on a runner of that platform. Nothing here
+    # cross-compiles, so a build that works is a build that runs on the platform it names. It needs app-build only for the
+    # release tag the CLI's version is stamped from.
     #
-    # This is the only job that builds the Zig CLI: cli-smoke-tests downloads the binary this uploads
-    # and create-release publishes it, so the binary is built once and used by both.
-    timeout-minutes: 40
+    # This is the only job that builds the Zig CLI: the binary, the Zig build cache and the libraries are saved under
+    # photosphere-cli-windows-<commit>-<run>, which cli-smoke-tests and create-release restore, so the binary is built once and
+    # used by both.
+    timeout-minutes: 60
     needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
     runs-on: windows-latest
     steps:
@@ -222,7 +332,7 @@ jobs:
         with:
           platform: windows-x64
 
-      # Stamps the release's version and commit into the CLI's config before it is compiled, the same way package-release does for
+      # Stamps the release's version and commit into the CLI's config before it is compiled, the same way app-build does for
       # the app. Without it the released CLI says it is version "dev".
       - name: Set config
         shell: bash
@@ -255,11 +365,18 @@ jobs:
           cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64
           ls -la out
 
-      - name: Upload the Zig CLI binary
-        uses: actions/upload-artifact@v4
+      - name: Save the Zig CLI build
+        uses: actions/cache/save@v4
         with:
-          name: photosphere-cli-zig-windows-x64
-          path: out
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
 
       - name: Save the Zig build cache
         if: always()
@@ -272,11 +389,11 @@ jobs:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
     # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
     # reported as a failure of the other.
-    # The binary is not built here: build-zig-windows-x64 builds it and this job downloads it, so the Zig CLI
+    # The binary is not built here: cli-build builds it and this job restores it from the cache, so the Zig CLI
     # is compiled once and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-windows-x64]
+    needs: [cli-build]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -324,26 +441,28 @@ jobs:
         run: |
           df -h .
           du -sh packages/*/zig-pkg packages/*/.zig-cache apps/*/zig-pkg apps/*/.zig-cache 2>/dev/null || true
-      # The Zig CLI is built by build-zig-windows-x64, but this job still runs the Zig build, which links the libraries the build
-      # jobs built.
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
+      # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads. The suites also
+      # run the Zig build of the CLI, which links the libraries cli-build saved with the binary, over the Zig build cache saved
+      # with them.
+      - name: Restore the Zig CLI build
+        uses: actions/cache/restore@v4
         with:
-          platform: windows-x64
-
-      # The smoke suites run the built binary rather than `bun run start`, at the path their common.sh reads.
-      - name: Download the Zig CLI built for this platform
-        uses: actions/download-artifact@v4
-        with:
-          name: photosphere-cli-zig-windows-x64
-          path: ./zig-binary
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
         run: |
           mkdir -p zig-out/bin
-          cp zig-binary/photosphere-cli-zig-windows-x64 zig-out/bin/psi.exe
-          # The artifact is downloaded without the executable bit, and the smoke suites fail with exit 126
-          # (found but not executable) without it.
+          cp out/photosphere-cli-zig-windows-x64 zig-out/bin/psi.exe
+          # The smoke suites fail with exit 126 (found but not executable) without the executable bit.
           chmod +x zig-out/bin/psi.exe
           ls -la zig-out/bin
       - name: Run the Zig CLI smoke tests
@@ -361,10 +480,11 @@ jobs:
           ../../zig-out/bin/psi version
 
   app-smoke-tests:
-    # The Photosphere App's smoke tests on Windows. Windows needs the WebView2 SDK and the WiX Toolset, which the setup
-    # step fetches. The Zig build links the third-party libraries the build jobs built.
+    # The Photosphere App's smoke tests on Windows, on the app app-build built, which PHOTOSPHERE_SMOKE_BUILD names. Windows needs
+    # the WebView2 SDK, which the setup step fetches. The CLI that makes the scenarios' fixtures is built
+    # by the smoke runner over the libraries app-build saved.
     timeout-minutes: 75
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    needs: [app-build]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -423,30 +543,196 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy setup
 
-      # The scenarios' fixtures are made by the CLI, built for the runner, and the app is built for the MSVC ABI.
+      # The scenarios' fixtures are made by the CLI, built for the runner, and the app is built for the MSVC ABI. app-build saved
+      # the libraries for both.
+      - name: Restore the Photosphere App build
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+
+      # The build path is given in the drive-letter form, which both Git Bash and the native Windows programs the smoke runner
+      # starts accept.
+      - name: Run the Photosphere App smoke tests
+        timeout-minutes: 60
+        shell: bash
+        run: PHOTOSPHERE_SMOKE_BUILD="$(cygpath -m "$PWD/out/app")" bun run test:ziggy
+
+  # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
+  typescript-compile:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # bun run compile records a what-changed baseline when it succeeds.
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Compile TypeScript
+        timeout-minutes: 12
+        run: bun run compile
+
+  # The TypeScript unit tests.
+  typescript-unit-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run unit tests
+        timeout-minutes: 12
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+
+  # The unit tests of the Zig CLI and of every Zig package, on this workflow's runner, over the libraries the library jobs built for it
+  # and the Zig build cache cli-build saved.
+  zig-unit-tests:
+    timeout-minutes: 50
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, cli-build]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install ffmpeg (Windows)
+        uses: ./.github/actions/install-ffmpeg-windows
+
+      - name: Install media processing tools (Windows)
+        uses: ./.github/actions/retry-install
+        with:
+          run: choco install imagemagick -y
+          verify: magick|convert
+
+      # The libraries for the runner, which the tests build for, restored from the cache.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
           platform: windows-x64
 
-      - name: Restore the third-party libraries for the MSVC ABI
-        uses: ./.github/actions/third-party-libraries
+      # Zig skips any compile step whose inputs are unchanged and already in .zig-cache. Without this the test binaries and psi are
+      # compiled from nothing every run, which is most of this job's time. The key changes with any Zig source, and the newest
+      # earlier cache is restored when there is no exact match, so only the binaries a change touches are compiled again.
+      # The next step lays cli-build's cache over it.
+      - name: Cache Zig's build cache
+        uses: actions/cache@v4
         with:
-          platform: windows-x64
-          build-args: -Dtarget=x86_64-windows-msvc
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', '**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
-      # run-desktop.sh builds the page and the native app itself, through sync-windows.sh.
-      - name: Run the Photosphere App smoke tests
-        timeout-minutes: 60
+      # The Zig build cache cli-build saved, laid over the test build's own, so Zig reuses any compile step the two builds have in
+      # common.
+      - name: Restore the CLI build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-build-${{ github.sha }}
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
-        run: bun run test:ziggy
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
 
-  package-release:
-    # The Photosphere App packaged for Windows, unsigned, by the same package script a developer runs. The version comes
-    # from the release tag: windows-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. Windows needs the WebView2 SDK
-    # and the WiX Toolset, which the setup step fetches. The Zig build links the third-party libraries the build jobs built.
-    timeout-minutes: 75
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+      # Built for any CPU of the architecture, so the compile steps match the restored build caches whatever CPU the runner has.
+      - name: Run the Zig unit tests
+        timeout-minutes: 40
+        shell: bash
+        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+
+  # Packages the Photosphere App for Windows as a zip and an MSI installer, both unsigned, by the same package script a developer
+  # runs, over the Zig build cache and the libraries app-build saved, so the Zig build starts warm. It stamps the version the way
+  # app-build does. Windows needs the WebView2 SDK and the WiX Toolset, which the setup step fetches. The package is saved under
+  # photosphere-package-windows-<commit>-<run>, which create-release restores. It runs beside the smoke tests.
+  package:
+    timeout-minutes: 120
+    needs: [prepare-tag, app-build]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -492,11 +778,19 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy setup
 
-      - name: Restore the third-party libraries for the MSVC ABI
-        uses: ./.github/actions/third-party-libraries
+      - name: Restore the Photosphere App build
+        uses: actions/cache/restore@v4
         with:
-          platform: windows-x64
-          build-args: -Dtarget=x86_64-windows-msvc
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       - name: Set config
         shell: bash
@@ -510,21 +804,27 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
+      # The output directory is given in the drive-letter form, because the package script hands it to WiX.
       - name: Package
         shell: bash
-        run: bun run --filter=ziggy package:windows -- x64 --version "$VERSION"
+        run: bun run --filter=ziggy package:windows -- x64 --version "$VERSION" --output-dir "$(cygpath -m "$PWD/out/package")"
 
-      - name: Upload the packages
-        uses: actions/upload-artifact@v4
+      # The package script leaves the install prefix it packaged from beside the packages, so only the packages are saved.
+      - name: Save the Photosphere App package
+        uses: actions/cache/save@v4
         with:
-          name: photosphere-app-windows
-          path: apps/photosphere/out/windows/*
-          if-no-files-found: error
-          retention-days: 2
+          path: |
+            out/package/*.zip
+            out/package/*.msi
+          key: photosphere-package-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
 
+  # Publishes the package the package job made and the CLI cli-build built, restored from the cache under their keys, once every
+  # other job has passed. A restore matches only a save of the same paths, so each restores the whole save, and
+  # enableCrossOsArchive lets this Linux runner restore what the Windows runners saved.
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, build-zig-windows-x64, cli-smoke-tests, app-smoke-tests, package-release]
+    needs: [prepare-tag, app-build, cli-build, cli-smoke-tests, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -534,19 +834,37 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download the Photosphere App packages
-        uses: actions/download-artifact@v4
+      - name: Restore the Photosphere App package
+        uses: actions/cache/restore@v4
         with:
-          pattern: photosphere-app-*
-          path: ./artifacts/app
-          merge-multiple: true
+          path: |
+            out/package/*.zip
+            out/package/*.msi
+          key: photosphere-package-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
-      - name: Download the Zig CLI artifacts
-        uses: actions/download-artifact@v4
+      - name: Restore the Zig CLI build
+        uses: actions/cache/restore@v4
         with:
-          pattern: photosphere-cli-zig-*
-          path: ./artifacts/zig
-          merge-multiple: true
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+
+      - name: Put the Photosphere App packages and the Zig CLI where the release steps read them
+        shell: bash
+        run: |
+          mkdir -p ./artifacts/app ./artifacts/zig
+          cp out/package/*.zip out/package/*.msi ./artifacts/app/
+          cp out/photosphere-cli-zig-windows-x64 ./artifacts/zig/
+          ls -la ./artifacts/app ./artifacts/zig
 
       - name: Create compressed archives
         run: |
@@ -587,23 +905,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete "zig-${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
+          gh release delete "${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
         continue-on-error: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('zig-{0}', needs.prepare-tag.outputs.tag) || format('zig-{0}-nightly', env.RELEASE_PLATFORM) }}
+          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || format('{0}-nightly', env.RELEASE_PLATFORM) }}
           # The zig- tag does not exist yet, so the release creates it. Without this it would be created on the default branch rather than on the commit that was built.
           target_commitish: ${{ github.sha }}
-          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
+          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
           draft: false
           prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
           files: |
             ./artifacts/photosphere-cli-zig-windows-x64.zip
             ./artifacts/app/*
           body: |
-            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
+            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
 
             ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
             ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}

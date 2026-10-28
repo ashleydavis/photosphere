@@ -2,7 +2,7 @@
 
 `release-notes.sh` prints the release notes for a build: one bullet per commit made since the last release tag, newest first.
 
-It exists so the two places that publish a build describe it the same way. Each platform's GitHub release workflow (`.github/workflows/release-zig-<platform>.yml`, see [Releasing](../docs/releasing.md)) uses it for the notes on a release or nightly, and the Android tester distribution (`apps/android-frontend/scripts/distribute-android.sh`) uses it for the notes a tester reads beside the build in Firebase App Tester. Written twice, those two would drift.
+It exists so the two places that publish a build describe it the same way. Each platform's GitHub release workflow (`.github/workflows/release-<platform>.yml`, see [Releasing](../docs/releasing.md)) uses it for the notes on a release or nightly, and the Android tester distribution (`apps/android-frontend/scripts/distribute-android.sh`) uses it for the notes a tester reads beside the build in Firebase App Tester. Written twice, those two would drift.
 
 ## Using it
 
@@ -24,6 +24,6 @@ The notes go to stdout and nothing else does, so a caller can capture them direc
 
 ## What counts as the last release tag
 
-The newest tag by version number among those `--tag-pattern` matches (every tag when it is not given), skipping `nightly` and any tag ending in `-nightly` (each platform's `zig-<platform>-nightly`), which move with every nightly build and so would report almost nothing, and skipping whatever `--exclude-tag` names. Merge commits are left out of the notes. With no tag to measure from, in a repository that has never been tagged or a clone whose tags were not fetched, the range is the whole history.
+The newest tag by version number among those `--tag-pattern` matches (every tag when it is not given), skipping `nightly` and any tag ending in `-nightly` (each platform's `<platform>-nightly`), which move with every nightly build and so would report almost nothing, and skipping whatever `--exclude-tag` names. Merge commits are left out of the notes. With no tag to measure from, in a repository that has never been tagged or a clone whose tags were not fetched, the range is the whole history.
 
 That last case is worth knowing about when the notes come out longer than expected: a shallow checkout without tags produces a bullet for every commit ever made. The release workflow checks out with `fetch-depth: 0`, so it has the tags.

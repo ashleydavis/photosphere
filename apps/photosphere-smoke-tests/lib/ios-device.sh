@@ -6,12 +6,12 @@
 # The app runs on a connected iPhone or iPad: PHOTOSPHERE_IOS_DEVICE names one, otherwise the first connected device is used (see
 # apple_pick_device). Xcode 14 has no command for running an app on a device, so scripts/ios-device.ts does it through
 # native-run's device library: it installs the app, launches it under the device's debugserver with the test environment,
-# and forwards the test control port over USB. Xcode's lldb then takes over the launched process, and is how the run
+# and the command-line arguments. Xcode's lldb then takes over the launched process, and is how the run
 # resumes it, sees it exit, stops it, and reads the files it writes in its data container, by evaluating Foundation calls
 # inside it while it is paused.
 #
 # iOS starts an app in the root directory whatever working directory debugserver is given, so the run moves the app into
-# its data container, by calling chdir in it before the core is created, and gives the port file, settings, vault and log directory as paths relative to it.
+# its data container, by calling chdir in it before the core is created, and gives the settings, vault and log directory as paths relative to it.
 #
 # A device runs one copy of the app at a time, so a scenario claims the device under a lock for as long as it runs.
 
@@ -27,14 +27,6 @@ photosphere_platform_device_limit() {
 
 # The app's bundle identifier.
 IOS_DEVICE_BUNDLE_ID="au.com.codecapers.photosphere.ziggy"
-
-#
-# Prints where the app writes its control port, relative to its data container. The container outlives the app, so each
-# scenario gets a name of its own, and a file an earlier scenario left can never be mistaken for this one's.
-#
-photosphere_ios_device_port_file() {
-    printf 'Library/ziggy-control-port-%s.txt\n' "$(basename "$1")"
-}
 
 # Seconds a scenario waits for the device to be free, and for lldb to answer.
 IOS_DEVICE_CLAIM_TIMEOUT_SECONDS=1800
@@ -238,12 +230,12 @@ photosphere_ios_device_scenario_dir() {
 photosphere_platform_prepare() {
     local run_dir="$1"
     apple_require_tool node jq xcrun
-    bash "$IOS_DEVICE_SCRIPTS_DIR/build-ios.sh" --sdk device --arch arm64 --test-hooks --configuration Release --native-dir "$run_dir/test-native" --build-dir "$run_dir/test-build" || return 1
+    bash "$IOS_DEVICE_SCRIPTS_DIR/build-ios.sh" --sdk device --arch arm64 --configuration Release --native-dir "$run_dir/test-native" --build-dir "$run_dir/test-build" || return 1
 }
 
 #
-# Starts the app for one scenario. Sets PHOTOSPHERE_CONTROL_HOST and PHOTOSPHERE_CONTROL_PORT to where the test control connection can
-# be reached. The device stays claimed until the scenario's shell ends, so a restart finds the same install and data. The settings,
+# Starts the app for one scenario, with --remote-control and the address of the scenario's remote control server, which it starts
+# first. The device stays claimed until the scenario's shell ends, so a restart finds the same install and data. The settings,
 # vault and logs are in a directory of the app's data container named for the scenario, given to the app as paths relative to the
 # container, which the run makes the app's working directory before the core is created. Installing the app again keeps its data, so
 # keep-data needs nothing more. Usage: photosphere_platform_start <test_dir> [keep-data]
@@ -256,10 +248,11 @@ photosphere_platform_start() {
     photosphere_ios_device_claim "$udid" || return 1
     mkdir -p "$test_dir"
     # Files an earlier start in this directory left would be taken for this start's.
-    rm -f "$test_dir/launch.json" "$test_dir/forward.json"
+    rm -f "$test_dir/launch.json"
     : > "$test_dir/app.log"
+    photosphere_start_remote_control_server "$test_dir" || return 1
 
-    # Installing replaces the other build, which shares the bundle identifier, and ends a copy that is running.
+    # Installing replaces any installed copy and ends a copy that is running.
     photosphere_ios_device_helper install "$udid" "$IOS_DEVICE_BUNDLE_ID" "$app" || return 1
 
     local scenario_dir
@@ -276,9 +269,7 @@ photosphere_platform_start() {
         "PHOTOSPHERE_VAULT_DIR=$scenario_dir/vault" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
         "PHOTOSPHERE_LOG_DIR=$scenario_dir" \
-        ZIGGY_TEST_MODE=1 \
-        "ZIGGY_TEST_PORT_FILE=$(photosphere_ios_device_port_file "$test_dir")" \
-        "${news_environment[@]+"${news_environment[@]}"}") || return 1
+        "${news_environment[@]+"${news_environment[@]}"}" -- --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
     echo "$pgid" > "$test_dir/launch.pgid"
     photosphere_ios_device_wait_file "$test_dir/launch.json" "$pid" "The device helper's launch" || {
         cat "$test_dir/launch.log" >&2
@@ -320,61 +311,6 @@ photosphere_platform_start() {
     # The scenario reads app.log, and the core writes its log to a file in the container, so a loop copies the file into app.log.
     read -r pid pgid < <(launch_in_process_group "$test_dir/log-pump.log" photosphere_ios_device_pump_log "$test_dir") || return 1
     echo "$pgid" > "$test_dir/log-pump.pgid"
-
-    local waited=0
-    local device_port=""
-    while true; do
-        sleep 1
-        if photosphere_ios_device_exited "$test_dir"; then
-            echo "The app exited before its control connection came up." >&2
-            return 1
-        fi
-        device_port="$(photosphere_ios_device_read_port "$test_dir")" || return 1
-        if [ -n "$device_port" ]; then
-            break
-        fi
-        if [ "$waited" -ge 60 ]; then
-            echo "The app never wrote its control port." >&2
-            return 1
-        fi
-        waited=$((waited + 1))
-    done
-
-    read -r pid pgid < <(launch_in_process_group "$test_dir/forward.log" node "$IOS_DEVICE_SCRIPTS_DIR/ios-device.ts" forward \
-        "$udid" "$device_port" "$test_dir/forward.json") || return 1
-    echo "$pgid" > "$test_dir/forward.pgid"
-    photosphere_ios_device_wait_file "$test_dir/forward.json" "$pid" "The device helper's port forward" || {
-        cat "$test_dir/forward.log" >&2
-        return 1
-    }
-    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
-    PHOTOSPHERE_CONTROL_PORT="$(jq -r '.port' "$test_dir/forward.json")"
-    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT
-}
-
-#
-# Prints the control port the app wrote, and nothing when it has not written one.
-#
-photosphere_ios_device_read_port() {
-    local test_dir="$1"
-    local container text
-    container="$(photosphere_ios_device_container "$test_dir")"
-    photosphere_ios_device_lock "$test_dir" || return 1
-    photosphere_ios_device_pause "$test_dir" || {
-        photosphere_ios_device_unlock "$test_dir"
-        return 1
-    }
-    # Encoding 4 is NSUTF8StringEncoding, a name lldb's expression parser does not know.
-    text="$(photosphere_ios_device_evaluate "$test_dir" "[[NSString stringWithContentsOfFile:@\"$container/$(photosphere_ios_device_port_file "$test_dir")\" encoding:4 error:nil] stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]]")" || {
-        photosphere_ios_device_unlock "$test_dir"
-        return 1
-    }
-    photosphere_ios_device_resume "$test_dir" || {
-        photosphere_ios_device_unlock "$test_dir"
-        return 1
-    }
-    photosphere_ios_device_unlock "$test_dir"
-    printf '%s' "$text" | tr -d '\n' | grep -E '^[0-9]+$' || true
 }
 
 #
@@ -450,7 +386,7 @@ photosphere_platform_stop() {
         photosphere_ios_device_lldb "quit"
     fi
     local name
-    for name in forward lldb launch; do
+    for name in lldb launch; do
         if [ -s "$test_dir/$name.pgid" ]; then
             kill_process_group "$(cat "$test_dir/$name.pgid")" || true
             : > "$test_dir/$name.pgid"

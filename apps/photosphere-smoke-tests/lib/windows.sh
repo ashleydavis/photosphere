@@ -12,8 +12,6 @@
 # replace its own.
 source "$PHOTOSPHERE_SMOKE_DIR/lib/linux.sh"
 
-WINDOWS_SCRIPTS_DIR="$PHOTOSPHERE_SMOKE_REPO_ROOT/apps/photosphere/scripts"
-
 # The file the app's process group is recorded in, per scenario.
 WINDOWS_PGID_FILE_NAME="app.pgid"
 
@@ -35,19 +33,28 @@ windows_native_path() {
 photosphere_platform_prepare() {
     local run_dir
     run_dir="$(windows_native_path "$1")"
-    bash "$WINDOWS_SCRIPTS_DIR/sync-windows.sh" --test-hooks --prefix "$run_dir/test" || return 1
+    local build="${PHOTOSPHERE_SMOKE_BUILD:-}"
+    if [ -z "$build" ]; then
+        build="$run_dir/build"
+        (cd "$PHOTOSPHERE_SMOKE_REPO_ROOT" && bun run --filter=ziggy build:windows -- --prefix "$build") || return 1
+    fi
+    if [ ! -f "$build/photosphere/photosphere.exe" ]; then
+        echo "The Windows build $build has no photosphere/photosphere.exe." >&2
+        return 1
+    fi
+    mkdir -p "$run_dir/app"
+    cp -R "$build/photosphere" "$run_dir/app/" || return 1
 }
 
 #
-# Starts the app for one scenario, recording what it started through launch_in_process_group. Sets PHOTOSPHERE_CONTROL_HOST and
-# PHOTOSPHERE_CONTROL_PORT to where the test control connection can be reached. Usage: photosphere_platform_start <test_dir> [keep-data]
+# Starts the app for one scenario, recording what it started through launch_in_process_group, with --remote-control and the address
+# of the scenario's remote control server, which it starts first. Usage: photosphere_platform_start <test_dir> [keep-data]
 #
 photosphere_platform_start() {
     local test_dir="$1"
-    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/test/photosphere/photosphere.exe"
+    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/app/photosphere/photosphere.exe"
     local log="$test_dir/app.log"
-    local port_file="$test_dir/control-port.txt"
-    rm -f "$port_file" "$test_dir/$WINDOWS_WINPID_FILE_NAME"
+    rm -f "$test_dir/$WINDOWS_WINPID_FILE_NAME"
 
     # The app's log starts again with the app, so a remembered position in the old one means nothing.
     rm -f "$test_dir/background-log-cursor.txt"
@@ -67,6 +74,7 @@ photosphere_platform_start() {
         sleep 0.5
         webview_waited=$((webview_waited + 1))
     done
+    photosphere_start_remote_control_server "$test_dir" || return 1
     if ! process_control_verify_job_control; then
         echo "Cannot start the app without a process group of its own; see the error above." >&2
         return 1
@@ -85,36 +93,25 @@ photosphere_platform_start() {
         PHOTOSPHERE_LOG_DIR="$(windows_native_path "$test_dir")" \
         PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         TEST_TMP_DIR="$(windows_native_path "$test_dir")" \
-        ZIGGY_TEST_MODE=1 \
-        ZIGGY_TEST_PORT_FILE="$(windows_native_path "$port_file")" \
-        "$app") || return 1
+        "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
     echo "$pid" > "$test_dir/app.pid"
     echo "$pgid" > "$test_dir/$WINDOWS_PGID_FILE_NAME"
+    # Windows tools take the Windows pid, which is not the shell's pid of a native program. Until the shell has handed over to the
+    # program the shell's pid can still name the launcher, so the Windows pid is read until it names the app's process.
     local waited=0
-    while [ ! -s "$port_file" ]; do
+    until cat "/proc/$pid/winpid" > "$test_dir/$WINDOWS_WINPID_FILE_NAME" 2>/dev/null && windows_app_process_running "$test_dir"; do
         if ! kill -0 "$pid" 2>/dev/null; then
-            echo "The app exited before its control connection came up. Its log:" >&2
+            echo "The app exited as it started. Its log:" >&2
             cat "$log" >&2
             return 1
         fi
         if [ "$waited" -ge 600 ]; then
-            echo "The app never wrote its control port." >&2
-            cat "$log" >&2
+            echo "Could not find the Windows process of the app (shell pid $pid) within 60 seconds." >&2
             return 1
         fi
         sleep 0.1
         waited=$((waited + 1))
     done
-    # Windows tools take the Windows pid, which is not the shell's pid of a native program. It is read once the app has written its port,
-    # because until the shell has handed over to the program the shell's pid can still name the launcher, and it is checked to be the
-    # app's.
-    if ! cat "/proc/$pid/winpid" > "$test_dir/$WINDOWS_WINPID_FILE_NAME" || ! windows_app_process_running "$test_dir"; then
-        echo "Could not find the Windows process of the app (shell pid $pid)." >&2
-        return 1
-    fi
-    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
-    PHOTOSPHERE_CONTROL_PORT="$(tr -d '\n' < "$port_file")"
-    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT
 }
 
 #

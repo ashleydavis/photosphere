@@ -5,7 +5,6 @@ Runs `zig build photosphere-backend` from the root of the repository for one tar
 ## Arguments
 
 - `<target>`: required. The Zig target triple to build for, for example `x86_64-linux-gnu` or `aarch64-macos.11.0`.
-- `--test-hooks`: optional. Builds the test hooks in (the test mode switch, the control connection and the other test-only features). Used by the test and stories scripts. Without it, as for every packaged artifact, the build contains none of them.
 - `--optimize <Debug|ReleaseSafe|ReleaseFast|ReleaseSmall>`: optional. The Zig optimize mode. Default `ReleaseSafe`.
 - `--prefix <dir>`: optional. The install prefix. Without it the root build's own `zig-out` is used.
 

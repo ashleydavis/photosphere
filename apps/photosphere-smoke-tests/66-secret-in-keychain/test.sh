@@ -15,7 +15,7 @@ SECRET_NAME="keychain-secret"
 SECRET_REGION="keychain-region-42"
 
 #
-# Reads the localStorage value for a key through the test control connection, echoing the raw value (empty when absent). Used to assert
+# Reads the localStorage value for a key through the remote control connection, echoing the raw value (empty when absent). Used to assert
 # no plaintext secret lingers in localStorage.
 # Usage: read_local_storage <port> <key>
 #

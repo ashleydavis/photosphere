@@ -6,12 +6,11 @@ When an iPhone or iPad is connected the scenarios run on it, and [ios-device.sh]
 
 It implements the `photosphere_platform_*` functions `common.sh` lists, `photosphere_platform_device_limit`, and the `ios_*` helpers scenarios call as `${PLATFORM}_<name>`. A helper that has no iOS implementation stops the scenario with a message naming it (`photosphere_ios_not_available`), so a scenario that reaches one fails loudly.
 
-A simulator process shares the host's file system and network, so the control port file, the settings, the vault and the logs are host paths inside the scenario's directory, and the control connection is reached at `127.0.0.1`. Variables named `SIMCTL_CHILD_<name>` reach the app's environment as `<name>`. The app's process is not a child of the shell, so it is recorded by its process id and stopped with `simctl`.
+A simulator process shares the host's file system and network, so the settings, the vault and the logs are host paths inside the scenario's directory. The app reaches the remote control server at `127.0.0.1`. The app is started with `--remote-control`. Variables named `SIMCTL_CHILD_<name>` reach the app's environment as `<name>`. The app's process is not a child of the shell, so it is recorded by its process id and stopped with `simctl`.
 
 The core's background passes (automatic import, sync and prefetch) report what they are doing to the simulator's system log under the `AutoImportService` category, not to the app's log file. Each start of the app streams that category into `background-<start>.log` in the scenario's directory with `simctl spawn <udid> log stream`, before the app is launched, and `ios_background_log` and `ios_clear_background_log` read those files the way the Android library reads logcat. `ios_background_work_running` reads the app's log for the core saying the background work was started and not since stopped.
 
 ## Environment
 
 - `PHOTOSPHERE_IOS_SIMULATOR`: the simulator to use, by name or identifier.
-- `PHOTOSPHERE_IOS_DEVICE`: the connected device to use, when several are connected (see [ios-device.md](ios-device.md)).
 - `PHOTOSPHERE_NEWS_URL`: passed on to the app, for the scenarios that serve a news feed.

@@ -6,8 +6,8 @@
 # replaces everything here. Otherwise the app runs on an iOS simulator that already exists: PHOTOSPHERE_IOS_SIMULATOR names one,
 # otherwise a running one or the first available iPhone is used (see apple_pick_simulator). Nothing is created or deleted.
 #
-# A simulator process shares the host's file system and network, so the control port file, the settings, the vault and the logs are
-# host paths inside the scenario's directory, and the control connection is reached at 127.0.0.1. Variables named SIMCTL_CHILD_<name>
+# A simulator process shares the host's file system and network, so the settings, the vault and the logs are
+# host paths inside the scenario's directory, and the app reaches its remote control server at 127.0.0.1. Variables named SIMCTL_CHILD_<name>
 # reach the app's environment as <name>. The app's process is not a child of this shell, so it is recorded by its process id and stopped
 # with simctl. The core writes its log to a file, and the scenario reads app.log, so a tail of the log file writes app.log.
 
@@ -112,7 +112,18 @@ photosphere_platform_device_limit() {
 
 photosphere_platform_prepare() {
     local run_dir="$1"
-    bash "$IOS_SCRIPTS_DIR/build-ios.sh" --sdk simulator --test-hooks --configuration Release --native-dir "$run_dir/test-native" --build-dir "$run_dir/test-build" || return 1
+    local build="${PHOTOSPHERE_SMOKE_BUILD:-}"
+    if [ -z "$build" ]; then
+        build="$run_dir/build"
+        bash "$IOS_SCRIPTS_DIR/build-ios.sh" --sdk simulator --configuration Release --native-dir "$build/native" --build-dir "$build/xcode" || return 1
+    fi
+    local built_app="$build/xcode/Build/Products/Release-iphonesimulator/Photosphere.app"
+    if [ ! -d "$built_app" ]; then
+        echo "The iOS simulator build $build has no xcode/Build/Products/Release-iphonesimulator/Photosphere.app." >&2
+        return 1
+    fi
+    mkdir -p "$run_dir/app"
+    cp -R "$built_app" "$run_dir/app/" || return 1
 }
 
 #
@@ -125,23 +136,22 @@ photosphere_ios_install() {
     if [ -f "$TMP_DIR/ios-installed" ]; then
         return 0
     fi
-    xcrun simctl install "$IOS_SIMULATOR_UDID" "$PHOTOSPHERE_SMOKE_RUN_DIR/test-build/Build/Products/Release-iphonesimulator/Photosphere.app" || return 1
+    xcrun simctl install "$IOS_SIMULATOR_UDID" "$PHOTOSPHERE_SMOKE_RUN_DIR/app/Photosphere.app" || return 1
     : > "$TMP_DIR/ios-installed"
 }
 
 #
-# Starts the app for one scenario. Sets PHOTOSPHERE_CONTROL_HOST and PHOTOSPHERE_CONTROL_PORT to where the test control connection can
-# be reached. A fresh start installs the app; with keep-data it starts the installed app again on the data the last run left.
+# Starts the app for one scenario, with --remote-control and the address of the scenario's remote control server, which it starts
+# first. A fresh start installs the app; with keep-data it starts the installed app again on the data the last run left.
 # Usage: photosphere_platform_start <test_dir> [keep-data]
 #
 photosphere_platform_start() {
     local test_dir="$1"
-    local port_file="$test_dir/control-port.txt"
-    rm -f "$port_file"
     mkdir -p "$test_dir"
     photosphere_ios_pick_simulator || return 1
     local udid="$IOS_SIMULATOR_UDID"
     echo "$udid" > "$test_dir/$IOS_UDID_FILE_NAME"
+    photosphere_start_remote_control_server "$test_dir" || return 1
     if ! process_control_verify_job_control; then
         echo "Cannot start the app without a process group of its own; see the error above." >&2
         return 1
@@ -196,9 +206,7 @@ photosphere_platform_start() {
         SIMCTL_CHILD_PHOTOSPHERE_LOG_DIR="$log_dir" \
         SIMCTL_CHILD_PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         SIMCTL_CHILD_TEST_TMP_DIR="$test_dir" \
-        SIMCTL_CHILD_ZIGGY_TEST_MODE=1 \
-        SIMCTL_CHILD_ZIGGY_TEST_PORT_FILE="$port_file" \
-        xcrun simctl launch "$udid" "$IOS_BUNDLE_ID")" || return 1
+        xcrun simctl launch "$udid" "$IOS_BUNDLE_ID" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL")" || return 1
     local pid="${launched##*: }"
     echo "$pid" > "$test_dir/$IOS_PID_FILE_NAME"
 
@@ -224,25 +232,6 @@ photosphere_platform_start() {
     local tail_pid tail_pgid
     read -r tail_pid tail_pgid < <(launch_in_process_group "$test_dir/app.log" tail -n +1 -f "${log_files[0]}") || return 1
     echo "$tail_pgid" > "$test_dir/log-stream.pgid"
-
-    waited=0
-    while [ ! -s "$port_file" ]; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            echo "The app exited before its control connection came up. Its log:" >&2
-            cat "$test_dir/app.log" >&2
-            return 1
-        fi
-        if [ "$waited" -ge 600 ]; then
-            echo "The app never wrote its control port." >&2
-            cat "$test_dir/app.log" >&2
-            return 1
-        fi
-        sleep 0.1
-        waited=$((waited + 1))
-    done
-    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
-    PHOTOSPHERE_CONTROL_PORT="$(tr -d '\n' < "$port_file")"
-    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT
 }
 
 #

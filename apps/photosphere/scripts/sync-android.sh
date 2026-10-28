@@ -8,7 +8,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/android-common.sh"
 
 arch_list="x86_64 arm64"
 optimize="ReleaseSafe"
-test_hooks="false"
 skip_ui="false"
 bundle_arguments=()
 while [ $# -gt 0 ]; do
@@ -21,10 +20,6 @@ while [ $# -gt 0 ]; do
             optimize="$2"
             shift 2
             ;;
-        --test-hooks)
-            test_hooks="true"
-            shift
-            ;;
         --minify)
             bundle_arguments=(--minify)
             shift
@@ -34,7 +29,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         *)
-            echo "Usage: sync-android.sh [--arch \"x86_64 arm64\"] [--optimize Debug|ReleaseSafe|ReleaseFast|ReleaseSmall] [--test-hooks] [--minify] [--skip-ui]" >&2
+            echo "Usage: sync-android.sh [--arch \"x86_64 arm64\"] [--optimize Debug|ReleaseSafe|ReleaseFast|ReleaseSmall] [--minify] [--skip-ui]" >&2
             exit 2
             ;;
     esac
@@ -86,18 +81,19 @@ for arch in x86_64 arm64; do
     } > "$generated_dir/zig-libc/$arch.txt"
 done
 
-test_hooks_argument="-Dtest-hooks=false"
-if [ "$test_hooks" = "true" ]; then
-    test_hooks_argument="-Dtest-hooks=true"
-fi
-
-# The page is embedded in the library, so it is built first.
+# The page is embedded in the library, so it is built first, into a directory of this build's own, so a build of another platform
+# running at the same moment cannot replace it mid-build. Removed afterwards. --skip-ui embeds the page already in dist instead.
+page_directory="apps/photosphere-frontend/dist"
 if [ "$skip_ui" = "false" ]; then
     echo "Building the page..."
-    (cd "$PHOTOSPHERE_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}")
+    frontend_dir="$(cd "$PHOTOSPHERE_APP_DIR/../photosphere-frontend" && pwd)"
+    page_dir="$(mktemp -d "$frontend_dir/page.XXXXXX")"
+    trap 'find "$page_dir" -type f -delete; find "$page_dir" -depth -type d -empty -delete' EXIT
+    (cd "$PHOTOSPHERE_APP_DIR" && bun run bundle:ui --out-dir "$page_dir" "${bundle_arguments[@]+"${bundle_arguments[@]}"}")
+    page_directory="apps/photosphere-frontend/$(basename "$page_dir")"
 fi
-if [ ! -f "$PHOTOSPHERE_APP_DIR/../photosphere-frontend/dist/index.html" ]; then
-    echo "ERROR: $PHOTOSPHERE_APP_DIR/../photosphere-frontend/dist/index.html does not exist. Run without --skip-ui." >&2
+if [ ! -f "$PHOTOSPHERE_REPO_ROOT/$page_directory/index.html" ]; then
+    echo "ERROR: $PHOTOSPHERE_REPO_ROOT/$page_directory/index.html does not exist. Run without --skip-ui." >&2
     exit 1
 fi
 
@@ -116,11 +112,11 @@ for arch in $arch_list; do
             triple="aarch64-linux-android"
             ;;
     esac
-    echo "Building the Zig library for $abi ($optimize, $test_hooks_argument)..."
+    echo "Building the Zig library for $abi ($optimize)..."
     (cd "$PHOTOSPHERE_REPO_ROOT" && zig build photosphere-backend \
         "-Dtarget=$triple" \
         "-Doptimize=$optimize" \
-        "$test_hooks_argument" \
+        "-Dui-directory=$page_directory" \
         --libc "$generated_dir/zig-libc/$arch.txt" \
         -p "$generated_dir/zig-out/$abi")
     mkdir -p "$generated_dir/jniLibs/$abi"

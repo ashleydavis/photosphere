@@ -1,0 +1,696 @@
+# The Photosphere App for iOS, built once and then tested, packaged and released. prepare-tag resolves the release tag, and each
+# third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and caches it, all side by
+# side. Then app-build builds the app for the simulator over those libraries and saves it in the cache under a key of its own for
+# this run. The later jobs restore that instead of building: app-smoke-tests runs the simulator build and package packages the
+# app for a device over the restored Zig build cache. zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript, which
+# their own jobs build. create-release, once every other job has passed, publishes the package.
+name: Release iOS
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+  WHAT_CHANGED_VERSION: "v0.0.6"
+  # Each platform has a workflow of its own, so a failure on one shows at a glance and holds up no other platform's release.
+  # Its release tags are <RELEASE_PLATFORM>-v1.2.3, and its GitHub release is zig-<that tag>.
+  RELEASE_PLATFORM: "ios"
+  RELEASE_PLATFORM_NAME: "iOS"
+
+on:
+  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
+  push:
+    branches:
+      - "*"
+  #   tags:
+  #     - 'ios-v*.*.*'
+
+  # pull_request:
+  #   branches:
+  #     - main
+
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release action. none = nightly build. update-latest = move the latest ios-v*.*.* tag to this commit and re-release it. new-patch = create the next patch tag (e.g. ios-v0.0.8 -> ios-v0.0.9) and release it."
+        type: choice
+        options:
+          - none
+          - update-latest
+          - new-patch
+        default: none
+
+jobs:
+  # Resolves the release tag once, before anything is built, because it can create and push a tag. Its outputs, the tag and
+  # whether this run is a release, are read by app-build, cli-build, package and create-release, so the two builds run side by side.
+  prepare-tag:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      is-release: ${{ steps.resolve.outputs.is-release }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          RELEASE_INPUT="${{ inputs.release }}"
+          PREFIX="${RELEASE_PLATFORM}-v"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "update-latest" ]; then
+            TAG=$(git tag --list "${PREFIX}*.*.*" --sort=-version:refname | head -1)
+            if [ -z "$TAG" ]; then
+              echo "No existing ${PREFIX}*.*.* tag to update"
+              exit 1
+            fi
+            git tag -f "$TAG"
+            git push --force origin "$TAG"
+            IS_RELEASE="true"
+          elif [ "$RELEASE_INPUT" = "new-patch" ]; then
+            LATEST=$(git tag --list "${PREFIX}*.*.*" --sort=-version:refname | head -1)
+            if [ -z "$LATEST" ]; then
+              LATEST="${PREFIX}0.0.0"
+            fi
+            MAJOR=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f1)
+            MINOR=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f2)
+            PATCH=$(echo "${LATEST#"$PREFIX"}" | cut -d. -f3)
+            TAG="${PREFIX}${MAJOR}.${MINOR}.$((PATCH + 1))"
+            git tag "$TAG"
+            git push origin "$TAG"
+            IS_RELEASE="true"
+          else
+            TAG=""
+            IS_RELEASE="false"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
+
+  # The third-party libraries, each built once by its own action and cached, so a library an earlier run has already built is
+  # restored rather than compiled again. Each is built for the iOS simulator the smoke tests run on and for an iOS device, which the
+  # package is built for. ImageMagick's and FFmpeg's generated files for iOS are not checked in, so their builds make them first.
+  # Every job that runs the Zig build restores the libraries from that cache with the third-party-libraries action.
+  build-aws-sdk:
+    timeout-minutes: 60
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build the AWS SDK for C
+        uses: ./.github/actions/build-aws-sdk
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+
+      - name: Build the AWS SDK for C for the second architecture or ABI
+        uses: ./.github/actions/build-aws-sdk
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+
+  build-zlib-ng:
+    timeout-minutes: 30
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build zlib-ng
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+
+      - name: Build zlib-ng for the second architecture or ABI
+        uses: ./.github/actions/build-zlib-ng
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+
+  build-imagemagick:
+    timeout-minutes: 60
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build ImageMagick
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Build ImageMagick for the second architecture or ABI
+        uses: ./.github/actions/build-imagemagick
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+          config-name: aarch64-ios
+
+  build-ffmpeg:
+    timeout-minutes: 60
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build FFmpeg
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Build FFmpeg for the second architecture or ABI
+        uses: ./.github/actions/build-ffmpeg
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+          config-name: aarch64-ios
+
+
+  # Restores the third-party libraries the library jobs built and builds the Photosphere App for the iOS simulator, in Release,
+  # by the same build script a developer runs, for the smoke tests. The version comes from the release tag: ios-v1.2.3 is 1.2.3 and
+  # a nightly is dev-nightly.<timestamp>. The library jobs build each library for an iOS device, which the package job builds for, for the iOS
+  # simulator and for the runner's macOS, which the CLI that makes the smoke tests' fixtures builds for, and this job
+  # restores them from their caches. ImageMagick's and FFmpeg's generated files for iOS
+  # are not checked in, so their builds make them first. The simulator app, the Zig build cache and the libraries are saved under
+  # photosphere-app-ios-<commit>-<run>, which app-smoke-tests and package restore.
+  app-build:
+    timeout-minutes: 150
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Check the iOS toolchain (iOS)
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Restore the third-party libraries for the runner
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-arm64
+          build-args: -Dtarget=aarch64-macos.11.0
+
+      - name: Restore the third-party libraries for the iOS simulator
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Restore the third-party libraries for an iOS device
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0
+          config-name: aarch64-ios
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      # The app is built into out/app, laid out as apps/photosphere-smoke-tests/run.md describes, which is where the smoke tests take
+      # it from. Only the app is saved, not the rest of Xcode's derived data.
+      - name: Build the app for the iOS simulator
+        shell: bash
+        run: bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+
+      - name: Save the Photosphere App build
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
+
+  app-smoke-tests:
+    # The Photosphere App's smoke tests on an iOS simulator, on the simulator build app-build made, which
+    # PHOTOSPHERE_SMOKE_BUILD names. run.sh picks the first available iPhone simulator and boots it, and installs the app on it.
+    # The runner's default Xcode is used, because apple-common.sh only requires one that works and setup-ios.sh checks for 14.2
+    # or newer. The CLI that makes the scenarios' fixtures is built by the smoke runner over the libraries app-build saved.
+    timeout-minutes: 90
+    needs: [app-build]
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # The scenarios build their database fixtures with the CLI from source, which needs ImageMagick and ffmpeg.
+      - name: Install media processing tools
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree rsync
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Check the iOS toolchain
+        run: bun run --filter=ziggy setup:ios
+
+      # The CLI that makes the scenarios' fixtures is built for the runner's macOS. app-build saved its libraries with the app.
+      - name: Restore the Photosphere App build
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Run the Photosphere App iOS smoke tests
+        timeout-minutes: 75
+        env:
+          PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
+        run: bun run test:ziggy:ios
+
+  # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
+  typescript-compile:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # bun run compile records a what-changed baseline when it succeeds.
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Compile TypeScript
+        timeout-minutes: 12
+        run: bun run compile
+
+  # The TypeScript unit tests.
+  typescript-unit-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run unit tests
+        timeout-minutes: 12
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+
+  # The unit tests of the Zig CLI and of every Zig package, on this workflow's runner, over the libraries the library jobs built for it
+  # and the Zig build cache app-build saved.
+  zig-unit-tests:
+    timeout-minutes: 50
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, app-build]
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (macOS)
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      # The libraries for the runner, which the tests build for, restored from the cache.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-arm64
+
+      # Zig skips any compile step whose inputs are unchanged and already in .zig-cache. Without this the test binaries and psi are
+      # compiled from nothing every run, which is most of this job's time. The key changes with any Zig source, and the newest
+      # earlier cache is restored when there is no exact match, so only the binaries a change touches are compiled again.
+      # The next step lays app-build's cache over it.
+      - name: Cache Zig's build cache
+        uses: actions/cache@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', '**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
+
+      # The build app-build saved, with its Zig build cache and libraries, laid over the test build's own cache, so Zig reuses any
+      # compile step the two builds have in common. The paths are the ones app-build saved, which a restore has to name exactly.
+      - name: Restore the app build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # Built for any CPU of the architecture, so the compile steps match the restored build caches whatever CPU the runner has.
+      - name: Run the Zig unit tests
+        timeout-minutes: 40
+        shell: bash
+        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+
+  # Packages the Photosphere App for an iOS device, unsigned, by the same package script a developer runs, over the Zig build cache
+  # and the libraries app-build saved, so the Zig build starts warm. It stamps the version the way app-build does. The archive is
+  # made by xcodebuild with code signing off, and only its .ipa is saved, under photosphere-package-ios-<commit>-<run>, because an
+  # .xcarchive is a folder and only the .ipa is attached to the release. create-release restores it. It runs beside the smoke tests.
+  package:
+    timeout-minutes: 120
+    needs: [prepare-tag, app-build]
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Check the iOS toolchain (iOS)
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Restore the Photosphere App build
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Package (iOS)
+        shell: bash
+        run: bun run --filter=ziggy package:ios -- --version "$VERSION" --output-dir "$PWD/out/package"
+
+      - name: Save the Photosphere App package
+        uses: actions/cache/save@v4
+        with:
+          path: out/package/*.ipa
+          key: photosphere-package-ios-${{ github.sha }}-${{ github.run_id }}
+
+  # Publishes the package the package job made, restored from the cache under its key, once every other job has passed. A restore
+  # matches only a save of the same paths, so it restores the whole save.
+  create-release:
+    timeout-minutes: 20
+    needs: [prepare-tag, app-build, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore the Photosphere App package
+        uses: actions/cache/restore@v4
+        with:
+          path: out/package/*.ipa
+          key: photosphere-package-ios-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Put the Photosphere App packages where the release steps read them
+        shell: bash
+        run: |
+          mkdir -p ./artifacts/app
+          cp out/package/*.ipa ./artifacts/app/
+          ls -la ./artifacts/app
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          # The CLI commits made since the last release tag, as bullets. The same script produces the
+          # notes for the Android tester builds, so a release and a tester build never describe the
+          # same commits differently. The tag being built is excluded so a tagged release measures
+          # from the tag before it; for a nightly the tag is empty and nothing is excluded.
+          RELEASE_NOTES=$(bash ./scripts/release-notes.sh \
+            --prefix cli \
+            --exclude-tag "${{ needs.prepare-tag.outputs.tag }}" \
+            --tag-pattern "${RELEASE_PLATFORM}-v*.*.*" \
+            --empty-message "- No CLI-related commits found")
+
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "Generated release notes:"
+          echo "$RELEASE_NOTES"
+
+      - name: Delete existing nightly release
+        if: needs.prepare-tag.outputs.is-release != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
+        continue-on-error: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || format('{0}-nightly', env.RELEASE_PLATFORM) }}
+          # The zig- tag does not exist yet, so the release creates it. Without this it would be created on the default branch rather than on the commit that was built.
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
+          draft: false
+          prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
+          files: |
+            ./artifacts/app/*
+          body: |
+            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
+
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
+            ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}
+
+            ## What's Changed
+            ${{ steps.release-notes.outputs.RELEASE_NOTES }}
+
+            ## Download
+            - **iOS**: `.ipa` (unsigned)
+
+            ## Bundled tools and licences
+            The mobile apps bundle in-process builds of ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and FFmpeg (LGPL-2.1+), along with ImageMagick's libjpeg, libpng, libwebp and zlib delegates. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).

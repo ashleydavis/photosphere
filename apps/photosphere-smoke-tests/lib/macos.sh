@@ -7,27 +7,35 @@
 # settings, vault and logs are in the scenario's directory through the same PHOTOSPHERE_* variables the Linux library sets. The app
 # opens a real window, so the run needs a logged-in graphical session.
 
-MACOS_SCRIPTS_DIR="$PHOTOSPHERE_SMOKE_REPO_ROOT/apps/photosphere/scripts"
-
 # The file the app's process group is recorded in, per scenario.
 MACOS_PGID_FILE_NAME="app.pgid"
 
 photosphere_platform_prepare() {
     local run_dir="$1"
-    bash "$MACOS_SCRIPTS_DIR/build-macos.sh" --test-hooks --configuration Release --native-dir "$run_dir/test-native" --build-dir "$run_dir/test-build" || return 1
+    local build="${PHOTOSPHERE_SMOKE_BUILD:-}"
+    if [ -z "$build" ]; then
+        build="$run_dir/build"
+        (cd "$PHOTOSPHERE_SMOKE_REPO_ROOT" && bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$build/native" --build-dir "$build/xcode") || return 1
+    fi
+    local built_app="$build/xcode/Build/Products/Release/Photosphere.app"
+    if [ ! -d "$built_app" ]; then
+        echo "The macOS build $build has no xcode/Build/Products/Release/Photosphere.app." >&2
+        return 1
+    fi
+    mkdir -p "$run_dir/app"
+    ditto "$built_app" "$run_dir/app/Photosphere.app" || return 1
 }
 
 #
-# Starts the app for one scenario, recording what it started through launch_in_process_group. Sets PHOTOSPHERE_CONTROL_HOST and
-# PHOTOSPHERE_CONTROL_PORT to where the test control connection can be reached. Usage: photosphere_platform_start <test_dir> [keep-data]
+# Starts the app for one scenario, recording what it started through launch_in_process_group, with --remote-control and the address
+# of the scenario's remote control server, which it starts first. Usage: photosphere_platform_start <test_dir> [keep-data]
 #
 photosphere_platform_start() {
     local test_dir="$1"
-    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/test-build/Build/Products/Release/Photosphere.app/Contents/MacOS/Photosphere"
+    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/app/Photosphere.app/Contents/MacOS/Photosphere"
     local log="$test_dir/app.log"
-    local port_file="$test_dir/control-port.txt"
-    rm -f "$port_file"
     mkdir -p "$test_dir/home"
+    photosphere_start_remote_control_server "$test_dir" || return 1
     if ! process_control_verify_job_control; then
         echo "Cannot start the app without a process group of its own; see the error above." >&2
         return 1
@@ -52,29 +60,9 @@ photosphere_platform_start() {
         PHOTOSPHERE_LOG_DIR="$test_dir" \
         PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         TEST_TMP_DIR="$test_dir" \
-        ZIGGY_TEST_MODE=1 \
-        ZIGGY_TEST_PORT_FILE="$port_file" \
-        "$app") || return 1
+        "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
     echo "$pid" > "$test_dir/app.pid"
     echo "$pgid" > "$test_dir/$MACOS_PGID_FILE_NAME"
-    local waited=0
-    while [ ! -s "$port_file" ]; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            echo "The app exited before its control connection came up. Its log:" >&2
-            cat "$log" >&2
-            return 1
-        fi
-        if [ "$waited" -ge 600 ]; then
-            echo "The app never wrote its control port." >&2
-            cat "$log" >&2
-            return 1
-        fi
-        sleep 0.1
-        waited=$((waited + 1))
-    done
-    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
-    PHOTOSPHERE_CONTROL_PORT="$(tr -d '\n' < "$port_file")"
-    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT
 }
 
 #

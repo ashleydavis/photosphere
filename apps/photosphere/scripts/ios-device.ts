@@ -8,9 +8,10 @@
 // Usage:
 //   node scripts/ios-device.ts install <udid> <bundle-id> <app-path>
 //       Copies the .app to the device and installs it, replacing any installed copy.
-//   node scripts/ios-device.ts launch <udid> <bundle-id> <info-file> [NAME=VALUE...]
+//   node scripts/ios-device.ts launch <udid> <bundle-id> <info-file> [NAME=VALUE...] [-- ARGUMENT...]
 //       Launches the installed app under the device's debugserver, stopped at its first instruction, with the given
-//       environment. It then listens on a free loopback port and passes one connection through to that debugserver, for
+//       environment and the arguments after --. It then listens on a free loopback port and passes one connection through
+//       to that debugserver, for
 //       lldb to take over the process with `process connect connect://127.0.0.1:<port>`. It writes {"port", "container"}
 //       as JSON to <info-file> once it is listening, and exits when either side closes.
 //   node scripts/ios-device.ts forward <udid> <device-port> <info-file>
@@ -110,7 +111,7 @@ async function install(udid: string, bundleId: string, appPath: string): Promise
 //
 // Launches the installed app stopped at its first instruction and hands its debugserver connection to one client.
 //
-async function launch(udid: string, bundleId: string, infoFile: string, environment: string[]): Promise<void> {
+async function launch(udid: string, bundleId: string, infoFile: string, environment: string[], argumentList: string[]): Promise<void> {
     const manager = await ClientManager.create(udid);
     await mountDeveloperDiskImage(manager);
     const installer = await manager.getInstallationProxyClient();
@@ -126,7 +127,13 @@ async function launch(udid: string, bundleId: string, infoFile: string, environm
             throw new Error(`debugserver refused the environment ${assignment}: ${environmentResult}`);
         }
     }
-    await debugserver.launchApp(appInfo.Path, appInfo.CFBundleExecutable);
+    // native-run's launchApp sends the program's path and no arguments, so the launch packet is made here: each argument, the
+    // program's path first, as its hex length, its position and its hex text.
+    const launchArguments = [join(appInfo.Path, appInfo.CFBundleExecutable), ...argumentList].map((argument: string, position: number) => {
+        const hex = Buffer.from(argument).toString("hex");
+        return `${hex.length},${position},${hex}`;
+    });
+    await debugserver.sendCommand(`A${launchArguments.join(",")}`, []);
     const launchResult = await debugserver.checkLaunchSuccess();
     if (launchResult !== "OK") {
         throw new Error(`debugserver could not launch ${bundleId}: ${launchResult}`);
@@ -184,13 +191,17 @@ async function main(): Promise<void> {
         await install(args[0], args[1], args[2]);
     }
     else if (command === "launch" && args.length >= 3) {
-        await launch(args[0], args[1], args[2], args.slice(3));
+        const rest = args.slice(3);
+        const separator = rest.indexOf("--");
+        const environment = separator === -1 ? rest : rest.slice(0, separator);
+        const argumentList = separator === -1 ? [] : rest.slice(separator + 1);
+        await launch(args[0], args[1], args[2], environment, argumentList);
     }
     else if (command === "forward" && args.length === 3) {
         await forward(args[0], Number(args[1]), args[2]);
     }
     else {
-        throw new Error("usage: ios-device.ts install <udid> <bundle-id> <app-path> | launch <udid> <bundle-id> <info-file> [NAME=VALUE...] | forward <udid> <device-port> <info-file>");
+        throw new Error("usage: ios-device.ts install <udid> <bundle-id> <app-path> | launch <udid> <bundle-id> <info-file> [NAME=VALUE...] [-- ARGUMENT...] | forward <udid> <device-port> <info-file>");
     }
 }
 

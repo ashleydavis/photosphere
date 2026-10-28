@@ -398,7 +398,7 @@ capture_loop() {
             #
             if [ "$IS_ZIGGY" = true ]; then
                 #
-                # The Photosphere App is driven through its test control connection. send_command prints
+                # The Photosphere App is driven through its remote control connection. send_command prints
                 # the app's answer when a command fails, so the cause of a missing screenshot is in the output.
                 #
                 mkdir -p "$(dirname "$out_path")"

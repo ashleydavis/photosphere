@@ -88,6 +88,9 @@
     "emu:and:pool:monitor": "bash ./apps/android-frontend/scripts/emulator-pool-monitor.sh",
     "perf": "bun --filter '*' perf"
   },
+  "devDependencies": {
+    "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.20"
+  },
   "workspaces": [
     "apps/*",
     "packages/*",

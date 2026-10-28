@@ -11,4 +11,3 @@ Options:
 - `--optimize <Debug|ReleaseSafe|ReleaseFast|ReleaseSmall>`: the Zig optimize mode. Default `ReleaseSafe`.
 - `--minify`: minifies the page, which is what a release package wants.
 - `--strip`: leaves the debug information out of the executable, which is what a release package wants.
-- `--test-hooks`: builds the test control connection in. Never use it for something that ships.

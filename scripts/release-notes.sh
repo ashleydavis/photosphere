@@ -58,7 +58,7 @@ while [ $# -gt 0 ]; do
 done
 
 # The last tag a release was cut from, newest first by version number. The nightly tags (`nightly`
-# and each platform's `zig-<platform>-nightly`) are skipped because they move with every nightly
+# and each platform's `<platform>-nightly`) are skipped because they move with every nightly
 # build, so measuring from one would report almost nothing.
 LAST_TAG=""
 while IFS= read -r tag; do

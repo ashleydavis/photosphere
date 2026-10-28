@@ -12,30 +12,37 @@ LINUX_PGID_FILE_NAME="app.pgid"
 
 photosphere_platform_prepare() {
     local run_dir="$1"
-    (cd "$PHOTOSPHERE_SMOKE_REPO_ROOT" && bun run --filter=ziggy bundle:ui) || return 1
-    # The page is embedded in the executable, so nothing but the executable is installed. A scenario that passes proves the page loads
-    # from the executable alone, which is why nothing is copied beside it.
-    (cd "$PHOTOSPHERE_SMOKE_REPO_ROOT" && zig build photosphere-linux -Dtest-hooks=true -p "$run_dir/test") || return 1
-    local installed
-    installed="$(find "$run_dir/test/bin" -type f | wc -l)"
-    if [ "$installed" -ne 1 ]; then
-        echo "The Linux build installed more than the one executable:" >&2
-        find "$run_dir/test/bin" -type f >&2
+    local build="${PHOTOSPHERE_SMOKE_BUILD:-}"
+    if [ -z "$build" ]; then
+        build="$run_dir/build"
+        (cd "$PHOTOSPHERE_SMOKE_REPO_ROOT" && bun run --filter=ziggy build:linux -- --prefix "$build") || return 1
+    fi
+    if [ ! -f "$build/bin/photosphere" ]; then
+        echo "The Linux build $build has no bin/photosphere." >&2
         return 1
     fi
+    # The page is embedded in the executable, so the build installs nothing but the executable. A scenario that passes proves the page
+    # loads from the executable alone.
+    local installed
+    installed="$(find "$build/bin" -type f | wc -l)"
+    if [ "$installed" -ne 1 ]; then
+        echo "The Linux build installs more than the one executable:" >&2
+        find "$build/bin" -type f >&2
+        return 1
+    fi
+    mkdir -p "$run_dir/app/photosphere"
+    cp "$build/bin/photosphere" "$run_dir/app/photosphere/" || return 1
 }
 
 #
-# Starts the app for one scenario, recording what it started through launch_in_process_group. Sets PHOTOSPHERE_CONTROL_HOST and
-# PHOTOSPHERE_CONTROL_PORT to where the test control connection can be reached. The scenario's settings, vault, logs and web view data
+# Starts the app for one scenario, recording what it started through launch_in_process_group, with --remote-control and the
+# address of the scenario's remote control server, which it starts first. The scenario's settings, vault, logs and web view data
 # are all inside the scenario's own directory, and so is the home directory, so nothing reaches the settings of the person running the
 # test. Usage: photosphere_platform_start <test_dir> [keep-data]
 #
 photosphere_platform_start() {
     local test_dir="$1"
-    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/test/bin/photosphere"
-    local port_file="$test_dir/control-port.txt"
-    rm -f "$port_file"
+    local app="$PHOTOSPHERE_SMOKE_RUN_DIR/app/photosphere/photosphere"
 
     # The app's log starts again with the app, so a remembered position in the old one means nothing.
     rm -f "$test_dir/background-log-cursor.txt"
@@ -44,6 +51,7 @@ photosphere_platform_start() {
     if [ "${SHOW_UI:-0}" != "1" ]; then
         wrapper=(xvfb-run -a -s "-screen 0 1280x1024x24")
     fi
+    photosphere_start_remote_control_server "$test_dir" || return 1
     if ! process_control_verify_job_control; then
         echo "Cannot start the app without a process group of its own; see the error above." >&2
         return 1
@@ -64,29 +72,9 @@ photosphere_platform_start() {
         PHOTOSPHERE_LOG_DIR="$test_dir" \
         PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         TEST_TMP_DIR="$test_dir" \
-        ZIGGY_TEST_MODE=1 \
-        ZIGGY_TEST_PORT_FILE="$port_file" \
-        "${wrapper[@]}" "$app") || return 1
+        "${wrapper[@]}" "$app" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL") || return 1
     echo "$pid" > "$test_dir/app.pid"
     echo "$pgid" > "$test_dir/$LINUX_PGID_FILE_NAME"
-    local waited=0
-    while [ ! -s "$port_file" ]; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            echo "The app exited before its control connection came up. Its log:" >&2
-            cat "$test_dir/app.log" >&2
-            return 1
-        fi
-        if [ "$waited" -ge 600 ]; then
-            echo "The app never wrote its control port." >&2
-            cat "$test_dir/app.log" >&2
-            return 1
-        fi
-        sleep 0.1
-        waited=$((waited + 1))
-    done
-    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
-    PHOTOSPHERE_CONTROL_PORT="$(tr -d '\n' < "$port_file")"
-    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT
 }
 
 #

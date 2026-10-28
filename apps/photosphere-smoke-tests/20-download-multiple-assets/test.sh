@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Selects two assets in the gallery and downloads them from the right sidebar. On a desktop the folder dialog is answered through the
-# test control connection's pick-answer command and both saved files are checked to be the originals byte for byte. A phone hands a
+# remote control connection's pick-answer command and both saved files are checked to be the originals byte for byte. A phone hands a
 # download to the system folder picker, which nothing outside the app can answer, so the test stages the picker's outcome with
 # stage-export and checks the download completes.
 

@@ -167,7 +167,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 ## Guides
 
 - [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) - Ziggy's parts, message protocol, how to add a message type, a task type or a native host callback, and the test hooks.
-- [Photosphere on Ziggy](photosphere-on-ziggy.md) - How Photosphere takes Ziggy at a version tag, how to move to a newer one, and how Photosphere is built on it.
+- [Photosphere on Ziggy](photosphere-on-ziggy.md) - How Photosphere takes Ziggy, how to move to a released one, and how Photosphere is built on it.
 - [Photosphere App](../apps/photosphere/README.md) - Building and running the app on each platform.
 - [UI stories](../packages/user-interface/src/stories/README.md) - The stories browser and the cross-platform story player.
 - [Testing](testing/README.md) - Running the tests, the manual e2e scripts, and the stories.
@@ -177,6 +177,7 @@ The local iOS environment is pinned to macOS 12.7.6 / Xcode 14.2, which is why t
 - [Syncing](syncing.md) - What a sync moves, when each platform runs one, and how it keeps working while the app is not on screen.
 - [Tasks](tasks.md) - Adding a new background task type.
 - [Releasing](releasing.md) - The release workflow for each platform, the tag that starts each one and the GitHub release it creates.
+- [Workflows](workflows.md) - The jobs of the CI and release workflows, what each one needs and where each one gets its input and puts its output.
 - [Delivering the Android app to testers](android-tester-distribution.md) - Getting a Photosphere App build to Android testers through Firebase App Distribution, with `bun run distribute:ziggy:android`.
 - [Setting up Photosphere on Android](android-onboarding.md) - What a user does after installing the app: automatic import, and a private encrypted remote copy to back up to.
 - [Mobile native media tools](mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired up.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Packages Photosphere's Linux app as a zip and a deb, without the test hooks. See package-linux.md.
+# Packages Photosphere's Linux app as a zip and a deb. See package-linux.md.
 
 set -eu
 
@@ -12,12 +12,16 @@ OUTPUT_DIR="$APP_DIR/out/linux"
 VERSION="$(jq -r '.version' "$APP_DIR/package.json")"
 while [ $# -gt 0 ]; do
     case "$1" in
+        --output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
         --version)
             VERSION="$2"
             shift 2
             ;;
         *)
-            echo "package-linux.sh: unknown argument '$1'. Options: --version." >&2
+            echo "package-linux.sh: unknown argument '$1'. Options: --output-dir, --version." >&2
             exit 1
             ;;
     esac
@@ -47,9 +51,14 @@ case "$ARCHITECTURE" in
 esac
 BASE_NAME="photosphere-$VERSION-linux-$ARCHITECTURE"
 
-(cd "$APP_DIR" && bun run bundle:ui --minify)
+# The page is bundled into a directory of this build's own and embedded from there, so a build of another platform running at the
+# same moment cannot replace it mid-build. Removed afterwards.
+FRONTEND_DIR="$(cd "$APP_DIR/../photosphere-frontend" && pwd)"
+PAGE_DIR="$(mktemp -d "$FRONTEND_DIR/page.XXXXXX")"
+trap 'find "$PAGE_DIR" -type f -delete; find "$PAGE_DIR" -depth -type d -empty -delete' EXIT
+(cd "$APP_DIR" && bun run bundle:ui --minify --out-dir "$PAGE_DIR")
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/photosphere-package-XXXXXX")"
-(cd "$APP_DIR/../.." && zig build photosphere-linux -Doptimize=ReleaseSafe -Dstrip=true -p "$STAGE_DIR/prefix")
+(cd "$APP_DIR/../.." && zig build photosphere-linux -Doptimize=ReleaseSafe -Dstrip=true "-Dui-directory=apps/photosphere-frontend/$(basename "$PAGE_DIR")" -p "$STAGE_DIR/prefix")
 mkdir -p "$OUTPUT_DIR"
 
 # The zip holds the executable, which has the page embedded, in one folder.

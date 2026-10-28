@@ -89,3 +89,5 @@ apps/photosphere/wix/
 apps/photosphere/native/windows/package/
 apps/photosphere/out/
 apps/photosphere-frontend/dist-build.*
+# The page a build bundled into a directory of its own (bundle-ui.sh --out-dir), removed when the build ends.
+apps/photosphere-frontend/page.*

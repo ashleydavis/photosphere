@@ -58,7 +58,7 @@ After `bun install`, run `bun run setup` for the one-time, per-platform environm
 
 - [Development](docs/development.md) - Setup, the project layout, the common commands, and how to run each app.
 - [Ziggy](https://github.com/ashleydavis/ziggy) - Ziggy, the application framework the Photosphere App runs on for Windows, macOS, Linux, Android and iOS, in its own repository. Its [architecture guide](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) covers its parts and protocol.
-- [Photosphere on Ziggy](docs/photosphere-on-ziggy.md) - How Photosphere takes Ziggy at a version tag and how it is built on it.
+- [Photosphere on Ziggy](docs/photosphere-on-ziggy.md) - How Photosphere takes Ziggy and how it is built on it.
 - [Photosphere App](apps/photosphere/README.md) - Building, running and packaging the app on each platform.
 - [Testing](docs/testing/README.md) - Unit tests, CLI and Photosphere App smoke tests, and the manual end-to-end scripts.
 - [UI stories](packages/user-interface/src/stories/README.md) - Every page, modal, dialog, and component in isolation, and the story player that cycles them on desktop, Android, and iOS.

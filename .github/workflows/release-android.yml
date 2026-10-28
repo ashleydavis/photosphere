@@ -1,4 +1,10 @@
-name: Release Zig Android
+# The Photosphere App for Android, built once and then tested, packaged and released. prepare-tag resolves the release tag, and
+# each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and caches it, all side
+# by side. Then app-build builds the app's debug-type APK over those libraries and saves it in the cache under a key of its own for
+# this run. The later jobs restore that instead of building: app-smoke-tests runs the APK and package packages the release APKs
+# over the restored Zig build cache. zig-unit-tests runs the Zig unit tests on Linux over the Linux libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every
+# other job has passed, publishes the package.
+name: Release Android
 
 env:
   BUN_VERSION: "1.3.14"
@@ -33,6 +39,8 @@ on:
         default: none
 
 jobs:
+  # Resolves the release tag once, before anything is built, because it can create and push a tag. Its outputs, the tag and
+  # whether this run is a release, are read by app-build, cli-build, package and create-release, so the two builds run side by side.
   prepare-tag:
     timeout-minutes: 5
     runs-on: ubuntu-latest
@@ -196,11 +204,118 @@ jobs:
           platform: android
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
 
+  # Restores the third-party libraries the library jobs built and builds the Photosphere App for Android by the same build script
+  # a developer runs: a debug-type APK of the release library for both Android architectures, which is what the smoke tests need,
+  # because their scenarios seed and read the app's data through run-as. The version comes from the release tag: android-v1.2.3 is
+  # 1.2.3 and a nightly is dev-nightly.<timestamp>. The library jobs build each library for both Android architectures the app ships, and for the
+  # runner, which the CLI that makes the smoke tests' fixtures builds for, and this job restores them from
+  # their caches. The APK, the Zig build cache and the libraries are saved
+  # under photosphere-app-android-<commit>-<run>, which app-smoke-tests and package restore.
+  app-build:
+    timeout-minutes: 150
+    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Set up the Android C library
+        uses: ./.github/actions/android-libc
+
+      - name: Restore the third-party libraries for the runner
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: linux-x64
+
+      - name: Restore the third-party libraries for Android x86_64
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: android
+          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
+
+      - name: Restore the third-party libraries for Android arm64
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: android
+          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
+
+      - name: Set config
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+          else
+            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      # The APK is copied to out/app/photosphere.apk, laid out as apps/photosphere-smoke-tests/run.md describes, which is where the
+      # smoke tests take it from.
+      - name: Build (Android)
+        shell: bash
+        run: bun run --filter=ziggy build:android -- --output-dir "$PWD/out/app"
+
+      - name: Save the Photosphere App build
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+
   app-smoke-tests:
     # The Photosphere App's smoke tests on an Android emulator. The emulator has no host LAN bridge, so PHOTOSPHERE_NO_LAN_BRIDGE
     # makes the scenarios that need one skip with a logged SKIP line.
+    #
+    # The app is the debug-type APK app-build built, which PHOTOSPHERE_SMOKE_BUILD names: the scenarios seed and read the app's data
+    # through run-as, which needs a debuggable APK, and the release APK is not one. The CLI that makes the scenarios' fixtures is
+    # built over app-build's Zig build cache and libraries, restored below.
     timeout-minutes: 90
-    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+    needs: [app-build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -270,17 +385,20 @@ jobs:
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
-      # The CLI that makes the scenarios' fixtures is built for the runner, and the app for the emulator.
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
+      # The CLI that makes the scenarios' fixtures is built for the runner, and the app for the emulator. app-build saved the
+      # libraries for both.
+      - name: Restore the Photosphere App build
+        uses: actions/cache/restore@v4
         with:
-          platform: linux-x64
-
-      - name: Restore the third-party libraries for Android x86_64
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: android
-          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
@@ -307,6 +425,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         env:
           PHOTOSPHERE_NO_LAN_BRIDGE: "1"
+          PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
         with:
           api-level: 35
           arch: x86_64
@@ -318,13 +437,178 @@ jobs:
           # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
           script: bun run test:ziggy:and
 
-  package-release:
-    # The Photosphere App packaged for Android, unsigned, by the same package script a developer runs. The version comes from
-    # the release tag: android-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. The Android version code, which has
-    # to rise with every build that replaces another, is the build time in minutes since the epoch. It is built and not run:
-    # running it needs an emulator, which the smoke test job and the local test runs provide.
-    timeout-minutes: 90
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
+  # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
+  typescript-compile:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      # bun run compile records a what-changed baseline when it succeeds.
+      - name: Install what-changed
+        uses: ./.github/actions/install-what-changed
+
+      - name: Compile TypeScript
+        timeout-minutes: 12
+        run: bun run compile
+
+  # The TypeScript unit tests.
+  typescript-unit-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Run unit tests
+        timeout-minutes: 12
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+
+  # The unit tests of the Zig CLI and of every Zig package, on this workflow's runner, over the libraries the library jobs built for it
+  # and the Zig build cache app-build saved.
+  zig-unit-tests:
+    timeout-minutes: 50
+    needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, app-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Zig (version from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig
+
+      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zig/p
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun install
+
+      - name: Install media processing tools (Linux)
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
+      # The libraries for the runner, which the tests build for, restored from the cache.
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: linux-x64
+
+      # Zig skips any compile step whose inputs are unchanged and already in .zig-cache. Without this the test binaries and psi are
+      # compiled from nothing every run, which is most of this job's time. The key changes with any Zig source, and the newest
+      # earlier cache is restored when there is no exact match, so only the binaries a change touches are compiled again.
+      # The next step lays app-build's cache over it.
+      - name: Cache Zig's build cache
+        uses: actions/cache@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', '**/build.zig.zon') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
+
+      # The build app-build saved, with its Zig build cache and libraries, laid over the test build's own cache, so Zig reuses any
+      # compile step the two builds have in common. The paths are the ones app-build saved, which a restore has to name exactly.
+      - name: Restore the app build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
+      # Built for any CPU of the architecture, so the compile steps match the restored build caches whatever CPU the runner has.
+      - name: Run the Zig unit tests
+        timeout-minutes: 40
+        shell: bash
+        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+
+  # Packages the Photosphere App for Android, unsigned, by the same package script a developer runs: a release APK per
+  # architecture, over the Zig build cache and the libraries app-build saved, so the Zig build starts warm. It stamps the version
+  # the way app-build does. The Android version code, which has to rise with every build that replaces another, is the build time
+  # in minutes since the epoch. The packages are built and not run: running them needs an emulator, which the smoke test job and
+  # the local test runs provide. They are saved under photosphere-package-android-<commit>-<run>, which create-release restores.
+  # It runs beside the smoke tests.
+  package:
+    timeout-minutes: 120
+    needs: [prepare-tag, app-build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -369,17 +653,18 @@ jobs:
       - name: Set up the Android C library
         uses: ./.github/actions/android-libc
 
-      - name: Restore the third-party libraries for Android x86_64
-        uses: ./.github/actions/third-party-libraries
+      - name: Restore the Photosphere App build
+        uses: actions/cache/restore@v4
         with:
-          platform: android
-          build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
-
-      - name: Restore the third-party libraries for Android arm64
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: android
-          build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Set config
         shell: bash
@@ -395,19 +680,19 @@ jobs:
 
       - name: Package (Android)
         shell: bash
-        run: bun run --filter=ziggy package:android -- --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))"
+        run: bun run --filter=ziggy package:android -- --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))" --output-dir "$PWD/out/package"
 
-      - name: Upload the packages
-        uses: actions/upload-artifact@v4
+      - name: Save the Photosphere App package
+        uses: actions/cache/save@v4
         with:
-          name: photosphere-app-android
-          path: apps/photosphere/out/android/*.apk
-          if-no-files-found: error
-          retention-days: 2
+          path: out/package
+          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
 
+  # Publishes the packages the package job made, restored from the cache under its key, once every other job has passed. A restore
+  # matches only a save of the same paths, so it restores the whole save.
   create-release:
     timeout-minutes: 20
-    needs: [prepare-tag, build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg, app-smoke-tests, package-release]
+    needs: [prepare-tag, app-build, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -417,12 +702,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download the Photosphere App packages
-        uses: actions/download-artifact@v4
+      - name: Restore the Photosphere App package
+        uses: actions/cache/restore@v4
         with:
-          pattern: photosphere-app-*
-          path: ./artifacts/app
-          merge-multiple: true
+          path: out/package
+          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Put the Photosphere App packages where the release steps read them
+        shell: bash
+        run: |
+          mkdir -p ./artifacts/app
+          cp out/package/*.apk ./artifacts/app/
+          ls -la ./artifacts/app
 
       - name: Generate release notes
         id: release-notes
@@ -449,22 +741,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete "zig-${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
+          gh release delete "${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
         continue-on-error: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('zig-{0}', needs.prepare-tag.outputs.tag) || format('zig-{0}-nightly', env.RELEASE_PLATFORM) }}
+          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || format('{0}-nightly', env.RELEASE_PLATFORM) }}
           # The zig- tag does not exist yet, so the release creates it. Without this it would be created on the default branch rather than on the commit that was built.
           target_commitish: ${{ github.sha }}
-          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
+          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
           draft: false
           prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
           files: |
             ./artifacts/app/*
           body: |
-            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere Zig {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere Zig {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
+            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
 
             ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
             ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}

@@ -3,20 +3,23 @@
 # Shared helpers for Photosphere's smoke tests. Source this file from each test.sh:
 #   source "$TEST_DIR/../lib/common.sh"
 #
-# A scenario starts the app in test mode, drives it through the test control connection (see "Test hooks" in the Ziggy architecture
+# A scenario starts the app in test mode, drives it through the remote control server (see "Remote control" in the Ziggy architecture
 # document) and checks what it logs and what the page shows. The helpers keep the names and arguments the desktop and mobile suites
 # of the apps they replace use, so a scenario reads the same whichever app it was written for.
 #
 # The platform library chosen by the runner (lib/<platform>.sh) implements:
 #
 #   photosphere_platform_prepare <run_dir>
-#       Builds the app with the test hooks into the run directory. Returns non-zero when a build fails.
+#       Puts the app in the run directory, taken from the build directory PHOTOSPHERE_SMOKE_BUILD names when it is set, or else from
+#       one the platform's build script builds into <run_dir>/build. run.md gives the layout of a build directory per platform.
+#       Returns non-zero when a build or install fails.
 #
 #   photosphere_platform_start <test_dir> [keep-data]
-#       Starts the app for one scenario, recording what it started through launch_in_process_group, in test mode, with its settings,
-#       vault, logs and data inside the scenario's directory. Its output goes to <test_dir>/app.log. Sets PHOTOSPHERE_CONTROL_HOST and
-#       PHOTOSPHERE_CONTROL_PORT to where the test control connection can be reached from the host. Returns non-zero when the app did not
-#       come up. With keep-data it starts the app again on the data the last run left, on a phone on the same install.
+#       Starts the remote control server of the instance (photosphere_start_remote_control_server), then the app with
+#       --remote-control "$PHOTOSPHERE_REMOTE_CONTROL" (the ziggy.remoteControl extra on Android), recording what it started through
+#       launch_in_process_group, with its settings, vault, logs and data inside the scenario's directory. Its output goes to
+#       <test_dir>/app.log. Returns non-zero when the app did not start. With keep-data it starts the app again on the data the last
+#       run left, on a phone on the same install.
 #
 #   photosphere_platform_stop <test_dir>
 #       Stops the app and everything it started.
@@ -95,6 +98,75 @@ WAIT_POLL_INTERVAL=0.25
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# The file descriptor the next remote control server's stdin pipe is kept open on. Each app instance of a scenario has a server of its
+# own, so each gets a descriptor of its own. Literal numbers, because the bash macOS ships (3.2) has no {name} form for choosing one.
+PHOTOSPHERE_NEXT_SERVER_FD=20
+
+#
+# Starts the remote control server of one app instance on ports the system chooses, recording it through launch_in_process_group in
+# the instance's directory, and waits until it listens. Sets PHOTOSPHERE_CONTROL_HOST and PHOTOSPHERE_CONTROL_PORT to where the script
+# connects and PHOTOSPHERE_REMOTE_CONTROL to the address the app is started with. A server this directory still has is stopped first.
+# The server's stdin is a pipe whose writing end this shell keeps open, so the server ends when the scenario does, however the
+# scenario ends. A job launch_in_process_group starts from inside the process substitution is given /dev/null as its stdin, so the
+# pipe is passed on file descriptor 5 and the server's shell moves it to stdin.
+# Usage: photosphere_start_remote_control_server <test_dir>
+#
+photosphere_start_remote_control_server() {
+    local test_dir="$1"
+    photosphere_stop_remote_control_server "$test_dir"
+    local log="$test_dir/remote-control-server.log"
+    local launched="$test_dir/remote-control-server.launched"
+    local fd="$PHOTOSPHERE_NEXT_SERVER_FD"
+    PHOTOSPHERE_NEXT_SERVER_FD=$((PHOTOSPHERE_NEXT_SERVER_FD + 1))
+    rm -f "$launched"
+    mkdir -p "$test_dir"
+    echo "$fd" > "$test_dir/remote-control-server.fd"
+    eval "exec $fd> >(launch_in_process_group \"\$log\" bash -c 'exec 0<&5 5<&-; cd \"\$1\" && exec bun run ziggy-remote-control-server --app-port 0 --script-port 0' remote-control-server \"\$PHOTOSPHERE_SMOKE_REPO_ROOT\" 5<&0 > \"\$launched\")"
+    local waited=0
+    local pid pgid ports
+    while true; do
+        if [ -s "$launched" ]; then
+            read -r pid pgid < "$launched"
+            echo "$pgid" > "$test_dir/remote-control-server.pgid"
+            ports="$(sed -n 's/^The remote control server is listening: the app on 127\.0\.0\.1:\([0-9]*\), the script on 127\.0\.0\.1:\([0-9]*\)\.$/\1 \2/p' "$log")"
+            if [ -n "$ports" ]; then
+                break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+                echo "The remote control server ended before it listened. Its log:" >&2
+                cat "$log" >&2
+                return 1
+            fi
+        fi
+        if [ "$waited" -ge 600 ]; then
+            echo "The remote control server did not listen within 60 seconds. Its log:" >&2
+            cat "$log" >&2
+            return 1
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
+    PHOTOSPHERE_CONTROL_PORT="${ports#* }"
+    PHOTOSPHERE_REMOTE_CONTROL="127.0.0.1:${ports%% *}"
+    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT PHOTOSPHERE_REMOTE_CONTROL
+}
+
+#
+# Stops the remote control server of one app instance, when it has one. Usage: photosphere_stop_remote_control_server <test_dir>
+#
+photosphere_stop_remote_control_server() {
+    local test_dir="$1"
+    if [ -s "$test_dir/remote-control-server.fd" ]; then
+        eval "exec $(cat "$test_dir/remote-control-server.fd")>&-"
+        : > "$test_dir/remote-control-server.fd"
+    fi
+    if [ -s "$test_dir/remote-control-server.pgid" ]; then
+        kill_process_group "$(cat "$test_dir/remote-control-server.pgid")" || true
+        : > "$test_dir/remote-control-server.pgid"
+    fi
+}
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -157,7 +229,7 @@ fi
 REPO_DIR="$(cd "$REPO_DIR" && native_pwd)"
 
 #
-# Sends one command line on the test control connection and prints the answer line. Every call opens a connection of its own, so
+# Sends one command line on the remote control connection and prints the answer line. Every call opens a connection of its own, so
 # several instances can be driven from one scenario by naming the port of each. A signal that reaches this script while bash connects,
 # such as the exit of a child it started, makes connect fail with "Interrupted system call", which bash reports and does not retry, so
 # that failure is tried again. Prints nothing and returns non-zero when no answer came.
@@ -199,7 +271,7 @@ reset_app_state() {
 }
 
 #
-# Launches the app in test mode as a background process, and publishes the port of its test control connection as the APP_PORT global
+# Launches the app in test mode as a background process, and publishes the port of its remote control connection as the APP_PORT global
 # that callers use. For a second concurrent instance, copy APP_PORT into your own variable right after the call (see the share tests).
 # Usage: start_app <tmp_dir> [x_position]
 #
@@ -229,6 +301,7 @@ cleanup_apps() {
             continue
         fi
         photosphere_platform_stop "$tmp_dir" || true
+        photosphere_stop_remote_control_server "$tmp_dir"
     done
     return 0
 }
@@ -284,7 +357,7 @@ dump_app_stacks() {
     case "$PLATFORM" in
         linux)
             # The thread listing below needs no gdb, so a missing gdb skips only the stacks. It once returned here instead, and
-            # 38-reset-device-s3 hanging in the Release Zig Linux workflow (run 40161921825, where gdb is not installed) left
+            # 38-reset-device-s3 hanging in the Release Linux workflow (run 40161921825, where gdb is not installed) left
             # nothing at all to say where the app was waiting.
             for stack_pid in $(process_tree_pids "$root_pid"); do
                 if ! command -v gdb > /dev/null 2>&1; then

@@ -11,5 +11,4 @@ Run it on a Mac with Xcode: `bun run --filter=ziggy build:ios`.
 - `--native-dir <dir>`: default: `native/ios/zig-out`.
 - `--build-dir <dir>`: default: `native/ios/zig-out/xcode`.
 - `--configuration <Debug|Release>`: default: `Debug`.
-- `--test-hooks`: build with the test control connection.
 - `--optimize <mode>`: default: `ReleaseSafe`.

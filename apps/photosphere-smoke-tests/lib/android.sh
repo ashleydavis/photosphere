@@ -2,8 +2,10 @@
 
 # The Android platform library of Photosphere's smoke tests. See common.sh for what it implements.
 #
-# The app runs on an emulator or device, driven from the host with adb. The build is a debug-type APK, so run-as can read what the app
-# writes (the test control port file and its log), and its Zig library has the test hooks.
+# The app runs on an emulator or device, driven from the host with adb, and connects to the scenario's remote control server through adb
+# reverse. The build is a debug-type APK of the release library, so run-as can read and seed what the app keeps (its log, its
+# databases and settings) and the PHOTOSPHERE_* extras below are honoured. The release APK is not debuggable and would allow neither.
+# The APK is the one build-android.sh copies into the build directory PHOTOSPHERE_SMOKE_BUILD names, or else one it builds here.
 #
 # A phone passes no environment to an app, so the settings the desktop sets through PHOTOSPHERE_* variables go in as string Intent
 # extras of the same names, which the activity (MainActivity) puts into the process environment before the core is created. They are
@@ -12,10 +14,10 @@
 # The core writes its log to a file in the app's private files directory, and the scenario reads app.log on the host, so a stream
 # started on the host (adb exec-out run-as ... tail -f) copies the log file into app.log as the core writes it.
 #
-# The device is chosen the way the repository's mobile suite chooses one (see apps/smoke-tests/lib/android.sh): the device named in
-# PHOTOSPHERE_ANDROID_DEVICES, else a pool emulator, else a plugged-in device. It is claimed under the same per-device lock the mobile
-# suite and the pool repair take, for as long as the scenario's shell runs: the lock is a file descriptor of that shell, so it is let
-# go when the scenario ends, and not between a stop and the restart that follows it, which must find the same install and data.
+# The device is the one named in PHOTOSPHERE_ANDROID_DEVICES, else a plugged-in device, else a pool emulator. It is claimed
+# under the same per-device lock the mobile suite and the pool repair take, for as long as the scenario's shell runs: the lock is a
+# file descriptor of that shell, so it is let go when the scenario ends, and not between a stop and the restart that follows it,
+# which must find the same install and data.
 
 ANDROID_SCRIPTS_DIR="$PHOTOSPHERE_SMOKE_REPO_ROOT/apps/photosphere/scripts"
 # JAVA_HOME and ANDROID_HOME, and the helpers that build the app.
@@ -25,9 +27,6 @@ source "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/scripts/emulator-config.sh"
 
 # The application id of the app.
 ANDROID_APP_ID="$PHOTOSPHERE_ANDROID_APP_ID"
-
-# Where the app writes its control port, inside its private files directory (the Intent extra carries the full path).
-ANDROID_PORT_FILE_DEVICE_PATH="/data/data/$ANDROID_APP_ID/files/ziggy-control-port.txt"
 
 # Seconds a scenario waits for a free device before giving up. The mobile suite's own variable and default.
 ANDROID_DEVICE_CLAIM_TIMEOUT="${PHOTOSPHERE_DEVICE_CLAIM_TIMEOUT:-1800}"
@@ -60,21 +59,13 @@ photosphere_adb() {
     "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" "$@" {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&-
 }
 
-#
-# Prints the control port the app wrote, and nothing when it has not written one. adb exec-out puts the device's error text on its
-# output, so only a line that is all digits counts as a port.
-#
-photosphere_android_read_port() {
-    photosphere_adb exec-out run-as "$ANDROID_APP_ID" cat files/ziggy-control-port.txt 2>/dev/null | tr -d '\r' | grep -E '^[0-9]+$' || true
-}
-
 # Seconds an adb query (the device list, an emulator's AVD name, a device property) is given before adb or the device counts as not
 # answering. Without it an emulator that has stopped responding leaves the run waiting with no output. Every timeout on adb here is
 # --foreground: timeout otherwise puts adb in a process group of its own, which Ctrl-C does not reach, so the run carries on.
 ANDROID_ADB_QUERY_SECONDS=10
 
 #
-# Prints the devices the run may use, one per line: the named ones, else the pool, else plugged-in devices, else any other
+# Prints the devices the run may use, one per line: the named ones, else plugged-in devices, else the pool, else any other
 # emulator, such as the single hand-testing one. Returns non-zero, naming what did not answer, when adb or an emulator does not
 # answer within ANDROID_ADB_QUERY_SECONDS.
 #
@@ -123,14 +114,14 @@ photosphere_android_candidate_devices() {
                 ;;
         esac
     done
-    if [ -n "$pool" ]; then
-        for serial in $pool; do
+    if [ -n "$hardware" ]; then
+        for serial in $hardware; do
             echo "$serial"
         done
         return 0
     fi
-    if [ -n "$hardware" ]; then
-        for serial in $hardware; do
+    if [ -n "$pool" ]; then
+        for serial in $pool; do
             echo "$serial"
         done
         return 0
@@ -286,17 +277,24 @@ photosphere_platform_prepare() {
     local run_dir="$1"
     photosphere_android_require_commands zig bun jq adb || return 1
     mkdir -p "$run_dir/test"
-    local architectures
-    echo "Finding the Android devices to build for..."
-    architectures="$(photosphere_android_architectures)" || return 1
-    if [ -z "$architectures" ]; then
-        echo "No pool emulator, named device or plugged-in device is attached, so there is no architecture to build for." >&2
+    local build="${PHOTOSPHERE_SMOKE_BUILD:-}"
+    if [ -z "$build" ]; then
+        build="$run_dir/build"
+        local architectures
+        echo "Finding the Android devices to build for..."
+        architectures="$(photosphere_android_architectures)" || return 1
+        if [ -z "$architectures" ]; then
+            echo "No pool emulator, named device or plugged-in device is attached, so there is no architecture to build for." >&2
+            return 1
+        fi
+        echo "Building for: $(printf '%s ' $architectures)"
+        bash "$ANDROID_SCRIPTS_DIR/build-android.sh" --optimize ReleaseSafe --arch "$(printf '%s ' $architectures)" --output-dir "$build" || return 1
+    fi
+    if [ ! -f "$build/photosphere.apk" ]; then
+        echo "The Android build $build has no photosphere.apk." >&2
         return 1
     fi
-    echo "Building for: $(printf '%s ' $architectures)"
-    bash "$ANDROID_SCRIPTS_DIR/sync-android.sh" --test-hooks --optimize ReleaseSafe --arch "$(printf '%s ' $architectures)" || return 1
-    photosphere_android_gradle assembleDebug "-PziggyVersionName=$(photosphere_android_version)" || return 1
-    cp "$PHOTOSPHERE_ANDROID_PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" "$run_dir/test/app.apk" || return 1
+    cp "$build/photosphere.apk" "$run_dir/test/app.apk" || return 1
 }
 
 #
@@ -320,8 +318,8 @@ photosphere_android_ensure_installed() {
 }
 
 #
-# Starts the app for one scenario. Sets PHOTOSPHERE_CONTROL_HOST and PHOTOSPHERE_CONTROL_PORT to where the test control connection can
-# be reached from the host. The settings and logs are in the app's private files directory, which is the scenario's: the first
+# Starts the app for one scenario with the ziggy.remoteControl extra and the address of the scenario's remote control server, which it
+# starts first. The settings and logs are in the app's private files directory, which is the scenario's: the first
 # start installs the app and, unless the scenario wiped the data itself with photosphere_platform_reset_app_state (and may have seeded
 # state since), clears its data. Every later start in the scenario keeps the data, as a desktop scenario's directory is kept.
 # Usage: photosphere_platform_start <test_dir> [keep-data]
@@ -333,9 +331,9 @@ photosphere_platform_start() {
     photosphere_android_ensure_installed "$test_dir" || return 1
     photosphere_adb shell am force-stop "$ANDROID_APP_ID"
     if [ "${2:-}" = "keep-data" ] || [ -f "$test_dir/log-generation.txt" ]; then
-        # A restart: the same device, the same install and the data the last run left, so only the port file is removed. A second
-        # start in a scenario is always a restart, because the scenario's seeded databases and settings are in that data.
-        photosphere_adb shell run-as "$ANDROID_APP_ID" rm -f files/ziggy-control-port.txt || return 1
+        # A restart: the same device, the same install and the data the last run left. A second start in a scenario is always a
+        # restart, because the scenario's seeded databases and settings are in that data.
+        :
     elif [ "$ANDROID_DATA_PREPARED" != "1" ]; then
         # The first start of a scenario that did not wipe the app's data itself: fresh data, so nothing of an earlier scenario is left
         # in the app's files directory. A scenario that did wipe it, and may have put state in since, keeps that state.
@@ -357,8 +355,15 @@ photosphere_platform_start() {
     # be deleted from under the stream that copies it to app.log, and the lines the app writes after the reset would never reach the host.
     local log_dir="cache/logs-$generation"
 
+    # The app connects to the remote control server at 127.0.0.1 on the device, and adb reverse carries that port to the same port on
+    # the host, where the server listens. The device is claimed for the scenario, so no other run uses the port there.
+    photosphere_start_remote_control_server "$test_dir" || return 1
+    local app_port="${PHOTOSPHERE_REMOTE_CONTROL##*:}"
+    photosphere_adb reverse "tcp:$app_port" "tcp:$app_port" > /dev/null || return 1
+    echo "$app_port" > "$test_dir/reverse-port.txt"
+
     # Every value is quoted for the device's shell, which adb hands the whole command line to.
-    local extras="--ez ziggy.testMode true --es ziggy.testPortFile '$ANDROID_PORT_FILE_DEVICE_PATH'"
+    local extras="--es ziggy.remoteControl '$PHOTOSPHERE_REMOTE_CONTROL'"
     extras="$extras --es PHOTOSPHERE_TEST_MODE '1'"
     extras="$extras --es PHOTOSPHERE_CONFIG_DIR '/data/data/$ANDROID_APP_ID/files/config'"
     extras="$extras --es PHOTOSPHERE_LOG_DIR '/data/data/$ANDROID_APP_ID/$log_dir'"
@@ -392,41 +397,10 @@ photosphere_platform_start() {
     local pid pgid
     read -r pid pgid < <(launch_in_process_group "$test_dir/app.log" photosphere_adb exec-out "run-as $ANDROID_APP_ID sh -c 'tail -n +1 -f $log_glob'") || return 1
     echo "$pgid" > "$test_dir/log-stream.pgid"
-
-    waited=0
-    local device_port=""
-    while true; do
-        device_port="$(photosphere_android_read_port)"
-        if [ -n "$device_port" ]; then
-            break
-        fi
-        if [ -z "$(photosphere_adb shell pidof "$ANDROID_APP_ID" | tr -d '\r')" ]; then
-            echo "The app exited before its control connection came up. Its log:" >&2
-            cat "$test_dir/app.log" >&2
-            photosphere_adb logcat -d -t 200 >&2
-            return 1
-        fi
-        if [ "$waited" -ge 600 ]; then
-            echo "The app never wrote its control port." >&2
-            cat "$test_dir/app.log" >&2
-            photosphere_adb logcat -d -t 200 >&2
-            return 1
-        fi
-        sleep 0.1
-        waited=$((waited + 1))
-    done
-
-    # Port 0 asks adb for any free host port, and it prints the one it chose, so two runs never pick the same one.
-    local host_port
-    host_port="$(photosphere_adb forward tcp:0 "tcp:$device_port" | tr -d '\r\n')" || return 1
-    echo "$host_port" > "$test_dir/forward-port.txt"
-    PHOTOSPHERE_CONTROL_HOST=127.0.0.1
-    PHOTOSPHERE_CONTROL_PORT="$host_port"
-    export PHOTOSPHERE_CONTROL_HOST PHOTOSPHERE_CONTROL_PORT
 }
 
 #
-# Stops the app and the log stream and removes the port forward. The device stays claimed until the scenario's shell ends, so a
+# Stops the app and the log stream and removes the reverse of the remote control port. The device stays claimed until the scenario's shell ends, so a
 # restart on the same data finds the same install. Usage: photosphere_platform_stop <test_dir>
 #
 photosphere_platform_stop() {
@@ -434,9 +408,9 @@ photosphere_platform_stop() {
     if [ -z "$ANDROID_SERIAL_CLAIMED" ]; then
         return 0
     fi
-    if [ -s "$test_dir/forward-port.txt" ]; then
-        photosphere_adb forward --remove "tcp:$(cat "$test_dir/forward-port.txt")" || true
-        : > "$test_dir/forward-port.txt"
+    if [ -s "$test_dir/reverse-port.txt" ]; then
+        photosphere_adb reverse --remove "tcp:$(cat "$test_dir/reverse-port.txt")" || true
+        : > "$test_dir/reverse-port.txt"
     fi
     photosphere_adb shell am force-stop "$ANDROID_APP_ID" || true
     if [ -s "$test_dir/log-stream.pgid" ]; then

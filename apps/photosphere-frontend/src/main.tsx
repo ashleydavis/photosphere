@@ -86,7 +86,7 @@ if (testMode) {
 
 //
 // In test mode, install the shared DOM test driver over the core's test-command events so the
-// test control connection can drive UI elements by their data-id attribute. The DOM-action
+// remote control connection can drive UI elements by their data-id attribute. The DOM-action
 // logic lives in user-interface's test-driver so it is shared with the mobile WebView. The page tells the
 // core it is listening once the platform provider is mounted (see PlatformProviderZiggy), because
 // some commands act through listeners the provider registers.

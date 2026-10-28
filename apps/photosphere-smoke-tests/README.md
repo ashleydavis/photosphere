@@ -1,6 +1,6 @@
 # Photosphere smoke tests
 
-One set of smoke tests for the Photosphere App on every platform. See [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) for the test hooks the suites are allowed to use.
+One set of smoke tests for the Photosphere App on every platform. See "Remote control" in [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/development/architecture.md#remote-control) for the test hooks the suites are allowed to use.
 
 ## Running
 
@@ -8,7 +8,7 @@ Run through the root `package.json` scripts, never by calling the shell scripts 
 
 - `bun run test:ziggy`: the desktop suite, run on the host operating system.
 - `bun run test:ziggy:and`: the suite on the Android emulator pool or a device.
-- `bun run test:ziggy:ios`: the suite on the iOS simulator, or on a connected iOS device when one is plugged in (MacOS only).
+- `bun run test:ziggy:ios`: the suite on a connected iPhone or iPad when there is one, otherwise the iOS simulator (MacOS only).
 
 Each ends with `what-changed baseline capture <name>`, and has a matching target in `what-changed.yaml` and an entry in `scripts/test-everything-parallel.sh`.
 
@@ -18,7 +18,7 @@ To run one scenario, name it: `PHOTOSPHERE_SMOKE_SCENARIO=<number or name> bun r
 
 - One directory per scenario at the top of this directory, named `<n>-<name>`, with a `test.sh` inside. The runner runs them in the order of their numbers. Exit code 77 means skipped.
 - Every scenario is offered to every platform. A scenario is platform-neutral and runs on desktop and mobile, with a platform check only where the behaviour differs. A scenario that cannot run on a platform exits with the skipped code itself, as the MCP server and menu scenarios do on a phone and the automatic import permission scenarios do on a desktop.
-- `lib/common.sh` holds the helpers every scenario sources, and `lib/<platform>.sh` builds, starts and stops the app on one platform.
+- `lib/common.sh` holds the helpers every scenario sources, and `lib/<platform>.sh` puts the app in place, starts it and stops it on one platform.
 - No marker files. A runner learns what it needs to know from the test itself.
 
 ## Shared machinery
@@ -31,7 +31,7 @@ Every scenario must survive running beside copies of itself and beside every oth
 
 ## Driving the app
 
-Through the test hooks listed in the "Test hooks" section of the architecture document, and nothing else. State is otherwise set up from outside the app (config files and data placed on disk).
+Through the test hooks described in the "Remote control" section of the architecture document, and nothing else. Each app instance has a [remote control server](https://github.com/ashleydavis/ziggy/blob/main/tools/remote-control-server/README.md) of its own: the app is started with `--remote-control` and connects out to it. The scenario talks to the server's script port. State is otherwise set up from outside the app (config files and data placed on disk).
 
 ## Manual scenarios
 

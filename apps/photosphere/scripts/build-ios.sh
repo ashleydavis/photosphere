@@ -14,7 +14,6 @@ ARCH="$(apple_host_arch)"
 NATIVE_DIR="$APPLE_APP_DIR/native/ios/zig-out"
 BUILD_DIR="$APPLE_APP_DIR/native/ios/zig-out/xcode"
 CONFIGURATION="Debug"
-TEST_HOOKS="no"
 OPTIMIZE="ReleaseSafe"
 
 while [ $# -gt 0 ]; do
@@ -39,16 +38,12 @@ while [ $# -gt 0 ]; do
             CONFIGURATION="$2"
             shift 2
             ;;
-        --test-hooks)
-            TEST_HOOKS="yes"
-            shift
-            ;;
         --optimize)
             OPTIMIZE="$2"
             shift 2
             ;;
         *)
-            apple_fail "unknown argument '$1'. Options: --sdk, --arch, --native-dir, --build-dir, --configuration, --test-hooks, --optimize."
+            apple_fail "unknown argument '$1'. Options: --sdk, --arch, --native-dir, --build-dir, --configuration, --optimize."
             ;;
     esac
 done
@@ -83,11 +78,7 @@ case "$SDK" in
         ;;
 esac
 
-if [ "$TEST_HOOKS" = "yes" ]; then
-    bash "$SCRIPT_DIR/sync-ios.sh" --sdk "$SDK" --arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE" --test-hooks
-else
-    bash "$SCRIPT_DIR/sync-ios.sh" --sdk "$SDK" --arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE"
-fi
+bash "$SCRIPT_DIR/sync-ios.sh" --sdk "$SDK" --arch "$ARCH" --native-dir "$NATIVE_DIR" --optimize "$OPTIMIZE"
 
 xcodebuild \
     -project "$APPLE_APP_DIR/native/ios/Photosphere.xcodeproj" \

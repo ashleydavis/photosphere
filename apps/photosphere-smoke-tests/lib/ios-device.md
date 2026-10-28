@@ -2,9 +2,9 @@
 
 The iOS platform library of Photosphere's smoke tests when a device is connected. [ios.sh](ios.md) sources it in place of its simulator functions, and it is never run on its own. It takes no arguments. It sources `apps/photosphere/scripts/lib/apple-common.sh`.
 
-The app runs on a connected iPhone or iPad: `PHOTOSPHERE_IOS_DEVICE` names one, otherwise the first connected device is used. Xcode 14 has no command for running an app on a device, so `apps/photosphere/scripts/ios-device.ts` does it through native-run's device library: it installs the app, launches it under the device's debugserver with the test environment, and forwards the test control port over USB. Xcode's `lldb` then takes over the launched process, and is how the run resumes it, sees it exit, stops it, and reads the files it writes in its data container.
+The app runs on a connected iPhone or iPad: `PHOTOSPHERE_IOS_DEVICE` names one, otherwise the first connected device is used. Xcode 14 has no command for running an app on a device, so `apps/photosphere/scripts/ios-device.ts` does it through native-run's device library: it installs the app, launches it under the device's debugserver with the test environment and `--remote-control` with the address of the scenario's remote control server. Xcode's `lldb` then takes over the launched process, and is how the run resumes it, sees it exit, stops it, and reads the files it writes in its data container.
 
-iOS starts an app in the root directory whatever working directory it is given, so the run moves the app into its data container before the core is created, and gives the port file, settings, vault and log directory as paths relative to it.
+iOS starts an app in the root directory whatever working directory it is given, so the run moves the app into its data container before the core is created, and gives the settings, vault and log directory as paths relative to it.
 
 A device runs one copy of the app at a time, so a scenario claims the device under a lock for as long as it runs, and `photosphere_platform_device_limit` reports one.
 

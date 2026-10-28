@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Opens an asset in the AssetView and clicks Download. On a desktop the save dialog is answered through the test control connection's
+# Opens an asset in the AssetView and clicks Download. On a desktop the save dialog is answered through the remote control connection's
 # pick-answer command and the saved file is checked to be the original byte for byte. A phone hands a download to the system save
 # picker, which nothing outside the app can answer, so the test stages the picker's outcome with stage-export and checks the download
 # completes.

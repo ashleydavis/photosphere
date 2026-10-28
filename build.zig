@@ -180,8 +180,6 @@ const IStandIns = struct {
 //
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    // Whether the test hooks (the test control connection) are built into the apps. Never for a release.
-    const test_hooks = b.option(bool, "test-hooks", "Build the test hooks (the test control connection) into the app (never for a release)") orelse false;
     // Whether the Windows native apps are compiled without linking WebView2's loader, to check them on a machine that cannot link.
     const compile_only = b.option(bool, "compile-only", "Compile the Windows shell without linking the WebView2 loader, to check it on a machine that cannot link") orelse false;
     // Whether the desktop executables leave out their debug information. Only the release packages do: a dev or test build keeps it, so
@@ -211,9 +209,9 @@ pub fn build(b: *std.Build) !void {
     // Zig ships no C library for iOS, so an iOS build, and a macOS build for a version other than the machine's, compiles against the
     // SDK's: the translated C headers and the C code of the packages need it.
     try apple_sdk.useSdk(b, target, "Photosphere's core");
-    // Ziggy, from the dependency named "ziggy" in build.zig.zon, with the test hooks when the app is built with them. The packages, the
+    // Ziggy, from the dependency named "ziggy" in build.zig.zon. The packages, the
     // CLI and the app all use this one.
-    const ziggy = ziggy_build.dependency(b, target, optimize, test_hooks);
+    const ziggy = ziggy_build.dependency(b, target, optimize);
     // Null means a lazy dependency is being fetched first: the build runs again once it has been, and this run registers nothing.
     const modules = (try addPackageModules(b, target, optimize, ziggy.module)) orelse return;
     if (!packages_supported) {
@@ -229,10 +227,7 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(test_packages_step);
     test_step.dependOn(test_cli_step);
     const stand_ins = addStandIns(b, target, optimize);
-    // The unit tests run Photosphere's core with Ziggy's test hooks compiled in. Every module of the test program must import the same
-    // Ziggy, so without the test hooks for the app the packages are made a second time over Ziggy with them.
-    const test_modules = if (test_hooks) modules else (try addPackageModules(b, target, optimize, ziggy_build.dependency(b, target, optimize, true).module)) orelse return;
-    try addUnitTests(b, test_packages_step, test_modules, target, optimize, stand_ins);
+    try addUnitTests(b, test_packages_step, modules, target, optimize, stand_ins);
     // The tests inside the build helper files (they are compiled by the build itself, so they are not under a package's src/test).
     const apple_sdk_tests = b.addTest(.{
         .name = "apple-sdk",
@@ -930,7 +925,9 @@ fn addPhotosphere(
         .name = "photosphere",
         .title = "Photosphere",
         .backend_source_file = "apps/photosphere/core/src/app.zig",
-        .ui_directory = photosphere_page_directory,
+        // -Dui-directory=<path> embeds the page a build bundled into a directory of its own, so builds running at the same moment
+        // never share one: a shared dist was replaced by one smoke test's build while another's was embedding it.
+        .ui_directory = b.option([]const u8, "ui-directory", "The directory of the built page to embed, relative to the repository root") orelse photosphere_page_directory,
         .imports = &.{
             .{
                 .name = "photosphere-core",

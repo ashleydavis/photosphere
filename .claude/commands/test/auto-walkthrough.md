@@ -11,7 +11,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 ## Before you start
 
 - Read `docs/testing/e2e/CHECKLIST.md` and `docs/testing/e2e/CHECKLIST-NOTES.md`.
-- Build the test-hooks desktop app once, before any subagent starts: `bun run --filter=ziggy bundle:ui`, then `zig build photosphere-linux -Dtest-hooks=true -p tmp/desktop-hooks/test`.
+- Build the desktop app once, before any subagent starts: `bun run --filter=ziggy bundle:ui`, then `zig build photosphere-linux -p tmp/desktop-hooks/test`.
 - Run `bun run emu:and:pool:status -- --quiet` to decide whether the Android tests can run, at the moment you start them.
 - Split the tests into as many groups as there are subagents, keeping each `###` group whole, and give each subagent one group list. Each subagent runs its tests one after another; the groups run in parallel.
 
@@ -20,7 +20,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 - Run every step in the order the test file writes it: Prep, Test and Check. Do not skip, reorder or merge steps.
 - **Do not skip prep.** Run every command in every code block of the Prep section. A skipped prep command makes a test fail for no reason.
 - Every test keeps its data in its own `/tmp/psi-…` folder, named in its Prep, so tests in different subagents never share state. Do not use any other folder.
-- Desktop steps: start the test-hooks build hidden under `xvfb-run`, with the test's export block plus the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets, and drive it through its control connection the way `apps/photosphere-smoke-tests/lib/common.sh` does (`click`, `type`, `navigate`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot`, `quit`). Elements are found only by `data-id`, in `packages/user-interface/src`. Use bash for the control connection, since zsh has no `/dev/tcp`. Take a screenshot and look at it for every step whose expectation is about what the window shows.
+- Desktop steps: start a remote control server with `bun run ziggy-remote-control-server --app-port 0 --script-port 0` (it prints the two ports it listens on), then start the build hidden under `xvfb-run` with `--remote-control 127.0.0.1:<app port>`, the test's export block and the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets, and drive it through the server's script port the way `apps/photosphere-smoke-tests/lib/common.sh` does (`click`, `type`, `navigate`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot`, `quit`). Elements are found only by `data-id`, in `packages/user-interface/src`. Use bash for the control connection, since zsh has no `/dev/tcp`. Take a screenshot and look at it for every step whose expectation is about what the window shows.
 - CLI steps: run them from the repo root with the test's export block, through `mise exec --`. `psi` is the Zig CLI the test's Prep builds into `zig-out/bin`.
 - Android steps run only when the pool check says the pool is up, driven the way `apps/photosphere-smoke-tests` drives Android. iOS steps run only on macOS.
 - Record the pid of every app you start, quit it with the control connection's `quit` as soon as its test is done, and check it has exited. Never kill by name or command line.

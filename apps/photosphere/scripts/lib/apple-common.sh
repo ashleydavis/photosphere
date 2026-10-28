@@ -74,26 +74,27 @@ apple_zig_arch() {
 
 # Bundles Photosphere's page and builds the Zig static library, which embeds the page, so an Xcode build has everything it links.
 # <native_dir> gets lib/libphotosphere.a and include/ziggy.h.
-# Usage: apple_sync_native <zig_target> <native_dir> <yes|no test hooks> <zig optimize mode> <yes|no minify the page>
+# Usage: apple_sync_native <zig_target> <native_dir> <zig optimize mode> <yes|no minify the page>
 apple_sync_native() {
     local zig_target="$1"
     local native_dir="$2"
-    local test_hooks="$3"
-    local optimize="$4"
-    local minify="$5"
+    local optimize="$3"
+    local minify="$4"
     local bundle_arguments=()
     if [ "$minify" = "yes" ]; then
         bundle_arguments=(--minify)
     fi
     apple_require_tool bun zig rsync xcrun
+    # The page is bundled into a directory of this build's own and embedded from there, so a build of another platform running at
+    # the same moment cannot replace it mid-build. Removed when the script exits.
     echo "Bundling the page..."
-    (cd "$APPLE_APP_DIR" && bun run bundle:ui "${bundle_arguments[@]+"${bundle_arguments[@]}"}") || apple_fail "bundling the page failed."
-    echo "Building the Zig library for $zig_target (optimize $optimize, test hooks $test_hooks)..."
-    if [ "$test_hooks" = "yes" ]; then
-        (cd "$APPLE_REPO_ROOT" && zig build photosphere-backend -Dtarget="$zig_target" -Doptimize="$optimize" -Dtest-hooks=true -p "$native_dir") || apple_fail "the Zig build failed."
-    else
-        (cd "$APPLE_REPO_ROOT" && zig build photosphere-backend -Dtarget="$zig_target" -Doptimize="$optimize" -p "$native_dir") || apple_fail "the Zig build failed."
-    fi
+    local frontend_dir
+    frontend_dir="$(cd "$APPLE_APP_DIR/../photosphere-frontend" && pwd)"
+    APPLE_PAGE_DIR="$(mktemp -d "$frontend_dir/page.XXXXXX")"
+    trap 'find "$APPLE_PAGE_DIR" -type f -delete; find "$APPLE_PAGE_DIR" -depth -type d -empty -delete' EXIT
+    (cd "$APPLE_APP_DIR" && bun run bundle:ui --out-dir "$APPLE_PAGE_DIR" "${bundle_arguments[@]+"${bundle_arguments[@]}"}") || apple_fail "bundling the page failed."
+    echo "Building the Zig library for $zig_target (optimize $optimize)..."
+    (cd "$APPLE_REPO_ROOT" && zig build photosphere-backend -Dtarget="$zig_target" -Doptimize="$optimize" "-Dui-directory=apps/photosphere-frontend/$(basename "$APPLE_PAGE_DIR")" -p "$native_dir") || apple_fail "the Zig build failed."
     # A workaround for a bug in Zig 0.16.0, which is the pinned version. Its archive writer puts the contents of a long-named
     # member at an offset that is not a multiple of 8, and Xcode 26's linker refuses such an archive with "ld: 64-bit mach-o
     # member not 8-byte aligned". The fix is on Zig's master (ziglang/zig issue 35280) and will not reach 0.16.x. Writing the

@@ -140,8 +140,8 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - [Testing](docs/testing/README.md) - How to run the automated tests, the manual e2e scripts, and the UI stories
 - "The testing manual" is the manual e2e testing checklist, `docs/testing/e2e/CHECKLIST.md`. Read `docs/testing/e2e/README.md` only when more detail is needed.
 - [Tasks](docs/tasks.md) - How to add a new background task type (worker handler, registration, frontend consumption)
-- [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) - The Zig and system web view application framework the Photosphere App is built on, in its own repository: parts, message protocol, adding a message, a task type or a native host callback, and test hooks
-- [Photosphere on Ziggy](docs/photosphere-on-ziggy.md) - How the Photosphere App takes Ziggy at a version tag, how to move to a newer one, how Photosphere is built on it, and the edits made to existing UI code
+- [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/development/architecture.md) - The Zig and system web view application framework the Photosphere App is built on, in its own repository: parts, message protocol, adding a message, a task type or a native host callback, and test hooks
+- [Photosphere on Ziggy](docs/photosphere-on-ziggy.md) - How the Photosphere App takes Ziggy, how to move to a released one, how Photosphere is built on it, and the edits made to existing UI code
 - [Photosphere App](apps/photosphere/README.md) - Building, running and packaging the Photosphere App on each platform, and which platform each script runs on
 - [Delivering the Android app to testers](docs/android-tester-distribution.md) - Getting a build to Android testers through Firebase App Distribution
 - [Mobile native media tools](docs/mobile-native-media.md) - How the bundled mobile ImageMagick/ffmpeg are wired and activated (iOS/Android)
