@@ -331,6 +331,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
+          # The TypeScript CLI the smoke suite compares psi with is built in cli-smoke-tests. It takes this stamped config, so both
+          # report the same version: stamping again there would put a different nightly time in it, and scenario 95 (news) failed
+          # comparing "vdev-nightly.<time>" with the unstamped "vdev".
+          cp packages/config/src/index.ts out/build-config.ts
           chmod +x apps/cli-zig/bin/arm64/mac/psi
           cp apps/cli-zig/bin/arm64/mac/psi out/photosphere-cli-zig-macos-arm64
           ls -la out
@@ -422,6 +426,12 @@ jobs:
             third-party/ffmpeg/zig-out
           key: photosphere-cli-macos-arm64-${{ github.sha }}-${{ github.run_id }}
           fail-on-cache-miss: true
+
+      # The stamped config cli-build kept, so the TypeScript CLI this job builds reports the version psi does.
+      - name: Put back the build config cli-build stamped
+        shell: bash
+        run: cp out/build-config.ts packages/config/src/index.ts
+
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
         run: |
