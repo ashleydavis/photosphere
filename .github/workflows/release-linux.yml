@@ -461,6 +461,25 @@ jobs:
           echo "Testing version command after building..."
           ../../zig-out/bin/psi version
 
+      # Scenario 86 (multi-device) of this suite sat out its 10-minute limit on macOS x64 after its last step had passed, and the job
+      # kept nothing but the printed output, which did not say what it was waiting for. A failed test keeps its directory, which holds
+      # its full log and the CLI's own logs.
+      - name: Collect the logs of failed CLI smoke tests
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/cli-smoke-logs"
+          if [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then
+              cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/cli-smoke-logs/"
+          fi
+
+      - name: Upload the logs of failed CLI smoke tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-smoke-logs-linux
+          path: ${{ runner.temp }}/cli-smoke-logs
+
   app-smoke-tests:
     # The Photosphere App's smoke tests on Linux, run under xvfb, on the app app-build built, which PHOTOSPHERE_SMOKE_BUILD names.
     # The CLI that makes the scenarios' fixtures is the one cli-build built.
