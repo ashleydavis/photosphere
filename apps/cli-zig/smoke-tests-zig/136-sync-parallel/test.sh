@@ -139,7 +139,7 @@ create_replicas() {
     log_success "Created $NUM_REPLICAS databases (1 original + $((NUM_REPLICAS-1)) replicas)"
 }
 
-# One worker: for each iteration, edits the asset's description in its own database with bdb, checks
+# One worker: for each iteration, edits the asset's description in its own database, checks
 # the root hash changed, and syncs its database to every other one. Every outcome is written to the
 # worker's output file. A failed step is logged and the worker moves to its next iteration; the final
 # root hash comparison is what fails the test.
@@ -172,28 +172,11 @@ worker_process() {
             continue
         fi
 
-        # Edit the description field using bdb-cli.
-        #
-        # The collection root is <database>/.db/bson, which is where the BSON database actually
-        # lives. This used to pass <database>/metadata, which is not a database at all: every edit
-        # answered "Record not found in collection metadata", the failure was tolerated by the
-        # `continue` below, and the suite then passed by comparing four databases that nothing had
-        # ever modified.
-        #
-        # The exit code is taken straight after bdb. It used to be taken after the rm below, so it was
-        # the rm's, and a failed edit was never reported.
+        # Edit the description field. set-field takes the database write lock and stamps the content
+        # hash in the database state file as the app does, so the sync below sees the edit.
         local edit_output
         local edit_exit_code=0
-        edit_output=$($(get_bdb_command) edit "$db_path/.db/bson" metadata "$ASSET_ID" description string "$edit_uuid" 2>&1) || edit_exit_code=$?
-
-        # bdb writes straight into the BSON database and knows nothing about the database state file
-        # one level above it, which is where the application records the content hash. Sync reads that
-        # hash first and skips outright when both sides report the same one, so an edit made this way
-        # is invisible to it: the whole suite used to sync nothing at all. Removing the state file is
-        # how a raw edit says "what is recorded about me is no longer true"; the next write recreates
-        # it. Nothing the application itself does needs this, because every write it makes stamps the
-        # hash as it goes.
-        rm -f "$db_path/.db/state.dat"
+        edit_output=$($(get_zig_cli_command) -q debug set-field "$ASSET_ID" description "$edit_uuid" --db "$db_path" --yes 2>&1) || edit_exit_code=$?
 
         if [ $edit_exit_code -ne 0 ]; then
             log_error "Process $process_id, iteration $i: Failed to edit description"
@@ -253,7 +236,7 @@ worker_process() {
 }
 
 # Stops every worker still running, keeping the exit code it was entered with so the summary that runs
-# after it reports the test's own result. Each worker is a shell whose psi and bdb children do the
+# after it reports the test's own result. Each worker is a shell whose psi children do the
 # work, so the tree has to be taken rather than the recorded pid alone.
 cleanup_processes() {
     local exit_code=$?
@@ -378,9 +361,7 @@ test_sync_parallel() {
     echo "Configuration:"
     echo "  Total databases: $NUM_REPLICAS"
     echo "  Iterations per process: $NUM_ITERATIONS"
-    echo "  Use binary: ${USE_BINARY:-false}"
     echo "  Zig CLI command: $(get_zig_cli_command)"
-    echo "  BDB command: $(get_bdb_command)"
     echo "============================================================================"
 
     # Check dependencies

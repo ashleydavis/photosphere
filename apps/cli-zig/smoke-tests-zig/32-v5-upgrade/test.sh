@@ -39,7 +39,7 @@ test_v5_database_upgrade() {
     
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
-    check_merkle_tree_order "$temp_v5_dir/.db/files.dat" "upgraded v5 database"
+    check_merkle_tree_order "$temp_v5_dir" "upgraded v5 database"
     
     rm -rf "$temp_v5_dir"
     log_success "Cleaned up temporary v5 upgrade database"

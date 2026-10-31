@@ -807,3 +807,113 @@ test "secrets send tells a mistyped pairing code from an absent device" {
         "Pairing code rejected: a device was found but it is using a different code.\n",
     }), "", 0);
 }
+
+//
+// The asset of the test/dbs/v6 fixture.
+//
+const v6_asset_id = "89171cd9-a652-4047-b869-1154bf2c95a1";
+
+//
+// A record ID in the form the metadata collection takes that no record of test/dbs/v6 has.
+//
+const missing_record_id = "00000000-0000-0000-0000-000000000000";
+
+test "debug record shows a record of the metadata collection, and reports one that is not there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-debug-record");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
+
+    const shown = try runZig(allocator, environment, &.{ "debug", "record", v6_asset_id, "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), shown.exitCode);
+    try std.testing.expect(std.mem.startsWith(u8, shown.stdout, "Collection: metadata\nRecord ID: " ++ v6_asset_id ++ "\n\nRecord data:\n{\n  \"_id\": \"" ++ v6_asset_id ++ "\",\n"));
+    try std.testing.expect(std.mem.indexOf(u8, shown.stdout, "\"...\": \"") != null);
+
+    // With --all every field is shown, and none is cut short.
+    const all = try runZig(allocator, environment, &.{ "debug", "record", v6_asset_id, "--db", db, "--yes", "--all" });
+    try std.testing.expectEqual(@as(u8, 0), all.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, all.stdout, "\"...\"") == null);
+    try std.testing.expect(std.mem.indexOf(u8, all.stdout, "  \"photoDate\": \"2025-05-27T09:54:16.000Z\",\n") != null);
+
+    try expectResult(try runZig(allocator, environment, &.{ "debug", "record", missing_record_id, "--db", db, "--yes" }),
+        \\Collection: metadata
+        \\Record ID: 00000000-0000-0000-0000-000000000000
+        \\
+        \\Record not found.
+        \\
+    , "", 0);
+}
+
+test "debug set-field changes a field, stamps the database as modified and leaves it verifiable" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-debug-set-field");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
+
+    const hashBefore = try runZig(allocator, environment, &.{ "-q", "root-hash", "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), hashBefore.exitCode);
+
+    try expectResult(try runZig(allocator, environment, &.{ "debug", "set-field", v6_asset_id, "description", "Edited by the test", "--db", db, "--yes" }),
+        "\u{2713} Successfully updated field 'description' in record '" ++ v6_asset_id ++ "'\n", "", 0);
+
+    const shown = try runZig(allocator, environment, &.{ "debug", "record", v6_asset_id, "--db", db, "--yes", "--all" });
+    try std.testing.expect(std.mem.indexOf(u8, shown.stdout, "  \"description\": \"Edited by the test\"") != null);
+
+    // A JSON value is stored as the value it holds rather than as its text.
+    try expectResult(try runZig(allocator, environment, &.{ "debug", "set-field", v6_asset_id, "labels", "[\"one\",\"two\"]", "--json", "--db", db, "--yes" }),
+        "\u{2713} Successfully updated field 'labels' in record '" ++ v6_asset_id ++ "'\n", "", 0);
+    const withLabels = try runZig(allocator, environment, &.{ "debug", "record", v6_asset_id, "--db", db, "--yes", "--all" });
+    try std.testing.expect(std.mem.indexOf(u8, withLabels.stdout, "  \"labels\": [\n    \"one\",\n    \"two\"\n  ]") != null);
+
+    // The change is in the content hash, so sync sees it, and the database still verifies.
+    const hashAfter = try runZig(allocator, environment, &.{ "-q", "root-hash", "--db", db, "--yes" });
+    try std.testing.expect(!std.mem.eql(u8, hashBefore.stdout, hashAfter.stdout));
+    const verified = try runZig(allocator, environment, &.{ "verify", "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), verified.exitCode);
+}
+
+test "debug set-field refuses a record that is not there and a value that is not JSON" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-debug-set-field-fail");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
+
+    const missing = try runZig(allocator, environment, &.{ "debug", "set-field", missing_record_id, "description", "x", "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), missing.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, missing.stderr, "\u{2717} Record '" ++ missing_record_id ++ "' not found in the metadata collection.") != null);
+
+    const badJson = try runZig(allocator, environment, &.{ "debug", "set-field", v6_asset_id, "description", "{not json", "--json", "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 1), badJson.exitCode);
+    try std.testing.expect(std.mem.indexOf(u8, badJson.stderr, "\u{2717} Invalid JSON value: {not json") != null);
+
+    // Neither failure added a record.
+    const record = try runZig(allocator, environment, &.{ "debug", "record", missing_record_id, "--db", db, "--yes" });
+    try std.testing.expect(std.mem.indexOf(u8, record.stdout, "Record not found.") != null);
+}
+
+test "debug check-merkle-tree passes a database the CLI wrote" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "clic-debug-check-tree");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    const environment = try helpers.cliEnvironment(allocator, root);
+    const db = try std.fs.path.join(allocator, &.{ root, "db" });
+    try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
+
+    const result = try runZig(allocator, environment, &.{ "debug", "check-merkle-tree", "--db", db, "--yes" });
+    try std.testing.expectEqual(@as(u8, 0), result.exitCode);
+    try std.testing.expect(std.mem.startsWith(u8, result.stdout, "\u{2713} Leaf nodes are in sorted order (sort tree: "));
+}

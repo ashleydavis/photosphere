@@ -7,17 +7,15 @@ DESCRIPTION="Edit an asset's metadata and read it back through the CLI"
 # the new value rather than the old one.
 #
 # What this one does NOT cover, and the reason it is written differently from its two siblings: the
-# CLI has no route to applyDatabaseOps. That function is reached only through POST
-# /apply-database-ops on the asset server (packages/node-api/src/lib/asset-server-routes.ts), which
-# the desktop and mobile shells run and the CLI does not, and there is no `psi` command that edits an
-# asset's metadata at all. So this exercises the layer underneath instead: the edit is written
-# straight into the BSON collection with bdb, the same tool test 37 uses, and read back with
-# `psi info`. Treat a pass here as saying the storage and read halves are sound, and look to the
-# desktop and mobile tests for whether the endpoint above them works.
+# CLI has no route to applyDatabaseOps, which the app reaches through its asset server. The edit is
+# made with `psi debug set-field`, the same command test 37 uses, which takes the same steps
+# applyDatabaseOps takes (the write lock, the update, the commit and the state stamp), and is read
+# back with `psi info`. Treat a pass here as saying the storage and read halves are sound, and look
+# to the app tests for whether the endpoint above them works.
 #
-# Reading back with `psi info` rather than with bdb is the point of the test. bdb reporting what bdb
-# just wrote would prove only that bdb is self-consistent; `psi info` opens the database through the
-# same code the rest of the CLI uses, so it is the reader a user would actually meet.
+# Reading back with `psi info` rather than with `psi debug record` is the point of the test. The
+# debug commands reporting what they just wrote would prove only that they are self-consistent;
+# `psi info` is the reader a user would actually meet.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -66,7 +64,7 @@ test_edit_asset_metadata() {
     expect_output_string "$before_output" "$new_description" "The description is not set before the edit" "false"
 
     invoke_command "Set the description in the database" \
-        "$(get_bdb_command) edit \"$db_dir/.db/bson\" metadata $record_id description string \"$new_description\"" 0
+        "$(get_zig_cli_command) -q debug set-field $record_id description \"$new_description\" --db \"$db_dir\" --yes" 0
 
     local after_output
     invoke_command "Read the asset after the edit" \

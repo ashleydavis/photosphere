@@ -1,5 +1,5 @@
 #!/bin/bash
-DESCRIPTION="Test sync after editing field with bdb-cli"
+DESCRIPTION="Test sync after editing a field with psi debug set-field"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -21,8 +21,7 @@ test_sync_edit_field() {
     # Hardcoded values from inspecting the v6 database
     local record_id="89171cd9-a652-4047-b869-1154bf2c95a1"
     local field_name="description"
-    local field_type="string"
-    local new_field_value="Test description edited by bdb-cli"
+    local new_field_value="Test description edited by psi debug set-field"
     
     check_exists "$v6_db_dir" "V6 test database directory"
     
@@ -61,10 +60,10 @@ test_sync_edit_field() {
         exit 1
     fi
     
-    # Edit a field in the original database using bdb-cli
-    log_info "Editing field '$field_name' in record '$record_id' using bdb-cli"
+    # Edit a field in the original database
+    log_info "Editing field '$field_name' in record '$record_id' "
     local edit_output
-    invoke_command "Edit field using bdb-cli" "$(get_bdb_command) edit $original_dir/.db/bson metadata $record_id $field_name $field_type \"$new_field_value\"" 0 "edit_output"
+    invoke_command "Edit field" "$(get_zig_cli_command) -q debug set-field $record_id $field_name \"$new_field_value\" --db $original_dir --yes" 0 "edit_output"
     
     # Verify the edit was successful
     expect_output_string "$edit_output" "Successfully updated field" "Field edit was successful"
@@ -72,7 +71,7 @@ test_sync_edit_field() {
     # Verify the field was actually changed by reading it back
     log_info "Verifying field was changed by reading record back"
     local verify_record_output
-    verify_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $record_id --all 2>&1)
+    verify_record_output=$($(get_zig_cli_command) -q debug record $record_id --db $original_dir --all --yes 2>&1)
     local record_exit_code=$?
     
     if [ $record_exit_code -ne 0 ]; then
@@ -140,7 +139,7 @@ test_sync_edit_field() {
     # Verify the copy database now has the edited field
     log_info "Verifying copy database now has the edited field"
     local copy_record_output
-    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $record_id --all 2>&1)
+    copy_record_output=$($(get_zig_cli_command) -q debug record $record_id --db $copy_dir --all --yes 2>&1)
     local copy_record_exit_code=$?
     
     if [ $copy_record_exit_code -ne 0 ]; then
@@ -193,8 +192,8 @@ test_sync_edit_field() {
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync edit original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync edit copy database"
+    check_merkle_tree_order "$original_dir" "sync edit original database"
+    check_merkle_tree_order "$copy_dir" "sync edit copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"
