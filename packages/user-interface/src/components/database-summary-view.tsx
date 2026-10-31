@@ -15,6 +15,15 @@ import Button from "@mui/joy/Button";
 import { ConsolidateDatabaseDialog } from "./consolidate-database-dialog";
 
 //
+// The summary the get-database-summary task returns, which carries the database's id on top of the fields of the
+// node-api summary.
+//
+interface IDatabaseSummaryWithId extends IDatabaseSummary {
+    // The identity of the database, the uuid in its merkle tree. Two databases can sync only when they share it.
+    databaseId: string;
+}
+
+//
 // Props for a single headline statistic.
 //
 interface IStatTileProps {
@@ -121,7 +130,7 @@ export function DatabaseSummaryView() {
     //
     // The loaded summary data, or undefined while loading.
     //
-    const [summary, setSummary] = useState<IDatabaseSummary | undefined>(undefined);
+    const [summary, setSummary] = useState<IDatabaseSummaryWithId | undefined>(undefined);
 
     //
     // Error message if the summary task failed.
@@ -174,7 +183,7 @@ export function DatabaseSummaryView() {
                 return;
             }
             if (result.status === TaskStatus.Succeeded) {
-                const loadedSummary = result.outputs as IDatabaseSummary;
+                const loadedSummary = result.outputs as IDatabaseSummaryWithId;
                 setSummary(loadedSummary);
                 // Observable success line so a smoke test can confirm the get-database-summary
                 // handler ran and returned data.
@@ -252,6 +261,9 @@ export function DatabaseSummaryView() {
                     }
 
                     <SummarySection title="Location">
+                        {summary
+                            && <SummaryRow dataId="database-id" label="Database ID" value={summary.databaseId} />
+                        }
                         <SummaryRow dataId="database-path" label="Path" value={databasePath} />
                         <SummaryRow dataId="database-storage-type" label="Storage type" value={getStorageType(databasePath)} />
                         {summary

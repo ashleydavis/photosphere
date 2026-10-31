@@ -259,6 +259,7 @@ test "get_database_summary returns the summary of the open database" {
     try environment.openDatabase();
     try environment.expectText("get_database_summary", "{}",
         \\{
+        \\  "databaseId": "85fe592c-9b92-4fa1-9ec5-f87f01cf8e72",
         \\  "mode": "full",
         \\  "totalImports": 1,
         \\  "totalFiles": 4,

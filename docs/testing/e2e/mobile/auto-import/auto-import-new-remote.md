@@ -127,7 +127,7 @@ Expected, either route: the phone holds a secret with the bucket's endpoint and 
 
 Two databases can sync only when they share an identity, a single uuid held in the merkle tree. So the remote is created empty, carrying the phone's identity, and left for the background sync to fill.
 
-Get the phone's database id, then from the repo root, with the CLI on the PATH:
+Get the phone's database id from the **Database ID** row of **Database Info** in the sidebar, then from the repo root, with the CLI on the PATH:
 
 ```bash
 psi init --db "$S3_DB" --database-id <the phone's database id> --yes
@@ -234,4 +234,4 @@ Expected: it reports that MinIO stopped.
 - Steps 5, 13 and 15 need a photo taken with the camera, which the human does.
 - Step 7: close the app completely from the system's recent apps screen, or with `adb -s <serial> shell am force-stop au.com.codecapers.photosphere.ziggy`, then open it again from the launcher.
 - Step 8 Route A: type the endpoint, region and keys that `start-minio` printed with `input text`. Route B: read the pairing code from the CLI output and type it on the phone.
-- Step 9 needs the phone's database id, read from the database's details on the phone with a screenshot.
+- Step 9 needs the phone's database id, read from the **Database ID** row of **Database Info** on the phone with a screenshot.

@@ -126,6 +126,9 @@ pub const DatabaseMode = enum {
 // A summary of the database.
 //
 pub const IDatabaseSummary = struct {
+    // The identity of the database, the uuid in its merkle tree. Two databases can sync only when they share it.
+    databaseId: []const u8,
+
     // Whether this database is a full copy or a partial replica.
     mode: DatabaseMode,
 
@@ -609,6 +612,7 @@ pub fn getDatabaseSummary(allocator: std.mem.Allocator, io: std.Io, log: ILog, a
     }
 
     return .{
+        .databaseId = merkleTree.id,
         .mode = if (isPartialDatabase(merkleTree.databaseMetadata)) .partial else .full,
         .totalImports = filesImported,
         .totalFiles = if (merkleTree.sort) |sort| sort.leafCount else 0,
