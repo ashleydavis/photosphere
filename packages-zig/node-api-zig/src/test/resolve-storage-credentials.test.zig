@@ -12,7 +12,7 @@ const errors = utils.errors;
 //
 // The environment variables the tests clear before and after each test.
 //
-const credential_variables = [_][]const u8{ "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_ENDPOINT_URL", "AWS_ENDPOINT_URL_S3", "PSI_ENCRYPTION_KEY", "GOOGLE_API_KEY" };
+const credential_variables = [_][]const u8{ "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "AWS_ENDPOINT_URL", "PSI_ENCRYPTION_KEY", "GOOGLE_API_KEY" };
 
 //
 // Prepares a test: installs the environment, clears the credential variables and points the config dir at a new
@@ -240,30 +240,7 @@ test "the environment credentials take their endpoint from AWS_ENDPOINT_URL" {
     try std.testing.expectEqualStrings("http://127.0.0.1:9000", result.s3Config.?.endpoint.?);
 }
 
-test "the environment credentials prefer AWS_ENDPOINT_URL_S3 when both endpoint variables are set" {
-    const log = utils.mute_log.MuteLog.init();
-    const test_env = try test_environment.setupEnvironment(std.testing.io);
-    defer test_env.deinit(log);
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    const configDir = try setup(allocator, io, "");
-    defer temp_dirs.removeTempDir(io, configDir);
-    try test_environment.setEnv("AWS_ACCESS_KEY_ID", "ENV_AKID");
-    try test_environment.setEnv("AWS_SECRET_ACCESS_KEY", "ENV_SECRET");
-    try test_environment.setEnv("AWS_ENDPOINT_URL", "http://127.0.0.1:9000");
-    try test_environment.setEnv("AWS_ENDPOINT_URL_S3", "http://127.0.0.1:9001");
-    defer for (credential_variables) |name| {
-        test_environment.setEnv(name, null) catch {};
-    };
-
-    const result = try resolveStorageCredentials(allocator, io, log, "s3:my-bucket:/photos", null, null, null);
-
-    try std.testing.expectEqualStrings("http://127.0.0.1:9001", result.s3Config.?.endpoint.?);
-}
-
-test "the environment credentials have no endpoint when neither endpoint variable is set" {
+test "the environment credentials have no endpoint when AWS_ENDPOINT_URL is not set" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -284,7 +261,7 @@ test "the environment credentials have no endpoint when neither endpoint variabl
     try std.testing.expect(result.s3Config.?.endpoint == null);
 }
 
-test "a vault entry's endpoint wins over both endpoint variables" {
+test "a vault entry's endpoint wins over AWS_ENDPOINT_URL" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -298,7 +275,6 @@ test "a vault entry's endpoint wins over both endpoint variables" {
     try test_environment.setEnv("AWS_ACCESS_KEY_ID", "ENV_AKID");
     try test_environment.setEnv("AWS_SECRET_ACCESS_KEY", "ENV_SECRET");
     try test_environment.setEnv("AWS_ENDPOINT_URL", "http://127.0.0.1:9000");
-    try test_environment.setEnv("AWS_ENDPOINT_URL_S3", "http://127.0.0.1:9001");
     defer for (credential_variables) |name| {
         test_environment.setEnv(name, null) catch {};
     };

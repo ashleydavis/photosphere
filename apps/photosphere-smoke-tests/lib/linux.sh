@@ -52,7 +52,7 @@ photosphere_platform_start() {
     # The S3 variables a scenario exports for the CLI are removed: a phone never sees its host's environment, so the app has to find
     # credentials the way it does there, from the vault.
     read -r pid pgid < <(launch_in_process_group "$test_dir/app.log" env \
-        -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_ENDPOINT_URL -u AWS_ENDPOINT_URL_S3 -u AWS_REGION -u AWS_SESSION_TOKEN \
+        -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_ENDPOINT_URL -u AWS_REGION -u AWS_SESSION_TOKEN \
         WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 \
         HOME="$test_dir/home" \
         XDG_DATA_HOME="$test_dir/data" \

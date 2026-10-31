@@ -18,7 +18,7 @@ fn environmentOf(allocator: std.mem.Allocator, variables: []const [2][]const u8)
     return map;
 }
 
-test "endpointFromEnvironment returns null when neither variable is set" {
+test "endpointFromEnvironment returns null when AWS_ENDPOINT_URL is not set" {
     var environment = try environmentOf(std.testing.allocator, &.{});
     defer environment.deinit();
 
@@ -29,32 +29,13 @@ test "endpointFromEnvironment returns null when there is no environment" {
     try std.testing.expect(endpointFromEnvironment(null) == null);
 }
 
-test "endpointFromEnvironment returns AWS_ENDPOINT_URL when only that is set" {
+test "endpointFromEnvironment returns AWS_ENDPOINT_URL when it is set" {
     var environment = try environmentOf(std.testing.allocator, &.{
         .{ "AWS_ENDPOINT_URL", "http://127.0.0.1:9000" },
     });
     defer environment.deinit();
 
     try std.testing.expectEqualStrings("http://127.0.0.1:9000", endpointFromEnvironment(&environment).?);
-}
-
-test "endpointFromEnvironment returns AWS_ENDPOINT_URL_S3 when only that is set" {
-    var environment = try environmentOf(std.testing.allocator, &.{
-        .{ "AWS_ENDPOINT_URL_S3", "http://127.0.0.1:9001" },
-    });
-    defer environment.deinit();
-
-    try std.testing.expectEqualStrings("http://127.0.0.1:9001", endpointFromEnvironment(&environment).?);
-}
-
-test "endpointFromEnvironment prefers AWS_ENDPOINT_URL_S3 over AWS_ENDPOINT_URL when both are set" {
-    var environment = try environmentOf(std.testing.allocator, &.{
-        .{ "AWS_ENDPOINT_URL", "http://127.0.0.1:9000" },
-        .{ "AWS_ENDPOINT_URL_S3", "http://127.0.0.1:9001" },
-    });
-    defer environment.deinit();
-
-    try std.testing.expectEqualStrings("http://127.0.0.1:9001", endpointFromEnvironment(&environment).?);
 }
 
 test "endpointFromEnvironment treats an empty AWS_ENDPOINT_URL as not set" {
@@ -64,16 +45,6 @@ test "endpointFromEnvironment treats an empty AWS_ENDPOINT_URL as not set" {
     defer environment.deinit();
 
     try std.testing.expect(endpointFromEnvironment(&environment) == null);
-}
-
-test "endpointFromEnvironment treats an empty AWS_ENDPOINT_URL_S3 as not set and falls through to AWS_ENDPOINT_URL" {
-    var environment = try environmentOf(std.testing.allocator, &.{
-        .{ "AWS_ENDPOINT_URL", "http://127.0.0.1:9000" },
-        .{ "AWS_ENDPOINT_URL_S3", "" },
-    });
-    defer environment.deinit();
-
-    try std.testing.expectEqualStrings("http://127.0.0.1:9000", endpointFromEnvironment(&environment).?);
 }
 
 test "endpointFromEnvironment ignores AWS_ENDPOINT, which is no longer read" {

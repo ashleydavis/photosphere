@@ -7,7 +7,7 @@
 // AWS_ACCESS_KEY_ID=your_access_key
 // AWS_SECRET_ACCESS_KEY=your_secret_key
 // AWS_REGION=your_region (e.g., us-east-1)
-// AWS_ENDPOINT_URL=your_endpoint (optional, for S3-compatible services; AWS_ENDPOINT_URL_S3 wins when both are set)
+// AWS_ENDPOINT_URL=your_endpoint (optional, for S3-compatible services)
 // TEST_S3_BUCKET=your_test_bucket_name
 //
 // The groups of tests are the prefixes of the test names. The concurrent lock attempts run on threads of their own, each

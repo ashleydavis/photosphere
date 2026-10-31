@@ -76,7 +76,7 @@ test_s3_vault_credentials() {
     export_s3_env_credentials
     invoke_command "Initialize the database on S3" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
     verify_database "$s3_db"
-    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3 AWS_REGION
+    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_ENDPOINT_URL AWS_REGION
 
     invoke_command "Add an image to the database by name" \
         "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db $DB_NAME --yes" 0

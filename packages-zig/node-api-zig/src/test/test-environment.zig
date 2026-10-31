@@ -144,7 +144,6 @@ pub fn setupEnvironmentWith(io: std.Io, allocator: std.mem.Allocator) !*TestEnvi
     _ = map.orderedRemove("AWS_SECRET_ACCESS_KEY");
     _ = map.orderedRemove("AWS_REGION");
     _ = map.orderedRemove("AWS_ENDPOINT_URL");
-    _ = map.orderedRemove("AWS_ENDPOINT_URL_S3");
     node_utils.process_env.setEnvironMap(map);
 
     // The test's thread registers the media source builders for itself, and each task on its own thread.

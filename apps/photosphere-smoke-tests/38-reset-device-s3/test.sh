@@ -94,7 +94,7 @@ read_bucket_database() {
     local output_file="$1"
     # The CLI prefers AWS_* variables over "default:s3", so any left in the caller's shell would send it to another account.
     (
-        unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_ENDPOINT_URL AWS_ENDPOINT_URL_S3
+        unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_REGION AWS_ENDPOINT_URL
         run_zig_cli "$TMP_DIR" summary --db "$S3_DB_PATH" --yes > "$output_file" 2>&1
     )
 }
