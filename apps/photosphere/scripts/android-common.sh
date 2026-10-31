@@ -117,3 +117,54 @@ photosphere_android_write_libc_file() {
         echo "gcc_dir="
     } > "$file"
 }
+
+#
+# Chooses the Android device a script works on and prints its adb serial. A serial passed in (from --target or
+# PHOTOSPHERE_ANDROID_TARGET) is used as it is. Otherwise a plugged-in device wins, then the hand-testing emulator, then a smoke test
+# pool emulator whose device lock is free. That lock is taken on file descriptor 9 and held until the calling script ends, so nothing
+# installs over or changes an app a test is using; call it directly, not in $( ), or the lock goes with the subshell.
+# Sets PHOTOSPHERE_ANDROID_SERIAL. Usage: photosphere_android_pick_device <serial or empty>
+#
+photosphere_android_pick_device() {
+    local adb_command="$ANDROID_HOME/platform-tools/adb"
+    local serial="$1"
+    local pool_candidates="" candidate avd
+    if [ -z "$serial" ]; then
+        for candidate in $("$adb_command" devices | awk 'NR > 1 && $2 == "device" { print $1 }'); do
+            case "$candidate" in
+                emulator-*)
+                    avd="$("$adb_command" -s "$candidate" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
+                    case "$avd" in
+                        "$SINGLE_AVD_NAME")
+                            if [ -z "$serial" ]; then
+                                serial="$candidate"
+                            fi
+                            ;;
+                        "$POOL_AVD_PREFIX"-*)
+                            pool_candidates="$pool_candidates $candidate"
+                            ;;
+                    esac
+                    ;;
+                *)
+                    serial="$candidate"
+                    break
+                    ;;
+            esac
+        done
+        if [ -z "$serial" ]; then
+            for candidate in $pool_candidates; do
+                exec 9<>"$(android_device_lock_path "$candidate")"
+                if flock -n 9; then
+                    serial="$candidate"
+                    break
+                fi
+                exec 9>&-
+            done
+        fi
+    fi
+    if [ -z "$serial" ]; then
+        echo "ERROR: there is no device, hand-testing emulator ($SINGLE_AVD_NAME) or free pool emulator attached. A pool emulator that a test is using is left alone. Pass --target <serial> to name one." >&2
+        exit 1
+    fi
+    PHOTOSPHERE_ANDROID_SERIAL="$serial"
+}

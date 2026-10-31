@@ -69,3 +69,8 @@ Expected:
 Expected:
 - All 50 thumbnails are visible (no broken-image placeholders).
 - The detail view opens for each asset clicked, showing a larger preview and metadata.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Type the path into `database-path-input` rather than browsing. Open an asset with `long-press-click` on `gallery-thumb`. Count thumbnails and look for broken images in a `screenshot`.
