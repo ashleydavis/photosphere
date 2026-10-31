@@ -17,7 +17,7 @@ bun run ios        # iOS
 
 **A Photosphere database that already exists in an S3 bucket, with photos in it**, and its credentials: endpoint, region, access key id and secret access key. If it is encrypted you need its encryption key as well. The database must be reachable from both the phone and the development machine.
 
-The CLI commands below name the bucket by a raw `s3:` path, which carries no stored credentials with it, so it uses the environment. On anything other than real AWS, `AWS_ENDPOINT` has to be exported as well, or the command goes to AWS and reports that the bucket does not exist. Registering the database with `psi dbs add` is what step 1 does instead, and after that the credentials are found by path and no environment variables are needed.
+The CLI commands below name the bucket by a raw `s3:` path, which carries no stored credentials with it, so it uses the environment. On anything other than real AWS, the endpoint has to be exported as well, in `AWS_ENDPOINT_URL` (the name the `aws` CLI reads too), or the command goes to AWS and reports that the bucket does not exist. Registering the database with `psi dbs add` is what step 1 does instead, and after that the credentials are found by path and no environment variables are needed.
 
 The device needs to be able to take a photo with the camera partway through.
 

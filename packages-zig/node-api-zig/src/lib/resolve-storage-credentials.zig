@@ -10,6 +10,7 @@ const errors = utils.errors;
 const process_env = node_utils.process_env;
 const node_crypto = encryption.node_crypto;
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
+const endpointFromEnvironment = storage_zig.cloud_storage.endpointFromEnvironment;
 const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
 const exportPublicKeyToPem = encryption.key_utils.exportPublicKeyToPem;
 const IVault = vault_zig.vault.IVault;
@@ -148,7 +149,7 @@ pub fn resolveStorageCredentials(
                 .region = if (isTruthy(region)) region.? else "us-east-1",
                 .accessKeyId = process_env.getEnv("AWS_ACCESS_KEY_ID").?,
                 .secretAccessKey = process_env.getEnv("AWS_SECRET_ACCESS_KEY").?,
-                .endpoint = process_env.getEnv("AWS_ENDPOINT"),
+                .endpoint = endpointFromEnvironment(process_env.getEnvironMap()),
             };
             log.verbose("S3 credentials: loaded from environment variables (AWS_ACCESS_KEY_ID)");
         }

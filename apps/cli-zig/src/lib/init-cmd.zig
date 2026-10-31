@@ -21,6 +21,7 @@ const prompts = @import("clack/prompts.zig");
 const worker_pool = @import("worker-pool.zig");
 const process_argv = @import("process-argv.zig");
 const IS3Credentials = storage_zig.cloud_storage.IS3Credentials;
+const endpointFromEnvironment = storage_zig.cloud_storage.endpointFromEnvironment;
 const IStorage = storage_zig.storage.IStorage;
 const createStorage = storage_zig.storage_factory.createStorage;
 const pathJoin = storage_zig.storage_factory.pathJoin;
@@ -221,7 +222,7 @@ pub fn getDefaultS3Config(allocator: std.mem.Allocator, io: std.Io) !?IS3Credent
             .region = if (region.len > 0) region else "us-east-1",
             .accessKeyId = accessKeyId,
             .secretAccessKey = secretAccessKey,
-            .endpoint = process_env.getEnv("AWS_ENDPOINT"),
+            .endpoint = endpointFromEnvironment(process_env.getEnvironMap()),
         };
     }
 

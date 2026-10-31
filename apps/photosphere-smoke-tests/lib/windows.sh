@@ -75,7 +75,7 @@ photosphere_platform_start() {
     # The S3 variables a scenario exports for the CLI are removed, as the Linux library removes them: the app has to find credentials
     # the way it does on a phone, from the vault.
     read -r pid pgid < <(launch_in_process_group "$log" env \
-        -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_ENDPOINT -u AWS_REGION -u AWS_SESSION_TOKEN \
+        -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_ENDPOINT_URL -u AWS_ENDPOINT_URL_S3 -u AWS_REGION -u AWS_SESSION_TOKEN \
         LOCALAPPDATA="$(windows_native_path "$test_dir/data")" \
         PHOTOSPHERE_TEST_MODE=1 \
         PHOTOSPHERE_CONFIG_DIR="$(windows_native_path "$test_dir/config")" \

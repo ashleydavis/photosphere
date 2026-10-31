@@ -19,7 +19,7 @@ The device needs at least two photos in its photo library before you start, and 
 
 An S3 bucket and its credentials, reachable from both the phone and your development machine. The later steps back the phone up into it and then read that copy with the CLI.
 
-The CLI commands below name the bucket by a raw `s3:` path, which carries no stored credentials with it, so it uses the environment. On anything other than real AWS, `AWS_ENDPOINT` has to be exported as well, or the command goes to AWS and reports that the bucket does not exist.
+The CLI commands below name the bucket by a raw `s3:` path, which carries no stored credentials with it, so it uses the environment. On anything other than real AWS, the endpoint has to be exported as well, in `AWS_ENDPOINT_URL` (the name the `aws` CLI reads too), or the command goes to AWS and reports that the bucket does not exist.
 
 The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, and a phone on mobile data will sit there doing nothing with no error.
 
@@ -280,8 +280,6 @@ aws s3 rm s3://cloud-storage-tests/auto-sync-test/ --recursive
 ```
 
     A recursive delete takes everything under whatever prefix it is given, there is no undo, and this bucket holds other tests' data alongside this one, so a prefix that is mistyped or left off takes those with it.
-
-    `InvalidAccessKeyId` from this means the request went to real AWS rather than to the bucket. `aws` does not read `AWS_ENDPOINT`, which is the variable the `psi` commands elsewhere in this test use, so the endpoint has to be in `AWS_ENDPOINT_URL` as well.
 
 2. On the phone, remove the app's data. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app.
 3. Take the bucket's credentials off the development machine, and the database entry with them. Route B put them there, and a live access key left in a keychain outlives the test that needed it. From the repo root, with the CLI on the PATH:
