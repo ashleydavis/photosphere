@@ -27,12 +27,6 @@ test_dbs_clear() {
     expect_output_string "$dbs_output" "db-two" "db-two is absent after clear" false
     expect_output_string "$dbs_output" "No databases" "Empty message shown after clear"
 
-    local zig_dbs_list
-    local ts_dbs_list
-    invoke_command "List the databases with the Zig CLI" "$(get_zig_cli_command) -q dbs list" 0 "zig_dbs_list"
-    invoke_command "List the databases with the TypeScript CLI" "$(get_cli_command) -q dbs list" 0 "ts_dbs_list"
-    expect_value "$ts_dbs_list" "$zig_dbs_list" "The TypeScript CLI reads the database list the Zig CLI wrote"
-
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
 

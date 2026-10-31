@@ -26,22 +26,22 @@ test_export_with_multiple_keys() {
     # Create encrypted database with key1 (official key).
     invoke_command "Init encrypted database with key1" "$cli init --db \"$db_dir\" --key \"$key1_name\" --generate-key --yes"
 
-    ts_verify "$db_dir" --key "$key1_name"
+    verify_database "$db_dir" --key "$key1_name"
 
     # Ensure key2 exists (generate via throwaway database).
     invoke_command "Generate key2" "$cli init --db \"$test_dir/tmp-key2-db\" --key \"$key2_name\" --generate-key --yes"
 
-    ts_verify "$test_dir/tmp-key2-db" --key "$key2_name"
+    verify_database "$test_dir/tmp-key2-db" --key "$key2_name"
 
     # Add first file with key1 (encrypted with key1).
     invoke_command "Add first PNG with key1" "$cli add --db \"$db_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$db_dir" --key "$key1_name"
+    verify_database "$db_dir" --key "$key1_name"
 
     # Add second file with key2,key1 so key2 is write key (encrypted with key2).
     invoke_command "Add second JPG with key2" "$cli add --db \"$db_dir\" --key \"$key2_name,$key1_name\" \"$TEST_FILES_DIR/test.jpg\" --yes"
 
-    ts_verify "$db_dir" --key "$key2_name,$key1_name"
+    verify_database "$db_dir" --key "$key2_name,$key1_name"
 
     # Look up asset IDs via list.
     local asset_id1

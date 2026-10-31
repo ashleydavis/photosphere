@@ -22,10 +22,6 @@ test_examples() {
     done
     expect_output_string "$examples_output" "psi init --db ./photos" "The init examples show a database being created"
 
-    local ts_examples_output
-    invoke_command "Show the examples with the TypeScript CLI" "$(get_cli_command) -q examples" 0 "ts_examples_output"
-    expect_value "$examples_output" "$ts_examples_output" "The Zig CLI prints the examples the TypeScript CLI prints"
-
     test_passed
 }
 

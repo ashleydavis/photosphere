@@ -8,6 +8,6 @@ trap cleanup_and_show_summary EXIT
 TEST_DB_DIR="$(get_test_dir 18)/test-db"
 create_db_with_5_files "$TEST_DB_DIR"
 invoke_command "Replicate (setup)" "$(get_zig_cli_command) replicate --db $TEST_DB_DIR --dest $TEST_DB_DIR-replica --yes --force"
-ts_verify "$TEST_DB_DIR-replica"
+verify_database "$TEST_DB_DIR-replica"
 
 test_verify_replica 18

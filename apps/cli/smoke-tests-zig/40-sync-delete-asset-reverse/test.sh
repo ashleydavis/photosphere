@@ -30,7 +30,7 @@ test_sync_delete_asset_reverse() {
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_zig_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    ts_verify "$copy_dir"
+    verify_database "$copy_dir"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -63,7 +63,7 @@ test_sync_delete_asset_reverse() {
     log_info "Deleting asset '$test_asset_id' from copy database"
     local remove_output
     invoke_command "Remove asset from copy database" "$(get_zig_cli_command) remove --db $copy_dir $test_asset_id --verbose --yes" 0 "remove_output"
-    ts_verify "$copy_dir"
+    verify_database "$copy_dir"
     
     # Check that removal was successful
     expect_output_string "$remove_output" "Successfully removed asset" "Asset removal success message"
@@ -123,8 +123,8 @@ test_sync_delete_asset_reverse() {
     log_info "Syncing from copy to original (should delete asset in original)"
     local sync_output
     invoke_command "Sync copy to original" "$(get_zig_cli_command) sync --db $copy_dir --dest $original_dir --yes" 0 "sync_output"
-    ts_verify "$copy_dir"
-    ts_verify "$original_dir"
+    verify_database "$copy_dir"
+    verify_database "$original_dir"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"

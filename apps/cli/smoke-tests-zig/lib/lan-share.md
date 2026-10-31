@@ -1,6 +1,6 @@
 # lan-share.sh
 
-Helpers shared by the LAN share smoke tests of the Zig CLI: the tests under `apps/cli/smoke-tests-zig/` named `lan-share-*`. They pair a sender and a receiver on this machine through `psi dbs send`/`receive` and `psi secrets send`/`receive`, each side with a vault and config of its own, and check what arrives. The `*-ts-to-zig` and `*-zig-to-ts` tests run one side in the TypeScript CLI.
+Helpers shared by the LAN share smoke tests of the Zig CLI: the tests under `apps/cli/smoke-tests-zig/` named `lan-share-*`. They pair a sender and a receiver on this machine through `psi dbs send`/`receive` and `psi secrets send`/`receive`, each side with a vault and config of its own, and check what arrives.
 
 ## Use
 
@@ -16,7 +16,7 @@ Find the tests that source it with `grep -l 'lib/lan-share.sh' apps/cli/smoke-te
 Sourcing it does more than define functions:
 
 - It points `SENDER_VAULT_DIR`, `SENDER_CONFIG_DIR`, `RECEIVER_VAULT_DIR` and `RECEIVER_CONFIG_DIR` at directories under the test's `TEST_TMP_DIR` and creates the two receiver directories.
-- It sets `ZIG_CLI_CMD` (the Zig CLI), `TS_CLI_CMD` (the TypeScript CLI, compiled under `--binary`) and `SENDER_CLI_CMD` and `RECEIVER_CLI_CMD`, both the Zig CLI. An interop test sets one of the last two to `TS_CLI_CMD`.
+- It sets `ZIG_CLI_CMD` (the Zig CLI) and `SENDER_CLI_CMD` and `RECEIVER_CLI_CMD`, both the Zig CLI.
 - It sets the test's exit trap to `lan_share_exit; cleanup_and_show_summary`, so a LAN share test sets none of its own.
 - It creates `TEST_PID_FILE` (`$TEST_TMP_DIR/test-pids`) empty. Every process a test starts is recorded there and in `TEST_PIDS`, and is stopped by pid through `kill_process_tree`, never by name.
 - On macOS, where there is no `sha256sum`, it defines one over `shasum -a 256`.

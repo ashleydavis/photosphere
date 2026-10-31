@@ -27,8 +27,6 @@ test_v2_database_readonly_commands() {
     invoke_command "Run verify on v2 database (should fail)" "$(get_zig_cli_command) verify --db $v2_db_dir --yes" 1 "verify_output"
     expect_output_string "$verify_output" "upgrade" "Verify on v2 suggests running psi upgrade"
     log_success "Verify correctly rejected v2 database"
-    
-    invoke_command "Run verify on v2 database with the TypeScript CLI (should fail)" "$(get_cli_command) verify --db $v2_db_dir --yes" 1
 
     test_passed
 }

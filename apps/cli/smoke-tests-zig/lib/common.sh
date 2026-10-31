@@ -9,21 +9,14 @@ SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 # Absolute path to the repository root, for reaching the helper scripts under scripts/.
 REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
 
-# The compiled psi, mk and bdb the runner built for this run, when it runs with them. A run that says
-# it uses them but names none stops here rather than running whatever an empty path resolves to.
+# The Zig psi and the compiled mk and bdb the runner built for this run.
 source "$REPO_ROOT/apps/cli/test-cli-binaries.sh"
-if [ "${USE_BINARY:-false}" = "true" ]; then
-    test_cli_binary_path psi > /dev/null || exit 1
-fi
 
 # The Zig CLI every test here runs, which the runner built for this run.
 test_zig_cli_path > /dev/null || exit 1
 
 # LAN pairing codes, allocated so a test cannot take one another run on the machine is using.
 source "$REPO_ROOT/scripts/lib/test-lib.sh"
-
-# Timing for the TypeScript verify calls ts_verify makes.
-source "$SMOKE_TESTS_DIR/lib/ts-verify-timing.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -58,17 +51,6 @@ export PHOTOSPHERE_VAULT_TYPE="plaintext"
 get_test_dir() {
     local test_number="$1"
     echo "$TEST_TMP_DIR/$test_number"
-}
-
-# Get CLI command: default is from code (bun run start --); use --binary for built executable
-get_cli_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        test_cli_binary_path psi
-    else
-        # --silent keeps bun from echoing the script line into the output, so what the TypeScript CLI
-        # prints can be compared with what the Zig CLI prints when the tests run from the sources.
-        echo "bun run --silent start --"
-    fi
 }
 
 # Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
@@ -633,9 +615,9 @@ invoke_command() {
             log_success "$description"
             
             # Print root hash after successful psi commands that might affect the database. Not after a
-            # TypeScript verify (ts_verify sets SKIP_ROOT_HASH_PRINT), which reads the database and
-            # changes nothing, so the hash would be the one printed after the step it checks.
-            if { [[ "$command" == *"psi"* ]] || [[ "$command" == *"bun run start"* ]]; } && [ "${SKIP_ROOT_HASH_PRINT:-}" != "true" ]; then
+            # verify_database (which sets SKIP_ROOT_HASH_PRINT), which reads the database and changes
+            # nothing, so the hash would be the one printed after the step it checks.
+            if [[ "$command" == *"psi"* ]] && [ "${SKIP_ROOT_HASH_PRINT:-}" != "true" ]; then
                 # Extract database path from command
                 local db_path=""
                 if [[ "$command" == *"--db "* ]]; then
@@ -671,27 +653,22 @@ invoke_command() {
     fi
 }
 
-# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
-# fails the test unless it passes, so the reference implementation checks the integrity of every
-# database the Zig CLI writes. Any further arguments (a --key) go to verify. The time it takes is
-# appended to ts-verify-milliseconds.log in the test's directory, so the runner can report how much
-# of the Zig suite is spent in the TypeScript CLI.
-# Usage: ts_verify <database> [verify arguments...]
-ts_verify() {
+# Runs psi verify on a database the Zig CLI has just created or modified, and fails the test unless it
+# passes, so the integrity of every database the tests write is checked. Any further arguments (a
+# --key) go to verify.
+# Usage: verify_database <database> [verify arguments...]
+verify_database() {
     local database_dir="$1"
     shift
     local verify_arguments=""
     if [ $# -gt 0 ]; then
         verify_arguments="$(printf ' %q' "$@")"
     fi
-    local verify_start
-    verify_start="$(current_milliseconds)"
-    # The TypeScript CLI takes its deterministic test UUIDs from a counter of its own, so checking a
-    # database does not move the ids the Zig CLI hands out next, which the tests assert on.
-    local verify_counter_dir="$TEST_TMP_DIR/ts-verify-uuid-counter"
+    # verify takes deterministic test UUIDs for its tasks from a counter of its own, so checking a
+    # database does not move the ids the next command under test hands out, which the tests assert on.
+    local verify_counter_dir="$TEST_TMP_DIR/verify-uuid-counter"
     mkdir -p "$verify_counter_dir"
-    SKIP_ROOT_HASH_PRINT=true invoke_command "Verify $database_dir with the TypeScript CLI" "TEST_TMP_DIR=\"$verify_counter_dir\" $(get_cli_command) verify --db \"$database_dir\"$verify_arguments --yes"
-    record_ts_verify_milliseconds "$TEST_TMP_DIR/ts-verify-milliseconds.log" "$verify_start"
+    SKIP_ROOT_HASH_PRINT=true invoke_command "Verify $database_dir" "TEST_TMP_DIR=\"$verify_counter_dir\" $(get_zig_cli_command) verify --db \"$database_dir\"$verify_arguments --yes"
 }
 
 
@@ -926,7 +903,7 @@ create_db_with_5_files() {
     fi
 
     invoke_command "Initialize database" "$(get_zig_cli_command) init --db $db_dir --yes"
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
     populate_db_with_5_files "$db_dir"
 }
 
@@ -934,14 +911,14 @@ create_db_with_5_files() {
 populate_db_with_5_files() {
     local db_dir="$1"
     invoke_command "Add PNG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.png --yes"
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
     invoke_command "Add JPG file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/test.jpg --yes"
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
     invoke_command "Add MP4 file" "$(get_zig_cli_command) add --db $db_dir $TEST_FILES_DIR/multiple-files/test.mp4 --yes"
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
     if [ -d "$MULTIPLE_IMAGES_DIR" ]; then
         invoke_command "Add multiple images" "$(get_zig_cli_command) add --db $db_dir $MULTIPLE_IMAGES_DIR/ --yes"
-        ts_verify "$db_dir"
+        verify_database "$db_dir"
     fi
 }
 

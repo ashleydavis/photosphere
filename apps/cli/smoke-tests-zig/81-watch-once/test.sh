@@ -15,7 +15,7 @@ mkdir -p "$WATCH_DIR"
 CLI_COMMAND=$(get_zig_cli_command)
 
 invoke_command "Initialize database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 # --- 1. A file sitting in the watched folder is imported. ---
 
@@ -23,7 +23,7 @@ cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/first.png"
 
 WATCH_OUTPUT=""
 invoke_command "Import the folder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "One file was imported"
 expect_output_value "$WATCH_OUTPUT" "Already added:" 0 "Nothing was already in the database"
@@ -40,7 +40,7 @@ check_exists "$WATCH_DIR/first.png" "The source file"
 
 WATCH_OUTPUT=""
 invoke_command "Import the folder again" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 0 "The file was not imported a second time"
 expect_output_value "$WATCH_OUTPUT" "Already added:" 1 "The file was recognised as already in the database"
@@ -55,7 +55,7 @@ cp "$TEST_FILES_DIR/test.jpg" "$WATCH_DIR/second.jpg"
 
 WATCH_OUTPUT=""
 invoke_command "Import after adding a file" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The new file was imported"
 expect_output_value "$WATCH_OUTPUT" "Already added:" 1 "The old file was recognised"
@@ -71,7 +71,7 @@ cp "$TEST_FILES_DIR/test.webp" "$WATCH_DIR/holiday/third.webp"
 
 WATCH_OUTPUT=""
 invoke_command "Import with a subfolder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The file in the subfolder was imported"
 

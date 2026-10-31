@@ -25,7 +25,7 @@ test_v6_database_upgrade_no_effect() {
     
     local upgrade_output
     invoke_command "Upgrade v6 database (should be no-op)" "$(get_zig_cli_command) upgrade --db $temp_v6_dir --yes" 0 "upgrade_output"
-    ts_verify "$temp_v6_dir"
+    verify_database "$temp_v6_dir"
     
     expect_output_string "$upgrade_output" "Database is already at the latest version (6)" "Upgrade reports database is already current"
     

@@ -22,15 +22,15 @@ test_encrypt_plain() {
 
     invoke_command "Init plain source database" "$cli init --db \"$plain_dir\" --yes"
 
-    ts_verify "$plain_dir"
+    verify_database "$plain_dir"
 
     invoke_command "Add PNG file to plain database" "$cli add --db \"$plain_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$plain_dir"
+    verify_database "$plain_dir"
 
     invoke_command "Encrypt plain database in place using psi encrypt" "$cli encrypt --db \"$plain_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$plain_dir" --key "$key_name"
+    verify_database "$plain_dir" --key "$key_name"
 
     if [ ! -f "$plain_dir/.db/encryption.pub" ]; then
         log_error "Encrypted database missing .db/encryption.pub after psi encrypt"

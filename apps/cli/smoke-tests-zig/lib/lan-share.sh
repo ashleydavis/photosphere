@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Helpers shared by the LAN share smoke tests (125 to 135). Sourced after common.sh, which provides
-# the logging, test_passed, test_failed, seed_vault_secret, seed_databases_config, get_cli_command and
+# Helpers shared by the LAN share smoke tests (125 to 131). Sourced after common.sh, which provides
+# the logging, test_passed, test_failed, seed_vault_secret, seed_databases_config and
 # get_zig_cli_command. Sourcing this sets the test's exit trap, so a LAN share test sets none of its
 # own. See lan-share.md beside this file.
 
@@ -52,13 +52,10 @@ mkdir -p "$RECEIVER_VAULT_DIR" "$RECEIVER_CONFIG_DIR"
 # The Zig port of psi (apps/cli-zig), which the runner built for this run.
 ZIG_CLI_CMD="$(get_zig_cli_command)"
 
-# The TypeScript CLI, for the interop tests: from source, or the compiled one under --binary.
-TS_CLI_CMD="$(get_cli_command)"
-
-# The CLI the sending side of a share runs in. An interop test swaps it for the TypeScript CLI.
+# The CLI the sending side of a share runs in.
 SENDER_CLI_CMD="$ZIG_CLI_CMD"
 
-# The CLI the receiving side of a share runs in. An interop test swaps it for the TypeScript CLI.
+# The CLI the receiving side of a share runs in.
 RECEIVER_CLI_CMD="$ZIG_CLI_CMD"
 
 # Active receiver pid, killed by test_cleanup.
@@ -82,9 +79,9 @@ TEST_PID_FILE="$TEST_TMP_DIR/test-pids"
 #
 # Kills a process and its descendants, and reaps it.
 #
-# `bun run start` runs the actual CLI in a child process that owns the UDP broadcast and HTTPS
-# server. Killing only the top-level pid orphans that child, which keeps broadcasting its pairing
-# code. kill_process_tree takes the whole tree, which prevents the orphan.
+# Killing only the top-level pid could orphan a child process that owns the UDP broadcast and HTTPS
+# server, which would keep broadcasting its pairing code. kill_process_tree takes the whole tree,
+# which prevents the orphan.
 # Usage: kill_proc <pid>
 #
 kill_proc() {

@@ -4,9 +4,7 @@ DESCRIPTION="psi tools reports the ImageMagick, ffmpeg and ffprobe built into it
 # The suite's setup runs `tools --yes` for its exit code alone. This test checks what the command
 # reports, both with the suite's tools on the PATH and with a PATH that holds none of them. The Zig CLI
 # runs ImageMagick and FFmpeg from the libraries linked into it, so the report is the same in both
-# cases. It is not compared with the TypeScript CLI's report: that one describes the tools installed on
-# the machine, which differ from one machine and runner to the next, and with none on the PATH it
-# reports them missing.
+# cases.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"

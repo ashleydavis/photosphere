@@ -25,15 +25,15 @@ test_encrypt_old_to_new_format() {
 
     invoke_command "Init encrypted database (simulated old-format source)" "$cli init --db \"$old_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$old_dir" --key "$key_name"
+    verify_database "$old_dir" --key "$key_name"
 
     invoke_command "Add PNG file to simulated old-format database" "$cli add --db \"$old_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$old_dir" --key "$key_name"
+    verify_database "$old_dir" --key "$key_name"
 
     invoke_command "Run psi encrypt in place to convert to new format" "$cli encrypt --db \"$old_dir\" --key \"$key_name\" --yes"
 
-    ts_verify "$old_dir" --key "$key_name"
+    verify_database "$old_dir" --key "$key_name"
 
     assert_database_assets_encrypted "$old_dir" || test_failed "$name"
 

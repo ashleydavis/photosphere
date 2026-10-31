@@ -30,7 +30,7 @@ NC='\033[0m' # No Color
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
 source "$_CLI_ABS_DIR/../../scripts/lib/test-lib.sh"
 
-# Building psi, mk and bdb into a directory of this run's own, and naming them for the tests.
+# Building the Zig psi, mk and bdb into directories of this run's own, and naming them for the tests.
 source "$_CLI_ABS_DIR/test-cli-binaries.sh"
 
 # Starting and stopping background processes: the tree walk the traps below use to take a batch
@@ -54,36 +54,6 @@ source "$_CLI_ABS_DIR/../../scripts/lib/test-concurrency.sh"
 # The rolling pool the tests are scheduled through, shared with the desktop suite so there is one
 # scheduler rather than a copy per suite.
 source "$_CLI_ABS_DIR/../../scripts/lib/test-pool.sh"
-
-# Timing for the TypeScript verify calls the tests make on every database the Zig CLI writes.
-source "$_CLI_ABS_DIR/smoke-tests-zig/lib/ts-verify-timing.sh"
-
-# The TypeScript verify calls the finished tests made, and the milliseconds they took, summed over
-# the tests for the summary. Tests run side by side, so this is time spent rather than wall clock.
-TS_VERIFY_TOTAL_MILLISECONDS=0
-TS_VERIFY_TOTAL_CALLS=0
-
-# The seconds the finished tests took, summed, to set beside the TypeScript verify total.
-TESTS_TOTAL_SECONDS=0
-
-# The verify time of the test account_test_timing last took, for its result line.
-LAST_TS_VERIFY_NOTE=""
-
-#
-# Adds one finished test's TypeScript verify calls and duration to the suite totals, and sets
-# LAST_TS_VERIFY_NOTE to its verify time for the result line. Not run in a subshell, so the totals stick.
-# Usage: account_test_timing <test_dir> <test seconds>
-#
-account_test_timing() {
-    local test_dir="$1"
-    local test_seconds="$2"
-    local verify_milliseconds
-    verify_milliseconds="$(sum_ts_verify_milliseconds "$test_dir/ts-verify-milliseconds.log")"
-    TS_VERIFY_TOTAL_MILLISECONDS=$((TS_VERIFY_TOTAL_MILLISECONDS + verify_milliseconds))
-    TS_VERIFY_TOTAL_CALLS=$((TS_VERIFY_TOTAL_CALLS + $(count_ts_verify_calls "$test_dir/ts-verify-milliseconds.log")))
-    TESTS_TOTAL_SECONDS=$((TESTS_TOTAL_SECONDS + test_seconds))
-    LAST_TS_VERIFY_NOTE="(TypeScript verify $(format_milliseconds_as_seconds "$verify_milliseconds"))"
-}
 
 # Test configuration
 #
@@ -111,15 +81,13 @@ export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
 export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
-# Use built binary instead of bun run start (set by --binary)
+# Use the built mk and bdb executables instead of running them from source (set by --binary)
 USE_BINARY=false
 
-# Set by --source: run against the TypeScript rather than the compiled binaries.
+# Set by --source: run mk and bdb from their TypeScript sources rather than the compiled binaries.
 #
-# A full run builds the binaries and uses them, because that is what ships and because a psi
-# invocation costs about 0.10s less from the binary than through `bun run start`, which is roughly
-# 41s of work across the suite's 412 invocations. --source is the way back to the TypeScript, so that
-# path is not left to rot.
+# A full run builds the binaries and uses them, because that is what ships. --source is the way back
+# to the sources, so that path is not left to rot.
 USE_SOURCE=false
 
 # Set by --capture-baseline <target>: the what-changed target to record as passed once a full run
@@ -255,15 +223,6 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# Get CLI command: default is from code (bun run start --); use --binary for built executable
-get_cli_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        test_cli_binary_path psi
-    else
-        echo "bun run start --"
-    fi
-}
-
 # Get the Zig CLI command: the Zig port of psi (apps/cli-zig), which runs the ported commands. Built
 # for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
 get_zig_cli_command() {
@@ -341,16 +300,16 @@ invoke_command() {
 }
 
 #
-# Builds the three executables the tests run: psi, mk and bdb, into a directory of this run's own
-# (see test-cli-binaries.sh), never the package's shared bin/. A failed build ends the run.
+# Builds the mk and bdb executables the tests run, into a directory of this run's own (see
+# test-cli-binaries.sh), never the package's shared bin/. A failed build ends the run.
 #
 build_cli_binaries() {
-    log_info "Building psi, mk and bdb for this run"
+    log_info "Building mk and bdb for this run"
     if ! build_test_cli_binaries; then
         log_error "Failed to build the CLI executables"
         exit 1
     fi
-    log_success "Built psi, mk and bdb into $PHOTOSPHERE_CLI_BIN_DIR"
+    log_success "Built mk and bdb into $PHOTOSPHERE_CLI_BIN_DIR"
 }
 
 # Individual test functions (remain inline — not tests, just setup)
@@ -366,7 +325,7 @@ test_setup() {
         return 1
     fi
 
-    local cli_command=$(get_cli_command)
+    local cli_command=$(get_zig_cli_command)
     log_info "Using CLI command: $cli_command"
 
     # Ensure tmp directory exists
@@ -449,8 +408,7 @@ run_one() {
     if [ "$test_status" -eq 0 ]; then
         local test_duration
         test_duration=$(format_duration $((SECONDS - test_start)))
-        account_test_timing "$TEST_TMP_DIR" $((SECONDS - test_start))
-        printf "${GREEN}PASS${NC}  %2s  %-30s  %s  %s\n" "$num" "$name" "$test_duration" "$LAST_TS_VERIFY_NOTE"
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
         return 0
     else
         local test_duration
@@ -547,8 +505,7 @@ report_cli_pool_result() {
         printf "${BLUE}SKIP${NC}  %2s  %-30s  %s  (log: %s)\n" "$num" "$name" "$test_duration" "$log_file"
         skip=$((skip + 1))
     elif [ "$status" -eq 0 ]; then
-        account_test_timing "$test_dir" "$(cat "$test_dir/test-duration.txt" 2>/dev/null || echo 0)"
-        printf "${GREEN}PASS${NC}  %2s  %-30s  %s  %s\n" "$num" "$name" "$test_duration" "$LAST_TS_VERIFY_NOTE"
+        printf "${GREEN}PASS${NC}  %2s  %-30s  %s\n" "$num" "$name" "$test_duration"
         pass=$((pass + 1))
     elif test_timed_out "$status"; then
         # The subshell exits with what run_test_with_timeout returned, so a test that ran out
@@ -605,7 +562,6 @@ print_summary() {
     else
         printf "Duration: %ds\n" "$secs"
     fi
-    printf "TypeScript verify: %d calls, %s of the %ds the passing tests took between them\n" "$TS_VERIFY_TOTAL_CALLS" "$(format_milliseconds_as_seconds "$TS_VERIFY_TOTAL_MILLISECONDS")" "$TESTS_TOTAL_SECONDS"
 }
 
 # Print the log output for every failed test.
@@ -652,7 +608,6 @@ build_shared_fixtures() {
     local fixture_dir
     fixture_dir="$(allocate_isolated_test_dir "fixture-db-5-files")"
     log_info "Building the shared five-file database in $fixture_dir"
-    local fixture_start=$SECONDS
     # In a subshell with its own TEST_TMP_DIR, so the UUID counter the build leaves behind lands
     # beside the database rather than in the suite root, and so this run's own TEST_TMP_DIR is not
     # changed by building it.
@@ -666,8 +621,7 @@ build_shared_fixtures() {
         return 1
     fi
     export PHOTOSPHERE_SMOKE_FIXTURE_5_FILES="$fixture_dir"
-    account_test_timing "$fixture_dir" $((SECONDS - fixture_start))
-    log_success "Built the shared five-file database $LAST_TS_VERIFY_NOTE"
+    log_success "Built the shared five-file database"
 }
 
 # Map a test number to its individual script path.
@@ -690,16 +644,15 @@ run_all_tests() {
     log_info "Changing to CLI directory"
     cd "$(dirname "$0")"
 
-    # The tests run against what ships. Building all three takes about 0.8s, and every psi invocation
-    # after that is about 0.10s cheaper than it is through `bun run start`.
+    # The tests run against what ships.
     if [ "$USE_SOURCE" = "true" ]; then
-        log_info "Running against the TypeScript sources (--source)"
+        log_info "Running mk and bdb from their TypeScript sources (--source)"
     else
         USE_BINARY=true
         build_cli_binaries
     fi
     # Exported so the test scripts see it: smoke-tests-zig/lib/common.sh reads it to decide which command
-    # each of psi, mk and bdb is.
+    # each of mk and bdb is.
     export USE_BINARY
 
     # Reset UUID counter
@@ -879,9 +832,9 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Options:"
-    echo "  -b, --binary          - Run tests using the built executable. A full run does this anyway;"
+    echo "  -b, --binary          - Run mk and bdb from the built executables. A full run does this anyway;"
     echo "                          this is how a single test does it"
-    echo "  --source              - Run against the TypeScript sources instead of the built executables"
+    echo "  --source              - Run mk and bdb from their TypeScript sources instead of the built executables"
     echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: a directory allocated for the run)."
     echo "  --sequential          - Run independent tests sequentially instead of in parallel"
     echo "  --parallel [N]        - Run independent tests in a rolling pool of N. The default comes"
@@ -922,7 +875,7 @@ show_usage() {
     echo "  $0 --sequential               # Run all tests sequentially"
     echo "  $0 --parallel 3              # Run 3 tests at a time"
     echo "  $0 --parallel 10             # Run 10 tests at a time"
-    echo "  $0 --source                  # Run all tests against the TypeScript sources"
+    echo "  $0 --source                  # Run all tests with mk and bdb from their TypeScript sources"
     echo "  $0 to 5                      # Run tests 1-5"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
@@ -996,7 +949,7 @@ main() {
     set -- "${POSITIONAL[@]}"
 
     # Exported so the test scripts see it, which is what makes --binary mean anything for a single
-    # test: smoke-tests-zig/lib/common.sh reads it to decide which command each of psi, mk and bdb is,
+    # test: smoke-tests-zig/lib/common.sh reads it to decide which command each of mk and bdb is,
     # and a variable that is only assigned here is invisible to them.
     export USE_BINARY
 

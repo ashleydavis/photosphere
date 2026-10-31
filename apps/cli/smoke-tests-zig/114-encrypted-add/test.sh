@@ -22,11 +22,11 @@ test_add_encrypted_file() {
 
     invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     assert_database_assets_encrypted "$db_dir" || test_failed "$name"
 

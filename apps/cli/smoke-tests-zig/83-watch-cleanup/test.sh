@@ -15,14 +15,14 @@ mkdir -p "$WATCH_DIR"
 CLI_COMMAND=$(get_zig_cli_command)
 
 invoke_command "Initialize database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 # --- 1. Without --cleanup the source file is left where it is. ---
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/kept.png"
 
 invoke_command "Import without cleanup" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 check_exists "$WATCH_DIR/kept.png" "The source file with cleanup off"
 
 # --- 2. With --cleanup the source file goes once the asset is in the database. ---
@@ -31,7 +31,7 @@ cp "$TEST_FILES_DIR/test.jpg" "$WATCH_DIR/deleted.jpg"
 
 WATCH_OUTPUT=""
 invoke_command "Import with cleanup" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --cleanup --yes" 0 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The new file was imported"
 
@@ -64,7 +64,7 @@ printf 'this is not an image' > "$WATCH_DIR/broken.jpg"
 
 WATCH_OUTPUT=""
 invoke_command "Import with cleanup over a file that cannot be imported" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --cleanup --yes" 1 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 check_exists "$WATCH_DIR/broken.jpg" "The source file that failed to import"
 

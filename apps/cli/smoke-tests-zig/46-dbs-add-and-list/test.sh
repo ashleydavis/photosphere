@@ -20,12 +20,6 @@ test_dbs_add_and_list() {
     expect_output_string "$dbs_output" "smoke-db" "Database entry appears in dbs list"
     expect_output_string "$dbs_output" "$smoke_db_path" "Database path appears in dbs list"
 
-    local zig_dbs_list
-    local ts_dbs_list
-    invoke_command "List the databases with the Zig CLI" "$(get_zig_cli_command) -q dbs list" 0 "zig_dbs_list"
-    invoke_command "List the databases with the TypeScript CLI" "$(get_cli_command) -q dbs list" 0 "ts_dbs_list"
-    expect_value "$ts_dbs_list" "$zig_dbs_list" "The TypeScript CLI reads the database list the Zig CLI wrote"
-
     test_passed
 }
 

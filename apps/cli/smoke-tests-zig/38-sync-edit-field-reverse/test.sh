@@ -36,7 +36,7 @@ test_sync_edit_field_reverse() {
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_zig_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    ts_verify "$copy_dir"
+    verify_database "$copy_dir"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -131,8 +131,8 @@ test_sync_edit_field_reverse() {
     log_info "Using sync command to synchronize databases (bidirectional - should pull from copy to original)"
     local sync_output
     invoke_command "Sync databases (copy changes to original)" "$(get_zig_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    ts_verify "$copy_dir"
-    ts_verify "$original_dir"
+    verify_database "$copy_dir"
+    verify_database "$original_dir"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"

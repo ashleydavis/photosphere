@@ -34,7 +34,7 @@ test_v6_database_add_file() {
     
     local add_output
     invoke_command "Add test file to v6 database" "$(get_zig_cli_command) add --db $temp_v6_dir $test_file --yes" 0 "add_output"
-    ts_verify "$temp_v6_dir"
+    verify_database "$temp_v6_dir"
     
     expect_output_string "$add_output" "Added" "File was added successfully"
     

@@ -43,10 +43,10 @@ test_s3_database() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize a database on S3" "$(get_zig_cli_command) init --db $s3_db --yes" 0
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     invoke_command "Add an image to the S3 database" "$(get_zig_cli_command) add $TEST_FILES_DIR/test.jpg --db $s3_db --yes" 0
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     # Read the database back off S3. A summary that reports the imported file proves the write landed
     # in the bucket and was read back out of it, not out of any local cache.

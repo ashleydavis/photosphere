@@ -27,19 +27,19 @@ test_multi_key_encrypt() {
     # Create two encrypted DBs with different keys, add two assets to each.
     invoke_command "Init encrypted database 1 with key1" "$cli init --db \"$db1_dir\" --key \"$key1_name\" --generate-key --yes"
 
-    ts_verify "$db1_dir" --key "$key1_name"
+    verify_database "$db1_dir" --key "$key1_name"
 
     invoke_command "Init encrypted database 2 with key2" "$cli init --db \"$db2_dir\" --key \"$key2_name\" --generate-key --yes"
 
-    ts_verify "$db2_dir" --key "$key2_name"
+    verify_database "$db2_dir" --key "$key2_name"
 
     invoke_command "Add PNG and JPG to DB1 (key1)" "$cli add --db \"$db1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes"
 
-    ts_verify "$db1_dir" --key "$key1_name"
+    verify_database "$db1_dir" --key "$key1_name"
 
     invoke_command "Add PNG and JPG to DB2 (key2)" "$cli add --db \"$db2_dir\" --key \"$key2_name\" \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\" --yes"
 
-    ts_verify "$db2_dir" --key "$key2_name"
+    verify_database "$db2_dir" --key "$key2_name"
 
     # Simulate failed re-encrypt: take one asset from DB2 (key2) and overwrite same slot in DB1. Now DB1 has one asset with key1, one with key2.
     local asset_id_jpg_db1 asset_id_jpg_db2

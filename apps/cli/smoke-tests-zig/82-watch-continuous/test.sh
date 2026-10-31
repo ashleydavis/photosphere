@@ -5,9 +5,8 @@ DESCRIPTION="psi add --watch picks up a file created after it started, and Ctrl-
 # imports once would never exercise the watcher or the poll at all. This one starts the real command,
 # drops a file in while it is running, and waits for the asset to appear in the database.
 #
-# The signal has to reach the CLI itself. `bun run start --` spawns the CLI as a grandchild and does
-# not forward SIGINT, so the command is started under bash job control (macOS has no setsid) and
-# leads its own process group, which is signalled the way a terminal signals a foreground job.
+# The command is started under bash job control (macOS has no setsid) and leads its own process
+# group, which is signalled the way a terminal signals a foreground job.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -147,7 +146,7 @@ cancel_watch_command() {
 }
 
 invoke_command "Initialize database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 # A file that was there before the watch started, so the backfill has something to do as well.
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/before.png"
@@ -173,6 +172,6 @@ expect_output_value "$SUMMARY_OUTPUT" "Files imported:" 2 "Both files were impor
 
 invoke_command "Verify the database" "$CLI_COMMAND verify --db $TEST_DB_DIR --yes"
 
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 test_passed

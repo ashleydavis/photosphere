@@ -22,18 +22,18 @@ test_delete_encrypted_file() {
 
     invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     invoke_command "Add PNG file to encrypted database" "$cli add --db \"$db_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     local asset_id
     asset_id=$(get_asset_id_for_filename "$db_dir" "$key_name" "test.png") || test_failed "$name"
 
     invoke_command "Remove asset from encrypted database" "$cli remove --db \"$db_dir\" --key \"$key_name\" \"$asset_id\" --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     invoke_command "Verify encrypted database after delete" "$cli verify --db \"$db_dir\" --key \"$key_name\" --yes"
 

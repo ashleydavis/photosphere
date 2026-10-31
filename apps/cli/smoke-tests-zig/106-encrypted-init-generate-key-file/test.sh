@@ -25,7 +25,7 @@ init_with_generated_key() {
 
     invoke_command "Init encrypted database with generated vault key" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     if [ ! -f "$db_dir/.db/encryption.pub" ]; then
         log_error "Expected encryption.pub not found after init with generated key"

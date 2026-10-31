@@ -22,7 +22,7 @@ test_init_encrypted() {
 
     invoke_command "Init encrypted database" "$cli init --db \"$db_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$db_dir" --key "$key_name"
+    verify_database "$db_dir" --key "$key_name"
 
     if [ ! -d "$db_dir/.db" ] || [ ! -f "$db_dir/.db/files.dat" ] || [ ! -f "$db_dir/.db/encryption.pub" ]; then
         log_error "Encrypted database metadata not created correctly in $db_dir"

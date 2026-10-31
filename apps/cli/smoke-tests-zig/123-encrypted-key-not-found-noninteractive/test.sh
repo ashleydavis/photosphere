@@ -20,7 +20,7 @@ test_key_not_found_noninteractive() {
 
     invoke_command "Init plain database" "$cli init --db \"$db_dir\" --yes"
 
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
 
     local output
     output=$(eval "$cli compare --key nonexistent-key-xyz --db \"$db_dir\" --dest \"$db_dir\" --yes" 2>&1)

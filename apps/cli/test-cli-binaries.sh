@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Builds the compiled psi, mk and bdb executables a CLI smoke suite runs, into a directory that
+# Builds the compiled mk and bdb executables, and the Zig psi, a CLI smoke suite runs, into a directory that
 # belongs to that one run, and names them for the tests. See test-cli-binaries.md.
 #
 # Source this from a suite runner, which builds, and from a test library, which reads the paths:
@@ -64,7 +64,7 @@ test_cli_bun_target() {
 }
 
 #
-# Builds psi, mk and bdb into a newly allocated directory of this run's own and exports it as
+# Builds mk and bdb into a newly allocated directory of this run's own and exports it as
 # PHOTOSPHERE_CLI_BIN_DIR, which test_cli_binary_path reads in this shell and in every test it starts.
 #
 # Builds once per shell: a second call, such as `setup,all`, returns at once. The directory is recorded
@@ -89,20 +89,13 @@ build_test_cli_binaries() {
     export PHOTOSPHERE_CLI_BIN_DIR="$bin_dir"
 
     # Each executable in a directory of its own, because bun writes index.js.map beside each one and
-    # the three would overwrite each other's. Each build also runs from that directory, with the entry
+    # the two would overwrite each other's. Each build also runs from that directory, with the entry
     # points named by absolute path, because bun writes the executable to a temporary .bun-build file in
     # its working directory before moving it to --outfile: run from the package, an interrupted or
     # failed build left that file, over 100MB, in the source tree.
-    echo "Building psi, mk and bdb for $target into $bin_dir"
+    echo "Building mk and bdb for $target into $bin_dir"
     local cli_dir="$_TEST_CLI_BINARIES_CLI_DIR"
-    mkdir -p "$bin_dir/psi" "$bin_dir/mk" "$bin_dir/bdb"
-    # psi is built without a source map. With one, Bun 1.3.14 segfaulted as psi exited after a verify that had passed (exit code
-    # 132, "Bun has crashed"), in its source map lookup under Error.captureStackTrace (Mapping.Lookup.displaySourceURLIfNeeded),
-    # which failed a different Zig CLI smoke test each run on Linux and macOS.
-    if ! (cd "$bin_dir/psi" && bun build --env=disable --compile --minify --target="$target" --outfile "$bin_dir/psi/$(test_cli_executable_name psi)" "$cli_dir/index.ts" "$cli_dir/worker.ts"); then
-        echo "Failed to build psi into $bin_dir/psi" >&2
-        return 1
-    fi
+    mkdir -p "$bin_dir/mk" "$bin_dir/bdb"
     if ! (cd "$bin_dir/mk" && bun build --compile --minify --sourcemap --target="$target" --outfile "$bin_dir/mk/$(test_cli_executable_name mk)" "$cli_dir/../mk-cli/src/index.ts"); then
         echo "Failed to build mk into $bin_dir/mk" >&2
         return 1
@@ -159,7 +152,7 @@ test_zig_cli_path() {
 #
 # Prints the path of one of the executables build_test_cli_binaries built, failing loudly when this
 # run built none rather than letting a test run whatever an empty path resolves to.
-# Usage: test_cli_binary_path <psi|mk|bdb>
+# Usage: test_cli_binary_path <mk|bdb>
 #
 test_cli_binary_path() {
     local name="$1"
@@ -189,7 +182,6 @@ remove_test_cli_binaries() {
 
     local file
     for file in \
-        "psi/$(test_cli_executable_name psi)" "psi/index.js.map" "psi/worker.js.map" \
         "mk/$(test_cli_executable_name mk)" "mk/index.js.map" \
         "bdb/$(test_cli_executable_name bdb)" "bdb/index.js.map"; do
         if [ -e "$bin_dir/$file" ] && ! rm -f "$bin_dir/$file"; then
@@ -201,7 +193,7 @@ remove_test_cli_binaries() {
     # file at a time. The pattern stays as it is when nothing matches, and the -e test skips it then.
     local sub_dir
     local temporary_file
-    for sub_dir in psi mk bdb; do
+    for sub_dir in mk bdb; do
         for temporary_file in "$bin_dir/$sub_dir"/.*.bun-build; do
             if [ -e "$temporary_file" ] && ! rm -f "$temporary_file"; then
                 echo "WARNING: could not remove $temporary_file" >&2
@@ -209,7 +201,7 @@ remove_test_cli_binaries() {
         done
     done
 
-    for sub_dir in psi mk bdb; do
+    for sub_dir in mk bdb; do
         if [ -d "$bin_dir/$sub_dir" ] && ! rmdir "$bin_dir/$sub_dir"; then
             echo "WARNING: could not remove $bin_dir/$sub_dir" >&2
         fi

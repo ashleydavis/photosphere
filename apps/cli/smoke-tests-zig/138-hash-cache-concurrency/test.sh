@@ -1,5 +1,5 @@
 #!/bin/bash
-DESCRIPTION="Parallel Zig CLI processes write one hash cache without losing an entry, and the TypeScript CLI reads it back"
+DESCRIPTION="Parallel Zig CLI processes write one hash cache without losing an entry"
 
 # Proves that separate OS processes can write the shared hash cache at the same time without losing
 # each other's entries and without corrupting the file. Every write is its own psi process, so this
@@ -7,12 +7,11 @@ DESCRIPTION="Parallel Zig CLI processes write one hash cache without losing an e
 #
 # It drives the cache through the hidden "psi hash-cache" commands, and reads the result back through
 # them too, so the test and a developer poking at the cache use the same tools. Every psi command runs
-# in the Zig CLI, and the TypeScript CLI then reads the cache the Zig writers produced, so the two CLIs
-# are held to the same cache file format.
+# in the Zig CLI.
 
 # The runner exports NODE_ENV=testing, which the standalone script this test was ported from never
 # set, so the CLIs here run without it as they did there. For the same reason this test runs its
-# commands directly rather than through lib/common.sh's command runner or its TypeScript verify, both
+# commands directly rather than through lib/common.sh's command runner or its verify_database, both
 # of which put NODE_ENV=testing back in front of the command.
 unset NODE_ENV
 
@@ -69,14 +68,6 @@ ZIG_CLI="$(get_zig_cli_command)"
 #
 psi_cmd() {
     "$ZIG_CLI" --quiet "$@"
-}
-
-#
-# Runs a psi command in the TypeScript CLI, quietly, for the interop checks that read back what the
-# Zig CLI wrote. get_cli_command gives the compiled CLI under --binary and the sources otherwise.
-#
-ts_psi_cmd() {
-    $(get_cli_command) --quiet "$@"
 }
 
 #
@@ -204,32 +195,14 @@ if [ "$AFTER_REMOVE" != "$((EXPECTED_ENTRIES - 1))" ]; then
 fi
 echo -e "${GREEN}Removal applied cleanly${NC}"
 
-# Interop: the TypeScript CLI must read the cache the Zig CLI wrote, entry for entry.
-echo ""
-echo -e "${YELLOW}Reading the Zig-written cache back with the TypeScript CLI...${NC}"
-TS_COUNT=$(ts_psi_cmd hash-cache count --db "$TEST_DB") || test_failed "FAIL: the TypeScript CLI could not count the cache entries"
-if [ "$TS_COUNT" != "$AFTER_REMOVE" ]; then
-    test_failed "FAIL: the TypeScript CLI counts $TS_COUNT entries, the Zig CLI counts $AFTER_REMOVE"
+# An entry the removal did not name must still be there, with its hash.
+OTHER_SPOT_PATH="writer2/file-1.dat"
+OTHER_SPOT_EXPECTED=$(printf '%s' "$OTHER_SPOT_PATH" | sha256_of_stdin)
+OTHER_SPOT_ACTUAL=$(psi_cmd hash-cache get --db "$TEST_DB" "$OTHER_SPOT_PATH") || test_failed "FAIL: the Zig CLI could not get $OTHER_SPOT_PATH after the removal"
+if [ "$OTHER_SPOT_ACTUAL" != "$OTHER_SPOT_EXPECTED" ]; then
+    test_failed "FAIL: after the removal $OTHER_SPOT_PATH reads as $OTHER_SPOT_ACTUAL, expected $OTHER_SPOT_EXPECTED"
 fi
-
-TS_CACHED_PATHS="$OUTPUT_DIR/ts-cached-paths.txt"
-ts_psi_cmd hash-cache list --db "$TEST_DB" > "$TS_CACHED_PATHS" || test_failed "FAIL: the TypeScript CLI could not list the cache entries"
-ZIG_CACHED_PATHS="$OUTPUT_DIR/zig-cached-paths.txt"
-psi_cmd hash-cache list --db "$TEST_DB" > "$ZIG_CACHED_PATHS" || test_failed "FAIL: the Zig CLI could not list the cache entries after the removal"
-if ! diff "$ZIG_CACHED_PATHS" "$TS_CACHED_PATHS"; then
-    test_failed "FAIL: the TypeScript and Zig CLIs list different cache entries"
-fi
-
-TS_SPOT_PATH="writer2/file-1.dat"
-TS_SPOT_EXPECTED=$(printf '%s' "$TS_SPOT_PATH" | sha256_of_stdin)
-TS_SPOT_ACTUAL=$(ts_psi_cmd hash-cache get --db "$TEST_DB" "$TS_SPOT_PATH") || test_failed "FAIL: the TypeScript CLI could not get $TS_SPOT_PATH"
-if [ "$TS_SPOT_ACTUAL" != "$TS_SPOT_EXPECTED" ]; then
-    test_failed "FAIL: the TypeScript CLI reads $TS_SPOT_PATH as $TS_SPOT_ACTUAL, expected $TS_SPOT_EXPECTED"
-fi
-if ts_psi_cmd hash-cache get --db "$TEST_DB" "$SPOT_PATH" > /dev/null 2>&1; then
-    test_failed "FAIL: the TypeScript CLI still finds $SPOT_PATH, which the Zig CLI removed"
-fi
-echo -e "${GREEN}The TypeScript CLI reads the Zig-written cache identically${NC}"
+echo -e "${GREEN}The other entries are untouched by the removal${NC}"
 
 echo ""
 echo -e "${GREEN}PASS: all $EXPECTED_ENTRIES entries from $NUM_PROCESSES parallel processes survived${NC}"

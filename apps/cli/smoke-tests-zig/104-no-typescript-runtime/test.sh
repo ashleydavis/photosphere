@@ -2,12 +2,11 @@
 DESCRIPTION="The Zig CLI runs on its own: a copy of the binary, with no bun or node on the PATH, runs the common commands"
 
 # The Zig binary is copied alone into a directory of this test and run with a PATH that holds only the
-# directories of magick, ffmpeg and ffprobe, the external tools the TypeScript CLI also needs (or a directory
+# directories of magick, ffmpeg and ffprobe (or a directory
 # of links to them, for a tool whose own directory also holds bun or node). The test fails if bun or node can be
 # found in any of those directories. init, add, summary, list, export and
-# verify are run with asserted output and exit codes, then the TypeScript CLI checks the database with the
-# normal PATH. The binary is also checked not to be a bun-compiled executable: a bun-compiled executable
-# carries bun's embedded-files trailer, which the TypeScript CLI binary has and the Zig binary must not.
+# verify are run with asserted output and exit codes. The binary is also checked not to be a bun-compiled
+# executable: a bun-compiled executable carries bun's embedded-files trailer, which the Zig binary must not.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -119,8 +118,6 @@ test_no_typescript_runtime() {
     fi
 
     invoke_command "Verify the database" "$psi verify --db \"$db_dir\" --yes" 0
-
-    ts_verify "$db_dir"
 }
 
 test_no_typescript_runtime 104

@@ -22,12 +22,6 @@ test_vault_list_shared() {
     expect_output_string "$vault_output" "s3test01" "S3 credential appears in vault list"
     expect_output_string "$vault_output" "api00001" "API key appears in vault list"
 
-    local zig_vault_list
-    local ts_vault_list
-    invoke_command "List the vault with the Zig CLI" "$(get_zig_cli_command) secrets list" 0 "zig_vault_list"
-    invoke_command "List the vault with the TypeScript CLI" "$(get_cli_command) secrets list" 0 "ts_vault_list"
-    expect_value "$ts_vault_list" "$zig_vault_list" "The TypeScript CLI reads the vault the Zig CLI wrote"
-
     test_passed
 }
 

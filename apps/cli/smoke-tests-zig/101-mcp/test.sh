@@ -1,5 +1,5 @@
 #!/bin/bash
-DESCRIPTION="psi mcp serves an MCP client over stdio: it lists its tools, opens a database, reads, saves, verifies and imports media files, and the TypeScript CLI verifies what it imported"
+DESCRIPTION="psi mcp serves an MCP client over stdio: it lists its tools, opens a database, reads, saves, verifies and imports media files, and what it imported verifies"
 
 # An MCP client talks to `psi mcp` with newline-delimited JSON-RPC messages on its stdin and reads
 # the answers, one line each, from its stdout. Each session here is a file of messages fed to the
@@ -68,9 +68,9 @@ test_mcp() {
     mkdir -p "$test_dir"
 
     invoke_command "Create a database" "$(get_zig_cli_command) init --db \"$db_path\" --yes"
-    ts_verify "$db_path"
+    verify_database "$db_path"
     invoke_command "Add a PNG and a JPG" "$(get_zig_cli_command) add --db \"$db_path\" --yes \"$TEST_FILES_DIR/test.png\" \"$TEST_FILES_DIR/test.jpg\""
-    ts_verify "$db_path"
+    verify_database "$db_path"
 
     # --- 1. Handshake, tools and listing. ---
 
@@ -142,12 +142,12 @@ test_mcp() {
     expect_value "$(answer "$second_output" 8 | jq -r '.result.isError' | tr -d '\r')" "true" "Invalid arguments are an error result"
     expect_value "$(tool_text "$second_output" 9)" "Closed database at $db_path" "close_database closes the database"
 
-    # --- 3. What the Zig CLI imported through MCP is a sound database for the TypeScript CLI. ---
+    # --- 3. What the Zig CLI imported through MCP is a sound database. ---
 
     local summary_output
     invoke_command "Summarize the database with the Zig CLI" "$(get_zig_cli_command) summary --db \"$db_path\" --yes" 0 "summary_output"
     expect_value "$(parse_numeric "$summary_output" "Files imported:")" "3" "The database holds the three imports"
-    ts_verify "$db_path"
+    verify_database "$db_path"
 
     test_passed
 }

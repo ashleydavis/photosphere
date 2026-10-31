@@ -1,9 +1,8 @@
 #!/bin/bash
 DESCRIPTION="The Zig CloudStorage integration suite, against a local MinIO"
 
-# The Zig counterpart of smoke-tests/75-s3-storage-api, which runs the TypeScript CloudStorage
-# integration suite against a local S3 server. Here the suite is its port,
-# packages-zig/storage-zig/integration-tests/cloud-storage.test.zig: the same tests of basic file
+# Runs the CloudStorage integration suite against a local S3 server. The suite is
+# packages-zig/storage-zig/integration-tests/cloud-storage.test.zig: the tests of basic file
 # operations, directory operations, streams, the full write-lock lifecycle, error handling and path
 # handling, run against the CloudStorage the Zig CLI uses for every s3: database. The unit tests never
 # run it: it needs AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and TEST_S3_BUCKET, which this test

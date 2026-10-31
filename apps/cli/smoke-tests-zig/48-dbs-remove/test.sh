@@ -29,12 +29,6 @@ test_dbs_remove() {
     expect_output_string "$dbs_output" "^[[:space:]]*remove-db[[:space:]]" "remove-db is absent after removal" false
     expect_output_string "$dbs_output" "^[[:space:]]*keep-db[[:space:]]" "keep-db still present after removal"
 
-    local zig_dbs_list
-    local ts_dbs_list
-    invoke_command "List the databases with the Zig CLI" "$(get_zig_cli_command) -q dbs list" 0 "zig_dbs_list"
-    invoke_command "List the databases with the TypeScript CLI" "$(get_cli_command) -q dbs list" 0 "ts_dbs_list"
-    expect_value "$ts_dbs_list" "$zig_dbs_list" "The TypeScript CLI reads the database list the Zig CLI wrote"
-
     test_passed
 }
 

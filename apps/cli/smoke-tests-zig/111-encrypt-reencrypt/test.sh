@@ -23,17 +23,17 @@ test_encrypt_reencrypt() {
 
     invoke_command "Init encrypted database with key1" "$cli init --db \"$enc1_dir\" --key \"$key1_name\" --generate-key --yes"
 
-    ts_verify "$enc1_dir" --key "$key1_name"
+    verify_database "$enc1_dir" --key "$key1_name"
 
     invoke_command "Add PNG file with key1" "$cli add --db \"$enc1_dir\" --key \"$key1_name\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$enc1_dir" --key "$key1_name"
+    verify_database "$enc1_dir" --key "$key1_name"
 
     assert_database_assets_encrypted "$enc1_dir" || test_failed "$name"
 
     invoke_command "Re-encrypt database in place with key2" "$cli encrypt --db \"$enc1_dir\" --key \"$key2_name,$key1_name\" --generate-key --yes"
 
-    ts_verify "$enc1_dir" --key "$key2_name,$key1_name"
+    verify_database "$enc1_dir" --key "$key2_name,$key1_name"
 
     assert_database_assets_encrypted "$enc1_dir" || test_failed "$name"
 

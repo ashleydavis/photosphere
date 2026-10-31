@@ -80,7 +80,7 @@ test_s3_replicate() {
 
     invoke_command "Replicate the local database up to S3" \
         "$(get_zig_cli_command) replicate --db $source_db --dest \"$s3_replica\" --yes" 0
-    ts_verify "$s3_replica"
+    verify_database "$s3_replica"
 
     expect_value "$(read_root_hash "$s3_replica")" "$source_hash" "The S3 replica's root hash matches the source"
     expect_value "$(read_database_id "$s3_replica")" "$source_id" "The S3 replica's database id matches the source"
@@ -93,7 +93,7 @@ test_s3_replicate() {
 
     invoke_command "Replicate the S3 database back down to local storage" \
         "$(get_zig_cli_command) replicate --db \"$s3_replica\" --dest $local_replica --yes" 0
-    ts_verify "$local_replica"
+    verify_database "$local_replica"
 
     expect_value "$(read_root_hash "$local_replica")" "$source_hash" "The local replica's root hash matches the source"
     expect_value "$(read_database_id "$local_replica")" "$source_id" "The local replica's database id matches the source"
@@ -108,7 +108,7 @@ test_s3_replicate() {
     # adds a sixth file rather than being rejected as a duplicate.
     invoke_command "Add one more file to the source" \
         "$(get_zig_cli_command) add --db $source_db $TEST_FILES_DIR/test.webp --yes" 0
-    ts_verify "$source_db"
+    verify_database "$source_db"
 
     local updated_hash updated_summary updated_file_count
     updated_hash="$(read_root_hash "$source_db")"
@@ -117,7 +117,7 @@ test_s3_replicate() {
 
     invoke_command "Replicate the source up to S3 again" \
         "$(get_zig_cli_command) replicate --db $source_db --dest \"$s3_replica\" --yes" 0
-    ts_verify "$s3_replica"
+    verify_database "$s3_replica"
 
     expect_value "$(read_root_hash "$s3_replica")" "$updated_hash" "The S3 replica's root hash matches after the incremental replication"
 

@@ -94,12 +94,12 @@ test_s3_large_file() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize the S3 database" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     local add_output
     invoke_command "Add the large video to the S3 database" \
         "$(get_zig_cli_command) add \"$fixture\" --db \"$s3_db\" --verbose --yes" 0 "add_output"
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     local asset_id
     asset_id="$(asset_id_from_add_output "$add_output")"

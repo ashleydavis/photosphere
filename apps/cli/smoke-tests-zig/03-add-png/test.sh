@@ -7,6 +7,6 @@ trap cleanup_and_show_summary EXIT
 
 TEST_DB_DIR="$(get_test_dir 3)/test-db"
 invoke_command "Initialize database" "$(get_zig_cli_command) init --db $TEST_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 test_add_png_file 3

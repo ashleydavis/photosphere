@@ -4,9 +4,8 @@ DESCRIPTION="Ctrl+C cancels psi secrets send and psi secrets receive, and both w
 # The secret half of 78. secrets.ts installs the same pair of SIGINT handlers around the same two
 # waits, so both commands are cancellable and neither had anything covering that path.
 #
-# As in 78 the signal has to reach the CLI rather than the `bun run start --` wrapper, which does not
-# forward it, so each command runs under bash job control (macOS has no setsid) in its own process
-# group and the group is signalled.
+# As in 78 each command runs under bash job control (macOS has no setsid) in its own process group
+# and the group is signalled.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -52,8 +51,7 @@ start_share_command() {
     # macOS has no setsid, so bash job control stands in for it: with monitor mode on, the shell makes
     # each background job the leader of a new process group whose PGID equals its PID. That group is
     # what cancel_share_command signals, the way a terminal's Ctrl+C signals a foreground job's whole
-    # group, so the SIGINT reaches the CLI grandchild rather than only the `bun run start --` wrapper,
-    # which does not forward it. Monitor mode is turned off again straight after so nothing else in the
+    # group. Monitor mode is turned off again straight after so nothing else in the
     # test runs under it.
     set -m
     "$@" > "$log_file" 2>&1 &
@@ -199,9 +197,9 @@ test_secrets_share_cancel() {
     fi
     log_success "A send and a receive started after cancelled ones completed a real transfer"
 
-    local ts_received_value
-    invoke_command "Read the received secret with the TypeScript CLI" "PHOTOSPHERE_VAULT_DIR=\"$receiver_vault\" PHOTOSPHERE_CONFIG_DIR=\"$receiver_config\" $(get_cli_command) secrets view --yes --raw --name \"$SHARED_SECRET_NAME\"" 0 "ts_received_value"
-    expect_value "$ts_received_value" "SHAREDVALUE123" "The TypeScript CLI reads the secret the Zig CLI received"
+    local received_value
+    invoke_command "Read the received secret" "PHOTOSPHERE_VAULT_DIR=\"$receiver_vault\" PHOTOSPHERE_CONFIG_DIR=\"$receiver_config\" $(get_zig_cli_command) secrets view --yes --raw --name \"$SHARED_SECRET_NAME\"" 0 "received_value"
+    expect_value "$received_value" "SHAREDVALUE123" "The received secret has the value that was sent"
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"

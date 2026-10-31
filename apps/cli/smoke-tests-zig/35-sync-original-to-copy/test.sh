@@ -32,7 +32,7 @@ test_sync_original_to_copy() {
     rm -rf "$copy_dir"
     local replicate_output
     invoke_command "Replicate to create copy" "$(get_zig_cli_command) replicate --db $original_dir --dest $copy_dir --yes --force" 0 "replicate_output"
-    ts_verify "$copy_dir"
+    verify_database "$copy_dir"
     
     # Verify both databases exist
     check_exists "$original_dir" "Original database directory"
@@ -61,7 +61,7 @@ test_sync_original_to_copy() {
     log_info "Adding new file to original database"
     local add_output
     invoke_command "Add test file to original database" "$(get_zig_cli_command) add --db $original_dir $test_file --yes" 0 "add_output"
-    ts_verify "$original_dir"
+    verify_database "$original_dir"
     
     # Verify file was added
     expect_output_string "$add_output" "Added" "File was added successfully to original"
@@ -87,8 +87,8 @@ test_sync_original_to_copy() {
     log_info "Using sync command to synchronize databases"
     local sync_output
     invoke_command "Sync original to copy" "$(get_zig_cli_command) sync --db $original_dir --dest $copy_dir --yes" 0 "sync_output"
-    ts_verify "$copy_dir"
-    ts_verify "$original_dir"
+    verify_database "$copy_dir"
+    verify_database "$original_dir"
     
     # Verify sync completed
     expect_output_string "$sync_output" "Sync completed successfully" "Sync completed successfully"

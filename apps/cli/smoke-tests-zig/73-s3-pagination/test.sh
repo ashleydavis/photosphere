@@ -66,7 +66,7 @@ test_s3_pagination() {
     log_info "Database path: $s3_db"
 
     invoke_command "Initialize the S3 database" "$(get_zig_cli_command) init --db \"$s3_db\" --yes" 0
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     # --- 1. The fixture really holds more than one page of objects. ---
 

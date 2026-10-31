@@ -4,12 +4,11 @@ DESCRIPTION="Parallel Zig CLI processes add files to one local database, and eve
 # Four worker processes each generate a PNG, sleep a random time and add the PNG to the same local
 # database, for a fixed number of iterations, all at the same time, so they contend for the
 # database's write lock. Afterwards the database must verify, and every file a worker reports as added
-# must still match the hash and size it had when added and be found in the database. The TypeScript
-# CLI verifies the database the Zig writers built.
+# must still match the hash and size it had when added and be found in the database.
 
 # The runner exports NODE_ENV=testing, which the standalone script this test was ported from never
 # set, so the CLIs here run without it as they did there. For the same reason this test calls neither
-# invoke_command nor lib/common.sh's ts_verify: both put NODE_ENV=testing back in front of the
+# invoke_command nor lib/common.sh's verify_database: both put NODE_ENV=testing back in front of the
 # command.
 unset NODE_ENV
 
@@ -34,29 +33,22 @@ WRITE_LOCK_DB_DIR="$TEST_TMP_DIR/write-lock-test-db"
 WRITE_LOCK_FILES_DIR="$TEST_TMP_DIR/write-lock-files"
 PROCESS_OUTPUT_DIR="$TEST_TMP_DIR/write-lock-outputs"
 
-# Where ts_verify records how long each TypeScript verify took: the file the runner sums.
-TS_VERIFY_TIMING_LOG="$TEST_TMP_DIR/ts-verify-milliseconds.log"
-
 # Every worker this test backgrounds, so a run that ends early takes them with it.
 background_pids=()
 
-# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
-# fails the test unless it passes, so the reference implementation checks the integrity of every
-# database the Zig CLI writes. The time it takes is appended to TS_VERIFY_TIMING_LOG.
+# Runs psi verify on a database the Zig CLI has just created or modified, and fails the test unless it
+# passes, so the integrity of every database the test writes is checked.
 #
-# This replaces lib/common.sh's ts_verify for this test alone. That one runs through invoke_command,
+# This replaces lib/common.sh's verify_database for this test alone. That one runs through invoke_command,
 # which puts NODE_ENV=testing in front of the command, and the script this test was ported from ran
 # the verify without it.
-# Usage: ts_verify <database>
-ts_verify() {
+# Usage: verify_database <database>
+verify_database() {
     local database_dir="$1"
-    local verify_start
-    verify_start="$(current_milliseconds)"
-    log_info "Verifying $database_dir with the TypeScript CLI"
-    if ! $(get_cli_command) verify --db "$database_dir" --yes; then
-        test_failed "The TypeScript CLI does not verify $database_dir"
+    log_info "Verifying $database_dir"
+    if ! $(get_zig_cli_command) verify --db "$database_dir" --yes; then
+        test_failed "$database_dir does not verify"
     fi
-    record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
 }
 
 # Prints the SHA-256 of a file: sha256sum where it exists, otherwise shasum, as on macOS
@@ -70,6 +62,17 @@ sha256_of_file() {
     fi
 }
 
+# The current time in milliseconds. EPOCHREALTIME (bash 5) gives microseconds; the bash 3.2 macOS
+# ships lacks it, and there whole seconds from date are the best available.
+current_milliseconds() {
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+        local epoch_microseconds="${EPOCHREALTIME/[.,]/}"
+        echo $((10#$epoch_microseconds / 1000))
+    else
+        echo $(($(date +%s) * 1000))
+    fi
+}
+
 # Fails the test unless sha256sum or shasum (which macOS has instead) is available. The runner checks
 # ImageMagick before any test runs.
 check_dependencies() {
@@ -78,8 +81,7 @@ check_dependencies() {
     fi
 }
 
-# Creates the test's directories and the database every worker adds to, verified by the TypeScript
-# CLI.
+# Creates the test's directories and the database every worker adds to, verified.
 setup_test_environment() {
     log_info "Setting up test environment..."
 
@@ -91,7 +93,7 @@ setup_test_environment() {
     if ! $(get_zig_cli_command) init --db "$WRITE_LOCK_DB_DIR" --yes --session-id "setup-process"; then
         test_failed "Failed to initialize database"
     fi
-    ts_verify "$WRITE_LOCK_DB_DIR"
+    verify_database "$WRITE_LOCK_DB_DIR"
 
     log_success "Test environment setup complete"
 }
@@ -430,8 +432,8 @@ validate_results() {
     fi
 }
 
-# The test: set up, add files from every worker at once, validate what they added, and have the
-# TypeScript CLI verify the database. A failed validation still runs that verify before the test
+# The test: set up, add files from every worker at once, validate what they added, and verify the
+# database. A failed validation still runs that verify before the test
 # fails, as the script this test was ported from did.
 test_write_lock_parallel() {
     echo "============================================================================"
@@ -442,7 +444,6 @@ test_write_lock_parallel() {
     echo "  Iterations per process: $NUM_ITERATIONS"
     echo "  Sleep range: $((SLEEP_MIN_TENTHS / 10)).$((SLEEP_MIN_TENTHS % 10))s - $((SLEEP_MAX_TENTHS / 10)).$((SLEEP_MAX_TENTHS % 10))s"
     echo "  Use binary: ${USE_BINARY:-false}"
-    echo "  CLI command: $(get_cli_command)"
     echo "  Zig CLI command: $(get_zig_cli_command)"
     echo "============================================================================"
 
@@ -469,9 +470,8 @@ test_write_lock_parallel() {
         log_error "Write lock smoke test FAILED"
     fi
 
-    # Verify the database the concurrent Zig writers built with the TypeScript CLI
-    ts_verify "$WRITE_LOCK_DB_DIR"
-    echo "TypeScript verify: $(count_ts_verify_calls "$TS_VERIFY_TIMING_LOG") calls, $(format_milliseconds_as_seconds "$(sum_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG")")"
+    # Verify the database the concurrent Zig writers built
+    verify_database "$WRITE_LOCK_DB_DIR"
 
     log_info "Test data preserved in: $WRITE_LOCK_DB_DIR, $WRITE_LOCK_FILES_DIR, $PROCESS_OUTPUT_DIR"
     log_info "Process directories: $PROCESS_OUTPUT_DIR/process_*/"

@@ -113,12 +113,6 @@ test_config_file() {
     expect_output_string "$state_contents" "config-file-db" "state.yaml does not hold the database list" false
     expect_output_string "$databases_contents" "news" "databases.toml does not hold the news state" false
 
-    local zig_dbs_list
-    local ts_dbs_list
-    invoke_command "List the databases with the Zig CLI" "$(get_zig_cli_command) -q dbs list" 0 "zig_dbs_list"
-    invoke_command "List the databases with the TypeScript CLI" "$(get_cli_command) -q dbs list" 0 "ts_dbs_list"
-    expect_value "$ts_dbs_list" "$zig_dbs_list" "The TypeScript CLI reads the database list the Zig CLI wrote"
-
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"
 

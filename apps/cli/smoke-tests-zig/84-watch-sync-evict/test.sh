@@ -22,30 +22,30 @@ mkdir -p "$WATCH_DIR"
 CLI_COMMAND=$(get_zig_cli_command)
 
 invoke_command "Initialize the local database" "$CLI_COMMAND init --db $TEST_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 # The origin is made by replicating the local database rather than by initializing a second one.
 # Two databases created independently have different ids and sync refuses them, which is the
 # refusal this feature deliberately leaves in place: making them related is what `psi replicate`
 # (or `psi connect`, for a remote that already has content) is for.
 invoke_command "Replicate the local database to the origin" "$CLI_COMMAND replicate --db $TEST_DB_DIR --dest $ORIGIN_DB_DIR --yes"
-ts_verify "$ORIGIN_DB_DIR"
+verify_database "$ORIGIN_DB_DIR"
 invoke_command "Point the local database at the origin" "$CLI_COMMAND set-origin --db $TEST_DB_DIR $ORIGIN_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/holiday.png"
 
 WATCH_OUTPUT=""
 invoke_command "Import the folder" "$CLI_COMMAND add --db $TEST_DB_DIR $WATCH_DIR --yes" 0 WATCH_OUTPUT
-ts_verify "$TEST_DB_DIR"
+verify_database "$TEST_DB_DIR"
 
 expect_output_value "$WATCH_OUTPUT" "Files added:" 1 "The file was imported"
 
 # The two halves of what `psi watch` used to be, run one after the other. Each is separately useful
 # and separately testable, which is the point of splitting them.
 invoke_command "Sync to the origin" "$CLI_COMMAND sync --db $TEST_DB_DIR --yes"
-ts_verify "$TEST_DB_DIR"
-ts_verify "$ORIGIN_DB_DIR"
+verify_database "$TEST_DB_DIR"
+verify_database "$ORIGIN_DB_DIR"
 
 # --- The asset reached the origin. ---
 

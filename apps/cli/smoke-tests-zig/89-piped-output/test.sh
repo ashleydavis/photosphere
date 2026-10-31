@@ -47,7 +47,7 @@ test_piped_output() {
     mkdir -p "$TEST_DIR"
 
     invoke_command "Initialize the database" "$(get_zig_cli_command) init --db \"$db_path\" --yes" 0
-    ts_verify "$db_path"
+    verify_database "$db_path"
 
     log_info "Creating $ORPHAN_COUNT orphaned files ..."
     mkdir -p "$db_path/asset"

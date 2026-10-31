@@ -103,13 +103,13 @@ find_record_naming() {
 }
 
 invoke_command "Initialize the local database" "$CLI_COMMAND init --db $LOCAL_DB --yes"
-ts_verify "$LOCAL_DB"
+verify_database "$LOCAL_DB"
 
 # --- 1. A manual import is recorded, and badged as manual. ---
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/asked-for.png"
 invoke_command "Import a photo by hand" "$CLI_COMMAND add --db $LOCAL_DB $WATCH_DIR/asked-for.png --yes"
-ts_verify "$LOCAL_DB"
+verify_database "$LOCAL_DB"
 
 RECORD_FILE="$(find_record_naming "asked-for.png")"
 if [ -z "$RECORD_FILE" ]; then
@@ -161,7 +161,7 @@ done
 
 stop_watch_command || exit 1
 log_success "The watch command stopped"
-ts_verify "$LOCAL_DB"
+verify_database "$LOCAL_DB"
 
 if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
     log_error "An automatically imported photo was not badged automatic"
@@ -206,21 +206,21 @@ assert_no_record_inside "$LOCAL_DB" "Importing"
 log_success "Importing put no record inside the database it imported into"
 
 invoke_command "Create the remote and consolidate into it" "$CLI_COMMAND consolidate --db $LOCAL_DB $REMOTE_DB --yes"
-ts_verify "$LOCAL_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$LOCAL_DB"
+verify_database "$REMOTE_DB"
 assert_no_record_inside "$LOCAL_DB" "Consolidation"
 assert_no_record_inside "$REMOTE_DB" "Consolidation"
 log_success "Consolidation put no record inside either database"
 
 invoke_command "Sync to the remote" "$CLI_COMMAND sync --db $LOCAL_DB --yes"
-ts_verify "$LOCAL_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$LOCAL_DB"
+verify_database "$REMOTE_DB"
 assert_no_record_inside "$LOCAL_DB" "Sync"
 assert_no_record_inside "$REMOTE_DB" "Sync"
 log_success "Sync put no record inside either database"
 
 invoke_command "Replicate to a third database" "$CLI_COMMAND replicate --db $LOCAL_DB --dest $REPLICA_DB --yes"
-ts_verify "$REPLICA_DB"
+verify_database "$REPLICA_DB"
 assert_no_record_inside "$LOCAL_DB" "Replication"
 assert_no_record_inside "$REPLICA_DB" "Replication"
 log_success "Replication put no record inside either database"
@@ -244,11 +244,11 @@ expect_output_value "$REPLICA_SUMMARY" "Files imported:" 2 "Both photos reached 
 # This is what the per-database record buys. A single record for the machine would show photos put
 # into one database as having gone into the other, which is a lie about where they are.
 invoke_command "Initialize a second database" "$CLI_COMMAND init --db $OTHER_DB --yes"
-ts_verify "$OTHER_DB"
+verify_database "$OTHER_DB"
 
 cp "$TEST_FILES_DIR/test.png" "$WATCH_DIR/into-the-other.png"
 invoke_command "Import a photo into the second database" "$CLI_COMMAND add --db $OTHER_DB $WATCH_DIR/into-the-other.png --yes"
-ts_verify "$OTHER_DB"
+verify_database "$OTHER_DB"
 
 OTHER_RECORD_FILE="$(find_record_naming "into-the-other.png")"
 if [ -z "$OTHER_RECORD_FILE" ]; then

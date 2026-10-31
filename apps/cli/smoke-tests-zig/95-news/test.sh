@@ -1,10 +1,10 @@
 #!/bin/bash
-DESCRIPTION="psi news shows the whole feed newest first, marks what it showed as seen, and the TypeScript CLI reads what it recorded"
+DESCRIPTION="psi news shows the whole feed newest first and marks what it showed as seen"
 
 # The feed is the checked-in test/demo-news.yaml, read through a file:// URL (PHOTOSPHERE_NEWS_URL,
 # the override the demo scripts use), so the test needs no network and knows exactly what the feed
-# holds. Each CLI records what it has shown in state.yaml under a config directory of its own here,
-# so the two can be run from the same starting point and what they record compared byte for byte.
+# holds. Each part of the test records what it has shown in state.yaml under a config directory of its
+# own, so each starts from nothing shown.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -33,8 +33,7 @@ test_news() {
     local test_dir
     test_dir="$(get_test_dir "$test_number")"
     local zig_config="$test_dir/zig-config"
-    local ts_config="$test_dir/ts-config"
-    mkdir -p "$zig_config" "$ts_config"
+    mkdir -p "$zig_config"
 
     export PHOTOSPHERE_NEWS_URL
     PHOTOSPHERE_NEWS_URL="$(file_url "$TEST_FILES_DIR/demo-news.yaml")"
@@ -64,24 +63,12 @@ test_news() {
         expect_output_string "$zig_state" "^    - $item_id$" "$item_id is recorded as shown"
     done
 
-    local ts_first_output
-    invoke_command "Show the news with the TypeScript CLI" "PHOTOSPHERE_CONFIG_DIR=\"$ts_config\" $(get_cli_command) news" 0 "ts_first_output"
-    expect_value "$first_output" "$ts_first_output" "The Zig CLI shows the news as the TypeScript CLI does"
-
-    local ts_state
-    ts_state="$(cat "$ts_config/state.yaml")"
-    expect_value "$zig_state" "$ts_state" "The Zig CLI records the news it showed as the TypeScript CLI does"
-
     # --- 2. The second run shows every item as seen. ---
 
     local second_output
     invoke_command "Show the news again with the Zig CLI" "PHOTOSPHERE_CONFIG_DIR=\"$zig_config\" $(get_zig_cli_command) news" 0 "second_output"
     expect_output_string "$second_output" "(new)" "No item is new the second time" false
     expect_output_string "$second_output" "Welcome to Photosphere. Thanks for trying it out!$" "The seen items are still listed"
-
-    local ts_second_output
-    invoke_command "Show the news with the TypeScript CLI from what the Zig CLI recorded" "PHOTOSPHERE_CONFIG_DIR=\"$zig_config\" $(get_cli_command) news" 0 "ts_second_output"
-    expect_value "$ts_second_output" "$second_output" "The TypeScript CLI reads what the Zig CLI recorded as shown"
 
     # --- 3. Any other command shows the oldest unseen item once, and the news command then knows it. ---
 
@@ -99,10 +86,11 @@ test_news() {
     expect_output_string "$notify_again_output" "^   We'd love your feedback. Take our 2-minute user survey!$" "The next run shows the next item"
 
     local after_notify_output
-    invoke_command "Show the news with the TypeScript CLI after those notifications" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" $(get_cli_command) news" 0 "after_notify_output"
-    expect_output_string "$after_notify_output" "Welcome to Photosphere. Thanks for trying it out!$" "The TypeScript CLI knows the first item was shown"
-    expect_output_string "$after_notify_output" "Take our 2-minute user survey!$" "The TypeScript CLI knows the second item was shown"
-    expect_output_string "$after_notify_output" "end-to-end encrypted. (new)" "The TypeScript CLI still shows the third item as new"
+    invoke_command "Show the news with the Zig CLI after those notifications" "PHOTOSPHERE_CONFIG_DIR=\"$notify_config\" $(get_zig_cli_command) news" 0 "after_notify_output"
+    expect_output_string "$after_notify_output" "Welcome to Photosphere. Thanks for trying it out!$" "The news command knows the first item was shown"
+    expect_output_string "$after_notify_output" "Welcome to Photosphere. Thanks for trying it out! (new)" "The news command does not show the first item as new" false
+    expect_output_string "$after_notify_output" "Take our 2-minute user survey! (new)" "The news command does not show the second item as new" false
+    expect_output_string "$after_notify_output" "end-to-end encrypted. (new)" "The news command still shows the third item as new"
 
     # --- 4. A feed that cannot be read. ---
 
@@ -114,10 +102,6 @@ test_news() {
     local missing_output
     invoke_command "Show the news of a feed that is not there with the Zig CLI" "PHOTOSPHERE_NEWS_URL=\"$missing_feed_url\" PHOTOSPHERE_CONFIG_DIR=\"$empty_config\" $(get_zig_cli_command) news" 0 "missing_output"
     expect_output_string "$missing_output" "^No news items available.$" "An unreadable feed shows no items"
-
-    local ts_missing_output
-    invoke_command "Show the news of a feed that is not there with the TypeScript CLI" "PHOTOSPHERE_NEWS_URL=\"$missing_feed_url\" PHOTOSPHERE_CONFIG_DIR=\"$empty_config\" $(get_cli_command) news" 0 "ts_missing_output"
-    expect_value "$missing_output" "$ts_missing_output" "The Zig CLI reports an unreadable feed as the TypeScript CLI does"
 
     test_passed
 }

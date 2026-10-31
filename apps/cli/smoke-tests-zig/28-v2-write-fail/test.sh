@@ -31,7 +31,7 @@ test_v2_database_write_commands_fail() {
     expect_output_string "$remove_output" "upgrade" "Remove command error message suggests running upgrade command"
     log_success "Remove command correctly rejected v2 database"
 
-    invoke_command "Run verify on v2 database with the TypeScript CLI (should fail)" "$(get_cli_command) verify --db $v2_db_dir --yes" 1
+    invoke_command "Run verify on v2 database (should fail)" "$(get_zig_cli_command) verify --db $v2_db_dir --yes" 1
 
     test_passed
 }

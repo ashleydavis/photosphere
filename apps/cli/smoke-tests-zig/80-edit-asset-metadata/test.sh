@@ -39,10 +39,10 @@ test_edit_asset_metadata() {
     # to it. One asset is all the endpoint's behaviour needs.
     invoke_command "Create the database" \
         "$(get_zig_cli_command) init --db \"$db_dir\" --yes" 0
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
     invoke_command "Add a photo to the database" \
         "$(get_zig_cli_command) add \"$TEST_FILES_DIR/test.jpg\" --db \"$db_dir\" --yes" 0
-    ts_verify "$db_dir"
+    verify_database "$db_dir"
 
     # The asset's id is whatever `add` generated, so it is read out of the listing rather than
     # hardcoded the way test 37 hardcodes its v6 fixture's id.

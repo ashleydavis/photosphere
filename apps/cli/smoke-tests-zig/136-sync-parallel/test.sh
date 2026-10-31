@@ -4,11 +4,11 @@ DESCRIPTION="Parallel Zig CLI processes edit and sync four copies of one databas
 # One database and three replicas of it. One worker process per database edits the description of the
 # same asset and syncs its database with every other one, all at the same time, for a fixed number of
 # iterations. A final round syncs every database with every other one, after which all of them must
-# have the same root hash. The TypeScript CLI verifies every database the Zig CLI writes.
+# have the same root hash. Every database the Zig CLI writes is verified.
 
 # The runner exports NODE_ENV=testing, which the standalone script this test was ported from never
 # set, so the CLIs here run without it as they did there. For the same reason this test calls neither
-# invoke_command nor lib/common.sh's ts_verify: both put NODE_ENV=testing back in front of the
+# invoke_command nor lib/common.sh's verify_database: both put NODE_ENV=testing back in front of the
 # command.
 unset NODE_ENV
 
@@ -29,9 +29,6 @@ SYNC_DB_DIR="$TEST_TMP_DIR/sync-test-db"
 SYNC_FILES_DIR="$TEST_TMP_DIR/sync-test-files"
 PROCESS_OUTPUT_DIR="$TEST_TMP_DIR/sync-test-outputs"
 
-# Where ts_verify records how long each TypeScript verify took: the file the runner sums.
-TS_VERIFY_TIMING_LOG="$TEST_TMP_DIR/ts-verify-milliseconds.log"
-
 # The ID of the asset every worker edits, and the path of every database in the test.
 ASSET_ID=""
 declare -a DB_PATHS
@@ -39,23 +36,19 @@ declare -a DB_PATHS
 # Every worker this test backgrounds, so a run that ends early takes them with it.
 background_pids=()
 
-# Runs the TypeScript CLI's psi verify on a database the Zig CLI has just created or modified, and
-# fails the test unless it passes, so the reference implementation checks the integrity of every
-# database the Zig CLI writes. The time it takes is appended to TS_VERIFY_TIMING_LOG.
+# Runs psi verify on a database the Zig CLI has just created or modified, and fails the test unless it
+# passes, so the integrity of every database the test writes is checked.
 #
-# This replaces lib/common.sh's ts_verify for this test alone. That one runs through invoke_command,
+# This replaces lib/common.sh's verify_database for this test alone. That one runs through invoke_command,
 # which puts NODE_ENV=testing in front of the command, and the script this test was ported from ran
 # the verify without it.
-# Usage: ts_verify <database>
-ts_verify() {
+# Usage: verify_database <database>
+verify_database() {
     local database_dir="$1"
-    local verify_start
-    verify_start="$(current_milliseconds)"
-    log_info "Verifying $database_dir with the TypeScript CLI"
-    if ! $(get_cli_command) verify --db "$database_dir" --yes; then
-        test_failed "The TypeScript CLI does not verify $database_dir"
+    log_info "Verifying $database_dir"
+    if ! $(get_zig_cli_command) verify --db "$database_dir" --yes; then
+        test_failed "$database_dir does not verify"
     fi
-    record_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG" "$verify_start"
 }
 
 # Generate a random UUID
@@ -77,7 +70,7 @@ check_dependencies() {
 }
 
 # Creates the original database, generates a PNG and adds it, recording its ID in ASSET_ID. Each step
-# the Zig CLI takes is verified by the TypeScript CLI.
+# the Zig CLI takes is verified.
 setup_test_environment() {
     log_info "Setting up test environment..."
 
@@ -89,7 +82,7 @@ setup_test_environment() {
     if ! $(get_zig_cli_command) init --db "$SYNC_DB_DIR" --yes --session-id "setup-process"; then
         test_failed "Failed to initialize database"
     fi
-    ts_verify "$SYNC_DB_DIR"
+    verify_database "$SYNC_DB_DIR"
 
     # Generate a test PNG file
     local test_file="$SYNC_FILES_DIR/test.png"
@@ -116,13 +109,13 @@ setup_test_environment() {
     fi
 
     log_info "Test asset added with ID: $ASSET_ID"
-    ts_verify "$SYNC_DB_DIR"
+    verify_database "$SYNC_DB_DIR"
 
     log_success "Test environment setup complete"
 }
 
 # Replicates the original database into NUM_REPLICAS - 1 replicas, recording every database's path in
-# DB_PATHS, original first. Each replica is verified by the TypeScript CLI.
+# DB_PATHS, original first. Each replica is verified.
 create_replicas() {
     log_info "Creating $NUM_REPLICAS replica databases..."
 
@@ -140,7 +133,7 @@ create_replicas() {
         if ! $(get_zig_cli_command) replicate --db "$SYNC_DB_DIR" --dest "$replica_dir" --yes --force > /dev/null 2>&1; then
             test_failed "Failed to create replica $i"
         fi
-        ts_verify "$replica_dir"
+        verify_database "$replica_dir"
     done
 
     log_success "Created $NUM_REPLICAS databases (1 original + $((NUM_REPLICAS-1)) replicas)"
@@ -386,7 +379,6 @@ test_sync_parallel() {
     echo "  Total databases: $NUM_REPLICAS"
     echo "  Iterations per process: $NUM_ITERATIONS"
     echo "  Use binary: ${USE_BINARY:-false}"
-    echo "  CLI command: $(get_cli_command)"
     echo "  Zig CLI command: $(get_zig_cli_command)"
     echo "  BDB command: $(get_bdb_command)"
     echo "============================================================================"
@@ -408,11 +400,11 @@ test_sync_parallel() {
     # Clear background_pids since all processes completed successfully
     background_pids=()
 
-    # Verify every database the Zig CLI edited and synced with the TypeScript CLI, now the processes
+    # Verify every database the Zig CLI edited and synced, now the processes
     # that were writing to them have finished
     local worked_db
     for worked_db in "${DB_PATHS[@]}"; do
-        ts_verify "$worked_db"
+        verify_database "$worked_db"
     done
 
     # Final round of syncing
@@ -425,13 +417,12 @@ test_sync_parallel() {
         test_failed "Root hash verification failed"
     fi
 
-    # Verify every database the Zig CLI synced with the TypeScript CLI
+    # Verify every database the Zig CLI synced
     local synced_db
     for synced_db in "${DB_PATHS[@]}"; do
-        ts_verify "$synced_db"
+        verify_database "$synced_db"
     done
 
-    echo "TypeScript verify: $(count_ts_verify_calls "$TS_VERIFY_TIMING_LOG") calls, $(format_milliseconds_as_seconds "$(sum_ts_verify_milliseconds "$TS_VERIFY_TIMING_LOG")")"
 
     log_success "Sync smoke test PASSED"
     log_info "Test data preserved in: $SYNC_DB_DIR, $SYNC_FILES_DIR, $PROCESS_OUTPUT_DIR"

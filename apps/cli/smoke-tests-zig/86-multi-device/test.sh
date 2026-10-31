@@ -24,12 +24,12 @@ cp "$TEST_FILES_DIR/test.jpg" "$DEVICE_B_PHOTOS/from-b.jpg"
 # --- Device A imports its photos and creates the remote. ---
 
 invoke_command "Initialize device A" "$CLI_COMMAND init --db $DEVICE_A_DB --yes"
-ts_verify "$DEVICE_A_DB"
+verify_database "$DEVICE_A_DB"
 invoke_command "Device A imports its folder" "$CLI_COMMAND add --db $DEVICE_A_DB $DEVICE_A_PHOTOS --yes"
-ts_verify "$DEVICE_A_DB"
+verify_database "$DEVICE_A_DB"
 invoke_command "Device A consolidates into the remote" "$CLI_COMMAND consolidate --db $DEVICE_A_DB $REMOTE_DB --yes"
-ts_verify "$DEVICE_A_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$DEVICE_A_DB"
+verify_database "$REMOTE_DB"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$REMOTE_ASSETS" 1 "The remote holds device A's photo"
@@ -37,14 +37,14 @@ expect_value "$REMOTE_ASSETS" 1 "The remote holds device A's photo"
 # --- Device B imports its own photos and consolidates into the same remote. ---
 
 invoke_command "Initialize device B" "$CLI_COMMAND init --db $DEVICE_B_DB --yes"
-ts_verify "$DEVICE_B_DB"
+verify_database "$DEVICE_B_DB"
 invoke_command "Device B imports its folder" "$CLI_COMMAND add --db $DEVICE_B_DB $DEVICE_B_PHOTOS --yes"
-ts_verify "$DEVICE_B_DB"
+verify_database "$DEVICE_B_DB"
 
 CONNECT_OUTPUT=""
 invoke_command "Device B consolidates into the same remote" "$CLI_COMMAND consolidate --db $DEVICE_B_DB $REMOTE_DB --yes" 0 CONNECT_OUTPUT
-ts_verify "$DEVICE_B_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$DEVICE_B_DB"
+verify_database "$REMOTE_DB"
 expect_output_value "$CONNECT_OUTPUT" "Assets pushed to the remote:" 1 "Device B pushed its own photo"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
@@ -62,8 +62,8 @@ expect_output_string "$DEVICE_B_LIST" "from-a.png" "Device B has device A's phot
 # --- Device A picks up device B's photo on its next sync. ---
 
 invoke_command "Device A syncs" "$CLI_COMMAND sync --db $DEVICE_A_DB --yes"
-ts_verify "$DEVICE_A_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$DEVICE_A_DB"
+verify_database "$REMOTE_DB"
 
 DEVICE_A_LIST=""
 invoke_command "List device A" "$CLI_COMMAND list --db $DEVICE_A_DB --yes" 0 DEVICE_A_LIST
@@ -77,17 +77,17 @@ cp "$TEST_FILES_DIR/test.webp" "$DEVICE_A_PHOTOS/later-from-a.webp"
 # Two commands rather than one: importing and syncing are separate now. `psi add` knows nothing
 # about the origin, and `psi sync` is what pushes to it.
 invoke_command "Device A imports the new photo" "$CLI_COMMAND add --db $DEVICE_A_DB $DEVICE_A_PHOTOS --yes"
-ts_verify "$DEVICE_A_DB"
+verify_database "$DEVICE_A_DB"
 invoke_command "Device A syncs the new photo" "$CLI_COMMAND sync --db $DEVICE_A_DB --yes"
-ts_verify "$DEVICE_A_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$DEVICE_A_DB"
+verify_database "$REMOTE_DB"
 
 REMOTE_ASSETS=$(ls -1 "$REMOTE_DB/asset" 2>/dev/null | wc -l | tr -d ' ')
 expect_value "$REMOTE_ASSETS" 3 "The remote holds the photo taken after connecting"
 
 invoke_command "Device B syncs" "$CLI_COMMAND sync --db $DEVICE_B_DB --yes"
-ts_verify "$DEVICE_B_DB"
-ts_verify "$REMOTE_DB"
+verify_database "$DEVICE_B_DB"
+verify_database "$REMOTE_DB"
 
 DEVICE_B_LIST=""
 invoke_command "List device B again" "$CLI_COMMAND list --db $DEVICE_B_DB --yes" 0 DEVICE_B_LIST

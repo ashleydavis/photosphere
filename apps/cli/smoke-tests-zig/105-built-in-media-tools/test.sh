@@ -5,7 +5,7 @@ DESCRIPTION="The Zig CLI needs no installed media tools: a copy of the binary, a
 # directory, so no installed magick, convert, identify, ffmpeg or ffprobe can be found. The test fails if
 # any of them can be. init, add of a photo and of a video, summary, list and verify are run with asserted
 # output and exit codes, and the video's thumbnail is checked to exist and to be a JPEG. The script's own
-# commands (the image check of the thumbnail and the TypeScript CLI's verify) keep the normal PATH.
+# commands (the image check of the thumbnail) keep the normal PATH.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -90,8 +90,6 @@ test_built_in_media_tools() {
     expect_output_string "$list_output" "$video_id" "The list holds the video"
 
     invoke_command "Verify the database" "$psi verify --db \"$db_dir\" --yes" 0
-
-    ts_verify "$db_dir"
 }
 
 test_built_in_media_tools 105

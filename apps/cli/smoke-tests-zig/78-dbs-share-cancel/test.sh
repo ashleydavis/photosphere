@@ -6,10 +6,8 @@ DESCRIPTION="Ctrl+C cancels psi dbs send and psi dbs receive, and both work agai
 # Ctrl+C is therefore a real code path with nothing else covering it, and a cancel that left a socket
 # bound or a broadcast running would stop the next attempt dead.
 #
-# The signal has to reach the CLI itself. `bun run start --` spawns the CLI as a grandchild and does
-# not forward SIGINT, so signalling that wrapper leaves the command running: each command here is
-# started under bash job control (macOS has no setsid) so it leads its own process group, and the
-# group is signalled the way a terminal signals a foreground job on Ctrl+C.
+# Each command here is started under bash job control (macOS has no setsid) so it leads its own
+# process group, and the group is signalled the way a terminal signals a foreground job on Ctrl+C.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -63,8 +61,7 @@ start_share_command() {
     # macOS has no setsid, so bash job control stands in for it: with monitor mode on, the shell makes
     # each background job the leader of a new process group whose PGID equals its PID. That group is
     # what cancel_share_command signals, the way a terminal's Ctrl+C signals a foreground job's whole
-    # group, so the SIGINT reaches the CLI grandchild rather than only the `bun run start --` wrapper,
-    # which does not forward it. Monitor mode is turned off again straight after so nothing else in the
+    # group. Monitor mode is turned off again straight after so nothing else in the
     # test runs under it.
     set -m
     "$@" > "$log_file" 2>&1 &
@@ -209,9 +206,9 @@ test_dbs_share_cancel() {
     fi
     log_success "A send and a receive started after cancelled ones completed a real transfer"
 
-    local ts_received_entry
-    invoke_command "View the received database with the TypeScript CLI" "PHOTOSPHERE_VAULT_DIR=\"$receiver_vault\" PHOTOSPHERE_CONFIG_DIR=\"$receiver_config\" $(get_cli_command) -q dbs view --yes --name \"$SHARED_DB_NAME\"" 0 "ts_received_entry"
-    expect_output_string "$ts_received_entry" "$test_dir/shared-db" "The TypeScript CLI reads the database the Zig CLI received"
+    local received_entry
+    invoke_command "View the received database" "PHOTOSPHERE_VAULT_DIR=\"$receiver_vault\" PHOTOSPHERE_CONFIG_DIR=\"$receiver_config\" $(get_zig_cli_command) -q dbs view --yes --name \"$SHARED_DB_NAME\"" 0 "received_entry"
+    expect_output_string "$received_entry" "$test_dir/shared-db" "The received database entry has the path that was sent"
 
     export PHOTOSPHERE_VAULT_DIR="$saved_vault"
     export PHOTOSPHERE_CONFIG_DIR="$saved_config"

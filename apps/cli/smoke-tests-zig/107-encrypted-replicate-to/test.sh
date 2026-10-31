@@ -23,15 +23,15 @@ test_replicate_to_encrypted() {
 
     invoke_command "Init plain source database" "$cli init --db \"$src_dir\" --yes"
 
-    ts_verify "$src_dir"
+    verify_database "$src_dir"
 
     invoke_command "Add PNG file to plain database" "$cli add --db \"$src_dir\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$src_dir"
+    verify_database "$src_dir"
 
     invoke_command "Replicate to encrypted destination" "$cli replicate --db \"$src_dir\" --dest \"$dest_dir\" --dest-key \"$dest_key_name\" --generate-key --yes"
 
-    ts_verify "$dest_dir" --key "$dest_key_name"
+    verify_database "$dest_dir" --key "$dest_key_name"
 
     if [ ! -f "$dest_dir/.db/encryption.pub" ]; then
         log_error "Encrypted destination missing .db/encryption.pub"

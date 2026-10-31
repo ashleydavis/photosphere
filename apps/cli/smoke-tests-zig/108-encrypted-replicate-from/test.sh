@@ -23,17 +23,17 @@ test_replicate_from_encrypted() {
 
     invoke_command "Init encrypted source database" "$cli init --db \"$enc_dir\" --key \"$key_name\" --generate-key --yes"
 
-    ts_verify "$enc_dir" --key "$key_name"
+    verify_database "$enc_dir" --key "$key_name"
 
     invoke_command "Add PNG file to encrypted database" "$cli add --db \"$enc_dir\" --key \"$key_name\" \"$TEST_FILES_DIR/test.png\" --yes"
 
-    ts_verify "$enc_dir" --key "$key_name"
+    verify_database "$enc_dir" --key "$key_name"
 
     assert_database_assets_encrypted "$enc_dir" || test_failed "$name"
 
     invoke_command "Replicate from encrypted to plain destination" "$cli replicate --db \"$enc_dir\" --dest \"$plain_dir\" --key \"$key_name\" --yes"
 
-    ts_verify "$plain_dir"
+    verify_database "$plain_dir"
 
     if [ -f "$plain_dir/.db/encryption.pub" ]; then
         log_error "Plain destination should not have .db/encryption.pub"

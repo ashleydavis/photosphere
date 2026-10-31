@@ -21,12 +21,6 @@ test_dbs_view() {
     expect_output_string "$dbs_output" "enc00001" "Encryption key ID appears in view output"
     expect_output_string "$dbs_output" "s3test01" "S3 credential ID appears in view output"
 
-    local ts_dbs_output
-    invoke_command "View the database entry with the TypeScript CLI" "$(get_cli_command) -q dbs view --name view-db --yes" 0 "ts_dbs_output"
-    local zig_quiet_output
-    invoke_command "View the database entry quietly with the Zig CLI" "$(get_zig_cli_command) -q dbs view --name view-db --yes" 0 "zig_quiet_output"
-    expect_value "$ts_dbs_output" "$zig_quiet_output" "The Zig CLI views the entry exactly as the TypeScript CLI does"
-
     test_passed
 }
 

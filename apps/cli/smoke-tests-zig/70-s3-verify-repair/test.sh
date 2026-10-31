@@ -75,7 +75,7 @@ test_s3_verify_repair() {
     # Take the repair source now, while the database is intact.
     invoke_command "Replicate the intact database down to a local repair source" \
         "$(get_zig_cli_command) replicate --db \"$s3_db\" --dest $good_replica --yes" 0
-    ts_verify "$good_replica"
+    verify_database "$good_replica"
 
     # --- 2. A deleted asset object is reported by verify. ---
 
@@ -99,7 +99,7 @@ test_s3_verify_repair() {
 
     invoke_command "Repair the S3 database from the local replica" \
         "$(get_zig_cli_command) repair --db \"$s3_db\" --source $good_replica --yes" 0
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     local verify_repaired_output
     invoke_command "Verify after the repair" "$(get_zig_cli_command) verify --db \"$s3_db\" --yes" 0 "verify_repaired_output"
@@ -117,7 +117,7 @@ test_s3_verify_repair() {
 
     invoke_command "Repair the overwritten object from the local replica" \
         "$(get_zig_cli_command) repair --db \"$s3_db\" --source $good_replica --full --yes" 0
-    ts_verify "$s3_db"
+    verify_database "$s3_db"
 
     local verify_repaired_again_output
     invoke_command "Fully verify after the second repair" "$(get_zig_cli_command) verify --db \"$s3_db\" --full --yes" 0 "verify_repaired_again_output"
