@@ -1289,12 +1289,26 @@ cmd_pool_up() {
         echo "$running pool emulator(s) already running; starting the rest."
     fi
 
+    # An index whose unit is still running is left alone: systemd-run refuses a name that is still loaded,
+    # and a pool-down that failed part way leaves exactly that behind. A unit on its way out, or one whose
+    # emulator died, is waited for or cleared first, so its name can be used again.
+    local started=0
+    local unit_active_state
     for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
+        unit_active_state="$(pool_unit_state "$index" | cut -d' ' -f1)"
+        case "$unit_active_state" in
+            active|activating)
+                echo "Emulator '$(pool_avd_name "$index")' is already running as $(pool_unit_name "$index"); leaving it."
+                continue
+                ;;
+        esac
+        wait_for_pool_unit_released "$index" || exit 1
         start_emulator_bg "$(pool_avd_name "$index")" "$(pool_netcard_name "$index")" "pool-$index" "$wipe"
+        started=$((started + 1))
     done
 
-    echo "Waiting for $PHOTOSPHERE_EMULATOR_COUNT pool emulator(s) to reach the bridge (up to 600s)..."
-    if wait_for_ready 600 $((already + PHOTOSPHERE_EMULATOR_COUNT - running)); then
+    echo "Waiting for $started started pool emulator(s) to reach the bridge (up to 600s)..."
+    if wait_for_ready 600 $((already + started)); then
         cmd_status
     else
         echo "Timed out waiting for the pool to reach the bridge." >&2
@@ -1336,6 +1350,10 @@ wait_for_pool_units_released() {
 
         if [ "$(systemctl --user list-units --all --no-legend --plain "$POOL_UNIT_GLOB" 2>/dev/null | wc -l)" -eq 0 ]; then
             return 0
+        fi
+        # Said once, so a wait of up to a minute does not look like a hang.
+        if [ "$waited" -eq 0 ]; then
+            echo "Waiting for systemd to release the pool's emulator units (up to ${POOL_UNIT_RELEASE_TIMEOUT_SECONDS}s)..."
         fi
         sleep 1
         waited=$((waited + 1))
