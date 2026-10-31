@@ -84,7 +84,7 @@ const ErrorNumber = std.meta.Int(.unsigned, @bitSizeOf(anyerror));
 // calling thread's, so the main thread makes these as its own, with an allocator of its own, and only it writes and reads them: the
 // test reads them by a message to the main thread (see TestApp.consoleOut).
 //
-threadlocal var main_console_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var main_console_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 threadlocal var main_console_out: std.Io.Writer.Allocating = undefined;
 threadlocal var main_console_err: std.Io.Writer.Allocating = undefined;
 

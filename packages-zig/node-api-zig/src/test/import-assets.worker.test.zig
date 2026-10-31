@@ -60,7 +60,7 @@ const errors = utils.errors;
 // Allocator for the backend's state and the recorded messages, the test thread's own: the import, its backend and its recorder all run on the
 // test thread.
 //
-threadlocal var backend_allocator_state: @import("ziggy").thread_allocator.ThreadAllocator = .init;
+threadlocal var backend_allocator_state: @import("ziggy").utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // What a task added to the backend was.
@@ -917,7 +917,7 @@ test "childQueue.shutdown is called in the finally block even when scanPaths thr
 fn releaseLockLater(databaseDir: [512]u8, databaseDirLength: usize, importTime: *virtual_time_io.VirtualTimeIo) void {
     // The thread's own log, which writes to the console.
     const log = utils.mute_log.MuteLog.init();
-    var thread_allocator: @import("ziggy").thread_allocator.ThreadAllocator = .init;
+    var thread_allocator: @import("ziggy").utils.thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
     threaded.allocator = thread_allocator.allocator();

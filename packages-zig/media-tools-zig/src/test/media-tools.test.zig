@@ -46,7 +46,7 @@ const ThreadOutcome = struct {
 fn runWithOwnRunner(outcome: *ThreadOutcome) void {
     // The thread's own log, which writes to the console.
     const log = utils.mute_log.MuteLog.init();
-    var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+    var thread_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
     threaded.allocator = thread_allocator.allocator();

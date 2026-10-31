@@ -557,7 +557,7 @@ pub const WorkerPoolBun = struct {
         defer arena_state.deinit();
         const arena = arena_state.allocator();
         // The worker gets a copy of this thread's environment as its own, as a Bun worker is given process.env.
-        const environment: ?std.json.Value = if (ziggy.task_queue.utils.process_env.getEnvironMap()) |map| try ziggy.worker.environmentJson(arena, map) else null;
+        const environment: ?std.json.Value = if (ziggy.utils.process_env.getEnvironMap()) |map| try ziggy.worker.environmentJson(arena, map) else null;
         // A log with a file writes every line, whatever its console shows, so when the log given has one the worker sends its verbose and tool
         // lines too, and the log's console options decide what the console shows.
         const writesFile = log.logFilePath() != null;

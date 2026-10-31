@@ -1,5 +1,5 @@
 const std = @import("std");
-const ILog = @import("ziggy").task_queue.utils.log.ILog;
+const ILog = @import("ziggy").log.ILog;
 
 //
 // The iterator returned by batchGenerator.

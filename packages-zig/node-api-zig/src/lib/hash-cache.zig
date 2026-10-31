@@ -66,7 +66,7 @@ const SAVE_RETRIES = 20;
 // is used only on the thread that made it, so what it allocates is freed on that thread. It is a thread-local rather than an
 // argument because the CLI calls HashCache's functions as they are, without one.
 //
-threadlocal var cache_allocator_state: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var cache_allocator_state: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // The calling thread's cache allocator (see cache_allocator_state).
