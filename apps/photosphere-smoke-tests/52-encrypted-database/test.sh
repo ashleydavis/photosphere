@@ -14,7 +14,7 @@ print_test_header 52 "encrypted-database"
 DB_NAME="enc-db"
 # The CLI's --key is a *vault key name*, not a file path: --generate-key stores the generated RSA
 # key pair in the host vault under this name and never writes a PEM file. Every host CLI call here
-# goes through run_cli, which points the vault at this test's own tmp dir and selects the plaintext
+# goes through run_zig_cli, which points the vault at this test's own tmp dir and selects the plaintext
 # vault, so the key never touches the real OS keychain. That isolation is also what lets this run on
 # CI at all: a runner has no usable keychain (no libsecret on Linux, and `security` unavailable on
 # the macOS image), which failed this test before every other test in the suite could even run.
@@ -24,15 +24,15 @@ DB_PATH="$TMP_DIR/$DB_NAME"
 mkdir -p "$TMP_DIR"
 
 # Remove any key left in the host vault by a previous run so --generate-key starts clean and the
-# test is rerunnable. run_cli puts the vault under this test's tmp dir, so there is nothing to clean
+# test is rerunnable. run_zig_cli puts the vault under this test's tmp dir, so there is nothing to clean
 # on a fresh checkout; it still matters for a rerun that kept tmp.
-run_cli "$TMP_DIR" secrets remove --name "$KEY_NAME" --yes >/dev/null 2>&1 || true
+run_zig_cli "$TMP_DIR" secrets remove --name "$KEY_NAME" --yes >/dev/null 2>&1 || true
 
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
 # Create an encrypted database on the host: generate a key and add one asset through it.
-run_cli "$TMP_DIR" init --db "$DB_PATH" --generate-key --key "$KEY_NAME" --yes || exit 1
-run_cli "$TMP_DIR" add "$REPO_DIR/test/test.jpg" --db "$DB_PATH" --key "$KEY_NAME" --yes || exit 1
+run_zig_cli "$TMP_DIR" init --db "$DB_PATH" --generate-key --key "$KEY_NAME" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/test.jpg" --db "$DB_PATH" --key "$KEY_NAME" --yes || exit 1
 
 # Wipe everything the app has stored on the device (its storage sandbox, the WebView's
 # localStorage and the keychain) so this test starts from a known state. Done before launch,
@@ -61,7 +61,7 @@ DATABASE_APP_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
 # multi-line PEM, so the PEM is escaped into the type-command payload as a JSON string by jq.
 # `jq -Rs .` reads the file's raw bytes, slurps them into one string and prints it JSON-encoded,
 # quotes included, which is exactly the shape the payload needs.
-KEY_PEM_RAW=$(run_cli "$TMP_DIR" secrets view --name "$KEY_NAME" --raw --yes)
+KEY_PEM_RAW=$(run_zig_cli "$TMP_DIR" secrets view --name "$KEY_NAME" --raw --yes)
 if [ -z "$KEY_PEM_RAW" ]; then
     log_error "Could not read encryption key \"$KEY_NAME\" back from the host vault"
     exit 1

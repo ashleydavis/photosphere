@@ -91,14 +91,14 @@ export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
 export AWS_REGION="us-east-1"
 
 log_info "Creating the origin database in the bucket with the CLI"
-run_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
-run_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-1.jpeg" --db "$S3_ORIGIN_PATH" --yes || exit 1
-run_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-2.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-1.jpeg" --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-2.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
 # --- 2. The phone's database, which is a partial replica of that origin. ---
 
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
-run_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
+run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
 
 # Point the replica at the origin. This is the file plan-prefetch reads to find out there is somewhere
 # to fetch from, and the prefetch task reads to find out where.

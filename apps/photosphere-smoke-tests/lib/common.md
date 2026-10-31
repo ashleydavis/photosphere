@@ -8,7 +8,7 @@ source "$TEST_DIR/../lib/common.sh"
 
 It takes no arguments. It sources `scripts/lib/test-lib.sh` and `scripts/lib/process-control.sh`, then the platform library `lib/<platform>.sh` for the platform in `PHOTOSPHERE_SMOKE_PLATFORM`.
 
-It gives a scenario what it needs to start the app in test mode, drive it through the test control connection (see "Test hooks" in [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md)) and check what it logs and what the page shows: `start_app`, `wait_for_ready`, `send_command`, `read_value` and the `wait_for_*` helpers, `check_no_errors`, `stop_app`, the vault and config helpers, the S3 emulator helpers, and `run_cli` for the `psi` CLI. Each helper has a comment with its usage above it.
+It gives a scenario what it needs to start the app in test mode, drive it through the test control connection (see "Test hooks" in [Ziggy architecture](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md)) and check what it logs and what the page shows: `start_app`, `wait_for_ready`, `send_command`, `read_value` and the `wait_for_*` helpers, `check_no_errors`, `stop_app`, the vault and config helpers, the S3 emulator helpers, and `run_zig_cli` for the `psi` CLI. Each helper has a comment with its usage above it.
 
 The comment at the top of the file lists what a platform library must implement: `photosphere_platform_prepare`, `photosphere_platform_start`, `photosphere_platform_stop`, `photosphere_platform_wait_exit`, `photosphere_platform_is_running`, `photosphere_platform_reset_app_state`, and optionally `photosphere_platform_screenshot`.
 

@@ -94,7 +94,7 @@ cli_expect_success() {
     local description="$1"
     shift
     local cli_output
-    if ! cli_output="$(run_cli "$TMP_DIR" "$@" 2>&1)"; then
+    if ! cli_output="$(run_zig_cli "$TMP_DIR" "$@" 2>&1)"; then
         log_error "$description failed. The CLI said:"
         echo "$cli_output" | sed 's/^/  /'
         exit 1

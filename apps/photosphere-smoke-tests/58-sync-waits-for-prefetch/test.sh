@@ -144,7 +144,7 @@ export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
 export AWS_REGION="us-east-1"
 
 log_info "Creating the origin database with $ORIGIN_PHOTO_COUNT photos in it"
-run_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
 
 # The same two fixtures over and over under different names, because what matters is the number of
 # files the prefetch has to fetch rather than what is in them. Copied rather than re-added from the
@@ -161,12 +161,12 @@ while [ "$photo_index" -lt "$ORIGIN_PHOTO_COUNT" ]; do
     photo_index=$((photo_index + 1))
 done
 
-run_cli "$TMP_DIR" add "$ORIGIN_PHOTOS_DIR" --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$ORIGIN_PHOTOS_DIR" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
 # --- 2. The phone's database, which is a partial replica of that origin. ---
 
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
-run_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
+run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
 printf '{"origin":"%s"}\n' "$S3_ORIGIN_PATH" > "$LOCAL_REPLICA/.db/config.json"
 
 if [ -d "$LOCAL_REPLICA/thumb" ]; then
