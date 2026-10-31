@@ -1,6 +1,6 @@
 # encrypted.sh
 
-Helpers shared by the encrypted database smoke tests of the Zig CLI (the tests under `apps/cli/smoke-tests-zig/` whose names start `encrypted-`, `encrypt-` or `decrypt-`, apart from the two key-not-found tests, which need none of them). They check whether a database's stored assets are encrypted and look up an asset's ID by its file name.
+Helpers shared by the encrypted database smoke tests of the Zig CLI (the tests under `apps/cli-zig/smoke-tests-zig/` whose names start `encrypted-`, `encrypt-` or `decrypt-`, apart from the two key-not-found tests, which need none of them). They check whether a database's stored assets are encrypted and look up an asset's ID by its file name.
 
 ## Use
 
@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 source "$SCRIPT_DIR/../lib/encrypted.sh"
 ```
 
-Find the tests that source it with `grep -l 'lib/encrypted.sh' apps/cli/smoke-tests-zig/*/test.sh`.
+Find the tests that source it with `grep -l 'lib/encrypted.sh' apps/cli-zig/smoke-tests-zig/*/test.sh`.
 
 ## Functions
 

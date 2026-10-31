@@ -10,7 +10,7 @@ SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
 
 # The Zig psi and the compiled mk and bdb the runner built for this run.
-source "$REPO_ROOT/apps/cli/test-cli-binaries.sh"
+source "$REPO_ROOT/apps/cli-zig/test-cli-binaries.sh"
 
 # The Zig CLI every test here runs, which the runner built for this run.
 test_zig_cli_path > /dev/null || exit 1

@@ -3,7 +3,7 @@
 # Builds the five-file database once for a whole run, so the 18 tests that need one can copy it
 # instead of building an identical copy each.
 #
-# Run from apps/cli with TEST_TMP_DIR pointing at a directory of this run's own:
+# Run from apps/cli-zig with TEST_TMP_DIR pointing at a directory of this run's own:
 #   TEST_TMP_DIR=<dir> bash smoke-tests/lib/build-5-file-fixture.sh
 #
 # It leaves the database at <dir>/db and the UUID counter at <dir>/photosphere-test-uuid-counter,

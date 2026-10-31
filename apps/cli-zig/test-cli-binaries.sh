@@ -4,7 +4,7 @@
 # belongs to that one run, and names them for the tests. See test-cli-binaries.md.
 #
 # Source this from a suite runner, which builds, and from a test library, which reads the paths:
-#   source "<repo>/apps/cli/test-cli-binaries.sh"
+#   source "<repo>/apps/cli-zig/test-cli-binaries.sh"
 #
 # It defines functions only.
 #
@@ -14,7 +14,7 @@
 # failed with "failed to move executable ... EPERM". The package scripts stay as they are for people
 # building by hand; the suites no longer touch their output.
 
-# The directory of this file, the CLI package, which the mk-cli and bdb-cli packages sit beside.
+# The directory of this file, the Zig CLI, which the mk-cli and bdb-cli packages sit beside.
 _TEST_CLI_BINARIES_CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The per-test temporary directory allocator the binaries' directory comes from.

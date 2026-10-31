@@ -15,7 +15,7 @@ The `*-zig` suites likewise used to run whatever a plain `zig build` had last in
 It is sourced, not run:
 
 ```bash
-source "<repo>/apps/cli/test-cli-binaries.sh"
+source "<repo>/apps/cli-zig/test-cli-binaries.sh"
 ```
 
 It sources `scripts/lib/test-lib.sh` for the per-test temporary directory allocator.

@@ -325,11 +325,11 @@ jobs:
           ls -la zig-out/bin
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 30
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: ./smoke-tests-zig.sh --binary
       - name: Test the Zig version command
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: |
           echo "Testing version command after building..."

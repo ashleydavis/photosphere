@@ -1,6 +1,6 @@
 # lan-share.sh
 
-Helpers shared by the LAN share smoke tests of the Zig CLI: the tests under `apps/cli/smoke-tests-zig/` named `lan-share-*`. They pair a sender and a receiver on this machine through `psi dbs send`/`receive` and `psi secrets send`/`receive`, each side with a vault and config of its own, and check what arrives.
+Helpers shared by the LAN share smoke tests of the Zig CLI: the tests under `apps/cli-zig/smoke-tests-zig/` named `lan-share-*`. They pair a sender and a receiver on this machine through `psi dbs send`/`receive` and `psi secrets send`/`receive`, each side with a vault and config of its own, and check what arrives.
 
 ## Use
 
@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 source "$SCRIPT_DIR/../lib/lan-share.sh"
 ```
 
-Find the tests that source it with `grep -l 'lib/lan-share.sh' apps/cli/smoke-tests-zig/*/test.sh`.
+Find the tests that source it with `grep -l 'lib/lan-share.sh' apps/cli-zig/smoke-tests-zig/*/test.sh`.
 
 Sourcing it does more than define functions:
 
