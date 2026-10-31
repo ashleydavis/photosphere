@@ -18,7 +18,7 @@ const process_env = node_utils.process_env;
 // The allocator of the calling thread's cached vault instances, which live as long as the thread. Each thread has its own, as it has
 // its own vaultInstances, so no allocator is used by two threads.
 //
-threadlocal var instance_allocator_state: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var instance_allocator_state: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // Cache of vault instances keyed by type string, one for each thread: a task runs on a thread of its own, and its vaults are its

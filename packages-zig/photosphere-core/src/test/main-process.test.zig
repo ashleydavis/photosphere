@@ -263,7 +263,7 @@ fn awaitChildrenTask(services: ziggy.task_runner.TaskServices, timers: ziggy.tim
     const log = services.log;
     _ = context;
     _ = data;
-    var uuid_generator: ziggy.task_queue.utils.random_uuid_generator.RandomUuidGenerator = .{};
+    var uuid_generator: ziggy.utils.random_uuid_generator.RandomUuidGenerator = .{};
     const queue = try ziggy.task_queue.task_queue.TaskQueue.init(allocator, uuid_generator.uuidGenerator(), AWAIT_CHILDREN_SOURCE);
     defer queue.deinit(io, allocator, log);
     var child_index: usize = 0;

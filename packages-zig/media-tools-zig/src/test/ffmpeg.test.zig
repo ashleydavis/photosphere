@@ -408,7 +408,7 @@ const thread_count = 6;
 // that fails on a file named after the thread, whose error must reach this thread's log and no other's.
 //
 fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, outcome: *IThreadOutcome) void {
-    var thread_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+    var thread_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
     threaded.allocator = thread_allocator.allocator();

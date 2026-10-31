@@ -36,7 +36,7 @@ const HandlerServices = ziggy.core.HandlerServices;
 const Timers = ziggy.timers.Timers;
 const TimerId = ziggy.core.TimerId;
 const json = ziggy.json;
-const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
+const ThreadAllocator = ziggy.utils.thread_allocator.ThreadAllocator;
 
 //
 // How long the debounce waits after the last edit before a sync, in milliseconds.
@@ -886,8 +886,8 @@ pub fn onCreate(services: HandlerServices, timers: Timers, io: std.Io, allocator
 // The log options on the app's command line: --verbose, --debug and --tools each turn on their lines, as the CLI's do. Every other
 // argument is left to whatever else reads the command line.
 //
-pub fn logOptions(arguments: []const []const u8) ziggy.task_queue.utils.log.ILogOptions {
-    var options: ziggy.task_queue.utils.log.ILogOptions = .{
+pub fn logOptions(arguments: []const []const u8) ziggy.log.ILogOptions {
+    var options: ziggy.log.ILogOptions = .{
         .verbose = false,
         .debug = false,
         .tools = false,

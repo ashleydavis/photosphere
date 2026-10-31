@@ -89,7 +89,7 @@ const CountedServices = struct {
         return .{
             .ptr = self,
             .vtable = &vtable,
-            .log = ziggy.task_queue.utils.mute_log.MuteLog.init(),
+            .log = ziggy.log.mute_log.MuteLog.init(),
         };
     }
 
@@ -133,7 +133,7 @@ const CountedServices = struct {
         unexpected("isPhone");
     }
 
-    fn configureLog(_: *anyopaque, _: ziggy.task_queue.utils.log.ILogOptions) anyerror!void {
+    fn configureLog(_: *anyopaque, _: ziggy.log.ILogOptions) anyerror!void {
         unexpected("configureLog");
     }
 

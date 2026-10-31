@@ -1,9 +1,8 @@
 const std = @import("std");
-const errors = @import("ziggy").task_queue.utils.errors;
-const console = @import("ziggy").task_queue.utils.console;
-const ILog = @import("ziggy").task_queue.utils.log.ILog;
-const sleep = @import("ziggy").task_queue.utils.sleep;
-const wrapped_error = @import("ziggy").task_queue.utils.wrapped_error;
+const errors = @import("ziggy").utils.errors;
+const logging = @import("ziggy").log;
+const sleep = @import("ziggy").utils.sleep;
+const wrapped_error = @import("ziggy").utils.wrapped_error;
 
 //
 // An operation is a value (usually a pointer to a struct)
@@ -32,7 +31,7 @@ pub fn rejectAfter(comptime ReturnT: type, io: std.Io, ms: u64) anyerror!ReturnT
 // second thread to run one of them, and a task runs only on its own thread, so here the operation runs to its end and gives its own
 // result. timeoutMS is kept so the callers read as the TypeScript does.
 //
-pub fn retryOnce(io: std.Io, log: ILog, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
+pub fn retryOnce(io: std.Io, log: logging.ILog, operation: anytype, timeoutMS: u64) anyerror!OperationResult(@TypeOf(operation)) {
     _ = timeoutMS;
     return operation.run(io, log);
 }
@@ -40,7 +39,7 @@ pub fn retryOnce(io: std.Io, log: ILog, operation: anytype, timeoutMS: u64) anye
 //
 // Logs, to the log given, the error of a failed attempt as an indented JSON object holding its name and message (a Zig error has no stack to include).
 //
-fn logVerboseError(log: ILog, err: anyerror) void {
+fn logVerboseError(log: logging.ILog, err: anyerror) void {
     var buffer: [16 * 1024]u8 = undefined;
     var fixed_writer = std.Io.Writer.fixed(&buffer);
     fixed_writer.print("Error: {{\n  \"name\": {f},\n  \"message\": {f}\n}}", .{ std.json.fmt(errors.errorName(err), .{}), std.json.fmt(errors.errorMessage(err), .{}) }) catch {};
@@ -51,7 +50,7 @@ fn logVerboseError(log: ILog, err: anyerror) void {
 // Logs the context of the operation (or "An operation failed" when it has none), then ". Retrying after: " and the message of the error,
 // as a warning.
 //
-fn logRetryWarning(log: ILog, errorContext: ?[]const u8, err: anyerror) void {
+fn logRetryWarning(log: logging.ILog, errorContext: ?[]const u8, err: anyerror) void {
     var buffer: [32 * 1024]u8 = undefined;
     var fixed_writer = std.Io.Writer.fixed(&buffer);
     fixed_writer.print("{s}. Retrying after: {s}", .{ errorContext orelse "An operation failed", errors.errorMessage(err) }) catch {};
@@ -62,7 +61,7 @@ fn logRetryWarning(log: ILog, errorContext: ?[]const u8, err: anyerror) void {
 // Retrys a failing operation a number of times, logging each failure that is retried to the log given.
 // Each attempt is raced against a timeout and rejected if it doesn't complete in time.
 //
-pub fn retry(io: std.Io, log: ILog, operation: anytype, maxAttempts: u32, waitTimeMS: u64, waitTimeScale: u64, timeoutMS: u64, errorContext: ?[]const u8) anyerror!OperationResult(@TypeOf(operation)) {
+pub fn retry(io: std.Io, log: logging.ILog, operation: anytype, maxAttempts: u32, waitTimeMS: u64, waitTimeScale: u64, timeoutMS: u64, errorContext: ?[]const u8) anyerror!OperationResult(@TypeOf(operation)) {
     var attempts_left = maxAttempts;
     var wait_time_ms = waitTimeMS;
 
@@ -88,7 +87,7 @@ pub fn retry(io: std.Io, log: ILog, operation: anytype, maxAttempts: u32, waitTi
                 wait_time_ms *= waitTimeScale;
             }
             else {
-                console.errorFormat("Operation failed, no more retries allowed. Last error: {s}: {s}", .{ errors.errorName(err), errors.errorMessage(err) });
+                logging.console.errorFormat("Operation failed, no more retries allowed. Last error: {s}: {s}", .{ errors.errorName(err), errors.errorMessage(err) });
 
                 if (errorContext) |context| {
                     if (err != error.Thrown and err != error.FatalError) {

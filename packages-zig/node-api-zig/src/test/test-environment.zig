@@ -19,7 +19,7 @@ const lan_share_network = @import("lan-share-network-zig");
 // Allocator for what an environment holds. Each test thread has its own, and the environment is made and freed on the thread that set
 // it up: the pool keeps what it holds with its owning thread's allocator, and each worker makes its own.
 //
-threadlocal var environment_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var environment_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // The tools of the test environment's pool: none, so a task that runs ImageMagick or FFmpeg is given no runner (see

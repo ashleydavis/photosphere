@@ -7,7 +7,7 @@ const std = @import("std");
 const ziggy = @import("ziggy");
 
 pub const MessageQueue = ziggy.message_queue.MessageQueue;
-pub const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
+pub const ThreadAllocator = ziggy.utils.thread_allocator.ThreadAllocator;
 
 //
 // How long a take waits for a message before the test fails, in seconds.

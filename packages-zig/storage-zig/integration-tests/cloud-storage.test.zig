@@ -24,7 +24,7 @@ const ziggy = @import("ziggy");
 const CloudStorage = storage_zig.cloud_storage.CloudStorage;
 const Date = utils.timestamp_provider.Date;
 const MessageQueue = ziggy.message_queue.MessageQueue;
-const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
+const ThreadAllocator = ziggy.utils.thread_allocator.ThreadAllocator;
 
 //
 // Allocates what lives for the whole test binary: the environment, the location and the storage. Only the test thread uses it.

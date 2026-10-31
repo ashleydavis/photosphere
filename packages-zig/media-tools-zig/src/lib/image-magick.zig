@@ -6,7 +6,7 @@ const node_utils = @import("node-utils-zig");
 pub const c = @import("magick");
 
 const in_process_tools = node_utils.in_process_tools;
-const ThreadAllocator = @import("ziggy").thread_allocator.ThreadAllocator;
+const ThreadAllocator = @import("ziggy").utils.thread_allocator.ThreadAllocator;
 
 //
 // ImageMagick, built into the program and run in its process: the same thing the `magick` program does with its command line, which
