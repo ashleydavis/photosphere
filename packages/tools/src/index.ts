@@ -14,14 +14,6 @@ export type {
     VideoConfig
 } from './lib/types';
 
-// Export tool management functions
-export { 
-    verifyTools, 
-    ensureToolsAvailable,
-    type ToolStatus,
-    type ToolsStatus 
-} from './lib/tool-verification';
-
 export { 
     promptAndDownloadTools,
     getToolsDirectory 
