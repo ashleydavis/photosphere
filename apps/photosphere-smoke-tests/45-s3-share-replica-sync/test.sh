@@ -69,7 +69,7 @@ log_info "Encrypted database on S3: $S3_DB_PATH"
 # the `init` below (the entry does not exist yet).
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
-export AWS_ENDPOINT="$S3_ENDPOINT"
+export AWS_ENDPOINT_URL="$S3_ENDPOINT"
 export AWS_REGION="us-east-1"
 
 #

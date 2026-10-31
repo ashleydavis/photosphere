@@ -813,11 +813,12 @@ stop_s3_emulator() {
 
 # Exports the emulator's credentials as the AWS_* variables the CLI falls back to when the database
 # entry names no vault secret. This is the "point the CLI at a bucket" path a user takes with a
-# self-hosted server. Requires start_s3_emulator to have run first.
+# self-hosted server. The endpoint goes in AWS_ENDPOINT_URL, the name the AWS CLI reads too, so `aws`
+# reaches the same bucket from the same shell. Requires start_s3_emulator to have run first.
 export_s3_env_credentials() {
     export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
     export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
-    export AWS_ENDPOINT="$S3_ENDPOINT"
+    export AWS_ENDPOINT_URL="$S3_ENDPOINT"
     export AWS_REGION="us-east-1"
 }
 

@@ -38,7 +38,7 @@ A path on its own carries no credentials. They are resolved in this order:
 2. The `default:s3` entry in the vault, when there is one. It holds the access key, the secret, the region and the endpoint.
 3. The AWS SDK's own environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`.
 
-The endpoint comes from the vault entry when there is one, and otherwise from `AWS_ENDPOINT`. A bucket that is not on real AWS (DigitalOcean Spaces, MinIO, a local S3 server) needs it set, or the request goes to AWS and reports that the bucket does not exist. Spaces are regional, so the endpoint names the region the bucket is in, for example `https://syd1.digitaloceanspaces.com`.
+The endpoint comes from the vault entry when there is one, and otherwise from `AWS_ENDPOINT_URL`, with an empty value counting as not set. That is the variable the AWS CLI reads, so one exported endpoint serves `psi` and `aws` from the same shell. A bucket that is not on real AWS (DigitalOcean Spaces, MinIO, a local S3 server) needs it set, or the request goes to AWS and reports that the bucket does not exist. Spaces are regional, so the endpoint names the region the bucket is in, for example `https://syd1.digitaloceanspaces.com`.
 
 ## Encrypted storage
 
