@@ -5,7 +5,7 @@
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/android-common.sh"
-source "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/scripts/emulator-config.sh"
+source "$PHOTOSPHERE_ANDROID_TOOLS_DIR/emulator-config.sh"
 
 adb_command="$ANDROID_HOME/platform-tools/adb"
 
@@ -57,47 +57,8 @@ if [ -n "$fixture_dir" ] && [ ! -d "$PHOTOSPHERE_REPO_ROOT/test/dbs/$fixture_dir
     exit 1
 fi
 
-# Without a named target, a plugged-in device wins, then the hand-testing emulator, then a running smoke test pool emulator.
-# A pool emulator is taken only while its device lock is free, the lock the smoke tests and the pool repair take, so a run
-# never installs over an app a test is using. The lock is held until this script ends.
-if [ -z "$serial" ]; then
-    pool_candidates=""
-    for candidate in $("$adb_command" devices | awk 'NR > 1 && $2 == "device" { print $1 }'); do
-        case "$candidate" in
-            emulator-*)
-                avd="$("$adb_command" -s "$candidate" emu avd name 2>/dev/null | head -1 | tr -d '\r')"
-                case "$avd" in
-                    "$SINGLE_AVD_NAME")
-                        if [ -z "$serial" ]; then
-                            serial="$candidate"
-                        fi
-                        ;;
-                    "$POOL_AVD_PREFIX"-*)
-                        pool_candidates="$pool_candidates $candidate"
-                        ;;
-                esac
-                ;;
-            *)
-                serial="$candidate"
-                break
-                ;;
-        esac
-    done
-    if [ -z "$serial" ]; then
-        for candidate in $pool_candidates; do
-            exec {lock_fd}<>"$(android_device_lock_path "$candidate")"
-            if flock -n "$lock_fd"; then
-                serial="$candidate"
-                break
-            fi
-            exec {lock_fd}>&-
-        done
-    fi
-fi
-if [ -z "$serial" ]; then
-    echo "ERROR: there is no device, hand-testing emulator ($SINGLE_AVD_NAME) or free pool emulator attached. A pool emulator that a test is using is left alone. Pass --target <serial> to name one." >&2
-    exit 1
-fi
+photosphere_android_pick_device "$serial"
+serial="$PHOTOSPHERE_ANDROID_SERIAL"
 
 echo "Running on $serial ($("$adb_command" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r'))."
 abi="$("$adb_command" -s "$serial" shell getprop ro.product.cpu.abi | tr -d '\r')"
@@ -120,10 +81,15 @@ photosphere_android_gradle assembleDebug "-PziggyVersionName=$(photosphere_andro
 
 # The fixture is copied into the app's files directory and registered in its databases.toml there, which is the app's settings
 # directory when it is started normally, so the app opens it on launch. Both go in as a tar stream unpacked by run-as, the only
-# way into the app's private storage, which works because the debug build is debuggable.
+# way into the app's private storage, which works because the debug build is debuggable. They go through adb shell rather than
+# exec-in, because exec-in returns before the device has finished unpacking and does not pass back the remote exit code.
 if [ -n "$fixture_dir" ]; then
     echo "Copying the $fixture_dir database into the app's storage..."
-    tar -C "$PHOTOSPHERE_REPO_ROOT/test/dbs" -cf - "$fixture_dir" | "$adb_command" -s "$serial" exec-in run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
+
+    # A wiped app (pm clear, as android:reset does) has no files directory until it first runs, and tar cannot unpack into a
+    # directory that is not there.
+    "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" mkdir -p files
+    tar -C "$PHOTOSPHERE_REPO_ROOT/test/dbs" -cf - "$fixture_dir" | "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
 
     # A device with no databases registered has no databases.toml, and that starts from an empty one. A file that is there but
     # cannot be read stops the run, because writing over it would lose the user's entries.
@@ -137,7 +103,7 @@ if [ -n "$fixture_dir" ]; then
         fi
     fi
     (cd "$PHOTOSPHERE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "/data/data/$PHOTOSPHERE_ANDROID_APP_ID/files/$fixture_dir" "$existing_config" "$config_dir/databases.toml")
-    tar -C "$config_dir" -cf - databases.toml | "$adb_command" -s "$serial" exec-in run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
+    tar -C "$config_dir" -cf - databases.toml | "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
     echo "Registered test-$fixture_dir in the app's database list. The app opens it on launch."
 fi
 

@@ -146,3 +146,10 @@ psi list --db /tmp/psi-desktop-move-file-between-databases/dest
 
 Expected:
 - `test.jpg` is listed.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Create the database by typing its path into `database-path-input` with the `type` command rather than browsing for it.
+- **Import files** opens a file picker: queue `pick-answer` with `{"paths": ["<absolute path of the file>"]}` before clicking `import-files-button`.
+- Step 5 selects by hovering, which the control connection cannot do: select the thumbnail with `long-press` on it instead. Steps 4 and 7 open a database by name from the left side menu; take a `screenshot` to find it.

@@ -9,7 +9,7 @@ SMOKE_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 # Absolute path to the repository root, for reaching the helper scripts under scripts/.
 REPO_ROOT="$(cd "$SMOKE_TESTS_DIR/../../.." && pwd)"
 
-# The Zig psi and the compiled mk and bdb the runner built for this run.
+# The Zig psi the runner built for this run.
 source "$REPO_ROOT/apps/cli-zig/test-cli-binaries.sh"
 
 # The Zig CLI every test here runs, which the runner built for this run.
@@ -57,24 +57,6 @@ get_test_dir() {
 # for this run into a directory of its own (see test-cli-binaries.sh), never the shared zig-out.
 get_zig_cli_command() {
     test_zig_cli_path
-}
-
-# Get mk command: default is from code; use --binary for built executable
-get_mk_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        test_cli_binary_path mk
-    else
-        echo "bun run ../mk-cli/src/index.ts --"
-    fi
-}
-
-# Get bdb command: default is from code; use --binary for built executable
-get_bdb_command() {
-    if [ "$USE_BINARY" = "true" ]; then
-        test_cli_binary_path bdb
-    else
-        echo "bun run ../bdb-cli/src/index.ts"
-    fi
 }
 # Track test results
 TESTS_PASSED=0
@@ -156,27 +138,26 @@ log_error() {
 # Array to store test results with hashes
 TEST_RESULTS=()
 
-# Check that merkle tree leaf nodes are in sorted order
+# Check that the leaf nodes of a database's files merkle tree are in sorted order
 check_merkle_tree_order() {
-    local tree_file="$1"
+    local db_dir="$1"
     local description="${2:-merkle tree}"
     
-    if [ ! -f "$tree_file" ]; then
+    if [ ! -f "$db_dir/.db/files.dat" ]; then
         return 0  # Tree doesn't exist, skip check
     fi
     
-    local mk_cmd=$(get_mk_command)
-    local check_cmd="$mk_cmd check \"$tree_file\""
+    local check_cmd="$(get_zig_cli_command) -q debug check-merkle-tree --db \"$db_dir\" --yes"
     local check_output
     local exit_code
     
     # Run the check command and capture output and exit code
-    check_output=$($mk_cmd check "$tree_file" 2>&1)
+    check_output=$(eval "$check_cmd" 2>&1)
     exit_code=$?
     
     if [ $exit_code -ne 0 ]; then
         log_error "Leaf nodes are not in sorted order for $description"
-        log_error "Tree file: $tree_file"
+        log_error "Database: $db_dir"
         log_error "Command: $check_cmd"
         log_error "Exit code: $exit_code"
         echo "$check_output"
@@ -631,8 +612,6 @@ invoke_command() {
                     echo ""
                     echo -e "[@@@@@@] ${YELLOW}[ROOT-HASH]${NC} $($(get_zig_cli_command) root-hash --db "$db_path" --yes 2>/dev/null || echo "N/A")"
                     echo ""
-                    # echo -e "[@@@@@@] ${YELLOW}[MERKLE-TREE]${NC}"
-                    # $(get_mk_command) show "$db_path/.db/files.dat" 2>/dev/null | sed 's/^/[@@@@@@] /' || echo "[@@@@@@] N/A"
                 fi
             fi
         else
@@ -923,17 +902,32 @@ populate_db_with_5_files() {
     fi
 }
 
-# Write a databases.json config file directly (removes any existing .toml so the migration path runs).
+# Writes databases.toml directly from a JSON list of database entries, with no recent databases.
+# Each entry takes name, path and optionally description, origin, s3Key, encryptionKey and
+# geocodingKey, written under the keys the CLI writes them under (buildDatabasesConfigToml in
+# packages-zig/node-api-zig). The strings are written as JSON strings, whose escapes are also TOML's.
 # Usage: seed_databases_config '[{"name":"my-photos","description":"","path":"/tmp/db"}]'
 seed_databases_config() {
     local databases_json="$1"
 
     mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
-    # Rendered by the mobile harness's helper, which goes through node-api's own
-    # buildDatabasesConfigToml: the same function the app writes the file with, so a seeded config
-    # cannot drift from the format the app reads.
-    DATABASES="$databases_json" RECENT="[]" \
-        bun "$REPO_ROOT/apps/smoke-tests/lib/write-databases-config.ts" "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"
+    echo "$databases_json" | jq -j '
+        "recent_database_names = []\n"
+        + (map(
+            "\n[[databases]]\n"
+            + ([
+                ["name", .name],
+                ["description", (.description // "")],
+                ["path", .path],
+                ["origin", .origin],
+                ["s3_key", .s3Key],
+                ["encryption_key", .encryptionKey],
+                ["geocoding_key", .geocodingKey]
+            ]
+            | map(select(.[1] != null) | "\(.[0]) = \(.[1] | tojson)\n")
+            | add)
+        ) | add // "")
+    ' > "${PHOTOSPHERE_CONFIG_DIR}/databases.toml"
 }
 
 # Writes a PNG of random size (100 to 299 pixels a side) filled with one random colour, so every call

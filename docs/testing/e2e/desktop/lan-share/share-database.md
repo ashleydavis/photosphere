@@ -123,3 +123,9 @@ Expected:
 
 Expected:
 - The view dialog shows the same value that was seeded on the sender.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.
+- Two instances: start each test-hooks build with its own exports and its own `ZIGGY_TEST_PORT_FILE`, and send each command to the port of the instance the step names. Read the pairing code with `get-value` on `share-pairing-code`.

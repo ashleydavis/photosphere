@@ -72,7 +72,7 @@ test_v6_database_add_file() {
     
     expect_output_string "$list_output" "test.jpg" "Test file appears in asset listing"
     
-    check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 add-file test database"
+    check_merkle_tree_order "$temp_v6_dir" "v6 add-file test database"
     
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 add-file database"

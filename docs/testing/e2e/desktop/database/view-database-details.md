@@ -68,3 +68,7 @@ Expected output contains all of:
 - The database name `My Test DB`.
 - The database path `/tmp/psi-desktop-view-database-details/db`.
 - The configured secret ids (or "none" / equivalent if no secrets were attached).
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.

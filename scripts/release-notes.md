@@ -2,7 +2,7 @@
 
 `release-notes.sh` prints the release notes for a build: one bullet per commit made since the last release tag, newest first.
 
-It exists so the two places that publish a build describe it the same way. Each platform's GitHub release workflow (`.github/workflows/release-zig-<platform>.yml`, see [Releasing](../docs/releasing.md)) uses it for the notes on a release or nightly, and the Android tester distribution (`apps/android-frontend/scripts/distribute-android.sh`) uses it for the notes a tester reads beside the build in Firebase App Tester. Written twice, those two would drift.
+It exists so the two places that publish a build describe it the same way. Each platform's GitHub release workflow (`.github/workflows/release-zig-<platform>.yml`, see [Releasing](../docs/releasing.md)) uses it for the notes on a release or nightly, and the Android tester distribution (`apps/photosphere/scripts/distribute-android.sh`) uses it for the notes a tester reads beside the build in Firebase App Tester. Written twice, those two would drift.
 
 ## Using it
 

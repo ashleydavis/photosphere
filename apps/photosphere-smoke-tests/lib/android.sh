@@ -12,16 +12,15 @@
 # The core writes its log to a file in the app's private files directory, and the scenario reads app.log on the host, so a stream
 # started on the host (adb exec-out run-as ... tail -f) copies the log file into app.log as the core writes it.
 #
-# The device is chosen the way the repository's mobile suite chooses one (see apps/smoke-tests/lib/android.sh): the device named in
-# PHOTOSPHERE_ANDROID_DEVICES, else a pool emulator, else a plugged-in device. It is claimed under the same per-device lock the mobile
-# suite and the pool repair take, for as long as the scenario's shell runs: the lock is a file descriptor of that shell, so it is let
+# The device is chosen as the device named in PHOTOSPHERE_ANDROID_DEVICES, else a pool emulator, else a plugged-in device. It is
+# claimed under the per-device lock the pool repair takes (scripts/android/emulator-config.sh), for as long as the scenario's shell runs: the lock is a file descriptor of that shell, so it is let
 # go when the scenario ends, and not between a stop and the restart that follows it, which must find the same install and data.
 
 ANDROID_SCRIPTS_DIR="$PHOTOSPHERE_SMOKE_REPO_ROOT/apps/photosphere/scripts"
 # JAVA_HOME and ANDROID_HOME, and the helpers that build the app.
 source "$ANDROID_SCRIPTS_DIR/android-common.sh"
 # The pool's AVD prefix and the device lock path, from the file that defines them.
-source "$PHOTOSPHERE_CAPACITOR_ANDROID_DIR/scripts/emulator-config.sh"
+source "$PHOTOSPHERE_ANDROID_TOOLS_DIR/emulator-config.sh"
 
 # The application id of the app.
 ANDROID_APP_ID="$PHOTOSPHERE_ANDROID_APP_ID"

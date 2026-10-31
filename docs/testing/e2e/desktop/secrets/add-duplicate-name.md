@@ -70,3 +70,8 @@ Expected:
 Expected:
 - Only one `dup-secret` entry appears in the list.
 - Its value is the one from step 1 (the duplicate-add did not overwrite it).
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.

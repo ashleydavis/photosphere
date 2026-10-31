@@ -6,58 +6,40 @@ The other way round from [the new remote test](auto-import-new-remote.md). There
 
 The end state is the same as the other test's: one database in two places, the bucket recorded as the phone's origin, photos taken on the phone reaching the bucket on their own. What differs is the direction of the first move. Nothing is uploaded to join the two; the phone downloads a copy of what is already there.
 
-## Prerequisites
+## Prep
 
-Run the app from source (from the repo root):
-
-```bash
-bun run android    # Android
-bun run ios        # iOS
-```
-
-**A Photosphere database that already exists in an S3 bucket, with photos in it**, and its credentials: endpoint, region, access key id and secret access key. If it is encrypted you need its encryption key as well. The database must be reachable from both the phone and the development machine.
-
-The CLI commands below name the bucket by a raw `s3:` path, which carries no stored credentials with it, so it uses the environment. On anything other than real AWS, the endpoint has to be exported as well, in `AWS_ENDPOINT_URL` (the name the `aws` CLI reads too), or the command goes to AWS and reports that the bucket does not exist. Registering the database with `psi dbs add` is what step 1 does instead, and after that the credentials are found by path and no environment variables are needed.
-
-The device needs to be able to take a photo with the camera partway through.
-
-The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, and a phone on mobile data will sit there doing nothing with no error.
-
-If the app has been used before, remove its data first so the test starts with no database and no settings. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app and let `bun run ios` reinstall it.
-
-## Steps
-
-### 1. Register the existing database on the development machine
-
-From the repo root, with the CLI on the PATH, naming secrets that are already in the keychain (`psi secrets list` prints their names):
+- Run from the repo root, in one terminal, which the later CLI steps use too. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
+- **A Photosphere database that already exists in an S3 bucket, with photos in it.** It is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). `--from 50-assets` fills it with a copy of the `50-assets` test database (60 photos) and registers it on this machine as the entry `existing-remote-test`, with the credentials `existing-remote-test-s3`. The phone must be on the same network as this machine.
+- `$S3_DB` in the steps is the database's path, `s3:photosphere-smoke-test/existing-remote-test`.
+- `psi summary` checks the database reads, which also proves those are the right secrets.
+- The device needs to be able to take a photo with the camera partway through.
+- The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, and a phone on mobile data will sit there doing nothing with no error.
 
 ```bash
-psi dbs add --yes --name existing-remote-test \
-  --path s3:<bucket>/<prefix> --s3-cred <s3 secret name> --encryption-key <key name>
+bun run android:reset   # Android
+bun run android   # Android
+bun run ios:reset   # iOS
+bun run ios   # iOS
+bun run start-minio -- existing-remote-test --from 50-assets
+source tmp/minio/existing-remote-test.env
+psi summary --db "$S3_DB"
 ```
 
-Leave `--encryption-key` off if the database is not encrypted. Run `psi dbs add` with no arguments to be walked through creating the secrets instead.
+Expected:
+- The reset prints that it wiped Photosphere's data, or that the app is not installed.
+- `psi summary` prints a summary rather than a report that no database was found. **Write down the number of photos it holds.** Later steps compare against it.
 
-Check it reads, which also proves those are the right secrets:
+## Test
 
-```bash
-psi summary --db s3:<bucket>/<prefix>
-```
-
-Expected: a summary rather than a report that no database was found. **Write down the number of photos it holds.** Later steps compare against it.
-
----
-
-### 2. Check where the phone is starting from
+### 1. Check where the phone is starting from
 
 1. Open the app.
 2. Open the menu and go to the gallery.
 
 Expected: no database is open, and there is nothing in the gallery.
 
----
-
-### 3. Send the database to the phone
+### 2. Send the database to the phone
 
 Each side waits sixty seconds for the other, which is not enough time to start the send and then walk to the phone, so the phone waits first and the pairing code is chosen in advance rather than generated.
 
@@ -85,9 +67,7 @@ Expected:
 
 "No device found within 60 seconds" means the window was missed or the two are not on the same network. Run the send again with the phone waiting.
 
----
-
-### 4. Replicate it down onto the phone
+### 3. Replicate it down onto the phone
 
 1. On **Manage Databases**, press the **⋮** on the database that just arrived and choose **Replicate**.
 2. **Destination type**: `File system`.
@@ -99,37 +79,31 @@ Expected:
 - It finishes in seconds, however large the library is. A partial replication copies the README, the files merkle tree and the merkle trees of the record database, and nothing else: it deliberately does not walk the tree.
 - **Nothing appears on the Manage Databases page.** A replication does not register its destination, so the list is unchanged. That is the next step.
 
----
-
-### 5. Register the copy and make it the one the app uses
+### 4. Register the copy and make it the one the app uses
 
 1. On **Manage Databases**, press the **⋮** at the top and choose **Add database**.
 2. **Name**: whatever you want to see in the app. Entry names have to be unique, so if the name you want is the one the remote arrived under, rename the remote's entry first (**⋮** then **Edit** on it). Renaming an entry is safe: an origin is matched to its keys by path, never by name.
-3. **Type**: `File system`. **Path**: the name typed in step 4.
+3. **Type**: `File system`. **Path**: the name typed in step 3.
 4. Press **Add**.
 5. Back on **Manage Databases**, press the **⋮** on it and choose **Set as default**.
 
 Expected:
 - The copy is listed and the app opens it.
-- **Set as default** is what makes automatic import write into this database. Without it, switching automatic import on in step 7 makes a database of its own called **My Photos** and imports into that instead, because automatic import reads the default recorded in `config.yaml` and opening a database does not set it.
+- **Set as default** is what makes automatic import write into this database. Without it, switching automatic import on in step 6 makes a database of its own called **My Photos** and imports into that instead, because automatic import reads the default recorded in `config.yaml` and opening a database does not set it.
 - **⋮** then **View details** on it shows **Origin** blank, and you have to set it: **⋮** then **Edit**, and beside **Origin** use the **Choose…** dropdown to pick the remote's entry, then Save. Do not type the path: credentials are matched to an origin by exact path, so a typo finds no keys and fails minutes later in a log rather than when you save.
 - Setting it by hand is a gap rather than the intent. The replication records the origin in the copy's own `.db/config.json`, and the desktop refreshes the list entry from that whenever a database is opened, but mobile does not, so the field a phone shows stays empty. Origin is what background syncing looks for, and a database without it imports happily and never syncs.
 
----
-
-### 6. The library appears on the phone
+### 5. The library appears on the phone
 
 1. Go to the gallery.
 2. Wait.
 
 Expected:
-- Photos from the remote appear, and the count climbs towards the number written down in step 1.
+- Photos from the remote appear, and the count climbs towards the number written down in Prep.
 - **This takes a while, and the app looks empty while it happens.** The replication copied the trees and not the contents: opening a partial replica queues a prefetch that pulls the records and the thumbnails down from the bucket a few files at a time, and on a library of a few thousand photos that is minutes rather than seconds. An empty gallery a minute in is the prefetch still running, not a failure.
 - The photos are browsable once they appear. The originals are still only in the bucket and are fetched when a photo is opened.
 
----
-
-### 7. Set the phone importing into it
+### 6. Set the phone importing into it
 
 1. Open the menu and choose **Configuration**.
 2. Find the **Automatic import** card and turn the toggle on.
@@ -138,11 +112,9 @@ Expected:
 Expected:
 - The toggle stays on. A toggle that turns itself back off is a refused or partial permission.
 - On Android a notification appears saying **Backing up your photos**.
-- The app does not ask which database to import into: it uses the one recorded as the default, which step 5 set to the copy. A database called **My Photos** appearing instead means step 5's **Set as default** was missed.
+- The app does not ask which database to import into: it uses the one recorded as the default, which step 4 set to the copy. A database called **My Photos** appearing instead means step 4's **Set as default** was missed.
 
----
-
-### 8. Check automatic syncing is on
+### 7. Check automatic syncing is on
 
 1. Still in **Configuration**, look at the **Syncing** section.
 
@@ -150,9 +122,7 @@ Expected:
 - **Enable syncing** is on. A fresh installation starts with it on, so this is a check rather than a change.
 - **Only sync over Wi-Fi** is on, and the phone is on Wi-Fi.
 
----
-
-### 9. The phone's own photos are imported
+### 8. The phone's own photos are imported
 
 1. Go to the gallery.
 2. Wait.
@@ -162,29 +132,23 @@ Expected:
 - They keep appearing until the library has been walked, and then it stops.
 - The app stays usable throughout.
 
----
-
-### 10. A photo taken now goes the whole way
+### 9. A photo taken now goes the whole way
 
 1. Leave the app open.
 2. Take a photo with the camera.
 3. Switch back to Photosphere and go to the gallery.
+4. After a sync pass (passes run every five minutes by default), check the bucket from the repo root, with the CLI on the PATH:
+
+```bash
+psi summary --db "$S3_DB"
+```
 
 Expected:
 - The photo appears in the gallery within about half a minute, without you importing it.
-- After a sync pass it is in the bucket. Passes run every five minutes by default. Check from the repo root, with the CLI on the PATH:
+- After a sync pass it is in the bucket.
+- The photo count is higher than the number written down in Prep, by what the phone has imported.
 
-```bash
-psi summary --db s3:<bucket>/<prefix>
-```
-
-- The photo count is higher than the number written down in step 1, by what the phone has imported.
-
-Camera to a database that existed before the phone did, with nothing pressed anywhere.
-
----
-
-### 11. What was imported is recorded
+### 10. What was imported is recorded
 
 1. Go to the **Import** page.
 
@@ -192,24 +156,22 @@ Expected:
 - The photos the phone imported are listed, newest first, badged **automatic**.
 - The photos that came down from the bucket are **not** listed. They were not imported on this device; they arrived by replication, and the import record is this device's record of what it took in.
 
----
-
-### 12. The record survives a restart
+### 11. The record survives a restart
 
 1. Close the app completely and reopen it.
-2. Open the copy made in step 5.
+2. Open the copy made in step 4.
 3. Go to the **Import** page.
 
 Expected: the list still shows what this device imported, including from before the restart.
 
----
+## Check
 
-### 13. Check the photos are really there
+### 12. Check the photos are really there
 
 Automatic import and syncing must both have caught up first. From the repo root, with the CLI on the PATH:
 
 ```bash
-psi verify --db s3:<bucket>/<prefix>
+psi verify --db "$S3_DB"
 ```
 
 Expected:
@@ -218,17 +180,20 @@ Expected:
 
 A photo that shows in the gallery but fails verification has been recorded without its content being stored, which is the failure this step is here to catch.
 
----
+### 13. Clear up so the test can be run again
 
-### 14. Clear up so the test can be run again
-
-The phone goes back to having nothing, and the bucket keeps whatever the phone put in it, which is the point of the test rather than something to undo. Only remove those photos from the bucket if it is a test bucket rather than a real library.
-
-1. On the phone, remove the app's data. On Android: **Settings > Apps > Photosphere > Storage > Clear storage**. On iOS: delete the app.
-2. Take the database entry off the development machine, from the repo root, with the CLI on the PATH:
+The next run starts its own fresh bucket and resets the app, so only the server has to be stopped.
 
 ```bash
-psi dbs remove --yes --name existing-remote-test
+bun run stop-minio -- existing-remote-test
 ```
 
-    The secrets are left alone: they were already in the keychain before this test and are not this test's to remove.
+Expected: it reports that MinIO stopped.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
+- Step 2: start receiving on the phone first, type the four digits with `input text`, then run `psi dbs send` within the minute.
+- Step 6 brings up the system photos and videos permission: allow access to all photos, not a selection. If a notifications permission follows, allow it. The **Backing up your photos** notification is checked by pulling down the notification shade with a swipe from the top edge.
+- Step 9 needs a photo taken with the camera, which the human does.
+- Step 11: close the app completely from the system's recent apps screen, or with `adb -s <serial> shell am force-stop au.com.codecapers.photosphere.ziggy`, then open it again from the launcher.

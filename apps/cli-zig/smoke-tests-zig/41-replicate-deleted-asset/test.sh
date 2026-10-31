@@ -116,8 +116,8 @@ test_replicate_with_deleted_asset() {
     expect_output_string "$verify_replica_output" "Database verification passed" "Replica database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$source_dir/.db/files.dat" "replicate deleted source database"
-    check_merkle_tree_order "$replica_dir/.db/files.dat" "replicate deleted replica database"
+    check_merkle_tree_order "$source_dir" "replicate deleted source database"
+    check_merkle_tree_order "$replica_dir" "replicate deleted replica database"
     
     # Clean up temporary databases
     rm -rf "$source_dir"

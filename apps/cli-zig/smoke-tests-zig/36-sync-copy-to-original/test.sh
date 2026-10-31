@@ -132,8 +132,8 @@ test_sync_copy_to_original() {
     expect_output_string "$verify_copy_output" "Database verification passed" "Copy database passes verification"
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "reverse sync original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "reverse sync copy database"
+    check_merkle_tree_order "$original_dir" "reverse sync original database"
+    check_merkle_tree_order "$copy_dir" "reverse sync copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"

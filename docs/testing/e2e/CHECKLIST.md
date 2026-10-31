@@ -219,51 +219,51 @@ Run the story player and check every story cycles through without failures, then
 Run each of these on Android and on iOS. Tick a test only when it has passed on both, and say which platform failed when one does.
 
 ### Automatic import
-- [ ] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
-- [ ] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
-- [ ] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
-- [ ] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
+- [x] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
+- [-] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
+- [-] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
+- [-] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
 
 ### Import
-- [ ] [import-photo-and-video](mobile/import/import-photo-and-video.md)
+- [-] [import-photo-and-video](mobile/import/import-photo-and-video.md)
 
 ### Gallery
-- [ ] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
-- [ ] [export-asset](mobile/gallery/export-asset.md)
+- [-] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
+- [x] [export-asset](mobile/gallery/export-asset.md)
 
 ### Download
-- [ ] [download-assets](mobile/download/download-assets.md)
+- [-] [download-assets](mobile/download/download-assets.md)
 
 ### Database
-- [ ] [create-and-open-database](mobile/database/create-and-open-database.md)
-- [ ] [load-large-database](mobile/database/load-large-database.md)
-- [ ] [view-database-details](mobile/database/view-database-details.md)
-- [ ] [remove-recent-database](mobile/database/remove-recent-database.md)
-- [ ] [open-encrypted-database](mobile/database/open-encrypted-database.md)
-- [ ] [edit-database-origin](mobile/database/edit-database-origin.md)
+- [-] [create-and-open-database](mobile/database/create-and-open-database.md)
+- [x] [load-large-database](mobile/database/load-large-database.md)
+- [x] [view-database-details](mobile/database/view-database-details.md)
+- [-] [remove-recent-database](mobile/database/remove-recent-database.md)
+- [x] [open-encrypted-database](mobile/database/open-encrypted-database.md)
+- [-] [edit-database-origin](mobile/database/edit-database-origin.md)
 
 ### Sync
-- [ ] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
+- [-] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
 
 ### Move
-- [ ] [move-file-between-databases](mobile/move/move-file-between-databases.md)
+- [-] [move-file-between-databases](mobile/move/move-file-between-databases.md)
 
 ### Replication
-- [ ] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
-- [ ] [partial-replica-and-prefetch](mobile/replication/partial-replica-and-prefetch.md)
+- [-] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
+- [-] [partial-replica-and-prefetch](mobile/replication/partial-replica-and-prefetch.md)
 
 ### S3
-- [ ] [s3-database](mobile/s3/s3-database.md)
+- [-] [s3-database](mobile/s3/s3-database.md)
 
 ### Secrets
-- [ ] [add-and-view-secret](mobile/secrets/add-and-view-secret.md)
-- [ ] [add-encryption-key](mobile/secrets/add-encryption-key.md)
-- [ ] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
+- [-] [add-and-view-secret](mobile/secrets/add-and-view-secret.md)
+- [-] [add-encryption-key](mobile/secrets/add-encryption-key.md)
+- [-] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
 
 ### LAN Share
-- [ ] [mobile-to-mobile](mobile/lan-share/mobile-to-mobile.md)
-- [ ] [desktop-to-mobile](mobile/lan-share/desktop-to-mobile.md)
-- [ ] [cli-to-mobile](mobile/lan-share/cli-to-mobile.md)
+- [-] [mobile-to-mobile](mobile/lan-share/mobile-to-mobile.md)
+- [x] [desktop-to-mobile](mobile/lan-share/desktop-to-mobile.md)
+- [-] [cli-to-mobile](mobile/lan-share/cli-to-mobile.md)
 
 ### News
-- [ ] [news-notifications](mobile/news/news-notifications.md)
+- [-] [news-notifications](mobile/news/news-notifications.md)

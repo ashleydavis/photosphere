@@ -98,3 +98,8 @@ curl -s -X POST http://127.0.0.1:<port>/mcp -H "Content-Type: application/json" 
 
 Expected:
 - The endpoint stops accepting connections: `curl` prints nothing and the last line is `exit 7` (could not connect), proving the server shut down.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Step 1 is done as in [load-50-asset-fixture](../database/load-50-asset-fixture.md). The rest is CLI commands the agent runs itself. Step 4's quit is the `quit` command.

@@ -94,8 +94,8 @@ Commands: `pkill -f "bun run start.*--yes"`, `pkill -f "bun run.*udp-listen"`, `
 **10. `cli-desktop-lan-share-smoke-tests.sh:59, 60`, any matching process on the machine.**
 Commands: `pkill -f "bun run.*secrets (send|receive)"` and `pkill -f "bun run.*dbs (send|receive)"`, in the `EXIT` trap. Same reasoning and same blast radius as finding 9.
 
-**11. `apps/android-frontend/scripts/emulator.sh:313`, a host network interface.**
-Command: `ip link del "$netcard"`, running as root, iterating `$PSPHERE_TAPS`. `PSPHERE_TAPS` is passed in by `cmd_down`/`cmd_pool_down` from literal prefixes, but the privileged subcommand is reachable directly: `sudo PSPHERE_TAPS=eth0 apps/android-frontend/scripts/emulator.sh __bridge-down` deletes `eth0`. Nothing checks that the named interface is one the script created. Blast radius: the machine's real network interface. (`set -u` means an unset `PSPHERE_TAPS` aborts before this line, so the empty case is covered; the wrong-value case is not.)
+**11. `scripts/android/emulator.sh:313`, a host network interface.**
+Command: `ip link del "$netcard"`, running as root, iterating `$PSPHERE_TAPS`. `PSPHERE_TAPS` is passed in by `cmd_down`/`cmd_pool_down` from literal prefixes, but the privileged subcommand is reachable directly: `sudo PSPHERE_TAPS=eth0 scripts/android/emulator.sh __bridge-down` deletes `eth0`. Nothing checks that the named interface is one the script created. Blast radius: the machine's real network interface. (`set -u` means an unset `PSPHERE_TAPS` aborts before this line, so the empty case is covered; the wrong-value case is not.)
 
 **12. `apps/smoke-tests/lib/android.sh:436`, the app's entire data directory on the attached device.**
 Command: `adb shell pm clear "$APP_ID"`. `adb` is invoked without `-s`, so it targets `$ANDROID_SERIAL` or whatever single device is attached. `android_ready_devices` (line 70) accepts any device adb reports, not only emulators. Reachable path: a real phone with the app installed plugged in while `bun run test:and` runs. Blast radius: all Photosphere data on that phone, including its keychain entries.
@@ -138,10 +138,10 @@ Recursive deletions of directories built from `TEST_TMP_DIR` or from literal `./
 **`apps/cli/smoke-tests-key-chain/58..63/test.sh`, real OS keychain entries.**
 Each test runs `psi secrets remove --name <name> --yes` with `PHOTOSPHERE_VAULT_TYPE=keychain`, against the machine's real keychain. The names are literals but generic: `keychain-test-secret`, `view-secret`, `edit-secret`, `renamed-secret`, `keep-secret`, `delete-secret`, `list-multi-secret-a/b/c`. A real keychain entry of the same name under the Photosphere service is deleted. Indirect (the deletion is inside the CLI).
 
-**`apps/android-frontend/scripts/emulator.sh:276, 278, 340`, host kernel setting.**
+**`scripts/android/emulator.sh:276, 278, 340`, host kernel setting.**
 `sysctl -q -w net.ipv4.ip_forward=1` turns the host into a router and `down` restores the saved value. Unproven because the restore only happens if `down` runs; a machine where `up` succeeded and `down` never ran is left forwarding.
 
-**`apps/android-frontend/scripts/emulator.sh:427, 450`, the user's AVD directory.**
+**`scripts/android/emulator.sh:427, 450`, the user's AVD directory.**
 `cat > "$dir/config.ini"` and `> "$home/$name.ini"` where `home` is `${ANDROID_AVD_HOME:-$HOME/.android/avd}`. `create_base_avd` is only called with the literal `psphere-base`, so it writes a new AVD rather than overwriting an existing one, but it writes into the user's own Android configuration directory rather than a scratch area.
 
 **`apps/desktop/scripts/deb-post-install.sh:63, 65, 86, 88` and `apps/desktop/scripts/fix-sandbox.sh:46, 49`.**
@@ -217,10 +217,10 @@ Every script in the repository, one row each, in path order. Categories are A (g
 | Script | Destructive commands |
 | :-- | :-- |
 | `apps/android-frontend/android/gradlew` | none |
-| `apps/android-frontend/scripts/android-env.sh` | none |
+| `scripts/android/android-env.sh` | none |
 | `apps/android-frontend/scripts/android-gradle.sh` | none |
-| `apps/android-frontend/scripts/emulator-config.sh` | none |
-| `apps/android-frontend/scripts/emulator.sh` | B 235: `rm -f "$DNSMASQ_PID_FILE"`<br>B 244: `rm -f "$DNSMASQ_LOG_FILE"`<br>F 260: `chmod 0644 "$DNSMASQ_LOG_FILE" 2>/dev/null \|\| true`<br>E 278: `sysctl -q -w net.ipv4.ip_forward=1`<br>E 313: `ip link del "$netcard"`<br>B 328: `rm -f "$DNSMASQ_PID_FILE"`<br>D 334: `pkill -f "dnsmasq.*--interface=$BRIDGE_NAME" 2>/dev/null \|\| true`<br>E 340: `sysctl -q -w net.ipv4.ip_forward="$(cat "$IP_FORWARD_STATE_FILE")"`<br>B 342: `rm -f "$IP_FORWARD_STATE_FILE"`<br>E 351: `iptables -D FORWARD -i "$BRIDGE_NAME" -o "$uplink" -j ACCEPT 2>/dev/null \|\| true`<br>E 352: `iptables -D FORWARD -i "$uplink" -o "$BRIDGE_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null \|\| true`<br>E 356: `ip link del "$BRIDGE_NAME"` |
+| `scripts/android/emulator-config.sh` | none |
+| `scripts/android/emulator.sh` | B 235: `rm -f "$DNSMASQ_PID_FILE"`<br>B 244: `rm -f "$DNSMASQ_LOG_FILE"`<br>F 260: `chmod 0644 "$DNSMASQ_LOG_FILE" 2>/dev/null \|\| true`<br>E 278: `sysctl -q -w net.ipv4.ip_forward=1`<br>E 313: `ip link del "$netcard"`<br>B 328: `rm -f "$DNSMASQ_PID_FILE"`<br>D 334: `pkill -f "dnsmasq.*--interface=$BRIDGE_NAME" 2>/dev/null \|\| true`<br>E 340: `sysctl -q -w net.ipv4.ip_forward="$(cat "$IP_FORWARD_STATE_FILE")"`<br>B 342: `rm -f "$IP_FORWARD_STATE_FILE"`<br>E 351: `iptables -D FORWARD -i "$BRIDGE_NAME" -o "$uplink" -j ACCEPT 2>/dev/null \|\| true`<br>E 352: `iptables -D FORWARD -i "$uplink" -o "$BRIDGE_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null \|\| true`<br>E 356: `ip link del "$BRIDGE_NAME"` |
 | `apps/android-frontend/scripts/run-android.sh` | E 200: `"$ADB" -s "$target" shell rm -rf "$tmp_remote" >/dev/null 2>&1 \|\| true`<br>E 202: `"$ADB" -s "$target" shell run-as "$APP_ID" rm -rf "files/$FIXTURE_DB"`<br>E 204: `"$ADB" -s "$target" shell rm -rf "$tmp_remote" >/dev/null 2>&1 \|\| true`<br>E 241: `"$ADB" -s "$target" shell rm -f "/data/local/tmp/$DATABASES_CONFIG" >/dev/null 2>&1 \|\| true`<br>B 242: `rm -f "$tmp_local"` |
 | `apps/cli/check-tools.sh` | none |
 | `apps/cli/demo-news.sh` | B 29: `trap 'rm -rf "$DEMO_CONFIG"' EXIT INT TERM`<br>B 44: `rm -rf "$DEMO_CONFIG"` |
@@ -411,7 +411,7 @@ Ranked by blast radius, not by how easy the fix is. No fixes are applied here an
 4. **`scripts/story-player.sh:493` and `apps/desktop/screenshots/capture-ux.sh:24`**, a documented `--screenshots <dir>` option and an `OUT_DIR` environment variable feed `rm -rf`. Both are aimed at directories a developer would plausibly point at somewhere real, because the whole purpose of the option is to choose where output goes.
 5. **`apps/smoke-tests/lib/android.sh:436, 487`**, `adb shell pm clear` and `rm -rf files` target whatever device adb happens to be talking to, and the device-discovery function accepts real phones, not only emulators. Blast radius is another machine's app data, which no amount of local care protects.
 6. **`apps/cli/smoke-tests-lan-share.sh` and `cli-desktop-lan-share-smoke-tests.sh`**, five and two `pkill -f` calls on patterns broad enough to match a developer's own `bun` processes. Kills work in progress rather than deleting files, so the damage is recoverable, but it is silent and happens on every run.
-7. **`apps/android-frontend/scripts/emulator.sh:313`**, `ip link del` on an interface named by an environment variable, running as root through `sudo`. Only reachable by invoking the internal `__bridge-down` subcommand directly, which is why it ranks below the others, but the consequence is losing the machine's network.
+7. **`scripts/android/emulator.sh:313`**, `ip link del` on an interface named by an environment variable, running as root through `sudo`. Only reachable by invoking the internal `__bridge-down` subcommand directly, which is why it ranks below the others, but the consequence is losing the machine's network.
 8. **`apps/cli/smoke-tests.sh:642, 748, 930, 1000`**, `hash-cache clear` wipes a cache in the system temp directory that the user's real `psi` runs share. Nothing is permanently lost, only re-computed, but it is a test reaching outside its own sandbox.
 9. **`apps/desktop/scripts/test-post-install.sh:82, 86`**, `sudo chown root:root` on a path derived from `$1`. Narrow (the file must be named `chrome-sandbox`) but it leaves a root-owned setuid file the caller cannot undo.
 10. **`apps/cli/diff-dirs.sh:157`**, an unquoted expansion inside a `trap "rm -rf $TMPDIR"` string. Small blast radius and unlikely to fire, but it is the cheapest thing on this list to get wrong again, and the whole trap idiom is copied elsewhere in the repository.

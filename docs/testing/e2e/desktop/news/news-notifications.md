@@ -89,3 +89,9 @@ Expected:
 
 Expected:
 - No news toasts appear (both items are now marked as shown).
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- To restart, send `quit`, check the instance has exited, and start it again with the same exports and test-mode variables.
+- Read whether a toast is showing, and which one, from a `screenshot`.
