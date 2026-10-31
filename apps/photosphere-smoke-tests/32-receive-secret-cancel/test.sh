@@ -66,7 +66,7 @@ case "$PLATFORM" in
     android|ios)
         # Drawn per run, never hardcoded: the code is the only thing that tells two concurrent shares apart.
         code="$(allocate_pairing_code)"
-        run_cli "$TMP_DIR" secrets add --yes --name test-secret --type api-key --value "TESTAPIKEY123" > "$TMP_DIR/sender-setup.log" 2>&1 || {
+        run_zig_cli "$TMP_DIR" secrets add --yes --name test-secret --type api-key --value "TESTAPIKEY123" > "$TMP_DIR/sender-setup.log" 2>&1 || {
             log_error "The CLI could not add the secret to send. Its output: $TMP_DIR/sender-setup.log"
             exit 1
         }

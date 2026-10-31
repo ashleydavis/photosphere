@@ -92,7 +92,7 @@ log_success "The database in the bucket holds the imported photo"
 #
 read_bucket_database() {
     local output_file="$1"
-    run_cli "$TMP_DIR" summary --db "$S3_DB_PATH" --yes > "$output_file" 2>&1
+    run_zig_cli "$TMP_DIR" summary --db "$S3_DB_PATH" --yes > "$output_file" 2>&1
 }
 
 # Read it before the reset as well as after. A check that cannot tell "the reset destroyed it" from

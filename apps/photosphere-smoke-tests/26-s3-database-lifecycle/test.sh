@@ -13,7 +13,7 @@
 #
 # The path is typed in the plain `s3:bucket/prefix` form. The dialog's own Browse S3 button produces the `s3:bucket:/prefix` form
 # instead, and that form cannot be opened at all: nothing in the storage layer understands the `bucket:` segment (see
-# apps/cli/smoke-tests/72-s3-paths, whose final section is left failing on that). Using the working form here keeps this test about the
+# apps/cli-zig/smoke-tests-zig/72-s3-paths, whose final section is left failing on that). Using the working form here keeps this test about the
 # lifecycle.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"

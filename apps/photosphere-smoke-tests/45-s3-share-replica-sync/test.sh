@@ -64,7 +64,7 @@ start_s3_emulator "$S3_STATE_DIR"
 S3_DB_PATH="s3:$S3_EMULATOR_BUCKET/shared-encrypted"
 log_info "Encrypted database on S3: $S3_DB_PATH"
 
-# run_cli isolates the CLI's own vault and config under this test's tmp dir. These are what the CLI
+# run_zig_cli isolates the CLI's own vault and config under this test's tmp dir. These are what the CLI
 # falls back to when the database entry it is working on names no vault secret, which is the case for
 # the `init` below (the entry does not exist yet).
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
@@ -82,7 +82,7 @@ cli_expect_success() {
     local description="$1"
     shift
     local cli_output
-    if ! cli_output="$(run_cli "$TMP_DIR" "$@" 2>&1)"; then
+    if ! cli_output="$(run_zig_cli "$TMP_DIR" "$@" 2>&1)"; then
         log_error "$description failed. The CLI said:"
         echo "$cli_output" | sed 's/^/  /'
         exit 1
@@ -246,7 +246,7 @@ log_success "The prefetch pulled thumbnails down out of the bucket"
 # origin at all. A sync that reports it pushed changes and leaves this untouched has taken one of
 # syncDatabase's early returns rather than merging anything, which is invisible from the app: the
 # worker's own log never reaches app.log.
-ORIGIN_HASH_BEFORE="$(run_cli "$TMP_DIR" root-hash --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | tail -1 | tr -d '\r')"
+ORIGIN_HASH_BEFORE="$(run_zig_cli "$TMP_DIR" root-hash --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | tail -1 | tr -d '\r')"
 log_info "Origin root hash before the edit: $ORIGIN_HASH_BEFORE"
 
 # Trip the scheduler's 10 second debounce without waiting it out, as sync and s3-sync-prefetch do.
@@ -320,7 +320,7 @@ log_success "The edit is on the device's own disk, in the replica"
 # both produce an empty description on screen. A separate process opening the encrypted database from
 # scratch can only report what is actually stored, so this is what says which half is at fault when
 # this test fails. It is also the same check the desktop test makes, for the same reason.
-ORIGIN_ASSET_ID="$(run_cli "$TMP_DIR" list --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
+ORIGIN_ASSET_ID="$(run_zig_cli "$TMP_DIR" list --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
 if [ -z "$ORIGIN_ASSET_ID" ]; then
     log_error "Could not find the asset's id in the encrypted S3 database."
     exit 1
@@ -330,16 +330,16 @@ fi
 # cannot open an encrypted database at all. Replicating decrypts on the way out, which leaves a
 # database `info` can read. The replica is this test's own scratch copy and is read, never written.
 ORIGIN_COPY="$TMP_DIR/origin-check"
-if ! ORIGIN_COPY_OUTPUT="$(run_cli "$TMP_DIR" replicate --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --dest "$ORIGIN_COPY" --yes 2>&1)"; then
+if ! ORIGIN_COPY_OUTPUT="$(run_zig_cli "$TMP_DIR" replicate --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --dest "$ORIGIN_COPY" --yes 2>&1)"; then
     log_error "Could not replicate the encrypted S3 database to read it back. The CLI said:"
     echo "$ORIGIN_COPY_OUTPUT" | sed 's/^/  /'
     exit 1
 fi
 
-ORIGIN_HASH_AFTER="$(run_cli "$TMP_DIR" root-hash --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | tail -1 | tr -d '\r')"
+ORIGIN_HASH_AFTER="$(run_zig_cli "$TMP_DIR" root-hash --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | tail -1 | tr -d '\r')"
 log_info "Origin root hash after the sync:  $ORIGIN_HASH_AFTER"
 
-ORIGIN_INFO="$(run_cli "$TMP_DIR" info "$ORIGIN_ASSET_ID" --db "$ORIGIN_COPY" --yes 2>&1)"
+ORIGIN_INFO="$(run_zig_cli "$TMP_DIR" info "$ORIGIN_ASSET_ID" --db "$ORIGIN_COPY" --yes 2>&1)"
 if ! echo "$ORIGIN_INFO" | grep -qF "$DESCRIPTION"; then
     # `psi root-hash` was checked by hand to change when only a record's description changes, so an
     # unchanged hash here really does mean the origin's content is byte-for-byte what it was. What it

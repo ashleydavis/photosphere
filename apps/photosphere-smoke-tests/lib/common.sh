@@ -797,7 +797,7 @@ create_database() {
     shift
 
     local cli_output
-    if ! cli_output="$( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$db_path" --yes 2>&1 )"; then
+    if ! cli_output="$( "$PHOTOSPHERE_ZIG_CLI" init --db "$db_path" --yes 2>&1 )"; then
         log_error "Creating the database at $db_path failed. The CLI said:"
         echo "$cli_output" | sed 's/^/  /'
         exit 1
@@ -805,7 +805,7 @@ create_database() {
 
     local image
     for image in "$@"; do
-        if ! cli_output="$( cd "$REPO_DIR/apps/cli" && bun run start -- add "$image" --db "$db_path" --yes 2>&1 )"; then
+        if ! cli_output="$( "$PHOTOSPHERE_ZIG_CLI" add "$image" --db "$db_path" --yes 2>&1 )"; then
             log_error "Adding $image to the database at $db_path failed. The CLI said:"
             echo "$cli_output" | sed 's/^/  /'
             exit 1
@@ -881,27 +881,10 @@ run_with_timeout() {
 }
 
 #
-# Runs the psi CLI from source against a vault and config isolated under the test's own tmp dir, so a test never reads or writes the
-# developer's real OS keychain or database list. Both variables are required for isolation: PHOTOSPHERE_VAULT_DIR alone still selects
-# the keychain vault unless PHOTOSPHERE_VAULT_TYPE says otherwise. stdin is closed so an unexpected interactive prompt aborts instead of
-# hanging the run, and NO_COLOR keeps the output greppable.
-# Usage: run_cli <tmp_dir> <cli args...>
-#
-run_cli() {
-    local tmp_dir="$1"
-    shift
-    (
-        cd "$REPO_DIR/apps/cli" && \
-        NO_COLOR=1 \
-        PHOTOSPHERE_VAULT_TYPE="plaintext" \
-        PHOTOSPHERE_VAULT_DIR="$tmp_dir/cli-vault" \
-        PHOTOSPHERE_CONFIG_DIR="$tmp_dir/cli-config" \
-        run_with_timeout 90 bun run start -- "$@" </dev/null
-    )
-}
-
-#
-# Runs the psi CLI built from the Zig source (by run.sh, at PHOTOSPHERE_ZIG_CLI), isolated the same way as run_cli.
+# Runs the psi CLI built from the Zig source (by run.sh, at PHOTOSPHERE_ZIG_CLI) against a vault and config isolated under the test's
+# own tmp dir, so a test never reads or writes the developer's real OS keychain or database list. Both variables are required for
+# isolation: PHOTOSPHERE_VAULT_DIR alone still selects the keychain vault unless PHOTOSPHERE_VAULT_TYPE says otherwise. stdin is closed
+# so an unexpected interactive prompt aborts instead of hanging the run, and NO_COLOR keeps the output greppable.
 # Usage: run_zig_cli <tmp_dir> <cli args...>
 #
 run_zig_cli() {
@@ -967,7 +950,7 @@ cli_send_expect_success() {
     local tmp_dir="$1"
     shift
     local sender_log="$tmp_dir/sender.log"
-    run_cli "$tmp_dir" "$@" >"$sender_log" 2>&1 || true
+    run_zig_cli "$tmp_dir" "$@" >"$sender_log" 2>&1 || true
     if ! grep -q "sent successfully" "$sender_log"; then
         log_error "The CLI sender did not report a successful transfer. Sender output: $sender_log"
         exit 1
