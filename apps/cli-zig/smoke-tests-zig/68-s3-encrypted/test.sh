@@ -1,8 +1,8 @@
 #!/bin/bash
 DESCRIPTION="Encrypted database stored on S3"
 
-# Covers EncryptedStorage wrapped around CloudStorage, which nothing else does: the encrypted CLI
-# suite (apps/cli/smoke-tests-encrypted.sh) is filesystem-only, so the encryption layer has never run
+# Covers EncryptedStorage wrapped around CloudStorage, which nothing else does: the other encrypted
+# tests are filesystem-only, so the encryption layer would otherwise never run
 # over an s3: path.
 #
 # The assertion that matters is the ciphertext check. `list` and `verify` reading the database back

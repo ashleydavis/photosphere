@@ -1,7 +1,7 @@
 //
-// The prompts of the dbs commands (apps/cli-zig/src/cmd/dbs.zig against apps/cli/src/cmd/dbs.ts), answered the way a
-// person answers them: the keys of each prompt are typed once the prompt is showing. What the tests check is what the
-// TypeScript commands leave behind (databases.toml and the vault) and the messages they print.
+// The prompts of the dbs commands (apps/cli-zig/src/cmd/dbs.zig), answered the way a person answers them: the keys of
+// each prompt are typed once the prompt is showing. What the tests check is what the commands leave behind
+// (databases.toml and the vault) and the messages they print.
 //
 
 const std = @import("std");

@@ -3,9 +3,7 @@ DESCRIPTION="Concurrent writers against one S3 database"
 
 # CloudStorage.acquireWriteLock / refreshWriteLock / releaseWriteLock
 # (packages/storage/src/lib/cloud-storage.ts lines 547-730) implement mutual exclusion on a store with
-# no native locking primitive. Nothing exercises them under contention from real processes: the only
-# path that did was apps/cli/write-lock-smoke-test.sh --cloud, which names a real AWS bucket and so
-# has never run here.
+# no native locking primitive. Nothing else exercises them under contention from real processes.
 #
 # Four CLI processes each import a distinct file into the same S3 database at the same time. The
 # assertions are that every process exited zero, that the database still verifies, and that the asset
@@ -15,9 +13,6 @@ DESCRIPTION="Concurrent writers against one S3 database"
 #
 # Each process writes its own output file under the test's scratch directory, so a failure can be read
 # back afterwards rather than being interleaved on one stream.
-#
-# apps/cli/write-lock-smoke-test.sh is deliberately not reused and not modified: its --cloud mode
-# targets a real AWS bucket.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -29,7 +24,7 @@ TEST_NUMBER="${1:-76}"
 TEST_DIR="$(get_test_dir "$TEST_NUMBER")/run-$$"
 S3_STATE_DIR="$TEST_DIR/s3"
 
-# One writer per fixture. Four concurrent processes is what apps/cli/write-lock-smoke-test.sh uses.
+# One writer per fixture, four concurrent processes.
 WRITER_FILES=(
     "test.jpg"
     "test.png"

@@ -85,7 +85,7 @@ test_s3_pagination() {
     invoke_command "Find orphans across more than one listing page" \
         "$(get_zig_cli_command) find-orphans --db \"$s3_db\" --yes" 0 "orphans_output"
 
-    # The command's summary line reads "Found <n> orphaned file(s) ..." (apps/cli/src/cmd/find-orphans.ts).
+    # The command's summary line reads "Found <n> orphaned file(s) ..." (apps/cli-zig/src/cmd/find-orphans.zig).
     # A missing summary is a failure in its own right rather than a count of zero: it means the
     # capture is not the whole of what the command printed, and nothing about S3 can be read off it.
     local orphan_count

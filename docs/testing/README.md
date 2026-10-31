@@ -217,7 +217,7 @@ bun run stories:ziggy:and  # Photosphere App on the Android emulator or attached
 bun run stories:ziggy:ios  # Photosphere App on the iOS simulator
 ```
 
-The web build has no scripted runner: start it with `bun run dev:web`, open `http://localhost:8080/#/stories`, and click **▶ Play on automatic** to cycle the stories by hand. The port is `apps/dev-frontend/vite.config.ts`, which pins 8080.
+The web build has no scripted runner: start it with `bun run dev:ui`, open `http://localhost:5173/#/stories` (Vite's default port, which `apps/photosphere-frontend/vite.config.ts` leaves as it is), and click **▶ Play on automatic** to cycle the stories by hand.
 
 Screenshots go to `stories-screenshots/<platform>/` (`ziggy`, `ziggy-android` and `ziggy-ios` for the Photosphere App), with an `index.html` showing each story's light and dark shots side by side. Add `-- --open` to open it when the run finishes.
 
@@ -272,7 +272,7 @@ The group is made with bash job control, not with `setsid`. Monitor mode is turn
 
 That job control really does this is checked at runtime rather than trusted, once per shell, by `process_control_verify_job_control`. It starts a real background job and asks the kernel which group the job landed in. If the answer is not a group of the job's own, launching refuses outright and says so, instead of handing back a process group id that was never confirmed. The distinction matters more than it looks: a missed process group leaks, but a wrong one names some other process's group, and the cleanup then kills whatever is inside it.
 
-The leak check runs at the end of `apps/desktop/smoke-tests.sh` and `apps/smoke-tests/run.sh`. Each app or control bridge a test launches records its process group in the file named by `PHOTOSPHERE_LAUNCHED_GROUPS`, which the runner exports before it starts anything; at the end the runner reports whatever is still alive in those groups and fails the run. **A leak check failure on a run whose tests all passed is a real failure, not noise.** It means the suite left something on the machine, and enough of those is what took the machine into an out-of-memory kill that took the Android emulator pool with it. Fix the cleanup that missed; do not delete the check.
+The leak check runs at the end of `apps/photosphere-smoke-tests/run.sh`. Each app a test launches records its process group in the file named by `PHOTOSPHERE_LAUNCHED_GROUPS`, which the runner exports before it starts anything; at the end the runner reports whatever is still alive in those groups and fails the run. **A leak check failure on a run whose tests all passed is a real failure, not noise.** It means the suite left something on the machine, and enough of those is what took the machine into an out-of-memory kill that took the Android emulator pool with it. Fix the cleanup that missed; do not delete the check.
 
 It is scoped to the groups the suite itself created, and that precision is load-bearing rather than tidiness. `bun run test:everything` runs several suites at once in one checkout, so anything looser (matching this checkout's path, say) makes every suite report the others' live processes as its own leak. Naming the groups also reaches processes that match no pattern at all: the `Xvfb` server and Electron's utility processes are in the group but mention this checkout nowhere.
 
@@ -291,7 +291,7 @@ Work through [e2e/CHECKLIST.md](e2e/CHECKLIST.md), which lists every test and tr
 
 ### Running a manual test
 
-- CLI tests: run the commands from `apps/cli/` (each test starts with `cd apps/cli/`), using `bun run start -- <command>`.
+- CLI tests: each test builds the CLI with `zig build` and puts `zig-out/bin` on the `PATH`, then runs `psi <command>`.
 - Desktop tests: start the app from source with `bun run dev` (run from the repo root), then follow the on-screen steps. Some desktop tests also run CLI commands to set up or verify state.
 
 ### Use an isolated config and vault
@@ -320,7 +320,7 @@ PHOTOSPHERE_LOG_DIR="$TEST_DIR/logs" \
 bun run dev
 ```
 
-The same variables work for CLI tests. Set them in the shell before running `bun run start -- <command>` so the CLI and desktop app share the same isolated config and vault. If you are in a fresh shell (or did not run the desktop block above), set `TEST_DIR` first to the same path:
+The same variables work for CLI tests. Set them in the shell before running `psi <command>` so the CLI and desktop app share the same isolated config and vault. If you are in a fresh shell (or did not run the desktop block above), set `TEST_DIR` first to the same path:
 
 ```bash
 TEST_DIR="/tmp/photosphere-isolated-$$"
@@ -331,7 +331,7 @@ export PHOTOSPHERE_VAULT_DIR="$TEST_DIR/vault"
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
-With an isolated config dir you start with no databases registered, so create or open one from the UI (or pre-create one with the CLI) as the test directs. This is the same isolation pattern the Electron smoke tests use (`apps/desktop/smoke-tests/lib/common.sh`).
+With an isolated config dir you start with no databases registered, so create or open one from the UI (or pre-create one with the CLI) as the test directs.
 
 ## How a mobile smoke test sets up its state
 

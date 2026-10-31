@@ -1,5 +1,5 @@
 //
-// The worker pool of the CLI, a port of WorkerPoolBun (apps/cli/src/lib/worker-pool-bun.ts). The CLI's main thread owns the pool and
+// The worker pool of the CLI, a port of the TypeScript CLI's WorkerPoolBun. The CLI's main thread owns the pool and
 // everything in it. Each worker is one of Ziggy's workers: a thread that runs one task at a time and talks to the main thread only by
 // message, as a Bun worker does. The main thread reads the workers' messages while its own code waits for a task (the IQueueBackend's
 // waitForMessage), and fails the tasks that have run past their timeout while it waits, so the pool needs no lock.
