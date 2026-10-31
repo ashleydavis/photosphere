@@ -4,7 +4,7 @@
 # question sources.
 #
 # Source this; it is not a script anyone runs:
-#   source "<repo>/apps/android-frontend/scripts/emulator-status-lib.sh"
+#   source "<repo>/scripts/android/emulator-status-lib.sh"
 #
 # It defines functions and constants only and does nothing when sourced.
 #

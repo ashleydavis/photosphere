@@ -1,6 +1,6 @@
 # LAN sharing in the Android emulator
 
-`apps/android-frontend/scripts/emulator.sh` puts the Android emulator on a real network segment shared with your host, so you can use LAN sharing between the Electron app and the emulator. Without it, sharing to the emulator always fails with "No sender connected within 60 seconds".
+`scripts/android/emulator.sh` puts the Android emulator on a real network segment shared with your host, so you can use LAN sharing between the Electron app and the emulator. Without it, sharing to the emulator always fails with "No sender connected within 60 seconds".
 
 ## Why it is needed
 
@@ -48,9 +48,9 @@ lan bridge`, the emulator ignored `-wifi-tap` and is still behind the virtual ro
 `pool-repair` is the repair that needs no privileges:
 
 ```
-bun run --filter=android-frontend emu:pool:repair             # restart whichever are broken
-bun run --filter=android-frontend emu:pool:repair -- --index 2   # restart one
-bun run --filter=android-frontend emu:pool:repair -- --all       # restart every one
+bun run emu:and:pool:repair             # restart whichever are broken
+bun run emu:and:pool:repair -- --index 2   # restart one
+bun run emu:and:pool:repair -- --all       # restart every one
 ```
 
 It has no entry in the root `package.json` on purpose, so the full `--filter` form above is how it is invoked.
@@ -64,8 +64,8 @@ It repairs one emulator at a time, never in parallel, so a partly working pool n
 ### Reading what is wrong
 
 ```
-bun run --filter=android-frontend emu:pool:diagnose      # every index
-bun run --filter=android-frontend emu:pool:diagnose -- 2 # one index
+bun run emu:and:pool:diagnose      # every index
+bun run emu:and:pool:diagnose -- 2 # one index
 ```
 
 Read-only. For every pool index it prints the unit's state, result and main pid, `systemctl --user status`, the process's accumulated CPU time, whether it holds a descriptor on `/dev/kvm` and on a tap, its listening sockets, the pids in the AVD's lock files, and the last 40 lines of its log. `pool-repair` prints this by itself when a repair fails.
@@ -106,7 +106,7 @@ The event log holds the monitor starting and stopping with its pid, every repair
 
 Both roll at 4MB, keeping a single previous generation as `<name>.1`, so at most 16MB of the two together, and a reboot clears `/tmp` regardless. A log is never rolled while a repair is writing to it, so no repair's output is split across two files.
 
-Start with the event log and find the time the trouble began, then read the same stretch of the repair log for what the repairs themselves printed. `bun run --filter=android-frontend emu:pool:diagnose` gives the state now; these two give the state then.
+Start with the event log and find the time the trouble began, then read the same stretch of the repair log for what the repairs themselves printed. `bun run emu:and:pool:diagnose` gives the state now; these two give the state then.
 
 ### Memory limits
 
