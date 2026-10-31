@@ -40,7 +40,7 @@ They differ in which side is made first, and that decides which way the photos m
 
 The remote has to be created carrying this same id. Two databases can only sync when they are the same database, and the id in the merkle tree is what says they are.
 
-**The app does not display the database id anywhere today.** It is not in the database summary, not in **View details**, and not on the Developer screen, and `IDatabaseSummary` does not carry it. Until it is shown, this pathway cannot be completed from the phone, and pathway B is the one that works: create the remote empty on the computer with `psi init`, then replicate it down, which copies the id rather than matching it.
+Open the sidebar, tap **Database Info**, and read the **Database ID** row at the top of the **Location** section. `psi summary` prints the same id on its `Database ID:` line, for a database the computer can reach.
 
 ### A3. Create the remote to match it, on the computer
 

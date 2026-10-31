@@ -37,6 +37,7 @@ pub fn summaryCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, conte
     log.info("");
     log.info(try pc.bold(allocator, try pc.blue(allocator, "\u{1F4CA} Database Summary")));
     log.info("");
+    log.info(try std.fmt.allocPrint(allocator, "Database ID:      {s}", .{try pc.green(allocator, summary.databaseId)}));
     log.info(try std.fmt.allocPrint(allocator, "Mode:             {s}", .{try pc.green(allocator, @tagName(summary.mode))}));
     log.info(try std.fmt.allocPrint(allocator, "Files imported:   {s}", .{try pc.green(allocator, try std.fmt.allocPrint(allocator, "{d}", .{summary.totalImports}))}));
     log.info(try std.fmt.allocPrint(allocator, "Total files:      {s}", .{try pc.green(allocator, try std.fmt.allocPrint(allocator, "{d}", .{summary.totalFiles}))}));

@@ -38,6 +38,7 @@ test "opens storage at the requested database path and returns the summary compu
     // The summary the database itself gives when it is opened directly.
     const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, databaseDir, null, null, null)).storage);
     const object = result.object;
+    try std.testing.expectEqualStrings(expected.databaseId, object.get("databaseId").?.string);
     try std.testing.expectEqualStrings("full", object.get("mode").?.string);
     try std.testing.expectEqual(@as(i64, @intCast(expected.totalImports)), object.get("totalImports").?.integer);
     try std.testing.expectEqual(@as(i64, @intCast(expected.totalFiles)), object.get("totalFiles").?.integer);

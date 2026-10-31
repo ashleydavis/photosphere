@@ -286,6 +286,26 @@ test "getDatabaseSummary reports partial mode when the tree says the database is
     try std.testing.expectEqual(media_file_database.DatabaseMode.partial, summary.mode);
 }
 
+test "getDatabaseSummary reports the id of the database's merkle tree" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const dir = try temp_dirs.makeTempDir(allocator, io, "summary-database-id");
+    defer temp_dirs.removeTempDir(io, dir);
+    const storage = try buildSummaryDatabase(allocator, io, log, dir, try summaryMetadata(allocator, false));
+
+    const summary = try media_file_database.getDatabaseSummary(allocator, io, log, storage);
+
+    try std.testing.expectEqualStrings("12345678-1234-5678-9abc-123456789abc", summary.databaseId);
+}
+
 test "getDatabaseSummary reports full mode when the tree says the database is not partial" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
@@ -350,6 +370,7 @@ test "getDatabaseSummary reads the counts and hashes of test/dbs/v6" {
     try std.testing.expectEqual(@as(u64, 4), summary.totalFiles);
     try std.testing.expectEqual(@as(u64, 2_877_318), summary.totalSize);
     try std.testing.expectEqual(@as(u32, 6), summary.databaseVersion);
+    try std.testing.expectEqualStrings(filesTree.id, summary.databaseId);
     const filesHash = try std.fmt.allocPrint(allocator, "{x}", .{filesTree.merkle.?.hash});
     try std.testing.expectEqualStrings(filesHash, summary.filesHash.?);
     const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, io, log, storage, ".db/bson")).?;

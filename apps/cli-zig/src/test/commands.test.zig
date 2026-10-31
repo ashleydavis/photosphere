@@ -196,12 +196,14 @@ test "verify prints the report" {
 
 //
 // The report of `psi summary` for test/dbs/v6 at <db>: its files tree holds 4 files
-// (2.74 MiB) from 1 import and is a version 6 tree. {files}, {database} and {full} stand for the root hashes.
+// (2.74 MiB) from 1 import, is a version 6 tree and has the id 85fe592c-9b92-4fa1-9ec5-f87f01cf8e72. {files},
+// {database} and {full} stand for the root hashes.
 //
 const summary_v6_report =
     \\
     \\📊 Database Summary
     \\
+    \\Database ID:      85fe592c-9b92-4fa1-9ec5-f87f01cf8e72
     \\Mode:             full
     \\Files imported:   1
     \\Total files:      4

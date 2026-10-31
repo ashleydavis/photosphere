@@ -51,6 +51,15 @@ wait_for_log "$TMP_DIR" "Database summary loaded:"
 # so full is the only correct answer.
 wait_for_value "$APP_PORT" database-mode "full"
 
+# The page shows the database's id, the one psi database-id reads from the same database.
+DATABASE_ID="$(run_zig_cli "$TMP_DIR" database-id --db "$TMP_DIR/source-db" --yes | tail -1 | tr -d '\r\n' | xargs)"
+if [ -z "$DATABASE_ID" ]; then
+    log_error "psi database-id printed no id for $TMP_DIR/source-db"
+    exit 1
+fi
+wait_for_value "$APP_PORT" database-id "$DATABASE_ID"
+log_success "The summary page shows the database ID $DATABASE_ID"
+
 # The same summary is a tap away from the navbar's photo count, which is the number it summarises.
 # On a phone the dialog is a drawer sliding up from the bottom edge rather than a centred modal.
 # Back to the gallery first, because the count only renders there.
@@ -64,6 +73,8 @@ send_command "$APP_PORT" click '{"dataId":"database-photo-count"}' || exit 1
 # passed the first one.
 wait_for_value "$APP_PORT" database-summary-dialog "Consolidate into remote"
 wait_for_log "$TMP_DIR" "Database summary loaded:"
+wait_for_value "$APP_PORT" database-id "$DATABASE_ID"
+log_success "The summary dialog shows the database ID $DATABASE_ID"
 
 send_command "$APP_PORT" click '{"dataId":"database-summary-dialog-close"}' || exit 1
 wait_for_value_gone "$APP_PORT" database-summary-dialog "Consolidate into remote" || exit 1

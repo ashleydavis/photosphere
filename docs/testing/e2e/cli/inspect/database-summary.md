@@ -28,6 +28,7 @@ psi summary --db /tmp/psi-cli-inspect-database-summary/source
 ```
 
 Expected output contains all of these fields:
+- `Database ID:` showing the same uuid `psi database-id` prints for the database.
 - `Files imported:` (1 for the one added asset).
 - `Total files:` (multiple, including display/thumb and metadata derivatives).
 - `Total size:` in bytes or human-readable form.

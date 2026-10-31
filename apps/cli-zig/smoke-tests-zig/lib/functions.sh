@@ -221,6 +221,16 @@ test_database_summary() {
     expect_output_string "$summary_output" "Total files:" "Summary contains total files count"
     expect_output_string "$summary_output" "Total size:" "Summary contains total size"
     expect_output_string "$summary_output" "Full root hash:" "Summary contains full root hash"
+
+    # The summary shows the same id psi database-id reports for the database.
+    local database_id_output
+    invoke_command "Get the database ID" "$(get_zig_cli_command) database-id --db $TEST_DB_DIR --yes" 0 "database_id_output"
+    local database_id=$(echo "$database_id_output" | tail -1 | tr -d '\n' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+    if [ -z "$database_id" ]; then
+        log_error "psi database-id printed no id"
+        exit 1
+    fi
+    expect_output_string "$summary_output" "^Database ID: *$database_id\$" "Summary shows the database ID $database_id"
     test_passed
 }
 
