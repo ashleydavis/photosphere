@@ -350,11 +350,11 @@ jobs:
         # 101 tests, and the Windows runner is the slowest: it reached test 100 in 14 minutes, so the
         # old 14-minute limit killed the step with every test passing.
         timeout-minutes: 30
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: ./smoke-tests-zig.sh --binary
       - name: Test the Zig version command
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: |
           echo "Testing version command after building..."

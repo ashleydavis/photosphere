@@ -1,6 +1,6 @@
 //
 // Integration tests of CloudStorage against a real S3 server. They are not part of the unit tests: `zig build test-integration` runs them, and the
-// smoke test apps/cli/smoke-tests-zig/75-s3-storage-api runs that against a local S3 emulator.
+// smoke test apps/cli-zig/smoke-tests-zig/75-s3-storage-api runs that against a local S3 emulator.
 //
 // These tests require AWS credentials and an S3 bucket to run.
 // Set the following environment variables before running:

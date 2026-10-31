@@ -28,7 +28,7 @@
     "tev": "bun run test:everything",
     "t": "bun run test",
     "tw": "bun run test:watch",
-    "test:cli:zig": "cd ./apps/cli && bash ./smoke-tests-zig.sh --capture-baseline test:cli:zig",
+    "test:cli:zig": "cd ./apps/cli-zig && bash ./smoke-tests-zig.sh --capture-baseline test:cli:zig",
     "test:zig": "zig build test --summary all --test-timeout 20m && what-changed baseline capture test:zig",
     "bundle:ziggy:ui": "bun run --filter=ziggy bundle:ui",
     "bundle:ziggy:core": "bun run --filter=ziggy bundle:core",
