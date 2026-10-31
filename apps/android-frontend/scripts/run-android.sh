@@ -47,7 +47,7 @@ APP_ID="au.com.codecapers.photosphere"
 DATABASES_CONFIG="databases.toml"
 
 # Resolves JAVA_HOME (a JDK 17) and ANDROID_HOME, which both the Gradle build and native-run need.
-source "$SCRIPT_DIR/android-env.sh"
+source "$SCRIPT_DIR/../../../scripts/android/android-env.sh"
 
 ADB="$ANDROID_HOME/platform-tools/adb"
 
@@ -69,7 +69,7 @@ NATIVE_RUN="$REPO_DIR/node_modules/native-run/bin/native-run"
 # This used to be a local copy reading "tap-psphere", which the bridge script has never created. The
 # check below therefore never matched, so this script silently started every emulator off the bridge
 # even when one was up. Sourcing the name is what stops that happening again.
-source "$SCRIPT_DIR/emulator-config.sh"
+source "$SCRIPT_DIR/../../../scripts/android/emulator-config.sh"
 NETCARD_NAME="$NETCARD_PREFIX-0"
 
 # The pinned emulator build (see EMULATOR_BUILD in emulator-config.sh).
@@ -140,7 +140,7 @@ start_emulator() {
     local avd="$RUN_AVD"
     if ! "$EMULATOR" -list-avds 2>/dev/null | grep -qx "$avd"; then
         echo "Creating the '$avd' AVD (first run; no sudo, no bridge)..."
-        bash "$SCRIPT_DIR/emulator.sh" ensure-single-avd || exit 1
+        bash "$SCRIPT_DIR/../../../scripts/android/emulator.sh" ensure-single-avd || exit 1
     fi
 
     # Attach to the bridge only when it is already up; never bring it up here. Without the bridge the

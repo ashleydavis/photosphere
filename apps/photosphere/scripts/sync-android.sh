@@ -45,10 +45,6 @@ fi
 
 photosphere_android_require_commands zig bun
 
-# ImageMagick runs inside the app (Android has no program to start), linked from libraries and headers fetched into git-ignored
-# directories. The fetch skips what is already there.
-bash "$PHOTOSPHERE_REPO_ROOT/scripts/fetch-mobile-media-tools.sh" android
-
 generated_dir="$PHOTOSPHERE_ANDROID_PROJECT_DIR/app/build/ziggy"
 ndk_version="$(photosphere_android_ndk_version)"
 min_sdk="$(photosphere_android_min_sdk)"

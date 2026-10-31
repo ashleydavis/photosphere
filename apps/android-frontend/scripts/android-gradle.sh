@@ -12,7 +12,7 @@ APP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # The JDK 17 / Android SDK discovery, shared with the `run` script (`cap run` drives Gradle, so it
 # needs the same toolchain).
-source "$SCRIPT_DIR/android-env.sh"
+source "$SCRIPT_DIR/../../../scripts/android/android-env.sh"
 
 cd "$APP_ROOT/android"
 exec ./gradlew "$@"

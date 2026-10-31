@@ -26,10 +26,10 @@
 # real network. The guest still reaches the internet, via NAT through the host's uplink (see below).
 #
 # Examples (run as your user; up/down sudo only for the bridge, or use the bun scripts):
-#   apps/android-frontend/scripts/emulator.sh up        # bun run emu:and:up
-#   apps/android-frontend/scripts/emulator.sh status
-#   apps/android-frontend/scripts/emulator.sh restart    # bun run emu:and:restart
-#   apps/android-frontend/scripts/emulator.sh down       # bun run emu:and:down
+#   scripts/android/emulator.sh up        # bun run emu:and:up
+#   scripts/android/emulator.sh status
+#   scripts/android/emulator.sh restart    # bun run emu:and:restart
+#   scripts/android/emulator.sh down       # bun run emu:and:down
 set -euo pipefail
 
 # Name of the bridge (the virtual switch). Prefixed so it is obvious what created it.
@@ -47,7 +47,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/emulator-status-lib.sh"
 
 # kill_process_tree, for the one case systemd cannot cover: an emulator process that outlived its
 # unit. Never a match on a command line; only pids read from the AVD's own lock file are passed to it.
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../../scripts/lib/process-control.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/process-control.sh"
 
 #
 # Prints the tap interface name for the single emulator.
@@ -987,7 +987,7 @@ start_emulator_bg() {
     local emulator
     emulator="$(emulator_path)"
     if [ -z "$emulator" ]; then
-        echo "ERROR: emulator build $EMULATOR_BUILD not found at $(pinned_emulator_path). Install it with: bun run --filter=android-frontend setup" >&2
+        echo "ERROR: emulator build $EMULATOR_BUILD not found at $(pinned_emulator_path). Install it with: bun run setup:ziggy:android" >&2
         exit 1
     fi
 
@@ -2318,7 +2318,7 @@ case "${1:-}" in
         echo ""
         echo "The bridge, DHCP and NAT are shared: they are only torn down once no taps are left."
         echo "Both 'up' and 'pool-up' run on clones of a base AVD, which is auto-selected (override with"
-        echo "ANDROID_AVD). See apps/android-frontend/scripts/emulator.md."
+        echo "ANDROID_AVD). See scripts/android/emulator.md."
         exit 1
         ;;
 esac

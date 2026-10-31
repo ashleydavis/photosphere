@@ -11,7 +11,7 @@
 #   bash ./scripts/install-android-sdk.sh --install  # download and install the toolchain
 #
 # Everything lands under a single SDK directory ($HOME/Android/Sdk on Linux), which is exactly where
-# android-env.sh looks, so `bun run run` works afterwards with no extra configuration. The install is
+# android-env.sh looks, so `bun run android` works afterwards with no extra configuration. The install is
 # reversible: delete that directory to undo it. A JDK 17 is required to run sdkmanager; --install
 # installs one automatically (via apt on Debian/Ubuntu, which prompts for sudo) when none is found.
 
@@ -29,7 +29,7 @@ ANDROID_BUILD_TOOLS="build-tools;35.0.0"
 ANDROID_NDK="ndk;25.1.8937393"
 ANDROID_CMAKE="cmake;3.22.1"
 
-# The emulator's system image. The API level matches what scripts/emulator.sh builds its base AVD
+# The emulator's system image. The API level matches what emulator.sh builds its base AVD
 # from: create_base_avd picks the highest installed system image, and the image it documents to
 # install is android-36 google_apis x86_64, so installing that is what lets `emu:and:up` create an
 # AVD. x86_64 is the emulator ABI on an x86_64 host and is one of the app's built ABIs.
@@ -244,10 +244,10 @@ do_status() {
 
     echo
     if [ "$STATUS_MISSING" -eq 0 ]; then
-        echo "Ready: everything required is installed. Run the app with 'bun run run'."
+        echo "Ready: everything required is installed. Run the app with 'bun run android'."
     else
         echo "$STATUS_MISSING required item(s) missing. Install them with:"
-        echo "  bun run --filter=android-frontend setup"
+        echo "  bun run setup:ziggy:android"
     fi
 }
 
@@ -360,7 +360,7 @@ do_install() {
     echo "Add adb to your PATH (once):"
     echo "  echo 'export PATH=\$PATH:$ANDROID_HOME/platform-tools' >> ~/.zshrc"
     echo
-    echo "Run the app from apps/android-frontend with 'bun run run': it deploys to a plugged-in device"
+    echo "Run the app with 'bun run android' from the repository root: it deploys to a plugged-in device"
     echo "(verify with 'adb devices'). To run on the emulator instead, bring it up first with"
     echo "'bun run emu:and:up' (creates the AVD and the LAN bridge; prompts for sudo)."
 }

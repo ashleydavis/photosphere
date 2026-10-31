@@ -36,7 +36,7 @@
 # are the two files to read when the pool has misbehaved and the terminal it happened in is gone.
 #
 # Usage:
-#   apps/android-frontend/scripts/emulator-pool-monitor.sh   # bun run emu:and:pool:monitor
+#   scripts/android/emulator-pool-monitor.sh   # bun run emu:and:pool:monitor
 #
 # It takes no arguments. There is one thing to do with a pool monitor and this does it.
 #
@@ -52,7 +52,7 @@ source "$MONITOR_SCRIPT_DIR/emulator-config.sh"
 source "$MONITOR_SCRIPT_DIR/emulator-status-lib.sh"
 
 # kill_process_tree, for taking a background repair down with the monitor when it is interrupted.
-source "$MONITOR_SCRIPT_DIR/../../../scripts/lib/process-control.sh"
+source "$MONITOR_SCRIPT_DIR/../lib/process-control.sh"
 
 # The pool lifecycle script. This is the only thing here that can change anything, and it is reached
 # as a separate process rather than sourced, so nothing in this file can start or stop an emulator by
@@ -1394,7 +1394,7 @@ if ! acquire_monitor_lock; then
     fi
     echo "Stop that one first. To read the pool without starting a second monitor:" >&2
     echo "  bun run emu:and:pool:status" >&2
-    echo "  bun run --filter=android-frontend emu:pool:diagnose" >&2
+    echo "  bun run emu:and:pool:diagnose" >&2
     exit 1
 fi
 

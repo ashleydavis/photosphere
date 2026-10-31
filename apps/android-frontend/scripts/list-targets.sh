@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The hand-testing AVD's name, so an attached emulator running it can be told apart from the smoke
 # -test pool's clones (which are never a run target). Same source run-android.sh reads.
-source "$SCRIPT_DIR/emulator-config.sh"
+source "$SCRIPT_DIR/../../../scripts/android/emulator-config.sh"
 RUN_AVD="${PHOTOSPHERE_ANDROID_AVD:-$SINGLE_AVD_NAME}"
 
 # Resolve the SDK's adb without needing a JDK (unlike android-env.sh): listing devices does not build
