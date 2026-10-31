@@ -1,13 +1,12 @@
 #!/bin/bash
 DESCRIPTION="Edit an asset's metadata and read it back through the CLI"
 
-# The CLI half of a trio: apps/desktop/smoke-tests/34-edit-asset-metadata and
-# apps/smoke-tests/tests/46-edit-asset-metadata cover the same behaviour on the other two shells. The
-# behaviour is: a metadata edit made against a database lands in it, and the normal read path reports
-# the new value rather than the old one.
+# The CLI half of a pair: apps/photosphere-smoke-tests/34-edit-asset-metadata covers the same
+# behaviour in the Photosphere App. The behaviour is: a metadata edit made against a database lands in
+# it, and the normal read path reports the new value rather than the old one.
 #
-# What this one does NOT cover, and the reason it is written differently from its two siblings: the
-# CLI has no route to applyDatabaseOps, which the app reaches through its asset server. The edit is
+# What this one does NOT cover, and the reason it is written differently from its sibling: the CLI has
+# no route to applyDatabaseOps, which the app reaches through its asset server. The edit is
 # made with `psi debug set-field`, the same command test 37 uses, which takes the same steps
 # applyDatabaseOps takes (the write lock, the update, the commit and the state stamp), and is read
 # back with `psi info`. Treat a pass here as saying the storage and read halves are sound, and look

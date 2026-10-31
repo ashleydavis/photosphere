@@ -123,7 +123,7 @@ Everything below is run from the repo root.
 
 The commands that run the app rebuild it first, so what you are running is always built from the current source.
 
-To run the CLI, the dev-server, or the dev-frontend on their own, see [apps/cli](../apps/cli/README.md), [apps/dev-server](../apps/dev-server/README.md), and [apps/dev-frontend](../apps/dev-frontend/README.md).
+To run the CLI on its own, build it with `zig build` at the repository root and run `zig-out/bin/psi`.
 
 ## Automatic import
 

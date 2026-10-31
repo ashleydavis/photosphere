@@ -45,7 +45,7 @@ export function computeHash(inputStream: NodeJS.ReadableStream): Promise<Buffer>
 // worker's crypto shim provides and Node does not.
 //
 // This is how the two hashing paths are told apart. On mobile the bundler resolves every `crypto`
-// import to `packages/mobile-worker/src/shims/node-crypto.ts`, which exports `hashFileSync` backed
+// import to the mobile worker's crypto shim (packages/mobile-worker, now removed), which exports `hashFileSync` backed
 // by the platform's own SHA-256. Everywhere else `crypto` is Node's, which has no such export, and
 // the field is undefined. Nothing has to be told which platform it is on: the module that is
 // actually loaded answers the question.

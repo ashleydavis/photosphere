@@ -119,7 +119,7 @@ function isTestDatabaseName(name: string): boolean {
 //
 // Adds a test database to the TOML text of a databases config, returning the new text.
 //
-// Used by the deploy script (apps/android-frontend/scripts/write-databases-config.ts) to register a
+// Used by the Capacitor Android app's deploy script, which has been removed, to register a
 // fixture it has just copied onto a device, the same way a database is registered in
 // ~/.config/photosphere/databases.toml on desktop. It is here, beside the read and write handlers,
 // because it has to produce exactly the file they expect.

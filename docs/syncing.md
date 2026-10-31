@@ -230,12 +230,6 @@ Unit tests sit beside the code under `src/test/`.
 | `packages/node-api/src/test/lib/sync-database.worker.test.ts` | The `sync-database` task itself, which is what every platform queues. |
 | `packages/node-api/src/test/lib/sync-early-out.test.ts` | A sync doing nothing, cheaply, when both sides already hold the same content. |
 | `packages/node-api/src/test/lib/sync-metadata-edit.test.ts` | An edit reaching the origin. |
-| `packages/mobile-worker/src/test/lib/plan-sync.worker.test.ts` | What the background loop is told to do: every way a sync is refused, and the way it runs. Including the wait for a working prefetch, and that a stuck, finished, unreported or unrecognised one does not wait. |
-| `packages/mobile-worker/src/test/lib/plan-prefetch.worker.test.ts` | What the background prefetch loop is told to do: every way a pass is refused, and the step and job tag it hands back when one runs. |
-| `packages/mobile-worker/src/test/shims/network-status.test.ts` | The connection type crossing from native into that rule, and an unrecognised one becoming "unknown" rather than stopping syncing. |
-| `packages/mobile-frontend/src/test/mobile-edit-sync.test.ts` | The sync an edit starts, and that it still asks whether syncing is permitted. |
-| `apps/android-frontend/android/app/src/test/java/au/com/codecapers/photosphere/jsengine/SyncDriverTest.java` | The Android loop's decisions on the JVM, with no device: a plan saying stop ends it, a failed pass does not, a second pass cannot start while one is in flight, and a sync pass runs while an import pass is held open. |
-| `apps/ios-frontend/ios/App/AppTests/` | The same decisions for the iOS driver, and the connection-type reporting. |
 
 End to end:
 

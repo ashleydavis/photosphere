@@ -142,7 +142,7 @@ export async function verify(storageDescriptor: IDatabaseDescriptor, databaseSto
 
     //
     // Get the task queue from the provider (lazily created).
-    // Handlers are registered in the worker file (apps/cli/src/lib/worker.ts).
+    // Handlers are registered by whatever set up the task queue provider.
     // maxWorkers is set in the provider constructor (defaults to number of CPUs).
     //
     const queue = new TaskQueue(uuidGenerator, storageDescriptor.databasePath);

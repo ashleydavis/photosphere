@@ -17,21 +17,16 @@ DESCRIPTION="S3 database using credentials from a vault secret"
 #      looks like no data.
 #   3. Assert that creating an S3 database whose credential lives only in the vault works at all.
 #
-# Part 3 currently FAILS, and is left failing on purpose. `configureS3IfNeeded`
-# (apps/cli/src/lib/init-cmd.ts lines 66-80) gates on AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or a
-# 'default:s3' keychain secret and never consults the databases.json entry's s3Key, so in
-# non-interactive mode `init` on an s3: path refuses with "S3 credentials are required" even though
-# every read command resolves the same database's credentials from the vault without trouble. The
-# same call gates replicate, sync, encrypt and decrypt.
+# Part 3 is last, so if `init` stops reading the S3 credential registered against the path, everything
+# above still runs and reports first.
 #
 # resolveStorageCredentials matches the databases.json entry on an exact `path` string, so the path
 # registered with `dbs add` and the path the commands resolve to must be byte-identical; addressing
 # by name is what guarantees that.
 #
 # Note also that `psi init --db <registered-name>` does not resolve a registered name at all:
-# createDatabase (apps/cli/src/lib/init-cmd.ts line 926) takes options.db as a directory path
-# verbatim, so it creates a LOCAL directory called "<name>" in the working directory and reports
-# success. That is why this test never passes a name to init.
+# createDatabase (apps/cli-zig/src/lib/init-cmd.zig) takes --db as a directory path verbatim, so it
+# creates a LOCAL directory called "<name>" in the working directory and reports success. That is why this test never passes a name to init.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -104,8 +99,7 @@ test_s3_vault_credentials() {
     # --- 3. Creating an S3 database from a vault credential alone. ---
 
     # Restore a working credential, then create a second database at a fresh prefix with no AWS_*
-    # variable set. This is the assertion the init defect fails; it is last so everything above still
-    # runs and reports.
+    # variable set. It is last so everything above still runs and reports if it fails.
     seed_s3_vault_secret "$SECRET_NAME"
 
     local second_db="s3:$S3_EMULATOR_BUCKET/vault-cred-test-2"
