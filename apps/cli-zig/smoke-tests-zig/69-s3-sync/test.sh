@@ -13,15 +13,8 @@ DESCRIPTION="Sync between an S3 database and a local copy"
 # only the hash comparison catches that. Each change is also checked to have moved the hashes apart
 # before the sync, so a sync with nothing to do cannot be mistaken for a sync that worked.
 #
-# The field edit is driven on the local side only. bdb-cli writes BSON through the filesystem and has
-# no S3 mode, so editing a field inside the database on S3 is not something the tooling here can do;
-# an edit made locally and synced up covers the transfer path in the direction that is reachable.
-#
-# The field edit runs FIRST, immediately after the replicate, which is the order test 37 uses. A
-# bdb-cli edit made after some other sync has already run is not picked up by the next sync, which
-# reports "Databases already in sync, nothing to do" while the two root hashes differ. That is not an
-# S3 behaviour: a local-to-local pair does exactly the same thing, checked by hand while writing this
-# test. The cause has not been established, so the order here works with it rather than around it.
+# The field edit is driven on the local side, and an edit made locally and synced up covers the
+# transfer path. It runs first, immediately after the replicate, which is the order test 37 uses.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
@@ -138,7 +131,7 @@ test_s3_sync() {
 
     local edited_description="Description edited by smoke test 69"
     invoke_command "Edit a field in the local database" \
-        "$(get_bdb_command) edit $local_db/.db/bson metadata $V6_RECORD_ID description string \"$edited_description\"" 0
+        "$(get_zig_cli_command) -q debug set-field $V6_RECORD_ID description \"$edited_description\" --db $local_db --yes" 0
     expect_hashes_diverged "$local_db" "$s3_db" "The field edit moved the local root hash away from S3's"
 
     local sync_edit_output

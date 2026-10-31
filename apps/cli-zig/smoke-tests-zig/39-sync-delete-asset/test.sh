@@ -110,7 +110,7 @@ test_sync_delete_asset() {
     # Verify the BSON record has been deleted from the original database
     log_info "Verifying BSON record has been deleted from original database"
     local original_record_output
-    original_record_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    original_record_output=$($(get_zig_cli_command) -q debug record $test_asset_id --db $original_dir --all --yes 2>&1)
     if echo "$original_record_output" | grep -q "Record not found"; then
         log_success "BSON record has been deleted from original database"
     else
@@ -132,7 +132,7 @@ test_sync_delete_asset() {
     # Verify the BSON record has been deleted from the copy database after sync
     log_info "Verifying BSON record has been deleted from copy database after sync"
     local copy_record_output
-    copy_record_output=$($(get_bdb_command) record $copy_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    copy_record_output=$($(get_zig_cli_command) -q debug record $test_asset_id --db $copy_dir --all --yes 2>&1)
     if echo "$copy_record_output" | grep -q "Record not found"; then
         log_success "BSON record has been deleted from copy database"
     else
@@ -153,7 +153,7 @@ test_sync_delete_asset() {
     # Verify the BSON record has not been restored in the original database after sync
     log_info "Verifying BSON record has not been restored in original database after sync"
     local original_record_after_sync_output
-    original_record_after_sync_output=$($(get_bdb_command) record $original_dir/.db/bson metadata $test_asset_id --all 2>&1)
+    original_record_after_sync_output=$($(get_zig_cli_command) -q debug record $test_asset_id --db $original_dir --all --yes 2>&1)
     if echo "$original_record_after_sync_output" | grep -q "Record not found"; then
         log_success "BSON record remains deleted from original database after sync"
     else
@@ -180,8 +180,8 @@ test_sync_delete_asset() {
     fi
     
     # Check merkle tree order for both databases
-    check_merkle_tree_order "$original_dir/.db/files.dat" "sync delete original database"
-    check_merkle_tree_order "$copy_dir/.db/files.dat" "sync delete copy database"
+    check_merkle_tree_order "$original_dir" "sync delete original database"
+    check_merkle_tree_order "$copy_dir" "sync delete copy database"
     
     # Clean up temporary databases
     rm -rf "$original_dir"

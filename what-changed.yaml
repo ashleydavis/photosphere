@@ -40,8 +40,6 @@ targets:
   - name: test:cli:zig
     paths:
       - apps/cli-zig
-      - apps/bdb-cli
-      - apps/mk-cli
       - packages
       - packages-zig
       - third-party

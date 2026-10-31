@@ -39,7 +39,7 @@ test_v6_database_upgrade_no_effect() {
     
     expect_output_string "$verify_output" "Database verification passed" "V6 database verifies successfully after upgrade"
     
-    check_merkle_tree_order "$temp_v6_dir/.db/files.dat" "v6 upgrade test database"
+    check_merkle_tree_order "$temp_v6_dir" "v6 upgrade test database"
     
     rm -rf "$temp_v6_dir"
     log_success "Cleaned up temporary v6 upgrade database"

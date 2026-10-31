@@ -443,7 +443,6 @@ test_write_lock_parallel() {
     echo "  Processes: $NUM_PROCESSES"
     echo "  Iterations per process: $NUM_ITERATIONS"
     echo "  Sleep range: $((SLEEP_MIN_TENTHS / 10)).$((SLEEP_MIN_TENTHS % 10))s - $((SLEEP_MAX_TENTHS / 10)).$((SLEEP_MAX_TENTHS % 10))s"
-    echo "  Use binary: ${USE_BINARY:-false}"
     echo "  Zig CLI command: $(get_zig_cli_command)"
     echo "============================================================================"
 

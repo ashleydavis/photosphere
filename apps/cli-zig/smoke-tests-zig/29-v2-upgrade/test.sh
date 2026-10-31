@@ -46,7 +46,7 @@ test_v2_database_upgrade() {
     expect_output_string "$verify_output" "Database verification passed" "Upgraded database verifies successfully"
     
     # Check merkle tree order for upgraded database
-    check_merkle_tree_order "$temp_v2_dir/.db/files.dat" "upgraded v2 database"
+    check_merkle_tree_order "$temp_v2_dir" "upgraded v2 database"
     
     # Clean up temporary database
     rm -rf "$temp_v2_dir"

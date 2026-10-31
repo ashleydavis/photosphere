@@ -7,6 +7,7 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const bdb = @import("bdb-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
+const api = @import("api-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
@@ -22,6 +23,8 @@ const merkle_tree = merkle_tree_zig.merkle_tree;
 const visualizeTree = merkle_tree_zig.visualize.visualizeTree;
 const iterateLeaves = merkle_tree.iterateLeaves;
 const MerkleNode = merkle_tree.MerkleNode;
+const SortNode = merkle_tree.SortNode;
+const compareNames = merkle_tree.compareNames;
 const getItemInfo = merkle_tree.getItemInfo;
 const loadDatabaseMerkleTree = bdb.merkle_tree.loadDatabaseMerkleTree;
 const loadCollectionMerkleTree = bdb.merkle_tree.loadCollectionMerkleTree;
@@ -34,6 +37,9 @@ const buildFilesTree = node_api.tree.buildFilesTree;
 const getDatabaseSummary = node_api.media_file_database.getDatabaseSummary;
 const removeAsset = node_api.media_file_database.removeAsset;
 const ensureSortIndex = node_api.media_file_database.ensureSortIndex;
+const stampDatabaseModified = node_api.tree.stampDatabaseModified;
+const acquireWriteLock = api.write_lock.acquireWriteLock;
+const releaseWriteLock = api.write_lock.releaseWriteLock;
 const clearProgressMessage = terminal_utils.clearProgressMessage;
 const writeProgress = terminal_utils.writeProgress;
 const getDirectoryForCommand = directory_picker.getDirectoryForCommand;
@@ -981,5 +987,177 @@ pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, log:
 
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Rebuilt files merkle tree: {d} files.", .{result.fileCount})));
     log.info("");
+    exit(io, log, 0);
+}
+
+//
+// Options of the debug record command.
+// The base options are in `base`.
+//
+pub const IDebugRecordCommandOptions = struct {
+    // The options shared by every command.
+    base: IBaseCommandOptions = .{},
+
+    // Shows every field of the record, without truncating long strings.
+    all: ?bool = null,
+};
+
+//
+// Shows one record of the metadata collection, as JSON. Long strings are truncated and only the first five fields are
+// shown unless --all is given. A record that is not there is reported and is not an error.
+//
+pub fn debugRecordCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, recordId: []const u8, options: *IDebugRecordCommandOptions) !void {
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+
+    log.info(try pc.green(allocator, "Collection: metadata"));
+    log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Record ID: {s}", .{recordId})));
+
+    const record = try loaded.metadataCollection.getOne(io, log, recordId) orelse {
+        log.info("");
+        log.info(try pc.yellow(allocator, "Record not found."));
+        exit(io, log, 0);
+    };
+
+    const recordValue: BsonValue = .{
+        .document = record,
+    };
+    const recordToDisplay = if (options.all orelse false) recordValue else try truncateLongStrings(allocator, recordValue, 100, 5, false);
+    log.info("");
+    log.info(try pc.cyan(allocator, "Record data:"));
+    log.info(try pc.white(allocator, try js_value.jsonStringifyIndented(allocator, recordToDisplay)));
+
+    exit(io, log, 0);
+}
+
+//
+// Options of the debug set-field command.
+// The base options are in `base`.
+//
+pub const IDebugSetFieldCommandOptions = struct {
+    // The options shared by every command.
+    base: IBaseCommandOptions = .{},
+
+    // Reads the value as JSON (a number, boolean, array, object or quoted string) rather than as a string.
+    json: ?bool = null,
+};
+
+//
+// Reads the value given to debug set-field: the text itself, or the JSON value it holds when isJson is set.
+//
+pub fn parseFieldValue(allocator: std.mem.Allocator, value: []const u8, isJson: bool) !BsonValue {
+    if (isJson) {
+        return jsonParse(allocator, value);
+    }
+    return .{
+        .string = value,
+    };
+}
+
+//
+// Sets one field of a record of the metadata collection, the way the app edits an asset: holding the database write
+// lock, it updates the record, commits the BSON database and stamps the database as modified, so sync sees the change.
+// A record that is not there is an error.
+//
+pub fn debugSetFieldCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, recordId: []const u8, fieldName: []const u8, value: []const u8, options: *IDebugSetFieldCommandOptions) !void {
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+
+    const parsedValue = parseFieldValue(allocator, value, options.json orelse false) catch {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Invalid JSON value: {s}", .{value})));
+        exit(io, log, 1);
+    };
+
+    if (!try acquireWriteLock(allocator, io, log, loaded.rawAssetStorage, loaded.sessionId, 3)) {
+        log.@"error"(try pc.red(allocator, "\u{2717} Failed to acquire the database write lock."));
+        exit(io, log, 1);
+    }
+    const updated = setFieldUnderLock(allocator, io, log, loaded, recordId, fieldName, parsedValue);
+    try releaseWriteLock(allocator, io, log, loaded.rawAssetStorage);
+
+    if (!try updated) {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Record '{s}' not found in the metadata collection.", .{recordId})));
+        exit(io, log, 1);
+    }
+
+    log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Successfully updated field '{s}' in record '{s}'", .{ fieldName, recordId })));
+    exit(io, log, 0);
+}
+
+//
+// The part of debug set-field run holding the write lock, so the lock is released whether it fails or not. Returns
+// false, changing nothing, when the record is not there.
+//
+fn setFieldUnderLock(allocator: std.mem.Allocator, io: std.Io, log: ILog, loaded: init_cmd.IInitResult, recordId: []const u8, fieldName: []const u8, value: BsonValue) !bool {
+    if (try loaded.metadataCollection.getOne(io, log, recordId) == null) {
+        return false;
+    }
+
+    var updates: BsonDocument = .empty;
+    try updates.put(allocator, fieldName, value);
+    if (!try loaded.metadataCollection.updateOne(io, log, recordId, updates, .{})) {
+        return false;
+    }
+    try loaded.bsonDatabase.commit(io, log);
+    try stampDatabaseModified(allocator, io, log, loaded.assetStorage, loaded.rawAssetStorage);
+    return true;
+}
+
+//
+// Returns the index of the first name that sorts before the name ahead of it, or null when the names are in order.
+//
+pub fn findUnsortedName(names: []const []const u8) ?usize {
+    var index: usize = 1;
+    while (index < names.len) : (index += 1) {
+        if (compareNames(names[index - 1], names[index]) > 0) {
+            return index;
+        }
+    }
+    return null;
+}
+
+//
+// Returns the names of the leaves of a tree, left to right.
+//
+fn leafNames(comptime NodeT: type, allocator: std.mem.Allocator, root: *NodeT) ![]const []const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    var leaves = iterateLeaves(NodeT, allocator, root);
+    while (try leaves.next()) |leaf| {
+        try names.append(allocator, leaf.name orelse "");
+    }
+    return names.items;
+}
+
+//
+// Checks that the leaves of the files merkle tree (.db/files.dat) are in sorted order, in both its sort tree and its
+// merkle tree. A tree that is missing or out of order is an error, and the first leaf out of order is named.
+//
+pub fn debugCheckMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IBaseCommandOptions) !void {
+    const loaded = try loadDatabase(allocator, io, log, options.db, options, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+
+    const filesTree = try loadMerkleTree(allocator, io, log, loaded.assetStorage) orelse {
+        log.@"error"(try pc.red(allocator, "\u{2717} Failed to load the files merkle tree"));
+        exit(io, log, 1);
+    };
+    const sortRoot = filesTree.sort orelse {
+        log.@"error"(try pc.red(allocator, "\u{2717} The files merkle tree has no sort tree"));
+        exit(io, log, 1);
+    };
+    const merkleRoot = filesTree.merkle orelse {
+        log.@"error"(try pc.red(allocator, "\u{2717} The files merkle tree has no merkle tree"));
+        exit(io, log, 1);
+    };
+
+    const sortNames = try leafNames(SortNode, allocator, sortRoot);
+    if (findUnsortedName(sortNames)) |index| {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Sort tree leaf nodes are not in sorted order: {s} comes after {s}", .{ sortNames[index], sortNames[index - 1] })));
+        exit(io, log, 1);
+    }
+
+    const merkleNames = try leafNames(MerkleNode, allocator, merkleRoot);
+    if (findUnsortedName(merkleNames)) |index| {
+        log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Merkle tree leaf nodes are not in sorted order: {s} comes after {s}", .{ merkleNames[index], merkleNames[index - 1] })));
+        exit(io, log, 1);
+    }
+
+    log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "\u{2713} Leaf nodes are in sorted order (sort tree: {d}, merkle tree: {d} nodes)", .{ sortNames.len, merkleNames.len })));
     exit(io, log, 0);
 }

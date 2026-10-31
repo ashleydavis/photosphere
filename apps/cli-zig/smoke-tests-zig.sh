@@ -30,7 +30,7 @@ NC='\033[0m' # No Color
 # Per-test temporary directories, the same allocator every other suite in this repository uses.
 source "$_CLI_ABS_DIR/../../scripts/lib/test-lib.sh"
 
-# Building the Zig psi, mk and bdb into directories of this run's own, and naming them for the tests.
+# Building the Zig psi into a directory of this run's own, and naming it for the tests.
 source "$_CLI_ABS_DIR/test-cli-binaries.sh"
 
 # Starting and stopping background processes: the tree walk the traps below use to take a batch
@@ -80,15 +80,6 @@ DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
 export PHOTOSPHERE_VAULT_TYPE="plaintext"
-
-# Use the built mk and bdb executables instead of running them from source (set by --binary)
-USE_BINARY=false
-
-# Set by --source: run mk and bdb from their TypeScript sources rather than the compiled binaries.
-#
-# A full run builds the binaries and uses them, because that is what ships. --source is the way back
-# to the sources, so that path is not left to rot.
-USE_SOURCE=false
 
 # Set by --capture-baseline <target>: the what-changed target to record as passed once a full run
 # passes. The package.json script passes it here rather than chaining `what-changed baseline capture`
@@ -168,7 +159,7 @@ cleanup_and_show_summary() {
     done
 
     # After the kill, because Windows cannot delete an executable that is still running.
-    remove_test_cli_binaries
+    remove_test_zig_cli
 
     echo ""
     echo "============================================================================"
@@ -299,19 +290,6 @@ invoke_command() {
     fi
 }
 
-#
-# Builds the mk and bdb executables the tests run, into a directory of this run's own (see
-# test-cli-binaries.sh), never the package's shared bin/. A failed build ends the run.
-#
-build_cli_binaries() {
-    log_info "Building mk and bdb for this run"
-    if ! build_test_cli_binaries; then
-        log_error "Failed to build the CLI executables"
-        exit 1
-    fi
-    log_success "Built mk and bdb into $PHOTOSPHERE_CLI_BIN_DIR"
-}
-
 # Individual test functions (remain inline — not tests, just setup)
 test_setup() {
     local platform=$(detect_platform)
@@ -330,8 +308,6 @@ test_setup() {
 
     # Ensure tmp directory exists
     mkdir -p "$TEST_TMP_DIR"
-
-    build_cli_binaries
 
     TESTS_PASSED=$((TESTS_PASSED + 1))
 }
@@ -644,17 +620,6 @@ run_all_tests() {
     log_info "Changing to CLI directory"
     cd "$(dirname "$0")"
 
-    # The tests run against what ships.
-    if [ "$USE_SOURCE" = "true" ]; then
-        log_info "Running mk and bdb from their TypeScript sources (--source)"
-    else
-        USE_BINARY=true
-        build_cli_binaries
-    fi
-    # Exported so the test scripts see it: smoke-tests-zig/lib/common.sh reads it to decide which command
-    # each of mk and bdb is.
-    export USE_BINARY
-
     # Reset UUID counter
     local UUID_COUNTER_FILE="$TEST_TMP_DIR/photosphere-test-uuid-counter"
     if [ -f "$UUID_COUNTER_FILE" ]; then
@@ -832,9 +797,6 @@ show_usage() {
     echo "Run Photosphere CLI smoke tests"
     echo ""
     echo "Options:"
-    echo "  -b, --binary          - Run mk and bdb from the built executables. A full run does this anyway;"
-    echo "                          this is how a single test does it"
-    echo "  --source              - Run mk and bdb from their TypeScript sources instead of the built executables"
     echo "  -t, --tmp-dir <dir>   - Use <dir> for test databases (default: a directory allocated for the run)."
     echo "  --sequential          - Run independent tests sequentially instead of in parallel"
     echo "  --parallel [N]        - Run independent tests in a rolling pool of N. The default comes"
@@ -853,7 +815,7 @@ show_usage() {
     echo "  all                 - Run all tests (default if no command given)"
     local test_count=$(get_test_count)
     echo "  to <number>         - Run tests 1 through <number> (1-$test_count)"
-    echo "  setup               - Build the executables, to check they build (removed when the run ends)"
+    echo "  setup               - Build the Zig CLI, to check it builds (removed when the run ends)"
     echo "  check-tools         - Check required media processing tools are available"
     echo "  help                - Show this help message"
     echo ""
@@ -875,11 +837,10 @@ show_usage() {
     echo "  $0 --sequential               # Run all tests sequentially"
     echo "  $0 --parallel 3              # Run 3 tests at a time"
     echo "  $0 --parallel 10             # Run 10 tests at a time"
-    echo "  $0 --source                  # Run all tests with mk and bdb from their TypeScript sources"
     echo "  $0 to 5                      # Run tests 1-5"
     echo "  $0 setup,all                # Build and run all tests (tools must be available)"
     echo "  $0 setup,check-tools,all    # Build, check tools, and run all tests"
-    echo "  $0 setup                     # Check the executables build"
+    echo "  $0 setup                     # Check the Zig CLI builds"
     echo "  $0 check-tools               # Check tools only"
     echo "  $0 create-database          # Run only database creation test"
     echo "  $0 3                         # Run test 3 (add single file)"
@@ -893,15 +854,6 @@ main() {
     POSITIONAL=()
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -b|--binary)
-                USE_BINARY=true
-                shift
-                ;;
-            --source)
-                USE_SOURCE=true
-                USE_BINARY=false
-                shift
-                ;;
             -t|--tmp-dir)
                 if [ $# -lt 2 ]; then
                     log_error "Option $1 requires a directory argument"
@@ -948,11 +900,6 @@ main() {
     done
     set -- "${POSITIONAL[@]}"
 
-    # Exported so the test scripts see it, which is what makes --binary mean anything for a single
-    # test: smoke-tests-zig/lib/common.sh reads it to decide which command each of mk and bdb is,
-    # and a variable that is only assigned here is invisible to them.
-    export USE_BINARY
-
     # Check for help request
     if [ $# -eq 1 ] && [ "$1" = "help" ]; then
         show_usage
@@ -964,12 +911,6 @@ main() {
         set -- "all"
     fi
     
-    # Show binary mode status if enabled, and build the executables this run's tests are to use.
-    if [ "$USE_BINARY" = "true" ]; then
-        log_info "Using built executable for smoke tests"
-        build_cli_binaries
-    fi
-
     # Every command runs the Zig CLI, built for this run into a directory of its own.
     log_info "Building the Zig CLI for this run"
     if ! build_test_zig_cli; then

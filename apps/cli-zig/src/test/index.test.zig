@@ -1038,6 +1038,26 @@ test "debug command lines parse like commander" {
     try std.testing.expectEqualStrings("a", buildFilesTree.outcome.debugBuildFilesTree.db.?);
     try std.testing.expectEqual(@as(?bool, true), buildFilesTree.state.notificationsQuiet);
 
+    const record = try parse(allocator, &.{ "debug", "record", "rec-1", "--db", "a", "--all" });
+    try std.testing.expect(record.outcome == .debugRecord);
+    try std.testing.expectEqualStrings("rec-1", record.outcome.debugRecord.recordId);
+    try std.testing.expectEqualStrings("a", record.outcome.debugRecord.options.base.db.?);
+    try std.testing.expectEqual(@as(?bool, true), record.outcome.debugRecord.options.all);
+    try std.testing.expectEqual(@as(?bool, false), (try parse(allocator, &.{ "debug", "record", "rec-1" })).outcome.debugRecord.options.all);
+
+    const setField = try parse(allocator, &.{ "debug", "set-field", "rec-1", "description", "new text", "--db", "a" });
+    try std.testing.expect(setField.outcome == .debugSetField);
+    try std.testing.expectEqualStrings("rec-1", setField.outcome.debugSetField.recordId);
+    try std.testing.expectEqualStrings("description", setField.outcome.debugSetField.fieldName);
+    try std.testing.expectEqualStrings("new text", setField.outcome.debugSetField.value);
+    try std.testing.expectEqualStrings("a", setField.outcome.debugSetField.options.base.db.?);
+    try std.testing.expectEqual(@as(?bool, false), setField.outcome.debugSetField.options.json);
+    try std.testing.expectEqual(@as(?bool, true), (try parse(allocator, &.{ "debug", "set-field", "rec-1", "rating", "5", "--json" })).outcome.debugSetField.options.json);
+
+    const checkMerkleTree = try parse(allocator, &.{ "debug", "check-merkle-tree", "--db", "a" });
+    try std.testing.expect(checkMerkleTree.outcome == .debugCheckMerkleTree);
+    try std.testing.expectEqualStrings("a", checkMerkleTree.outcome.debugCheckMerkleTree.db.?);
+
     // With no subcommand the group shows its help, like commander does for a command with subcommands and no action.
     const group = try parse(allocator, &.{"debug"});
     try std.testing.expect(group.outcome == .failure);
