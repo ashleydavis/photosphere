@@ -161,25 +161,6 @@ pub fn bufferFromBase64(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
 }
 
 //
-// The S3 endpoint the environment names, or null when it names none.
-//
-// It is read from AWS_ENDPOINT_URL, the variable the AWS CLI reads, so one exported endpoint serves
-// `psi` and `aws` from the same shell. An empty value is not an endpoint, so a variable that is
-// exported but empty gives null rather than an endpoint of "" that fails without naming anything.
-//
-// The environment is an argument, rather than read from process_env here, so a test can drive this
-// without replacing the process environment.
-//
-pub fn endpointFromEnvironment(environment: ?*const std.process.Environ.Map) ?[]const u8 {
-    const map = environment orelse return null;
-    const endpoint = map.get("AWS_ENDPOINT_URL") orelse return null;
-    if (endpoint.len == 0) {
-        return null;
-    }
-    return endpoint;
-}
-
-//
 // AWS S3:
 // - https://docs.aws.amazon.com/sdkref/latest/guide/environment-variables.html
 // - https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/clients/client-s3/index.html
@@ -213,7 +194,11 @@ pub const CloudStorage = struct {
             }
         }
         if (endpoint == null) {
-            endpoint = endpointFromEnvironment(node_utils.process_env.getEnvironMap());
+            if (node_utils.process_env.getEnv("AWS_ENDPOINT_URL")) |environmentEndpoint| {
+                if (environmentEndpoint.len > 0) {
+                    endpoint = environmentEndpoint;
+                }
+            }
         }
 
         return .{

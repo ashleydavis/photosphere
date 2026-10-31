@@ -846,7 +846,7 @@ test "CloudStorage Zig: credentials given to the storage reach the server" {
         .accessKeyId = node_utils.process_env.getEnv("AWS_ACCESS_KEY_ID").?,
         .secretAccessKey = node_utils.process_env.getEnv("AWS_SECRET_ACCESS_KEY").?,
         .region = node_utils.process_env.getEnv("AWS_REGION"),
-        .endpoint = storage_zig.cloud_storage.endpointFromEnvironment(node_utils.process_env.getEnvironMap()),
+        .endpoint = node_utils.process_env.getEnv("AWS_ENDPOINT_URL"),
     });
     defer storage.s3.deinit();
     const filePath = try pathOf(allocator, &.{ location, "zig-credentials", "file.txt" });
