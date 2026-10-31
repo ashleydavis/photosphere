@@ -113,7 +113,7 @@ asset_count() {
 # of photos.
 #
 origin_file_count() {
-    run_cli "$TMP_DIR" summary --db "$S3_ORIGIN_PATH" --yes 2>/dev/null \
+    run_zig_cli "$TMP_DIR" summary --db "$S3_ORIGIN_PATH" --yes 2>/dev/null \
         | tr -d '\r' \
         | grep "Total files:" \
         | grep -o '[0-9][0-9]*' \
@@ -234,10 +234,10 @@ export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
 export AWS_REGION="us-east-1"
 
 log_info "Creating the origin database in the bucket with the CLI"
-run_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
 # Not the photo this scenario later puts into the library as its anchor: an import recognises a photo the database already holds and
 # does not take it in again, which is correct and is what the counts below would then wait on forever.
-run_cli "$TMP_DIR" add "$REPO_DIR/test/duplicate-images/a.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/duplicate-images/a.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
 # --- 2. The phone's database, which is a partial replica of that origin. ---
 
@@ -245,7 +245,7 @@ run_cli "$TMP_DIR" add "$REPO_DIR/test/duplicate-images/a.png" --db "$S3_ORIGIN_
 # `psi consolidate` does for a user on the desktop, and what the app has no way to do on a phone yet, so the scenario does it from the
 # host.
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
-run_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
+run_zig_cli "$TMP_DIR" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
 
 # Point the replica at the origin. This is the file the sync plan reads to find out there is somewhere to sync to, and the sync handler
 # reads to find out where.

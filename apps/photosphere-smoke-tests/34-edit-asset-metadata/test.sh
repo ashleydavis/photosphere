@@ -21,7 +21,6 @@ print_test_header 34 "edit-asset-metadata"
 
 SOURCE_DB="$TMP_DIR/test-db"
 DESCRIPTION="Edited in the gallery"
-CLI_DIR="$REPO_DIR/apps/cli"
 
 trap 'cleanup_apps "$TMP_DIR"' EXIT
 
@@ -114,7 +113,7 @@ case "$PLATFORM" in
         ;;
     *)
         log_info "Reading the asset back out of the database with the CLI..."
-        ASSET_ID="$(cd "$CLI_DIR" && bun run start -- list --db "$SOURCE_DB" --yes 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
+        ASSET_ID="$("$PHOTOSPHERE_ZIG_CLI" list --db "$SOURCE_DB" --yes 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
         if [ -z "$ASSET_ID" ]; then
             log_error "Could not find the asset's id in the output of 'psi list'."
             exit 1
@@ -125,7 +124,7 @@ case "$PLATFORM" in
         INFO_OUTPUT=""
         FOUND=""
         for _attempt in $(seq 1 30); do
-            INFO_OUTPUT="$(cd "$CLI_DIR" && bun run start -- info "$ASSET_ID" --db "$SOURCE_DB" --yes 2>&1)"
+            INFO_OUTPUT="$("$PHOTOSPHERE_ZIG_CLI" info "$ASSET_ID" --db "$SOURCE_DB" --yes 2>&1)"
             if echo "$INFO_OUTPUT" | grep -qF "$DESCRIPTION"; then
                 FOUND="1"
                 break

@@ -84,7 +84,7 @@ start_s3_emulator "$S3_STATE_DIR"
 S3_DB_PATH="s3:$S3_EMULATOR_BUCKET/large-asset-push"
 log_info "Encrypted database on S3: $S3_DB_PATH"
 
-# run_cli isolates the CLI's own vault and config under this test's tmp dir. These are what the CLI
+# run_zig_cli isolates the CLI's own vault and config under this test's tmp dir. These are what the CLI
 # falls back to when the database entry it is working on names no vault secret, which is the case for
 # the `init` below (the entry does not exist yet).
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
@@ -102,7 +102,7 @@ cli_expect_success() {
     local description="$1"
     shift
     local cli_output
-    if ! cli_output="$(run_cli "$TMP_DIR" "$@" 2>&1)"; then
+    if ! cli_output="$(run_zig_cli "$TMP_DIR" "$@" 2>&1)"; then
         log_error "$description failed. The CLI said:"
         echo "$cli_output" | sed 's/^/  /'
         exit 1
@@ -248,7 +248,7 @@ log_info "A sync ran and reported that it pushed changes; reading the bucket to 
 
 # --- 7. Read the bucket from the host and prove the original is in it. ---
 
-ORIGIN_ASSET_ID="$(run_cli "$TMP_DIR" list --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
+ORIGIN_ASSET_ID="$(run_zig_cli "$TMP_DIR" list --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
 if [ -z "$ORIGIN_ASSET_ID" ]; then
     log_error "The encrypted S3 database holds no asset at all, so the sync pushed neither the record nor the file."
     exit 1
@@ -259,7 +259,7 @@ log_info "The origin holds the asset record: $ORIGIN_ASSET_ID"
 # rather than the app's. It is also the assertion the app cannot fake: the record reaching the origin
 # is a buffer write and works with or without the fix, and only the file is streamed.
 EXPORTED_PATH="$TMP_DIR/exported-original.jpg"
-if ! EXPORT_OUTPUT="$(run_cli "$TMP_DIR" export "$ORIGIN_ASSET_ID" "$EXPORTED_PATH" --type original --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>&1)"; then
+if ! EXPORT_OUTPUT="$(run_zig_cli "$TMP_DIR" export "$ORIGIN_ASSET_ID" "$EXPORTED_PATH" --type original --db "$S3_DB_PATH" --key "$ENC_KEY_NAME" --yes 2>&1)"; then
     log_error "The original is not in the bucket: exporting it from the encrypted S3 database failed."
     log_error "The record made it up (it is written as a whole buffer) and the file did not (it is streamed)."
     log_error "'psi export $ORIGIN_ASSET_ID' said:"

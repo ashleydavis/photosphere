@@ -50,8 +50,8 @@ case "$PLATFORM" in
         export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
         export AWS_REGION="us-east-1"
 
-        ( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$S3_DB_PATH" --yes ) || exit 1
-        ( cd "$REPO_DIR/apps/cli" && bun run start -- add "$IMAGES_DIR/test-1.jpeg" --db "$S3_DB_PATH" --yes ) || exit 1
+        "$PHOTOSPHERE_ZIG_CLI" init --db "$S3_DB_PATH" --yes || exit 1
+        "$PHOTOSPHERE_ZIG_CLI" add "$IMAGES_DIR/test-1.jpeg" --db "$S3_DB_PATH" --yes || exit 1
         log_success "The bucket holds a database with one asset in it"
 
         # --- 2. Register it on the device, then take the server away. ---

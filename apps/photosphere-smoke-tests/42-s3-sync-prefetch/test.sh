@@ -56,13 +56,13 @@ export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
 export AWS_REGION="us-east-1"
 
 log_info "Creating the origin database in the bucket with the CLI"
-( cd "$REPO_DIR/apps/cli" && bun run start -- init --db "$S3_ORIGIN_PATH" --yes ) || exit 1
-( cd "$REPO_DIR/apps/cli" && bun run start -- add "$REPO_DIR/test/multiple-files/test-1.jpeg" --db "$S3_ORIGIN_PATH" --yes ) || exit 1
+"$PHOTOSPHERE_ZIG_CLI" init --db "$S3_ORIGIN_PATH" --yes || exit 1
+"$PHOTOSPHERE_ZIG_CLI" add "$REPO_DIR/test/multiple-files/test-1.jpeg" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
 # A partial replica on the host, which becomes the on-device database. A partial replica copies the
 # merkle trees but no thumbnails, which is exactly what prefetch-database exists to fill in.
 LOCAL_REPLICA="$TMP_DIR/$DB_NAME"
-( cd "$REPO_DIR/apps/cli" && bun run start -- replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes ) || exit 1
+"$PHOTOSPHERE_ZIG_CLI" replicate --db "$S3_ORIGIN_PATH" --dest "$LOCAL_REPLICA" --partial --yes || exit 1
 
 # Point the replica at the S3 origin. The sync and prefetch handlers both read this file.
 printf '{"origin":"%s"}\n' "$S3_ORIGIN_PATH" > "$LOCAL_REPLICA/.db/config.json"
