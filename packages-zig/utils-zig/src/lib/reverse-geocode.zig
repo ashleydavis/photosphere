@@ -1,7 +1,7 @@
 const std = @import("std");
-const errors = @import("ziggy").task_queue.utils.errors;
-const console = @import("ziggy").task_queue.utils.console;
-const js_number = @import("ziggy").task_queue.utils.js_number;
+const errors = @import("ziggy").utils.errors;
+const console = @import("ziggy").log.console;
+const js_number = @import("ziggy").utils.js_number;
 
 //
 // https://developers.google.com/maps/documentation/javascript

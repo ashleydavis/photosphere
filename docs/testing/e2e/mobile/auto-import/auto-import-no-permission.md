@@ -6,18 +6,23 @@ Test that refusing the photo permission is said out loud rather than leaving the
 
 A user who taps "Don't allow" and then sees the toggle sitting on has been told the backup is running when it cannot run at all.
 
-## Prerequisites
+## Prep
 
-Run the app from source (from the repo root):
+- Run from the repo root. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
+- `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
+- After the reset, the photo permission must not be granted yet. On Android: **Settings > Apps > Photosphere > Permissions > Photos and videos > Don't allow**. On iOS: **Settings > Photosphere > Photos > None**.
 
 ```bash
-bun run android    # Android
-bun run ios        # iOS
+bun run android:reset   # Android
+bun run android   # Android
+bun run ios:reset   # iOS
+bun run ios   # iOS
 ```
 
-Start with the app's data cleared, and with the photo permission not yet granted. On Android: **Settings > Apps > Photosphere > Permissions > Photos and videos > Don't allow**. On iOS: **Settings > Photosphere > Photos > None**.
+Expected:
+- The reset prints that it wiped Photosphere's data, or that the app is not installed, and the app starts with no database open.
 
-## Steps
+## Test
 
 ### 1. Switch automatic import on and refuse the permission
 
@@ -31,8 +36,6 @@ Expected:
 - A message says the app needs permission to read your photos.
 - No database is created: **Open database** lists nothing new.
 
----
-
 ### 2. Grant the permission and try again
 
 1. Grant the photo permission in the system settings for the app.
@@ -42,7 +45,7 @@ Expected:
 - The toggle stays on this time.
 - The app creates its database and starts backing up, as in [the new remote test](auto-import-new-remote.md).
 
----
+## Check
 
 ### 3. Take the permission away while it is running
 
@@ -55,3 +58,9 @@ Expected:
 - Automatic import stops, and the app says why.
 
 Note what actually happens here if it differs: the app may be restarted by the operating system when a permission is revoked, which is the system's doing rather than the app's.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Android: the agent does the UI steps with adb. iOS: the human does them, and the agent reads the results from screenshots.
+- Step 1: the system photos and videos permission appears; tap **Don't allow**. If a notifications permission appears, allow it.
+- Steps 2 and 3 grant and revoke the permission in the system settings app (**Settings > Apps > Photosphere > Permissions > Photos and videos**), which is driven with taps like the app itself.

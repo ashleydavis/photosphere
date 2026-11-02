@@ -146,25 +146,6 @@ summarise_failure() {
     tail -60 "$log_file" | sed 's/^/  /'
 }
 
-# Copies the per-test log files the mobile and desktop smoke suites write under their own tmp dirs.
-# The runners clear those before each test, so without this they are gone the moment the next
-# combination starts, and they are the evidence for why a side failed.
-snapshot_suite_logs() {
-    local destination="$1"
-    local found=0
-    local log_file relative_path target_dir
-
-    while IFS= read -r log_file; do
-        relative_path="${log_file#"$ROOT"/}"
-        target_dir="$destination/$(dirname "$relative_path")"
-        mkdir -p "$target_dir"
-        cp "$log_file" "$target_dir/"
-        found=1
-    done < <(find "$ROOT/apps/smoke-tests/tests" "$ROOT/apps/desktop/smoke-tests" -path '*/tmp/*' -name '*.log' -type f 2>/dev/null)
-
-    return $((1 - found))
-}
-
 #
 # Reports whether every attached Android emulator is still answering, printing a reason and returning
 # non-zero for the first one that is not. Says nothing about how many devices there are, which is the
@@ -415,7 +396,7 @@ done
 # Adds the mobile suites this machine can actually run. Each one that cannot run is dropped with a
 # printed reason rather than left in to fail every combination it appears in for a reason that has
 # nothing to do with interference. Nothing here starts, stops or restarts an emulator: per
-# apps/android-frontend/CLAUDE.md that is the human's job.
+# scripts/android/CLAUDE.md that is the human's job.
 add_mobile_scripts() {
     local status_command
 
@@ -718,7 +699,7 @@ write_report() {
 run_pair_phase() {
     local pair script_a script_b
     local either_failed failing_side failing_log
-    local verdict snapshot_dir pool_bridge_count_now
+    local verdict pool_bridge_count_now
     local pairs=()
 
     # The whole list is read up front rather than being streamed into the loop. Streaming it made the
@@ -763,12 +744,6 @@ run_pair_phase() {
             if [ "$(classify_pair "$script_a" "$script_b" 1)" = "interference" ]; then
                 write_report "$script_a" "$script_b" "$failing_side" \
                     "$PAIR_STATUS_A" "$PAIR_STATUS_B" "$failing_log"
-                # Before the next combination starts, because the mobile and desktop suites clear
-                # their per-test logs at the start of each run and those logs are the evidence.
-                snapshot_dir="$SESSION_DIR/suite-logs-$(safe_name "$script_a")-$(safe_name "$script_b")"
-                if snapshot_suite_logs "$snapshot_dir"; then
-                    echo "suite logs:       $snapshot_dir" >> "$REPORT"
-                fi
             fi
         fi
 
@@ -785,7 +760,7 @@ run_pair_phase() {
                         echo "  $POOL_BRIDGE_COUNT_AT_START pool emulator(s) were on the LAN bridge when this sweep started, $pool_bridge_count_now are now."
                         echo "  Every later pair would be measured against a smaller pool, so the results would be about the wrong thing."
                         echo "  Nothing here changed anything on any device. To put the pool back:"
-                        echo "    bun run --filter=android-frontend emu:pool:repair"
+                        echo "    bun run emu:and:pool:repair"
                         echo "LOGS=$SESSION_DIR"
                         exit 4
                     fi

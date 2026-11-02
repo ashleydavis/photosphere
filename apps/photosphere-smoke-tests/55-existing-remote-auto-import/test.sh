@@ -90,7 +90,7 @@ asset_count() {
 # How many files the origin database in the bucket holds. Read with the CLI from the host.
 #
 origin_file_count() {
-    run_cli "$TMP_DIR" summary --db "$S3_ORIGIN_PATH" --yes 2>/dev/null \
+    run_zig_cli "$TMP_DIR" summary --db "$S3_ORIGIN_PATH" --yes 2>/dev/null \
         | tr -d '\r' \
         | grep "Total files:" \
         | grep -o '[0-9][0-9]*' \
@@ -194,7 +194,7 @@ log_info "The database that already exists: $S3_ORIGIN_PATH"
 
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
-export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
+export AWS_ENDPOINT_URL="http://127.0.0.1:$S3_EMULATOR_PORT"
 export AWS_REGION="us-east-1"
 
 # None of these may be a photo this scenario later puts into the device photo library. An import recognises a photo the database already
@@ -202,9 +202,9 @@ export AWS_REGION="us-east-1"
 # phone the same file as the origin's first photo left the replica at zero originals through every pass, because there was nothing for
 # automatic import to do.
 log_info "Creating the database in the bucket with the CLI, with photos already in it"
-run_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
-run_cli "$TMP_DIR" add "$REPO_DIR/test/duplicate-images/a.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
-run_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-2.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" init --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/duplicate-images/a.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
+run_zig_cli "$TMP_DIR" add "$REPO_DIR/test/multiple-files/test-2.png" --db "$S3_ORIGIN_PATH" --yes || exit 1
 
 ORIGIN_FILES_AT_START="$(origin_file_count)"
 log_info "The database holds $ORIGIN_FILES_AT_START file(s) before the phone touches it"

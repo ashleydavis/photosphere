@@ -29,8 +29,8 @@ case "$PLATFORM" in
         trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 
         log_info "Seeding the host CLI with the database to send..."
-        run_cli "$TMP_DIR" secrets add --yes --name received-geo-key --type api-key --value received-geo-value >/dev/null 2>&1
-        run_cli "$TMP_DIR" dbs add --yes --name received-db --description "Received over LAN" --path "$TMP_DIR/received-db" --geocoding-key received-geo-key >/dev/null 2>&1
+        run_zig_cli "$TMP_DIR" secrets add --yes --name received-geo-key --type api-key --value received-geo-value >/dev/null 2>&1
+        run_zig_cli "$TMP_DIR" dbs add --yes --name received-db --description "Received over LAN" --path "$TMP_DIR/received-db" --geocoding-key received-geo-key >/dev/null 2>&1
 
         "${PLATFORM}_reset_app_state" || exit 1
         ;;

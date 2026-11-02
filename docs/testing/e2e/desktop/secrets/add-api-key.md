@@ -104,3 +104,8 @@ psi secrets view --name api-key-1 --yes
 Expected:
 - The view dialog shows the updated value `sk-test-CHANGED-99999`.
 - The CLI output shows `Value: sk-test-CHANGED-99999`, the exact string you entered, unchanged.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.

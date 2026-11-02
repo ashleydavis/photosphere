@@ -9,7 +9,7 @@ const HandlerServices = @import("ziggy").core.HandlerServices;
 const Timers = @import("ziggy").timers.Timers;
 
 test "mark-update-shown records the version as the last one shown" {
-    const log = ziggy.task_queue.utils.mute_log.MuteLog.init();
+    const log = ziggy.log.mute_log.MuteLog.init();
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
@@ -34,7 +34,7 @@ test "mark-update-shown without a version is an error reply" {
 }
 
 test "mark-news-shown adds the id to the news items shown, once" {
-    const log = ziggy.task_queue.utils.mute_log.MuteLog.init();
+    const log = ziggy.log.mute_log.MuteLog.init();
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();

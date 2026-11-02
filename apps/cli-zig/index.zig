@@ -126,6 +126,11 @@ const debugFindDuplicatesCommand = debug.debugFindDuplicatesCommand;
 const debugRemoveDuplicatesCommand = debug.debugRemoveDuplicatesCommand;
 const debugBuildSortIndexCommand = debug.debugBuildSortIndexCommand;
 const debugBuildFilesTreeCommand = debug.debugBuildFilesTreeCommand;
+const IDebugRecordCommandOptions = debug.IDebugRecordCommandOptions;
+const IDebugSetFieldCommandOptions = debug.IDebugSetFieldCommandOptions;
+const debugRecordCommand = debug.debugRecordCommand;
+const debugSetFieldCommand = debug.debugSetFieldCommand;
+const debugCheckMerkleTreeCommand = debug.debugCheckMerkleTreeCommand;
 const IHashCommandOptions = hash.IHashCommandOptions;
 const hashCommand = hash.hashCommand;
 const IToolsCommandOptions = tools_cmd.IToolsCommandOptions;
@@ -344,6 +349,34 @@ pub const IExportParsed = struct {
 };
 
 //
+// What the debug record command runs with: the ID of the record and its options.
+//
+pub const IDebugRecordParsed = struct {
+    // The ID of the record to show.
+    recordId: []const u8,
+
+    // The options of the command.
+    options: IDebugRecordCommandOptions,
+};
+
+//
+// What the debug set-field command runs with: the record, the field, its new value and the options.
+//
+pub const IDebugSetFieldParsed = struct {
+    // The ID of the record to change.
+    recordId: []const u8,
+
+    // The name of the field to set.
+    fieldName: []const u8,
+
+    // The new value of the field, as given on the command line.
+    value: []const u8,
+
+    // The options of the command.
+    options: IDebugSetFieldCommandOptions,
+};
+
+//
 // What the info command runs with: its inputs and its options.
 //
 pub const IInfoParsed = struct {
@@ -468,6 +501,15 @@ pub const ParseOutcome = union(enum) {
 
     // Run the debug build-files-tree command with these options.
     debugBuildFilesTree: IBaseCommandOptions,
+
+    // Run the debug record command with this record and these options.
+    debugRecord: IDebugRecordParsed,
+
+    // Run the debug set-field command with this record, field, value and these options.
+    debugSetField: IDebugSetFieldParsed,
+
+    // Run the debug check-merkle-tree command with these options.
+    debugCheckMerkleTree: IBaseCommandOptions,
 
     // Run the hash command with this file path and these options.
     hash: IHashParsed,
@@ -1008,6 +1050,54 @@ fn debugBuildFilesTreeAction(state: *IProgramState, args: []const ArgumentValue,
     _ = command;
     state.outcome = .{
         .debugBuildFilesTree = baseOptions(options),
+    };
+}
+
+//
+// The action of the debug record command (`initContext(debugRecordCommand)`): `run` calls initContext and the
+// command.
+//
+fn debugRecordAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .debugRecord = .{
+            .recordId = args[0].string,
+            .options = .{
+                .base = baseOptions(options),
+                .all = flagValue(options, "all"),
+            },
+        },
+    };
+}
+
+//
+// The action of the debug set-field command (`initContext(debugSetFieldCommand)`): `run` calls initContext and the
+// command.
+//
+fn debugSetFieldAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = command;
+    state.outcome = .{
+        .debugSetField = .{
+            .recordId = args[0].string,
+            .fieldName = args[1].string,
+            .value = args[2].string,
+            .options = .{
+                .base = baseOptions(options),
+                .json = flagValue(options, "json"),
+            },
+        },
+    };
+}
+
+//
+// The action of the debug check-merkle-tree command (`initContext(debugCheckMerkleTreeCommand)`): `run` calls
+// initContext and the command.
+//
+fn debugCheckMerkleTreeAction(state: *IProgramState, args: []const ArgumentValue, options: *const OptionValues, command: *Command) !void {
+    _ = args;
+    _ = command;
+    state.outcome = .{
+        .debugCheckMerkleTree = baseOptions(options),
     };
 }
 
@@ -1776,6 +1866,43 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
     _ = optionFrom(debugBuildFilesTree, yesOption);
     _ = optionFrom(debugBuildFilesTree, cwdOption);
     _ = debugBuildFilesTree.action(state, debugBuildFilesTreeAction);
+
+    const debugRecord = debugCommand
+        .command("record", .{})
+        .description("Show a record of the metadata collection as JSON.")
+        .argument("<record-id>", "The ID of the record to show.");
+    _ = optionFrom(debugRecord, dbOption);
+    _ = optionFrom(debugRecord, keyOption);
+    _ = optionFrom(debugRecord, verboseOption);
+    _ = optionFrom(debugRecord, yesOption);
+    _ = optionFrom(debugRecord, cwdOption);
+    _ = optionFrom(debugRecord, allOption);
+    _ = debugRecord.action(state, debugRecordAction);
+
+    const debugSetField = debugCommand
+        .command("set-field", .{})
+        .description("Set a field of a record of the metadata collection, as the app does when an asset is edited.")
+        .argument("<record-id>", "The ID of the record to change.")
+        .argument("<field>", "The name of the field to set.")
+        .argument("<value>", "The new value of the field.");
+    _ = optionFrom(debugSetField, dbOption);
+    _ = optionFrom(debugSetField, keyOption);
+    _ = optionFrom(debugSetField, verboseOption);
+    _ = optionFrom(debugSetField, yesOption);
+    _ = optionFrom(debugSetField, cwdOption);
+    _ = debugSetField
+        .option("--json", "Read the value as JSON (a number, boolean, array or object) rather than as a string.", .{ .boolean = false })
+        .action(state, debugSetFieldAction);
+
+    const debugCheckMerkleTree = debugCommand
+        .command("check-merkle-tree", .{})
+        .description("Check that the leaves of the files merkle tree (.db/files.dat) are in sorted order.");
+    _ = optionFrom(debugCheckMerkleTree, dbOption);
+    _ = optionFrom(debugCheckMerkleTree, keyOption);
+    _ = optionFrom(debugCheckMerkleTree, verboseOption);
+    _ = optionFrom(debugCheckMerkleTree, yesOption);
+    _ = optionFrom(debugCheckMerkleTree, cwdOption);
+    _ = debugCheckMerkleTree.action(state, debugCheckMerkleTreeAction);
 
     _ = program
         .command("help [command]", .{})
@@ -2708,6 +2835,33 @@ fn run(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, main_log: *ut
             const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options);
             const context = try initContext(allocator, io, log, mediaTools, options);
             try debugBuildFilesTreeCommand(allocator, io, log, context, &options);
+        },
+        .debugRecord => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
+            }
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try debugRecordCommand(allocator, io, log, context, parsed.recordId, &options);
+        },
+        .debugSetField => |parsed| {
+            var options = parsed.options;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
+            }
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options.base);
+            const context = try initContext(allocator, io, log, mediaTools, options.base);
+            try debugSetFieldCommand(allocator, io, log, context, parsed.recordId, parsed.fieldName, parsed.value, &options);
+        },
+        .debugCheckMerkleTree => |parsed| {
+            var options = parsed;
+            if (state.notificationsQuiet) |quiet| {
+                try print_notifications.printNotifications(allocator, io, consoleLog, quiet);
+            }
+            const log = try commandLog(allocator, io, consoleLog, main_log, mediaTools, options);
+            const context = try initContext(allocator, io, log, mediaTools, options);
+            try debugCheckMerkleTreeCommand(allocator, io, log, context, &options);
         },
         .hash => |parsed| {
             if (state.notificationsQuiet) |quiet| {

@@ -124,3 +124,9 @@ psi secrets view --name enc-key-1 --yes
 Expected:
 - The view dialog shows the replacement PEM you pasted in step 3, byte-for-byte.
 - The CLI output shows `Type: encryption-key` and that same PEM string, unchanged.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.
+- Type the PEM into `secret-private-key-input` with the `type` command, its line breaks included, by JSON-encoding it with `jq -Rs .` the way `apps/photosphere-smoke-tests/52-encrypted-database/test.sh` does.

@@ -115,11 +115,11 @@ fi
 jq --arg origin "$FETCHED_REMOTE" '.origin = $origin' "$FETCHED_LOCAL/.db/config.json" > "$TMP_DIR/local-config.json" || exit 1
 cp "$TMP_DIR/local-config.json" "$FETCHED_LOCAL/.db/config.json" || exit 1
 
-if ! run_cli "$TMP_DIR" verify --db "$FETCHED_REMOTE" --yes; then
+if ! run_zig_cli "$TMP_DIR" verify --db "$FETCHED_REMOTE" --yes; then
     log_error "Verifying the remote after consolidating failed"
     exit 1
 fi
-if ! run_cli "$TMP_DIR" sync --db "$FETCHED_LOCAL" --yes; then
+if ! run_zig_cli "$TMP_DIR" sync --db "$FETCHED_LOCAL" --yes; then
     log_error "Syncing the local database after consolidating failed"
     exit 1
 fi

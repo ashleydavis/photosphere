@@ -2,7 +2,7 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const errors = utils.errors;
-const ziggy_exec = @import("ziggy").task_queue.utils.exec;
+const ziggy_exec = @import("ziggy").exec;
 const in_process_tools = @import("in-process-tools.zig");
 
 //

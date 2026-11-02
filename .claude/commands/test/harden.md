@@ -138,7 +138,7 @@ Ask whether the pool monitor is running, at the moment you need the answer:
 flock -n /tmp/photosphere-emulator-pool-monitor.lock true
 ```
 
-Exit 1 means it is running: say which emulator broke, say the monitor will deal with it, and leave it alone. Exit 0 means it is not, and you may run `bun run --filter=android-frontend emu:pool:repair` (add `-- --index N` for one) or the read-only `bun run --filter=android-frontend emu:pool:diagnose`.
+Exit 1 means it is running: say which emulator broke, say the monitor will deal with it, and leave it alone. Exit 0 means it is not, and you may run `bun run emu:and:pool:repair` (add `-- --index N` for one) or the read-only `bun run emu:and:pool:diagnose`.
 
 For what went wrong earlier, read `/tmp/photosphere-emulator-pool-monitor.log` and `/tmp/photosphere-emulator-pool-monitor-repairs.log` before asking the human anything.
 

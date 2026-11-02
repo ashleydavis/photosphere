@@ -65,3 +65,8 @@ Expected:
 Expected:
 - The secret value is shown.
 - No error toasts are visible.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.

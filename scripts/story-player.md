@@ -4,12 +4,12 @@ Plays the running app through every registered UI story, in light and then dark,
 
 ## Arguments
 
-- `--platform <name>`: where the stories play. `electron` (the default), `android`, `ios`, `ziggy` (the Photosphere App on this operating system), `ziggy-android` (the Photosphere App on an Android emulator from the pool, or an attached device) or `ziggy-ios` (the Photosphere App on the iOS simulator).
+- `--platform <name>`: where the stories play. `ziggy` (the default: the Photosphere App on this operating system), `ziggy-android` (the Photosphere App on an Android emulator from the pool, or an attached device) or `ziggy-ios` (the Photosphere App on the iOS simulator).
 - `--duration <ms>`: how long a story is shown before the cycle moves on by itself. The player moves the cycle on as soon as the screenshot is written, so this only matters when a capture dies.
 - `--screenshots <dir>`: where the PNGs go. The default is `stories-screenshots/<platform>`.
 - `--no-screenshots`: play the stories without capturing anything.
 - `--open`: open the generated `index.html` when the run finishes.
-- `--headless`: hide the window. It applies to Electron and to the Photosphere App on Linux, which then runs on a virtual display. A phone or simulator window is always shown.
+- `--headless`: hide the window. It applies to the Photosphere App on Linux, which then runs on a virtual display. A phone or simulator window is always shown.
 
 ## What it does
 

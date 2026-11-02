@@ -13,8 +13,8 @@ import { useToast } from "../context/toast-context";
 import { useIsMobile } from "../lib/use-is-mobile";
 
 //
-// Fixed URL of the embedded MCP server in the desktop app. The port is a constant in the
-// desktop main process (apps/desktop/src/lib/mcp/main-bridge.ts:MCP_PORT).
+// Fixed URL of the embedded MCP server in the desktop app. The port was a constant in the
+// Electron app's main process, which has been removed.
 //
 const MCP_URL = "http://localhost:3475/mcp";
 

@@ -43,7 +43,7 @@ PULLED_DB_DIR="$TMP_DIR/pulled-db"
 read_asset_field() {
     local asset_id="$1"
     local field_label="$2"
-    run_cli "$TMP_DIR" info --db "$PULLED_DB_DIR/photosphere-default" "$asset_id" 2>/dev/null \
+    run_zig_cli "$TMP_DIR" info --db "$PULLED_DB_DIR/photosphere-default" "$asset_id" 2>/dev/null \
         | grep "$field_label" \
         | head -1 \
         | sed "s/.*$field_label//" \
@@ -52,7 +52,7 @@ read_asset_field() {
 
 # Everything in the database, newest first.
 list_assets() {
-    run_cli "$TMP_DIR" list --db "$PULLED_DB_DIR/photosphere-default" --page-size 200 2>/dev/null
+    run_zig_cli "$TMP_DIR" list --db "$PULLED_DB_DIR/photosphere-default" --page-size 200 2>/dev/null
 }
 
 # The asset id the database gave the one photo of a given kind.

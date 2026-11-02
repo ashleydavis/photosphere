@@ -207,3 +207,128 @@ All desktop results below come from a test-hooks build of the app driven through
     - **revist and confirm** *e* The "My Photos" button in the Open database list is too small. Make it double the size and add padding underneath to separate it from the other buttons.
     - **revist and confirm** *e* The wording "a private photo database is created for you" needs updating. Check what it really does first.
     - **revist and confirm** *e* Better if turning the toggle on prompted to add a folder, after Allow is tapped.
+- Android: step 6 fails. The Import page lists only the 2 photos imported from the existing library (test-1, test-2), both badged Automatic. The photo taken with the camera in step 5 is in the gallery (3 photos) but is not on the Import page, even after leaving the page and coming back. No import was running, so the count shown while one runs was not seen.
+- Android: step 14 passed, but has some issues. `psi verify` passed (12 valid files, 0 invalid), and the originals of all 3 photos exported from the bucket are byte for byte the same as the photos on the phone. The counts do not line up: `psi verify` reports 12 files, `psi summary` reports 10 files and `Files imported: 0` (the phone's own copy reports 3), and the gallery shows 3 photos, so "the number of files matches what the gallery showed" cannot be checked as written. In the bucket the photos are named `35.jpeg`, `36.png` and `37.jpg` with the app's temp folder as their path, not their camera roll names and paths.
+- Android: passed, with the problems noted above in steps 6 and 14. Run on Android only.
+
+#### auto-import-existing-remote
+
+- Android: fails at step 3. Starting the partial replication to `my-photos` shows "Replication failed: ReadOnlyFileSystem", raised from `replicateDatabase`. Steps 1 and 2 passed. The button is labelled **Start replication**, not **Replicate**.
+
+#### auto-import-no-permission
+
+- Android: fails at step 1. After **Don't allow**, the Automatic import toggle stays on and no message asks for the photo permission. No database is created. The notifications prompt still appears after the photo permission is refused.
+
+#### auto-import-delete-after-backup
+
+- Android: fails at step 1. Test fixed first: the app has no cleanup toggle, so steps 1 to 4 now use **Find photos already in my database** under **Free up space on this device**, which becomes **Delete N photo(s) from this device**. Pressing **Find photos already in my database** changes nothing on screen: the log has "Source cleanup counted", but the result reaches the page empty, so no count is shown and the button does not change.
+
+### Import
+
+#### import-photo-and-video
+
+- Android: fails at step 1. The photo is imported and shows in the gallery, but its row on the Import page has no **manual** badge, and after **Clear** the page shows no import record. In step 2 the video imported with a thumbnail, but tapping it in the gallery crashed the emulator twice (once with a SEGV in the emulator process), so playback was not checked and steps 3 and 4 were not reached.
+
+### Gallery
+
+#### view-and-edit-asset
+
+- Android: fails at step 2. Test fixed first: a tap opens a photo and press and hold selects it. The info panel shows the file name, width × height and date, but no file size and no camera details, although the fixture photos carry camera EXIF (the camera block in `asset-info.tsx` is commented out). Step 5: swiping does not move to the next photo; the on-screen arrows do. The edited description survived closing and reopening the database. Pinch zoom was not checked.
+
+#### export-asset
+
+- Android: passed. Test fixed first: Android shows the system save dialog, not the share sheet, and the full-photo check now compares against the stored file. Saved photo and video are byte for byte the same as the stored originals, and cancelling leaves nothing behind. Video playback was seen only in still screenshots.
+
+### Download
+
+#### download-assets
+
+- Android: fails at step 2: no progress is shown for a multi-photo download. Step 4: there is no cancel control, and backing out of the folder picker returns with no message. Test fixed first: the full-photo check, and a step that downloads the same photos again so the same-name case happens. Same-name files are saved as `x.jpg (1)`, which Android does not recognise as an image.
+
+### Database
+
+#### create-and-open-database
+
+- Android: fails at step 1. Choosing a new folder with **Browse** and pressing Create does nothing and shows no error; the dialog stays open. The log has `create-database task did not succeed: ReadOnlyFileSystem`: the folder picker gives a `content://` path the app cannot write to. Steps 2 to 5 could not run.
+
+#### load-large-database
+
+- Android: passed. Scrolling smoothness was not judged, only that every thumbnail loaded and the gallery stayed usable.
+
+#### view-database-details
+
+- Android: passed.
+
+#### remove-recent-database
+
+- Android: fails at step 3. The Prep's **New database** for `manual-test-2` hits the same `ReadOnlyFileSystem` failure as create-and-open-database, but the entry is still added to the list with a `content://` path, so typing an app-storage path is then refused with "A database named manual-test-2 already exists". Steps 1 and 2 passed. Step 3 cannot run because the removed database never existed on disk; step 4 was not run.
+
+#### open-encrypted-database
+
+- Android: passed. With the key deleted the message is "Could not reach the database: s3:…" while the log says "Encryption key not found in vault". The first delete of the key appeared to do nothing; the second showed a "Secret In Use" warning and worked.
+
+#### edit-database-origin
+
+- Android: fails at step 4. A made-up origin is skipped without telling anyone: the log has only an INFO line, "Sync skipped … origin not accessible", and nothing shows on screen. Steps 1 to 3 passed; the origin is set from **Edit**, the details sheet cannot set it. The quick sync after start-up did not run ("Sync debounce triggered" was logged, but nothing was queued until the 5-minute timer).
+
+### Sync
+
+#### sync-with-another-database
+
+- Android: fails at step 5, which could not be run. Steps 1 to 4 passed. Step 5 (flight mode) cannot run on a pool emulator: turning flight mode on takes it off the network bridge and the pool monitor restarts it with its data wiped.
+
+### Move
+
+#### move-file-between-databases
+
+- Android: fails at step 1. The move completes but the app shows no message that it did; only a log line is written. Steps 2 to 4 passed and `psi verify` found no failures on either database. Prep hits the `ReadOnlyFileSystem` failure when the target is chosen with **Browse**.
+
+### Replication
+
+#### replicate-to-another-database
+
+- Android: fails at step 2. `psi verify` on the replica reports 51 asset record mismatches (`psi verify` on the source `test/dbs/50-assets` itself reports 10), while `psi compare` says the two are identical. Steps 1, 3 and 4 passed. Step 5 (network off) was not run: it cannot run on a pool emulator. The replication-complete message runs off the right edge of the screen.
+
+#### partial-replica-and-prefetch
+
+- Android: fails at step 4, which could not be run. Steps 1, 2, 3 and 5 passed. Step 4 (network off) cannot run on a pool emulator.
+
+### S3
+
+#### s3-database
+
+- Android: fails at step 6. With a wrong secret key the app says "Could not reach the database" (log: `UnknownError`) rather than that it cannot authenticate. Steps 1 to 3 passed. Steps 4 and 5 (network off) were not run: they cannot run on a pool emulator. An S3 gallery listed May 2025 above October 2026.
+
+### Secrets
+
+#### add-and-view-secret
+
+- Android: fails at step 4. Saving a second secret with an existing name is refused, but the dialog shows no message; the error only goes to the log (`secrets-page.tsx:475`). Every other step passed, including surviving a force-stop.
+
+#### add-encryption-key
+
+- Android: fails at step 4. A key whose text is not a PEM saves without complaint. Steps 1 to 3 passed.
+
+#### add-s3-credentials
+
+- Android: fails at step 3. With `manual-test-s3` attached through **Configure secrets…**, saving the edit fails with "Could not load credentials from any providers" (from `setDatabaseOrigin` in `edit-database-modal.tsx`) and the database does not open. Steps 1 and 2 passed.
+
+### LAN Share
+
+#### mobile-to-mobile
+
+- Android: fails at step 4. Test fixed first: the sender shows the pairing code and the receiver types it, and Prep now gives each phone something to send (MinIO `mobile-test-m2m`). With a wrong code nothing is transferred, but both phones say only "No sender/receiver found within 60 seconds"; neither says a device is using a different code. Steps 1, 2 and 5 passed. Step 3 (network off) cannot run on a pool emulator.
+
+#### desktop-to-mobile
+
+- Android: passed. Test fixed first: the sender shows the pairing code, Prep now creates an encrypted database `desktop-share-enc` for the desktop to send, and step 3 attaches the key on the phone through **Configure secrets…**.
+
+#### cli-to-mobile
+
+- Android: fails at step 3, which could not be run. Test fixed first: the code is chosen and passed to `psi ... --code`, then typed on the phone. Steps 1, 2, 4 and 5 passed. Step 3 (network off) cannot run on a pool emulator. `psi secrets send` exits 0 after "Pairing code rejected", and a plain secret sent from the CLI shows as "API Key" on the phone.
+
+### News
+
+#### news-notifications
+
+- Android: fails at step 1. No news is shown at start-up. The app logs `News check skipped: NameServerFailure`, though the device itself resolves `raw.githubusercontent.com` and the feed has an item. Steps 2 to 4 were not run.

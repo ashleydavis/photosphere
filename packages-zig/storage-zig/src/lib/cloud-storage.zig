@@ -194,7 +194,7 @@ pub const CloudStorage = struct {
             }
         }
         if (endpoint == null) {
-            if (node_utils.process_env.getEnv("AWS_ENDPOINT")) |environmentEndpoint| {
+            if (node_utils.process_env.getEnv("AWS_ENDPOINT_URL")) |environmentEndpoint| {
                 if (environmentEndpoint.len > 0) {
                     endpoint = environmentEndpoint;
                 }

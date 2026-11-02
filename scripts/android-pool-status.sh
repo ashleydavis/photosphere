@@ -51,12 +51,12 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # The pool's AVD naming. Sourced rather than copied so a rename cannot leave this quietly matching
 # nothing and reporting the pool down when it is up, which is the exact failure this script exists to
 # prevent.
-source "$REPO_DIR/apps/android-frontend/scripts/emulator-config.sh"
+source "$REPO_DIR/scripts/android/emulator-config.sh"
 
 # The readings themselves: where adb is, whether a guest is on the bridge, and how much room it has
 # left. Shared with the pool monitor and with emulator.sh's repair path, so the three cannot disagree
 # about whether an emulator is usable. See emulator-status-lib.sh.
-source "$REPO_DIR/apps/android-frontend/scripts/emulator-status-lib.sh"
+source "$REPO_DIR/scripts/android/emulator-status-lib.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

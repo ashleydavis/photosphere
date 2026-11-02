@@ -79,3 +79,8 @@ psi verify --db /tmp/psi-desktop-open-existing-database/source
 
 Expected:
 - Verification completes without errors.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Type the path into `database-path-input` rather than browsing for it.

@@ -485,7 +485,7 @@ test "a storage given no credentials, where the environment has none either, can
     defer node_utils.process_env.setEnvironMap(previous);
     node_utils.process_env.setEnvironMap(try environmentOf(allocator, &.{
         .{ "AWS_REGION", "us-east-1" },
-        .{ "AWS_ENDPOINT", try server.endpoint(allocator) },
+        .{ "AWS_ENDPOINT_URL", try server.endpoint(allocator) },
     }));
     var storage = CloudStorage.init("bucket", null);
     defer storage.s3.deinit();
@@ -507,7 +507,7 @@ test "a storage given no region, where the environment has none either, fails wi
         .{ "AWS_ACCESS_KEY_ID", "key" },
         .{ "AWS_SECRET_ACCESS_KEY", "secret" },
         .{ "AWS_SESSION_TOKEN", "token" },
-        .{ "AWS_ENDPOINT", try server.endpoint(allocator) },
+        .{ "AWS_ENDPOINT_URL", try server.endpoint(allocator) },
     }));
     var storage = CloudStorage.init("bucket", null);
     defer storage.s3.deinit();
@@ -531,7 +531,7 @@ test "a storage given no credentials uses those of the environment, session toke
         .{ "AWS_SECRET_ACCESS_KEY", "secret" },
         .{ "AWS_SESSION_TOKEN", "token" },
         .{ "AWS_REGION", "us-east-1" },
-        .{ "AWS_ENDPOINT", try server.endpoint(allocator) },
+        .{ "AWS_ENDPOINT_URL", try server.endpoint(allocator) },
     }));
     var storage = CloudStorage.init("bucket", null);
     defer storage.s3.deinit();

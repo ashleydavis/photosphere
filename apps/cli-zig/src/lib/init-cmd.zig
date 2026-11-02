@@ -221,7 +221,7 @@ pub fn getDefaultS3Config(allocator: std.mem.Allocator, io: std.Io) !?IS3Credent
             .region = if (region.len > 0) region else "us-east-1",
             .accessKeyId = accessKeyId,
             .secretAccessKey = secretAccessKey,
-            .endpoint = process_env.getEnv("AWS_ENDPOINT"),
+            .endpoint = process_env.getEnv("AWS_ENDPOINT_URL"),
         };
     }
 

@@ -1,5 +1,5 @@
 //
-// The worker pool of the CLI, a port of WorkerPoolBun (apps/cli/src/lib/worker-pool-bun.ts). The CLI's main thread owns the pool and
+// The worker pool of the CLI, a port of the TypeScript CLI's WorkerPoolBun. The CLI's main thread owns the pool and
 // everything in it. Each worker is one of Ziggy's workers: a thread that runs one task at a time and talks to the main thread only by
 // message, as a Bun worker does. The main thread reads the workers' messages while its own code waits for a task (the IQueueBackend's
 // waitForMessage), and fails the tasks that have run past their timeout while it waits, so the pool needs no lock.
@@ -557,7 +557,7 @@ pub const WorkerPoolBun = struct {
         defer arena_state.deinit();
         const arena = arena_state.allocator();
         // The worker gets a copy of this thread's environment as its own, as a Bun worker is given process.env.
-        const environment: ?std.json.Value = if (ziggy.task_queue.utils.process_env.getEnvironMap()) |map| try ziggy.worker.environmentJson(arena, map) else null;
+        const environment: ?std.json.Value = if (ziggy.utils.process_env.getEnvironMap()) |map| try ziggy.worker.environmentJson(arena, map) else null;
         // A log with a file writes every line, whatever its console shows, so when the log given has one the worker sends its verbose and tool
         // lines too, and the log's console options decide what the console shows.
         const writesFile = log.logFilePath() != null;

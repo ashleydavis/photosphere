@@ -28,7 +28,7 @@ integration tests read:
 
 ```bash
 AWS_ACCESS_KEY_ID=$S3_EMULATOR_ACCESS_KEY AWS_SECRET_ACCESS_KEY=$S3_EMULATOR_SECRET_KEY \
-AWS_ENDPOINT=http://127.0.0.1:$S3_EMULATOR_PORT AWS_REGION=us-east-1 TEST_S3_BUCKET=$S3_EMULATOR_BUCKET \
+AWS_ENDPOINT_URL=http://127.0.0.1:$S3_EMULATOR_PORT AWS_REGION=us-east-1 TEST_S3_BUCKET=$S3_EMULATOR_BUCKET \
 zig build test test-integration -Dcoverage=/tmp/coverage/packages
 ```
 

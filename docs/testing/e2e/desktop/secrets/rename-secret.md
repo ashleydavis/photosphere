@@ -87,3 +87,8 @@ psi secrets list
 
 Expected:
 - `secrets list` shows a `new-name` row with `api-key` in its Type column, and no `old-name` row.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- The **Manage Secrets** page has no `data-id` in the steps: reach it with `navigate` and `{"page": "secrets"}`.

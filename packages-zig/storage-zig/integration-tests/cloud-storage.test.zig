@@ -1,13 +1,13 @@
 //
 // Integration tests of CloudStorage against a real S3 server. They are not part of the unit tests: `zig build test-integration` runs them, and the
-// smoke test apps/cli/smoke-tests-zig/75-s3-storage-api runs that against a local S3 emulator.
+// smoke test apps/cli-zig/smoke-tests-zig/75-s3-storage-api runs that against a local S3 emulator.
 //
 // These tests require AWS credentials and an S3 bucket to run.
 // Set the following environment variables before running:
 // AWS_ACCESS_KEY_ID=your_access_key
 // AWS_SECRET_ACCESS_KEY=your_secret_key
 // AWS_REGION=your_region (e.g., us-east-1)
-// AWS_ENDPOINT=your_endpoint (optional, for S3-compatible services)
+// AWS_ENDPOINT_URL=your_endpoint (optional, for S3-compatible services)
 // TEST_S3_BUCKET=your_test_bucket_name
 //
 // The groups of tests are the prefixes of the test names. The concurrent lock attempts run on threads of their own, each
@@ -24,7 +24,7 @@ const ziggy = @import("ziggy");
 const CloudStorage = storage_zig.cloud_storage.CloudStorage;
 const Date = utils.timestamp_provider.Date;
 const MessageQueue = ziggy.message_queue.MessageQueue;
-const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
+const ThreadAllocator = ziggy.utils.thread_allocator.ThreadAllocator;
 
 //
 // Allocates what lives for the whole test binary: the environment, the location and the storage. Only the test thread uses it.
@@ -846,7 +846,7 @@ test "CloudStorage Zig: credentials given to the storage reach the server" {
         .accessKeyId = node_utils.process_env.getEnv("AWS_ACCESS_KEY_ID").?,
         .secretAccessKey = node_utils.process_env.getEnv("AWS_SECRET_ACCESS_KEY").?,
         .region = node_utils.process_env.getEnv("AWS_REGION"),
-        .endpoint = node_utils.process_env.getEnv("AWS_ENDPOINT"),
+        .endpoint = node_utils.process_env.getEnv("AWS_ENDPOINT_URL"),
     });
     defer storage.s3.deinit();
     const filePath = try pathOf(allocator, &.{ location, "zig-credentials", "file.txt" });

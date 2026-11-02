@@ -117,7 +117,7 @@ pub const IMediaSource = struct {
 // that threw it). Each thread has its own, as it has its own lastDeleteErrorSourceIds, so no allocator is used by two threads and the
 // ids are freed on the thread that allocated them.
 //
-threadlocal var delete_error_allocator_state: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var delete_error_allocator_state: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // The source ids of the most recent MediaSourceDeleteError thrown on this thread (a Zig error cannot

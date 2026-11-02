@@ -94,7 +94,7 @@ cli_expect_success() {
     local description="$1"
     shift
     local cli_output
-    if ! cli_output="$(run_cli "$TMP_DIR" "$@" 2>&1)"; then
+    if ! cli_output="$(run_zig_cli "$TMP_DIR" "$@" 2>&1)"; then
         log_error "$description failed. The CLI said:"
         echo "$cli_output" | sed 's/^/  /'
         exit 1
@@ -112,7 +112,7 @@ log_info "Encrypted origin database on S3: $S3_ORIGIN_PATH"
 # host address that start_s3_emulator worked out.
 export AWS_ACCESS_KEY_ID="$S3_EMULATOR_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="$S3_EMULATOR_SECRET_KEY"
-export AWS_ENDPOINT="http://127.0.0.1:$S3_EMULATOR_PORT"
+export AWS_ENDPOINT_URL="http://127.0.0.1:$S3_EMULATOR_PORT"
 export AWS_REGION="us-east-1"
 
 # jq builds the JSON so the credentials are never hand-quoted. The field names are the ones

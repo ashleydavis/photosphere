@@ -197,7 +197,7 @@ test "reads the environment variables when they are set, without touching the va
     try environment.environ_map.put("AWS_ACCESS_KEY_ID", "AKIDENV");
     try environment.environ_map.put("AWS_SECRET_ACCESS_KEY", "secretenv");
     try environment.environ_map.put("AWS_REGION", "ap-southeast-2");
-    try environment.environ_map.put("AWS_ENDPOINT", "http://127.0.0.1:9000");
+    try environment.environ_map.put("AWS_ENDPOINT_URL", "http://127.0.0.1:9000");
 
     const result = (try init_cmd.getDefaultS3Config(environment.arena.allocator(), std.testing.io)).?;
 
@@ -231,7 +231,7 @@ test "the environment wins over the default:s3 secret, because that is the order
     try environment.storeSecret("default:s3", "s3-credentials", "{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIDVAULT\",\"secretAccessKey\":\"secretvault\",\"endpoint\":\"https://syd1.digitaloceanspaces.com\"}");
     try environment.environ_map.put("AWS_ACCESS_KEY_ID", "AKIDENV");
     try environment.environ_map.put("AWS_SECRET_ACCESS_KEY", "secretenv");
-    try environment.environ_map.put("AWS_ENDPOINT", "http://127.0.0.1:9000");
+    try environment.environ_map.put("AWS_ENDPOINT_URL", "http://127.0.0.1:9000");
 
     const result = (try init_cmd.getDefaultS3Config(environment.arena.allocator(), std.testing.io)).?;
 

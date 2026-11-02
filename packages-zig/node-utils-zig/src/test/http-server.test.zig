@@ -19,7 +19,7 @@ const Route = http_server.Route;
 const Router = http_server.Router;
 
 const MessageQueue = ziggy.message_queue.MessageQueue;
-const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
+const ThreadAllocator = ziggy.utils.thread_allocator.ThreadAllocator;
 
 const expectServerStopped = @import("../../../utils-zig/src/test/expect-server-stopped.zig").expectServerStopped;
 

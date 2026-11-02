@@ -25,7 +25,7 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 # Seed the host CLI with the secret to send, in a vault isolated under this test's tmp dir so the
 # developer's real keychain is untouched.
 log_info "Seeding the host CLI with the secret to send..."
-run_cli "$TMP_DIR" secrets add --yes --name received-secret --type api-key --value received-secret-value >/dev/null 2>&1
+run_zig_cli "$TMP_DIR" secrets add --yes --name received-secret --type api-key --value received-secret-value >/dev/null 2>&1
 
 # Wipe everything the app has stored on the device (its storage sandbox, the WebView's
 # localStorage and the keychain) so this test starts from a known state. Done before launch,

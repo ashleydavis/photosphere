@@ -39,7 +39,6 @@ targets:
   # TypeScript smoke suites with the ported commands run in the Zig CLI.
   - name: test:cli:zig
     paths:
-      - apps/cli
       - apps/cli-zig
       - packages
       - packages-zig

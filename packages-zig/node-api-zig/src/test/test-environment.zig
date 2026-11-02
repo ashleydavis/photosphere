@@ -19,7 +19,7 @@ const lan_share_network = @import("lan-share-network-zig");
 // Allocator for what an environment holds. Each test thread has its own, and the environment is made and freed on the thread that set
 // it up: the pool keeps what it holds with its owning thread's allocator, and each worker makes its own.
 //
-threadlocal var environment_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var environment_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // The tools of the test environment's pool: none, so a task that runs ImageMagick or FFmpeg is given no runner (see
@@ -143,7 +143,7 @@ pub fn setupEnvironmentWith(io: std.Io, allocator: std.mem.Allocator) !*TestEnvi
     _ = map.orderedRemove("AWS_ACCESS_KEY_ID");
     _ = map.orderedRemove("AWS_SECRET_ACCESS_KEY");
     _ = map.orderedRemove("AWS_REGION");
-    _ = map.orderedRemove("AWS_ENDPOINT");
+    _ = map.orderedRemove("AWS_ENDPOINT_URL");
     node_utils.process_env.setEnvironMap(map);
 
     // The test's thread registers the media source builders for itself, and each task on its own thread.

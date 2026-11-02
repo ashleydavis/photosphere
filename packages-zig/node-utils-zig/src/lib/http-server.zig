@@ -26,11 +26,11 @@ const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const process_env = ziggy.task_queue.utils.process_env;
+const process_env = ziggy.utils.process_env;
 
 const MessageQueue = ziggy.message_queue.MessageQueue;
 const Message = ziggy.message_queue.Message;
-const ThreadAllocator = ziggy.thread_allocator.ThreadAllocator;
+const ThreadAllocator = ziggy.utils.thread_allocator.ThreadAllocator;
 const json = ziggy.json;
 
 //

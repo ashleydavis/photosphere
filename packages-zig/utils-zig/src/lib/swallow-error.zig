@@ -1,7 +1,7 @@
 const std = @import("std");
 const retry = @import("retry.zig");
 const OperationResult = retry.OperationResult;
-const ILog = @import("ziggy").task_queue.utils.log.ILog;
+const ILog = @import("ziggy").log.ILog;
 
 //
 // Attempts to execute an operation. If it succeeds, returns the result.

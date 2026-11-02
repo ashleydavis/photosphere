@@ -99,3 +99,7 @@ cat /tmp/psi-desktop-edit-database-origin/db/.db/config.json
 
 Expected:
 - The `origin` field in the JSON is `s3:my-bucket/origin-database`.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.

@@ -148,7 +148,7 @@ pub fn resolveStorageCredentials(
                 .region = if (isTruthy(region)) region.? else "us-east-1",
                 .accessKeyId = process_env.getEnv("AWS_ACCESS_KEY_ID").?,
                 .secretAccessKey = process_env.getEnv("AWS_SECRET_ACCESS_KEY").?,
-                .endpoint = process_env.getEnv("AWS_ENDPOINT"),
+                .endpoint = process_env.getEnv("AWS_ENDPOINT_URL"),
             };
             log.verbose("S3 credentials: loaded from environment variables (AWS_ACCESS_KEY_ID)");
         }

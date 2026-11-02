@@ -123,3 +123,11 @@ file /tmp/psi-desktop-download-single-asset/downloads/test.jpg
 
 Expected:
 - The file is identified as a JPEG image.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Create the database by typing its path into `database-path-input` with the `type` command rather than browsing for it.
+- **Import files** opens a file picker: queue `pick-answer` with `{"paths": ["<absolute path of the file>"]}` before clicking `import-files-button`.
+- Step 3: open the asset with `long-press-click` on `gallery-thumb`.
+- Step 4's save dialog: queue `pick-answer` with the full destination path before clicking `download-asset-button`, in place of the Ctrl+L typing.

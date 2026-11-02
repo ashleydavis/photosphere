@@ -45,9 +45,7 @@ export interface IUiSection {
 //
 // One news item as the app has it in hand, which is the part of a published item a toast needs.
 //
-// Held here rather than reusing INewsItem from news-fetcher.ts because that module reads files and
-// this one is bundled into the mobile worker, and because this is a cache of what was fetched rather
-// than the published format itself.
+// This is a cache of what was fetched rather than the published news format itself.
 //
 export interface INewsFeedItem {
     // Stable id used to track whether the item has been shown.

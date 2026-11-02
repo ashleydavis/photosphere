@@ -95,3 +95,10 @@ psi verify --db /tmp/psi-desktop-import-video/source
 Expected:
 - Verification completes without errors.
 - All files pass integrity checks.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Create the database by typing its path into `database-path-input` with the `type` command rather than browsing for it.
+- **Import files** opens a file picker: queue `pick-answer` with `{"paths": ["<absolute path of the file>"]}` before clicking `import-files-button`.
+- Whether the video plays is judged by the human: leave it open in a visible window for them.

@@ -93,3 +93,9 @@ Expected:
 Expected:
 - `db-a` is still gone from the Recent databases list.
 - `db-b` is still in the Recent databases list.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Step 2's remove icon is `remove-recent-database-button-<n>`, where `<n>` is the row's place in the Recent databases list counting from 0. Read `recent-database-name-<n>` with `get-value` to find the row for `db-a` before clicking.
+- To restart, send `quit`, check the instance has exited, and start it again with the same exports and test-mode variables.

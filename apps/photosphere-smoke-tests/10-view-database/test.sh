@@ -28,10 +28,10 @@ case "$PLATFORM" in
         ;;
     *)
         log_info "Pre-creating api-key secret with the CLI (using the same vault as the app)..."
-        if ! (cd "$REPO_DIR/apps/cli" && PHOTOSPHERE_CONFIG_DIR="$TMP_DIR/config" \
+        if ! (PHOTOSPHERE_CONFIG_DIR="$TMP_DIR/config" \
             PHOTOSPHERE_VAULT_DIR="$TMP_DIR/vault" \
             PHOTOSPHERE_VAULT_TYPE=plaintext \
-            bun run start -- secrets add --yes --type api-key --name smoke-geocoding --value "fake-geocoding-key"); then
+            "$PHOTOSPHERE_ZIG_CLI" secrets add --yes --type api-key --name smoke-geocoding --value "fake-geocoding-key"); then
             log_error "Adding the api-key secret with the CLI failed"
             exit 1
         fi

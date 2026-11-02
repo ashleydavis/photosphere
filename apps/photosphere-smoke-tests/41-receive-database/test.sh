@@ -26,8 +26,8 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 # config isolated under this test's tmp dir so the developer's real keychain and database list are
 # untouched. The secret must exist before `dbs add --geocoding-key` will accept it.
 log_info "Seeding the host CLI with the database to send..."
-run_cli "$TMP_DIR" secrets add --yes --name received-geo-key --type api-key --value received-geo-value >/dev/null 2>&1
-run_cli "$TMP_DIR" dbs add --yes --name received-db --description "Received over LAN" --path "$TMP_DIR/received-db" --geocoding-key received-geo-key >/dev/null 2>&1
+run_zig_cli "$TMP_DIR" secrets add --yes --name received-geo-key --type api-key --value received-geo-value >/dev/null 2>&1
+run_zig_cli "$TMP_DIR" dbs add --yes --name received-db --description "Received over LAN" --path "$TMP_DIR/received-db" --geocoding-key received-geo-key >/dev/null 2>&1
 
 # Wipe everything the app has stored on the device (its storage sandbox, the WebView's
 # localStorage and the keychain) so this test starts from a known state. Done before launch,

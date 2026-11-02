@@ -15,7 +15,7 @@ const otherTypes = @import("types/other.zig").types;
 // is used by two threads. It is a thread-local rather than an argument because mime() is called as the TypeScript module's default
 // export is, without one.
 //
-threadlocal var mime_allocator: ziggy.thread_allocator.ThreadAllocator = .init;
+threadlocal var mime_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
 
 //
 // The default instance of the calling thread (TypeScript: `new Mime(standardTypes, otherTypes)._freeze()`, built when the module loads;

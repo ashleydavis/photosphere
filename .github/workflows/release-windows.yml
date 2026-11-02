@@ -367,10 +367,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          # The TypeScript CLI the smoke suite compares psi with is built in cli-smoke-tests. It takes this stamped config, so both
-          # report the same version: stamping again there would put a different nightly time in it, and scenario 95 (news) failed
-          # comparing "vdev-nightly.<time>" with the unstamped "vdev".
-          cp packages/config/src/index.ts out/build-config.ts
           chmod +x apps/cli-zig/bin/x64/win/psi.exe
           cp apps/cli-zig/bin/x64/win/psi.exe out/photosphere-cli-zig-windows-x64
           ls -la out
@@ -470,11 +466,6 @@ jobs:
           enableCrossOsArchive: true
           fail-on-cache-miss: true
 
-      # The stamped config cli-build kept, so the TypeScript CLI this job builds reports the version psi does.
-      - name: Put back the build config cli-build stamped
-        shell: bash
-        run: cp out/build-config.ts packages/config/src/index.ts
-
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
         run: |
@@ -487,14 +478,14 @@ jobs:
         # 101 tests, and the Windows runner is the slowest: it reached test 100 in 14 minutes, so the
         # old 14-minute limit killed the step with every test passing.
         timeout-minutes: 30
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         # The suites run the psi cli-build built, put in place above, rather than building another.
         # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh): Git Bash rewrites a POSIX
         # path only where it is an argument, not where a test writes it into a file or hands it to Bun.
-        run: PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../zig-out/bin/psi.exe")" ./smoke-tests-zig.sh --binary
+        run: PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../zig-out/bin/psi.exe")" ./smoke-tests-zig.sh
       - name: Test the Zig version command
-        working-directory: ./apps/cli
+        working-directory: ./apps/cli-zig
         shell: bash
         run: |
           echo "Testing version command after building..."

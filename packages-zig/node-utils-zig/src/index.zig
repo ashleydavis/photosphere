@@ -1,9 +1,9 @@
 //
-// The helpers that Ziggy's task queue is written with are taken from Ziggy's core, so that Photosphere and the task queue share one
+// The helpers that Ziggy is written with are taken from Ziggy's utils, so that Photosphere and Ziggy share one
 // copy of their types and of the state they keep (the log, the last error, the process environment and the console). The files of
 // those helpers here are not used.
 //
-const ziggy_utils = @import("ziggy").task_queue.utils;
+const ziggy_utils = @import("ziggy").utils;
 
 pub const exit_codes = @import("lib/exit-codes.zig");
 pub const termination = @import("lib/termination.zig");
