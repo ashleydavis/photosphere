@@ -424,20 +424,21 @@ const IThirdPartyLibraries = struct {
 
 //
 // Finds what the build in third-party/<name> installed for the target, under its zig-out/<arch>-<os>-<abi>. Runs that build first
-// when it has not been built for the target, so a new checkout needs no separate step, and costs one directory check when it has.
+// when its build-complete file is missing, so a new checkout needs no separate step and a build that was killed part way through
+// is finished, and costs one file check when it is there. That build installs build-complete after everything else.
 //
 fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !IThirdPartyLibraries {
     const directory = b.fmt("third-party/{s}/zig-out/{s}-{s}-{s}", .{ name, @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
     const io = b.graph.io;
-    var library_directory = b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true }) catch |err| switch (err) {
-        error.FileNotFound => library_directory: {
+    b.build_root.handle.access(io, b.fmt("{s}/build-complete", .{directory}), .{}) catch |err| switch (err) {
+        error.FileNotFound => {
             try buildThirdPartyLibraries(b, target, name);
-            break :library_directory try b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true });
         },
         else => {
             return err;
         },
     };
+    var library_directory = try b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true });
     defer library_directory.close(io);
     var archives: std.ArrayList(std.Build.LazyPath) = .empty;
     var iterator = library_directory.iterate();
@@ -474,7 +475,7 @@ fn buildThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, nam
             try std.Io.Dir.cwd().realPathFileAlloc(io, libc_file, b.allocator),
         });
     }
-    std.debug.print("third-party/{s} is not built for this target. Building it: {s}\n", .{ name, try std.mem.join(b.allocator, " ", argv.items) });
+    std.debug.print("third-party/{s} has not finished building for this target. Building it: {s}\n", .{ name, try std.mem.join(b.allocator, " ", argv.items) });
     var child = try std.process.spawn(io, .{
         .argv = argv.items,
         .cwd = .{
