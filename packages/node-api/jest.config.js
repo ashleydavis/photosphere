@@ -6,8 +6,8 @@ export default {
     // varies per run. Raised package-wide rather than per test.
     testTimeout: 30000,
     modulePathIgnorePatterns: [
-        "dist",
-        "build",
+        "/dist/",
+        "/build/",
     ],
     moduleNameMapper: {
         '^mime$': '<rootDir>/__mocks__/mime.js',

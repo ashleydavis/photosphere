@@ -1,8 +1,8 @@
 export default {
     preset: 'ts-jest',
     modulePathIgnorePatterns: [
-        "dist",
-        "build",
+        "/dist/",
+        "/build/",
     ],
     // node-utils reaches serialize-error, which ships as ESM only. The ts-jest preset transforms
     // TypeScript alone and jest leaves node_modules alone by default, so that package arrives as

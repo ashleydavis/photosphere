@@ -6,8 +6,8 @@ export default {
     //
     // testEnvironment: 'jsdom',
     modulePathIgnorePatterns: [
-        "dist",
-        "build",
+        "/dist/",
+        "/build/",
         "src/test/e2e",
     ],
 };

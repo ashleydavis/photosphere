@@ -2,8 +2,8 @@ export default {
     preset: 'ts-jest',
     testEnvironment: 'node',
     modulePathIgnorePatterns: [
-        "dist",
-        "build",
+        "/dist/",
+        "/build/",
     ],
     moduleNameMapper: {
         '^task-queue$': '<rootDir>/../../packages/task-queue/src/index.ts',
