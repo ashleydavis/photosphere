@@ -106,7 +106,7 @@ export function normalizeRoute(page: string): string {
 
 //
 // Works out what a menu action asks for. An action the page has no meaning of its own for is passed on as a platform event, which
-// is how new-database, add-database, open-database, import-assets, open-configuration, report-bug and the rest reach the app. An
+// is how new-database, add-database, import-assets, open-configuration, report-bug and the rest reach the app. An
 // action that claims a meaning and is malformed (a navigate with no route, a theme that does not exist) throws.
 //
 export function interpretMenuAction(action: string): MenuEffect {

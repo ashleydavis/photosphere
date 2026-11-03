@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
@@ -653,6 +653,15 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         return resolveDroppedFilePath(file as IDroppedFile, testMode, platform.platformKind === "desktop", droppedFile => ziggy.getPathForFile(droppedFile));
     }, [ziggy, platform.platformKind]);
 
+    const registerAction = useCallback((name: string, handler: () => void): Unsubscribe => {
+        ziggy.registerAction(name, handler);
+        return () => ziggy.removeAction(name);
+    }, [ziggy]);
+
+    const runAction = useCallback((name: string): Promise<void> => {
+        return ziggy.runAction(name);
+    }, [ziggy]);
+
     const checkTools = useCallback(async (): Promise<IToolsStatus> => {
         if (platform.platformKind !== "desktop") {
             // ImageMagick and ffmpeg are bundled inside the phone app, so they are available.
@@ -983,6 +992,8 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         openFolder,
         onPlatformEvent,
         getPathForFile,
+        registerAction,
+        runAction,
         supportsDragAndDropImport: platform.platformKind === "desktop",
         checkTools,
         onTaskMessage,

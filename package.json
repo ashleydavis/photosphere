@@ -100,7 +100,7 @@
     "perf": "bun --filter '*' perf"
   },
   "devDependencies": {
-    "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.22"
+    "ziggy-remote-control-server": "git+https://github.com/ashleydavis/ziggy.git#v0.0.23"
   },
   "workspaces": [
     "apps/*",

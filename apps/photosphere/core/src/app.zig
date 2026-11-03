@@ -126,6 +126,7 @@ pub const app = withNodeApiTasks(ziggy.core.App(.{
         },
     },
     .menu = core.menu.menu,
+    .actions = core.actions.actions,
     .ui_files = &page.files,
     .ui_query = core.page_query.pageQuery,
     .describe_error = core.describe_error.describeError,

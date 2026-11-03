@@ -1,4 +1,4 @@
-import type { IAddTask, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
+import type { IActionHandler, IActionInfo, IAddTask, ICoreErrorEvent, IJsonObject, IJsonValue, IMessageCallback, IPlatformInfo, ITaskCompletedEvent, ITaskEvent, ITestCommandEvent, IToolOutput, IZiggyBridge, LogLevel } from "ziggy";
 
 //
 // A message the page sent with send or invoke, or one of Ziggy's own calls that sends a message.
@@ -31,6 +31,12 @@ export class FakeZiggy implements IZiggyBridge {
 
     // The callbacks registered for each of Ziggy's own events, and for the app's own events under "event".
     private listeners: Map<string, IMessageCallback<any>[]> = new Map();
+
+    // The actions listActions resolves with, set by the test.
+    actionList: IActionInfo[] = [];
+
+    // The handler registered for each action, by its name.
+    private actionHandlers: Map<string, IActionHandler> = new Map();
 
     invoke<TResponse>(name: string, data: IJsonValue): Promise<TResponse> {
         this.invoked.push({
@@ -147,6 +153,30 @@ export class FakeZiggy implements IZiggyBridge {
 
     getPathForFile(_file: File): string | undefined {
         return undefined;
+    }
+
+    registerAction(name: string, handler: IActionHandler): void {
+        if (this.actionHandlers.has(name)) {
+            throw new Error(`The action ${name} already has a handler registered.`);
+        }
+        this.actionHandlers.set(name, handler);
+    }
+
+    removeAction(name: string): void {
+        this.actionHandlers.delete(name);
+    }
+
+    // Runs the handler registered for the action, as the core's action event does, and throws when there is none.
+    async runAction(name: string): Promise<void> {
+        const handler = this.actionHandlers.get(name);
+        if (handler === undefined) {
+            throw new Error(`The action ${name} has no handler registered.`);
+        }
+        await handler();
+    }
+
+    listActions(): Promise<IActionInfo[]> {
+        return Promise.resolve(this.actionList);
     }
 
     // Plays one of Ziggy's own events from the core to the callbacks registered for it, or with the name "event", an event of the app's own.

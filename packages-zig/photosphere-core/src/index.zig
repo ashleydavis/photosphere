@@ -17,6 +17,7 @@ pub const main_process = @import("lib/main-process.zig");
 pub const main_state = @import("lib/main-state.zig");
 pub const mcp_server = @import("lib/mcp-server.zig");
 pub const menu = @import("lib/menu.zig");
+pub const actions = @import("lib/actions.zig");
 pub const mobile_planning = @import("lib/mobile-planning.zig");
 pub const mobile_requests = @import("lib/mobile-requests.zig");
 pub const page_query = @import("lib/page-query.zig");

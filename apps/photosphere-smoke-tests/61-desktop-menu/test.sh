@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# A desktop menu action reaches the page: a menu action that navigates changes the route the page shows.
+# A desktop menu action reaches the page: a menu action that navigates changes the route the page shows, and the File menu's Open
+# Database item, which runs the Ziggy action open-database, opens the Open Database dialog through the handler the page registered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -23,6 +24,11 @@ wait_for_ready "$APP_PORT"
 send_command "$APP_PORT" menu '{"action":"navigate:/about"}' || exit 1
 wait_for_value "$APP_PORT" "about-version" "Version" || exit 1
 log_success "A menu action navigated the page to the about page"
+
+# The Open Database item runs the Ziggy action open-database, whose handler opens the dialog.
+send_command "$APP_PORT" menu '{"action":"open-database"}' || exit 1
+wait_for_log "$TMP_DIR" "Open database dialog opened" || exit 1
+log_success "The Open Database menu item opened the Open Database dialog"
 
 check_no_errors "$TMP_DIR" || exit 1
 

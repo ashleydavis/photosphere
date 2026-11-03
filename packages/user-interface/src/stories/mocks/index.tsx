@@ -233,6 +233,11 @@ export function mockPlatform(): IPlatformContext {
         getNetworkStatus: async () => ({ connected: true, connectionType: "unknown" }),
         onNetworkStatusChange: () => noUnsubscribe,
         setSyncAllowed: () => {},
+        // Stories register action handlers on mount, so registering succeeds and does nothing.
+        registerAction: () => noUnsubscribe,
+        runAction: () => {
+            throw new Error("The stories browser runs no Ziggy actions.");
+        },
     };
 }
 

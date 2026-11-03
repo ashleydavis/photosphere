@@ -179,7 +179,10 @@ const IStandIns = struct {
 // The tests read their fixtures with paths relative to this directory, which the test programs run in.
 //
 pub fn build(b: *std.Build) !void {
-    const target = b.standardTargetOptions(.{});
+    // The baseline CPU of the machine's architecture, never the building machine's own CPU: a build made for that CPU crashes with
+    // "Illegal instruction" on a machine without it. A build for another target, given with -Dtarget, already gets that target's
+    // baseline CPU.
+    const target = b.standardTargetOptions(.{ .default_target = .{ .cpu_model = .baseline } });
     // Whether the Windows native apps are compiled without linking WebView2's loader, to check them on a machine that cannot link.
     const compile_only = b.option(bool, "compile-only", "Compile the Windows shell without linking the WebView2 loader, to check it on a machine that cannot link") orelse false;
     // Whether the desktop executables leave out their debug information. Only the release packages do: a dev or test build keeps it, so

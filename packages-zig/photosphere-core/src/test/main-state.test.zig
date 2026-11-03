@@ -79,6 +79,7 @@ const CountedServices = struct {
         .holdKeepAlive = holdKeepAlive,
         .quit = quit,
         .menuAction = menuAction,
+        .runAction = runAction,
         .dataDir = dataDir,
         .isPhone = isPhone,
         .nativeCallbacks = nativeCallbacks,
@@ -123,6 +124,10 @@ const CountedServices = struct {
 
     fn menuAction(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) void {
         unexpected("menuAction");
+    }
+
+    fn runAction(_: *anyopaque, _: std.Io, _: std.mem.Allocator, _: []const u8) anyerror!void {
+        unexpected("runAction");
     }
 
     fn dataDir(_: *anyopaque) []const u8 {

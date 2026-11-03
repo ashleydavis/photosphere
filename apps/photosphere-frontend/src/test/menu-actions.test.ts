@@ -43,7 +43,7 @@ describe('interpretMenuAction', () => {
     });
 
     test('every other action is passed on as a platform event', () => {
-        for (const action of ['new-database', 'add-database', 'open-database', 'import-assets', 'open-configuration', 'report-bug']) {
+        for (const action of ['new-database', 'add-database', 'import-assets', 'open-configuration', 'report-bug']) {
             expect(interpretMenuAction(action)).toEqual({ kind: 'platform-event', action });
         }
     });

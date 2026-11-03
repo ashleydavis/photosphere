@@ -67,18 +67,13 @@ export interface ILeftSidebarProps {
     // Opens the add database modal.
     //
     onAddDatabase: () => void;
-
-    //
-    // Opens the open database modal.
-    //
-    onOpenDatabase: () => void;
 }
 
 
 //
 // Renders the left sidebar for the app.
 //
-export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase, onOpenDatabase }: ILeftSidebarProps) {
+export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase }: ILeftSidebarProps) {
     const { setOpenSearch } = useSearch();
     const { developerMode } = useDeveloper();
     const { openDatabase, databasePath, isOpening } = useAssetDatabase();
@@ -165,7 +160,8 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         data-id="sidebar-open-database"
                         onClick={() => {
                             setSidebarOpen(false);
-                            onOpenDatabase();
+                            platform.runAction("open-database")
+                                .catch(err => log.exception('Failed to open the Open Database dialog:', err as Error));
                         }}
                         >
                         <ListItemButton>

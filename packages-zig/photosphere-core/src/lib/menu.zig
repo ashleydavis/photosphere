@@ -4,14 +4,16 @@
 //
 // Each item says what it runs. A `.standard` item is an action the native app does itself: quit, close-window, reload, toggle-devtools,
 // toggle-fullscreen, zoom-in, zoom-out, zoom-reset, undo, redo, cut, copy, paste and select-all. Every other item is Photosphere's and
-// runs `.ui`: the core sends the page the app event {"type": "menu", "item": "<name>"}. The page reads the item's `.name` like this:
+// runs `.ui`, except Open Database, which runs the Ziggy action open-database (see actions.zig), whose handler `main.tsx`
+// registers. For a `.ui` item the core sends the page the app event {"type": "menu", "item": "<name>"}. The page reads the item's
+// `.name` like this:
 //
 //  - `navigate:<route>` goes to the page at the route.
 //  - `about` goes to the About page. The Help menu's About item has this name because two items cannot share `navigate:/about`.
 //  - `theme:<light|dark|system>` saves the theme and tells the page.
 //  - `open-log-directory` shows the folder the log files are in.
 //  - `help` opens the wiki in the system browser.
-//  - Anything else (new-database, add-database, open-database, import-assets, close-database, open-configuration and report-bug) is
+//  - Anything else (new-database, add-database, import-assets, close-database, open-configuration and report-bug) is
 //    the platform event of that name.
 //
 // What Ziggy's menus force:
@@ -25,7 +27,6 @@
 
 const ziggy = @import("ziggy");
 
-//
 // The menu the Photosphere App passes to ziggy.core.App as `.menu`.
 //
 pub const menu: []const ziggy.menu.Menu = &.{
@@ -35,7 +36,7 @@ pub const menu: []const ziggy.menu.Menu = &.{
             .{
                 .label = "New Database...",
                 .name = "new-database",
-                .accelerator = "CmdOrCtrl+N",
+                .shortcut = "CmdOrCtrl+N",
                 .run = .ui,
             },
             .{
@@ -44,16 +45,15 @@ pub const menu: []const ziggy.menu.Menu = &.{
                 .run = .ui,
             },
             .{
-                .label = "Open Database...",
-                .name = "open-database",
-                .accelerator = "CmdOrCtrl+O",
-                .run = .ui,
+                .run = .{
+                    .action = "open-database",
+                },
             },
             ziggy.menu.separator,
             .{
                 .label = "Import Assets...",
                 .name = "import-assets",
-                .accelerator = "CmdOrCtrl+I",
+                .shortcut = "CmdOrCtrl+I",
                 .run = .ui,
             },
             ziggy.menu.separator,
@@ -65,14 +65,14 @@ pub const menu: []const ziggy.menu.Menu = &.{
             ziggy.menu.separator,
             .{
                 .label = "Close Window",
-                .accelerator = "CmdOrCtrl+W",
+                .shortcut = "CmdOrCtrl+W",
                 .run = .{
                     .standard = .@"close-window",
                 },
             },
             .{
                 .label = "Exit",
-                .accelerator = "CmdOrCtrl+Q",
+                .shortcut = "CmdOrCtrl+Q",
                 .run = .{
                     .standard = .quit,
                 },
@@ -84,14 +84,14 @@ pub const menu: []const ziggy.menu.Menu = &.{
         .items = &.{
             .{
                 .label = "Undo",
-                .accelerator = "CmdOrCtrl+Z",
+                .shortcut = "CmdOrCtrl+Z",
                 .run = .{
                     .standard = .undo,
                 },
             },
             .{
                 .label = "Redo",
-                .accelerator = "CmdOrCtrl+Shift+Z",
+                .shortcut = "CmdOrCtrl+Shift+Z",
                 .run = .{
                     .standard = .redo,
                 },
@@ -99,28 +99,28 @@ pub const menu: []const ziggy.menu.Menu = &.{
             ziggy.menu.separator,
             .{
                 .label = "Cut",
-                .accelerator = "CmdOrCtrl+X",
+                .shortcut = "CmdOrCtrl+X",
                 .run = .{
                     .standard = .cut,
                 },
             },
             .{
                 .label = "Copy",
-                .accelerator = "CmdOrCtrl+C",
+                .shortcut = "CmdOrCtrl+C",
                 .run = .{
                     .standard = .copy,
                 },
             },
             .{
                 .label = "Paste",
-                .accelerator = "CmdOrCtrl+V",
+                .shortcut = "CmdOrCtrl+V",
                 .run = .{
                     .standard = .paste,
                 },
             },
             .{
                 .label = "Select All",
-                .accelerator = "CmdOrCtrl+A",
+                .shortcut = "CmdOrCtrl+A",
                 .run = .{
                     .standard = .@"select-all",
                 },
@@ -163,21 +163,21 @@ pub const menu: []const ziggy.menu.Menu = &.{
             ziggy.menu.separator,
             .{
                 .label = "Actual Size",
-                .accelerator = "CmdOrCtrl+0",
+                .shortcut = "CmdOrCtrl+0",
                 .run = .{
                     .standard = .@"zoom-reset",
                 },
             },
             .{
                 .label = "Zoom In",
-                .accelerator = "CmdOrCtrl+Plus",
+                .shortcut = "CmdOrCtrl+Plus",
                 .run = .{
                     .standard = .@"zoom-in",
                 },
             },
             .{
                 .label = "Zoom Out",
-                .accelerator = "CmdOrCtrl+Minus",
+                .shortcut = "CmdOrCtrl+Minus",
                 .run = .{
                     .standard = .@"zoom-out",
                 },
@@ -185,7 +185,7 @@ pub const menu: []const ziggy.menu.Menu = &.{
             ziggy.menu.separator,
             .{
                 .label = "Toggle Fullscreen",
-                .accelerator = "F11",
+                .shortcut = "F11",
                 .run = .{
                     .standard = .@"toggle-fullscreen",
                 },
@@ -245,14 +245,14 @@ pub const menu: []const ziggy.menu.Menu = &.{
             ziggy.menu.separator,
             .{
                 .label = "Reload",
-                .accelerator = "CmdOrCtrl+R",
+                .shortcut = "CmdOrCtrl+R",
                 .run = .{
                     .standard = .reload,
                 },
             },
             .{
                 .label = "Toggle Developer Tools",
-                .accelerator = "CmdOrCtrl+Shift+I",
+                .shortcut = "CmdOrCtrl+Shift+I",
                 .run = .{
                     .standard = .@"toggle-devtools",
                 },

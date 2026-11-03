@@ -225,6 +225,13 @@ function __Main({ initialTheme }: IMainProps) {
     }, []);
 
     //
+    // Opens the Open Database dialog when the Ziggy action open-database runs, from the File menu, its shortcut or the sidebar's item.
+    //
+    useEffect(() => {
+        return platform.registerAction("open-database", () => setOpenDatabaseModalOpen(true));
+    }, [platform]);
+
+    //
     // Listen to the host: menu actions it dispatches by name, and messages from the tasks it runs.
     //
     // A task message is how a task reaches the interface on every platform, the Electron main process
@@ -259,10 +266,6 @@ function __Main({ initialTheme }: IMainProps) {
 
                 case 'add-database':
                     setAddDatabaseModalOpen(true);
-                    break;
-
-                case 'open-database':
-                    setOpenDatabaseModalOpen(true);
                     break;
 
                 case 'import-assets':
@@ -348,7 +351,6 @@ function __Main({ initialTheme }: IMainProps) {
                     onOpenConfiguration={() => setConfigurationOpen(true)}
                     onNewDatabase={() => setCreateDatabaseModalOpen(true)}
                     onAddDatabase={() => setAddDatabaseModalOpen(true)}
-                    onOpenDatabase={() => setOpenDatabaseModalOpen(true)}
                     />
             </Drawer>
 

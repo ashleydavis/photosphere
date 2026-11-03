@@ -679,6 +679,17 @@ export interface IPlatformContext {
     // SyncContext from the user toggles and the current network status.
     //
     setSyncAllowed: (allowed: boolean) => void;
+
+    //
+    // Registers the frontend handler of one of the app's Ziggy actions, which runs whatever runs the action: its menu item, its
+    // shortcut or runAction. Returns the call that removes it, so a component that registers on mount removes it on unmount.
+    //
+    registerAction: (name: string, handler: () => void) => Unsubscribe;
+
+    //
+    // Runs one of the app's Ziggy actions by its name, through the handler registered for it.
+    //
+    runAction: (name: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);
