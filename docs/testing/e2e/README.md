@@ -29,6 +29,8 @@ Each test is a markdown file in three parts:
 
 A mobile test starts by wiping the app on the emulator or simulator with `bun run android:reset` or `bun run ios:reset`. `bun run android:50` and `bun run ios:50` (or `:1`, `:0`) start the app with a test database open, and `bun run android:add-fixtures` and `bun run ios:add-fixtures` put photos and videos in the device's photo library. A test that needs S3 gets a fresh bucket on a local MinIO server: see [MinIO for the manual tests](minio.md).
 
+`bun run app:log` prints the app's log on any platform: see [app-log](../../../apps/photosphere/scripts/app-log.md).
+
 ### The checklist
 
 [CHECKLIST.md](CHECKLIST.md) lists every test, grouped by section (CLI, Desktop, Mobile) and group. Each test is marked:

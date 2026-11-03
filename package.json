@@ -54,6 +54,7 @@
     "ios:1": "bun run --filter=ziggy ios 1",
     "ios:0": "bun run --filter=ziggy ios 0",
     "android:reset": "bun run --filter=ziggy android:reset",
+    "app:log": "bash ./apps/photosphere/scripts/app-log.sh",
     "ios:reset": "bun run --filter=ziggy ios:reset",
     "android:add-fixtures": "bun run --filter=ziggy android:add-fixtures",
     "ios:add-fixtures": "bun run --filter=ziggy ios:add-fixtures",

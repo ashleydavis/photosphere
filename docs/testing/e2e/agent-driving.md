@@ -6,6 +6,10 @@ The rules in the [README](README.md) still apply: every step is run, in order. D
 
 Screenshots go in the project's `tmp/walkthrough/` folder, which is not committed.
 
+## Reading the app log
+
+`bun run app:log -- --platform <p> [--target <t>] [--errors]` prints the app's main log, or its errors log, on every platform. To read only what a step added, take the file's path with `--path` and its line count before the step, then print from the next line with `--from-line <count + 1>` after it. A different path after the step means the app restarted, so read the whole new file. See [app-log](../../../apps/photosphere/scripts/app-log.md).
+
 ## Android (emulator or device)
 
 adb is at `$ANDROID_HOME/platform-tools/adb`. Find the device's serial with `adb devices` and pass it to every command with `-s <serial>`, since more than one emulator may be running.
