@@ -214,6 +214,7 @@ All desktop results below come from a test-hooks build of the app driven through
 #### auto-import-existing-remote
 
 - Android: fails at step 3. Starting the partial replication to `my-photos` shows "Replication failed: ReadOnlyFileSystem", raised from `replicateDatabase`. Steps 1 and 2 passed. The button is labelled **Start replication**, not **Replicate**.
+- Android rerun: fails at step 3 again, the same way. The log has two `[WARN] [Worker 3] An operation failed. Retrying after: ReadOnlyFileSystem` lines, then `[ERROR] [Frontend] Replication error: Error: ReadOnlyFileSystem at replicateDatabase`. Prep and steps 1 and 2 passed. The first attempt at this rerun was lost part way through, when the pool monitor restarted the emulator with its data wiped.
 
 #### auto-import-no-permission
 

@@ -29,7 +29,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 ## Deciding the result
 
 - A test passes when every step's result matches what the test file expects. Compare each step on its own.
-- **An unexpected error fails the test.** A new `[ERROR]` line in the app's errors log, or an error shown on screen, that the test's expectations do not name makes the step 🔴 and the test fails (`- [-]`). Copy the error into the note word for word. `[WARN]` lines are listed in the result but do not fail a step on their own. A subagent's report for a test that failed this way includes the error lines word for word.
+- **An unexpected error fails the test.** A new `[ERROR]` line in the app's errors log, or an error shown on screen, that the test's expectations do not name makes the step 🔴 and the test fails. As soon as it is seen, write a note under the test in `CHECKLIST-NOTES.md` naming the step and copying the error word for word, and mark the test `- [-]` in `CHECKLIST.md`. Do not wait for the end of the test. `[WARN]` lines are listed in the result but do not fail a step on their own. A subagent's report for a test that failed this way includes the error lines word for word.
 - A step that cannot be run fails the test. Mark it `- [-]` and say in the note which step could not be run and why.
 - When an expectation contradicts the fixture (the files it names are not the ones the fixture holds) or names a button, field or page the app does not have under any name, the test is wrong: fix the test file, keeping what it checks, record the fix in the notes, and run the test again from Prep.
 - Before calling a test failed, check that every prep command ran. If one did not, run the test again from Prep.

@@ -89,7 +89,7 @@ It looks at the pool every five seconds, so a crashed emulator is usually back o
 
 Each pass classifies every pool index and repairs at most one, by calling `pool-repair --index N`. It never repairs an emulator whose harness lock is held, and it watches every attached emulator while only ever repairing pool ones, so a hand-testing emulator appears in the table and is never touched. It never touches the bridge or the taps and never runs `sudo`; when the bridge is missing it says so and keeps watching, because the human putting it back is a normal thing to wait for.
 
-Two limits on it. After three failed repairs of one index in a row it leaves that index alone for ten minutes, writes the `pool-diagnose` report for it, and then gives it another three attempts; the wait doubles each round to an hour, and being repaired or being found healthy clears it. The wait is what stops a machine-level fault turning into an endless cold-boot loop that makes the machine worse, and the retry is what stops a loaded machine costing you the emulator for the rest of the day: on 2026-08-12 the monitor abandoned three of the five permanently, and every one of those repairs had failed with `did not reach the bridge within 420s`, which is what a cold boot does on a machine too busy to finish one inside the timeout. And a healthy emulator that has been up over 12 hours is recycled while nothing is using it, but only when every other index is healthy and its lock is free: the emulators that died had been up 23.5 hours holding 6.6 to 6.7GB each plus up to 2GB of swap.
+Two limits on it. After three failed repairs of one index in a row it leaves that index alone for ten minutes, writes the `pool-diagnose` report for it, and then gives it another three attempts; the wait doubles each round to an hour, and being repaired or being found healthy clears it. The wait is what stops a machine-level fault turning into an endless cold-boot loop that makes the machine worse, and the retry is what stops a loaded machine costing you the emulator for the rest of the day: on 2026-08-12 the monitor abandoned three of the five permanently, and every one of those repairs had failed with `did not reach the bridge within 420s`, which is what a cold boot does on a machine too busy to finish one inside the timeout. A healthy emulator is never restarted, however long it has been up.
 
 One repairing monitor runs per machine, held with `flock` on `/tmp/photosphere-emulator-pool-monitor.lock`. Watching takes no lock, so any number of people can have the display open.
 
@@ -115,6 +115,10 @@ Every emulator is started as a transient systemd user service inside a slice cal
 The limits live in `psphere-pool.slice`, next to `emulator.sh`, which is commented with the numbers and the reasoning. `emulator.sh` installs that file into your systemd user unit directory the first time it starts an emulator, and never overwrites it afterwards, so a copy you have tuned by hand is left alone; it prints a note when the installed copy and the repository copy differ. To adopt a changed copy, copy it over yourself and run `systemctl --user daemon-reload`.
 
 The limits are read when an emulator starts, so a change only reaches emulators started afterwards. Use `bun run emu:and:pool:restart` to apply one to the pool.
+
+### The shared netsimd
+
+Every emulator on the machine connects to one `netsimd`, the emulator's network simulator. An emulator that finds none running starts one as its own child, inside its own unit, so stopping that one emulator used to kill `netsimd` and abort every other emulator with it. `emulator.sh` now starts `netsimd` first, in a unit of its own called `psphere-netsimd` that is outside the slice and is logged to `/tmp/psphere-netsimd.log`, so no emulator owns it. A `netsimd` that an emulator already started is left where it is, so this takes effect at the first launch after the pool has been restarted.
 
 ### Disk, and what a restart resets
 

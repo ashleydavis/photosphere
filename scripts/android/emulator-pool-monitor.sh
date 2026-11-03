@@ -116,13 +116,6 @@ MONITOR_MAX_CONSECUTIVE_FAILURES="${MONITOR_MAX_CONSECUTIVE_FAILURES:-3}"
 MONITOR_BACKOFF_SECONDS="${MONITOR_BACKOFF_SECONDS:-600}"
 MONITOR_MAX_BACKOFF_SECONDS="${MONITOR_MAX_BACKOFF_SECONDS:-3600}"
 
-# How long a healthy pool emulator may stay up before it is recycled while nothing is using it.
-#
-# Twelve hours. The five emulators that died had been up 23.5 hours and were holding 6.6 to 6.7GB of
-# resident memory plus up to 2GB of swap each. Recycling one while it is idle costs a cold boot
-# nobody is waiting on; not recycling it costs the pool during a test run.
-MONITOR_MAX_UPTIME_SECONDS="${MONITOR_MAX_UPTIME_SECONDS:-43200}"
-
 # Where the one repairing monitor on this machine holds its lock.
 #
 # A fixed path, deliberately, and the rule in CLAUDE.md about fixed paths does not reach it: that
@@ -1062,7 +1055,6 @@ repair_pass() {
     local index serial unit uptime verdict repair reason
     local candidate="" candidate_serial="" candidate_reason=""
     local broken=0 unhealthy=0 active=0
-    local oldest_index="" oldest_serial="" oldest_uptime=0
 
     # A repair is already running. Nothing here could act on what it found anyway, since repairs are
     # one at a time, and the emulator being fixed would read as broken on every pass in the meantime.
@@ -1130,22 +1122,6 @@ repair_pass() {
         # last repair ended it or somebody fixed it by hand. The next trouble this index has gets a
         # full set of attempts rather than inheriting an hour-long wait from the last one.
         clear_repair_history "$index"
-
-        # A minute's margin before a later index displaces an earlier one as the oldest. Each index's
-        # reading is taken in turn and each takes a second or two, so a pool whose emulators all
-        # started together reports the last one checked as marginally the oldest; without the margin
-        # the recycling would always pick the highest index rather than the genuinely oldest.
-        case "$uptime" in
-            ''|*[!0-9]*)
-                ;;
-            *)
-                if [ "$uptime" -gt "$(( oldest_uptime + 60 ))" ]; then
-                    oldest_uptime="$uptime"
-                    oldest_index="$index"
-                    oldest_serial="$serial"
-                fi
-                ;;
-        esac
     done < <("$EMULATOR_SCRIPT" pool-check)
 
     # An emulator running means the last start worked, whenever it was, so the next outage gets its
@@ -1171,16 +1147,6 @@ repair_pass() {
     # that is not coming back and that nothing is waiting on: it can stop taking up a row.
     if [ "$broken" -eq 0 ] && [ "$unhealthy" -eq 0 ]; then
         forget_gone_emulators
-    fi
-
-    # Nothing is broken, so this is the moment to deal with age. The emulators that died had been up
-    # 23.5 hours holding 6.6 to 6.7GB each plus up to 2GB of swap, and a cold boot costs nothing when
-    # nothing is waiting on it. Only with every other index healthy, and only when no test is using
-    # it, so recycling can never be what takes the pool below what a run needs.
-    if [ "$broken" -eq 0 ] && [ "$unhealthy" -eq 0 ] && [ -n "$oldest_index" ] \
-        && [ "$oldest_uptime" -gt "$MONITOR_MAX_UPTIME_SECONDS" ]; then
-        repair_index "$oldest_index" "$oldest_serial" \
-            "it has been up $(( oldest_uptime / 3600 ))h, past the $(( MONITOR_MAX_UPTIME_SECONDS / 3600 ))h a pool emulator is recycled after, and every other index is healthy"
     fi
 }
 

@@ -4,7 +4,7 @@
 
 **Do not skip prep.** Every command in a test's Prep section is run, from every code block in it. A skipped prep command makes a test fail for no reason, so when a test fails, first check that every prep command ran.
 
-**An unexpected error fails the test.** Read the app's errors log (`bun run app:log -- --platform <p> --errors`) before and after every step. A new `[ERROR]` line, or an error shown on screen, that the test does not expect fails the test.
+**An unexpected error fails the test.** Read the app's errors log (`bun run app:log -- --platform <p> --errors`) before and after every step. A new `[ERROR]` line, or an error shown on screen, that the test does not expect fails the test. As soon as one is seen, note the error word for word in [CHECKLIST-NOTES.md](CHECKLIST-NOTES.md) and mark the test `- [-]`.
 
 Work through these manual tests and check them off as they pass.
 

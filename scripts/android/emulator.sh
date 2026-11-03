@@ -956,6 +956,59 @@ emulator_launch_argv() {
 }
 
 #
+# Starts netsimd, the network simulator every emulator on this machine shares, in a systemd user unit
+# of its own, unless that unit is already running.
+#
+# An emulator that finds no netsimd running starts one as its own child, so it lands in that
+# emulator's unit, and every emulator started after it connects to that same netsimd. Stopping the
+# first emulator's unit then kills the netsimd the others depend on, and they abort: on 2026-11-04,
+# stopping one pool emulator's unit SIGKILLed netsimd and the other four dumped core within five
+# seconds. Started here first, netsimd belongs to no emulator, and every emulator finds it through
+# the netsim.ini it writes. --no-shutdown stops it exiting when no emulator is connected, which would
+# hand it back to the next emulator to start.
+#
+# A netsimd already running outside this unit is one an emulator started, and is left alone: a
+# second netsimd would compete with it for the same netsim.ini. The unit is started once that one is
+# gone, at the next launch after the pool has been restarted.
+# Usage: ensure_netsimd_unit <emulator_binary_path>
+#
+ensure_netsimd_unit() {
+    local emulator="$1"
+    local unit="psphere-netsimd"
+
+    if systemctl --user is-active --quiet "$unit"; then
+        return 0
+    fi
+
+    if pgrep -x netsimd >/dev/null; then
+        echo "netsimd is already running inside an emulator's unit, so it is left there until the pool is restarted."
+        return 0
+    fi
+
+    # The emulator starts netsimd with the host's DNS servers, read from resolv.conf. This does the same.
+    local host_dns
+    host_dns="$(sed -n 's/^nameserver[[:space:]]\{1,\}\([^[:space:]]\{1,\}\).*/\1/p' /etc/resolv.conf | paste -sd, -)"
+    local dns_args=()
+    if [ -n "$host_dns" ]; then
+        dns_args+=(--host-dns="$host_dns")
+    fi
+
+    systemctl --user reset-failed "$unit" 2>/dev/null || true
+
+    # Outside the pool's slice, so the slice's memory limit and the wait for the pool's units to be
+    # released at pool-down never count it. TimeoutStopSec because with --no-shutdown it exits only on
+    # SIGKILL, and systemd would otherwise wait 90 seconds before sending one.
+    echo "Starting netsimd as $unit, so no emulator's unit owns it..."
+    systemd-run --user --unit="$unit" \
+        --description="Photosphere emulators: shared netsimd" \
+        -p Restart=on-failure \
+        -p TimeoutStopSec=5 \
+        -p StandardOutput="append:/tmp/psphere-netsimd.log" \
+        -p StandardError="append:/tmp/psphere-netsimd.log" \
+        "$(dirname "$emulator")/netsimd" ${dns_args[@]+"${dns_args[@]}"} --no-shutdown
+}
+
+#
 # Starts one writable emulator in the background on the given tap, so it lands on the bridge. Must
 # run as your user, not root: the emulator can only open a tap it owns. Nothing here is ever
 # -read-only, so every emulator keeps its own state.
@@ -997,6 +1050,7 @@ start_emulator_bg() {
     fi
 
     ensure_pool_slice
+    ensure_netsimd_unit "$emulator"
 
     # A transient unit starts from the user manager's environment rather than this shell's, so
     # anything the emulator needs that was exported from a shell profile has to be handed over
