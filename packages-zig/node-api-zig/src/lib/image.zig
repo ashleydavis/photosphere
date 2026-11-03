@@ -344,7 +344,7 @@ fn metadataFromExif(log: ILog, allocator: std.mem.Allocator, exif: exif_parser.E
     if (isTruthy(exif.tags.get("GPSLatitude")) and isTruthy(exif.tags.get("GPSLongitude"))) {
         coordinates = try convertExifCoordinates(exif.tags);
         if (!isLocationInRange(coordinates.?)) {
-            log.@"error"(try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: {s}, for asset {s}.", .{ try locationJson(allocator, coordinates.?), filePath }));
+            log.@"error"(try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: lat {d}, lng {d}, for asset {s}.", .{ coordinates.?.lat, coordinates.?.lng, filePath }));
             coordinates = null;
         }
     }
@@ -357,31 +357,6 @@ fn metadataFromExif(log: ILog, allocator: std.mem.Allocator, exif: exif_parser.E
         .photoDate = photoDate,
         .dimensions = dimensionsFromExif(exif),
     };
-}
-
-//
-// Formats a location like `JSON.stringify(coordinates)`.
-//
-pub fn locationJson(allocator: std.mem.Allocator, location: ILocation) ![]const u8 {
-    var output: std.Io.Writer.Allocating = .init(allocator);
-    try output.writer.writeAll("{\"lat\":");
-    try writeJsonNumber(&output.writer, location.lat);
-    try output.writer.writeAll(",\"lng\":");
-    try writeJsonNumber(&output.writer, location.lng);
-    try output.writer.writeAll("}");
-    return output.written();
-}
-
-//
-// Writes a number as JSON: null for NaN and the infinities.
-//
-fn writeJsonNumber(writer: *std.Io.Writer, number: f64) !void {
-    if (std.math.isFinite(number)) {
-        try serialization_zig.js_number.writeNumber(writer, number);
-    }
-    else {
-        try writer.writeAll("null");
-    }
 }
 
 //

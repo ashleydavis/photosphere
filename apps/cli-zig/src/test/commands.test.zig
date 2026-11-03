@@ -2580,10 +2580,14 @@ test "help prints the help of a command" {
 }
 
 //
-// A path as it appears inside a JSON string (a Windows path's backslashes are escaped).
+// A path as it appears inside a JSON string, without the quotes: every character JSON escapes is escaped (a Windows path's
+// backslashes among them). The text is allocated with the allocator.
 //
 fn jsonEscapedPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
-    return std.mem.replaceOwned(u8, allocator, path, "\\", "\\\\");
+    var output = std.Io.Writer.Allocating.init(allocator);
+    errdefer output.deinit();
+    try std.json.Stringify.encodeJsonStringChars(path, .{}, &output.writer);
+    return output.toOwnedSlice();
 }
 
 test "mcp answers an MCP session" {

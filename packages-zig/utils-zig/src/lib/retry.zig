@@ -37,12 +37,12 @@ pub fn retryOnce(io: std.Io, log: logging.ILog, operation: anytype, timeoutMS: u
 }
 
 //
-// Logs, to the log given, the error of a failed attempt as an indented JSON object holding its name and message (a Zig error has no stack to include).
+// Logs, to the log given, the name and message of the error of a failed attempt (a Zig error has no stack to include).
 //
 fn logVerboseError(log: logging.ILog, err: anyerror) void {
     var buffer: [16 * 1024]u8 = undefined;
     var fixed_writer = std.Io.Writer.fixed(&buffer);
-    fixed_writer.print("Error: {{\n  \"name\": {f},\n  \"message\": {f}\n}}", .{ std.json.fmt(errors.errorName(err), .{}), std.json.fmt(errors.errorMessage(err), .{}) }) catch {};
+    fixed_writer.print("{s}: {s}", .{ errors.errorName(err), errors.errorMessage(err) }) catch {};
     log.verbose(fixed_writer.buffered());
 }
 

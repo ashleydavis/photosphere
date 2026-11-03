@@ -23,6 +23,42 @@ const IStorage = storage_zig.storage.IStorage;
 const SESSION_ID = "test-session";
 
 //
+// A database op the page sends, with its inner op given as text.
+//
+const IOpJson = struct {
+    // The path of the database the op is for.
+    databaseId: []const u8,
+
+    // The collection the op is for.
+    collectionName: []const u8,
+
+    // The id of the record the op changes.
+    recordId: []const u8,
+
+    // The inner op, as JSON text.
+    op: utils.json.Raw,
+};
+
+//
+// The fields a set op writes in the test.
+//
+const IAssetFieldsJson = struct {
+    // The name of the original file.
+    origFileName: []const u8,
+};
+
+//
+// A set op: the fields to write into the record.
+//
+const ISetOpJson = struct {
+    // Always "set".
+    type: []const u8,
+
+    // The fields to write.
+    fields: IAssetFieldsJson,
+};
+
+//
 // A virtual-time io and a database to serve, with a core over them.
 //
 const CoreFixture = struct {
@@ -262,8 +298,20 @@ test "applyDatabaseOps delegates to the apply-database-ops library with context 
     try fixture.init(log, allocator, "core-apply");
     defer fixture.deinit(log);
     const io = fixture.virtual_time.io();
-    const databasePathJson = try utils.json.stringify(allocator, fixture.database.dir);
-    const opText = try std.fmt.allocPrint(allocator, "{{\"databaseId\":{s},\"collectionName\":\"metadata\",\"recordId\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"op\":{{\"type\":\"set\",\"fields\":{{\"origFileName\":\"x.jpg\"}}}}}}", .{databasePathJson});
+    const setOpText = try utils.json.stringify(allocator, ISetOpJson{
+        .type = "set",
+        .fields = .{
+            .origFileName = "x.jpg",
+        },
+    });
+    const opText = try utils.json.stringify(allocator, IOpJson{
+        .databaseId = fixture.database.dir,
+        .collectionName = "metadata",
+        .recordId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        .op = .{
+            .text = setOpText,
+        },
+    });
     const op = try api.database_op.databaseOpFromJson(try std.json.parseFromSliceLeaky(std.json.Value, allocator, opText, .{}));
 
     try fixture.core.assetServerCore().applyDatabaseOps(allocator, io, log, &.{op});

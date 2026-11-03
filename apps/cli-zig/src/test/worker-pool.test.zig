@@ -355,6 +355,41 @@ test "reports a failed task with the error name and message" {
     try std.testing.expectEqualStrings("UnknownTaskType", collector.lastErrorMessage);
 }
 
+//
+// Goal: the verbose log of a failed task gives the error's name and message.
+// Method: run a task that fails, with verbose logging on and the console captured, and look for the line in what was written to
+// stdout.
+//
+test "a failed task's error is logged when verbose logging is on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
+    var stdout_capture = std.Io.Writer.Allocating.init(allocator);
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
+    defer utils.console.setCapture(null, null);
+
+    const pool_allocator = std.testing.allocator;
+    var timer_list = TimerList.init();
+    var mediaTools = try media_tools.MediaTools.init();
+    defer mediaTools.deinit();
+    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    defer pool.deinit(std.testing.io, pool_allocator);
+    var collector = Collector.init(allocator);
+    _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
+    try addTask(pool, memory.log, pool_allocator, "fail", .null, "source", null);
+    try collector.waitForCompleted(memory.log, pool, pool_allocator, timer_list.interface(), 1);
+    try std.testing.expectEqual(@as(usize, 1), collector.failed);
+    const expected = " failed: Error: boom 42\n";
+    try std.testing.expect(std.mem.indexOf(u8, stdout_capture.written(), expected) != null);
+}
+
 test "forwards task messages to the message callbacks" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

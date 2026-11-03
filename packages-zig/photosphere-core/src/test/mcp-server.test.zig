@@ -180,10 +180,46 @@ fn waitForRequest(app: *TestApp, tool: []const u8) ![]u8 {
 }
 
 //
-// Answers a tool call the way the page does: a `mcp-tool-response` message holding the request id and the payload.
+// The data of a `mcp-tool-response` message: the request it answers and either the result or the error.
 //
-fn answerRequest(app: *TestApp, request_id: []const u8, payload_json: []const u8) !void {
-    const message = try std.fmt.allocPrint(std.testing.allocator, "{{\"kind\":\"app\",\"name\":\"mcp-tool-response\",\"data\":{{\"requestId\":\"{s}\",{s}}}}}", .{ request_id, payload_json });
+const IToolResponseData = struct {
+    // The id of the request being answered.
+    requestId: []const u8,
+
+    // The tool's result, left out when the tool failed.
+    result: ?[]const u8 = null,
+
+    // The tool's error message, left out when the tool succeeded.
+    @"error": ?[]const u8 = null,
+};
+
+//
+// A `mcp-tool-response` message as the page sends it.
+//
+const IToolResponseMessage = struct {
+    // Always "app".
+    kind: []const u8,
+
+    // Always "mcp-tool-response".
+    name: []const u8,
+
+    // The answer.
+    data: IToolResponseData,
+};
+
+//
+// Answers a tool call the way the page does: a `mcp-tool-response` message holding the request id and the result or the error.
+//
+fn answerRequest(app: *TestApp, request_id: []const u8, result: ?[]const u8, error_message: ?[]const u8) !void {
+    const message = try ziggy.json.stringify(std.testing.allocator, IToolResponseMessage{
+        .kind = "app",
+        .name = "mcp-tool-response",
+        .data = .{
+            .requestId = request_id,
+            .result = result,
+            .@"error" = error_message,
+        },
+    });
     defer std.testing.allocator.free(message);
     app.native_app.sendMessage(std.testing.allocator, message);
 }
@@ -198,7 +234,7 @@ test "a tool call is forwarded to the page and the page's answer is the result" 
     try call.start(port, "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"list_databases\",\"arguments\":{}}}");
     const request_id = try waitForRequest(&app, "list_databases");
     defer std.testing.allocator.free(request_id);
-    try answerRequest(&app, request_id, "\"result\":\"the-databases\"");
+    try answerRequest(&app, request_id, "the-databases", null);
     const answer = try call.finish();
     defer std.testing.allocator.free(answer);
 
@@ -218,7 +254,7 @@ test "the arguments the tool was called with, with the defaults filled in, are s
     const text = try app.native_app.messageAt(std.testing.io, std.testing.allocator, app.native_app.indexOfContaining(std.testing.io, std.testing.allocator, "\"type\":\"mcp-tool-request\"").?);
     defer std.testing.allocator.free(text);
     try std.testing.expect(std.mem.indexOf(u8, text, "\"tool\":\"list_media_files\",\"args\":{\"limit\":20,\"pageId\":\"page-2\"}") != null);
-    try answerRequest(&app, request_id, "\"result\":\"ok\"");
+    try answerRequest(&app, request_id, "ok", null);
     const answer = try call.finish();
     std.testing.allocator.free(answer);
 }
@@ -233,7 +269,7 @@ test "a failure of the page is the failure of the tool, with the page's reason a
     try call.start(port, "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"open_database\",\"arguments\":{\"path\":\"/missing\"}}}");
     const request_id = try waitForRequest(&app, "open_database");
     defer std.testing.allocator.free(request_id);
-    try answerRequest(&app, request_id, "\"error\":\"No database at that path\"");
+    try answerRequest(&app, request_id, null, "No database at that path");
     const answer = try call.finish();
     defer std.testing.allocator.free(answer);
 

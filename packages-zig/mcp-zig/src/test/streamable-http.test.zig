@@ -401,6 +401,31 @@ test "a POST of text that is not JSON is refused with an error page" {
     try std.testing.expect(std.mem.indexOf(u8, reply.body, "<pre>Unexpected token in JSON</pre>") != null);
 }
 
+//
+// The params of the over-limit ping: one string long enough to take the body over the limit.
+//
+const IOverLimitPingParams = struct {
+    // The string that makes the body too large.
+    x: []const u8,
+};
+
+//
+// A JSON-RPC ping whose body is over the limit of the transport.
+//
+const IOverLimitPing = struct {
+    // The JSON-RPC version, "2.0".
+    jsonrpc: []const u8,
+
+    // The id of the request.
+    id: i64,
+
+    // The method called, "ping".
+    method: []const u8,
+
+    // The params, which carry the oversized string.
+    params: IOverLimitPingParams,
+};
+
 test "a POST of a body over the limit is refused with 413" {
     var running: Running = undefined;
     try running.start();
@@ -410,7 +435,15 @@ test "a POST of a body over the limit is refused with 413" {
     const allocator = arena.allocator();
     const text = try allocator.alloc(u8, streamable_http.JSON_BODY_LIMIT + 1);
     @memset(text, 'a');
-    const payload = try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{{\"x\":\"{s}\"}}}}", .{text});
+    const request: IOverLimitPing = .{
+        .jsonrpc = "2.0",
+        .id = 1,
+        .method = "ping",
+        .params = .{
+            .x = text,
+        },
+    };
+    const payload = try ziggy.json.stringify(allocator, request);
 
     const reply = try running.post(allocator, payload);
 

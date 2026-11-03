@@ -2045,6 +2045,18 @@ test "copySync creates parent directories for the destination" {
 }
 
 //
+// The document a concurrent writer puts in the file in the updateJson tests: a count, and padding that makes each write a
+// different length.
+//
+const IExternalCountDocument = struct {
+    // The count the concurrent writer sets.
+    count: usize,
+
+    // A string of `x` characters, as long as the number of outside changes so far.
+    pad: []const u8,
+};
+
+//
 // A mutator for the updateJson tests: adds `amount` to the `count` of the current document, optionally
 // writing the file itself first (a concurrent writer) on the first call or on every call.
 //
@@ -2071,15 +2083,14 @@ const JsonCountMutator = struct {
         if (self.externalWriteFile) |externalPath| {
             if (!self.injectOnce or self.external == 0) {
                 self.external += 1;
-                var text: std.ArrayList(u8) = .empty;
-                try text.print(allocator, "{{\"count\":{d},\"pad\":\"", .{if (self.injectOnce) 99 else self.external});
-                var padIndex: usize = 0;
-                while (!self.injectOnce and padIndex < self.external) {
-                    try text.append(allocator, 'x');
-                    padIndex += 1;
-                }
-                try text.appendSlice(allocator, "\"}");
-                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text.items });
+                const pad = try allocator.alloc(u8, if (self.injectOnce) 0 else self.external);
+                @memset(pad, 'x');
+                const document: IExternalCountDocument = .{
+                    .count = if (self.injectOnce) 99 else self.external,
+                    .pad = pad,
+                };
+                const text = try utils.json.stringify(allocator, document);
+                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text });
             }
         }
         var object: std.json.ObjectMap = .empty;

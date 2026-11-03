@@ -647,12 +647,12 @@ test "should log the error of a failed attempt when verbose logging is enabled" 
     };
     defer verbose_log.messages.deinit();
     defer verbose_log.warnings.deinit();
-    var operation: MockOperation = .{ .failuresBeforeSuccess = 1, .failureMessage = "First \"failure\"" };
+    var operation: MockOperation = .{ .failuresBeforeSuccess = 1, .failureMessage = "First failure" };
 
     _ = try retry.retry(io, verbose_log.ilog(), &operation, 2, 1, 2, 30_000, null);
 
     try std.testing.expectEqualStrings(
-        "Error: {\n  \"name\": \"Error\",\n  \"message\": \"First \\\"failure\\\"\"\n}\n",
+        "Error: First failure\n",
         verbose_log.messages.written(),
     );
 }

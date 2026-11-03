@@ -7,11 +7,14 @@ const lan_share_types = @import("lan-share-types.zig");
 const lan_share_sender = @import("lan-share-sender.zig");
 const socket = @import("socket.zig");
 const https = @import("https.zig");
+const json = @import("ziggy").json;
 
 //
 // Names used from other files.
 //
 const IPairingCodeHashResponse = lan_share_types.IPairingCodeHashResponse;
+const IErrorResponse = lan_share_types.IErrorResponse;
+const ISuccessResponse = lan_share_types.ISuccessResponse;
 const generateKeyPairSync = encryption.node_crypto.generateKeyPairSync;
 const createSign = encryption.node_crypto.createSign;
 const sha256Hex = lan_share_sender.sha256Hex;
@@ -608,7 +611,7 @@ pub const LanShareReceiver = struct {
     fn handleRequest(self: *LanShareReceiver, log: ILog, request: *std.http.Server.Request) !bool {
         self.requestCount += 1;
         if (self.requestCount > MAX_REQUESTS) {
-            try respondJson(request, .too_many_requests, "{\"error\":\"Too many requests\"}");
+            try respondJson(request, .too_many_requests, comptime json.stringifyComptime(IErrorResponse{ .@"error" = "Too many requests" }));
             self.complete(null);
             return false;
         }
@@ -633,7 +636,7 @@ pub const LanShareReceiver = struct {
                 .duplicate_field_behavior = .use_last,
             });
             const shareRequest = parsed catch {
-                try respondJson(request, .bad_request, "{\"error\":\"Invalid JSON\"}");
+                try respondJson(request, .bad_request, comptime json.stringifyComptime(IErrorResponse{ .@"error" = "Invalid JSON" }));
                 return true;
             };
 
@@ -647,16 +650,16 @@ pub const LanShareReceiver = struct {
             // Any other value that is not an object has no codeHash.
             const codeHash: ?std.json.Value = if (shareRequest == .object) shareRequest.object.get("codeHash") else null;
             if (codeHash == null or codeHash.? != .string or !std.mem.eql(u8, codeHash.?.string, &self.codeHash)) {
-                try respondJson(request, .forbidden, "{\"error\":\"Invalid pairing code\"}");
+                try respondJson(request, .forbidden, comptime json.stringifyComptime(IErrorResponse{ .@"error" = "Invalid pairing code" }));
                 return true;
             }
 
-            try respondJson(request, .ok, "{\"success\":true}");
+            try respondJson(request, .ok, comptime json.stringifyComptime(ISuccessResponse{ .success = true }));
             self.complete(shareRequest.object.get("payload"));
             return true;
         }
 
-        try respondJson(request, .not_found, "{\"error\":\"Not found\"}");
+        try respondJson(request, .not_found, comptime json.stringifyComptime(IErrorResponse{ .@"error" = "Not found" }));
         return true;
     }
 

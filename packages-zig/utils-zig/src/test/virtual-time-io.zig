@@ -219,9 +219,21 @@ fn move(virtual_time: *VirtualTimeIo, nanoseconds: i64) void {
         return;
     };
     var buffer: [64]u8 = undefined;
-    const text = std.fmt.bufPrint(&buffer, "{{\"jumped_nanoseconds\":{d}}}", .{jumped}) catch unreachable;
-    queue.post(virtual_time.threaded.io(), 0, text) catch @panic("out of memory posting a move of the clock");
+    var fixed_writer = std.Io.Writer.fixed(&buffer);
+    const clock_move: IClockMove = .{
+        .jumped_nanoseconds = jumped,
+    };
+    std.json.Stringify.value(clock_move, .{}, &fixed_writer) catch unreachable;
+    queue.post(virtual_time.threaded.io(), 0, fixed_writer.buffered()) catch @panic("out of memory posting a move of the clock");
 }
+
+//
+// A move of the clock as it is posted to a test's queue.
+//
+const IClockMove = struct {
+    // The total the clock has moved so far, in nanoseconds.
+    jumped_nanoseconds: i64,
+};
 
 //
 // Sleeps: a short sleep moves the clock, a long one really sleeps for its length divided by the speed.

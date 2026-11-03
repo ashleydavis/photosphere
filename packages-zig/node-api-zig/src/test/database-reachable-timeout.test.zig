@@ -13,6 +13,23 @@ const media_file_database = node_api.media_file_database;
 const errors = utils.errors;
 
 //
+// The S3 credentials stored in the vault for the test's database.
+//
+const IS3CredentialsValue = struct {
+    // The S3 region.
+    region: []const u8,
+
+    // The access key id.
+    accessKeyId: []const u8,
+
+    // The secret access key.
+    secretAccessKey: []const u8,
+
+    // The URL of the test's server.
+    endpoint: []const u8,
+};
+
+//
 // The bound on finding out whether a database is reachable.
 //
 // What this protects is a user waiting on an answer. Nothing else bounds the read: the S3 client's own
@@ -219,11 +236,17 @@ test "checkDatabaseExists gives up when the storage never answers, rather than w
     };
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:bucket/unreachable\"\ns3_key = \"database-reachable-timeout-s3\"\n");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
+    const credentials: IS3CredentialsValue = .{
+        .region = "us-east-1",
+        .accessKeyId = "AKID",
+        .secretAccessKey = "SECRET",
+        .endpoint = try std.fmt.allocPrint(allocator, "http://127.0.0.1:{d}", .{server.port}),
+    };
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{
         .name = "database-reachable-timeout-s3",
         .type = "s3-credentials",
-        .value = try std.fmt.allocPrint(allocator, "{{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"endpoint\":\"http://127.0.0.1:{d}\"}}", .{server.port}),
+        .value = try utils.json.stringify(allocator, credentials),
     });
 
     const started = std.Io.Clock.awake.now(clientIo);
@@ -254,11 +277,17 @@ test "checkDatabaseExists answers normally when the storage does answer" {
     };
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), "[[databases]]\nname = \"db\"\ndescription = \"\"\npath = \"s3:bucket/reachable\"\ns3_key = \"database-reachable-answers-s3\"\n");
     try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", configDir);
+    const credentials: IS3CredentialsValue = .{
+        .region = "us-east-1",
+        .accessKeyId = "AKID",
+        .secretAccessKey = "SECRET",
+        .endpoint = try std.fmt.allocPrint(allocator, "http://127.0.0.1:{d}", .{server.port}),
+    };
     const vault = try vault_zig.get_vault.getVault("plaintext");
     try vault.set(allocator, io, .{
         .name = "database-reachable-answers-s3",
         .type = "s3-credentials",
-        .value = try std.fmt.allocPrint(allocator, "{{\"region\":\"us-east-1\",\"accessKeyId\":\"AKID\",\"secretAccessKey\":\"SECRET\",\"endpoint\":\"http://127.0.0.1:{d}\"}}", .{server.port}),
+        .value = try utils.json.stringify(allocator, credentials),
     });
 
     const exists = try media_file_database.checkDatabaseExists(allocator, io, log, "s3:bucket/reachable", null);

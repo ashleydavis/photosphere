@@ -6,13 +6,31 @@ const DEFAULT_DATABASE_FOLDER_NAME = auto_import_mobile.DEFAULT_DATABASE_FOLDER_
 const WHOLE_LIBRARY_SOURCES = auto_import_mobile.WHOLE_LIBRARY_SOURCES;
 const planMobileAutoImport = auto_import_mobile.planMobileAutoImport;
 const resolveAutoImportPauseMs = auto_import_mobile.resolveAutoImportPauseMs;
+const json = @import("ziggy").json;
+
+//
+// The automatic import settings as they are stored.
+//
+const IStoredAutoImportSettings = struct {
+    // True when automatic import is switched on.
+    enabled: bool,
+
+    // The list of sources, as the JSON text the test gives.
+    sources: json.Raw,
+};
 
 //
 // Settings with automatic import switched on (or off) and the sources the JSON text gives, as they would be stored.
 // (Zig: the settings are the JSON they were stored as.)
 //
 fn settingsWith(allocator: std.mem.Allocator, enabled: bool, sourcesJson: []const u8) !std.json.Value {
-    const text = try std.fmt.allocPrint(allocator, "{{\"enabled\":{s},\"sources\":{s}}}", .{ if (enabled) "true" else "false", sourcesJson });
+    const settings: IStoredAutoImportSettings = .{
+        .enabled = enabled,
+        .sources = .{
+            .text = sourcesJson,
+        },
+    };
+    const text = try json.stringify(allocator, settings);
     return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
 }
 

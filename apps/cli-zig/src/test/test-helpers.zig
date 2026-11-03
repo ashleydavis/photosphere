@@ -610,6 +610,14 @@ pub fn databasesToml(allocator: std.mem.Allocator, name: []const u8, description
 }
 
 //
+// What a blocking task posts to the test thread when it starts and when it ends.
+//
+const IBlockingTaskEvent = struct {
+    // "started" or "ended".
+    type: []const u8,
+};
+
+//
 // The queues the blocking tasks of a test and the test's own thread talk through: the only thing the worker threads and the test
 // thread both touch. A blocking task posts "started" when it starts and "ended" when it returns to `events`, which the test thread
 // takes from, and runs until the test thread closes `release` or the task's source is cancelled.
@@ -645,8 +653,8 @@ pub const BlockingTaskQueues = struct {
     // released or cancelled, and says it ended.
     //
     pub fn runBlockingTask(self: *BlockingTaskQueues, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_queue.types.ITaskContext) void {
-        self.events.post(io, 0, "{\"type\":\"started\"}") catch @panic("out of memory telling the test a task started");
-        defer self.events.post(io, 0, "{\"type\":\"ended\"}") catch @panic("out of memory telling the test a task ended");
+        self.events.post(io, 0, comptime ziggy.json.stringifyComptime(IBlockingTaskEvent{ .type = "started" })) catch @panic("out of memory telling the test a task started");
+        defer self.events.post(io, 0, comptime ziggy.json.stringifyComptime(IBlockingTaskEvent{ .type = "ended" })) catch @panic("out of memory telling the test a task ended");
         while (!context.isCancelled(io, allocator)) {
             if (self.release.take(io, allocator, .{ .duration = .{ .raw = .fromMilliseconds(2), .clock = .awake } })) |message| {
                 allocator.free(message.text);
@@ -675,11 +683,17 @@ pub const BlockingTaskCount = struct {
     pub fn readEvents(self: *BlockingTaskCount, queues: *BlockingTaskQueues, allocator: std.mem.Allocator) void {
         while (queues.events.tryTake(std.testing.io, allocator)) |message| {
             defer allocator.free(message.text);
-            if (std.mem.eql(u8, message.text, "{\"type\":\"started\"}")) {
+            const parsed = std.json.parseFromSlice(IBlockingTaskEvent, allocator, message.text, .{
+                .ignore_unknown_fields = false,
+            }) catch |err| {
+                std.debug.panic("a blocking task sent an event that could not be read ({s}): {s}", .{ @errorName(err), message.text });
+            };
+            defer parsed.deinit();
+            if (std.mem.eql(u8, parsed.value.type, "started")) {
                 self.running += 1;
                 self.maxRunning = @max(self.maxRunning, self.running);
             }
-            else if (std.mem.eql(u8, message.text, "{\"type\":\"ended\"}")) {
+            else if (std.mem.eql(u8, parsed.value.type, "ended")) {
                 self.running -= 1;
             }
             else {

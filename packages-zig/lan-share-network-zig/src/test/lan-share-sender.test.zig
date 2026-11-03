@@ -8,6 +8,7 @@ const MessageQueue = ziggy.message_queue.MessageQueue;
 const LanShareSender = lan_share.lan_share_sender.LanShareSender;
 const LanShareReceiver = lan_share.lan_share_receiver.LanShareReceiver;
 const IReceiverEndpoint = lan_share.lan_share_types.IReceiverEndpoint;
+const IPairingCodeHashResponse = lan_share.lan_share_types.IPairingCodeHashResponse;
 const ReceiveThread = @import("receive-thread.zig").ReceiveThread;
 
 //
@@ -559,7 +560,10 @@ fn serveRefusingOrFail(allocator: std.mem.Allocator, start: IRefusingReceiverSta
         var httpServer = std.http.Server.init(&connection.reader, &connection.writer);
         var request = try httpServer.receiveHead();
         if (request.head.method == .GET) {
-            const body = try std.fmt.allocPrint(allocator, "{{\"codeHash\":\"{s}\"}}", .{start.codeHash});
+            const response: IPairingCodeHashResponse = .{
+                .codeHash = start.codeHash,
+            };
+            const body = try ziggy.json.stringify(allocator, response);
             try request.respond(body, .{ .status = .ok });
             continue;
         }

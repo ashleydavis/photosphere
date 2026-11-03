@@ -27,10 +27,169 @@ const IBsonCollection = bdb.collection.IBsonCollection;
 const BSON_RECORD_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 //
-// The fields of a minimal asset, as the JSON the page sends.
+// A database op the page sends, with its inner op given as text.
 //
-fn minimalAssetJson(allocator: std.mem.Allocator, id: []const u8, extra: []const u8) ![]const u8 {
-    return std.fmt.allocPrint(allocator, "{{\"_id\":\"{s}\",\"origFileName\":\"x.jpg\",\"contentType\":\"image/jpeg\",\"width\":1,\"height\":1,\"hash\":\"ab\",\"fileDate\":\"2020-01-01T00:00:00.000Z\",\"uploadDate\":\"2020-01-01T00:00:00.000Z\",\"micro\":\"\",\"color\":[0,0,0]{s}}}", .{ id, extra });
+const IOpJson = struct {
+    // The path of the database the op is for.
+    databaseId: []const u8,
+
+    // The collection the op is for.
+    collectionName: []const u8,
+
+    // The id of the record the op changes.
+    recordId: []const u8,
+
+    // The inner op, as JSON text.
+    op: utils.json.Raw,
+};
+
+//
+// A set op: the fields to write into the record.
+//
+const ISetOpJson = struct {
+    // Always "set".
+    type: []const u8,
+
+    // The fields to write, as JSON text.
+    fields: utils.json.Raw,
+};
+
+//
+// A push or pull op: the value to add to or take from an array field.
+//
+const IFieldOpJson = struct {
+    // "push" or "pull".
+    type: []const u8,
+
+    // The name of the array field.
+    field: []const u8,
+
+    // The value to add or take, as JSON text.
+    value: utils.json.Raw,
+};
+
+//
+// The fields of a minimal asset, followed by any extra fields.
+//
+const IMinimalAssetJson = struct {
+    // The asset's id.
+    _id: []const u8,
+
+    // The name of the original file.
+    origFileName: []const u8,
+
+    // The asset's content type.
+    contentType: []const u8,
+
+    // The width in pixels.
+    width: u32,
+
+    // The height in pixels.
+    height: u32,
+
+    // The asset's hash.
+    hash: []const u8,
+
+    // The date of the file.
+    fileDate: []const u8,
+
+    // The date of the upload.
+    uploadDate: []const u8,
+
+    // The micro thumbnail.
+    micro: []const u8,
+
+    // The dominant colour.
+    color: [3]u8,
+
+    // Extra fields, written after the ones above.
+    extra: std.json.ObjectMap,
+
+    //
+    // Called by std.json when the asset is written: writes the declared fields in order, then the extra fields in place of the `extra` field.
+    //
+    pub fn jsonStringify(self: IMinimalAssetJson, json_writer: anytype) !void {
+        try json_writer.beginObject();
+        inline for (std.meta.fields(IMinimalAssetJson)) |field| {
+            if (comptime !std.mem.eql(u8, field.name, "extra")) {
+                try json_writer.objectField(field.name);
+                try json_writer.write(@field(self, field.name));
+            }
+        }
+        var iterator = self.extra.iterator();
+        while (iterator.next()) |entry| {
+            try json_writer.objectField(entry.key_ptr.*);
+            try json_writer.write(entry.value_ptr.*);
+        }
+        try json_writer.endObject();
+    }
+};
+
+//
+// The fields of a minimal asset the page sends, with the extra fields added after them.
+//
+fn minimalAssetJson(allocator: std.mem.Allocator, id: []const u8, extra: std.json.ObjectMap) ![]const u8 {
+    return utils.json.stringify(allocator, IMinimalAssetJson{
+        ._id = id,
+        .origFileName = "x.jpg",
+        .contentType = "image/jpeg",
+        .width = 1,
+        .height = 1,
+        .hash = "ab",
+        .fileDate = "2020-01-01T00:00:00.000Z",
+        .uploadDate = "2020-01-01T00:00:00.000Z",
+        .micro = "",
+        .color = .{ 0, 0, 0 },
+        .extra = extra,
+    });
+}
+
+//
+// Extra asset fields holding a labels field with the value given as JSON text.
+//
+fn labelsField(allocator: std.mem.Allocator, labelsJson: []const u8) !std.json.ObjectMap {
+    var extra: std.json.ObjectMap = .empty;
+    try extra.put(allocator, "labels", try std.json.parseFromSliceLeaky(std.json.Value, allocator, labelsJson, .{}));
+    return extra;
+}
+
+//
+// The JSON text of a metadata database op with its inner op given as JSON text.
+//
+fn opJson(allocator: std.mem.Allocator, databaseId: []const u8, recordId: []const u8, innerOp: []const u8) ![]const u8 {
+    return utils.json.stringify(allocator, IOpJson{
+        .databaseId = databaseId,
+        .collectionName = "metadata",
+        .recordId = recordId,
+        .op = .{
+            .text = innerOp,
+        },
+    });
+}
+
+//
+// The JSON text of a set op writing the fields given as JSON text.
+//
+fn setOpJson(allocator: std.mem.Allocator, fields: []const u8) ![]const u8 {
+    return utils.json.stringify(allocator, ISetOpJson{
+        .type = "set",
+        .fields = .{
+            .text = fields,
+        },
+    });
+}
+
+//
+// The JSON text of a push or pull op on the array field with the value given as JSON text.
+//
+fn fieldOpJson(allocator: std.mem.Allocator, opType: []const u8, field: []const u8, value: []const u8) ![]const u8 {
+    return utils.json.stringify(allocator, IFieldOpJson{
+        .type = opType,
+        .field = field,
+        .value = .{
+            .text = value,
+        },
+    });
 }
 
 //
@@ -45,7 +204,7 @@ fn opFromJson(allocator: std.mem.Allocator, text: []const u8) !IDatabaseOp {
 // Minimal database op for grouping tests (payload contents are irrelevant to groupOpsByDatabaseId).
 //
 fn groupingOp(allocator: std.mem.Allocator, databaseId: []const u8, recordId: []const u8) !IDatabaseOp {
-    return opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"{s}\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{{}}}}}}", .{ databaseId, recordId }));
+    return opFromJson(allocator, try opJson(allocator, databaseId, recordId, try setOpJson(allocator, "{}")));
 }
 
 //
@@ -144,8 +303,8 @@ test "applyMetadataDatabaseOps set with upsert creates a new metadata record" {
     const io = std.testing.io;
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
-    const fields = try minimalAssetJson(allocator, "wrong-id-should-be-stripped", "");
-    const op = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/ignored-for-this-test\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, fields }));
+    const fields = try minimalAssetJson(allocator, "wrong-id-should-be-stripped", .empty);
+    const op = try opFromJson(allocator, try opJson(allocator, "/ignored-for-this-test", BSON_RECORD_ID, try setOpJson(allocator, fields)));
 
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{op});
 
@@ -162,9 +321,11 @@ test "applyMetadataDatabaseOps set merges into an existing record" {
     const io = std.testing.io;
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
-    const existing = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, try minimalAssetJson(allocator, BSON_RECORD_ID, ",\"description\":\"old\"") }));
+    var description: std.json.ObjectMap = .empty;
+    try description.put(allocator, "description", .{ .string = "old" });
+    const existing = try opFromJson(allocator, try opJson(allocator, "/x", BSON_RECORD_ID, try setOpJson(allocator, try minimalAssetJson(allocator, BSON_RECORD_ID, description))));
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{existing});
-    const change = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{{\"description\":\"new\"}}}}}}", .{BSON_RECORD_ID}));
+    const change = try opFromJson(allocator, try opJson(allocator, "/x", BSON_RECORD_ID, try setOpJson(allocator, "{\"description\":\"new\"}")));
 
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{change});
 
@@ -176,13 +337,13 @@ test "applyMetadataDatabaseOps set merges into an existing record" {
 //
 // Makes a record with a labels array, then applies an op of the given type and value to it, and returns the labels afterwards.
 //
-fn labelsAfter(log: ILog, allocator: std.mem.Allocator, startingLabels: []const u8, opType: []const u8, value: []const u8) ![]const []const u8 {
+fn labelsAfter(log: ILog, allocator: std.mem.Allocator, startingFields: std.json.ObjectMap, opType: []const u8, value: []const u8) ![]const []const u8 {
     const io = std.testing.io;
     var fixture: *Fixture = try allocator.create(Fixture);
     try fixture.init(allocator);
-    const create = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, try minimalAssetJson(allocator, BSON_RECORD_ID, startingLabels) }));
+    const create = try opFromJson(allocator, try opJson(allocator, "/x", BSON_RECORD_ID, try setOpJson(allocator, try minimalAssetJson(allocator, BSON_RECORD_ID, startingFields))));
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{create});
-    const change = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"{s}\",\"field\":\"labels\",\"value\":\"{s}\"}}}}", .{ BSON_RECORD_ID, opType, value }));
+    const change = try opFromJson(allocator, try opJson(allocator, "/x", BSON_RECORD_ID, try fieldOpJson(allocator, opType, "labels", try utils.json.stringify(allocator, value))));
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{change});
     const saved = (try fixture.collection.getOne(io, log, BSON_RECORD_ID)).?;
     var labels: std.ArrayList([]const u8) = .empty;
@@ -196,7 +357,7 @@ test "applyMetadataDatabaseOps push appends a value to an array field when absen
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(log, arena.allocator(), ",\"labels\":[\"x\"]", "push", "y");
+    const labels = try labelsAfter(log, arena.allocator(), try labelsField(arena.allocator(), "[\"x\"]"), "push", "y");
     try std.testing.expectEqual(@as(usize, 2), labels.len);
     try std.testing.expectEqualStrings("x", labels[0]);
     try std.testing.expectEqualStrings("y", labels[1]);
@@ -206,7 +367,7 @@ test "applyMetadataDatabaseOps push does not duplicate an existing value" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(log, arena.allocator(), ",\"labels\":[\"x\"]", "push", "x");
+    const labels = try labelsAfter(log, arena.allocator(), try labelsField(arena.allocator(), "[\"x\"]"), "push", "x");
     try std.testing.expectEqual(@as(usize, 1), labels.len);
     try std.testing.expectEqualStrings("x", labels[0]);
 }
@@ -215,7 +376,7 @@ test "applyMetadataDatabaseOps push creates the array when the field is not an a
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(log, arena.allocator(), "", "push", "x");
+    const labels = try labelsAfter(log, arena.allocator(), .empty, "push", "x");
     try std.testing.expectEqual(@as(usize, 1), labels.len);
     try std.testing.expectEqualStrings("x", labels[0]);
 }
@@ -228,9 +389,9 @@ test "applyMetadataDatabaseOps push appends an object value even when an equal o
     const io = std.testing.io;
     var fixture: Fixture = undefined;
     try fixture.init(allocator);
-    const create = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ BSON_RECORD_ID, try minimalAssetJson(allocator, BSON_RECORD_ID, ",\"labels\":[{\"a\":1}]") }));
+    const create = try opFromJson(allocator, try opJson(allocator, "/x", BSON_RECORD_ID, try setOpJson(allocator, try minimalAssetJson(allocator, BSON_RECORD_ID, try labelsField(allocator, "[{\"a\":1}]")))));
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{create});
-    const change = try opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":\"/x\",\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"push\",\"field\":\"labels\",\"value\":{{\"a\":1}}}}}}", .{BSON_RECORD_ID}));
+    const change = try opFromJson(allocator, try opJson(allocator, "/x", BSON_RECORD_ID, try fieldOpJson(allocator, "push", "labels", "{\"a\":1}")));
 
     try apply_database_ops.applyMetadataDatabaseOps(allocator, io, log, fixture.collection, &.{change});
 
@@ -242,7 +403,7 @@ test "applyMetadataDatabaseOps pull removes a value from an array field" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const labels = try labelsAfter(log, arena.allocator(), ",\"labels\":[\"x\",\"y\"]", "pull", "x");
+    const labels = try labelsAfter(log, arena.allocator(), try labelsField(arena.allocator(), "[\"x\",\"y\"]"), "pull", "x");
     try std.testing.expectEqual(@as(usize, 1), labels.len);
     try std.testing.expectEqualStrings("y", labels[0]);
 }
@@ -290,8 +451,7 @@ test "applyMetadataDatabaseOps rejects unsupported collection names" {
 // A set op for a new record in the database at the path.
 //
 fn setOpFor(allocator: std.mem.Allocator, databasePath: []const u8, recordId: []const u8) !IDatabaseOp {
-    const databasePathJson = try utils.json.stringify(allocator, databasePath);
-    return opFromJson(allocator, try std.fmt.allocPrint(allocator, "{{\"databaseId\":{s},\"collectionName\":\"metadata\",\"recordId\":\"{s}\",\"op\":{{\"type\":\"set\",\"fields\":{s}}}}}", .{ databasePathJson, recordId, try minimalAssetJson(allocator, recordId, "") }));
+    return opFromJson(allocator, try opJson(allocator, databasePath, recordId, try setOpJson(allocator, try minimalAssetJson(allocator, recordId, .empty))));
 }
 
 test "applyDatabaseOps acquires write lock and persists metadata on a real database directory" {

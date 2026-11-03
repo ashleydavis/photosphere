@@ -336,17 +336,6 @@ test "getImageDetails produces the details and the files" {
     }
 }
 
-test "locationJson prints numbers as JSON.stringify does" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    // The JSON of { lat: 91.5, lng: 1e-7 }.
-    const text = try image.locationJson(arena.allocator(), .{
-        .lat = 91.5,
-        .lng = 1e-7,
-    });
-    try std.testing.expectEqualStrings("{\"lat\":91.5,\"lng\":1e-7}", text);
-}
-
 //
 // One tag of a hand-built EXIF IFD.
 //
@@ -485,10 +474,10 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     try std.testing.expectEqualStrings("40 50 JPEG 75 exif:[]", try describeImage(memory.log, allocator, runner, details.microPath));
 
     try std.testing.expect(details.coordinates == null);
-    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: {{\"lat\":95,\"lng\":10.5}}, for asset {s}.", .{filePath})) != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: lat 95, lng 10.5, for asset {s}.", .{filePath})) != null);
 }
 
-test "getImageMetadata writes coordinates that are not numbers as null, and gives up on GPS tags that are not arrays" {
+test "getImageMetadata drops and logs coordinates that are not finite, and gives up on GPS tags that are not arrays" {
     const memory = try MemoryLog.init(std.testing.allocator, .{
         .verbose = false,
         .debug = false,
@@ -504,7 +493,7 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-metadata-gps");
     defer temp_dirs.removeTempDir(io, tempDir);
 
-    // 0/0 degrees is NaN, which JSON.stringify writes as null.
+    // 0/0 degrees is NaN and 1/0 degrees is infinity.
     const nanPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
         .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 0, 0 }, .{ 0, 1 }, .{ 0, 1 } }) },
         .{ .tag = 0x0004, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 1, 0 }, .{ 0, 1 }, .{ 0, 1 } }) },
@@ -512,15 +501,9 @@ test "getImageMetadata writes coordinates that are not numbers as null, and give
     const nanMetadata = try image.getImageMetadata(allocator, io, memory.log, nanPath, "image/jpeg");
     try std.testing.expect(nanMetadata.coordinates == null);
     try std.testing.expect(nanMetadata.metadata != null);
-    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: {{\"lat\":null,\"lng\":null}}, for asset {s}.", .{nanPath})) != null);
-
-    // Numbers are written in their shortest form, so a tiny one takes an exponent.
-    const tinyPath = try writeJpegWithExif(allocator, io, tempDir, 1, &.{
-        .{ .tag = 0x0002, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 95, 1 }, .{ 0, 1 }, .{ 0, 1 } }) },
-        .{ .tag = 0x0004, .tiffType = 5, .count = 3, .value = try rationals(allocator, &.{ .{ 0, 1 }, .{ 0, 1 }, .{ 1, 1000 } }) },
-    });
-    _ = try image.getImageMetadata(allocator, io, memory.log, tinyPath, "image/jpeg");
-    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Ignoring out of range GPS coordinates: {\"lat\":95,\"lng\":2.7777777777777776e-7}") != null);
+    // The sign of the NaN that 0/0 gives depends on the processor, so Zig prints "nan" or "-nan".
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Ignoring out of range GPS coordinates: lat ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), try std.fmt.allocPrint(allocator, "nan, lng inf, for asset {s}.", .{nanPath})) != null);
 
     // A SHORT latitude is a number and an ASCII longitude a string: destructuring [degrees, minutes, seconds] out of
     // the number throws, so no metadata is read at all.

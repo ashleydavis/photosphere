@@ -95,6 +95,28 @@ threadlocal var main_console_err: std.Io.Writer.Allocating = undefined;
 const FINAL_CONSOLE_TYPE = "test-final-console";
 
 //
+// The parts of a reply to a request that succeeded which requestOk reads.
+//
+const IReplyOk = struct {
+    // Whether the request succeeded.
+    ok: bool,
+
+    // The reply's data.
+    data: std.json.Value,
+};
+
+//
+// The parts of a reply to a request that failed which requestError reads.
+//
+const IReplyError = struct {
+    // Whether the request succeeded.
+    ok: bool,
+
+    // Why the request failed.
+    @"error": []const u8,
+};
+
+//
 // Which of the console's streams: standard output or standard error.
 //
 const ConsoleStream = enum { out, err };
@@ -599,13 +621,20 @@ pub const TestApp = struct {
         const allocator = std.testing.allocator;
         const reply = try self.request(message_name, data_json);
         defer allocator.free(reply);
-        const marker = ",\"ok\":true,\"data\":";
-        const marker_at = std.mem.indexOf(u8, reply, marker) orelse {
+        // Numbers are kept as their text, so the data's numbers come back byte for byte.
+        const parsed = std.json.parseFromSlice(IReplyOk, allocator, reply, .{
+            .ignore_unknown_fields = true,
+            .parse_numbers = false,
+        }) catch {
             std.debug.print("the {s} message did not succeed: {s}\n", .{ message_name, reply });
             return error.RequestFailed;
         };
-        const data_start = marker_at + marker.len;
-        return try allocator.dupe(u8, reply[data_start .. reply.len - 1]);
+        defer parsed.deinit();
+        if (!parsed.value.ok) {
+            std.debug.print("the {s} message did not succeed: {s}\n", .{ message_name, reply });
+            return error.RequestFailed;
+        }
+        return try ziggy.json.stringify(allocator, parsed.value.data);
     }
 
     //
@@ -615,15 +644,19 @@ pub const TestApp = struct {
         const allocator = std.testing.allocator;
         const reply = try self.request(message_name, data_json);
         defer allocator.free(reply);
-        const marker = ",\"ok\":false,\"error\":";
-        const marker_at = std.mem.indexOf(u8, reply, marker) orelse {
+        const parsed = std.json.parseFromSlice(IReplyError, allocator, reply, .{
+            .ignore_unknown_fields = true,
+            .parse_numbers = false,
+        }) catch {
             std.debug.print("the {s} message did not fail: {s}\n", .{ message_name, reply });
             return error.RequestSucceeded;
         };
-        const error_json = reply[marker_at + marker.len .. reply.len - 1];
-        var parsed = try std.json.parseFromSlice([]const u8, allocator, error_json, .{});
         defer parsed.deinit();
-        return try allocator.dupe(u8, parsed.value);
+        if (parsed.value.ok) {
+            std.debug.print("the {s} message did not fail: {s}\n", .{ message_name, reply });
+            return error.RequestSucceeded;
+        }
+        return try allocator.dupe(u8, parsed.value.@"error");
     }
 
     //

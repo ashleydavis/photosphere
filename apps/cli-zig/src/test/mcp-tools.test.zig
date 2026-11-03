@@ -5,7 +5,8 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const media_tools = @import("media-tools-zig");
-const task_queue = @import("ziggy").task_queue;
+const ziggy = @import("ziggy");
+const task_queue = ziggy.task_queue;
 const helpers = @import("test-helpers.zig");
 const init_cmd = cli.init_cmd;
 const McpServer = cli.mcp_protocol.McpServer;
@@ -180,9 +181,37 @@ const IToolsTestEnvironment = struct {
     //
     fn openDatabase(self: *IToolsTestEnvironment) !void {
         const allocator = self.arena.allocator();
-        const escapedPath = try std.mem.replaceOwned(u8, allocator, try self.databasePath(), "\\", "\\\\");
-        try self.expectText("open_database", try std.fmt.allocPrint(allocator, "{{\"path\":\"{s}\"}}", .{escapedPath}), try std.fmt.allocPrint(allocator, "Opened database at {s}", .{try self.databasePath()}));
+        const arguments: IOpenDatabaseArguments = .{
+            .path = try self.databasePath(),
+        };
+        try self.expectText(
+            "open_database",
+            try ziggy.json.stringify(allocator, arguments),
+            try std.fmt.allocPrint(allocator, "Opened database at {s}", .{try self.databasePath()}),
+        );
     }
+};
+
+//
+// The arguments of the open_database tool.
+//
+const IOpenDatabaseArguments = struct {
+    // The path of the database to open.
+    path: []const u8,
+};
+
+//
+// The arguments of the save_media_file tool.
+//
+const ISaveMediaFileArguments = struct {
+    // The id of the asset whose file is written.
+    assetId: []const u8,
+
+    // The path the file is written to.
+    outputPath: []const u8,
+
+    // Which file of the asset is written (original, display or thumb), or null for the tool's default.
+    type: ?[]const u8,
 };
 
 //
@@ -373,14 +402,17 @@ test "save_media_file writes the original, display or thumbnail file of a media 
 
     try environment.openDatabase();
     const kinds = [_][]const u8{ "original", "display", "thumb" };
-    const escapedRoot = try std.mem.replaceOwned(u8, allocator, environment.root, "\\", "\\\\");
     const storagePrefixes = [_][]const u8{ "asset", "display", "thumb" };
     const sizes = [_]usize{ 2049800, 696014, 130591 };
     for (kinds, storagePrefixes, sizes) |kind, storagePrefix, size| {
         const outputPath = try std.mem.concat(allocator, u8, &.{ environment.root, "/out/", kind, "/file.bin" });
         try environment.expectText(
             "save_media_file",
-            try std.fmt.allocPrint(allocator, "{{\"assetId\":\"{s}\",\"outputPath\":\"{s}/out/{s}/file.bin\",\"type\":\"{s}\"}}", .{ v6_asset_id, escapedRoot, kind, kind }),
+            try ziggy.json.stringify(allocator, ISaveMediaFileArguments{
+                .assetId = v6_asset_id,
+                .outputPath = outputPath,
+                .type = kind,
+            }),
             try std.fmt.allocPrint(allocator, "Wrote {d} bytes to {s}", .{ size, outputPath }),
         );
         const written = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
@@ -391,7 +423,11 @@ test "save_media_file writes the original, display or thumbnail file of a media 
     // The type defaults to the original.
     try environment.expectText(
         "save_media_file",
-        try std.fmt.allocPrint(allocator, "{{\"assetId\":\"{s}\",\"outputPath\":\"{s}/default.bin\"}}", .{ v6_asset_id, escapedRoot }),
+        try ziggy.json.stringify(allocator, ISaveMediaFileArguments{
+            .assetId = v6_asset_id,
+            .outputPath = try std.mem.concat(allocator, u8, &.{ environment.root, "/default.bin" }),
+            .type = null,
+        }),
         try std.fmt.allocPrint(allocator, "Wrote 2049800 bytes to {s}/default.bin", .{environment.root}),
     );
 

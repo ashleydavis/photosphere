@@ -34,6 +34,18 @@ const readConfigFromStorage = node_api.config_worker.readConfigFromStorage;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
 const at = @import("sandbox.zig").at;
 const stepData = @import("sandbox.zig").stepData;
+const json = @import("utils-zig").json;
+
+//
+// The automatic import settings as the app stores them.
+//
+const IStoredAutoImportSettings = struct {
+    // True when automatic import is switched on.
+    enabled: bool,
+
+    // The list of sources, as the JSON text the test gives.
+    sources: json.Raw,
+};
 
 //
 // Writes the automatic import settings into the temporary sandbox's config.yaml, exactly as the app would, leaving every
@@ -43,7 +55,13 @@ const stepData = @import("sandbox.zig").stepData;
 fn writeSettingsFile(sandbox: *Sandbox, log: ILog, enabled: bool, defaultDatabasePath: ?[]const u8, sourcesJson: []const u8, pauseBetweenRunsMs: i64) !void {
     const allocator = sandbox.arenaAllocator();
     var config = (try readConfigFromStorage(allocator, sandbox.io, log, "config.yaml")).config;
-    const settingsJson = try std.fmt.allocPrint(allocator, "{{\"enabled\":{s},\"sources\":{s}}}", .{ if (enabled) "true" else "false", sourcesJson });
+    const settings: IStoredAutoImportSettings = .{
+        .enabled = enabled,
+        .sources = .{
+            .text = sourcesJson,
+        },
+    };
+    const settingsJson = try json.stringify(allocator, settings);
     config.autoImport = .{
         .settings = try api.auto_import_settings.normaliseAutoImportSettings(allocator, try sandbox.json(settingsJson)),
         .defaultDatabasePath = defaultDatabasePath,

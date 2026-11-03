@@ -802,8 +802,12 @@ pub const WorkerPoolBun = struct {
             defer if (poolTask) |task| freeTask(allocator, task);
 
             if (result.status == .Failed and log.verboseEnabled()) {
-                const detail = std.fmt.allocPrint(arena, "Task {s} failed with error {{\n  \"name\": \"{s}\",\n  \"message\": \"{s}\"\n}}", .{ taskId, if (result.@"error") |failure| failure.name else "Error", result.errorMessage orelse "" }) catch @panic("out of memory logging a failed task");
-                writeOutputLine(prefixMessage(arena, workerState.workerId, workerState.currentTaskId, detail));
+                const message = std.fmt.allocPrint(arena, "Task {s} failed: {s}: {s}", .{
+                    taskId,
+                    if (result.@"error") |failure| failure.name else "Error",
+                    result.errorMessage orelse "",
+                }) catch @panic("out of memory logging a failed task");
+                writeOutputLine(prefixMessage(arena, workerState.workerId, workerState.currentTaskId, message));
             }
 
             // Build result object
@@ -1164,7 +1168,7 @@ pub const WorkerPoolBun = struct {
             workerState.worker.postMessage(io, cancelMsg) catch @panic("out of memory cancelling tasks");
         }
         for (self.workers.items) |workerState| {
-            workerState.worker.postMessage(io, "{\"type\":\"shutdown\"}") catch @panic("out of memory stopping a worker");
+            workerState.worker.postMessage(io, comptime json.stringifyComptime(worker_messages.IWorkerShutdownMessage{})) catch @panic("out of memory stopping a worker");
         }
         for (self.workers.items) |workerState| {
             workerState.worker.destroy(allocator);
@@ -1192,7 +1196,7 @@ pub const WorkerPoolBun = struct {
             workerState.worker.postMessage(io, cancelMsg) catch @panic("out of memory cancelling tasks");
         }
         for (self.workers.items) |workerState| {
-            workerState.worker.postMessage(io, "{\"type\":\"shutdown\"}") catch @panic("out of memory stopping a worker");
+            workerState.worker.postMessage(io, comptime json.stringifyComptime(worker_messages.IWorkerShutdownMessage{})) catch @panic("out of memory stopping a worker");
         }
         for (self.workers.items) |workerState| {
             workerState.worker.thread.join();

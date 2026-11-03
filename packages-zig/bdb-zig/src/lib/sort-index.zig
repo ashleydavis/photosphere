@@ -711,30 +711,10 @@ pub const SortIndex = struct {
     // Save checkpoint for incremental builds
     fn saveCheckpoint(self: *SortIndex, io: std.Io, checkpoint: *IBuildCheckpoint) !void {
         checkpoint.lastUpdated = @floatFromInt(std.Io.Clock.real.now(io).toMilliseconds());
-        var json: std.Io.Writer.Allocating = .init(self.allocator);
-        const writer = &json.writer;
-        try writer.writeAll("{\"completedShards\":[");
-        for (checkpoint.completedShards, 0..) |completedShard, shardIndex| {
-            if (shardIndex > 0) {
-                try writer.writeAll(",");
-            }
-            try js_value.writeNumber(writer, completedShard);
-        }
-        try writer.writeAll("],\"currentShard\":");
-        if (checkpoint.currentShard) |currentShard| {
-            try js_value.writeNumber(writer, currentShard);
-        }
-        else {
-            try writer.writeAll("null");
-        }
-        try writer.writeAll(",\"currentShardRecordIndex\":");
-        try js_value.writeNumber(writer, checkpoint.currentShardRecordIndex);
-        try writer.writeAll(",\"totalRecordsProcessed\":");
-        try js_value.writeNumber(writer, checkpoint.totalRecordsProcessed);
-        try writer.writeAll(",\"lastUpdated\":");
-        try js_value.writeNumber(writer, checkpoint.lastUpdated);
-        try writer.writeAll("}");
-        try self.storage.write(self.allocator, io, self.checkpointFilePath, "application/json", json.written());
+        const json = try std.json.Stringify.valueAlloc(self.allocator, checkpoint.*, .{
+            .emit_null_optional_fields = true,
+        });
+        try self.storage.write(self.allocator, io, self.checkpointFilePath, "application/json", json);
     }
 
     // Load checkpoint for incremental builds

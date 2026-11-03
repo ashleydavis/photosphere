@@ -29,6 +29,22 @@ pub const IPairingCodeHashResponse = struct {
 };
 
 //
+// Response body the receiver sends when it refuses a request.
+//
+pub const IErrorResponse = struct {
+    // Why the request was refused, for the sender to report.
+    @"error": []const u8,
+};
+
+//
+// Response body the receiver sends when it accepts a payload.
+//
+pub const ISuccessResponse = struct {
+    // Whether the payload was accepted.
+    success: bool,
+};
+
+//
 // Network endpoint information discovered by the sender via UDP broadcast.
 //
 pub const IReceiverEndpoint = struct {

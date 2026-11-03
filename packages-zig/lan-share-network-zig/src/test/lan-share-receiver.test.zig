@@ -107,6 +107,7 @@ test "accepts payload with correct code hash" {
 
     const response = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     try std.testing.expectEqual(@as(u16, 200), response.statusCode);
+    try std.testing.expectEqualStrings("{\"success\":true}", response.body);
 
     const result = try receiving.finish();
     try std.testing.expectEqualStrings("hello", result.?.object.get("message").?.string);
@@ -160,13 +161,17 @@ test "aborts and returns 429 after exceeding the request budget" {
     });
 
     // Send MAX_REQUESTS+1 (6) requests: the 6th triggers the abort (count > 5).
-    var lastStatus: u16 = 0;
+    var lastResponse: https.IResponse = .{
+        .statusCode = 0,
+        .body = "",
+    };
     for (0..6) |_| {
-        lastStatus = (try requestReceiver(allocator, &receiver, "POST", "/share-payload", body)).statusCode;
+        lastResponse = try requestReceiver(allocator, &receiver, "POST", "/share-payload", body);
     }
 
     // The 6th request should have triggered a 429 and abort.
-    try std.testing.expectEqual(@as(u16, 429), lastStatus);
+    try std.testing.expectEqual(@as(u16, 429), lastResponse.statusCode);
+    try std.testing.expectEqualStrings("{\"error\":\"Too many requests\"}", lastResponse.body);
 
     const result = try receiving.finish();
     try std.testing.expect(result == null);

@@ -712,6 +712,20 @@ test "parseISOString reads what toISOString writes and rejects anything else" {
 }
 
 //
+// The content of the lock file the Unicode whitespace test writes.
+//
+const IBomLockFile = struct {
+    // Who holds the lock.
+    owner: []const u8,
+
+    // When the lock was taken, as an ISO string.
+    acquiredAt: []const u8,
+
+    // When the lock was last refreshed, in milliseconds since the epoch.
+    timestamp: i64,
+};
+
+//
 // The lock is read with its content trimmed, and the trim removes a byte order mark
 // and the Unicode spaces as well as ASCII whitespace, so such a lock is read and held rather than broken as corrupt.
 //
@@ -723,7 +737,13 @@ test "a lock file surrounded by Unicode whitespace is read and held, not broken"
     const allocator = fixture.arena.allocator();
     const lockFilePath = try fixture.path("bom.lock");
     const timestamp = std.Io.Clock.real.now(std.testing.io).toMilliseconds();
-    try test_files.writeFile(std.testing.io, lockFilePath, try std.fmt.allocPrint(allocator, "\u{FEFF}{{\"owner\":\"first-owner\",\"acquiredAt\":\"2020-01-01T00:00:00.000Z\",\"timestamp\":{d}}}\u{3000}", .{timestamp}));
+    const lock: IBomLockFile = .{
+        .owner = "first-owner",
+        .acquiredAt = "2020-01-01T00:00:00.000Z",
+        .timestamp = timestamp,
+    };
+    const lockJson = try utils.json.stringify(allocator, lock);
+    try test_files.writeFile(std.testing.io, lockFilePath, try std.mem.concat(allocator, u8, &.{ "\u{FEFF}", lockJson, "\u{3000}" }));
 
     try std.testing.expect(!try fixture.storage.acquireWriteLock(allocator, std.testing.io, log, lockFilePath, "second-owner"));
 

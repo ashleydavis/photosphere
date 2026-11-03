@@ -45,6 +45,27 @@ pub const IDLE_LIMIT_MS = 10_000;
 const from_owner = 0;
 
 //
+// A message on the server's queues that matters only for its type: the server's own "stop", "free" and "request" signals, and
+// the type of any other message on them.
+//
+const IQueueSignal = struct {
+    // What the message asks for or reports.
+    type: []const u8,
+};
+
+//
+// The message that hands a connection over by its socket, from the accepting thread to the server thread and from the server thread
+// to a connection thread.
+//
+const IConnectionMessage = struct {
+    // Always "connection".
+    type: []const u8 = "connection",
+
+    // The connection's socket handle, as a number.
+    socket: u64,
+};
+
+//
 // One request, with the helpers the routes use. Its strings stay valid until the handler returns. The handler is given the
 // connection thread's Io and an allocator freed when it returns, which the helpers that need them are given.
 //
@@ -147,7 +168,7 @@ pub const Request = struct {
         }) orelse {
             return null;
         };
-        if (isType(message.text, "stop")) {
+        if (isType(allocator, message.text, "stop")) {
             allocator.free(message.text);
             self.stopped = true;
             return null;
@@ -393,7 +414,7 @@ pub const HttpServer = struct {
     // allocator.
     //
     pub fn stop(self: *HttpServer, io: std.Io, allocator: std.mem.Allocator) void {
-        self.queue.post(io, from_owner, "{\"type\":\"stop\"}") catch @panic("out of memory stopping an HTTP server");
+        self.queue.post(io, from_owner, comptime json.stringifyComptime(IQueueSignal{ .type = "stop" })) catch @panic("out of memory stopping an HTTP server");
         self.thread.join();
         self.queue.deinit();
         allocator.destroy(self);
@@ -479,7 +500,7 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
         }
         waiting.deinit(allocator);
         for (connections.items) |*connection| {
-            connection.queue.post(io, 0, "{\"type\":\"stop\"}") catch @panic("out of memory stopping an HTTP server");
+            connection.queue.post(io, 0, comptime json.stringifyComptime(IQueueSignal{ .type = "stop" })) catch @panic("out of memory stopping an HTTP server");
             if (connection.stream != null) {
                 wakeConnection(io, connection);
             }
@@ -498,7 +519,7 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
         // What the accepting thread and the connection threads sent after the last message read: connections nobody will serve.
         while (queue.tryTake(io, allocator)) |message| {
             if (message.from == from_accepting) {
-                streamOf(message.text).close(io);
+                streamOf(allocator, message.text).close(io);
             }
             allocator.free(message.text);
         }
@@ -513,7 +534,7 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
             continue;
         };
         if (message.from == from_accepting) {
-            const stream = streamOf(message.text);
+            const stream = streamOf(allocator, message.text);
             allocator.free(message.text);
             const index = freeConnection(connections.items) orelse blk: {
                 if (connections.items.len >= start.maxConnectionThreads) {
@@ -531,7 +552,7 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
             handOver(io, allocator, &connections.items[index], stream);
             continue;
         }
-        if (message.from != from_owner and isType(message.text, "free")) {
+        if (message.from != from_owner and isType(allocator, message.text, "free")) {
             allocator.free(message.text);
             const connection = &connections.items[message.from - 1];
             closeConnection(io, connection);
@@ -544,7 +565,7 @@ fn serverMain(start: ThreadStart, listener_given: std.Io.net.Server, queue: *Mes
             }
             continue;
         }
-        if (message.from != from_owner and isType(message.text, "request")) {
+        if (message.from != from_owner and isType(allocator, message.text, "request")) {
             allocator.free(message.text);
             connections.items[message.from - 1].requested = true;
             continue;
@@ -592,7 +613,7 @@ fn acceptMain(listener_given: std.Io.net.Server, queue: *MessageQueue, server_qu
 // Sends the accepting thread "stop", wakes it from accept with a connection to the server's own port and waits for it to end.
 //
 fn stopAccepting(io: std.Io, accept_queue: *MessageQueue, accepting: std.Thread, port: u16) void {
-    accept_queue.post(io, 0, "{\"type\":\"stop\"}") catch @panic("out of memory stopping an HTTP server");
+    accept_queue.post(io, 0, comptime json.stringifyComptime(IQueueSignal{ .type = "stop" })) catch @panic("out of memory stopping an HTTP server");
     const address = std.Io.net.IpAddress.parseIp4("127.0.0.1", port) catch unreachable;
     if (address.connect(io, .{ .mode = .stream })) |stream| {
         stream.close(io);
@@ -696,7 +717,7 @@ fn closeConnection(io: std.Io, connection: *ConnectionThread) void {
 //
 fn handleServerMessage(io: std.Io, allocator: std.mem.Allocator, log: utils.log.ILog, connections: []ConnectionThread, message: Message) bool {
     defer allocator.free(message.text);
-    if (message.from == from_owner and isType(message.text, "stop")) {
+    if (message.from == from_owner and isType(allocator, message.text, "stop")) {
         return false;
     }
     var arena_state = std.heap.ArenaAllocator.init(allocator);
@@ -768,7 +789,9 @@ fn startConnectionThread(io: std.Io, allocator: std.mem.Allocator, start: *const
 // to a connection thread. Allocated with the allocator.
 //
 fn connectionMessage(allocator: std.mem.Allocator, stream: std.Io.net.Stream) ![]u8 {
-    return std.fmt.allocPrint(allocator, "{{\"type\":\"connection\",\"socket\":{d}}}", .{handleNumber(stream.socket.handle)});
+    return json.stringify(allocator, IConnectionMessage{
+        .socket = handleNumber(stream.socket.handle),
+    });
 }
 
 //
@@ -818,19 +841,19 @@ fn connectionMain(start: ThreadStart, number: u32, queue: *MessageQueue, server_
         const message = queue.take(io, allocator, .none) orelse {
             @panic("an HTTP connection thread's queue closed");
         };
-        if (isType(message.text, "stop")) {
+        if (isType(allocator, message.text, "stop")) {
             allocator.free(message.text);
             return;
         }
-        if (!isType(message.text, "connection")) {
+        if (!isType(allocator, message.text, "connection")) {
             // A message for a request that has ended: there is nobody to give it to.
             allocator.free(message.text);
             continue;
         }
-        const socket = socketOf(message.text);
+        const socket = socketOf(allocator, message.text);
         allocator.free(message.text);
         const stopped = serveConnection(io, allocator, log, thread_arena, socket, state, queue, server_queue, number, start.router);
-        server_queue.post(io, number, "{\"type\":\"free\"}") catch @panic("out of memory freeing a connection thread");
+        server_queue.post(io, number, comptime json.stringifyComptime(IQueueSignal{ .type = "free" })) catch @panic("out of memory freeing a connection thread");
         if (stopped) {
             return;
         }
@@ -870,7 +893,7 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, log: utils.log.ILog
         }
         return stopRequested(io, allocator, queue);
     };
-    server_queue.post(io, number, "{\"type\":\"request\"}") catch @panic("out of memory reporting a request");
+    server_queue.post(io, number, comptime json.stringifyComptime(IQueueSignal{ .type = "request" })) catch @panic("out of memory reporting a request");
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -905,7 +928,7 @@ fn serveConnection(io: std.Io, allocator: std.mem.Allocator, log: utils.log.ILog
 fn stopRequested(io: std.Io, allocator: std.mem.Allocator, queue: *MessageQueue) bool {
     var stop = false;
     while (queue.tryTake(io, allocator)) |message| {
-        if (isType(message.text, "stop")) {
+        if (isType(allocator, message.text, "stop")) {
             stop = true;
         }
         allocator.free(message.text);
@@ -916,30 +939,40 @@ fn stopRequested(io: std.Io, allocator: std.mem.Allocator, queue: *MessageQueue)
 //
 // The connection of a "connection" message, as a stream to close or hand over.
 //
-fn streamOf(text: []const u8) std.Io.net.Stream {
+fn streamOf(allocator: std.mem.Allocator, text: []const u8) std.Io.net.Stream {
     return .{
         .socket = .{
-            .handle = socketOf(text),
+            .handle = socketOf(allocator, text),
             .address = std.Io.net.IpAddress.parseIp4("127.0.0.1", 0) catch unreachable,
         },
     };
 }
 
 //
-// Whether a message's JSON text is of the type, read without parsing it: the type is the first field of every message here.
+// Whether a message's JSON text is of the type. Every message on these queues is made by Photosphere's own code as an object with a
+// `type`, so text that does not parse as one is a bug and panics, naming the text.
 //
-fn isType(text: []const u8, comptime message_type: []const u8) bool {
-    return std.mem.startsWith(u8, text, "{\"type\":\"" ++ message_type ++ "\"");
+fn isType(allocator: std.mem.Allocator, text: []const u8, comptime message_type: []const u8) bool {
+    const parsed = std.json.parseFromSlice(IQueueSignal, allocator, text, .{
+        .ignore_unknown_fields = true,
+    }) catch |err| {
+        std.debug.panic("an HTTP server queue message is not an object with a type ({s}): {s}", .{ @errorName(err), text });
+    };
+    defer parsed.deinit();
+    return std.mem.eql(u8, parsed.value.type, message_type);
 }
 
 //
 // The socket of a "connection" message.
 //
-fn socketOf(text: []const u8) std.Io.net.Socket.Handle {
-    const marker = "\"socket\":";
-    const start = (std.mem.indexOf(u8, text, marker) orelse @panic("a connection message has no socket")) + marker.len;
-    const end = std.mem.indexOfScalarPos(u8, text, start, '}') orelse text.len;
-    const number = std.fmt.parseInt(u64, text[start..end], 10) catch @panic("a connection message has a socket that is not a number");
+fn socketOf(allocator: std.mem.Allocator, text: []const u8) std.Io.net.Socket.Handle {
+    const parsed = std.json.parseFromSlice(IConnectionMessage, allocator, text, .{
+        .ignore_unknown_fields = true,
+    }) catch |err| {
+        std.debug.panic("an HTTP server connection message could not be read ({s}): {s}", .{ @errorName(err), text });
+    };
+    defer parsed.deinit();
+    const number = parsed.value.socket;
     return if (builtin.os.tag == .windows) @ptrFromInt(number) else @intCast(number);
 }
 
