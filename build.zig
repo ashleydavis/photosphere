@@ -423,16 +423,16 @@ const IThirdPartyLibraries = struct {
 };
 
 //
-// Finds what the build in third-party/<name> installed for the target, under its zig-out/<arch>-<os>-<abi>. Stops the build with
-// the command that builds it when it has not been built for the target.
+// Finds what the build in third-party/<name> installed for the target, under its zig-out/<arch>-<os>-<abi>. Runs that build first
+// when it has not been built for the target, so a new checkout needs no separate step, and costs one directory check when it has.
 //
 fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !IThirdPartyLibraries {
     const directory = b.fmt("third-party/{s}/zig-out/{s}-{s}-{s}", .{ name, @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
     const io = b.graph.io;
     var library_directory = b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true }) catch |err| switch (err) {
-        error.FileNotFound => {
-            std.log.err("third-party/{s} is not built for this target: there is no {s}. Build it with `zig build{s}` in third-party/{s}.", .{ name, directory, if (target.query.isNative()) "" else b.fmt(" -Dtarget={s}", .{try target.query.zigTriple(b.allocator)}), name });
-            std.process.exit(1);
+        error.FileNotFound => library_directory: {
+            try buildThirdPartyLibraries(b, target, name);
+            break :library_directory try b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true });
         },
         else => {
             return err;
@@ -452,6 +452,46 @@ fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name
         .include_directory = b.path(b.fmt("{s}/include", .{directory})),
         .zig_directory = b.path(b.fmt("{s}/zig", .{directory})),
     };
+}
+
+//
+// Runs `zig build` in third-party/<name> with this build's target, CPU and libc file, the build a person would otherwise run there
+// themselves, and stops this build when it fails. It runs while this build is configured, because the libraries are listed then.
+//
+fn buildThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !void {
+    const io = b.graph.io;
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.appendSlice(b.allocator, &.{
+        b.graph.zig_exe,
+        "build",
+        b.fmt("-Dtarget={s}", .{try target.query.zigTriple(b.allocator)}),
+        b.fmt("-Dcpu={s}", .{try target.query.serializeCpuAlloc(b.allocator)}),
+    });
+    // Resolved here because that build runs in its own directory.
+    if (b.libc_file) |libc_file| {
+        try argv.appendSlice(b.allocator, &.{
+            "--libc",
+            try std.Io.Dir.cwd().realPathFileAlloc(io, libc_file, b.allocator),
+        });
+    }
+    std.debug.print("third-party/{s} is not built for this target. Building it: {s}\n", .{ name, try std.mem.join(b.allocator, " ", argv.items) });
+    var child = try std.process.spawn(io, .{
+        .argv = argv.items,
+        .cwd = .{
+            .path = b.pathFromRoot(b.fmt("third-party/{s}", .{name})),
+        },
+    });
+    const term = try child.wait(io);
+    switch (term) {
+        .exited => |code| {
+            if (code == 0) {
+                return;
+            }
+        },
+        else => {},
+    }
+    std.log.err("Building third-party/{s} failed ({any}). Its output is above.", .{ name, term });
+    std.process.exit(1);
 }
 
 //
