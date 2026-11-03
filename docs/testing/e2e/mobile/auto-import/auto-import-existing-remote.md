@@ -73,7 +73,7 @@ Expected:
 2. **Destination type**: `File system`.
 3. **Destination path**: type a short name, for example `my-photos`. It is created inside the app's own private storage; there is nothing on the phone's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser.
 4. **Mode**: **Partial**.
-5. Press **Replicate**.
+5. Press **Start replication**.
 
 Expected:
 - It finishes in seconds, however large the library is. A partial replication copies the README, the files merkle tree and the merkle trees of the record database, and nothing else: it deliberately does not walk the tree.
