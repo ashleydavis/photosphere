@@ -71,8 +71,8 @@ ANDROID_ADB_QUERY_SECONDS=10
 
 #
 # Prints the devices the run may use, one per line: the named ones, else plugged-in devices, else the pool, else any other
-# emulator, such as the single hand-testing one. Returns non-zero, naming what did not answer, when adb or an emulator does not
-# answer within ANDROID_ADB_QUERY_SECONDS.
+# emulator, such as the single hand-testing one. Returns non-zero when adb does not answer within ANDROID_ADB_QUERY_SECONDS. An
+# emulator that does not answer in that time is named on stderr and passed over, so one dead emulator does not stop the others.
 #
 photosphere_android_candidate_devices() {
     local adb_command="$ANDROID_HOME/platform-tools/adb"
@@ -101,8 +101,8 @@ photosphere_android_candidate_devices() {
             emulator-*)
                 avd_output="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$adb_command" -s "$serial" emu avd name 2>/dev/null)"
                 if [ "$?" -eq 124 ]; then
-                    echo "The emulator $serial did not give its AVD name within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding." >&2
-                    return 1
+                    echo "The emulator $serial did not give its AVD name within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding and is passed over." >&2
+                    continue
                 fi
                 avd="$(printf '%s\n' "$avd_output" | head -1 | tr -d '\r')"
                 case "$avd" in
@@ -243,7 +243,9 @@ photosphere_android_require_wipe_allowed() {
 
 #
 # Prints the architecture name the build scripts use for each device the run may use, one per line without repeats. Says on stderr
-# which device it is asking, and returns non-zero naming the device when one does not answer within ANDROID_ADB_QUERY_SECONDS.
+# which device it is asking. A device that does not answer within ANDROID_ADB_QUERY_SECONDS, or whose query fails, is named on stderr
+# and passed over: claiming a device passes over one that cannot reach this host, so no scenario runs on it and the build does not
+# need its architecture.
 #
 photosphere_android_architectures() {
     local candidates serial abi status
@@ -254,12 +256,12 @@ photosphere_android_architectures() {
         abi="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$serial" shell getprop ro.product.cpu.abi)"
         status=$?
         if [ "$status" -eq 124 ]; then
-            echo "The device $serial did not give its CPU architecture within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding." >&2
-            return 1
+            echo "The device $serial did not give its CPU architecture within ${ANDROID_ADB_QUERY_SECONDS}s, so it is not responding and is passed over." >&2
+            continue
         fi
         if [ "$status" -ne 0 ]; then
-            echo "Asking the device $serial for its CPU architecture failed (exit $status)." >&2
-            return 1
+            echo "Asking the device $serial for its CPU architecture failed (exit $status), so it is passed over." >&2
+            continue
         fi
         abi="$(printf '%s' "$abi" | tr -d '\r')"
         case "$abi" in
@@ -289,7 +291,7 @@ photosphere_platform_prepare() {
         echo "Finding the Android devices to build for..."
         architectures="$(photosphere_android_architectures)" || return 1
         if [ -z "$architectures" ]; then
-            echo "No pool emulator, named device or plugged-in device is attached, so there is no architecture to build for." >&2
+            echo "No pool emulator, named device or plugged-in device is attached and answering, so there is no architecture to build for." >&2
             return 1
         fi
         echo "Building for: $(printf '%s ' $architectures)"
