@@ -1,4 +1,4 @@
-import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
+import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
 import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
@@ -19,7 +19,6 @@ import { firstSeededNewsNotification } from "./seeded-news";
 import { signalTestPageReady } from "./ziggy-test-transport";
 import { isTestMode } from "./test-mode";
 import { toJsonValue } from "./to-json-value";
-import { AppMessages } from "./app-messages";
 
 //
 // Whether the app is running in test mode (?testMode=1 on the page's address).
@@ -47,6 +46,18 @@ const BACKGROUND_WORK_CONFIG_KEYS: string[] = [
     'syncOnlyOnWifi',
 ];
 
+
+//
+// One of Photosphere's own events as it arrives from the core on the bridge. Every listener
+// receives every event and acts only on the type it is for.
+//
+export interface IAppEvent<TData> {
+    // The name of the event, such as "database-opened".
+    type: string;
+
+    // What the event carries, null when it carries nothing.
+    data: TData;
+}
 
 //
 // Props for the Ziggy platform provider.
@@ -80,9 +91,6 @@ interface IErudaState {
 // on a phone is decided by the platform kind the core reported.
 //
 export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformProviderZiggyProps) {
-    // Photosphere's own messages and events, each named by its type, over the bridge.
-    const messages = useMemo(() => new AppMessages(ziggy), [ziggy]);
-
     // What the automatic import card says about importing while the app is not on screen. A desktop imports while it is open, iOS
     // decides for itself when a background import runs, and Android keeps importing with the screen off.
     let backgroundImportDescription: string;
@@ -225,11 +233,11 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             // reads nothing, and the setting has to go back off rather than looking as though photos are being backed up when none
             // can even be seen. Syncing never asks, because it moves what is already in the database.
             if (decision.needsMediaPermission && !importRunningRef.current) {
-                const permission = readPermissionState(await messages.invoke<IRawPermissionResult>('requestMediaPermission', null));
+                const permission = readPermissionState(await ziggy.invoke<IRawPermissionResult>('requestMediaPermission', null));
                 const outcome = resolveMediaPermission(permission);
                 if (!outcome.enabled) {
                     importWanted = false;
-                    await messages.invoke('set-config', { key: AUTO_IMPORT_ENABLED_KEY, value: false });
+                    await ziggy.invoke('set-config', { key: AUTO_IMPORT_ENABLED_KEY, value: false });
                     log.info(`Automatic import switched off: ${outcome.message}`);
                 }
             }
@@ -255,7 +263,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             if (!importWanted && !syncWanted) {
                 // Asked for unconditionally rather than only when this page started it: the work outlives the page, so a fresh page
                 // that finds both settings off has to be able to stop work left running by the one before it.
-                await messages.invoke('stopBackgroundImport', null);
+                await ziggy.invoke('stopBackgroundImport', null);
                 return;
             }
 
@@ -263,7 +271,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             // which database each one works on, whether it should run at all, and how long to wait between passes. Asked for every
             // time either feature is wanted, not only the first time: a loop that ended has to be started again when its feature
             // comes back, and starting one that is already running does nothing.
-            await messages.invoke('startBackgroundImport', null);
+            await ziggy.invoke('startBackgroundImport', null);
         };
 
         ensureAutoImport().catch(error => log.exception("Failed to start automatic import", error as Error));
@@ -313,127 +321,145 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     // Set up message listener for database-opened events
     useEffect(() => {
-        const handleDatabaseOpened = (databasePath: string) => {
-            // Notify all subscribers
-            openedCallbacksRef.current.forEach(callback => {
-                callback(databasePath);
-            });
+        const handleDatabaseOpened = (event: IAppEvent<string>) => {
+            if (event.type === 'database-opened') {
+                // Notify all subscribers
+                openedCallbacksRef.current.forEach(callback => {
+                    callback(event.data);
+                });
+            }
         };
 
-        messages.onEvent('database-opened', handleDatabaseOpened);
+        ziggy.onEvent(handleDatabaseOpened);
 
         return () => {
-            messages.removeAllListeners('database-opened');
+            ziggy.removeEventListener(handleDatabaseOpened);
         };
     }, [ziggy]);
 
     // Set up message listener for database-closed events
     useEffect(() => {
-        const handleDatabaseClosed = () => {
-            // Notify all subscribers
-            closedCallbacksRef.current.forEach(callback => {
-                callback();
-            });
+        const handleDatabaseClosed = (event: IAppEvent<null>) => {
+            if (event.type === 'database-closed') {
+                // Notify all subscribers
+                closedCallbacksRef.current.forEach(callback => {
+                    callback();
+                });
+            }
         };
 
-        messages.onEvent('database-closed', handleDatabaseClosed);
+        ziggy.onEvent(handleDatabaseClosed);
 
         return () => {
-            messages.removeAllListeners('database-closed');
+            ziggy.removeEventListener(handleDatabaseClosed);
         };
     }, [ziggy]);
 
     // Set up message listener for theme-changed events
     useEffect(() => {
-        const handleThemeChanged = (theme: 'light' | 'dark' | 'system') => {
-            // Notify all subscribers
-            themeCallbacksRef.current.forEach(callback => {
-                callback(theme);
-            });
+        const handleThemeChanged = (event: IAppEvent<'light' | 'dark' | 'system'>) => {
+            if (event.type === 'theme-changed') {
+                // Notify all subscribers
+                themeCallbacksRef.current.forEach(callback => {
+                    callback(event.data);
+                });
+            }
         };
 
-        messages.onEvent('theme-changed', handleThemeChanged);
+        ziggy.onEvent(handleThemeChanged);
 
         return () => {
-            messages.removeAllListeners('theme-changed');
+            ziggy.removeEventListener(handleThemeChanged);
         };
     }, [ziggy]);
 
     // Set up message listener for sync-started events
     useEffect(() => {
-        const handleSyncStarted = () => {
-            syncStartedCallbacksRef.current.forEach(cb => cb());
+        const handleSyncStarted = (event: IAppEvent<null>) => {
+            if (event.type === 'sync-started') {
+                syncStartedCallbacksRef.current.forEach(cb => cb());
+            }
         };
 
-        messages.onEvent('sync-started', handleSyncStarted);
+        ziggy.onEvent(handleSyncStarted);
 
         return () => {
-            messages.removeAllListeners('sync-started');
+            ziggy.removeEventListener(handleSyncStarted);
         };
     }, [ziggy]);
 
     // Set up message listener for sync-completed events
     useEffect(() => {
-        const handleSyncCompleted = () => {
-            syncCompletedCallbacksRef.current.forEach(cb => cb());
+        const handleSyncCompleted = (event: IAppEvent<null>) => {
+            if (event.type === 'sync-completed') {
+                syncCompletedCallbacksRef.current.forEach(cb => cb());
+            }
         };
 
-        messages.onEvent('sync-completed', handleSyncCompleted);
+        ziggy.onEvent(handleSyncCompleted);
 
         return () => {
-            messages.removeAllListeners('sync-completed');
+            ziggy.removeEventListener(handleSyncCompleted);
         };
     }, [ziggy]);
 
     // Set up message listener for show-notification events
     useEffect(() => {
-        const handleShowNotification = (data: IShowNotificationData) => {
-            showNotificationCallbacksRef.current.forEach(cb => cb(data));
+        const handleShowNotification = (event: IAppEvent<IShowNotificationData>) => {
+            if (event.type === 'show-notification') {
+                showNotificationCallbacksRef.current.forEach(cb => cb(event.data));
+            }
         };
 
-        messages.onEvent('show-notification', handleShowNotification);
+        ziggy.onEvent(handleShowNotification);
 
         return () => {
-            messages.removeAllListeners('show-notification');
+            ziggy.removeEventListener(handleShowNotification);
         };
     }, [ziggy]);
 
     // Set up message listener for databases-changed events
     useEffect(() => {
-        const handleDatabasesChanged = () => {
-            databasesChangedCallbacksRef.current.forEach(callback => callback());
+        const handleDatabasesChanged = (event: IAppEvent<null>) => {
+            if (event.type === 'databases-changed') {
+                databasesChangedCallbacksRef.current.forEach(callback => callback());
+            }
         };
 
-        messages.onEvent('databases-changed', handleDatabasesChanged);
+        ziggy.onEvent(handleDatabasesChanged);
 
         return () => {
-            messages.removeAllListeners('databases-changed');
+            ziggy.removeEventListener(handleDatabasesChanged);
         };
     }, [ziggy]);
 
     // Set up message listener for update-available events
     useEffect(() => {
-        const handleUpdateAvailable = (data: IUpdateAvailableData) => {
-            updateAvailableCallbacksRef.current.forEach(cb => cb(data));
+        const handleUpdateAvailable = (event: IAppEvent<IUpdateAvailableData>) => {
+            if (event.type === 'update-available') {
+                updateAvailableCallbacksRef.current.forEach(cb => cb(event.data));
+            }
         };
 
-        messages.onEvent('update-available', handleUpdateAvailable);
+        ziggy.onEvent(handleUpdateAvailable);
 
         return () => {
-            messages.removeAllListeners('update-available');
+            ziggy.removeEventListener(handleUpdateAvailable);
         };
     }, [ziggy]);
 
     // Set up message listener for platform events pushed from the core.
     useEffect(() => {
-        const handlePlatformEvent = (event: IPlatformEvent) => {
-            platformEventCallbacksRef.current.forEach(callback => callback(event));
+        const handlePlatformEvent = (event: IAppEvent<IPlatformEvent>) => {
+            if (event.type === 'platform-event') {
+                platformEventCallbacksRef.current.forEach(callback => callback(event.data));
+            }
         };
 
-        messages.onEvent('platform-event', handlePlatformEvent);
+        ziggy.onEvent(handlePlatformEvent);
 
         return () => {
-            messages.removeAllListeners('platform-event');
+            ziggy.removeEventListener(handlePlatformEvent);
         };
     }, [ziggy]);
 
@@ -443,14 +469,17 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // subscriber-based delivery would be lost whenever no subscriber is mounted (for example while the
     // Main subtree is torn down to show the top-level /stories route).
     useEffect(() => {
-        const handleNavigate = (page: string) => {
-            window.location.hash = page.startsWith('/') ? page : `/${page}`;
+        const handleNavigate = (event: IAppEvent<string>) => {
+            if (event.type === 'navigate') {
+                const page = event.data;
+                window.location.hash = page.startsWith('/') ? page : `/${page}`;
+            }
         };
 
-        messages.onEvent('navigate', handleNavigate);
+        ziggy.onEvent(handleNavigate);
 
         return () => {
-            messages.removeAllListeners('navigate');
+            ziggy.removeEventListener(handleNavigate);
         };
     }, [ziggy]);
 
@@ -497,11 +526,11 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
                 return;
             case 'set-theme':
                 // The core announces the change with a theme-changed event, which reaches the theme subscribers.
-                await messages.invoke('set-config', { key: 'theme', value: effect.theme });
+                await ziggy.invoke('set-config', { key: 'theme', value: effect.theme });
                 return;
             case 'open-log-directory': {
-                const logDetails = await messages.invoke<ILogDetails>('get-log-details', null);
-                await messages.invoke('open-path', logDirectoryOf(logDetails.logFilePath));
+                const logDetails = await ziggy.invoke<ILogDetails>('get-log-details', null);
+                await ziggy.invoke('open-path', logDirectoryOf(logDetails.logFilePath));
                 return;
             }
             case 'open-url':
@@ -516,8 +545,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         }
     }, [ziggy]);
 
-    // Set up the listener for the menu items the page runs. The core sends each as the app event {type: "menu", item}, which is not
-    // laid out like Photosphere's own {type, data} events, so it is taken from the bridge here rather than through AppMessages.
+    // Set up the listener for the menu items the page runs. The core sends each as the app event {type: "menu", item}.
     // Every other app event reaches this listener too and is skipped.
     useEffect(() => {
         const handleMenuEvent = (event: IMenuEvent) => {
@@ -539,7 +567,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             // No-op: no database picker on a phone yet.
             return;
         }
-        await messages.invoke('open-database', null);
+        await ziggy.invoke('open-database', null);
     }, [ziggy, platform.platformKind]);
 
     const onDatabaseOpened = useCallback((callback: (databasePath: string) => void): (() => void) => {
@@ -564,7 +592,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const notifyDatabaseOpened = useCallback(async (databasePath: string): Promise<void> => {
         // Notify the core to add to recent databases
-        await messages.invoke('notify-database-opened', databasePath);
+        await ziggy.invoke('notify-database-opened', databasePath);
 
         // Remember which database the background sync pushes, which is what makes it work for the database the user is actually
         // using. Opening a database can be the first thing that gives the background work something to do, so the decision about
@@ -585,7 +613,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const notifyDatabaseClosed = useCallback(async (): Promise<void> => {
         // Notify the core to clear config
-        await messages.invoke('notify-database-closed', null);
+        await ziggy.invoke('notify-database-closed', null);
     }, [ziggy]);
 
     const onThemeChanged = useCallback((callback: (theme: 'light' | 'dark' | 'system') => void): (() => void) => {
@@ -596,7 +624,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, []);
 
     const notifyDatabaseEdited = useCallback((): void => {
-        messages.send('notify-database-edited', null);
+        ziggy.send('notify-database-edited', null);
     }, [ziggy]);
 
     const onSyncStarted = useCallback((callback: () => void): (() => void) => {
@@ -646,7 +674,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
             // No-op: a phone has no file manager to show a folder in.
             return;
         }
-        await messages.invoke('open-path', folderPath);
+        await ziggy.invoke('open-path', folderPath);
     }, [ziggy, platform.platformKind]);
 
     const getPathForFile = useCallback((file: File): string | undefined => {
@@ -673,7 +701,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
                 missingTools: [],
             };
         }
-        return await messages.invoke<IToolsStatus>('check-tools', null);
+        return await ziggy.invoke<IToolsStatus>('check-tools', null);
     }, [ziggy, platform.platformKind]);
 
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
@@ -693,46 +721,46 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // Cancels through the core's queue backend, the cancel-tasks main-command, for the reason ZiggyQueueBackend.cancelTasks gives:
     // Ziggy's own cancel-tasks channel left a cancelled import waiting for good on children that never started.
     const cancelTasks = useCallback(async (sessionId: string): Promise<void> => {
-        messages.send('main-command', {
+        ziggy.send('main-command', {
             command: 'cancel-tasks',
             source: sessionId,
         });
     }, [ziggy]);
 
     const getDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return await messages.invoke<IDatabaseEntry[]>('get-databases', null);
+        return await ziggy.invoke<IDatabaseEntry[]>('get-databases', null);
     }, [ziggy]);
 
     const addDatabase = useCallback(async (entry: IDatabaseEntry): Promise<IDatabaseEntry> => {
-        return await messages.invoke<IDatabaseEntry>('add-database', toJsonValue(entry));
+        return await ziggy.invoke<IDatabaseEntry>('add-database', toJsonValue(entry));
     }, [ziggy]);
 
     const updateDatabase = useCallback(async (originalName: string, entry: IDatabaseEntry): Promise<void> => {
-        await messages.invoke('update-database', { originalName, entry: toJsonValue(entry) });
+        await ziggy.invoke('update-database', { originalName, entry: toJsonValue(entry) });
     }, [ziggy]);
 
     const setDatabaseOrigin = useCallback(async (databasePath: string, origin: string | undefined): Promise<void> => {
-        await messages.invoke('set-database-origin', { databasePath, origin: origin ?? null });
+        await ziggy.invoke('set-database-origin', { databasePath, origin: origin ?? null });
     }, [ziggy]);
 
     const removeDatabaseEntry = useCallback(async (name: string): Promise<void> => {
-        await messages.invoke('remove-database-entry', name);
+        await ziggy.invoke('remove-database-entry', name);
     }, [ziggy]);
 
     const findDatabase = useCallback(async (name: string): Promise<IDatabaseEntry | undefined> => {
-        const found = await messages.invoke<IDatabaseEntry | null>('find-database', name);
+        const found = await ziggy.invoke<IDatabaseEntry | null>('find-database', name);
         return found ?? undefined;
     }, [ziggy]);
 
     // Both platforms show the native app's folder dialog. On Android the dialog answers with a content:// tree address, where
     // the phone's earlier "Browse" prompt asked for a name and answered with a path inside the app's private storage.
     const pickFolder = useCallback(async (options?: IPickFolderOptions): Promise<string | undefined> => {
-        const picked = await messages.invoke<string | null>('pick-folder', toJsonValue(options ?? null));
+        const picked = await ziggy.invoke<string | null>('pick-folder', toJsonValue(options ?? null));
         return picked ?? undefined;
     }, [ziggy]);
 
     const pickFiles = useCallback(async (title: string): Promise<string[] | undefined> => {
-        const picked = await messages.invoke<string[] | null>('pick-files', title);
+        const picked = await ziggy.invoke<string[] | null>('pick-files', title);
         return picked ?? undefined;
     }, [ziggy]);
 
@@ -758,7 +786,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     const saveDownloadedFiles = useCallback(async (items: ISaveAssetItem[], databasePath: string): Promise<ISaveDownloadResult> => {
         if (platform.platformKind === "desktop") {
             // One round trip: the core shows the destination dialog, writes the files and reports the outcome.
-            return await messages.invoke<ISaveDownloadResult>('save-assets', { items: toJsonValue(items), databasePath });
+            return await ziggy.invoke<ISaveDownloadResult>('save-assets', { items: toJsonValue(items), databasePath });
         }
 
         // A phone cannot write to a place the user chooses, so the files are written into the app's private storage and the
@@ -767,24 +795,24 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         stagedExportOutcomeRef.current = undefined;
         return await saveDownloadsViaShareSheet(items, databasePath, testOutcome, {
             newUuid: () => uuidGenerator.generate(),
-            makeExportFolder: async folder => (await messages.invoke<IExportFolderReply>('exportTempFolder', { folder })).path,
+            makeExportFolder: async folder => (await ziggy.invoke<IExportFolderReply>('exportTempFolder', { folder })).path,
             runTask: (taskType, data) => runDownloadTask(databasePath, taskType, data),
-            exportFile: (path, outcome) => messages.invoke<IExportFileReply>('exportFile', toJsonValue(buildExportFileRequest(path, outcome))),
-            exportFiles: (paths, outcome) => messages.invoke<IExportFilesReply>('exportFiles', toJsonValue(buildExportFilesRequest(paths, outcome))),
+            exportFile: (path, outcome) => ziggy.invoke<IExportFileReply>('exportFile', toJsonValue(buildExportFileRequest(path, outcome))),
+            exportFiles: (paths, outcome) => ziggy.invoke<IExportFilesReply>('exportFiles', toJsonValue(buildExportFilesRequest(paths, outcome))),
         });
     }, [ziggy, platform.platformKind, runDownloadTask]);
 
     const listSecrets = useCallback(async (): Promise<ISharedSecretEntry[]> => {
-        const allSecrets = await messages.invoke<ISecret[]>('vault-list', null);
+        const allSecrets = await ziggy.invoke<ISecret[]>('vault-list', null);
         return allSecrets.map((secretEntry: ISecret) => ({ name: secretEntry.name, type: secretEntry.type }));
     }, [ziggy]);
 
     const addSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> => {
-        const existing = await messages.invoke<ISecret | null>('vault-get', entry.name);
+        const existing = await ziggy.invoke<ISecret | null>('vault-get', entry.name);
         if (existing) {
             throw new Error(`A secret named '${entry.name}' already exists.`);
         }
-        await messages.invoke('vault-set', { name: entry.name, type: entry.type, value });
+        await ziggy.invoke('vault-set', { name: entry.name, type: entry.type, value });
         return { name: entry.name, type: entry.type };
     }, [ziggy]);
 
@@ -795,48 +823,48 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
         // Set the new entry first, then delete the old one if the name changed.
         // Order matters: a crash between the two leaves data rather than losing it.
-        await messages.invoke('vault-set', { name: entry.name, type: entry.type, value });
+        await ziggy.invoke('vault-set', { name: entry.name, type: entry.type, value });
         if (originalName !== entry.name) {
-            await messages.invoke('vault-delete', originalName);
+            await ziggy.invoke('vault-delete', originalName);
         }
     }, [ziggy]);
 
     const deleteSecret = useCallback(async (name: string): Promise<void> => {
-        await messages.invoke('vault-delete', name);
+        await ziggy.invoke('vault-delete', name);
     }, [ziggy]);
 
     const getSecretValue = useCallback(async (name: string): Promise<string | undefined> => {
-        const secret = await messages.invoke<ISecret | null>('vault-get', name);
+        const secret = await ziggy.invoke<ISecret | null>('vault-get', name);
         return secret?.value;
     }, [ziggy]);
 
     const getRecentDatabases = useCallback(async (): Promise<IDatabaseEntry[]> => {
-        return await messages.invoke<IDatabaseEntry[]>('get-recent-databases', null);
+        return await ziggy.invoke<IDatabaseEntry[]>('get-recent-databases', null);
     }, [ziggy]);
 
     const getLastDatabase = useCallback(async (): Promise<string | undefined> => {
-        const lastDatabase = await messages.invoke<string | null>('get-last-database', null);
+        const lastDatabase = await ziggy.invoke<string | null>('get-last-database', null);
         return lastDatabase ?? undefined;
     }, [ziggy]);
 
     const removeRecentDatabaseName = useCallback(async (name: string): Promise<void> => {
-        await messages.invoke('remove-recent-database-name', name);
+        await ziggy.invoke('remove-recent-database-name', name);
     }, [ziggy]);
 
     const listS3Dirs = useCallback(async (s3Key: string, bucket: string, prefix: string): Promise<string[]> => {
-        return await messages.invoke<string[]>('list-s3-dirs', { s3Key, bucket, prefix });
+        return await ziggy.invoke<string[]>('list-s3-dirs', { s3Key, bucket, prefix });
     }, [ziggy]);
 
     const importSharePayload = useCallback(async (payload: unknown, conflictResolutions: Record<string, IConflictResolution>): Promise<void> => {
-        await messages.invoke('import-share-payload', { payload: toJsonValue(payload), conflictResolutions: toJsonValue(conflictResolutions) });
+        await ziggy.invoke('import-share-payload', { payload: toJsonValue(payload), conflictResolutions: toJsonValue(conflictResolutions) });
     }, [ziggy]);
 
     const markUpdateAsShown = useCallback(async (version: string): Promise<void> => {
-        await messages.invoke('mark-update-shown', version);
+        await ziggy.invoke('mark-update-shown', version);
     }, [ziggy]);
 
     const markNewsAsShown = useCallback(async (newsId: string): Promise<void> => {
-        await messages.invoke('mark-news-shown', newsId);
+        await ziggy.invoke('mark-news-shown', newsId);
     }, [ziggy]);
 
     const copyToClipboard = useCallback(async (blob: Blob, _contentType: string): Promise<void> => {
@@ -855,7 +883,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     //
     const toggleDevTools = useCallback((): void => {
         if (platform.platformKind === "desktop") {
-            messages.send('main-command', 'toggle-devtools');
+            ziggy.send('main-command', 'toggle-devtools');
             return;
         }
         const erudaState = erudaStateRef.current;
@@ -893,13 +921,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // sync-specific channel is needed.
     //
     const setSyncAllowed = useCallback((allowed: boolean): void => {
-        messages.send('main-command', { command: 'set-sync-allowed', allowed });
+        ziggy.send('main-command', { command: 'set-sync-allowed', allowed });
     }, [ziggy]);
 
     // Tells the core the page has loaded and is listening for events, which starts the checks for an update and for news. The
     // listeners of the components below this provider are set up before this runs, so the toast a check asks for is not lost.
     useEffect(() => {
-        messages.send('main-command', { command: 'page-loaded' });
+        ziggy.send('main-command', { command: 'page-loaded' });
     }, [ziggy]);
 
     // In test mode, the shared test driver's window events are turned into the app's own callbacks, so a test exercises the
@@ -1041,11 +1069,11 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     //
     const config = createConfig(
         async (key) => {
-            const value = await messages.invoke('get-config', key);
+            const value = await ziggy.invoke('get-config', key);
             return value === null ? undefined : value;
         },
         async (key, value) => {
-            await messages.invoke('set-config', { key, value: value as IJsonValue });
+            await ziggy.invoke('set-config', { key, value: value as IJsonValue });
             if (BACKGROUND_WORK_CONFIG_KEYS.includes(key) && autoImportChangedRef.current) {
                 autoImportChangedRef.current();
             }
@@ -1054,10 +1082,10 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     const state = createConfig(
         async (key) => {
-            const value = await messages.invoke('get-state', key);
+            const value = await ziggy.invoke('get-state', key);
             return value === null ? undefined : value;
         },
-        (key, value) => messages.invoke('set-state', { key, value: value as IJsonValue })
+        (key, value) => ziggy.invoke('set-state', { key, value: value as IJsonValue })
     );
 
     return (

@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
 import type { IZiggyBridge } from "ziggy";
-import { AppMessages } from "./app-messages";
+import type { IAppEvent } from "./platform-provider-ziggy";
 import { TaskQueue, TaskStatus } from "task-queue";
 import { RandomUuidGenerator } from "utils";
 import { useAssetDatabase, useGallery, useSearch, type IAssetDatabase, type IGalleryContext, type ISearchContext, type IGalleryItem, type IDatabaseEntry } from "user-interface";
@@ -48,32 +48,36 @@ export function McpToolHandler({ ziggy }: IMcpToolHandlerProps): React.ReactElem
     const gallery = useGallery();
     const search = useSearch();
     const navigate = useNavigate();
-    const messages = useMemo(() => new AppMessages(ziggy), [ziggy]);
 
     useEffect(() => {
-        const handler = (request: IMcpToolRequest): void => {
-            void dispatchTool(request, assetDatabase, gallery, search, navigate, messages)
+        const handler = (event: IAppEvent<IMcpToolRequest>): void => {
+            if (event.type !== MCP_TOOL_REQUEST) {
+                return;
+            }
+
+            const request = event.data;
+            void dispatchTool(request, assetDatabase, gallery, search, navigate, ziggy)
                 .then(result => {
-                    messages.send("mcp-tool-response", {
+                    ziggy.send("mcp-tool-response", {
                         requestId: request.requestId,
                         result,
                     });
                 })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);
-                    messages.send("mcp-tool-response", {
+                    ziggy.send("mcp-tool-response", {
                         requestId: request.requestId,
                         error: message,
                     });
                 });
         };
 
-        messages.onEvent(MCP_TOOL_REQUEST, handler);
+        ziggy.onEvent(handler);
 
         return () => {
-            messages.removeAllListeners(MCP_TOOL_REQUEST);
+            ziggy.removeEventListener(handler);
         };
-    }, [ messages, assetDatabase, gallery, search, navigate ]);
+    }, [ ziggy, assetDatabase, gallery, search, navigate ]);
 
     return null;
 }
@@ -88,11 +92,11 @@ async function dispatchTool(
     gallery: IGalleryContext,
     search: ISearchContext,
     navigate: NavigateFunction,
-    messages: AppMessages,
+    ziggy: IZiggyBridge,
 ): Promise<string> {
     switch (request.tool) {
         case "list_databases": {
-            const databases = await messages.invoke<IDatabaseEntry[]>("get-databases", null);
+            const databases = await ziggy.invoke<IDatabaseEntry[]>("get-databases", null);
             return JSON.stringify(databases, null, 2);
         }
         case "open_database": {
@@ -193,7 +197,7 @@ async function dispatchTool(
             // (no dialog, because the model has already chosen the destination via Claude).
             //
             const defaultFilename = args.outputPath.split(/[\\/]/).pop() || args.outputPath;
-            await messages.invoke("save-asset", { assetId: args.assetId, assetType: args.type, filename: defaultFilename, databasePath, destPath: args.outputPath });
+            await ziggy.invoke("save-asset", { assetId: args.assetId, assetType: args.type, filename: defaultFilename, databasePath, destPath: args.outputPath });
             return `Saving ${args.type} of media file ${args.assetId} to ${args.outputPath}`;
         }
         case "import_media_files": {
@@ -201,7 +205,7 @@ async function dispatchTool(
             if (args.dryRun) {
                 return "Dry-run import is not supported from the desktop MCP server. Use `psi mcp` (CLI) for dry runs.";
             }
-            const session = await messages.invoke<IImportSession | null>("import-directories", args.paths);
+            const session = await ziggy.invoke<IImportSession | null>("import-directories", args.paths);
             return session
                 ? `Started import session ${session.sessionId}`
                 : "Import cancelled or no database open.";

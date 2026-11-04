@@ -42,13 +42,13 @@ flowchart TD
         queue["ZiggyQueueBackend"]
     end
 
-    bridge -->|"getPlatform(), then render"| app
+    bridge --> app
     app --> router
     app -->|"setQueueBackend"| queue
     queue <--> bridge
     router -->|"/stories"| ppzStories["PlatformProviderZiggy"] --> stories["StoriesPage"]
     router -->|"all other paths"| ppz
-    ppz <-->|"AppMessages"| bridge
+    ppz <-->|"messages and events"| bridge
 
     subgraph platformCtx["Platform contexts"]
         uuid["UuidGeneratorProvider"]
