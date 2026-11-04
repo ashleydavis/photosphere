@@ -32,22 +32,6 @@ const testMode = isTestMode();
 const uuidGenerator: IUuidGenerator = testMode ? new TestUuidGenerator() : new RandomUuidGenerator();
 
 //
-// The settings the phone's background work has to be told about the moment they change. Every setting is written the same way; this
-// only decides who needs telling afterwards. The syncing pair is here as well as the automatic import ones because the page decides
-// whether the background sync should run, so switching syncing on while automatic import is off would otherwise wait for the next
-// launch.
-//
-const BACKGROUND_WORK_CONFIG_KEYS: string[] = [
-    'autoImportEnabled',
-    'autoImportSources',
-    'autoImportCleanupEnabled',
-    'defaultDatabasePath',
-    'syncEnabled',
-    'syncOnlyOnWifi',
-];
-
-
-//
 // One of Photosphere's own events as it arrives from the core on the bridge. Every listener
 // receives every event and acts only on the type it is for.
 //
@@ -1074,7 +1058,11 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         },
         async (key, value) => {
             await ziggy.invoke('set-config', { key, value: value as IJsonValue });
-            if (BACKGROUND_WORK_CONFIG_KEYS.includes(key) && autoImportChangedRef.current) {
+
+            //
+            // TODO: Move this re-check of the background work to the core, which already receives every set-config.
+            //
+            if (autoImportChangedRef.current) {
                 autoImportChangedRef.current();
             }
         }
