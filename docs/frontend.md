@@ -52,8 +52,8 @@ flowchart TD
 
     subgraph platformCtx["Platform contexts"]
         uuid["UuidGeneratorProvider"]
-        config["ConfigContextProvider (get-config / set-config)"]
-        state["StateContextProvider (get-state / set-state)"]
+        config["ConfigStoreContextProvider (get-config / set-config)"]
+        state["StateStoreContextProvider (get-state / set-state)"]
         platform["PlatformContextProvider (IPlatformContext)"]
         uuid --> config --> state --> platform
     end
@@ -114,7 +114,7 @@ flowchart TD
 - The one place that knows about Ziggy. Everything below it talks to the core only through the contexts it provides.
 - It turns bridge messages and events into four contexts:
   - `PlatformContext`: the `IPlatformContext` object (databases, vault, recents, pickers, tasks, sharing, menu actions, notifications, theme and network events).
-  - `ConfigContext` and `StateContext`: key/value stores backed by the core's config file and state file.
+  - `ConfigStoreContext` and `StateStoreContext`: key/value stores backed by the core's config file and state file, read through `useConfigStore()` and `useStateStore()`.
   - `UuidGenerator`.
 - Desktop versus phone differences are decided here from `platform.platformKind`, not in the shared UI.
 

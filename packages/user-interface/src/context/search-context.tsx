@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useGallery } from "./gallery-context";
-import { useConfig } from "./config-context";
-import { useState as useStateStore } from "./state-context";
+import { useConfigStore } from "./config-store-context";
+import { useStateStore } from "./state-store-context";
 
 export interface ISearchContext {
     //
@@ -82,7 +82,7 @@ export function SearchContextProvider({ children }: ISearchContextProviderProps)
     const [savedSearches, setSavedSearches] = useState<string[]>([]);
 
     const { search, clearSearch, searchText } = useGallery();
-    const config = useConfig();
+    const config = useConfigStore();
     const state = useStateStore();
 
     //

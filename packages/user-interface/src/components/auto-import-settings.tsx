@@ -8,7 +8,7 @@ import Typography from "@mui/joy/Typography/Typography";
 import { Add, CloudUpload, Delete } from "@mui/icons-material";
 // Imported from the module rather than the package barrel, which reaches Node-only code.
 import { IAutoImportSettings, IFolderAutoImportSource } from "api/src/lib/auto-import-settings";
-import { useConfig } from "../context/config-context";
+import { useConfigStore } from "../context/config-store-context";
 import { usePlatform } from "../context/platform-context";
 import { log } from "utils";
 import { getDefaultDatabasePath, loadAutoImportSettings, saveAutoImportSettings } from "../lib/auto-import-config";
@@ -35,7 +35,7 @@ const CLEANUP_TASK_SOURCE = "source-cleanup";
 // handful of photos. A button asks once, when they choose.
 //
 export function AutoImportSettings() {
-    const config = useConfig();
+    const config = useConfigStore();
     const platform = usePlatform();
     const [settings, setSettings] = useState<IAutoImportSettings | undefined>(undefined);
 

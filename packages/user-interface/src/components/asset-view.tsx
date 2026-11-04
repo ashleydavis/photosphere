@@ -7,7 +7,7 @@ import { useGallery } from "../context/gallery-context";
 import { useGallerySource } from "../context/gallery-source";
 import { usePlatform } from "../context/platform-context";
 import { useAssetDatabase } from "../context/asset-database-source";
-import { useState as useStateStore } from "../context/state-context";
+import { useStateStore } from "../context/state-store-context";
 import { Chip, Drawer, IconButton } from "@mui/joy";
 import { ContentCopy, Delete, Download, Flag, Star } from "@mui/icons-material";
 import { DeleteConfirmationDialog } from "./delete-confirmation-dialog";

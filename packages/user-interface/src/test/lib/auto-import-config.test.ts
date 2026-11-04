@@ -1,5 +1,5 @@
 import { DEFAULT_AUTO_IMPORT_SETTINGS, IAutoImportSettings } from "api";
-import { IConfig } from "../../context/config-context";
+import { IConfig } from "../../context/config-store-context";
 import {
     AUTO_IMPORT_ENABLED_KEY,
     AUTO_IMPORT_SOURCES_KEY,

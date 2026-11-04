@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigContextProvider, StateContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
@@ -1090,13 +1090,13 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
 
     return (
         <UuidGeneratorProvider value={uuidGenerator}>
-            <ConfigContextProvider value={config}>
-                <StateContextProvider value={state}>
+            <ConfigStoreContextProvider value={config}>
+                <StateStoreContextProvider value={state}>
                     <PlatformContextProvider value={platformContext}>
                         {children}
                     </PlatformContextProvider>
-                </StateContextProvider>
-            </ConfigContextProvider>
+                </StateStoreContextProvider>
+            </ConfigStoreContextProvider>
         </UuidGeneratorProvider>
     );
 }

@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform } from "./platform-context";
-import { useConfig } from "./config-context";
-import { useState as useStateStore } from "./state-context";
+import { useConfigStore } from "./config-store-context";
+import { useStateStore } from "./state-store-context";
 import { log } from "utils";
 
 //
@@ -82,7 +82,7 @@ export interface IDeveloperContextProviderProps {
 //
 export function DeveloperContextProvider({ children }: IDeveloperContextProviderProps) {
     const platform = usePlatform();
-    const config = useConfig();
+    const config = useConfigStore();
     const state = useStateStore();
 
     //

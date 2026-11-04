@@ -1,6 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform, type INetworkStatus } from "./platform-context";
-import { useConfig } from "./config-context";
+import { useConfigStore } from "./config-store-context";
 import { computeSyncAllowed } from "../lib/sync-gate";
 import { SYNC_ENABLED_CONFIG_KEY, SYNC_ONLY_ON_WIFI_CONFIG_KEY } from "../lib/sync-config";
 import { log } from "utils";
@@ -51,7 +51,7 @@ export interface ISyncContextProviderProps {
 //
 export function SyncContextProvider({ children }: ISyncContextProviderProps) {
     const platform = usePlatform();
-    const config = useConfig();
+    const config = useConfigStore();
 
     //
     // Whether syncing is enabled. Loaded from persistent config on mount (default true).

@@ -7,7 +7,7 @@ import {
     IRawAutoImportSettings,
     normaliseAutoImportSettings,
 } from "api/src/lib/auto-import-settings";
-import { IConfig } from "../context/config-context";
+import { IConfig } from "../context/config-store-context";
 
 //
 // Reading and writing the automatic import settings through the generic config store.

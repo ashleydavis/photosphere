@@ -1,5 +1,8 @@
+//
+// The React context that hands the state store to the component tree.
+//
 import React, { ReactNode, createContext, useContext } from "react";
-import type { IConfig } from "./config-context";
+import type { IConfig } from "./config-store-context";
 
 //
 // The store for what the app remembers on its own, so the interface comes back the way it was left:
@@ -12,14 +15,17 @@ import type { IConfig } from "./config-context";
 // Nothing has to decide at run time, and nothing has to keep a list of which key is which.
 //
 // The operations are the same as the config store's, so the interface is the same one. What differs is
-// the file underneath: each platform backs this context with state.yaml and the config context with
-// config.yaml.
+// the file underneath: each platform backs this context with state.yaml and the config store context
+// with config.yaml.
 //
-const StateContext = createContext<IConfig | undefined>(undefined);
+const StateStoreContext = createContext<IConfig | undefined>(undefined);
 
-export interface IStateContextProviderProps {
+//
+// Props for the state store provider.
+//
+export interface IStateStoreContextProviderProps {
     //
-    // The store implementation to provide to the component tree.
+    // The store to provide to the component tree.
     //
     value: IConfig;
 
@@ -32,24 +38,21 @@ export interface IStateContextProviderProps {
 //
 // Provides the state store to the component tree.
 //
-export function StateContextProvider({ value, children }: IStateContextProviderProps) {
+export function StateStoreContextProvider({ value, children }: IStateStoreContextProviderProps) {
     return (
-        <StateContext.Provider value={value}>
+        <StateStoreContext.Provider value={value}>
             {children}
-        </StateContext.Provider>
+        </StateStoreContext.Provider>
     );
 }
 
 //
-// Returns the state store from context. Must be used within a StateContextProvider.
+// Returns the state store from context. Must be used within a StateStoreContextProvider.
 //
-// A file that also needs React's own useState imports this one under another name, rather than either
-// being renamed: the two are unrelated and both names are the right one where they are used.
-//
-export function useState(): IConfig {
-    const context = useContext(StateContext);
+export function useStateStore(): IConfig {
+    const context = useContext(StateStoreContext);
     if (!context) {
-        throw new Error(`StateContext is not set! Add StateContextProvider to the component tree.`);
+        throw new Error(`StateStoreContext is not set! Add StateStoreContextProvider to the component tree.`);
     }
     return context;
 }

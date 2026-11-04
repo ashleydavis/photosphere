@@ -10,7 +10,7 @@ import ModalClose from "@mui/joy/ModalClose";
 import { ResponsiveDialog } from "./responsive-dialog";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
-import { useConfig } from "../context/config-context";
+import { useConfigStore } from "../context/config-store-context";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useSync } from "../context/sync-context";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
@@ -34,7 +34,7 @@ export interface IConfigurationDialogProps {
 //
 export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps) {
     const { mode, setMode } = useColorScheme();
-    const config = useConfig();
+    const config = useConfigStore();
     const { targetRowHeight, setTargetRowHeight } = useGalleryLayout();
     const { syncEnabled, toggleSyncEnabled, syncOnlyOnWifi, toggleSyncOnlyOnWifi } = useSync();
 

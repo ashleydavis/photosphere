@@ -16,8 +16,8 @@ import { AppContextProvider } from "../../context/app-context";
 import { DeveloperContextProvider } from "../../context/developer-context";
 import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
-import { ConfigContextProvider, createConfig } from "../../context/config-context";
-import { StateContextProvider } from "../../context/state-context";
+import { ConfigStoreContextProvider, createConfig } from "../../context/config-store-context";
+import { StateStoreContextProvider } from "../../context/state-store-context";
 import {
     AssetDatabaseContext,
     AssetDatabaseProvider,
@@ -478,7 +478,7 @@ export interface IMockProvidersProps {
 //
 //
 // Builds an in-memory IConfig backed by a plain object, so components that
-// consume useConfig() get a working implementation in stories.
+// consume useConfigStore() get a working implementation in stories.
 //
 function createInMemoryConfig() {
     const configStore: { [key: string]: unknown } = {};
@@ -503,7 +503,7 @@ export function MockProviders({
     const databaseValue = assetDatabase || mockAssetDatabase();
 
     //
-    // In-memory config so any story that consumes useConfig() gets a real
+    // In-memory config so any story that consumes useConfigStore() gets a real
     // implementation instead of crashing on missing context.
     //
     const config = createInMemoryConfig();
@@ -556,8 +556,8 @@ export function MockProviders({
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={apiValue}>
-                    <ConfigContextProvider value={config}>
-                    <StateContextProvider value={state}>
+                    <ConfigStoreContextProvider value={config}>
+                    <StateStoreContextProvider value={state}>
                         <AppContextProvider>
                             <ToastContextProvider>
                                 {withJobsContext(
@@ -583,8 +583,8 @@ export function MockProviders({
                                 )}
                             </ToastContextProvider>
                         </AppContextProvider>
-                    </StateContextProvider>
-                    </ConfigContextProvider>
+                    </StateStoreContextProvider>
+                    </ConfigStoreContextProvider>
                     </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
@@ -732,8 +732,8 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={axiosApi}>
-                    <ConfigContextProvider value={config}>
-                    <StateContextProvider value={state}>
+                    <ConfigStoreContextProvider value={config}>
+                    <StateStoreContextProvider value={state}>
                         <AppContextProvider>
                             <ToastContextProvider>
                                 <JobsContextProvider>
@@ -759,8 +759,8 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                                 </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
-                    </StateContextProvider>
-                    </ConfigContextProvider>
+                    </StateStoreContextProvider>
+                    </ConfigStoreContextProvider>
                     </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>

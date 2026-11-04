@@ -1,3 +1,6 @@
+//
+// The React context that hands the config store to the component tree.
+//
 import React, { ReactNode, createContext, useContext } from "react";
 
 //
@@ -66,38 +69,44 @@ export function createConfig(
     };
 }
 
-const ConfigContext = createContext<IConfig | undefined>(undefined);
+//
+// The store for what the user chose, which each platform backs with config.yaml.
+//
+const ConfigStoreContext = createContext<IConfig | undefined>(undefined);
 
-export interface IConfigContextProviderProps {
+//
+// Props for the config store provider.
+//
+export interface IConfigStoreContextProviderProps {
     //
-    // The IConfig implementation to provide to the component tree.
+    // The store to provide to the component tree.
     //
     value: IConfig;
 
     //
-    // Child components that will have access to the config.
+    // Child components that will have access to the store.
     //
     children: ReactNode | ReactNode[];
 }
 
 //
-// Provides an IConfig implementation to the component tree.
+// Provides the config store to the component tree.
 //
-export function ConfigContextProvider({ value, children }: IConfigContextProviderProps) {
+export function ConfigStoreContextProvider({ value, children }: IConfigStoreContextProviderProps) {
     return (
-        <ConfigContext.Provider value={value}>
+        <ConfigStoreContext.Provider value={value}>
             {children}
-        </ConfigContext.Provider>
+        </ConfigStoreContext.Provider>
     );
 }
 
 //
-// Returns the config from context. Must be used within a ConfigContextProvider.
+// Returns the config store from context. Must be used within a ConfigStoreContextProvider.
 //
-export function useConfig(): IConfig {
-    const context = useContext(ConfigContext);
+export function useConfigStore(): IConfig {
+    const context = useContext(ConfigStoreContext);
     if (!context) {
-        throw new Error(`ConfigContext is not set! Add ConfigContextProvider to the component tree.`);
+        throw new Error(`ConfigStoreContext is not set! Add ConfigStoreContextProvider to the component tree.`);
     }
     return context;
 }

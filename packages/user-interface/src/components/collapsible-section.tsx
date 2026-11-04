@@ -1,7 +1,7 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import Typography from "@mui/joy/Typography/Typography";
 import { ExpandMore, KeyboardArrowRight } from "@mui/icons-material";
-import { useState as useStateStore } from "../context/state-context";
+import { useStateStore } from "../context/state-store-context";
 
 export interface ICollapsibleSectionProps {
     //

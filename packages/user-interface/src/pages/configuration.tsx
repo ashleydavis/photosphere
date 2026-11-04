@@ -8,7 +8,7 @@ import Button from "@mui/joy/Button/Button";
 import Slider from "@mui/joy/Slider/Slider";
 import Card from "@mui/joy/Card";
 import { DarkMode, LightMode, SettingsBrightness, PhotoSizeSelectLarge } from "@mui/icons-material";
-import { useConfig } from "../context/config-context";
+import { useConfigStore } from "../context/config-store-context";
 import { useGalleryLayout } from "../context/gallery-layout-context";
 import { useIsMobile } from "../lib/use-is-mobile";
 import { AutoImportSettings } from "../components/auto-import-settings";
@@ -22,7 +22,7 @@ import { AutoImportSettings } from "../components/auto-import-settings";
 //
 export function ConfigurationPage() {
     const { mode, setMode } = useColorScheme();
-    const config = useConfig();
+    const config = useConfigStore();
     const { targetRowHeight, setTargetRowHeight } = useGalleryLayout();
     const isMobile = useIsMobile();
 

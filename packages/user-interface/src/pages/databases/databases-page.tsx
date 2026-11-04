@@ -22,7 +22,7 @@ import { ReceiveDatabaseDialog } from '../../components/receive-database-dialog'
 import { ViewDatabaseDialog } from '../../components/view-database-dialog';
 import { ReplicateDatabaseDialog } from '../../components/replicate-database-dialog';
 import { ConsolidateDatabaseDialog } from '../../components/consolidate-database-dialog';
-import { useConfig } from '../../context/config-context';
+import { useConfigStore } from '../../context/config-store-context';
 import { getDefaultDatabasePath, setDefaultDatabasePath } from '../../lib/auto-import-config';
 import Chip from '@mui/joy/Chip';
 
@@ -31,7 +31,7 @@ import Chip from '@mui/joy/Chip';
 //
 export function DatabasesPage() {
     const platform = usePlatform();
-    const config = useConfig();
+    const config = useConfigStore();
     const { dbs: databases, secrets, refresh } = useApp();
     const { openDatabase } = useAssetDatabase();
     const navigate = useNavigate();

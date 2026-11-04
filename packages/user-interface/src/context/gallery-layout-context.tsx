@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useRef, useStat
 import { computePartialLayout, deleteFromLayout, IGalleryLayout } from "../lib/create-layout";
 import { useGallery } from "./gallery-context";
 import { IGalleryItem } from "../lib/gallery-item";
-import { useState as useStateStore } from "./state-context";
+import { useStateStore } from "./state-store-context";
 
 //
 // Manages the layout of the gallery.
