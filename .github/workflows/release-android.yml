@@ -436,6 +436,9 @@ jobs:
           api-level: 35
           arch: x86_64
           target: google_apis
+          # The image's default userdata partition is 7.4 GB, more than some runners have free, and the emulator then fails to start.
+          # A local emulator in daily use holds 1.9 GB of data.
+          disk-size: 4096M
           # Emulator 36.6.11, the build the local emulator scripts pin (EMULATOR_BUILD in scripts/android/emulator-config.sh,
           # which says why): the newest emulator never gives back the memory of an app it has stopped, and this suite starts the app
           # many times.
