@@ -37,6 +37,10 @@ const routes: asset_server_routes.AssetServerRoutes = asset_server_routes.attach
 // What the asset server is started with.
 //
 pub const IAssetServerOptions = struct {
+    // The directory a relative database path in a request is resolved against: the dbs directory of the app's data directory, or empty for the working
+    // directory.
+    baseDir: []const u8,
+
     // Write-lock owner for write/apply operations (see acquireWriteLock).
     sessionId: []const u8,
     // The native app's callbacks, through which a connection thread reads a database's credentials from the native app's keychain (a
@@ -48,6 +52,9 @@ pub const IAssetServerOptions = struct {
 // What each connection thread is told, as JSON text, of which it is given a copy.
 //
 const IConnectionConfig = struct {
+    // The directory a relative database path in a request is resolved against.
+    baseDir: []const u8,
+
     // Write-lock owner for write/apply operations.
     sessionId: []const u8,
 };
@@ -70,6 +77,7 @@ pub const AssetServer = struct {
         const self = try allocator.create(AssetServer);
         errdefer allocator.destroy(self);
         const config = try json.stringify(allocator, IConnectionConfig{
+            .baseDir = options.baseDir,
             .sessionId = options.sessionId,
         });
         defer allocator.free(config);
@@ -116,7 +124,7 @@ fn createConnectionCore(config: []const u8, native_callbacks: ?*const ziggy.core
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const parsed = try std.json.parseFromSliceLeaky(IConnectionConfig, arena_state.allocator(), config, .{});
-    return try asset_server_core.createOwnAssetServerCore(allocator, parsed.sessionId, native_callbacks);
+    return try asset_server_core.createOwnAssetServerCore(allocator, parsed.baseDir, parsed.sessionId, native_callbacks);
 }
 
 //

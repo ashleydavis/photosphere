@@ -17,8 +17,6 @@ const enter = "\r";
 // The databases.toml the dbs prompt tests start with: one entry that has every field.
 //
 const seed_config =
-    \\recent_database_names = [ "photos" ]
-    \\
     \\[[databases]]
     \\name = "photos"
     \\description = "My photos"
@@ -87,8 +85,6 @@ test "dbs add links the secrets it is told to and creates the ones it is asked t
     try helpers.expectContains(created.stdout, "\u{2713} Database \"created\" added.");
 
     try std.testing.expectEqualStrings(
-        \\recent_database_names = [ "photos" ]
-        \\
         \\[[databases]]
         \\name = "photos"
         \\description = "My photos"
@@ -245,6 +241,12 @@ test "dbs edit changes a database picked from the list, with its secrets, and sa
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const environment = try helpers.setupConfigAndVault(allocator, root, seed_config, seed_vault);
 
+    // The database is in the recents, which the rename has to carry to the new name.
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/state.yaml", .{root}),
+        .data = "databases:\n  recent_names:\n    - photos\n",
+    });
+
     // Each prompt starts with the current value: typing adds to it. The S3 credentials and the geocoding key are
     // changed to None, and the encryption key is kept.
     const edited = try helpers.runPsiWithPrompts(allocator, environment, &.{ "dbs", "edit" }, &.{
@@ -261,8 +263,6 @@ test "dbs edit changes a database picked from the list, with its secrets, and sa
     try helpers.expectContains(edited.stdout, "Edit Database: photos");
     try helpers.expectContains(edited.stdout, "\u{2713} Database \"photos2\" updated.");
     try std.testing.expectEqualStrings(
-        \\recent_database_names = [ "photos2" ]
-        \\
         \\[[databases]]
         \\name = "photos2"
         \\description = "My photos edited"
@@ -270,6 +270,7 @@ test "dbs edit changes a database picked from the list, with its secrets, and sa
         \\encryption_key = "my-key"
         \\
     , try helpers.readRootFile(allocator, root, "config/databases.toml"));
+    try std.testing.expectEqualStrings("databases:\n  recent_names:\n    - photos2\n", try helpers.readRootFile(allocator, root, "config/state.yaml"));
 
     const selectCancelled = try helpers.runPsiWithPrompts(allocator, environment, &.{ "dbs", "edit" }, &.{
         .{ .waitFor = "Select a database to edit:", .keys = cancel },

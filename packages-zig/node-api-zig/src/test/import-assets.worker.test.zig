@@ -661,7 +661,7 @@ const ImportTest = struct {
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
         self.databaseDir = try path.join(allocator, &.{ self.tempDir, "db" });
-        const created = try storage_zig.storage_factory.createStorage(allocator, io, self.databaseDir, null, null);
+        const created = try storage_zig.storage_factory.createStorage(allocator, io, "", self.databaseDir, null, null);
         self.database = try node_api.media_file_database.createMediaFileDatabase(allocator, created.storage, self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider());
         try node_api.media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
 
@@ -928,7 +928,7 @@ fn releaseLockLater(databaseDir: [512]u8, databaseDirLength: usize, importTime: 
     }
     var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
     defer arena.deinit();
-    const created = storage_zig.storage_factory.createStorage(arena.allocator(), io, databaseDir[0..databaseDirLength], null, null) catch |err| {
+    const created = storage_zig.storage_factory.createStorage(arena.allocator(), io, "", databaseDir[0..databaseDirLength], null, null) catch |err| {
         std.debug.panic("The releaser could not open the database's storage: {s}", .{@errorName(err)});
     };
     created.rawStorage.releaseWriteLock(arena.allocator(), io, log, ".db/write.lock") catch {};
@@ -946,7 +946,7 @@ test "when acquireWriteLock returns false, retries until lock is acquired and sl
     const io = virtual_time.io();
     _ = try context.writePhoto("img1.jpg");
     // Another owner holds the lock when the import first asks for it, and lets go of it a while later.
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, context.databaseDir, null, null);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, "", context.databaseDir, null, null);
     try std.testing.expect(try created.rawStorage.acquireWriteLock(allocator, io, log, ".db/write.lock", "other-owner"));
     // Waiting for the lock logs each failed attempt; a passing test must write nothing to stderr, so the log is muted.
     var databaseDir: [512]u8 = undefined;

@@ -166,7 +166,7 @@ fn addFileToFilesTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, asset
 //
 fn createEmptyDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, name: []const u8) !TestDatabase {
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
@@ -193,7 +193,7 @@ const TestDatabase = struct {
 //
 fn createPopulatedDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog) !TestDatabase {
     const dir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
     return .{ .dir = dir, .assetStorage = opened.storage, .rawStorage = opened.rawStorage };
 }
 
@@ -315,7 +315,7 @@ test "omits the content hash when the database is empty" {
     defer test_env.deinit(log);
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-locked-empty");
     defer temp_dirs.removeTempDir(io, dir);
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
 
     try tree.stampDatabaseStateLocked(allocator, io, log, opened.storage, opened.rawStorage, "session-1", .{ .lastReplicatedAt = "2026-01-02T03:04:05.000Z" });
 
@@ -387,7 +387,7 @@ test "omits the content hash when the database is empty and preserves other fiel
     defer test_env.deinit(log);
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-state-empty");
     defer temp_dirs.removeTempDir(io, dir);
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
     try api.database_state.saveDatabaseState(allocator, io, log, opened.rawStorage, .{ .lastModifiedAt = "2026-01-02T03:04:05.000Z" });
 
     try tree.stampDatabaseState(allocator, io, log, opened.storage, opened.rawStorage, .{ .lastSyncedAt = "2026-01-02T03:04:06.000Z" });
@@ -448,7 +448,7 @@ test "writes lastModifiedAt but no content hash when the database is empty" {
     defer test_env.deinit(log);
     const dir = try temp_dirs.makeTempDir(allocator, io, "stamp-modified-empty");
     defer temp_dirs.removeTempDir(io, dir);
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
 
     try tree.stampDatabaseModified(allocator, io, log, opened.storage, opened.rawStorage);
 

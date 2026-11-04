@@ -263,7 +263,7 @@ pub fn planSyncHandler(
     // A database with no origin has nowhere to sync to. The sync task itself would skip it, having
     // paid for an engine slot and a database open to find that out, and it would say so every pass
     // for as long as the phone was switched on.
-    const opened = try openStorage(allocator, io, log, databasePath.?, null, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try node_api.database_base_dir.taskDatabaseBaseDir(allocator, data), databasePath.?, null, null, context.nativeCaller);
     const databaseConfig = try loadDatabaseConfig(allocator, io, log, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" has no origin to sync to", .{databasePath.?}), settings, pauseBetweenRunsMs));

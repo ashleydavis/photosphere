@@ -29,7 +29,7 @@ fn recordProgress(context: ?*anyopaque, _: std.Io, _: ILog, message: ?[]const u8
 fn runVerify(allocator: std.mem.Allocator, io: std.Io, log: ILog, databaseDir: []const u8, options: ?verify.IVerifyOptions, recorder: ?*progress_recorder.ProgressRecorder) !verify.IVerifyResult {
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, databaseDir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", databaseDir, null, null, null);
     const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     const progressCallback: ?node_api.media_file_database.ProgressCallback = if (recorder) |progressRecorder| .{ .context = progressRecorder, .function = recordProgress } else null;
     return verify.verify(allocator, io, log, test_timers.timers(), .{ .databasePath = databaseDir }, opened.storage, uuidGenerator.uuidGenerator(), database.metadataCollection, options, progressCallback);
@@ -264,7 +264,7 @@ test "verify reports a database record whose hash is wrong as a record mismatch"
     defer test_env.deinitWith(log, allocator);
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, databaseDir, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", databaseDir, null, null, null);
     const database = try node_api.media_file_database.createMediaFileDatabase(allocator, opened.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     var updates: @import("serialization-zig").bson.BsonDocument = .empty;
     try updates.put(allocator, "hash", .{ .string = "0000" });

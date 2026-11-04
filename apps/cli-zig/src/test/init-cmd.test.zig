@@ -756,7 +756,6 @@ fn registerDatabases(environment: *TestEnvironment, entries: []const @import("no
     }
     var toml: std.json.ObjectMap = .empty;
     try toml.put(allocator, "databases", .{ .array = databases });
-    try toml.put(allocator, "recent_database_names", .{ .array = std.json.Array.init(allocator) });
     try @import("node-utils-zig").fs.writeToml(allocator, std.testing.io, try std.fs.path.join(allocator, &.{ configDir, "databases.toml" }), .{ .object = toml });
 }
 

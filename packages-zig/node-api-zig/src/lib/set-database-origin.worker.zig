@@ -4,6 +4,7 @@ const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const updateDatabaseConfig = api.database_config.updateDatabaseConfig;
@@ -62,7 +63,7 @@ pub fn setDatabaseOriginHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const opened = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, null, null, context.nativeCaller);
     try updateDatabaseConfig(allocator, io, log, opened.rawStorage, .{
         .origin = data.origin,
     });

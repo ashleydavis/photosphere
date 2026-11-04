@@ -198,9 +198,14 @@ photosphere_platform_start() {
         stream_waited=$((stream_waited + 1))
     done
 
+    # The app resolves a short name a user types against the dbs directory of PHOTOSPHERE_DATA_DIR, which is the directory ios_app_path
+    # names, so a seeded database and the short name typed for it name the same place.
+    local data_dir
+    data_dir="$(photosphere_ios_storage_root)" || return 1
     local launched
     launched="$(SIMCTL_CHILD_PHOTOSPHERE_TEST_MODE=1 \
         SIMCTL_CHILD_PHOTOSPHERE_CONFIG_DIR="$test_dir/config" \
+        SIMCTL_CHILD_PHOTOSPHERE_DATA_DIR="$data_dir" \
         SIMCTL_CHILD_PHOTOSPHERE_VAULT_DIR="$test_dir/vault" \
         SIMCTL_CHILD_PHOTOSPHERE_VAULT_TYPE=plaintext \
         SIMCTL_CHILD_PHOTOSPHERE_LOG_DIR="$log_dir" \
@@ -346,6 +351,16 @@ photosphere_ios_storage_root() {
 }
 
 #
+# Prints the host path of the dbs directory in the app's storage directory, the one the app resolves a short database name a user types
+# against, and where the helpers below seed, fetch, wait for and check databases.
+#
+photosphere_ios_databases_root() {
+    local root
+    root="$(photosphere_ios_storage_root)" || return 1
+    printf '%s\n' "$root/dbs"
+}
+
+#
 # Prints the host path of the app's settings directory, which photosphere_platform_start gives the app as PHOTOSPHERE_CONFIG_DIR: a
 # directory named config in the directory of the app that was started last, or in the scenario's own when none has been started.
 #
@@ -354,60 +369,62 @@ photosphere_ios_config_dir() {
 }
 
 #
-# Prints the absolute path, on the host, of a name inside the app's storage directory, which is where ios_seed_database puts a
-# fixture. The app resolves no relative path against its storage, so a scenario types or writes this path rather than the name.
-# Usage: ios_app_path <relative_path_under_storage>
+# Prints the absolute path, on the host, of a name inside the dbs directory in the app's storage directory, which is where
+# ios_seed_database puts a fixture. The storage directory is the one photosphere_platform_start gives the app as PHOTOSPHERE_DATA_DIR,
+# and the app resolves a short name a user types against its dbs directory, so a seeded database and the short name typed for it name
+# the same place.
+# Usage: ios_app_path <relative_path_under_dbs>
 #
 ios_app_path() {
     local root
-    root="$(photosphere_ios_storage_root)" || return 1
+    root="$(photosphere_ios_databases_root)" || return 1
     printf '%s\n' "$root/$1"
 }
 
 #
-# Copies a database fixture from the host into the app's storage directory, the place ios_app_path names. A copy already there is made
-# to match the fixture. The simulator's container is on the host filesystem, so a copy is enough. <relative_dest> is relative to the
-# storage directory.
-# Usage: ios_seed_database <host_fixture_dir> <relative_dest_under_storage>
+# Copies a database fixture from the host into the dbs directory in the app's storage directory, the place ios_app_path names. A copy already there is made
+# to match the fixture. The simulator's container is on the host filesystem, so a copy is enough. <relative_dest> is relative to the dbs
+# directory.
+# Usage: ios_seed_database <host_fixture_dir> <relative_dest_under_dbs>
 #
 ios_seed_database() {
     local host_src="$1"
     local rel_dest="$2"
     local root
-    root="$(photosphere_ios_storage_root)" || return 1
+    root="$(photosphere_ios_databases_root)" || return 1
     mkdir -p "$root/$rel_dest" || return 1
     rsync -a --delete "$host_src/" "$root/$rel_dest/" || return 1
-    echo "Seeded database fixture '$(basename "$host_src")' into the app's storage directory at $rel_dest" >&2
+    echo "Seeded database fixture '$(basename "$host_src")' into the dbs directory in the app's storage directory at $rel_dest" >&2
 }
 
 #
-# Copies a database out of the app's storage directory to a directory on the host, so the host's CLI can read what the app wrote. The
+# Copies a database out of the dbs directory in the app's storage directory to a directory on the host, so the host's CLI can read what the app wrote. The
 # simulator's container is on the host filesystem, so a copy is enough. The destination must not exist.
-# Usage: ios_fetch_database <relative_path_under_storage> <host_dest>
+# Usage: ios_fetch_database <relative_path_under_dbs> <host_dest>
 #
 ios_fetch_database() {
     local rel_path="$1"
     local host_dest="$2"
     local root
-    root="$(photosphere_ios_storage_root)" || return 1
+    root="$(photosphere_ios_databases_root)" || return 1
     if [ ! -d "$root/$rel_path" ]; then
-        echo "$rel_path is not a directory in the app's storage directory ($root), so nothing was copied out" >&2
+        echo "$rel_path is not a directory in the app's databases directory ($root), so nothing was copied out" >&2
         return 1
     fi
     mkdir -p "$host_dest" || return 1
     rsync -a "$root/$rel_path/" "$host_dest/" || return 1
     if [ -z "$(ls -A "$host_dest")" ]; then
-        echo "$rel_path held nothing, so nothing was copied out of the app's storage directory" >&2
+        echo "$rel_path held nothing, so nothing was copied out of the dbs directory in the app's storage directory" >&2
         return 1
     fi
 }
 
 #
-# Writes the app's databases.toml into its settings directory, registering the given databases and recent-database names, from outside
-# the app, as a desktop scenario pre-writes the file. The first two arguments are JSON: the databases as an array of {name, path}
-# (description, origin, s3Key, encryptionKey and geocodingKey optional), and the recents as an array of names, empty when omitted. The
-# third is the path of the database the app reopens on launch; omitted, no such key is written, which leaves the app on the welcome
-# screen. Paths are written as given.
+# Writes the app's databases.toml and the databases section of its state.yaml into its settings directory, registering the given
+# databases and recent-database names, from outside the app, as a desktop scenario pre-writes the files. The first two arguments are
+# JSON: the databases as an array of {name, path} (description, origin, s3Key, encryptionKey and geocodingKey optional), written to
+# databases.toml, and the recents as an array of names, empty when omitted. The third is the path of the database the app reopens on
+# launch; omitted, it is left out of state.yaml and the app starts on the welcome screen. Paths are written as given.
 # Usage: ios_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 ios_seed_databases_config() {
@@ -418,9 +435,7 @@ ios_seed_databases_config() {
     config_dir="$(photosphere_ios_config_dir)"
     mkdir -p "$config_dir" || return 1
     local rendered="$config_dir/databases.toml.seeding"
-    if ! jq -rn --argjson databases "$databases_json" --argjson recent "$recent_json" --arg last "$last_database" '
-        "recent_database_names = \($recent | tojson)",
-        (if $last != "" then "last_database = \($last | tojson)" else empty end),
+    if ! jq -rn --argjson databases "$databases_json" '
         ($databases[] |
             "",
             "[[databases]]",
@@ -438,6 +453,7 @@ ios_seed_databases_config() {
     fi
     mv "$rendered" "$config_dir/databases.toml" || return 1
     echo "Wrote the app's database list to $config_dir/databases.toml" >&2
+    seed_databases_state "$recent_json" "$last_database"
 }
 
 #
@@ -701,14 +717,14 @@ ios_dump_background_diagnostics() {
 }
 
 #
-# Removes a path under the app's storage directory so a scenario that creates fresh state there can be run again. A file is removed
+# Removes a path under the dbs directory in the app's storage directory so a scenario that creates fresh state there can be run again. A file is removed
 # and an empty directory is removed. A directory with anything in it fails, because removing a tree needs a recursive delete, which
 # this library has not been given approval for.
-# Usage: ios_reset_path <relative_path_under_storage>
+# Usage: ios_reset_path <relative_path_under_dbs>
 #
 ios_reset_path() {
     local root
-    root="$(photosphere_ios_storage_root)" || return 1
+    root="$(photosphere_ios_databases_root)" || return 1
     local target="$root/$1"
     if [ ! -e "$target" ] && [ ! -L "$target" ]; then
         return 0
@@ -724,14 +740,14 @@ ios_reset_path() {
 }
 
 #
-# Waits until the given path under the app's storage directory exists and is non-empty (for a directory, lists at least one entry), to
+# Waits until the given path under the dbs directory in the app's storage directory exists and is non-empty (for a directory, lists at least one entry), to
 # see a background task's effect on storage. Returns 0 once it is there, non-zero after DEFAULT_WAIT_TIMEOUT seconds.
-# Usage: ios_wait_for_file <relative_path_under_storage>
+# Usage: ios_wait_for_file <relative_path_under_dbs>
 #
 ios_wait_for_file() {
     local rel="$1"
     local root
-    root="$(photosphere_ios_storage_root)" || return 1
+    root="$(photosphere_ios_databases_root)" || return 1
     local target="$root/$rel"
     local deadline=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
     while [ "$SECONDS" -lt "$deadline" ]; do
@@ -796,11 +812,11 @@ ios_damage_vault() {
 }
 
 #
-# Succeeds when a path under the app's storage directory exists, whether a file or a directory. Usage: ios_path_exists <relative_path_under_storage>
+# Succeeds when a path under the dbs directory in the app's storage directory exists, whether a file or a directory. Usage: ios_path_exists <relative_path_under_dbs>
 #
 ios_path_exists() {
     local root
-    root="$(photosphere_ios_storage_root)" || return 1
+    root="$(photosphere_ios_databases_root)" || return 1
     [ -e "$root/$1" ]
 }
 

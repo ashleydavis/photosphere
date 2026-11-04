@@ -161,7 +161,7 @@ test "the record is read for the database path without opening the database" {
         .path = "s3:bucket:/photos",
         .encryptionKey = "get-import-record-missing-key",
     });
-    try std.testing.expectError(error.Thrown, openStorage(allocator, io, log, "s3:bucket:/photos", null, null, null));
+    try std.testing.expectError(error.Thrown, openStorage(allocator, io, log, "", "s3:bucket:/photos", null, null, null));
     try recordTest.writeRecord("s3:bucket:/photos", "{\"entries\":[{\"assetId\":\"b\",\"logicalPath\":\"two.png\",\"outcome\":\"skipped\",\"importedAt\":\"\",\"source\":\"manual\"}],\"truncated\":false}");
 
     const record = try recordTest.run(log, "s3:bucket:/photos");

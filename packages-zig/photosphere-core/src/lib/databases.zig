@@ -122,9 +122,9 @@ pub const IOpenedDatabaseStorage = struct {
 
 //
 // Opens the raw storage of the database at a path, using the S3 credentials in the vault secret the database's entry names when it
-// has one. set-database-origin and notify-database-opened each need this block.
+// has one. set-database-origin and notify-database-opened each need this block. A relative path is resolved against base_dir.
 //
-pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: []const IDatabaseEntry, database_path: []const u8, native_caller: ?utils.native_caller.INativeCaller) !IOpenedDatabaseStorage {
+pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, base_dir: []const u8, databases: []const IDatabaseEntry, database_path: []const u8, native_caller: ?utils.native_caller.INativeCaller) !IOpenedDatabaseStorage {
     const vault = try vault_zig.get_vault.getVaultWithHost(allocator, vault_zig.get_vault.getDefaultVaultType(), native_caller);
     var database_entry: ?IDatabaseEntry = null;
     for (databases) |existing_entry| {
@@ -144,7 +144,7 @@ pub fn openDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databases: 
             }
         }
     }
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, database_path, s3_credentials, null);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, base_dir, database_path, s3_credentials, null);
     return .{
         .entry = database_entry,
         .rawStorage = created.rawStorage,
@@ -262,14 +262,13 @@ fn writeDatabaseOrigin(io: std.Io, log: ILog, allocator: std.mem.Allocator, rawS
 fn setDatabaseOrigin(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
     _ = timers;
-    _ = context;
     const database_path = json.getString(data, "databasePath") orelse {
         return utils.errors.throwError("The database needs a path.", .{});
     };
     const origin = json.getString(data, "origin");
     const databases = try databases_config.getDatabases(allocator, io);
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
-    const opened = try openDatabaseStorage(allocator, io, databases, database_path, services.nativeCaller(&requester_storage));
+    const opened = try openDatabaseStorage(allocator, io, try node_api.database_base_dir.databaseBaseDir(allocator, context.data_dir), databases, database_path, services.nativeCaller(&requester_storage));
     try writeDatabaseOrigin(io, log, allocator, opened.rawStorage, origin);
     if (opened.entry) |found_entry| {
         if (!optionalStringsEqual(found_entry.origin, origin)) {

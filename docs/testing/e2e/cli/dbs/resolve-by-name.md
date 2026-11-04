@@ -23,8 +23,6 @@ jq -c '. + {"enc00001":{"name":"enc00001","type":"encryption-key","value":.["dbs
     /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json > /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json.new
 mv /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json.new /tmp/psi-cli-dbs-resolve-by-name/vault/vault.json
 cat > /tmp/psi-cli-dbs-resolve-by-name/config/databases.toml <<'TOML'
-recent_database_names = []
-
 [[databases]]
 name = "resolve-name-db"
 description = ""

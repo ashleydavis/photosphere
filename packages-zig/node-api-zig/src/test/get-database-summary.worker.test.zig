@@ -36,7 +36,7 @@ test "opens storage at the requested database path and returns the summary compu
     const result = try run(allocator, io, log, &context, databaseDir);
 
     // The summary the database itself gives when it is opened directly.
-    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, databaseDir, null, null, null)).storage);
+    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, "", databaseDir, null, null, null)).storage);
     const object = result.object;
     try std.testing.expectEqualStrings("full", object.get("mode").?.string);
     try std.testing.expectEqual(@as(i64, @intCast(expected.totalImports)), object.get("totalImports").?.integer);
@@ -87,7 +87,7 @@ test "computes the summary against the opened storage" {
 
     const result = try run(allocator, io, log, &context, databaseDir);
 
-    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, databaseDir, null, null, null)).storage);
+    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, "", databaseDir, null, null, null)).storage);
     try std.testing.expectEqualStrings(expected.fullHash, result.object.get("fullHash").?.string);
     try std.testing.expectEqual(@as(i64, @intCast(expected.totalFiles)), result.object.get("totalFiles").?.integer);
 }
@@ -107,7 +107,7 @@ test "returns the summary produced by getDatabaseSummary" {
 
     const result = try run(allocator, io, log, &context, databaseDir);
 
-    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, databaseDir, null, null, null)).storage);
+    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, "", databaseDir, null, null, null)).storage);
     const text = try std.json.Stringify.valueAlloc(allocator, expected, .{
         .emit_null_optional_fields = false,
     });
@@ -129,7 +129,7 @@ test "leaves out the hashes a database that holds no files does not have" {
 
     const result = try run(allocator, io, log, &context, databaseDir);
 
-    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, databaseDir, null, null, null)).storage);
+    const expected = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, "", databaseDir, null, null, null)).storage);
     try std.testing.expectEqual(expected.filesHash == null, result.object.get("filesHash") == null);
     try std.testing.expectEqual(expected.databaseHash == null, result.object.get("databaseHash") == null);
     try std.testing.expectEqualStrings(expected.fullHash, result.object.get("fullHash").?.string);

@@ -6,6 +6,7 @@ const storage_zig = @import("storage-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const tree = @import("tree.zig");
 const media_file_database = @import("media-file-database.zig");
 const retry_operations = @import("retry-operations.zig");
@@ -273,7 +274,7 @@ pub fn prefetchDatabaseHandler(
     //
     // Check whether this is a partial database. Skip immediately for full databases.
     //
-    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const rawStorage = local.rawStorage;
     log.verbose(try std.fmt.allocPrint(allocator, "Prefetch opened the replica \"{s}\"", .{data.databasePath}));
@@ -291,7 +292,7 @@ pub fn prefetchDatabaseHandler(
     };
 
     log.verbose(try std.fmt.allocPrint(allocator, "Prefetch opening the origin {s}", .{origin}));
-    const originStorage = (try openStorage(allocator, io, log, origin, null, null, context.nativeCaller)).storage;
+    const originStorage = (try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), origin, null, null, context.nativeCaller)).storage;
     log.verbose(try std.fmt.allocPrint(allocator, "Prefetch opened the origin {s}", .{origin}));
 
     var missingFiles: MissingFilesIterator = .{

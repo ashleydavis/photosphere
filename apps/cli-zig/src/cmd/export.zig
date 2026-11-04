@@ -109,7 +109,7 @@ pub fn exportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, contex
     // A partial database may have dropped this original locally because the origin holds it. Reading
     // through origin-backed storage is what fetches it back, so exporting works whether the file is
     // on this machine or only on the remote.
-    const assetStorage = try openLazyOriginStorage(allocator, io, log, localStorage, rawAssetStorage, null);
+    const assetStorage = try openLazyOriginStorage(allocator, io, log, "", localStorage, rawAssetStorage, null);
 
     const asset = try metadataCollection.getOne(io, log, assetId) orelse {
         log.@"error"(try std.fmt.allocPrint(allocator, "Asset {s} not found in database.", .{assetId}));

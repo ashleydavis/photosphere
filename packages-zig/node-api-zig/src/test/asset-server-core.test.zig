@@ -81,6 +81,7 @@ const CoreFixture = struct {
         fixture.core = try asset_server_core.createAssetServerCore(std.testing.allocator, .{
             .uuidGenerator = fixture.database.uuidGenerator.uuidGenerator(),
             .timestampProvider = fixture.database.timestampProvider.timestampProvider(),
+            .baseDir = "",
             .sessionId = SESSION_ID,
             .nativeCaller = null,
         });
@@ -316,7 +317,7 @@ test "applyDatabaseOps delegates to the apply-database-ops library with context 
 
     try fixture.core.assetServerCore().applyDatabaseOps(allocator, io, log, &.{op});
 
-    const reopened = try node_api.open_storage.openStorage(allocator, io, log, fixture.database.dir, null, null, null);
+    const reopened = try node_api.open_storage.openStorage(allocator, io, log, "", fixture.database.dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, reopened.storage, fixture.database.uuidGenerator.uuidGenerator(), fixture.database.timestampProvider.timestampProvider());
     const loaded = (try database.metadataCollection.getOne(io, log, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")).?;
     try std.testing.expectEqualStrings("x.jpg", loaded.get("origFileName").?.string);

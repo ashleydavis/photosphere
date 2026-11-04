@@ -45,6 +45,9 @@ DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 # Isolate the vault and config so tests don't pollute the user's real data.
 export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
+# And the data directory, which psi shares with the desktop app and resolves a relative database path or a short
+# database name against (its dbs directory), so no test reads or writes the user's own or another test's databases.
+export PHOTOSPHERE_DATA_DIR="${TEST_TMP_DIR}/data"
 export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
 # Get test directory path for a given test number
@@ -902,18 +905,16 @@ populate_db_with_5_files() {
     fi
 }
 
-# Writes databases.toml directly from a JSON list of database entries, with no recent databases.
-# Each entry takes name, path and optionally description, origin, s3Key, encryptionKey and
-# geocodingKey, written under the keys the CLI writes them under (buildDatabasesConfigToml in
-# packages-zig/node-api-zig). The strings are written as JSON strings, whose escapes are also TOML's.
+# Writes databases.toml directly from a JSON list of database entries. Each entry takes name, path
+# and optionally description, origin, s3Key, encryptionKey and geocodingKey, written under the keys
+# the CLI writes them under. The strings are written as JSON strings, whose escapes are also TOML's.
 # Usage: seed_databases_config '[{"name":"my-photos","description":"","path":"/tmp/db"}]'
 seed_databases_config() {
     local databases_json="$1"
 
     mkdir -p "$PHOTOSPHERE_CONFIG_DIR"
     echo "$databases_json" | jq -j '
-        "recent_database_names = []\n"
-        + (map(
+        (map(
             "\n[[databases]]\n"
             + ([
                 ["name", .name],

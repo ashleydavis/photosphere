@@ -76,11 +76,12 @@ Expected:
 
 ```bash
 grep -E "db-a|db-b" /tmp/psi-desktop-remove-recent-database/config/databases.toml
+cat /tmp/psi-desktop-remove-recent-database/config/state.yaml
 ```
 
 Expected:
-- Both `db-a` and `db-b` are still listed as `[[databases]]` entries.
-- Only `db-a` is missing from the `recent_database_names` array.
+- Both `db-a` and `db-b` are still listed as `[[databases]]` entries in `databases.toml`.
+- In `state.yaml`, `recent_names` under `databases` lists `db-b` and leaves out `db-a`.
 
 ---
 

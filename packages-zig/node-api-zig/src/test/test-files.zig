@@ -10,7 +10,7 @@ const IStorage = storage_zig.storage.IStorage;
 // Creates a FileStorage rooted at a directory (the storage `createStorage(directory)` returns for a local path).
 //
 pub fn directoryStorage(allocator: std.mem.Allocator, io: std.Io, directory: []const u8) !IStorage {
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, directory, null, null);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, "", directory, null, null);
     return created.storage;
 }
 

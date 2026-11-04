@@ -173,6 +173,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - Never use IIFE async generator pattern (`(async function* () { ... })()`). Extract to a named `async function*` instead.
 - Never use `ReturnType<typeof ...>`. Use the actual type directly (e.g. `NodeJS.Timeout` instead of `ReturnType<typeof setTimeout>`).
 - Never use the `unknown` type. Use the actual type directly.
+- Never inject anything into the app's environment: no `process_env` entry, environment variable or similar set by the app's own code to pass a value to other code. Pass the value down from whoever owns it. A test may set environment variables when it starts the app, such as the directories that keep tests apart.
 - Global variables are generally frowned on. Do not add one (a module-level mutable variable, a Zig top-level or struct-level `var`, or a `threadlocal`) unless the human explicitly asks for it. Pass the value down from whoever owns it instead.
 
 ## Restrictions

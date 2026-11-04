@@ -84,7 +84,7 @@ test "createDatabase creates README.md, the files tree, the sort indexes and con
     const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database");
     defer temp_dirs.removeTempDir(io, dir);
-    const created = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
 
     try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, "12345678-1234-4678-8abc-123456789abc");
@@ -117,7 +117,7 @@ test "createDatabase generates a database id when none is given" {
     const generators = try makeGenerators(allocator);
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-id");
     defer temp_dirs.removeTempDir(io, dir);
-    const created = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
     const loaded = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
@@ -139,7 +139,7 @@ test "createDatabase throws when the directory already contains files" {
     const dir = try temp_dirs.makeTempDir(allocator, io, "create-database-full");
     defer temp_dirs.removeTempDir(io, dir);
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ dir, "something.txt" }), "x");
-    const created = try node_api.open_storage.openStorage(allocator, io, log, dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, "", dir, null, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try std.testing.expectError(error.Thrown, media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null));
 
@@ -516,7 +516,25 @@ test "checkDatabaseExists is true when the database has a merkle tree" {
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
-    try std.testing.expect(try media_file_database.checkDatabaseExists(allocator, io, log, databaseDir, null));
+    try std.testing.expect(try media_file_database.checkDatabaseExists(allocator, io, log, "", databaseDir, null));
+}
+
+test "checkDatabaseExists finds a database by its short name in the base directory" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit(log);
+    const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "1-asset");
+    const baseDir = std.fs.path.dirname(databaseDir).?;
+    defer temp_dirs.removeTempDir(io, baseDir);
+
+    try std.testing.expect(try media_file_database.checkDatabaseExists(allocator, io, log, baseDir, std.fs.path.basename(databaseDir), null));
 }
 
 test "checkDatabaseExists is false when the directory exists but holds no database" {
@@ -533,7 +551,7 @@ test "checkDatabaseExists is false when the directory exists but holds no databa
     const emptyDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-empty");
     defer temp_dirs.removeTempDir(io, emptyDir);
 
-    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, log, emptyDir, null));
+    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, log, "", emptyDir, null));
 }
 
 test "checkDatabaseExists is false when the path does not exist at all" {
@@ -550,7 +568,7 @@ test "checkDatabaseExists is false when the path does not exist at all" {
     const tempDir = try temp_dirs.makeTempDir(allocator, io, "check-database-exists-missing");
     defer temp_dirs.removeTempDir(io, tempDir);
 
-    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, log, try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }), null));
+    try std.testing.expect(!try media_file_database.checkDatabaseExists(allocator, io, log, "", try std.fs.path.join(allocator, &.{ tempDir, "does-not-exist" }), null));
 }
 
 test "checkDatabaseExists does not catch a storage error: it is not reported as no database" {
@@ -569,7 +587,7 @@ test "checkDatabaseExists does not catch a storage error: it is not reported as 
     const dirs = try registerPathWithMissingKey(allocator, io, databaseDir);
     defer restoreConfigDir(io, dirs);
 
-    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, io, log, databaseDir, null));
+    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, io, log, "", databaseDir, null));
     try std.testing.expectEqualStrings("Encryption key \"missing-enc\" not found in vault", errors.lastErrorMessage());
 }
 
@@ -596,9 +614,9 @@ test "openLazyOriginStorage hands back the local storage of a database with no o
     defer test_env.deinit(log);
     const databaseDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, databaseDir, null, null);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, "", databaseDir, null, null);
 
-    const opened = try media_file_database.openLazyOriginStorage(allocator, io, log, created.storage, created.rawStorage, null);
+    const opened = try media_file_database.openLazyOriginStorage(allocator, io, log, "", created.storage, created.rawStorage, null);
 
     try std.testing.expectEqual(created.storage.ptr, opened.ptr);
     try std.testing.expectEqual(created.storage.vtable, opened.vtable);

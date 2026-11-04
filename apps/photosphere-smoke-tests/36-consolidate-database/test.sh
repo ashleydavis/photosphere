@@ -49,8 +49,17 @@ fi
 "${PLATFORM}_seed_database" "$REMOTE_DB" "remote-db" || exit 1
 "${PLATFORM}_seed_database" "$SECOND_DB" "second-db" || exit 1
 LOCAL_APP_PATH="$("${PLATFORM}_app_path" "local-db")"
-REMOTE_APP_PATH="$("${PLATFORM}_app_path" "remote-db")"
 SECOND_APP_PATH="$("${PLATFORM}_app_path" "second-db")"
+
+# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+case "$PLATFORM" in
+    android|ios)
+        REMOTE_APP_PATH="remote-db"
+        ;;
+    *)
+        REMOTE_APP_PATH="$("${PLATFORM}_app_path" "remote-db")"
+        ;;
+esac
 
 # Both databases are listed before the app starts. Adding them through the dialog opens each one as it is added, which takes the page
 # away and makes the second add a race; the list is not what this test is about, so it is written to the config file.
@@ -105,8 +114,8 @@ log_success "The remote holds three originals, with the shared photo only once"
 
 # --- Sync works now, where it refused before. ---
 
-# The local database now names the remote as its origin, by the path the app was given. The copy of it on the host is pointed at the
-# copy of the remote on the host, because the app's path means nothing there; nothing else about it changes.
+# The local database now names the remote as its origin, by the path typed into the dialog. The copy of it on the host is pointed at
+# the copy of the remote on the host, because the app's path means nothing there; nothing else about it changes.
 RECORDED_ORIGIN="$(jq -r '.origin' "$FETCHED_LOCAL/.db/config.json")"
 if [ "$RECORDED_ORIGIN" != "$REMOTE_APP_PATH" ]; then
     log_error "Expected the local database to record $REMOTE_APP_PATH as its origin, found: $RECORDED_ORIGIN"

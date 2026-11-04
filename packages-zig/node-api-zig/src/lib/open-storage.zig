@@ -62,11 +62,14 @@ pub const IOpenStorageResult = struct {
 // the registered values.
 // A caller with nothing to supply passes null.
 // host reaches the phone's keychain when the phone vault holds the credentials, and is null where there is no phone shell.
+// baseDir is the directory a relative databasePath is resolved against (see createStorage): the dbs directory of the app's data directory, or empty for
+// the working directory.
 //
 pub fn openStorage(
     allocator: std.mem.Allocator,
     io: std.Io,
     log: ILog,
+    baseDir: []const u8,
     databasePath: []const u8,
     encryptionKey: ?[]const u8,
     s3Key: ?[]const u8,
@@ -75,7 +78,7 @@ pub fn openStorage(
     const credentials = try resolveStorageCredentials(allocator, io, log, databasePath, encryptionKey, s3Key, host);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
     const storageOptions = loadedKeys.options;
-    const created = try createStorage(allocator, io, databasePath, credentials.s3Config, storageOptions);
+    const created = try createStorage(allocator, io, baseDir, databasePath, credentials.s3Config, storageOptions);
     return .{
         .storage = created.storage,
         .rawStorage = created.rawStorage,

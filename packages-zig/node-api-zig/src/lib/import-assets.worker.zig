@@ -44,6 +44,7 @@ const IImportAssetsResult = api.import_assets_types.IImportAssetsResult;
 const IImportRecordEntry = api.import_record.IImportRecordEntry;
 const ImportSource = api.import_record.ImportSource;
 const createStorage = storage_zig.storage_factory.createStorage;
+const database_base_dir = @import("database-base-dir.zig");
 const loadEncryptionKeysFromPem = @import("encryption-zig").key_utils.loadEncryptionKeysFromPem;
 const IStorage = storage_zig.storage.IStorage;
 const BsonDatabase = bdb.database.BsonDatabase;
@@ -1390,7 +1391,7 @@ pub fn importAssetsHandler(allocator: std.mem.Allocator, io: std.Io, timers: Tim
 
     const credentials = try resolveStorageCredentials(allocator, io, log, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
-    const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
+    const created = try createStorage(allocator, io, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
 
     const bsonDatabase = try BsonDatabase.init(allocator, created.storage, ".db/bson", uuidGenerator, context.timestampProvider);
     const metadataCollection = try bsonDatabase.collection("metadata");

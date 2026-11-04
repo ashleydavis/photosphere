@@ -36,13 +36,13 @@ test "initializes a new empty database at a directory that does not exist yet" {
     const rootDir = try temp_dirs.makeTempDir(allocator, io, "create-database-new");
     defer temp_dirs.removeTempDir(io, rootDir);
     const databaseDir = try std.fs.path.join(allocator, &.{ rootDir, "new-db" });
-    try std.testing.expect(!try checkDatabaseExists(allocator, io, log, databaseDir, null));
+    try std.testing.expect(!try checkDatabaseExists(allocator, io, log, "", databaseDir, null));
 
     const output = try run(allocator, io, log, &context, databaseDir);
 
     try std.testing.expect(output == .null);
-    try std.testing.expect(try checkDatabaseExists(allocator, io, log, databaseDir, null));
-    const summary = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, databaseDir, null, null, null)).storage);
+    try std.testing.expect(try checkDatabaseExists(allocator, io, log, "", databaseDir, null));
+    const summary = try getDatabaseSummary(allocator, io, log, (try openStorage(allocator, io, log, "", databaseDir, null, null, null)).storage);
     try std.testing.expectEqual(@as(u64, 0), summary.totalImports);
     // The one file a new database holds is its README.
     try std.testing.expectEqual(@as(u64, 1), summary.totalFiles);
@@ -64,7 +64,7 @@ test "initializes a new empty database in an empty directory" {
 
     _ = try run(allocator, io, log, &context, emptyDir);
 
-    try std.testing.expect(try checkDatabaseExists(allocator, io, log, emptyDir, null));
+    try std.testing.expect(try checkDatabaseExists(allocator, io, log, "", emptyDir, null));
 }
 
 test "refuses a directory that already holds a database" {

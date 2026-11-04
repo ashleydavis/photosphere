@@ -7,6 +7,7 @@ const task_queue_zig = @import("ziggy").task_queue;
 const bdb = @import("bdb-zig");
 const serialization_zig = @import("serialization-zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const media_file_database = @import("media-file-database.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
@@ -126,13 +127,13 @@ pub fn moveAssetsHandler(
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const source = try openStorage(allocator, io, log, sourceDatabasePath, null, null, context.nativeCaller);
+    const source = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), sourceDatabasePath, null, null, context.nativeCaller);
     const sourceStorage = source.storage;
     const sourceRawStorage = source.rawStorage;
     const sourceDb = try createMediaFileDatabase(allocator, sourceStorage, uuidGenerator, timestampProvider);
     try loadSortIndexes(allocator, log, sourceStorage, sourceDb.metadataCollection);
 
-    const dest = try openStorage(allocator, io, log, destDatabasePath, null, null, context.nativeCaller);
+    const dest = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), destDatabasePath, null, null, context.nativeCaller);
     const destStorage = dest.storage;
     const destRawStorage = dest.rawStorage;
     const destDb = try createMediaFileDatabase(allocator, destStorage, uuidGenerator, timestampProvider);

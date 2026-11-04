@@ -106,7 +106,7 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDir:
 
     const sourcePath = try std.fs.path.join(allocator, &.{ workingDir, "source" });
     try std.Io.Dir.cwd().createDirPath(io, sourcePath);
-    const source = try createStorage(allocator, io, sourcePath, null, null);
+    const source = try createStorage(allocator, io, "", sourcePath, null, null);
     const sourceDatabase = try media_file_database.createMediaFileDatabase(allocator, source.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, source.storage, source.rawStorage, try sync_helpers.testUuidGenerator(allocator), sourceDatabase.metadataCollection, null);
 
@@ -124,7 +124,7 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDir:
     // `replicate --force` does to a destination whose id does not match.
     const targetPath = try std.fs.path.join(allocator, &.{ workingDir, "target" });
     try std.Io.Dir.cwd().createDirPath(io, targetPath);
-    const target = try createStorage(allocator, io, targetPath, null, null);
+    const target = try createStorage(allocator, io, "", targetPath, null, null);
     const targetDatabase = try media_file_database.createMediaFileDatabase(allocator, target.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, target.storage, target.rawStorage, try sync_helpers.testUuidGenerator(allocator), targetDatabase.metadataCollection, null);
 
@@ -136,9 +136,9 @@ fn syncOneAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDir:
     targetTree.?.id = sourceTree.?.id;
     try tree.saveMerkleTree(allocator, io, log, &targetTree.?, target.storage);
 
-    const reopenedSource = try createStorage(allocator, io, sourcePath, null, null);
+    const reopenedSource = try createStorage(allocator, io, "", sourcePath, null, null);
     const reopenedSourceDatabase = try media_file_database.createMediaFileDatabase(allocator, reopenedSource.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
-    const reopenedTarget = try createStorage(allocator, io, targetPath, null, null);
+    const reopenedTarget = try createStorage(allocator, io, "", targetPath, null, null);
     const wrappedTarget = try allocator.create(SpyStorage);
     wrappedTarget.* = .{
         .allocator = allocator,

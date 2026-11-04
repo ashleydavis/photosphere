@@ -272,7 +272,7 @@ test "updateDatabaseStateLocked releases the lock and passes the error on when t
     var tempDir = std.testing.tmpDir(.{});
     defer tempDir.cleanup();
     const directory = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tempDir.sub_path });
-    const storage = (try storage_zig.storage_factory.createStorage(allocator, io, directory, null, null)).storage;
+    const storage = (try storage_zig.storage_factory.createStorage(allocator, io, "", directory, null, null)).storage;
 
     // A directory where the state file goes, so saving the state fails.
     try tempDir.dir.createDirPath(io, STATE_PATH);

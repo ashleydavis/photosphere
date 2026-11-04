@@ -593,14 +593,17 @@ export function MockProviders({
 }
 
 //
-// Candidate paths for the repo's 50-assets test database, relative to the
-// working directory of the process hosting the REST API. The first covers
-// `bun run dev` and `bun run dev:web` (the server runs from apps/<app>), the
-// second covers app processes launched from the repo root (smoke tests).
+// Candidate paths for the repo's 50-assets test database. The first two are
+// relative to the working directory of the process hosting the REST API: the
+// first covers `bun run dev` and `bun run dev:web` (the server runs from
+// apps/<app>), the second covers app processes launched from the repo root.
+// The third is a simple name, which the app resolves into its own database
+// folder, where the story player seeds the fixture on a phone.
 //
 const testDatabaseCandidates = [
     "../../test/dbs/50-assets",
     "test/dbs/50-assets",
+    "50-assets",
 ];
 
 //

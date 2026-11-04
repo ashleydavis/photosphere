@@ -15,8 +15,6 @@ rm -rf /tmp/psi-cli-dbs-edit-rename
 mkdir -p /tmp/psi-cli-dbs-edit-rename/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-edit-rename/config
 cat > /tmp/psi-cli-dbs-edit-rename/config/databases.toml <<'TOML'
-recent_database_names = []
-
 [[databases]]
 name = "edit-db"
 description = ""

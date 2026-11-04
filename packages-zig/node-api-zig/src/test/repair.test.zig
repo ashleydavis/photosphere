@@ -57,7 +57,7 @@ fn createTestDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, name:
         .timestampProvider = .{},
     };
     const dir = try temp_dirs.makeTempDir(allocator, io, name);
-    const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, dir, null, null);
+    const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, "", dir, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, generators.uuidGenerator.uuidGenerator(), generators.timestampProvider.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, generators.uuidGenerator.uuidGenerator(), database.metadataCollection, null);
     return .{ .dir = dir, .assetStorage = created.storage, .rawStorage = created.rawStorage, .database = database };

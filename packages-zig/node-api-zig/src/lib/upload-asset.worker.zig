@@ -13,6 +13,7 @@ const storage_zig = @import("storage-zig");
 const serialization_zig = @import("serialization-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const file_scanner = @import("file-scanner.zig");
 const media_file_database = @import("media-file-database.zig");
 const video = @import("video.zig");
@@ -428,7 +429,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, l
     _ = try std.fmt.hexToBytes(expectedHashBuffer, data.expectedHash);
 
     const openStorageStartedAt = dateNow(io);
-    const opened = try openStorage(allocator, io, log, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const storage = opened.storage;
     const openStorageMs = dateNow(io) - openStorageStartedAt;
 

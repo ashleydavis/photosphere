@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Adds a database entry on the Databases page, then checks the entry reached storage. On a desktop the database is created with the CLI
-# and the entry points at its path. On a phone an empty database is copied into the app's sandbox and the entry's path is its
-# sandbox-relative name. Adding auto-opens the database, so it must be present to load cleanly.
+# and the entry points at its path. On a phone an empty database is copied into the app's sandbox and the entry's path is the
+# short name a user types. Adding auto-opens the database, so it must be present to load cleanly.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -17,8 +17,8 @@ case "$PLATFORM" in
         ENTRY_NAME="my-test-db"
         # Wipe everything the app has stored on the device before launch, with the app stopped, so the test starts from a known state.
         "${PLATFORM}_reset_app_state" || exit 1
-        # Read after the reset, because on iOS the reset installs the app again, which moves its storage to a new path.
-        DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
+        # A user on a phone types the short name, which the app resolves into its own storage, where the database is seeded.
+        DATABASE_PATH="test-db"
         ;;
     *)
         ENTRY_NAME="My Test DB"

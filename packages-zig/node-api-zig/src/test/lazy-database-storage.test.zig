@@ -43,7 +43,7 @@ test "isDatabasePartial is false for a full database" {
     try fixture.init(allocator, io, log, "partial-false");
     defer fixture.deinit(io, log);
 
-    try std.testing.expect(!try media_file_database.isDatabasePartial(allocator, io, log, fixture.dir, null, null));
+    try std.testing.expect(!try media_file_database.isDatabasePartial(allocator, io, log, "", fixture.dir, null, null));
 }
 
 test "isDatabasePartial is true when the files tree says the database is a partial copy" {
@@ -60,7 +60,7 @@ test "isDatabasePartial is true when the files tree says the database is a parti
     defer fixture.deinit(io, log);
     try makePartialCopy(allocator, io, log, &fixture, null);
 
-    try std.testing.expect(try media_file_database.isDatabasePartial(allocator, io, log, fixture.dir, null, null));
+    try std.testing.expect(try media_file_database.isDatabasePartial(allocator, io, log, "", fixture.dir, null, null));
 }
 
 test "isDatabasePartial is false where there is no database" {
@@ -77,7 +77,7 @@ test "isDatabasePartial is false where there is no database" {
     defer fixture.deinit(io, log);
 
     const nowhere = try std.fs.path.join(allocator, &.{ fixture.dir, "not-a-database" });
-    try std.testing.expect(!try media_file_database.isDatabasePartial(allocator, io, log, nowhere, null, null));
+    try std.testing.expect(!try media_file_database.isDatabasePartial(allocator, io, log, "", nowhere, null, null));
 }
 
 test "createLazyDatabaseStorage returns the plain storage of a database with no origin" {
@@ -94,7 +94,7 @@ test "createLazyDatabaseStorage returns the plain storage of a database with no 
     defer fixture.deinit(io, log);
     try makePartialCopy(allocator, io, log, &fixture, null);
 
-    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, log, fixture.dir, null, null, null);
+    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, log, "", fixture.dir, null, null, null);
 
     // It reads the database, and a file that is not there is not there.
     try std.testing.expect((try node_api.tree.loadMerkleTree(allocator, io, log, lazy)) != null);
@@ -121,7 +121,7 @@ test "createLazyDatabaseStorage returns the plain storage of a full database tha
         .origin = origin.dir,
     });
 
-    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, log, fixture.dir, null, null, null);
+    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, log, "", fixture.dir, null, null, null);
 
     try std.testing.expect(try lazy.read(allocator, io, log, "thumb/only-at-origin") == null);
 }
@@ -144,7 +144,7 @@ test "createLazyDatabaseStorage fetches a file a partial copy does not hold from
     defer fixture.deinit(io, log);
     try makePartialCopy(allocator, io, log, &fixture, origin.dir);
 
-    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, log, fixture.dir, null, null, null);
+    const lazy = try media_file_database.createLazyDatabaseStorage(allocator, io, log, "", fixture.dir, null, null, null);
 
     const fetched = (try lazy.read(allocator, io, log, "thumb/only-at-origin")).?;
     try std.testing.expectEqualStrings("from the origin", fetched);

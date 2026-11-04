@@ -95,15 +95,23 @@ if [ -n "$fixture_dir" ]; then
     # cannot be read stops the run, because writing over it would lose the user's entries.
     config_dir="$(mktemp -d)"
     existing_config="$(mktemp)"
-    trap 'rm -f "$existing_config" "$config_dir/databases.toml"; rmdir "$config_dir"' EXIT
-    if "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" ls files/databases.toml > /dev/null 2>&1; then
-        if ! "$adb_command" -s "$serial" exec-out run-as "$PHOTOSPHERE_ANDROID_APP_ID" cat files/databases.toml > "$existing_config"; then
-            echo "ERROR: the app's databases.toml on $serial could not be read, so it is not written over." >&2
-            exit 1
+    existing_state="$(mktemp)"
+    trap 'rm -f "$existing_config" "$existing_state" "$config_dir/databases.toml" "$config_dir/state.yaml"; rmdir "$config_dir"' EXIT
+    for config_file in databases.toml state.yaml; do
+        if [ "$config_file" = "databases.toml" ]; then
+            existing_copy="$existing_config"
+        else
+            existing_copy="$existing_state"
         fi
-    fi
-    (cd "$PHOTOSPHERE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "/data/data/$PHOTOSPHERE_ANDROID_APP_ID/files/$fixture_dir" "$existing_config" "$config_dir/databases.toml")
-    tar -C "$config_dir" -cf - databases.toml | "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
+        if "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" ls "files/$config_file" > /dev/null 2>&1; then
+            if ! "$adb_command" -s "$serial" exec-out run-as "$PHOTOSPHERE_ANDROID_APP_ID" cat "files/$config_file" > "$existing_copy"; then
+                echo "ERROR: the app's $config_file on $serial could not be read, so it is not written over." >&2
+                exit 1
+            fi
+        fi
+    done
+    (cd "$PHOTOSPHERE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "/data/data/$PHOTOSPHERE_ANDROID_APP_ID/files/$fixture_dir" "$existing_config" "$config_dir/databases.toml" "$existing_state" "$config_dir/state.yaml")
+    tar -C "$config_dir" -cf - databases.toml state.yaml | "$adb_command" -s "$serial" shell run-as "$PHOTOSPHERE_ANDROID_APP_ID" tar -C files -xf -
     echo "Registered test-$fixture_dir in the app's database list. The app opens it on launch."
 fi
 

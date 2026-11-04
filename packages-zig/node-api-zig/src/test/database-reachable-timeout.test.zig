@@ -250,7 +250,7 @@ test "checkDatabaseExists gives up when the storage never answers, rather than w
     });
 
     const started = std.Io.Clock.awake.now(clientIo);
-    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, clientIo, log, "s3:bucket/unreachable", null));
+    try std.testing.expectError(error.Thrown, media_file_database.checkDatabaseExists(allocator, clientIo, log, "", "s3:bucket/unreachable", null));
     const elapsedMilliseconds = started.durationTo(std.Io.Clock.awake.now(clientIo)).toMilliseconds();
 
     try std.testing.expect(std.mem.startsWith(u8, errors.lastErrorMessage(), "Operation timed out after 30000ms: "));
@@ -290,7 +290,7 @@ test "checkDatabaseExists answers normally when the storage does answer" {
         .value = try utils.json.stringify(allocator, credentials),
     });
 
-    const exists = try media_file_database.checkDatabaseExists(allocator, io, log, "s3:bucket/reachable", null);
+    const exists = try media_file_database.checkDatabaseExists(allocator, io, log, "", "s3:bucket/reachable", null);
 
     try std.testing.expect(exists);
 }

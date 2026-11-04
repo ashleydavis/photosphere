@@ -20,7 +20,7 @@ export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-dbs-no-match-fallback/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 psi init --db /tmp/psi-cli-dbs-no-match-fallback/db --yes
 psi add test/test.png --db /tmp/psi-cli-dbs-no-match-fallback/db --yes
-printf 'recent_database_names = []\n' > /tmp/psi-cli-dbs-no-match-fallback/config/databases.toml
+printf 'databases = []\n' > /tmp/psi-cli-dbs-no-match-fallback/config/databases.toml
 ```
 
 Expected:

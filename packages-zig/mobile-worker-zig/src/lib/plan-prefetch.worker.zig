@@ -126,7 +126,7 @@ fn refuse(reason: []const u8, settings: ISyncSettings, pauseBetweenRunsMs: std.j
 
 //
 // Handler for the plan-prefetch task.
-// (Zig: the input data is ignored, and the context's host requester goes to openStorage. The host is how the platform is
+// (Zig: the input data is read only for the data directory the task adapter put in it, and the context's host requester goes to openStorage. The host is how the platform is
 // asked for the connection type.)
 //
 pub fn planPrefetchHandler(
@@ -138,7 +138,6 @@ pub fn planPrefetchHandler(
     context: ITaskContext,
     host: INetworkStatusHost,
 ) anyerror!std.json.Value {
-    _ = data;
     const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
     const config = read.config;
     const syncConfig = config.sync;
@@ -178,7 +177,7 @@ pub fn planPrefetchHandler(
     }
 
     // A database with no origin has nothing to fetch from.
-    const opened = try openStorage(allocator, io, log, databasePath.?, null, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try node_api.database_base_dir.taskDatabaseBaseDir(allocator, data), databasePath.?, null, null, context.nativeCaller);
     const databaseConfig = try loadDatabaseConfig(allocator, io, log, opened.rawStorage);
     if (configOrigin(databaseConfig) == null) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" has no origin to fill in from", .{databasePath.?}), settings, pauseBetweenRunsMs));
@@ -194,7 +193,7 @@ pub fn planPrefetchHandler(
     // loop threw and the prefetch never ran at all. Measured on a Pixel 6 against an encrypted S3
     // origin, every pass reported "Checksum mismatch: expected <the last 32 bytes of the encrypted
     // file> got <a hash of the rest of it>". `load-assets` passes them at the same call.
-    if (!try isDatabasePartial(allocator, io, log, databasePath.?, opened.s3Config, opened.storageOptions)) {
+    if (!try isDatabasePartial(allocator, io, log, try node_api.database_base_dir.taskDatabaseBaseDir(allocator, data), databasePath.?, opened.s3Config, opened.storageOptions)) {
         return toJsonValue(allocator, refuse(try std.fmt.allocPrint(allocator, "\"{s}\" is not a partial replica, so there is nothing to fill in", .{databasePath.?}), settings, pauseBetweenRunsMs));
     }
 

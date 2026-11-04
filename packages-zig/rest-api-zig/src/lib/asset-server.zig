@@ -17,6 +17,9 @@ pub const IAssetServerOptions = struct {
     // Port to listen on. 0 lets the operating system assign a free port.
     port: u16,
 
+    // The directory a relative database path in a request is resolved against, or empty for the working directory.
+    baseDir: []const u8,
+
     // Write-lock owner for apply-database-ops (see acquireWriteLock).
     sessionId: []const u8,
 };
@@ -31,6 +34,9 @@ const routes: AssetServerRoutes = node_api.asset_server_routes.attachAssetServer
 // What the connection thread is told, as JSON text, of which it is given a copy.
 //
 const IConnectionConfig = struct {
+    // The directory a relative database path in a request is resolved against.
+    baseDir: []const u8,
+
     // Write-lock owner for apply-database-ops.
     sessionId: []const u8,
 };
@@ -75,6 +81,7 @@ pub fn createAssetServer(allocator: std.mem.Allocator, io: std.Io, log: ILog, op
         .port = 0,
     };
     const config = try json.stringify(allocator, IConnectionConfig{
+        .baseDir = options.baseDir,
         .sessionId = options.sessionId,
     });
     defer allocator.free(config);
@@ -107,7 +114,7 @@ fn createConnectionCore(config: []const u8, native_callbacks: ?*const ziggy.core
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
     const parsed = try std.json.parseFromSliceLeaky(IConnectionConfig, arena_state.allocator(), config, .{});
-    return try node_api.asset_server_core.createOwnAssetServerCore(allocator, parsed.sessionId, null);
+    return try node_api.asset_server_core.createOwnAssetServerCore(allocator, parsed.baseDir, parsed.sessionId, null);
 }
 
 //

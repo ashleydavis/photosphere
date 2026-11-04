@@ -9,6 +9,7 @@ const resolve_storage_credentials = @import("resolve-storage-credentials.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const createStorage = storage_zig.storage_factory.createStorage;
+const database_base_dir = @import("database-base-dir.zig");
 const loadEncryptionKeysFromPem = encryption.key_utils.loadEncryptionKeysFromPem;
 const createDatabase = media_file_database.createDatabase;
 const createMediaFileDatabase = media_file_database.createMediaFileDatabase;
@@ -52,7 +53,7 @@ pub fn createDatabaseHandler(
 
     const credentials = try resolveStorageCredentials(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
-    const created = try createStorage(allocator, io, data.databasePath, credentials.s3Config, loadedKeys.options);
+    const created = try createStorage(allocator, io, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, credentials.s3Config, loadedKeys.options);
     const database = try createMediaFileDatabase(allocator, created.storage, context.uuidGenerator, context.timestampProvider);
     try createDatabase(allocator, io, log, created.storage, created.rawStorage, context.uuidGenerator, database.metadataCollection, null);
     return .null;

@@ -61,7 +61,7 @@ test "addPaths imports a file into a new database, then finds it already there" 
     defer queue.stop(log, allocator);
 
     const databaseDir = try std.fs.path.join(allocator, &.{ root, "db" });
-    const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, databaseDir, null, null);
+    const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, "", databaseDir, null, null);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, uuidGenerator.uuidGenerator(), database.metadataCollection, null);
@@ -114,7 +114,7 @@ fn createImportFixture(allocator: std.mem.Allocator, io: std.Io, log: ILog, name
     fixture.root = try temp_dirs.makeTempDir(allocator, io, name);
     fixture.databaseDir = try std.fmt.allocPrint(allocator, "{s}/db", .{fixture.root});
     fixture.photosDir = try std.fmt.allocPrint(allocator, "{s}/photos", .{fixture.root});
-    const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, fixture.databaseDir, null, null);
+    const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, "", fixture.databaseDir, null, null);
     var timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider = .{};
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, fixture.uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, fixture.uuidGenerator.uuidGenerator(), database.metadataCollection, null);

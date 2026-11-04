@@ -669,6 +669,25 @@ fn setAutoImportCheckMs(app: *TestApp, milliseconds: u64) !void {
     }.check);
 }
 
+test "a new default database for automatic import is put in the dbs directory of the directory PHOTOSPHERE_DATA_DIR names, where short names resolve" {
+    var app: TestApp = undefined;
+    try app.prepareWithConfigFile("auto_import:\n  enabled: true\n  sources:\n    - type: folder\n      path: /watched\n      recurse: true\n");
+    try app.environ_map.put("PHOTOSPHERE_DATA_DIR", "/scenario/files");
+    try app.launchWithTasks(&auto_import_tasks);
+    defer app.stop();
+    std.testing.allocator.free(try app.native_app.uiQuery(std.testing.allocator));
+    try waitFor(&app, "\"createdDefaultDatabase\":true");
+    try waitFor(&app, "\"importing\":true");
+    var path_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer path_arena.deinit();
+    const default_path = try node_api.auto_import_desktop.getDefaultDatabasePath(path_arena.allocator(), try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs" }));
+    try app.onState(@as([]const u8, default_path), struct {
+        fn check(path: []const u8, state: *main_state.MainState, _: ziggy.core.HandlerServices, _: ziggy.timers.Timers, _: std.Io) anyerror!void {
+            try std.testing.expectEqualStrings(path, state.auto_import_database_path.?);
+        }
+    }.check);
+}
+
 test "automatic import is started again by the periodic check after its task died" {
     var app: TestApp = undefined;
     const allocator = std.testing.allocator;

@@ -9,6 +9,7 @@ const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const bson_json = @import("bson-json.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
@@ -97,13 +98,13 @@ pub fn loadAssetsHandler(
 
     log.info(try std.fmt.allocPrint(allocator, "Loading assets from database \"{s}\"", .{data.databasePath}));
 
-    const opened = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, null, null, context.nativeCaller);
     const plainStorage = opened.storage;
-    const isPartial = try isDatabasePartial(allocator, io, log, data.databasePath, opened.s3Config, opened.storageOptions);
+    const isPartial = try isDatabasePartial(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, opened.s3Config, opened.storageOptions);
 
     // Only wrap in lazy storage for partial databases; plain storage otherwise.
     const storage = if (isPartial)
-        try createLazyDatabaseStorage(allocator, io, log, data.databasePath, opened.s3Config, opened.storageOptions, context.nativeCaller)
+        try createLazyDatabaseStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, opened.s3Config, opened.storageOptions, context.nativeCaller)
     else
         plainStorage;
 

@@ -1202,7 +1202,8 @@ pub fn loadDatabase(
 
     const resolvedS3Config: ?IS3Credentials = if (resolvedSecrets) |secrets| secrets.s3Config else null;
     const s3Config = resolvedS3Config orelse (if (std.mem.startsWith(u8, dbDir, "s3:")) try getDefaultS3Config(allocator, io) else null);
-    const created = try createStorage(allocator, io, dbDir, s3Config, storageOptions);
+    // The empty base directory resolves a relative dbDir against the working directory, as every path on the command line is.
+    const created = try createStorage(allocator, io, "", dbDir, s3Config, storageOptions);
     var assetStorage = created.storage;
     const rawAssetStorage = created.rawStorage;
 
@@ -1261,7 +1262,7 @@ pub fn loadDatabase(
 
                 storageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
 
-                assetStorage = (try createStorage(allocator, io, dbDir, s3Config, storageOptions)).storage;
+                assetStorage = (try createStorage(allocator, io, "", dbDir, s3Config, storageOptions)).storage;
             }
             else if (nonInteractive) {
                 try outro(io, try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} This database is encrypted and requires a private key to access.\n  Please provide the key name using the --key option.\n\nExample:\n    {s}", .{try pc.cyan(allocator, "psi <command> --key my-photos")})), .{});
@@ -1286,7 +1287,7 @@ pub fn loadDatabase(
 
                 storageOptions = (try loadEncryptionKeysFromPem(allocator, keyPems)).options;
 
-                assetStorage = (try createStorage(allocator, io, dbDir, s3Config, storageOptions)).storage;
+                assetStorage = (try createStorage(allocator, io, "", dbDir, s3Config, storageOptions)).storage;
             }
         }
     }
@@ -1445,7 +1446,7 @@ pub fn createDatabase(
         s3Config = try getDefaultS3Config(allocator, io);
     }
 
-    const created = try createStorage(allocator, io, dbDir, s3Config, storageOptions);
+    const created = try createStorage(allocator, io, "", dbDir, s3Config, storageOptions);
     const assetStorage = created.storage;
     const rawAssetStorage = created.rawStorage;
 

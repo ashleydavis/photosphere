@@ -1,11 +1,10 @@
 //
 // Reads and writes config.yaml as a background task.
 //
-// The same arrangement as databases-config.worker.zig and for the same reason: the mobile WebView
-// holds these settings but cannot open a file, so its reads and writes run in the embedded worker
-// over the storage layer. Putting them in a file rather than in the WebView's own store is what lets
-// the background import and the background sync, which run while the app is off screen, find out
-// whether they are switched on at all.
+// The mobile WebView holds these settings but cannot open a file, so its reads and writes run in the
+// embedded worker over the storage layer. Putting them in a file rather than in the WebView's own
+// store is what lets the background import and the background sync, which run while the app is off
+// screen, find out whether they are switched on at all.
 //
 // One file holds every feature's settings, so a write merges rather than replaces: switching syncing
 // on must not wipe what automatic import is watching. Every section the caller does not send is left

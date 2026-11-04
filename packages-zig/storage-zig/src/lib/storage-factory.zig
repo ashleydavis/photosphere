@@ -77,19 +77,46 @@ pub const ICreateStorageResult = struct {
 };
 
 //
-// Resolves a path to an absolute path like Node's `path.resolve(path)` (relative paths resolve against the cwd).
-// Always resolving against the cwd also gives a rooted Windows path (`\dir`) the cwd's drive, like Node.
+// Whether a database path is a simple name: a single path segment such as `my-photos`, which is the only kind of path resolved
+// against a base directory. After an optional `fs:` prefix is taken off, it is not empty, not `.` or `..`, holds no `/` or `\`, is
+// not absolute and does not start with `s3:`.
 //
-fn resolvePath(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]const u8 {
+pub fn isSimpleName(path: []const u8) bool {
+    const name = if (std.mem.startsWith(u8, path, "fs:")) path["fs:".len..] else path;
+    if (name.len == 0 or std.mem.eql(u8, name, ".") or std.mem.eql(u8, name, "..")) {
+        return false;
+    }
+    if (std.mem.indexOfAny(u8, name, "/\\") != null) {
+        return false;
+    }
+    if (std.mem.startsWith(u8, name, "s3:") or std.fs.path.isAbsolute(name)) {
+        return false;
+    }
+    return true;
+}
+
+//
+// Resolves a path to an absolute path like Node's `path.resolve`. An absolute path is kept. A simple name (see isSimpleName) is put
+// in baseDir, and every other relative path (`.`, `./x`, `foo/bar`, `../x`) is put in the working directory, as is a simple name when
+// baseDir is empty. Resolving against the cwd as well gives a rooted Windows path (`\dir`) the drive of the base directory, or of the
+// cwd, like Node.
+//
+fn resolvePath(allocator: std.mem.Allocator, io: std.Io, baseDir: []const u8, path: []const u8) ![]const u8 {
     const currentPath = try std.process.currentPathAlloc(io, allocator);
-    return std.fs.path.resolve(allocator, &.{ currentPath, path });
+    if (baseDir.len == 0 or !isSimpleName(path)) {
+        return std.fs.path.resolve(allocator, &.{ currentPath, path });
+    }
+    return std.fs.path.resolve(allocator, &.{ currentPath, baseDir, path });
 }
 
 //
 // Creates the appropriate storage implementation based on the prefix in the path.
+// A file system path that is a simple name (see isSimpleName) is resolved against baseDir: the app passes the `dbs` directory of its
+// data directory, and the CLI passes an empty baseDir, which is its working directory. Any other relative path is resolved against
+// the working directory. An absolute path and an S3 path are not changed.
 // (The storage objects are allocated with the allocator and live as long as its memory.)
 //
-pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, rootPath: []const u8, s3Config: ?IS3Credentials, options: ?IStorageOptions) !ICreateStorageResult {
+pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, baseDir: []const u8, rootPath: []const u8, s3Config: ?IS3Credentials, options: ?IStorageOptions) !ICreateStorageResult {
     if (rootPath.len == 0) {
         return errors.throwError("Path is required", .{});
     }
@@ -103,7 +130,7 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, rootPath: []const
         const fileStorage = try allocator.create(FileStorage);
         fileStorage.* = FileStorage.init("fs:");
         storage = fileStorage.storage();
-        normalizedPath = try resolvePath(allocator, io, rootPath["fs:".len..]);
+        normalizedPath = try resolvePath(allocator, io, baseDir, rootPath["fs:".len..]);
         storageType = "fs";
     }
     else if (std.mem.startsWith(u8, rootPath, "s3:")) {
@@ -120,7 +147,7 @@ pub fn createStorage(allocator: std.mem.Allocator, io: std.Io, rootPath: []const
         const fileStorage = try allocator.create(FileStorage);
         fileStorage.* = FileStorage.init("fs:");
         storage = fileStorage.storage();
-        normalizedPath = try resolvePath(allocator, io, rootPath);
+        normalizedPath = try resolvePath(allocator, io, baseDir, rootPath);
         storageType = "fs";
     }
 

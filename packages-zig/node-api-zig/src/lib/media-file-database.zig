@@ -1098,8 +1098,8 @@ fn removeAssetUnderLock(
 // Checks the isPartial flag stored in the merkle tree's database metadata.
 // (Zig: s3Config and storageOptions are passed as null when absent.)
 //
-pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !bool {
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
+pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, log: ILog, baseDir: []const u8, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions) !bool {
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, baseDir, databasePath, s3Config, storageOptions);
     const merkleTree = try tree.loadMerkleTree(allocator, io, log, created.storage);
     return merkleTree != null and isPartialDatabase(merkleTree.?.databaseMetadata);
 }
@@ -1111,8 +1111,8 @@ pub fn isDatabasePartial(allocator: std.mem.Allocator, io: std.Io, log: ILog, da
 // (Zig: resolveStorageCredentials is given null for its optional encryptionKey and s3Key, and the LazyOriginStorage is allocated
 // with the allocator and keeps it.)
 //
-pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.native_caller.INativeCaller) !IStorage {
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, s3Config, storageOptions);
+pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, baseDir: []const u8, databasePath: []const u8, s3Config: ?storage_zig.cloud_storage.IS3Credentials, storageOptions: ?encryption.encryption_types.IStorageOptions, host: ?utils.native_caller.INativeCaller) !IStorage {
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, baseDir, databasePath, s3Config, storageOptions);
 
     const config = try api.database_config.loadDatabaseConfig(allocator, io, log, created.rawStorage);
     const origin = configOrigin(config) orelse {
@@ -1126,7 +1126,7 @@ pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, log: 
 
     const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, log, origin, null, null, host);
     const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
-    const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
+    const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, baseDir, origin, credentials.s3Config, loadedKeys.options)).storage;
     const lazyStorage = try allocator.create(LazyOriginStorage);
     lazyStorage.* = LazyOriginStorage.init(created.storage, originStorage);
     return lazyStorage.storage();
@@ -1145,7 +1145,7 @@ pub fn createLazyDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, log: 
 // compare the local database against its origin, and a local read that falls back to the origin
 // makes the two look identical when they are not.
 //
-pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.native_caller.INativeCaller) !IStorage {
+pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog, baseDir: []const u8, localStorage: IStorage, localRawStorage: IStorage, host: ?utils.native_caller.INativeCaller) !IStorage {
     const config = try api.database_config.loadDatabaseConfig(allocator, io, log, localRawStorage);
     const origin = configOrigin(config) orelse {
         return localStorage;
@@ -1158,7 +1158,7 @@ pub fn openLazyOriginStorage(allocator: std.mem.Allocator, io: std.Io, log: ILog
 
     const credentials = try resolve_storage_credentials.resolveStorageCredentials(allocator, io, log, origin, null, null, host);
     const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
-    const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, origin, credentials.s3Config, loadedKeys.options)).storage;
+    const originStorage = (try storage_zig.storage_factory.createStorage(allocator, io, baseDir, origin, credentials.s3Config, loadedKeys.options)).storage;
     const lazyStorage = try allocator.create(LazyOriginStorage);
     lazyStorage.* = LazyOriginStorage.init(localStorage, originStorage);
     return lazyStorage.storage();
@@ -1196,6 +1196,9 @@ const OpenAndCheckMerkleTreeOperation = struct {
     // Allocates what opening the storage and checking it need.
     allocator: std.mem.Allocator,
 
+    // The directory a relative databasePath is resolved against.
+    baseDir: []const u8,
+
     // The path of the database to look for.
     databasePath: []const u8,
 
@@ -1206,7 +1209,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
     // Opens the storage for the path and asks whether it holds a merkle tree.
     //
     pub fn run(self: *OpenAndCheckMerkleTreeOperation, io: std.Io, log: ILog) !bool {
-        const opened = try open_storage.openStorage(self.allocator, io, log, self.databasePath, null, null, self.host);
+        const opened = try open_storage.openStorage(self.allocator, io, log, self.baseDir, self.databasePath, null, null, self.host);
         return tree.merkleTreeExists(self.allocator, io, opened.storage);
     }
 };
@@ -1220,7 +1223,7 @@ const OpenAndCheckMerkleTreeOperation = struct {
 // an automatic sync may run is a separate question, decided by computeSyncAllowed from the platform's
 // reported network status.
 //
-pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !bool {
+pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, log: ILog, baseDir: []const u8, databasePath: []const u8, host: ?utils.native_caller.INativeCaller) !bool {
     // Open storage the same way the load path does: openStorage resolves S3/encryption credentials
     // from the database's own config, so the existence check and the actual load agree on what is
     // reachable rather than probing with no credentials.
@@ -1244,6 +1247,7 @@ pub fn checkDatabaseExists(allocator: std.mem.Allocator, io: std.Io, log: ILog, 
     // given the limit instead, and one that reaches it is cancelled.
     var operation: OpenAndCheckMerkleTreeOperation = .{
         .allocator = allocator,
+        .baseDir = baseDir,
         .databasePath = databasePath,
         .host = host,
     };

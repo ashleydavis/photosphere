@@ -88,7 +88,7 @@ const CleanupTest = struct {
         self.uuidGenerator = try TestUuidGenerator.init(allocator);
         self.timestampProvider = .{};
         self.databaseDir = try path.join(allocator, &.{ self.tempDir, "db" });
-        const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, self.databaseDir, null, null);
+        const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, "", self.databaseDir, null, null);
         self.database = try node_api.media_file_database.createMediaFileDatabase(allocator, created.storage, self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider());
         try node_api.media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, self.uuidGenerator.uuidGenerator(), self.database.metadataCollection, null);
         self.context = TaskContext.init(self.uuidGenerator.uuidGenerator(), self.timestampProvider.timestampProvider(), "session-1", "cleanup-task", .{

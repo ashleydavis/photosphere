@@ -63,6 +63,7 @@ fn encodeComponent(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
 fn startServer(log: ILog) !*AssetServer {
     const listener = try http_server.open(io, asset_server.HOST, 0);
     return AssetServer.start(std.testing.allocator, io, log, listener, .{
+        .baseDir = "",
         .sessionId = "test-session",
         .nativeCallbacks = null,
     });
@@ -157,6 +158,7 @@ test "the asset server listens on the port its socket was opened on" {
 
     const listener = try http_server.open(io, asset_server.HOST, freePort);
     const server = try AssetServer.start(std.testing.allocator, io, log, listener, .{
+        .baseDir = "",
         .sessionId = "test-session",
         .nativeCallbacks = null,
     });

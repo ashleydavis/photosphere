@@ -33,6 +33,8 @@ Every scenario must survive running beside copies of itself and beside every oth
 
 Through the test hooks described in the "Remote control" section of the architecture document, and nothing else. Each app instance has a [remote control server](https://github.com/ashleydavis/ziggy/blob/main/tools/remote-control-server/README.md) of its own: the app is started with `--remote-control` and connects out to it. The scenario talks to the server's script port. State is otherwise set up from outside the app (config files and data placed on disk).
 
+A step that types into the app types what a user types (a simple name on a phone, see [Database names and paths](../../docs/database-names-and-paths.md)), and `${PLATFORM}_app_path` is only for what the test does from outside the app.
+
 ## Manual scenarios
 
 `manual/` holds scenarios that measure a real device and are never part of a run of the whole suite. A run picks one up only when it is named, for example `PHOTOSPHERE_SMOKE_SCENARIO=90-perf-import bun run test:ziggy:and`. They are not run by `test:everything`.

@@ -11,7 +11,8 @@
 # inside it while it is paused.
 #
 # iOS starts an app in the root directory whatever working directory debugserver is given, so the run moves the app into
-# its data container, by calling chdir in it before the core is created, and gives the settings, vault and log directory as paths relative to it.
+# its data container, by calling chdir in it before the core is created, and gives the settings, vault, data and log directory as paths
+# relative to it.
 #
 # A device runs one copy of the app at a time, so a scenario claims the device under a lock for as long as it runs.
 
@@ -266,6 +267,7 @@ photosphere_platform_start() {
         "$udid" "$IOS_DEVICE_BUNDLE_ID" "$test_dir/launch.json" \
         PHOTOSPHERE_TEST_MODE=1 \
         "PHOTOSPHERE_CONFIG_DIR=$scenario_dir/config" \
+        "PHOTOSPHERE_DATA_DIR=$scenario_dir/files" \
         "PHOTOSPHERE_VAULT_DIR=$scenario_dir/vault" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
         "PHOTOSPHERE_LOG_DIR=$scenario_dir" \

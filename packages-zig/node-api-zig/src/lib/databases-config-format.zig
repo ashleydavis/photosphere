@@ -2,11 +2,7 @@ const std = @import("std");
 
 //
 // The on-disk layout of databases.toml and the conversions between it and the in-memory entry type.
-//
-// Shared by desktop (databases-config.zig, which owns ~/.config/photosphere/databases.toml) and
-// mobile (databases-config.worker.zig, which owns the copy in the app's storage sandbox), so
-// there is one definition of the file format rather than one per platform. Nothing here touches the
-// filesystem, which is what lets it be bundled into the mobile worker.
+// The conversions work on values in memory.
 //
 
 //

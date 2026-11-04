@@ -79,6 +79,9 @@ DUPLICATE_IMAGES_DIR="../../test/duplicate-images"
 # Isolate the vault and config so tests don't pollute the user's real data.
 export PHOTOSPHERE_VAULT_DIR="${TEST_TMP_DIR}/vault"
 export PHOTOSPHERE_CONFIG_DIR="${TEST_TMP_DIR}/config"
+# And the data directory, which psi shares with the desktop app and resolves a relative database path or a short
+# database name against (its dbs directory), so no test reads or writes the user's own or another test's databases.
+export PHOTOSPHERE_DATA_DIR="${TEST_TMP_DIR}/data"
 export PHOTOSPHERE_VAULT_TYPE="plaintext"
 
 # Set by --capture-baseline <target>: the what-changed target to record as passed once a full run

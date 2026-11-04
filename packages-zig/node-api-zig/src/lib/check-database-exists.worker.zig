@@ -14,6 +14,7 @@ const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const media_file_database = @import("media-file-database.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const checkDatabaseExists = media_file_database.checkDatabaseExists;
@@ -60,7 +61,7 @@ pub fn checkDatabaseExistsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const exists = try checkDatabaseExists(allocator, io, log, data.databasePath, context.nativeCaller);
+    const exists = try checkDatabaseExists(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, context.nativeCaller);
     const result: ICheckDatabaseExistsResult = .{
         .exists = exists,
     };

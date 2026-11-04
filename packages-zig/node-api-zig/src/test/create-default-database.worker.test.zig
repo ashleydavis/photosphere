@@ -24,7 +24,10 @@ const DEFAULT_DATABASE_DISPLAY_NAME = api.auto_import_mobile.DEFAULT_DATABASE_DI
 const createDefaultDatabaseHandler = node_api.create_default_database_worker.createDefaultDatabaseHandler;
 const readConfigHandler = node_api.config_worker.readConfigHandler;
 const buildConfigYaml = node_api.config_worker.buildConfigYaml;
-const readDatabasesConfigHandler = node_api.databases_config_worker.readDatabasesConfigHandler;
+const getDatabases = node_api.databases_config.getDatabases;
+const getRecentDatabaseNames = node_api.databases_config.getRecentDatabaseNames;
+const getLastDatabase = node_api.databases_config.getLastDatabase;
+const IDatabaseEntry = node_api.databases_config.IDatabaseEntry;
 const defaultConfigFile = node_api.config_format.defaultConfigFile;
 const checkDatabaseExists = node_api.media_file_database.checkDatabaseExists;
 const addDatabaseEntry = node_api.databases_config.addDatabaseEntry;
@@ -53,9 +56,6 @@ const Sandbox = struct {
     // The path of config.yaml.
     configPath: []const u8,
 
-    // The path of databases.toml.
-    databasesConfigPath: []const u8,
-
     // The task context. The database it creates is stamped with the identifiers from here.
     context: RecordingTaskContext,
 
@@ -71,7 +71,6 @@ const Sandbox = struct {
         try test_environment.setEnv("PHOTOSPHERE_CONFIG_DIR", self.tempDir);
         self.databasePath = try std.fs.path.join(allocator, &.{ self.tempDir, "photosphere-default" });
         self.configPath = try std.fs.path.join(allocator, &.{ self.tempDir, "config.yaml" });
-        self.databasesConfigPath = try std.fs.path.join(allocator, &.{ self.tempDir, "databases.toml" });
         try self.context.init(allocator, null, null);
     }
 
@@ -96,9 +95,6 @@ const Sandbox = struct {
         try object.put(allocator, "configPath", .{
             .string = self.configPath,
         });
-        try object.put(allocator, "databasesConfigPath", .{
-            .string = self.databasesConfigPath,
-        });
         try object.put(allocator, "open", .{
             .bool = open,
         });
@@ -122,17 +118,10 @@ const Sandbox = struct {
     }
 
     //
-    // Reads the database list back through the read-databases-config task.
+    // Reads the database list back from databases.toml.
     //
-    fn readDatabases(self: *Sandbox, log: utils.log.ILog) !std.json.ObjectMap {
-        const allocator = self.arena.allocator();
-        var object: std.json.ObjectMap = .empty;
-        try object.put(allocator, "configPath", .{
-            .string = self.databasesConfigPath,
-        });
-        return (try readDatabasesConfigHandler(allocator, std.testing.io, test_timers.timers(), log, .{
-            .object = object,
-        }, self.context.taskContext())).object;
+    fn readDatabases(self: *Sandbox) ![]const IDatabaseEntry {
+        return getDatabases(self.arena.allocator(), std.testing.io);
     }
 
     //
@@ -172,10 +161,10 @@ const Sandbox = struct {
 //
 // The paths of the entries of a database list.
 //
-fn entryPaths(allocator: std.mem.Allocator, databases: std.json.ObjectMap) ![]const []const u8 {
+fn entryPaths(allocator: std.mem.Allocator, databases: []const IDatabaseEntry) ![]const []const u8 {
     var paths: std.ArrayList([]const u8) = .empty;
-    for (databases.get("databases").?.array.items) |entry| {
-        try paths.append(allocator, entry.object.get("path").?.string);
+    for (databases) |entry| {
+        try paths.append(allocator, entry.path);
     }
     return paths.items;
 }
@@ -189,7 +178,7 @@ test "creates a real database at the path" {
     const output = try sandbox.run(log, true);
 
     try std.testing.expect(output == .null);
-    try std.testing.expect(try checkDatabaseExists(sandbox.arena.allocator(), std.testing.io, log, sandbox.databasePath, null));
+    try std.testing.expect(try checkDatabaseExists(sandbox.arena.allocator(), std.testing.io, log, "", sandbox.databasePath, null));
 }
 
 test "records the database as the default and adds it to the database list" {
@@ -204,12 +193,11 @@ test "records the database as the default and adds it to the database list" {
     const settings = try sandbox.readSettings(log);
     try std.testing.expectEqualStrings(sandbox.databasePath, settings.get("autoImport").?.object.get("defaultDatabasePath").?.string);
 
-    const databases = try sandbox.readDatabases(log);
-    const entries = databases.get("databases").?.array.items;
+    const entries = try sandbox.readDatabases();
     try std.testing.expectEqual(@as(usize, 1), entries.len);
-    try std.testing.expectEqualStrings(DEFAULT_DATABASE_DISPLAY_NAME, entries[0].object.get("name").?.string);
-    try std.testing.expectEqualStrings("", entries[0].object.get("description").?.string);
-    try std.testing.expectEqualStrings(sandbox.databasePath, entries[0].object.get("path").?.string);
+    try std.testing.expectEqualStrings(DEFAULT_DATABASE_DISPLAY_NAME, entries[0].name);
+    try std.testing.expectEqualStrings("", entries[0].description);
+    try std.testing.expectEqualStrings(sandbox.databasePath, entries[0].path);
 }
 
 test "records the database when there is no settings file and no database list yet" {
@@ -222,7 +210,7 @@ test "records the database when there is no settings file and no database list y
 
     const settings = try sandbox.readSettings(log);
     try std.testing.expectEqualStrings(sandbox.databasePath, settings.get("autoImport").?.object.get("defaultDatabasePath").?.string);
-    try std.testing.expectEqual(@as(usize, 1), (try sandbox.readDatabases(log)).get("databases").?.array.items.len);
+    try std.testing.expectEqual(@as(usize, 1), (try sandbox.readDatabases()).len);
 }
 
 test "leaves the rest of the settings exactly as it found them" {
@@ -270,14 +258,33 @@ test "keeps the databases the user already has" {
 
     _ = try sandbox.run(log, true);
 
-    const databases = try sandbox.readDatabases(log);
-    const paths = try entryPaths(allocator, databases);
+    const paths = try entryPaths(allocator, try sandbox.readDatabases());
     try std.testing.expectEqual(@as(usize, 2), paths.len);
     try std.testing.expectEqualStrings("holiday", paths[0]);
     try std.testing.expectEqualStrings(sandbox.databasePath, paths[1]);
-    const recentNames = databases.get("recentDatabaseNames").?.array.items;
+    const recentNames = try getRecentDatabaseNames(allocator, io);
     try std.testing.expectEqual(@as(usize, 1), recentNames.len);
-    try std.testing.expectEqualStrings("Holiday", recentNames[0].string);
+    try std.testing.expectEqualStrings("Holiday", recentNames[0]);
+}
+
+test "refuses to list the default database under a name another database already has" {
+    const log = utils.mute_log.MuteLog.init();
+    var sandbox: Sandbox = undefined;
+    try sandbox.init();
+    defer sandbox.deinit(log);
+    const allocator = sandbox.arena.allocator();
+    try addDatabaseEntry(allocator, std.testing.io, .{
+        .name = DEFAULT_DATABASE_DISPLAY_NAME,
+        .description = "",
+        .path = "elsewhere",
+    });
+
+    try std.testing.expectError(error.Thrown, sandbox.run(log, true));
+
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "A database named \"{s}\" already exists at elsewhere, so the default database at {s} cannot be listed under that name.", .{ DEFAULT_DATABASE_DISPLAY_NAME, sandbox.databasePath }), errors.lastErrorMessage());
+    const paths = try entryPaths(allocator, try sandbox.readDatabases());
+    try std.testing.expectEqual(@as(usize, 1), paths.len);
+    try std.testing.expectEqualStrings("elsewhere", paths[0]);
 }
 
 test "keeps the database the user had open" {
@@ -296,9 +303,7 @@ test "keeps the database the user had open" {
 
     _ = try sandbox.run(log, true);
 
-    // Writing the list without it would close the database the user had open.
-    const databases = try sandbox.readDatabases(log);
-    try std.testing.expectEqualStrings("holiday", databases.get("lastDatabase").?.string);
+    try std.testing.expectEqualStrings("holiday", (try getLastDatabase(allocator, io)).?);
 }
 
 test "recording the same database twice does not list it twice" {
@@ -312,7 +317,7 @@ test "recording the same database twice does not list it twice" {
     _ = try sandbox.run(log, true);
     _ = try sandbox.run(log, true);
 
-    const paths = try entryPaths(sandbox.arena.allocator(), try sandbox.readDatabases(log));
+    const paths = try entryPaths(sandbox.arena.allocator(), try sandbox.readDatabases());
     try std.testing.expectEqual(@as(usize, 1), paths.len);
     try std.testing.expectEqualStrings(sandbox.databasePath, paths[0]);
 }
@@ -334,7 +339,7 @@ test "does not create the database again when one is already there" {
 
     const settings = try sandbox.readSettings(log);
     try std.testing.expectEqualStrings(databaseDir, settings.get("autoImport").?.object.get("defaultDatabasePath").?.string);
-    const paths = try entryPaths(allocator, try sandbox.readDatabases(log));
+    const paths = try entryPaths(allocator, try sandbox.readDatabases());
     try std.testing.expectEqual(@as(usize, 1), paths.len);
     try std.testing.expectEqualStrings(databaseDir, paths[0]);
 }
@@ -409,19 +414,7 @@ test "a missing config path is refused" {
 
     try std.testing.expectError(error.Thrown, sandbox.run(log, true));
     try std.testing.expectEqualStrings("configPath is required", errors.lastErrorMessage());
-    try std.testing.expect(!try checkDatabaseExists(sandbox.arena.allocator(), std.testing.io, log, sandbox.databasePath, null));
-}
-
-test "a missing databases config path is refused" {
-    const log = utils.mute_log.MuteLog.init();
-    var sandbox: Sandbox = undefined;
-    try sandbox.init();
-    defer sandbox.deinit(log);
-    sandbox.databasesConfigPath = "";
-
-    try std.testing.expectError(error.Thrown, sandbox.run(log, true));
-    try std.testing.expectEqualStrings("databasesConfigPath is required", errors.lastErrorMessage());
-    try std.testing.expect(!try checkDatabaseExists(sandbox.arena.allocator(), std.testing.io, log, sandbox.databasePath, null));
+    try std.testing.expect(!try checkDatabaseExists(sandbox.arena.allocator(), std.testing.io, log, "", sandbox.databasePath, null));
 }
 
 test "throws a descriptive error when the task data is not valid" {
@@ -439,5 +432,5 @@ test "throws a descriptive error when the task data is not valid" {
     try std.testing.expectError(error.Thrown, createDefaultDatabaseHandler(allocator, std.testing.io, test_timers.timers(), console_log, .{
         .object = object,
     }, sandbox.context.taskContext()));
-    try std.testing.expectEqualStrings("The create-default-database task data is not valid: databasePath, configPath and databasesConfigPath must be strings and open must be a boolean", errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("The create-default-database task data is not valid: databasePath and configPath must be strings and open must be a boolean", errors.lastErrorMessage());
 }

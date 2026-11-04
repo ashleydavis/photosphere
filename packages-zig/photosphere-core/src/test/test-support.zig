@@ -286,7 +286,7 @@ pub const TestApp = struct {
     // Makes the directory the test owns, with config.yaml holding the text when there is one, the console capture and the
     // environment.
     //
-    fn prepareWithConfigFile(self: *TestApp, config_yaml: ?[]const u8) !void {
+    pub fn prepareWithConfigFile(self: *TestApp, config_yaml: ?[]const u8) !void {
         const allocator = std.testing.allocator;
         const io = std.testing.io;
         self.native_app.init();

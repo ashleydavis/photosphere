@@ -4,6 +4,7 @@ const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const getDatabaseSummary = media_file_database.getDatabaseSummary;
@@ -46,7 +47,7 @@ pub fn getDatabaseSummaryHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const opened = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, null, null, context.nativeCaller);
     const summary = try getDatabaseSummary(allocator, io, log, opened.storage);
     const text = try std.json.Stringify.valueAlloc(allocator, summary, .{
         .emit_null_optional_fields = false,

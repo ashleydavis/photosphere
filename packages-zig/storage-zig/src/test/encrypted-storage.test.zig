@@ -197,7 +197,7 @@ test "EncryptedStorage reads the files in the golden fixtures" {
     const io = std.testing.io;
     const dbDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-ts-files");
     defer test_files.removeTempDir(io, dbDir);
-    const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
+    const created = try createStorage(allocator, io, "", dbDir, null, try loadFixtureOptions(allocator));
     try std.testing.expectEqualStrings("encrypted-fs", created.@"type");
 
     // The plaintext fixture matches the formula it was generated from.
@@ -228,7 +228,7 @@ test "EncryptedStorage writes files with the header and length of the golden fix
     const io = std.testing.io;
     const dbDir = try test_files.makeTempDir(allocator, io, "encrypted-storage-zig-files");
     defer test_files.removeTempDir(io, dbDir);
-    const created = try createStorage(allocator, io, dbDir, null, try loadFixtureOptions(allocator));
+    const created = try createStorage(allocator, io, "", dbDir, null, try loadFixtureOptions(allocator));
 
     for (golden_encrypted_files) |goldenFile| {
         const plain = try makeFixturePlaintext(allocator, goldenFile.plainSize);

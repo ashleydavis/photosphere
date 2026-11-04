@@ -74,6 +74,60 @@ test "buildStateYaml produces text parseStateYamlChecked reads back as the state
     try std.testing.expectEqual(@as(usize, 1), parsed.state.ui.count());
 }
 
+test "the databases section round-trips through the text of a state file, beside the other sections" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var state = try state_format.defaultStateFile(allocator);
+    state.gallery.sort = "date";
+    state.databases.recentNames = &.{ "beta", "alpha" };
+    state.databases.lastOpenedPath = "/photos/beta";
+
+    const text = try state_format.buildStateYaml(allocator, state);
+    const parsed = try state_format.parseStateYamlChecked(allocator, text);
+
+    try std.testing.expectEqualStrings(
+        \\gallery:
+        \\  sort: date
+        \\databases:
+        \\  recent_names:
+        \\    - beta
+        \\    - alpha
+        \\  last_opened_path: /photos/beta
+        \\
+    , text);
+    try std.testing.expectEqual(@as(usize, 2), parsed.state.databases.recentNames.len);
+    try std.testing.expectEqualStrings("beta", parsed.state.databases.recentNames[0]);
+    try std.testing.expectEqualStrings("alpha", parsed.state.databases.recentNames[1]);
+    try std.testing.expectEqualStrings("/photos/beta", parsed.state.databases.lastOpenedPath.?);
+}
+
+test "an empty databases section is left out of the file, and a missing one reads as no recents and no last database" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const state = try state_format.defaultStateFile(allocator);
+
+    const document = try state_format.stateFileToYaml(allocator, state);
+
+    try std.testing.expect(document.object.get("databases") == null);
+    try std.testing.expectEqual(@as(usize, 0), state.databases.recentNames.len);
+    try std.testing.expect(state.databases.lastOpenedPath == null);
+}
+
+test "a recent name that is not text and a last path that is not text are dropped when read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const parsed = try state_format.parseStateYamlChecked(allocator, "databases:\n  recent_names:\n    - alpha\n    - 5\n    - beta\n  last_opened_path: [1]\n");
+
+    try std.testing.expectEqual(@as(usize, 2), parsed.state.databases.recentNames.len);
+    try std.testing.expectEqualStrings("alpha", parsed.state.databases.recentNames[0]);
+    try std.testing.expectEqualStrings("beta", parsed.state.databases.recentNames[1]);
+    try std.testing.expect(parsed.state.databases.lastOpenedPath == null);
+}
+
 test "parseStateYamlChecked reports text that will not parse as malformed, with what the parser said" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

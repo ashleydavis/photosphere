@@ -103,10 +103,11 @@ fn bridgedContext(services: *const TaskServices, context: TaskContext, native_ca
 //
 pub fn planAutoImportTask(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     _ = data;
-    // The phone's working directory is not the app's data directory, so the default database is given a place in it.
+    // The phone's working directory is not the app's data directory, so the default database is given a place in the dbs directory
+    // of it, where short names resolve.
     var request: std.json.ObjectMap = .empty;
     try request.put(allocator, "appDataPath", .{
-        .string = context.data_dir,
+        .string = try node_api.database_base_dir.databaseBaseDir(allocator, context.data_dir),
     });
     var native_caller_storage: ziggy.task_runner.TaskNativeCaller = undefined;
     var uuid_generator: utils.random_uuid_generator.RandomUuidGenerator = .{};
@@ -127,7 +128,7 @@ pub fn planSyncTask(services: TaskServices, timers: Timers, io: std.Io, allocato
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
     const host = networkStatusOf(&services);
-    const result = try mobile_worker.plan_sync_worker.planSyncHandler(allocator, io, timers, services.log, data, task_context, host);
+    const result = try mobile_worker.plan_sync_worker.planSyncHandler(allocator, io, timers, services.log, try node_api.database_base_dir.withTaskDataDir(allocator, data, context.data_dir), task_context, host);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 
@@ -140,7 +141,7 @@ pub fn planPrefetchTask(services: TaskServices, timers: Timers, io: std.Io, allo
     var timestamp_provider: utils.timestamp_provider.TimestampProvider = .{};
     const task_context = bridgedContext(&services, context, &native_caller_storage, &uuid_generator, &timestamp_provider);
     const host = networkStatusOf(&services);
-    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, services.log, data, task_context, host);
+    const result = try mobile_worker.plan_prefetch_worker.planPrefetchHandler(allocator, io, timers, services.log, try node_api.database_base_dir.withTaskDataDir(allocator, data, context.data_dir), task_context, host);
     return try std.json.Stringify.valueAlloc(allocator, result, .{});
 }
 

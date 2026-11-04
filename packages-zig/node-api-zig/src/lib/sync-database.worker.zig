@@ -6,6 +6,7 @@ const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const tree = @import("tree.zig");
 const sync = @import("sync.zig");
 const bson_json = @import("bson-json.zig");
@@ -138,11 +139,13 @@ const SyncBatcher = struct {
 //
 // Syncs the local database with its origin and sends the events about it.
 // (Zig has no try block that can be left with return and still reach a catch, so this is a function of its own.)
+// baseDir is the directory a relative database or origin path is resolved against.
 //
 fn syncDatabase(
     allocator: std.mem.Allocator,
     io: std.Io,
     log: ILog,
+    baseDir: []const u8,
     data: ISyncDatabaseData,
     context: ITaskContext,
     runStartedAt: i64,
@@ -151,7 +154,7 @@ fn syncDatabase(
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, baseDir, data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const localRawStorage = local.rawStorage;
 
@@ -172,7 +175,7 @@ fn syncDatabase(
     // the standard openStorage path. The connectivity check then runs against that storage,
     // which avoids false-negative skips when the origin needs credentials the worker would not
     // otherwise have (e.g. S3 origins registered in databases.toml with an s3_key).
-    const originOpened = try openStorage(allocator, io, log, origin, null, null, context.nativeCaller);
+    const originOpened = try openStorage(allocator, io, log, baseDir, origin, null, null, context.nativeCaller);
     const originStorage = originOpened.storage;
     const originRawStorage = originOpened.rawStorage;
 
@@ -279,7 +282,7 @@ pub fn syncDatabaseHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    syncDatabase(allocator, io, log, data, context, runStartedAt) catch |err| {
+    syncDatabase(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data, context, runStartedAt) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Sync failed for \"{s}\"", .{data.databasePath}), err);
         return err;
     };

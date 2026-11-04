@@ -51,6 +51,7 @@ test "createAssetServer binds only to the loopback interface" {
 
     const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, memory.log, .{
         .port = 0,
+        .baseDir = "",
         .sessionId = "test-session",
     });
     defer server.close(std.testing.io, std.testing.allocator);
@@ -82,6 +83,7 @@ test "createAssetServer listens on the port it is asked for" {
 
     const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, log, .{
         .port = freePort,
+        .baseDir = "",
         .sessionId = "test-session",
     });
     defer server.close(std.testing.io, std.testing.allocator);
@@ -99,6 +101,7 @@ test "createAssetServer serves the routes, with CORS headers, and stops answerin
     defer fixture.deinit();
     const server = try rest_api.asset_server.createAssetServer(std.testing.allocator, io, log, .{
         .port = 0,
+        .baseDir = "",
         .sessionId = "test-session",
     });
     const port = server.port;

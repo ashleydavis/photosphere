@@ -115,7 +115,7 @@ fn writeDatabaseConfig(sandbox: *Sandbox, origin: ?[]const u8) !void {
 fn writeMerkleTree(sandbox: *Sandbox, log: ILog, isPartial: bool) !void {
     const allocator = sandbox.arenaAllocator();
     try std.Io.Dir.cwd().createDirPath(sandbox.io, DATABASE_PATH ++ "/.db");
-    const opened = try node_api.open_storage.openStorage(allocator, sandbox.io, log, DATABASE_PATH, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, sandbox.io, log, "", DATABASE_PATH, null, null, null);
     // A real UUID, because the tree is serialized by the real saver and it writes the id as sixteen
     // bytes rather than as text.
     var tree = merkle_tree_zig.merkle_tree.createTree("6f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d");

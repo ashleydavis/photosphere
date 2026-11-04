@@ -266,7 +266,10 @@ test "switching automatic import on reports a default database that could not be
     try app.start();
     defer app.stop();
     // A file where the default database's folder would go, so creating the database there cannot work.
-    const blocked_path = try std.fs.path.join(std.testing.allocator, &.{ app.tmp_path, "photosphere-default" });
+    const databases_dir = try std.fs.path.join(std.testing.allocator, &.{ app.tmp_path, "dbs" });
+    defer std.testing.allocator.free(databases_dir);
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, databases_dir);
+    const blocked_path = try std.fs.path.join(std.testing.allocator, &.{ databases_dir, "photosphere-default" });
     defer std.testing.allocator.free(blocked_path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = blocked_path,

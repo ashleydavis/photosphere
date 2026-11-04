@@ -188,7 +188,15 @@ wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 # credentials from the received shared-db entry, which names the same path. Partial is what a phone
 # really holds, and it is the target of the push either way: the partial filter in syncDatabases
 # applies to the target of a copy, and the target here is the origin.
-send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "$REPLICA_NAME")" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+case "$PLATFORM" in
+    android|ios)
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$REPLICA_NAME" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+        ;;
+    *)
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "$REPLICA_NAME")" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+        ;;
+esac
 
 # The replica is encrypted under the received key, so it and the origin hold the same ciphertext and the push moves the stored bytes
 # across. A plain replica of an encrypted origin is copied through the decrypting layer, and the sync then compares the plaintext length
@@ -208,8 +216,12 @@ send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}' || exit 1
 log_success "The encrypted S3 database was replicated onto the device"
 
 # The replication has already registered the replica in the databases list under its folder name, so it is opened from there and
-# not added a second time.
-send_command "$APP_PORT" open-database "$(jq -cn --arg path "$("${PLATFORM}_app_path" "$REPLICA_NAME")" '{path: $path}')" || exit 1
+# not added a second time. It was registered after the received database, so it is the second entry, which is asserted rather than
+# assumed.
+click_sidebar_item "$APP_PORT" open-database || exit 1
+wait_for_log "$TMP_DIR" "Open database dialog opened"
+wait_for_value "$APP_PORT" "database-list-item-1" "$REPLICA_NAME"
+send_command "$APP_PORT" click '{"dataId":"database-list-item-1"}' || exit 1
 wait_for_log "$TMP_DIR" "Load assets task completed"
 
 # --- 5. Import the generated photo into the replica, on the device. ---

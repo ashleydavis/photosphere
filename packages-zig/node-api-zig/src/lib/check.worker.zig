@@ -13,6 +13,7 @@ const hash_cache = @import("hash-cache.zig");
 const file_scanner = @import("file-scanner.zig");
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const IFileStat = file_scanner.IFileStat;
@@ -132,7 +133,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log
     }
 
     // Recreate storage and metadata collection in the worker
-    const opened = try openStorage(allocator, io, log, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const database = try createMediaFileDatabase(allocator, opened.storage, uuidGenerator, timestampProvider);
     const metadataCollection = database.metadataCollection;
 

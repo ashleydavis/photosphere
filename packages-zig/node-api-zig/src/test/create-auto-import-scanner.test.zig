@@ -268,7 +268,7 @@ const ScannerTest = struct {
 // Makes the storage of a database directory.
 //
 fn createDatabaseStorage(allocator: std.mem.Allocator, io: std.Io, databaseDir: []const u8) !storage_factory.ICreateStorageResult {
-    return storage_factory.createStorage(allocator, io, databaseDir, null, null);
+    return storage_factory.createStorage(allocator, io, "", databaseDir, null, null);
 }
 
 //

@@ -23,7 +23,6 @@ case "$PLATFORM" in
         # Wipe everything the app has stored on the device before launch, with the app stopped, so nothing can write state back
         # underneath it and the test starts from a known state.
         "${PLATFORM}_reset_app_state" || exit 1
-        DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
         ;;
     *)
         DATABASE_PATH="$TMP_DIR/test-db"
@@ -96,7 +95,8 @@ case "$PLATFORM" in
         click_sidebar_item "$APP_PORT" new-database || exit 1
         wait_for_log "$TMP_DIR" "Create database dialog opened"
         send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"test-db"}' || exit 1
-        send_command "$APP_PORT" type "$(jq -cn --arg text "$DATABASE_PATH" '{dataId: "database-path-input", text: $text}')" || exit 1
+        # A user on a phone types the short name, which the app resolves into its own storage.
+        send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"test-db"}' || exit 1
         send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
         wait_for_log "$TMP_DIR" "Database created"
 

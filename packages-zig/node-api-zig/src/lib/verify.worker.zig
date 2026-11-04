@@ -11,6 +11,7 @@ const task_queue_zig = @import("ziggy").task_queue;
 const storage_zig = @import("storage-zig");
 const api = @import("api-zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const hash = @import("hash.zig");
 const retry_operations = @import("retry-operations.zig");
 const errors = utils.errors;
@@ -286,7 +287,7 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, lo
     const storageDescriptor = data.storageDescriptor;
     const fileName = node.name orelse "";
 
-    const opened = try openStorage(allocator, io, log, storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
+    const opened = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), storageDescriptor.databasePath, storageDescriptor.encryptionKey, null, context.nativeCaller);
     const storage = opened.storage;
 
     var infoOperation: retry_operations.InfoOperation("() => storage.info(fileName)") = .{ .allocator = allocator, .storage = storage, .fileName = fileName };

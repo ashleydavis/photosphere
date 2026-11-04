@@ -566,6 +566,7 @@ pub const MainState = struct {
         };
         const session_id = try self.uuid_generator.uuidGenerator().generate(arena, io);
         const server = node_api.asset_server.AssetServer.start(allocator, io, log, listener, .{
+            .baseDir = try node_api.database_base_dir.databaseBaseDir(arena, services.dataDir()),
             .sessionId = session_id,
             .nativeCallbacks = services.nativeCallbacks(),
         }) catch |err| {

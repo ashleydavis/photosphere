@@ -5,6 +5,7 @@ const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const IJobTag = task_queue_zig.types.IJobTag;
@@ -124,7 +125,7 @@ pub fn replicateDatabaseHandler(
     // Open source storage. When the source is registered in databases.json its credentials come
     // from there; otherwise data.sourceEncryptionKey (file path or vault name) supplies the key.
     //
-    const source = try openStorage(allocator, io, log, data.sourcePath, data.sourceEncryptionKey, null, context.nativeCaller);
+    const source = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.sourcePath, data.sourceEncryptionKey, null, context.nativeCaller);
     const sourceStorage = source.storage;
     const sourceDb = try createMediaFileDatabase(allocator, sourceStorage, uuidGenerator, timestampProvider);
 
@@ -136,6 +137,7 @@ pub fn replicateDatabaseHandler(
         allocator,
         io,
         log,
+        try database_base_dir.taskDatabaseBaseDir(allocator, taskData),
         data.destPath,
         data.destEncryptionKey,
         data.destS3Key,

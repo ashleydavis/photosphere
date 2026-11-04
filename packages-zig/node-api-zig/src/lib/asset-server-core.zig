@@ -25,6 +25,9 @@ pub const IAssetServerCoreOptions = struct {
     // Timestamp provider used when applying database ops.
     timestampProvider: ITimestampProvider,
 
+    // The directory a relative database path is resolved against: the dbs directory of the app's data directory, or empty for the working directory.
+    baseDir: []const u8,
+
     // Write-lock owner for write/apply operations (see acquireWriteLock).
     sessionId: []const u8,
 
@@ -98,6 +101,9 @@ pub const AssetServerCore = struct {
     // Timestamp provider used when applying database ops.
     timestampProvider: ITimestampProvider,
 
+    // The directory a relative database path is resolved against.
+    baseDir: []const u8,
+
     // Write-lock owner for write/apply operations.
     sessionId: []const u8,
 
@@ -119,6 +125,7 @@ pub const AssetServerCore = struct {
         self.* = .{
             .uuidGenerator = options.uuidGenerator,
             .timestampProvider = options.timestampProvider,
+            .baseDir = try allocator.dupe(u8, options.baseDir),
             .sessionId = try allocator.dupe(u8, options.sessionId),
             .nativeCaller = options.nativeCaller,
             .storageCache = .empty,
@@ -131,6 +138,7 @@ pub const AssetServerCore = struct {
     // Frees the core, with the allocator init was given. The storages it cached are freed with the arena they were made with.
     //
     pub fn deinit(self: *AssetServerCore, allocator: std.mem.Allocator) void {
+        allocator.free(self.baseDir);
         allocator.free(self.sessionId);
         if (self.ownGenerators) |generators| {
             allocator.destroy(generators);
@@ -167,7 +175,7 @@ pub const AssetServerCore = struct {
         }
         const credentials = try resolve_storage_credentials.resolveStorageCredentials(thread_arena, io, log, databasePath, null, null, self.nativeCaller);
         const loadedKeys = try encryption.key_utils.loadEncryptionKeysFromPem(thread_arena, credentials.encryptionKeyPems);
-        const storage = try media_file_database.createLazyDatabaseStorage(thread_arena, io, log, databasePath, credentials.s3Config, loadedKeys.options, self.nativeCaller);
+        const storage = try media_file_database.createLazyDatabaseStorage(thread_arena, io, log, self.baseDir, databasePath, credentials.s3Config, loadedKeys.options, self.nativeCaller);
         try self.storageCache.put(thread_arena, try thread_arena.dupe(u8, databasePath), storage);
         return storage;
     }
@@ -184,7 +192,7 @@ pub const AssetServerCore = struct {
     // Writes raw bytes for one asset variant into a database directory from a byte stream.
     //
     pub fn writeAsset(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, log: ILog, assetId: []const u8, assetType: []const u8, databasePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) !void {
-        const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, null, null);
+        const created = try storage_zig.storage_factory.createStorage(allocator, io, self.baseDir, databasePath, null, null);
         try media_file_database.writeAssetStream(allocator, io, log, created.storage, created.rawStorage, self.sessionId, assetId, assetType, contentType, inputStream, contentLength);
     }
 
@@ -192,7 +200,7 @@ pub const AssetServerCore = struct {
     // Applies metadata operations to one or more on-disk databases.
     //
     pub fn applyDatabaseOps(self: *AssetServerCore, allocator: std.mem.Allocator, io: std.Io, log: ILog, ops: []const IDatabaseOp) !void {
-        try apply_database_ops.applyDatabaseOps(allocator, io, log, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.nativeCaller);
+        try apply_database_ops.applyDatabaseOps(allocator, io, log, self.baseDir, self.uuidGenerator, self.timestampProvider, self.sessionId, ops, self.nativeCaller);
     }
 
     //
@@ -250,8 +258,9 @@ pub const OwnGenerators = struct {
 // Creates a core with generators of its own, for one thread of a server that gives each of its threads a core (see asset-server.zig).
 // The core reaches the keychain through the native app's callbacks the thread was given, the thread calling the native app itself, when
 // it was given them and the native app has a host request callback. They must outlive the core.
+// baseDir is the directory a relative database path in a request is resolved against.
 //
-pub fn createOwnAssetServerCore(allocator: std.mem.Allocator, sessionId: []const u8, nativeCallbacks: ?*const ziggy.core.NativeCallbacks) !*AssetServerCore {
+pub fn createOwnAssetServerCore(allocator: std.mem.Allocator, baseDir: []const u8, sessionId: []const u8, nativeCallbacks: ?*const ziggy.core.NativeCallbacks) !*AssetServerCore {
     const generators = try allocator.create(OwnGenerators);
     errdefer allocator.destroy(generators);
     generators.* = .{};
@@ -263,6 +272,7 @@ pub fn createOwnAssetServerCore(allocator: std.mem.Allocator, sessionId: []const
     const core = try AssetServerCore.init(allocator, .{
         .uuidGenerator = if (generators.testUuids) |*test_uuids| test_uuids.uuidGenerator() else generators.randomUuids.uuidGenerator(),
         .timestampProvider = if (testing) generators.testTimestamps.timestampProvider() else generators.timestamps.timestampProvider(),
+        .baseDir = baseDir,
         .sessionId = sessionId,
         .nativeCaller = nativeCaller,
     });

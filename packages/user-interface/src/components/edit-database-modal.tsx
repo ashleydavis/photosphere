@@ -185,7 +185,7 @@ export function EditDatabaseModal({
         const entryData: Omit<IDatabaseEntry, 'id'> = {
             name: trimmedName,
             description: form.description,
-            path: form.path,
+            path: form.path.trim(),
             origin: trimmedOrigin.length === 0 ? undefined : trimmedOrigin,
             s3Key: form.s3Key,
             encryptionKey: form.encryptionKey,

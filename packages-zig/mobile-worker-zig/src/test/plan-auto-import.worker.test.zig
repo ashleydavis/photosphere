@@ -122,10 +122,9 @@ test "plan-auto-import creates and records the default database when there is no
     try expectString(DEFAULT_DATABASE_FOLDER_NAME, result, "databasePath");
     try expectKeyStrings(&.{ "create-default-database", "import-assets" }, "type", result, "steps");
     const created = stepData(at(result, "steps").?, "create-default-database").?;
-    try std.testing.expectEqual(@as(usize, 4), created.object.count());
+    try std.testing.expectEqual(@as(usize, 3), created.object.count());
     try expectString(DEFAULT_DATABASE_FOLDER_NAME, created, "databasePath");
     try expectString(try node_api.config_file.getConfigPath(sandbox.arenaAllocator()), created, "configPath");
-    try expectString(try node_api.databases_config.getDatabasesConfigPath(sandbox.arenaAllocator()), created, "databasesConfigPath");
 
     // Asked for on screen as well as on disk: photos are about to start arriving in it, and a gallery showing nothing while they
     // do is the thing this asks for.

@@ -727,6 +727,36 @@ fn flagValue(values: *const OptionValues, name: []const u8) ?bool {
 }
 
 //
+// Resolves the --db value of the command parsed, once, for every command (see storage_helper.resolveDatabaseOption), so a simple name
+// finds a database in the working directory or else in the desktop app's databases directory without each command doing it.
+//
+fn resolveDatabaseOptions(allocator: std.mem.Allocator, io: std.Io, outcome: *ParseOutcome) !void {
+    switch (outcome.*) {
+        inline else => |*parsed| {
+            const Parsed = @TypeOf(parsed.*);
+            if (comptime @typeInfo(Parsed) != .@"struct") {
+                return;
+            }
+            if (comptime @hasField(Parsed, "base")) {
+                try resolveBaseDatabaseOption(allocator, io, &parsed.base);
+            }
+            else if (comptime @hasField(Parsed, "options") and @typeInfo(@TypeOf(parsed.options)) == .@"struct" and @hasField(@TypeOf(parsed.options), "base")) {
+                try resolveBaseDatabaseOption(allocator, io, &parsed.options.base);
+            }
+        },
+    }
+}
+
+//
+// Replaces the --db value in a command's shared options with the path it resolves to.
+//
+fn resolveBaseDatabaseOption(allocator: std.mem.Allocator, io: std.Io, base: *IBaseCommandOptions) !void {
+    if (base.db) |databaseOption| {
+        base.db = try storage_helper.resolveDatabaseOption(allocator, io, databaseOption);
+    }
+}
+
+//
 // Converts the parsed values to the options shared by every command.
 //
 fn baseOptions(values: *const OptionValues) IBaseCommandOptions {
@@ -2680,7 +2710,8 @@ fn run(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, main_log: *ut
         .allocator = allocator,
     };
     const program = try createProgram(allocator, &state);
-    const outcome = try parseCommandLine(program, &state, userArgs);
+    var outcome = try parseCommandLine(program, &state, userArgs);
+    try resolveDatabaseOptions(allocator, io, &outcome);
     switch (outcome) {
         .failure => |failure| {
             // Commander has written the help or the error. main() exits with 0 for help and quietly with 1 for

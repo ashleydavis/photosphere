@@ -41,7 +41,7 @@ pub const DatabaseFixture = struct {
         fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
         fixture.timestampProvider = .{};
         fixture.dir = try temp_dirs.makeTempDir(allocator, io, name);
-        const created = try node_api.open_storage.openStorage(allocator, io, log, fixture.dir, null, null, null);
+        const created = try node_api.open_storage.openStorage(allocator, io, log, "", fixture.dir, null, null, null);
         fixture.rawStorage = created.rawStorage;
         fixture.database = try media_file_database.createMediaFileDatabase(allocator, created.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
         try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, fixture.uuidGenerator.uuidGenerator(), fixture.database.metadataCollection, null);

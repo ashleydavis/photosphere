@@ -76,9 +76,6 @@ const ICreateDefaultDatabaseStepData = struct {
     // The sandbox-relative path of config.yaml.
     configPath: []const u8,
 
-    // The sandbox-relative path of databases.toml.
-    databasesConfigPath: []const u8,
-
     // Whether the database is also opened on screen.
     open: bool,
 };
@@ -127,7 +124,7 @@ fn toJsonValue(allocator: std.mem.Allocator, value: anytype) !std.json.Value {
 
 //
 // Handler for the plan-auto-import task.
-// (Zig: the input data may name the app's data directory, in appDataPath. The config file and the databases file are named by
+// (Zig: the input data may name the directory the app's databases go in (the dbs directory of its data directory), in appDataPath. The config file and the databases file are named by
 // their absolute paths in the app's config directory, because the working directory of the program is not the app's data
 // directory.)
 //
@@ -142,7 +139,7 @@ pub fn planAutoImportHandler(
     const read = try readConfigFromStorage(allocator, io, log, try node_api.config_file.getConfigPath(allocator));
     const contents = read.config.autoImport;
     var plan = try planMobileAutoImport(allocator, try autoImportSettingsToJson(allocator, contents.settings), contents.defaultDatabasePath);
-    // Where the default database is made is a folder of the app's data directory when the caller names one. A caller whose working
+    // Where the default database is made is a folder of the app's databases directory when the caller names one. A caller whose working
     // directory is not the app's data directory has to, because a relative path would be made wherever that is.
     if (plan.isNewDefault) {
         if (data == .object) {
@@ -166,7 +163,6 @@ pub fn planAutoImportHandler(
                 .data = try toJsonValue(allocator, ICreateDefaultDatabaseStepData{
                     .databasePath = plan.databasePath,
                     .configPath = try node_api.config_file.getConfigPath(allocator),
-                    .databasesConfigPath = try node_api.databases_config.getDatabasesConfigPath(allocator),
 
                     // The user switched automatic import on and photos are about to start arriving
                     // in this database, so it is the one they should be looking at.

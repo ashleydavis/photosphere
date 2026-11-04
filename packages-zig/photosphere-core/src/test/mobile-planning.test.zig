@@ -37,6 +37,26 @@ test "plan-auto-import runs on Ziggy's runner and says not to run when nothing h
     try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"shouldRun\":false");
 }
 
+test "plan-auto-import puts a new default database in the dbs directory of the directory PHOTOSPHERE_DATA_DIR names, where short names resolve" {
+    var app: TestApp = undefined;
+    try app.prepare();
+    try app.environ_map.put("PHOTOSPHERE_DATA_DIR", "/scenario/files");
+    try app.launch();
+    defer app.stop();
+
+    try addTask(&app, "plan-auto-data-dir", "plan-auto-import");
+
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, "\"taskId\":\"plan-auto-data-dir\",\"status\":\"succeeded\"");
+    var path_arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer path_arena.deinit();
+    const default_path = try node_api.auto_import_desktop.getDefaultDatabasePath(path_arena.allocator(), try std.fs.path.join(path_arena.allocator(), &.{ "/scenario/files", "dbs" }));
+    const quoted_path = try utils.json.stringify(std.testing.allocator, default_path);
+    defer std.testing.allocator.free(quoted_path);
+    const expected = try std.mem.concat(std.testing.allocator, u8, &.{ "\"databasePath\":", quoted_path });
+    defer std.testing.allocator.free(expected);
+    try app.native_app.expectMessageContaining(std.testing.io, std.testing.allocator, expected);
+}
+
 test "plan-sync runs on Ziggy's runner and refuses when syncing is switched off, without asking the phone anything" {
     var app: TestApp = undefined;
     try app.start();

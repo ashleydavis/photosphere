@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Opens the sidebar and removes a recent database. On a desktop two databases are created with the CLI and databases.toml is seeded
-# with both as entries and as recents, and the file is checked afterwards: the recent name is gone and both entries remain. On a phone
+# Opens the sidebar and removes a recent database. On a desktop two databases are created with the CLI, databases.toml is seeded with
+# both as entries and state.yaml with both as recents, and the files are checked afterwards: the recent name is gone from state.yaml and
+# both entries remain in databases.toml. On a phone
 # the recent list lives on the device, so one database is copied into the sandbox, configured and opened, and only the removal is covered.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,21 +23,10 @@ case "$PLATFORM" in
         create_database "$TMP_DIR/test-db-a"
         create_database "$TMP_DIR/test-db-b"
 
-        log_info "Writing databases.toml seeded with two entries and both in recent_database_names..."
-        mkdir -p "$TMP_DIR/config"
-        cat > "$TMP_DIR/config/databases.toml" <<TOML
-recent_database_names = ["test-db-a", "test-db-b"]
-
-[[databases]]
-name = "test-db-a"
-description = ""
-path = "$TMP_DIR/test-db-a"
-
-[[databases]]
-name = "test-db-b"
-description = ""
-path = "$TMP_DIR/test-db-b"
-TOML
+        log_info "Writing databases.toml with two entries and state.yaml with both as recents..."
+        "${PLATFORM}_seed_databases_config" \
+            "$(jq -cn --arg a "$TMP_DIR/test-db-a" --arg b "$TMP_DIR/test-db-b" '[{name: "test-db-a", path: $a}, {name: "test-db-b", path: $b}]')" \
+            '["test-db-a","test-db-b"]' || exit 1
         ;;
 esac
 
@@ -79,16 +69,20 @@ case "$PLATFORM" in
         ;;
     *)
         TOML_FILE="$TMP_DIR/config/databases.toml"
+        STATE_FILE="$TMP_DIR/config/state.yaml"
 
-        if grep -q "test-db-a" <(grep "^recent_database_names" "$TOML_FILE"); then
-            log_error "test-db-a still present in recent_database_names"
-            cat "$TOML_FILE"
+        # The app writes the recents as a YAML sequence, one name to a line under recent_names.
+        recent_names="$(sed -n '/^databases:/,/^[^[:space:]]/p' "$STATE_FILE" | sed -n '/^  recent_names:/,/^  [^[:space:]-]/p' | grep '^    - ' || true)"
+
+        if grep -q "test-db-a" <<< "$recent_names"; then
+            log_error "test-db-a still present in the recents in state.yaml"
+            cat "$STATE_FILE"
             exit 1
         fi
 
-        if ! grep -q "test-db-b" <(grep "^recent_database_names" "$TOML_FILE"); then
-            log_error "test-db-b unexpectedly missing from recent_database_names"
-            cat "$TOML_FILE"
+        if ! grep -q "test-db-b" <<< "$recent_names"; then
+            log_error "test-db-b unexpectedly missing from the recents in state.yaml"
+            cat "$STATE_FILE"
             exit 1
         fi
 

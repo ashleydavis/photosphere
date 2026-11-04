@@ -29,7 +29,7 @@ They differ in which side is made first, and that decides which way the photos m
 
 1. On the phone, open the menu (the hamburger, top left) and choose **Manage Databases**.
 2. Press **New database**.
-3. **Name**: whatever you want to see in the app. **Type**: `File system`. **Path**: a short name such as `my-photos`. It is created inside the app's own private storage; there is nothing on the phone's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser.
+3. **Name**: whatever you want to see in the app. **Type**: `File system`. **Path**: a simple name such as `my-photos`. It is created inside the app's own private storage; there is nothing on the phone's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser.
 4. Leave **Encrypted** off. Android already encrypts the device, and encrypting the local copy as well costs the phone work on every photo it imports.
 5. Press **Create**.
 6. Back on **Manage Databases**, press the **⋮** on it and choose **Set as default**.
@@ -151,7 +151,7 @@ This makes the phone's own copy: the same database with the same identity, with 
 
 1. On **Manage Databases**, press the **⋮** on the remote and choose **Replicate**.
 2. **Destination type**: `File system`.
-3. **Destination path**: type a short name, for example `photosphere-ash`. It is created inside the app's own private storage; there is nothing on the phone's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser. This is a local path, so it can be the same word as the bucket without clashing with it.
+3. **Destination path**: type a simple name, for example `photosphere-ash`. It is created inside the app's own private storage; there is nothing on the phone's filesystem to browse to, and **Browse** on Android is a text prompt rather than a folder chooser. This is a local path, so it can be the same word as the bucket without clashing with it.
 4. **Mode**: **Partial**. It copies the README, the files merkle tree and the merkle trees of the record database, and nothing else: a handful of small files however large the library is, because it deliberately does not walk the tree. **Full** copies every original as well, which on a real library is tens of gigabytes onto a phone.
 5. Press **Replicate**. It finishes in seconds.
 

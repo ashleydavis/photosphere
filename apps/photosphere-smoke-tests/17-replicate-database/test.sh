@@ -25,9 +25,10 @@ case "$PLATFORM" in
         "${PLATFORM}_reset_path" "dest-full"
         log_info "Pre-creating an empty source database with the CLI..."
         create_database "$SOURCE_DB"
-        SOURCE_PATH="$("${PLATFORM}_app_path" "source-db")"
-        DEST_PARTIAL="$("${PLATFORM}_app_path" "dest-partial")"
-        DEST_FULL="$("${PLATFORM}_app_path" "dest-full")"
+        # A user on a phone types short names, which the app resolves into its own storage, where the source is seeded.
+        SOURCE_PATH="source-db"
+        DEST_PARTIAL="dest-partial"
+        DEST_FULL="dest-full"
         ;;
     *)
         log_info "Pre-creating the source database with one fixture..."
@@ -99,6 +100,11 @@ wait_for_log "$TMP_DIR" "Replication completed for"
 
 case "$PLATFORM" in
     android|ios)
+        if ! "${PLATFORM}_path_exists" "dest-partial/.db/config.json"; then
+            log_error "Partial replication did not produce a database at $("${PLATFORM}_app_path" "dest-partial")"
+            exit 1
+        fi
+
         # Replicate a second time. A replication tags its task queue with the source database's path and shuts that queue down when it
         # finishes, which cancels the source. The engine pool used to remember a cancelled source for the life of the app, so a second
         # replication was discarded before it ran: no error, no log line, the dialog simply sat there.
@@ -111,10 +117,14 @@ case "$PLATFORM" in
         send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
         send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
         wait_for_log "$TMP_DIR" "Replicate database dialog opened"
-        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "dest-second")" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+        send_command "$APP_PORT" type "$(jq -cn --arg text "dest-second" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
         send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
         send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
         wait_for_log "$TMP_DIR" "Replication completed for"
+        if ! "${PLATFORM}_path_exists" "dest-second/.db/config.json"; then
+            log_error "The second replication did not produce a database at $("${PLATFORM}_app_path" "dest-second")"
+            exit 1
+        fi
         log_success "A second replication of the same database ran, rather than being silently dropped"
         ;;
     *)

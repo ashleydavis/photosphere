@@ -17,7 +17,7 @@ const IAppConfig = app_config.IAppConfig;
 //
 
 //
-// The folder the default private database is created in, under the application data directory.
+// The folder the default private database is created in, under the dbs directory of the application data directory.
 //
 pub const DEFAULT_DATABASE_FOLDER_NAME = "photosphere-default";
 

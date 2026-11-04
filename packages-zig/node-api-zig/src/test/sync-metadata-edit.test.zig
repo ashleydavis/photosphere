@@ -38,7 +38,7 @@ fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, worki
     try std.Io.Dir.cwd().createDirPath(io, originPath);
 
     const uuidGenerator = try sync_helpers.testUuidGenerator(allocator);
-    const created = try createStorage(allocator, io, originPath, null, null);
+    const created = try createStorage(allocator, io, "", originPath, null, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, created.storage, uuidGenerator, clock.timestampProvider());
     try media_file_database.createDatabase(allocator, io, log, created.storage, created.rawStorage, uuidGenerator, database.metadataCollection, null);
 
@@ -72,8 +72,8 @@ fn makeOriginDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, worki
 // (This is what applyDatabaseOps does for a "set" op on the metadata collection.)
 //
 fn applySetOp(allocator: std.mem.Allocator, io: std.Io, log: ILog, clock: *SettableTimestampProvider, databasePath: []const u8, recordId: []const u8, fields: BsonDocument) !void {
-    const created = try createStorage(allocator, io, databasePath, null, null);
-    const assetStorage = try media_file_database.openLazyOriginStorage(allocator, io, log, created.storage, created.rawStorage, null);
+    const created = try createStorage(allocator, io, "", databasePath, null, null);
+    const assetStorage = try media_file_database.openLazyOriginStorage(allocator, io, log, "", created.storage, created.rawStorage, null);
     const database = try media_file_database.createMediaFileDatabase(allocator, assetStorage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     try media_file_database.loadSortIndexes(allocator, log, assetStorage, database.metadataCollection);
 
@@ -102,9 +102,9 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDi
     // The replica, exactly as the app makes it: a replicate of the origin, which records the
     // origin path in the replica's own config.
     const replicaPath = try std.fs.path.join(allocator, &.{ workingDir, "replica" });
-    const sourceForReplicate = try createStorage(allocator, io, originPath, null, null);
+    const sourceForReplicate = try createStorage(allocator, io, "", originPath, null, null);
     const sourceDbForReplicate = try media_file_database.createMediaFileDatabase(allocator, sourceForReplicate.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
-    const destForReplicate = try createStorage(allocator, io, replicaPath, null, null);
+    const destForReplicate = try createStorage(allocator, io, "", replicaPath, null, null);
     _ = try replicate(
         allocator,
         io,
@@ -133,8 +133,8 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDi
 
     // Sync the replica up to its origin, the way syncDatabaseHandler does: source is the local
     // replica, target is the origin.
-    const replicaStorage = try createStorage(allocator, io, replicaPath, null, null);
-    const originStorage = try createStorage(allocator, io, originPath, null, null);
+    const replicaStorage = try createStorage(allocator, io, "", replicaPath, null, null);
+    const originStorage = try createStorage(allocator, io, "", originPath, null, null);
     const replicaDb = try media_file_database.createMediaFileDatabase(allocator, replicaStorage.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     const originDb = try media_file_database.createMediaFileDatabase(allocator, originStorage.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
 
@@ -159,7 +159,7 @@ fn runEditAndSync(allocator: std.mem.Allocator, io: std.Io, log: ILog, workingDi
     try originDb.bsonDatabase.flush();
     try replicaDb.bsonDatabase.flush();
 
-    const verifyStorage = try createStorage(allocator, io, originPath, null, null);
+    const verifyStorage = try createStorage(allocator, io, "", originPath, null, null);
     const verifyDb = try media_file_database.createMediaFileDatabase(allocator, verifyStorage.storage, try sync_helpers.testUuidGenerator(allocator), clock.timestampProvider());
     const originRecord = try verifyDb.metadataCollection.getOne(io, log, assetId);
     try verifyDb.bsonDatabase.flush();

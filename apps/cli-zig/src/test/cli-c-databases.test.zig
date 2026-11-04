@@ -50,8 +50,6 @@ const network_note = "   \u{2139} Network Requirement\n" ++ (" " ** 70) ++ "\n" 
 // The databases of the dbs tests: one local path with every secret set and one S3 path with none.
 //
 const seed_config =
-    \\recent_database_names = [ "photos" ]
-    \\
     \\[[databases]]
     \\name = "photos"
     \\description = "My photos"
@@ -83,7 +81,7 @@ fn setup(allocator: std.mem.Allocator, root: []const u8, databasesConfig: ?[]con
     const environment = try helpers.cliEnvironment(allocator, root);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = try std.fs.path.join(allocator, &.{ root, "config", "databases.toml" }),
-        .data = databasesConfig orelse "databases = []\nrecent_database_names = []\n",
+        .data = databasesConfig orelse "databases = []\n",
     });
     // The plaintext vault keeps vault.json in the directory PHOTOSPHERE_VAULT_DIR names, which is the test root
     // itself (a directory of its own under the root would have to be created first, and this test needs no other).

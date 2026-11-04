@@ -28,7 +28,16 @@ trap cleanup EXIT
 log_info "Pre-creating database with the CLI..."
 create_database "$TMP_DIR/test-db"
 "${PLATFORM}_seed_database" "$TMP_DIR/test-db" "test-db" || exit 1
-DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
+
+# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+case "$PLATFORM" in
+    android|ios)
+        DATABASE_PATH="test-db"
+        ;;
+    *)
+        DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
+        ;;
+esac
 
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"

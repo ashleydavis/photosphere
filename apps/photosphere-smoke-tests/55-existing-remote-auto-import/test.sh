@@ -39,8 +39,7 @@ S3_STATE_DIR="$TMP_DIR/s3"
 SECRET_NAME="existing-remote-smoke-test-s3"
 
 # The name and path of the replica the app makes. Named for the scenario rather than "photosphere-default" so a run against a real
-# phone never touches the database that phone backs up to. The app resolves no relative path against its storage, so the path is the
-# absolute one in the app's files directory.
+# phone never touches the database that phone backs up to. The path is for what the test does from outside the app.
 DB_NAME="existing-remote-test-db"
 DB_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
 
@@ -173,7 +172,7 @@ on_exit() {
 
     if [ "$CAN_WIPE_APP_DATA" -ne 1 ]; then
         "${PLATFORM}_return_app_settings" "$SAVED_SETTINGS_DIR"
-        log_info "Left behind on this device: the test replica at files/$DB_NAME, which nothing reads once the settings above are back."
+        log_info "Left behind on this device: the test replica at files/dbs/$DB_NAME, which nothing reads once the settings above are back."
     fi
 
     stop_s3_emulator "$S3_STATE_DIR"
@@ -252,7 +251,15 @@ send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 
-send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$DB_PATH\"}" || exit 1
+# A user on a phone types the short name, which the app resolves into its own storage, at DB_PATH. A desktop user types the full path.
+case "$PLATFORM" in
+    android|ios)
+        send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$DB_NAME\"}" || exit 1
+        ;;
+    *)
+        send_command "$APP_PORT" type "{\"dataId\":\"replicate-dest-path-input\",\"text\":\"$DB_PATH\"}" || exit 1
+        ;;
+esac
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
 

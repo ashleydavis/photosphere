@@ -15,8 +15,6 @@ rm -rf /tmp/psi-cli-dbs-clear
 mkdir -p /tmp/psi-cli-dbs-clear/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-clear/config
 cat > /tmp/psi-cli-dbs-clear/config/databases.toml <<'TOML'
-recent_database_names = []
-
 [[databases]]
 name = "db-one"
 description = ""

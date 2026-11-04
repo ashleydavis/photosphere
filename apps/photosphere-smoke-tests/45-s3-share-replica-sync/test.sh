@@ -126,11 +126,16 @@ cli_expect_success "Adding a photo to the encrypted database" \
 # so nothing can write state back underneath it.
 "${PLATFORM}_reset_app_state" || exit 1
 
-# Where the replica lives on the device. The app resolves nothing relative, so the replicate dialog and the Add Database dialog are
-# both given the full path inside the app's own storage. Asked for after the reset, not before it: on the iOS simulator the reset
-# uninstalls and reinstalls the app, which moves its data container to a new path, so a path taken before it names a directory the
-# app no longer owns and the checks below would look for the replica somewhere the app never wrote it.
-REPLICA_PATH="$("${PLATFORM}_app_path" "$REPLICA_NAME")"
+# The path given to the replicate dialog. A user on a phone types the short name, which the app resolves into its own storage. A
+# desktop user types the full path, asked for after the reset, not before it, because a reset can move the app's data directory.
+case "$PLATFORM" in
+    android|ios)
+        REPLICA_PATH="$REPLICA_NAME"
+        ;;
+    *)
+        REPLICA_PATH="$("${PLATFORM}_app_path" "$REPLICA_NAME")"
+        ;;
+esac
 
 start_app "$TMP_DIR" || exit 1
 wait_for_ready "$APP_PORT" || exit 1

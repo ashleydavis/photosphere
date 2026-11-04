@@ -15,7 +15,8 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 case "$PLATFORM" in
     android|ios)
         "${PLATFORM}_reset_app_state" || exit 1
-        DATABASE_PATH="$("${PLATFORM}_app_path" "test-db")"
+        # A user on a phone types the short name, which the app resolves into its own storage, where the database is seeded.
+        DATABASE_PATH="test-db"
         ;;
     *)
         DATABASE_PATH="$TMP_DIR/test-db"

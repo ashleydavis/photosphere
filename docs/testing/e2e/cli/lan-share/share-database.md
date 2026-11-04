@@ -23,8 +23,6 @@ cat > /tmp/psi-sender/vault/vault.json <<'EOF'
 {"test-s3-key":{"name":"test-s3-key","type":"s3-credentials","value":"{\"region\":\"us-east-1\",\"accessKeyId\":\"AKIATEST\",\"secretAccessKey\":\"testsecret\"}"}}
 EOF
 cat > /tmp/psi-sender/config/databases.toml <<'EOF'
-recent_database_names = []
-
 [[databases]]
 name = "test-db"
 description = ""

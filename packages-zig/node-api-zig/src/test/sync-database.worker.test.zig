@@ -54,7 +54,7 @@ fn makeData(allocator: std.mem.Allocator, databasePath: []const u8, includeJob: 
 // Opens the database at a path, with a real clock and generators.
 //
 fn openDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8) !media_file_database.IMediaFileDatabase {
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, databasePath, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", databasePath, null, null, null);
     const uuidGenerator = try allocator.create(utils.random_uuid_generator.RandomUuidGenerator);
     uuidGenerator.* = .{};
     const timestampProvider = try allocator.create(utils.timestamp_provider.TimestampProvider);
@@ -67,7 +67,7 @@ fn openDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePat
 // databases for identical.
 //
 fn addAsset(allocator: std.mem.Allocator, io: std.Io, log: ILog, databasePath: []const u8, assetId: []const u8) !void {
-    const opened = try node_api.open_storage.openStorage(allocator, io, log, databasePath, null, null, null);
+    const opened = try node_api.open_storage.openStorage(allocator, io, log, "", databasePath, null, null, null);
     const database = try openDatabase(allocator, io, log, databasePath);
     if (!try api.write_lock.acquireWriteLock(allocator, io, log, opened.rawStorage, "session-test", 3)) {
         return error.FailedToAcquireWriteLock;
@@ -417,7 +417,7 @@ test "sends the assets pulled from the origin as sync-batch messages of at most 
     try scenario.init(allocator, io, log, "sync-database-batches", null);
     defer scenario.deinit(io, log);
     // The origin gains 51 assets, so the local database pulls a full batch of 50 and a batch of 1.
-    const originOpened = try node_api.open_storage.openStorage(allocator, io, log, scenario.origin.dir, null, null, null);
+    const originOpened = try node_api.open_storage.openStorage(allocator, io, log, "", scenario.origin.dir, null, null, null);
     const originDatabase = try openDatabase(allocator, io, log, scenario.origin.dir);
     for (0..51) |index| {
         var record = try BsonDocument.fromFields(allocator, &.{
@@ -475,7 +475,7 @@ test "sends the id of an asset the local database deleted, that the origin still
     var scenario: Scenario = undefined;
     try scenario.init(allocator, io, log, "sync-database-deleted", null);
     defer scenario.deinit(io, log);
-    const localOpened = try node_api.open_storage.openStorage(allocator, io, log, scenario.localPath, null, null, null);
+    const localOpened = try node_api.open_storage.openStorage(allocator, io, log, "", scenario.localPath, null, null, null);
     const localDatabase = try openDatabase(allocator, io, log, scenario.localPath);
     try media_file_database.removeAsset(allocator, io, log, localOpened.storage, localOpened.rawStorage, "session-test", localDatabase.bsonDatabase, localDatabase.metadataCollection, SHARED_ASSET_ID, true);
     try localDatabase.bsonDatabase.flush();
@@ -527,7 +527,7 @@ test "sends an asset the origin changed, that the local database also holds, as 
     try scenario.init(allocator, io, log, "sync-database-updated", null);
     defer scenario.deinit(io, log);
     // The origin changes the record both sides hold.
-    const originOpened = try node_api.open_storage.openStorage(allocator, io, log, scenario.origin.dir, null, null, null);
+    const originOpened = try node_api.open_storage.openStorage(allocator, io, log, "", scenario.origin.dir, null, null, null);
     const originDatabase = try openDatabase(allocator, io, log, scenario.origin.dir);
     const updates = try BsonDocument.fromFields(allocator, &.{
         .{

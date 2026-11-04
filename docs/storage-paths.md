@@ -14,7 +14,7 @@ fs:./photos                 a relative path, resolved against the working direct
 C:\Users\me\photos          Windows, backslashes are converted to forward slashes
 ```
 
-The path after `fs:` is resolved to an absolute path, so a relative one depends on where the command was run from. Backslashes become forward slashes, which is why a Windows path and a Unix one behave the same everywhere below the storage layer.
+The path after `fs:` is resolved to an absolute path. A simple name such as `photos` can resolve into the data directory's `dbs` folder, and every other relative path depends on where the command was run from: see [Database names and paths](database-names-and-paths.md#the-path). Backslashes become forward slashes, which is why a Windows path and a Unix one behave the same everywhere below the storage layer.
 
 ## S3 and S3 compatible buckets
 
@@ -34,7 +34,7 @@ Several databases can share one bucket by using different prefixes. Each one see
 
 A path on its own carries no credentials. They are resolved in this order:
 
-1. The credentials registered against the database entry, when the database is named rather than given as a raw path. This is what `Configure secrets…` in the app sets, and what `s3_key` in `databases.toml` records.
+1. The credentials named by `s3_key` in the database record whose path is this path. This is what `Configure secrets…` in the app sets.
 2. The `default:s3` entry in the vault, when there is one. It holds the access key, the secret, the region and the endpoint.
 3. The AWS SDK's own environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_REGION`.
 

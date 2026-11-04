@@ -10,6 +10,7 @@ const replicate_database_worker = @import("replicate-database.worker.zig");
 const import_assets_worker = @import("import-assets.worker.zig");
 const hash_file_worker = @import("hash-file.worker.zig");
 const cleanup_sources_worker = @import("cleanup-sources.worker.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const prefetch_database_worker = @import("prefetch-database.worker.zig");
 const consolidate_database_worker = @import("consolidate-database.worker.zig");
 const check_database_exists_worker = @import("check-database-exists.worker.zig");
@@ -136,16 +137,30 @@ pub fn taskEntries(comptime Tools: type, comptime registerMediaSources: fn (cont
     for (handlers, 0..) |entry, index| {
         list[index] = .{
             .name = entry.type,
-            .handler = ziggy.task_runner.fromQueueHandler(withMediaSources(registerMediaSources, entry.handler)),
+            .handler = fromNodeApiHandler(withMediaSources(registerMediaSources, entry.handler)),
         };
     }
     for (tool_handlers, 0..) |entry, index| {
         list[handlers.len + index] = .{
             .name = entry.type,
-            .handler = ziggy.task_runner.fromQueueHandler(withTools(Tools, registerMediaSources, entry.handler)),
+            .handler = fromNodeApiHandler(withTools(Tools, registerMediaSources, entry.handler)),
         };
     }
     return list;
+}
+
+//
+// Turns a task queue handler into a task handler, as Ziggy's fromQueueHandler does, and also hands it the app's data directory, which
+// Ziggy's TaskContext carries and its ITaskContext does not. runQueueHandler gives the handler only the context and the data, so the
+// data directory goes in the data, under database_base_dir.TASK_DATA_DIR_KEY, where database_base_dir.taskDatabaseBaseDir reads it.
+//
+pub fn fromNodeApiHandler(comptime handler: task_queue_zig.types.TaskHandler) ziggy.task_runner.TaskHandler {
+    return &struct {
+        fn run(services: ziggy.task_runner.TaskServices, timers: ziggy.timers.Timers, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_runner.TaskContext, data: std.json.Value) anyerror!?[]const u8 {
+            const with_data_dir = try database_base_dir.withTaskDataDir(allocator, data, context.data_dir);
+            return try ziggy.task_runner.runQueueHandler(services, timers, io, allocator, context, handler, with_data_dir);
+        }
+    }.run;
 }
 
 //

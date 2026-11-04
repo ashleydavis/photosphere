@@ -54,6 +54,7 @@ photosphere_platform_start() {
         CFFIXED_USER_HOME="$test_dir/home" \
         PHOTOSPHERE_TEST_MODE=1 \
         PHOTOSPHERE_CONFIG_DIR="$test_dir/config" \
+        PHOTOSPHERE_DATA_DIR="$test_dir/files" \
         PHOTOSPHERE_CACHE_DIR="$test_dir/cache" \
         PHOTOSPHERE_VAULT_DIR="$test_dir/vault" \
         PHOTOSPHERE_VAULT_TYPE=plaintext \
@@ -107,16 +108,18 @@ macos_reset_app_state() {
 }
 
 #
-# Prints the absolute path of a name inside the scenario's files directory, which is where macos_seed_database puts a fixture.
-# Usage: macos_app_path <relative_path_under_files>
+# Prints the absolute path of a name inside the dbs directory of the scenario's files directory, which is where macos_seed_database
+# puts a fixture. The files directory is the one photosphere_platform_start gives the app as PHOTOSPHERE_DATA_DIR, and the app resolves
+# a short database name a user types against its dbs directory, so a seeded database and the short name typed for it name the same place.
+# Usage: macos_app_path <relative_path_under_dbs>
 #
 macos_app_path() {
-    echo "$TMP_DIR/files/$1"
+    echo "$TMP_DIR/files/dbs/$1"
 }
 
 #
-# Removes a path under the scenario's files directory so a scenario that creates fresh state there can be run again. Removes the one
-# named path only. Usage: macos_reset_path <relative_path_under_files>
+# Removes a path under the dbs directory of the scenario's files directory so a scenario that creates fresh state there can be run again. Removes the one
+# named path only. Usage: macos_reset_path <relative_path_under_dbs>
 #
 macos_reset_path() {
     local target
@@ -284,23 +287,17 @@ macos_apply_settings_change() {
 }
 
 #
-# Has the app open the given database when it starts, by naming it as the database to reopen in its databases.toml. A desktop syncs
-# the database that is open, so without this nothing is open for the sync to push. Written before the app starts.
-# Usage: macos_open_database_on_launch <database_path>
+# Has the app open the given database when it starts, by naming it as the database to reopen in its state.yaml, keeping the recents
+# macos_seed_databases_config wrote. A desktop syncs the database that is open, so this gives the sync a database to push. Written
+# before the app starts, after macos_seed_databases_config. Usage: macos_open_database_on_launch <database_path>
 #
 macos_open_database_on_launch() {
     local databases_file="$TMP_DIR/config/databases.toml"
     if [ ! -f "$databases_file" ]; then
-        echo "macos_open_database_on_launch: there is no $databases_file to name the database in" >&2
+        echo "macos_open_database_on_launch: there is no $databases_file listing the database to open" >&2
         return 1
     fi
-    local rendered
-    rendered="$(mktemp)"
-    {
-        echo "last_database = $(jq -n --arg path "$1" '$path')"
-        grep -v '^last_database = ' "$databases_file"
-    } > "$rendered"
-    mv "$rendered" "$databases_file"
+    seed_databases_state "$(seeded_recent_database_names)" "$1"
 }
 
 #
@@ -353,8 +350,8 @@ macos_request_sync() {
 }
 
 #
-# Waits until the given path under the scenario's files directory exists and is non-empty, to see a background task's effect on storage.
-# Returns 0 once it is there, non-zero after DEFAULT_WAIT_TIMEOUT seconds. Usage: macos_wait_for_file <relative_path_under_files>
+# Waits until the given path under the dbs directory of the scenario's files directory exists and is non-empty, to see a background task's effect on storage.
+# Returns 0 once it is there, non-zero after DEFAULT_WAIT_TIMEOUT seconds. Usage: macos_wait_for_file <relative_path_under_dbs>
 #
 macos_wait_for_file() {
     local target
@@ -475,14 +472,14 @@ macos_seed_library_auto_import_config() {
 }
 
 #
-# Prints the directory of the database of the given name as the app has it: one a scenario seeded into the scenario's files directory,
+# Prints the directory of the database of the given name as the app has it: one a scenario seeded into the dbs directory of the scenario's files directory,
 # or else the one the app made for itself inside its data directory. Ziggy's MacOS native app puts that directory under Application
 # Support in the home directory, which is the scenario's own home here (CFFIXED_USER_HOME), so the bundle identifier is not named. Never
 # the host's own copy that a scenario seeded from. Prints nothing when there is none. Usage: macos_app_database_dir <database_dir_name>
 #
 macos_app_database_dir() {
-    if [ -d "$TMP_DIR/files/$1" ]; then
-        echo "$TMP_DIR/files/$1"
+    if [ -d "$TMP_DIR/files/dbs/$1" ]; then
+        echo "$TMP_DIR/files/dbs/$1"
         return 0
     fi
     find "$TMP_DIR/home/Library/Application Support" -type d -name "$1" -print 2>/dev/null | head -1
@@ -527,9 +524,9 @@ macos_sync_stopped_log() {
 }
 
 #
-# Copies a database fixture from the host into the scenario's files directory, the place macos_app_path names. A copy already there is
+# Copies a database fixture from the host into the dbs directory of the scenario's files directory, the place macos_app_path names. A copy already there is
 # replaced: it is emptied with find and its directory removed, the named path only. Usage: macos_seed_database <host_fixture_dir>
-# <relative_dest_under_files>
+# <relative_dest_under_dbs>
 #
 macos_seed_database() {
     local host_src="$1"
@@ -548,19 +545,18 @@ macos_seed_database() {
 }
 
 #
-# Writes the app's databases.toml into its settings directory, from outside the app and before it starts. The first two arguments are
-# JSON: the databases as an array of {name, path} (description, origin, s3Key, encryptionKey and geocodingKey optional), and the recents
-# as an array of names, empty when omitted. The third is the path of the database the app reopens on launch; omitted, no such key is
-# written. Usage: macos_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
+# Writes the app's databases.toml and the databases section of its state.yaml into its settings directory, from outside the app and
+# before it starts. The first two arguments are JSON: the databases as an array of {name, path} (description, origin, s3Key,
+# encryptionKey and geocodingKey optional), written to databases.toml, and the recents as an array of names, empty when omitted. The
+# third is the path of the database the app reopens on launch, left out of state.yaml when omitted.
+# Usage: macos_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 macos_seed_databases_config() {
     local databases_json="$1"
     local recent_json="${2:-[]}"
     local last_database="${3:-}"
     mkdir -p "$TMP_DIR/config" || return 1
-    if ! jq -rn --argjson databases "$databases_json" --argjson recent "$recent_json" --arg last "$last_database" '
-        "recent_database_names = \($recent | tojson)",
-        (if $last != "" then "last_database = \($last | tojson)" else empty end),
+    if ! jq -rn --argjson databases "$databases_json" '
         ($databases[] |
             "",
             "[[databases]]",
@@ -575,4 +571,5 @@ macos_seed_databases_config() {
         echo "Could not render the app's database list from: $databases_json" >&2
         return 1
     fi
+    seed_databases_state "$recent_json" "$last_database"
 }

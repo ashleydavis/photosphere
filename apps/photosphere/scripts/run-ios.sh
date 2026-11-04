@@ -74,11 +74,15 @@ if [ -n "$fixture_dir" ]; then
     mkdir -p "$DATABASE_DIR" "$CONFIG_DIR"
     cp -R "$APPLE_REPO_ROOT/test/dbs/$fixture_dir/." "$DATABASE_DIR/"
     EXISTING_CONFIG="$(mktemp)"
+    EXISTING_STATE="$(mktemp)"
     if [ -f "$CONFIG_DIR/databases.toml" ]; then
         cp "$CONFIG_DIR/databases.toml" "$EXISTING_CONFIG"
     fi
-    (cd "$APPLE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "$DATABASE_DIR" "$EXISTING_CONFIG" "$CONFIG_DIR/databases.toml")
-    rm -f "$EXISTING_CONFIG"
+    if [ -f "$CONFIG_DIR/state.yaml" ]; then
+        cp "$CONFIG_DIR/state.yaml" "$EXISTING_STATE"
+    fi
+    (cd "$APPLE_APP_DIR" && bun scripts/write-fixture-databases-config.ts "$fixture_dir" "$DATABASE_DIR" "$EXISTING_CONFIG" "$CONFIG_DIR/databases.toml" "$EXISTING_STATE" "$CONFIG_DIR/state.yaml")
+    rm -f "$EXISTING_CONFIG" "$EXISTING_STATE"
     echo "Registered test-$fixture_dir in the app's database list. The app opens it on launch."
 fi
 open -a Simulator

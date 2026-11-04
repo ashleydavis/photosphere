@@ -1097,6 +1097,49 @@ read_config_file() {
 }
 
 #
+# Writes the databases section of the app's state.yaml from outside the app and before it starts, keeping every other section the file
+# already has: the recently opened database names, most recent first, as a JSON array, and the path of the database the app reopens on
+# launch, left out when it is empty. With no names and no path the section is removed. The recents are written as one JSON line, which
+# YAML reads as a sequence, so open_database_on_launch can carry them through.
+# Usage: seed_databases_state '<recent names json>' '<last database path>'
+#
+seed_databases_state() {
+    local recent_json="$1"
+    local last_database="$2"
+    local rendered
+    rendered="$(mktemp)"
+    read_config_file state.yaml | sed -e '/^databases:/,/^[^[:space:]]/{/^databases:/d;/^[[:space:]]/d}' > "$rendered"
+    if ! jq -rn --argjson recent "$recent_json" --arg last "$last_database" '
+        if ($recent | length) > 0 or $last != "" then
+            "databases:",
+            (if ($recent | length) > 0 then "  recent_names: \($recent | tojson)" else empty end),
+            (if $last != "" then "  last_opened_path: \($last | tojson)" else empty end)
+        else
+            empty
+        end
+    ' >> "$rendered"; then
+        echo "Could not render the databases section of the app's state from: $recent_json" >&2
+        rm -f "$rendered"
+        return 1
+    fi
+    put_config_file "$rendered" state.yaml || {
+        rm -f "$rendered"
+        return 1
+    }
+    rm -f "$rendered"
+}
+
+#
+# Prints the recently opened database names that seed_databases_state wrote into the app's state.yaml, as a JSON array, or [] when the
+# file holds no recents line. Usage: seeded_recent_database_names
+#
+seeded_recent_database_names() {
+    local recent_json
+    recent_json="$(read_config_file state.yaml | sed -n 's/^  recent_names: //p')"
+    echo "${recent_json:-[]}"
+}
+
+#
 # Opens the page's actions menu, which holds the page's secondary actions on a phone. A desktop page shows those actions directly, so
 # there is no menu to open. Usage: open_page_actions_menu <port>
 #

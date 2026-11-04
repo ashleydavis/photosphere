@@ -1,5 +1,6 @@
 //
-// The recent-database messages: get-recent-databases, get-last-database and remove-recent-database-name. They read and write the recents and the last database in databases.toml.
+// The recent-database messages: get-recent-databases, get-last-database and remove-recent-database-name. They read and write the
+// recents and the last database in state.yaml, checked against the records in databases.toml.
 //
 // Each is a task type, because they read and write a file, and the thread that handles the page's messages must not wait for that.
 //

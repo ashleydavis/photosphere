@@ -237,7 +237,7 @@ test "summary prints the report" {
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
 
     // The root hashes stored in the database's trees, and their combination.
-    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, db, null, null);
+    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, "", db, null, null);
     const filesTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, log, ".db/files.dat", storage.storage, "FTRE")).?;
     const databaseHash = (try @import("bdb-zig").merkle_tree.getDatabaseRootHash(allocator, std.testing.io, log, storage.storage, ".db/bson")).?;
     const fullHash = merkle_tree_zig.merkle_tree.combineHashes(filesTree.merkle.?.hash, databaseHash);
@@ -384,7 +384,7 @@ test "remove deletes the asset" {
     // The record is gone and its ID is recorded as deleted.
     const info = try runZig(allocator, environment, &.{ "info", assetId, "--db", db, "--yes" });
     try std.testing.expect(std.mem.indexOf(u8, info.stdout, "Error: Asset not found in database") != null);
-    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, db, null, null);
+    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, "", db, null, null);
     const filesTree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, log, ".db/files.dat", storage.storage, "FTRE")).?;
     const deletedAssetIds = filesTree.databaseMetadata.?.get("deletedAssetIds").?.array;
     try std.testing.expectEqual(@as(usize, 1), deletedAssetIds.len);
@@ -1595,7 +1595,7 @@ fn expectCreatedDatabase(log: ILog, allocator: std.mem.Allocator, dbDir: []const
     try std.testing.expectEqualStrings("{}", try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db/config.json" }), allocator, .unlimited));
     try std.testing.expectEqualSlices(u8, try expectedEmptySortIndexTree(allocator, "hash_asc", hashIndexId), try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db/bson/indexes/metadata/hash_asc/tree.dat" }), allocator, .unlimited));
     try std.testing.expectEqualSlices(u8, try expectedEmptySortIndexTree(allocator, "photoDate_desc", photoDateIndexId), try cwd.readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db/bson/indexes/metadata/photoDate_desc/tree.dat" }), allocator, .unlimited));
-    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, dbDir, null, null);
+    const storage = try storage_zig.storage_factory.createStorage(allocator, std.testing.io, "", dbDir, null, null);
     const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, log, ".db/files.dat", storage.storage, "FTRE")).?;
     try std.testing.expectEqualStrings(databaseId, tree.id);
 }
@@ -3431,8 +3431,6 @@ test "hash-cache commands without --db fail" {
 // none of the optional ones.
 //
 const dbs_seed_config =
-    \\recent_database_names = [ "photos" ]
-    \\
     \\[[databases]]
     \\name = "photos"
     \\description = "My photos"
@@ -3529,7 +3527,7 @@ test "dbs list, view, remove and clear print the reports" {
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "view", "--yes", "--path", "/nope" }), "", "\u{2717} No database matching the given name or path was found.\n", 1);
 
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "remove", "--yes", "--name", "photos" }), "\n\u{2713} Database \"photos\" removed from list.\n", "", 0);
-    try std.testing.expectEqualStrings("recent_database_names = []\n\n[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
+    try std.testing.expectEqualStrings("[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "remove", "--yes", "--path", "s3:bucket/db" }), "\n\u{2713} Database \"my-db\" removed from list.\n", "", 0);
 
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "ls" }), "No databases configured.\nUse \"psi dbs add\" to add a database.\n", "", 0);
@@ -3546,7 +3544,7 @@ test "dbs clear removes every database" {
     const environment = try setupDbs(allocator, root, dbs_seed_vault);
 
     try expectResult(try runZig(allocator, environment, &.{ "dbs", "clear", "--yes" }), "\n\u{2713} Removed 2 database(s) from the list.\n", "", 0);
-    try std.testing.expectEqualStrings("databases = []\nrecent_database_names = []\n", try readDatabasesToml(allocator, root));
+    try std.testing.expectEqualStrings("databases = []\n", try readDatabasesToml(allocator, root));
 }
 
 // The "logs Did you mean hint when name lookup fails and suggestions
@@ -3620,8 +3618,6 @@ test "dbs add and edit store databases" {
 
     // What is written for the same commands.
     try std.testing.expectEqualStrings(
-        \\recent_database_names = []
-        \\
         \\[[databases]]
         \\name = "photos"
         \\description = "My photos"
@@ -3658,7 +3654,7 @@ test "dbs remove asks before removing and dbs view picks from a list" {
     const removeResult = try runZigWithInput(allocator, environment, &.{ "-q", "dbs", "remove", "--name", "photos" }, "y");
     try std.testing.expectEqualStrings("\x1b[?25l \n\u{25c6}  Remove database \"photos\" (/data/photos)? This does not delete the database files.\n   \u{25cb} Yes / \u{25cf} No\n \n\x1b[1A\n\x1b[?25h\x1b[999D\x1b[4A\x1b[1B\x1b[J\u{25c7}  Remove database \"photos\" (/data/photos)? This does not delete the database files.\n   Yes\n\n\u{2713} Database \"photos\" removed from list.\n", removeResult.stdout);
     try std.testing.expectEqual(@as(u8, 0), removeResult.exitCode);
-    try std.testing.expectEqualStrings("recent_database_names = []\n\n[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
+    try std.testing.expectEqualStrings("[[databases]]\nname = \"my-db\"\ndescription = \"\"\npath = \"s3:bucket/db\"\n", try readDatabasesToml(allocator, root));
 }
 
 test "dbs send and receive transfer a database and its secrets over the local network" {
@@ -3782,8 +3778,6 @@ test "dbs send and receive transfer a database and its secrets over the local ne
     try std.testing.expectEqualStrings(receiveExpected, try std.Io.Dir.cwd().readFileAlloc(std.testing.io, receiverOutput, allocator, .unlimited));
 
     try std.testing.expectEqualStrings(
-        \\recent_database_names = []
-        \\
         \\[[databases]]
         \\name = "photos"
         \\description = "My photos"

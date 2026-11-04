@@ -468,9 +468,9 @@ test "applyDatabaseOps acquires write lock and persists metadata on a real datab
     defer fixture.deinit(io, log);
     const op = try setOpFor(allocator, fixture.dir, BSON_RECORD_ID);
 
-    try apply_database_ops.applyDatabaseOps(allocator, io, log, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, "", fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
 
-    const created = try node_api.open_storage.openStorage(allocator, io, log, fixture.dir, null, null, null);
+    const created = try node_api.open_storage.openStorage(allocator, io, log, "", fixture.dir, null, null, null);
     const verifyDb = try media_file_database.createMediaFileDatabase(allocator, created.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
     try media_file_database.loadSortIndexes(allocator, log, created.storage, verifyDb.metadataCollection);
     const loaded = (try verifyDb.metadataCollection.getOne(io, log, BSON_RECORD_ID)).?;
@@ -488,7 +488,7 @@ test "applyDatabaseOps does nothing for an empty op list" {
     var uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
     var timestampProvider: utils.timestamp_provider.TimestampProvider = .{};
 
-    try apply_database_ops.applyDatabaseOps(allocator, io, log, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session-1", &.{}, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, "", uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session-1", &.{}, null);
 }
 
 test "applyDatabaseOps throws when another session holds the write lock, and changes nothing" {
@@ -511,7 +511,7 @@ test "applyDatabaseOps throws when another session holds the write lock, and cha
     try std.testing.expect(try fixture.rawStorage.acquireWriteLock(allocator, io, memory.log, ".db/write.lock", "another-session"));
     const op = try setOpFor(allocator, fixture.dir, BSON_RECORD_ID);
 
-    try std.testing.expectError(error.Thrown, apply_database_ops.applyDatabaseOps(allocator, io, memory.log, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null));
+    try std.testing.expectError(error.Thrown, apply_database_ops.applyDatabaseOps(allocator, io, memory.log, "", fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null));
     try std.testing.expectEqualStrings("Failed to acquire write lock.", utils.errors.errorMessage(error.Thrown));
     try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Lock is currently held by \"another-session\"") != null);
 
@@ -544,7 +544,7 @@ test "applyDatabaseOps stamps lastModifiedAt on the database state after applyin
     const op = try setOpFor(allocator, fixture.dir, BSON_RECORD_ID);
 
     const before = try isoNow(allocator, io);
-    try apply_database_ops.applyDatabaseOps(allocator, io, log, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, "", fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), "session-1", &.{op}, null);
     const after = try isoNow(allocator, io);
 
     const state = (try api.database_state.loadDatabaseState(allocator, io, log, fixture.rawStorage)).?;
@@ -573,7 +573,7 @@ test "applyDatabaseOps writes state separately for each database group" {
     const opA = try setOpFor(allocator, fixtureA.dir, BSON_RECORD_ID);
     const opB = try setOpFor(allocator, fixtureB.dir, recordIdB);
 
-    try apply_database_ops.applyDatabaseOps(allocator, io, log, fixtureA.uuidGenerator.uuidGenerator(), fixtureA.timestampProvider.timestampProvider(), "session-1", &.{ opA, opB }, null);
+    try apply_database_ops.applyDatabaseOps(allocator, io, log, "", fixtureA.uuidGenerator.uuidGenerator(), fixtureA.timestampProvider.timestampProvider(), "session-1", &.{ opA, opB }, null);
 
     const stateA = (try api.database_state.loadDatabaseState(allocator, io, log, fixtureA.rawStorage)).?;
     const stateB = (try api.database_state.loadDatabaseState(allocator, io, log, fixtureB.rawStorage)).?;

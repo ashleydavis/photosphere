@@ -7,6 +7,7 @@ const merkle_tree_zig = @import("merkle-tree-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const tree = @import("tree.zig");
 const media_file_database = @import("media-file-database.zig");
 const errors = utils.errors;
@@ -256,7 +257,7 @@ pub fn evictOriginalsHandler(
         return errors.throwError("databasePath is required", .{});
     }
 
-    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, null, null, context.nativeCaller);
     const localStorage = local.storage;
     const localRawStorage = local.rawStorage;
 
@@ -278,7 +279,7 @@ pub fn evictOriginalsHandler(
         });
     };
 
-    const originStorage = (try openStorage(allocator, io, log, origin, null, null, context.nativeCaller)).storage;
+    const originStorage = (try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), origin, null, null, context.nativeCaller)).storage;
     const originMerkleTree = try loadMerkleTree(allocator, io, log, originStorage) orelse {
         return evictResultToJson(allocator, .{
             .evictedAssetIds = &.{},

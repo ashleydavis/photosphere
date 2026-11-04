@@ -138,19 +138,20 @@ pub fn applyMetadataDatabaseOps(allocator: std.mem.Allocator, io: std.Io, log: I
 //
 // Persists metadata changes to disk for one or more databases (grouped by each op's databaseId).
 // uuidGenerator and timestampProvider are passed through to the BSON database; sessionId owns .db/write.lock during writes.
+// baseDir is the directory a relative database path is resolved against: the dbs directory of the app's data directory, or empty for the working directory.
 // (Zig: the write lock is acquired with 3 attempts, the default of acquireWriteLock's maxAttempts, as Zig has no default
 // parameter values; the lock is released before the failure of the try block is returned, as the finally block does.)
 //
-pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, log: ILog, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.native_caller.INativeCaller) !void {
+pub fn applyDatabaseOps(allocator: std.mem.Allocator, io: std.Io, log: ILog, baseDir: []const u8, uuidGenerator: IUuidGenerator, timestampProvider: ITimestampProvider, sessionId: []const u8, ops: []const IDatabaseOp, host: ?utils.native_caller.INativeCaller) !void {
     if (ops.len == 0) {
         return;
     }
 
     const groups = try groupOpsByDatabaseId(allocator, ops);
     for (groups.keys(), groups.values()) |databasePath, pathOps| {
-        const created = try storage_zig.storage_factory.createStorage(allocator, io, databasePath, null, null);
+        const created = try storage_zig.storage_factory.createStorage(allocator, io, baseDir, databasePath, null, null);
         const rawStorage = created.rawStorage;
-        const assetStorage = try media_file_database.createLazyDatabaseStorage(allocator, io, log, databasePath, null, null, host);
+        const assetStorage = try media_file_database.createLazyDatabaseStorage(allocator, io, log, baseDir, databasePath, null, null, host);
         const database = try media_file_database.createMediaFileDatabase(allocator, assetStorage, uuidGenerator, timestampProvider);
         try media_file_database.loadSortIndexes(allocator, log, assetStorage, database.metadataCollection);
 

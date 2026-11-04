@@ -37,7 +37,7 @@ case "$PLATFORM" in
         wait_for_log "$TMP_DIR" "Add database dialog opened"
 
         send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"My Test DB"}' || exit 1
-        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "$DB_NAME")" '{dataId: "database-path-input", text: $text}')" || exit 1
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$DB_NAME" '{dataId: "database-path-input", text: $text}')" || exit 1
         send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
         wait_for_log "$TMP_DIR" "Database entry added"
 

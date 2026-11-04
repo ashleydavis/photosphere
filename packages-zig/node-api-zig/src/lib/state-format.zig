@@ -9,8 +9,9 @@ const errors = @import("utils-zig").errors;
 // config.yaml holds what the user chose: the theme, what automatic import watches, whether syncing
 // runs. state.yaml holds what the app remembers on its own so the interface comes back the way it was
 // left: the folder a dialog last opened at, which sidebar sections are collapsed, how the gallery was
-// sorted, which news has already been shown. Nobody edits state.yaml, and nothing in it is worth
-// carrying to another machine, which is why it is not documented for users the way config.yaml is.
+// sorted, which news has already been shown, which databases were opened lately and which to reopen.
+// The app alone writes state.yaml, and what it holds belongs to this machine, which is why it is
+// documented here rather than for users the way config.yaml is.
 //
 // It sits beside config.yaml, in ~/.config/photosphere on the CLI and the desktop app and at the root
 // of the storage sandbox on a phone, and PHOTOSPHERE_CONFIG_DIR moves both together.
@@ -132,6 +133,23 @@ pub const IGalleryState = struct {
 };
 
 //
+// Which databases were opened lately and which one to reopen. The databases themselves are
+// configuration and live in databases.toml; this is only what the app remembered about using them.
+//
+pub const IDatabasesState = struct {
+    //
+    // Names of the databases opened most recently, most recent first, as they were written,
+    // including a name whose record has since left databases.toml.
+    //
+    recentNames: []const []const u8 = &.{},
+
+    //
+    // Path of the database to reopen at the next start, absent when the last one open was closed.
+    //
+    lastOpenedPath: ?[]const u8 = null,
+};
+
+//
 // Everything state.yaml holds, in memory, with camelCase fields.
 //
 pub const IStateFile = struct {
@@ -154,6 +172,11 @@ pub const IStateFile = struct {
     // What the notification system has already shown, and the feed it has in hand.
     //
     news: INewsState,
+
+    //
+    // Which databases were opened lately and which one to reopen.
+    //
+    databases: IDatabasesState,
 
     //
     // The interface's own working state, under the keys the interface uses.
@@ -386,6 +409,27 @@ fn yamlToNewsState(allocator: std.mem.Allocator, section: ?std.json.Value) !INew
 }
 
 //
+// Turns the `databases` section into its in-memory form, dropping a recent name that is not text.
+//
+fn yamlToDatabasesState(allocator: std.mem.Allocator, section: ?std.json.Value) !IDatabasesState {
+    if (!isSection(section)) {
+        return .{};
+    }
+
+    const object = section.?.object;
+    var databases: IDatabasesState = .{};
+    if (object.get("recent_names")) |recentNames| {
+        if (recentNames == .array) {
+            databases.recentNames = try stringsOf(allocator, recentNames.array);
+        }
+    }
+    if (stringField(object, "last_opened_path")) |lastOpenedPath| {
+        databases.lastOpenedPath = lastOpenedPath;
+    }
+    return databases;
+}
+
+//
 // Turns the `ui` section into its in-memory form, dropping any key holding something it could not have
 // been written with.
 //
@@ -421,6 +465,7 @@ pub fn yamlToStateFile(allocator: std.mem.Allocator, document: ?std.json.Value) 
         .searches = try yamlToSearchesState(allocator, parsed.get("searches")),
         .gallery = yamlToGalleryState(parsed.get("gallery")),
         .news = try yamlToNewsState(allocator, parsed.get("news")),
+        .databases = try yamlToDatabasesState(allocator, parsed.get("databases")),
         .ui = try yamlToUiSection(allocator, parsed.get("ui")),
     };
 }
@@ -546,6 +591,17 @@ pub fn stateFileToYaml(allocator: std.mem.Allocator, state: IStateFile) !std.jso
         });
     }
     try writeSection(allocator, &document, "news", news);
+
+    var databases: std.json.ObjectMap = .empty;
+    if (state.databases.recentNames.len > 0) {
+        try databases.put(allocator, "recent_names", try stringArray(allocator, state.databases.recentNames));
+    }
+    if (state.databases.lastOpenedPath) |lastOpenedPath| {
+        try databases.put(allocator, "last_opened_path", .{
+            .string = lastOpenedPath,
+        });
+    }
+    try writeSection(allocator, &document, "databases", databases);
 
     try writeSection(allocator, &document, "ui", try state.ui.clone(allocator));
 

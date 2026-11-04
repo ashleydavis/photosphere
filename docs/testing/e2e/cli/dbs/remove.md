@@ -16,8 +16,6 @@ rm -rf /tmp/psi-cli-dbs-remove
 mkdir -p /tmp/psi-cli-dbs-remove/config
 export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-remove/config
 cat > /tmp/psi-cli-dbs-remove/config/databases.toml <<'TOML'
-recent_database_names = []
-
 [[databases]]
 name = "keep-db"
 description = ""

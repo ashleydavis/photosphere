@@ -4,6 +4,7 @@ const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const media_file_database = @import("media-file-database.zig");
 const open_storage = @import("open-storage.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const tree = @import("tree.zig");
 const consolidate = @import("consolidate.zig");
 const prefetch_database_worker = @import("prefetch-database.worker.zig");
@@ -113,8 +114,8 @@ pub fn consolidateDatabaseHandler(
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
 
-    const local = try openStorage(allocator, io, log, data.databasePath, null, null, context.nativeCaller);
-    const remote = try openStorage(allocator, io, log, data.remotePath, null, null, context.nativeCaller);
+    const local = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, null, null, context.nativeCaller);
+    const remote = try openStorage(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.remotePath, null, null, context.nativeCaller);
 
     if (!try merkleTreeExists(allocator, io, remote.storage)) {
         return errors.throwError("There is no database at \"{s}\" to consolidate into.", .{data.remotePath});

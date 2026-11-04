@@ -46,7 +46,6 @@ const AUTO_IMPORT_TASK_SOURCE = node_api.auto_import_desktop.AUTO_IMPORT_TASK_SO
 fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, context: TaskContext, data: std.json.Value) anyerror!?[]const u8 {
     const log = services.log;
     _ = timers;
-    _ = context;
     const arena = allocator;
     if (data != .string) {
         return utils.errors.throwError("The database that was opened needs a path.", .{});
@@ -54,7 +53,7 @@ fn notifyDatabaseOpened(services: TaskServices, timers: Timers, io: std.Io, allo
     const database_path = data.string;
     const all_databases = try databases_config.getDatabases(arena, io);
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
-    const opened = try databases.openDatabaseStorage(arena, io, all_databases, database_path, services.nativeCaller(&requester_storage));
+    const opened = try databases.openDatabaseStorage(arena, io, try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir), all_databases, database_path, services.nativeCaller(&requester_storage));
     const database_config = try api_zig.database_config.loadDatabaseConfig(arena, io, log, opened.rawStorage);
     const origin: ?[]const u8 = if (database_config) |config| json.getString(config, "origin") else null;
     if (opened.entry) |existing| {
@@ -307,7 +306,6 @@ fn createDefaultDatabase(services: TaskServices, timers: Timers, io: std.Io, are
     const task_id = try services.queueChild(io, arena, timers, "create-default-database", .{
         .databasePath = database_path,
         .configPath = try node_api.config_file.getConfigPath(arena),
-        .databasesConfigPath = try databases_config.getDatabasesConfigPath(arena),
 
         // The user switched automatic import on and photos are about to start arriving in this database, so it is requested on screen
         // as well as on disk. The same thing a phone's pass requests, put the same way: in the request that makes the database.
@@ -355,7 +353,7 @@ pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, aren
     }
 
     const config = try node_api.app_config.loadAppConfig(arena, io);
-    const plan = try node_api.auto_import_desktop.planDesktopAutoImport(arena, config, try node_utils.photo_folders.getDefaultPhotoFolders(arena, io), context.data_dir);
+    const plan = try node_api.auto_import_desktop.planDesktopAutoImport(arena, config, try node_utils.photo_folders.getDefaultPhotoFolders(arena, io), try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir));
 
     const planned_settings_json = try json.stringify(arena, try api_zig.auto_import_settings.autoImportSettingsToJson(arena, plan.settings));
 
@@ -373,7 +371,7 @@ pub fn ensureAutoImport(services: TaskServices, timers: Timers, io: std.Io, aren
     }
 
     var requester_storage: ziggy.task_runner.TaskNativeCaller = undefined;
-    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, log, plan.databasePath, services.nativeCaller(&requester_storage)))) {
+    if (plan.isNewDefault or !(try node_api.media_file_database.checkDatabaseExists(arena, io, log, try node_api.database_base_dir.databaseBaseDir(arena, context.data_dir), plan.databasePath, services.nativeCaller(&requester_storage)))) {
         try createDefaultDatabase(services, timers, io, arena, plan.databasePath);
     }
     return .{

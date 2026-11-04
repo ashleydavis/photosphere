@@ -20,7 +20,6 @@ fn databasesToml(allocator: std.mem.Allocator, name: []const u8, path: []const u
     var entries = std.json.Array.init(allocator);
     try entries.append(.{ .object = entry });
     var document: std.json.ObjectMap = .empty;
-    try document.put(allocator, "recent_database_names", .{ .array = std.json.Array.init(allocator) });
     try document.put(allocator, "databases", .{ .array = entries });
     return node_utils.toml.stringify(allocator, .{ .object = document });
 }
@@ -31,6 +30,19 @@ fn databasesToml(allocator: std.mem.Allocator, name: []const u8, path: []const u
 fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
     const allocator = std.testing.allocator;
     const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "databases.toml" });
+    defer allocator.free(path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = path,
+        .data = text,
+    });
+}
+
+//
+// Writes the test's state.yaml, beside databases.toml in the settings directory the app reads.
+//
+fn writeStateYaml(app: *TestApp, text: []const u8) !void {
+    const allocator = std.testing.allocator;
+    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "state.yaml" });
     defer allocator.free(path);
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{
         .sub_path = path,
@@ -61,7 +73,7 @@ test "get-databases replies every entry in the file, leaving out the fields an e
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try writeDatabasesToml(&app, "recent_database_names = []\n\n[[databases]]\nname = \"alpha\"\ndescription = \"first\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"s3:bucket/b\"\ns3_key = \"my-s3\"\norigin = \"/elsewhere\"\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"first\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"s3:bucket/b\"\ns3_key = \"my-s3\"\norigin = \"/elsewhere\"\n");
     const reply = try app.requestOk("get-databases", "null");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("[{\"name\":\"alpha\",\"description\":\"first\",\"path\":\"/a\"},{\"name\":\"beta\",\"description\":\"\",\"path\":\"s3:bucket/b\",\"origin\":\"/elsewhere\",\"s3Key\":\"my-s3\"}]", reply);
@@ -104,7 +116,7 @@ test "find-database replies with the entry whatever the letter case of the name"
     var app: TestApp = undefined;
     try app.start();
     defer app.stop();
-    try writeDatabasesToml(&app, "recent_database_names = []\n\n[[databases]]\nname = \"Alpha\"\ndescription = \"\"\npath = \"/a\"\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"Alpha\"\ndescription = \"\"\npath = \"/a\"\n");
     const reply = try app.requestOk("find-database", "\"aLPHA\"");
     defer std.testing.allocator.free(reply);
     try std.testing.expectEqualStrings("{\"name\":\"Alpha\",\"description\":\"\",\"path\":\"/a\"}", reply);
@@ -124,7 +136,8 @@ test "update-database replaces the entry, renames it, and keeps the recents poin
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    try writeDatabasesToml(&app, "recent_database_names = [ \"alpha\" ]\n\n[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
+    try writeStateYaml(&app, "databases:\n  recent_names:\n    - alpha\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n");
     const update_reply = try app.requestOk("update-database", "{\"originalName\":\"alpha\",\"entry\":{\"name\":\"renamed\",\"description\":\"new\",\"path\":\"/b\"}}");
     defer allocator.free(update_reply);
     try std.testing.expectEqualStrings("null", update_reply);
@@ -159,7 +172,8 @@ test "remove-database-entry removes the entry and its recent name, and replies n
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    try writeDatabasesToml(&app, "recent_database_names = [ \"alpha\", \"beta\" ]\n\n[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
+    try writeStateYaml(&app, "databases:\n  recent_names:\n    - alpha\n    - beta\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     const remove_reply = try app.requestOk("remove-database-entry", "\"ALPHA\"");
     defer allocator.free(remove_reply);
     try std.testing.expectEqualStrings("null", remove_reply);
@@ -329,7 +343,7 @@ test "update-database renaming onto the name of another entry is an error reply 
     try app.start();
     defer app.stop();
     const allocator = std.testing.allocator;
-    try writeDatabasesToml(&app, "recent_database_names = []\n\n[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
     const reply = try app.requestError("update-database", "{\"originalName\":\"alpha\",\"entry\":{\"name\":\"BETA\",\"description\":\"\",\"path\":\"/a\"}}");
     defer allocator.free(reply);
     try std.testing.expectEqualStrings("A database named \"BETA\" already exists.", reply);
@@ -352,7 +366,7 @@ test "set-database-origin with an entry whose s3 secret is not JSON is an error 
     defer app.stop();
     const allocator = std.testing.allocator;
     allocator.free(try app.requestOk("vault-set", "{\"name\":\"databases-test-origin-bad-s3\",\"type\":\"s3-credentials\",\"value\":\"not json\"}"));
-    try writeDatabasesToml(&app, "recent_database_names = []\n\n[[databases]]\nname = \"cloud\"\ndescription = \"\"\npath = \"/cloud-db\"\ns3_key = \"databases-test-origin-bad-s3\"\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"cloud\"\ndescription = \"\"\npath = \"/cloud-db\"\ns3_key = \"databases-test-origin-bad-s3\"\n");
     const reply = try app.requestError("set-database-origin", "{\"databasePath\":\"/cloud-db\",\"origin\":\"/o\"}");
     defer allocator.free(reply);
     try std.testing.expect(std.mem.startsWith(u8, reply, "The secret that holds the S3 credentials is not valid JSON"));

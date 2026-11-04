@@ -44,7 +44,7 @@ SECRET_NAME="background-sync-smoke-test-s3"
 #
 # Named for the scenario rather than "photosphere-default", so a run against a real phone never touches the database that phone actually
 # backs up to. Which database the background sync pushes is whatever config.yaml names, and this scenario names this one for as long as
-# it runs. The app resolves no relative path against its storage, so the path is the absolute one in the app's files directory.
+# it runs. The path is the absolute one in the app's files directory, for what the test does from outside the app.
 DB_NAME="background-sync-test-db"
 DB_PATH="$("${PLATFORM}_app_path" "$DB_NAME")"
 
@@ -202,7 +202,7 @@ on_exit() {
     if [ "$CAN_WIPE_APP_DATA" -ne 1 ]; then
         "${PLATFORM}_return_app_settings" "$SAVED_SETTINGS_DIR"
 
-        log_info "Left behind on this device: the test database at files/$DB_NAME, which nothing reads once the settings above are back. It cannot be removed from here, because a recursive delete is not something a test may run."
+        log_info "Left behind on this device: the test database at files/dbs/$DB_NAME, which nothing reads once the settings above are back. It cannot be removed from here, because a recursive delete is not something a test may run."
     fi
 
     stop_s3_emulator "$S3_STATE_DIR"

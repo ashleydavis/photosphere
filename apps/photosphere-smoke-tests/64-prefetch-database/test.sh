@@ -43,7 +43,15 @@ send_command "$APP_PORT" click '{"dataId":"add-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Add database dialog opened"
 
 send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"Source DB"}' || exit 1
-send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "source-db")" '{dataId: "database-path-input", text: $text}')" || exit 1
+# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+case "$PLATFORM" in
+    android|ios)
+        send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"source-db"}' || exit 1
+        ;;
+    *)
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "source-db")" '{dataId: "database-path-input", text: $text}')" || exit 1
+        ;;
+esac
 send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
 wait_for_log "$TMP_DIR" "Database entry added"
 
@@ -61,15 +69,26 @@ send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replicate database dialog opened"
 
-send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "dest-partial")" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+case "$PLATFORM" in
+    android|ios)
+        send_command "$APP_PORT" type '{"dataId":"replicate-dest-path-input","text":"dest-partial"}' || exit 1
+        ;;
+    *)
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "dest-partial")" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+        ;;
+esac
 send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
 send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
 wait_for_log "$TMP_DIR" "Replication completed for"
+send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}' || exit 1
 
-# Open the partial replica. load-assets sees the partial flag and fire-and-forget queues a
-# prefetch-database task, which copies the missing thumbnails from origin (the source database) into
-# the local replica.
-send_command "$APP_PORT" open-database "$(jq -cn --arg path "$("${PLATFORM}_app_path" "dest-partial")" '{path: $path}')" || exit 1
+# Open the partial replica from the database list, where the replication registered it after the source. load-assets sees the
+# partial flag and fire-and-forget queues a prefetch-database task, which copies the missing thumbnails from origin (the source
+# database) into the local replica.
+click_sidebar_item "$APP_PORT" open-database || exit 1
+wait_for_log "$TMP_DIR" "Open database dialog opened"
+wait_for_value "$APP_PORT" "database-list-item-1" "dest-partial"
+send_command "$APP_PORT" click '{"dataId":"database-list-item-1"}' || exit 1
 wait_for_log "$TMP_DIR" "Load assets task completed"
 
 # The prefetch is proven by its effect on device storage: the partial replica's thumb directory,

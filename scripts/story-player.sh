@@ -187,12 +187,12 @@ build_app() {
     photosphere_platform_prepare "$PHOTOSPHERE_SMOKE_RUN_DIR" || return 1
     if [ "$ON_HOST" = false ]; then
         #
-        # A phone starts from nothing: wipe the app, then seed the 50-assets fixture into its storage
+        # A phone starts from nothing: wipe the app, then seed the 50-assets fixture under the simple name 50-assets, which the app resolves into its own database folder,
         # the way the Photosphere App's own phone scenarios seed theirs.
         #
         reset_app_state
         log_info "Seeding the 50-assets fixture into the app sandbox..."
-        "${PHOTOSPHERE_SMOKE_PLATFORM}_seed_database" "$REPO_DIR/test/dbs/50-assets" "test/dbs/50-assets" || return 1
+        "${PHOTOSPHERE_SMOKE_PLATFORM}_seed_database" "$REPO_DIR/test/dbs/50-assets" "50-assets" || return 1
     fi
 }
 

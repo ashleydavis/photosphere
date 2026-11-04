@@ -34,7 +34,7 @@ test "findOrphans lists the files that are not in the merkle tree, skipping .db,
     try writeStray(allocator, db, ".DS_Store");
     try writeStray(allocator, db, "other/file");
 
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, db, null, null);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, "", db, null, null);
     const merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
     const orphans = try findOrphans(allocator, io, log, created.storage, &merkleTree);
 
@@ -54,7 +54,7 @@ test "findOrphans finds nothing in a database without strays" {
     const db = try std.fs.path.join(allocator, &.{ root, "db" });
     try helpers.copyDirectory(allocator, "../../test/dbs/v6", db);
 
-    const created = try storage_zig.storage_factory.createStorage(allocator, io, db, null, null);
+    const created = try storage_zig.storage_factory.createStorage(allocator, io, "", db, null, null);
     const merkleTree = (try node_api.tree.loadMerkleTree(allocator, io, log, created.storage)).?;
     const orphans = try findOrphans(allocator, io, log, created.storage, &merkleTree);
 

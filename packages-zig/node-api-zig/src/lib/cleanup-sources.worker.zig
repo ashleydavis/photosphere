@@ -22,6 +22,7 @@ const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
 const normaliseAutoImportSettings = api.auto_import_settings.normaliseAutoImportSettings;
 const runSourceCleanup = api.source_cleanup.runSourceCleanup;
 const createStorage = storage_zig.storage_factory.createStorage;
+const database_base_dir = @import("database-base-dir.zig");
 const loadEncryptionKeysFromPem = @import("encryption-zig").key_utils.loadEncryptionKeysFromPem;
 const BsonDatabase = bdb.database.BsonDatabase;
 const IBsonCollection = bdb.collection.IBsonCollection;
@@ -167,7 +168,7 @@ pub fn cleanupSourcesHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers
 
     const credentials = try resolveStorageCredentials(allocator, io, log, data.storageDescriptor.databasePath, data.storageDescriptor.encryptionKey, null, context.nativeCaller);
     const loadedKeys = try loadEncryptionKeysFromPem(allocator, credentials.encryptionKeyPems);
-    const created = try createStorage(allocator, io, data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
+    const created = try createStorage(allocator, io, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.storageDescriptor.databasePath, credentials.s3Config, loadedKeys.options);
     const bsonDatabase = try BsonDatabase.init(allocator, created.storage, ".db/bson", context.uuidGenerator, context.timestampProvider);
     const metadataCollection = try bsonDatabase.collection("metadata");
 

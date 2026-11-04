@@ -48,6 +48,11 @@ ANDROID_DATA_PREPARED=""
 # config.yaml inside it.
 ANDROID_CONFIG_DIR_RELATIVE="files/config"
 
+# Where the app keeps the databases it names by a short name, relative to the app's private data directory: the dbs directory of the
+# files directory photosphere_platform_start gives the app as PHOTOSPHERE_DATA_DIR. The database helpers below seed, read and check
+# databases here.
+ANDROID_DATABASES_DIR_RELATIVE="files/dbs"
+
 # Seconds a bridge-attached emulator's wlan0 address is waited for before the emulator is taken to be on user-mode NAT.
 ANDROID_HOST_ADDRESS_WAIT_SECONDS=30
 
@@ -368,6 +373,7 @@ photosphere_platform_start() {
     local extras="--es ziggy.remoteControl '$PHOTOSPHERE_REMOTE_CONTROL'"
     extras="$extras --es PHOTOSPHERE_TEST_MODE '1'"
     extras="$extras --es PHOTOSPHERE_CONFIG_DIR '/data/data/$ANDROID_APP_ID/files/config'"
+    extras="$extras --es PHOTOSPHERE_DATA_DIR '/data/data/$ANDROID_APP_ID/files'"
     extras="$extras --es PHOTOSPHERE_LOG_DIR '/data/data/$ANDROID_APP_ID/$log_dir'"
     if [ -n "${PHOTOSPHERE_NEWS_URL:-}" ]; then
         extras="$extras --es PHOTOSPHERE_NEWS_URL '$PHOTOSPHERE_NEWS_URL'"
@@ -563,16 +569,18 @@ photosphere_android_put_file() {
 }
 
 #
-# Prints the absolute path, on the device, of a name inside the app's files directory, which is where android_seed_database puts a
-# fixture. The app resolves no relative path against its storage, so a scenario types or writes this path rather than the name.
-# Usage: android_app_path <relative_path_under_files>
+# Prints the absolute path, on the device, of a name inside the dbs directory of the app's files directory, which is where
+# android_seed_database puts a fixture. The files directory is the one photosphere_platform_start gives the app as PHOTOSPHERE_DATA_DIR,
+# and the app resolves a short name a user types against its dbs directory, so a seeded database and the short name typed for it name
+# the same place.
+# Usage: android_app_path <relative_path_under_dbs>
 #
 android_app_path() {
-    echo "/data/data/$ANDROID_APP_ID/files/$1"
+    echo "/data/data/$ANDROID_APP_ID/$ANDROID_DATABASES_DIR_RELATIVE/$1"
 }
 
 #
-# Copies a database fixture from the host into the app's files directory, the place android_app_path names. A copy already there is replaced. Usage: android_seed_database <host_fixture_dir> <relative_dest_under_files>
+# Copies a database fixture from the host into the dbs directory of the app's files directory, the place android_app_path names. A copy already there is replaced. Usage: android_seed_database <host_fixture_dir> <relative_dest_under_dbs>
 #
 android_seed_database() {
     local host_src="$1"
@@ -581,20 +589,20 @@ android_seed_database() {
     photosphere_android_prepare_for_seeding || return 1
     photosphere_adb shell rm -rf "$staged" > /dev/null 2>&1 || true
     photosphere_adb push "$host_src" "$staged" > /dev/null || return 1
-    photosphere_adb shell run-as "$ANDROID_APP_ID" rm -rf "files/$rel_dest" || return 1
+    photosphere_adb shell run-as "$ANDROID_APP_ID" rm -rf "$ANDROID_DATABASES_DIR_RELATIVE/$rel_dest" || return 1
     # The destination's parents are made too: a nested destination fails the copy with "No such file or directory" otherwise.
-    photosphere_adb shell run-as "$ANDROID_APP_ID" mkdir -p "files/$(dirname "$rel_dest")" || return 1
-    photosphere_adb shell run-as "$ANDROID_APP_ID" cp -r "$staged" "files/$rel_dest" || return 1
+    photosphere_adb shell run-as "$ANDROID_APP_ID" mkdir -p "$ANDROID_DATABASES_DIR_RELATIVE/$(dirname "$rel_dest")" || return 1
+    photosphere_adb shell run-as "$ANDROID_APP_ID" cp -r "$staged" "$ANDROID_DATABASES_DIR_RELATIVE/$rel_dest" || return 1
     photosphere_adb shell rm -rf "$staged" > /dev/null 2>&1 || true
-    echo "Seeded database fixture '$(basename "$host_src")' into the app's files directory at files/$rel_dest" >&2
+    echo "Seeded database fixture '$(basename "$host_src")' into the app's storage at $ANDROID_DATABASES_DIR_RELATIVE/$rel_dest" >&2
 }
 
 #
-# Writes the app's databases.toml into its settings directory, registering the given databases and recent-database names, from
-# outside the app and before it starts, as a desktop scenario pre-writes the file. The first two arguments are JSON: the databases as
-# an array of {name, path} (description, origin, s3Key, encryptionKey and geocodingKey optional), and the recents as an array of names,
-# empty when omitted. The third is the path of the database the app reopens on launch; omitted, no such key is written, which leaves the
-# app on the welcome screen. Paths are written as given.
+# Writes the app's databases.toml and the databases section of its state.yaml into its settings directory, registering the given
+# databases and recent-database names, from outside the app and before it starts, as a desktop scenario pre-writes the files. The first
+# two arguments are JSON: the databases as an array of {name, path} (description, origin, s3Key, encryptionKey and geocodingKey
+# optional), written to databases.toml, and the recents as an array of names, empty when omitted. The third is the path of the database
+# the app reopens on launch; omitted, it is left out of state.yaml and the app starts on the welcome screen. Paths are written as given.
 # Usage: android_seed_databases_config '<databases json>' ['<recent names json>'] ['<last database path>']
 #
 android_seed_databases_config() {
@@ -604,9 +612,7 @@ android_seed_databases_config() {
     photosphere_android_prepare_for_seeding || return 1
     local rendered
     rendered="$(mktemp)"
-    if ! jq -rn --argjson databases "$databases_json" --argjson recent "$recent_json" --arg last "$last_database" '
-        "recent_database_names = \($recent | tojson)",
-        (if $last != "" then "last_database = \($last | tojson)" else empty end),
+    if ! jq -rn --argjson databases "$databases_json" '
         ($databases[] |
             "",
             "[[databases]]",
@@ -628,6 +634,7 @@ android_seed_databases_config() {
     }
     rm -f "$rendered"
     echo "Wrote the app's database list to $ANDROID_CONFIG_DIR_RELATIVE/databases.toml" >&2
+    seed_databases_state "$recent_json" "$last_database"
 }
 
 #
@@ -1087,32 +1094,32 @@ android_restore_app_data_file() {
 }
 
 #
-# Copies a directory of the app's files directory onto this machine. A whole tree rather than one file, because a database is a
+# Copies a directory of the dbs directory of the app's files directory onto this machine. A whole tree rather than one file, because a database is a
 # directory: a scenario that checks what the app wrote reads it with the CLI, and the CLI needs the whole `.db` folder. It goes through
 # `tar` on the device and adb's stdout, because `adb pull` cannot reach private storage at all.
-# Usage: android_save_sandbox_dir <dir_under_files> <local_dir>
+# Usage: android_save_sandbox_dir <dir_under_dbs> <local_dir>
 #
 android_save_sandbox_dir() {
     local device_dir="$1"
     local local_dir="$2"
     photosphere_android_prepare_for_seeding || return 1
 
-    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -d "files/$device_dir" >/dev/null 2>&1; then
-        echo "The device has no files/$device_dir to save" >&2
+    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -d "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir" >/dev/null 2>&1; then
+        echo "The device has no $ANDROID_DATABASES_DIR_RELATIVE/$device_dir to save" >&2
         return 1
     fi
     mkdir -p "$local_dir"
     local tarball="$local_dir/sandbox-dir.tar"
-    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C files "$device_dir" > "$tarball" 2>/dev/null; then
-        echo "Could not read files/$device_dir off the device." >&2
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" > "$tarball" 2>/dev/null; then
+        echo "Could not read $ANDROID_DATABASES_DIR_RELATIVE/$device_dir off the device." >&2
         return 1
     fi
     if [ ! -s "$tarball" ]; then
-        echo "files/$device_dir came back empty from the device." >&2
+        echo "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir came back empty from the device." >&2
         return 1
     fi
     if ! tar xf "$tarball" -C "$local_dir" 2>/dev/null; then
-        echo "Could not unpack files/$device_dir after copying it off the device." >&2
+        echo "Could not unpack $ANDROID_DATABASES_DIR_RELATIVE/$device_dir after copying it off the device." >&2
         return 1
     fi
     rm -f "$tarball"
@@ -1141,25 +1148,25 @@ android_photo_picker_is_open() {
 }
 
 #
-# Removes a path under the app's files directory so a scenario that creates fresh state there can be run again. Installs the app first,
-# because run-as needs it. Fails when the removal fails. Usage: android_reset_path <relative_path_under_files>
+# Removes a path under the dbs directory of the app's files directory so a scenario that creates fresh state there can be run again. Installs the app first,
+# because run-as needs it. Fails when the removal fails. Usage: android_reset_path <relative_path_under_dbs>
 #
 android_reset_path() {
     local rel="$1"
     photosphere_android_prepare_for_seeding || return 1
-    photosphere_adb shell run-as "$ANDROID_APP_ID" rm -rf "files/$rel" || return 1
+    photosphere_adb shell run-as "$ANDROID_APP_ID" rm -rf "$ANDROID_DATABASES_DIR_RELATIVE/$rel" || return 1
 }
 
 #
-# Waits until the given path under the app's files directory exists and is non-empty (for a directory, lists at least one entry), to
+# Waits until the given path under the dbs directory of the app's files directory exists and is non-empty (for a directory, lists at least one entry), to
 # see a background task's effect on storage the host cannot reach. Returns 0 once it is there, non-zero after DEFAULT_WAIT_TIMEOUT seconds.
-# Usage: android_wait_for_file <relative_path_under_files>
+# Usage: android_wait_for_file <relative_path_under_dbs>
 #
 android_wait_for_file() {
     local rel="$1"
     local deadline=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
     while [ "$SECONDS" -lt "$deadline" ]; do
-        if photosphere_adb shell run-as "$ANDROID_APP_ID" ls "files/$rel" 2>/dev/null | grep -q .; then
+        if photosphere_adb shell run-as "$ANDROID_APP_ID" ls "$ANDROID_DATABASES_DIR_RELATIVE/$rel" 2>/dev/null | grep -q .; then
             return 0
         fi
         sleep "$WAIT_POLL_INTERVAL"
@@ -1190,10 +1197,10 @@ android_read_config_file() {
 }
 
 #
-# Succeeds when a path under the app's files directory exists, whether a file or a directory. Usage: android_path_exists <relative_path_under_files>
+# Succeeds when a path under the dbs directory of the app's files directory exists, whether a file or a directory. Usage: android_path_exists <relative_path_under_dbs>
 #
 android_path_exists() {
-    photosphere_adb shell run-as "$ANDROID_APP_ID" test -e "files/$1"
+    photosphere_adb shell run-as "$ANDROID_APP_ID" test -e "$ANDROID_DATABASES_DIR_RELATIVE/$1"
 }
 
 #
@@ -1317,11 +1324,11 @@ android_seed_library_auto_import_config() {
 # is the only way to see app-private storage. Usage: android_asset_count <database_dir_name>
 #
 android_asset_count() {
-    photosphere_adb shell run-as "$ANDROID_APP_ID" ls "files/$1/asset" 2>/dev/null | tr -d '\r' | grep -c . || true
+    photosphere_adb shell run-as "$ANDROID_APP_ID" ls "$ANDROID_DATABASES_DIR_RELATIVE/$1/asset" 2>/dev/null | tr -d '\r' | grep -c . || true
 }
 
 #
-# Copies the database in the given directory of the app's files onto this machine, as android_save_sandbox_dir does. The destination is
+# Copies the database in the given directory of the app's files/dbs onto this machine, as android_save_sandbox_dir does. The destination is
 # made by the copy. Usage: android_pull_database <dir_name> <local_dir>
 #
 android_pull_database() {
@@ -1441,21 +1448,21 @@ android_app_process_alive() {
 }
 
 #
-# Copies a database in the app's files directory to a directory on the host, so the host's CLI can read what the app wrote. The
+# Copies a database in the dbs directory of the app's files directory to a directory on the host, so the host's CLI can read what the app wrote. The
 # directory is streamed out of the app's private storage as an archive, because adb cannot pull from it. The destination must not
-# exist. Usage: android_fetch_database <relative_path_under_files> <host_dest>
+# exist. Usage: android_fetch_database <relative_path_under_dbs> <host_dest>
 #
 android_fetch_database() {
     local rel_path="$1"
     local host_dest="$2"
     photosphere_android_claim_device || return 1
     mkdir -p "$host_dest" || return 1
-    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar -cf - -C "files/$rel_path" . | tar -xf - -C "$host_dest"; then
-        echo "Could not copy files/$rel_path out of the app's storage" >&2
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar -cf - -C "$ANDROID_DATABASES_DIR_RELATIVE/$rel_path" . | tar -xf - -C "$host_dest"; then
+        echo "Could not copy $ANDROID_DATABASES_DIR_RELATIVE/$rel_path out of the app's storage" >&2
         return 1
     fi
     if [ -z "$(ls -A "$host_dest")" ]; then
-        echo "files/$rel_path held nothing, so nothing was copied out of the app's storage" >&2
+        echo "$ANDROID_DATABASES_DIR_RELATIVE/$rel_path held nothing, so nothing was copied out of the app's storage" >&2
         return 1
     fi
 }

@@ -4,9 +4,10 @@ const utils = @import("utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const api = @import("api-zig");
 const media_file_database = @import("media-file-database.zig");
+const database_base_dir = @import("database-base-dir.zig");
 const create_database_worker = @import("create-database.worker.zig");
 const config_worker = @import("config.worker.zig");
-const databases_config_worker = @import("databases-config.worker.zig");
+const databases_config = @import("databases-config.zig");
 const errors = utils.errors;
 const ITaskContext = task_queue_zig.types.ITaskContext;
 const DEFAULT_DATABASE_DISPLAY_NAME = api.auto_import_mobile.DEFAULT_DATABASE_DISPLAY_NAME;
@@ -15,8 +16,7 @@ const checkDatabaseExists = media_file_database.checkDatabaseExists;
 const createDatabaseHandler = create_database_worker.createDatabaseHandler;
 const readConfigFromStorage = config_worker.readConfigFromStorage;
 const writeConfigHandler = config_worker.writeConfigHandler;
-const readDatabasesConfigHandler = databases_config_worker.readDatabasesConfigHandler;
-const writeDatabasesConfigHandler = databases_config_worker.writeDatabasesConfigHandler;
+const IDatabasesConfig = databases_config.IDatabasesConfig;
 
 //
 // The task that creates the default private photo database and records it.
@@ -35,8 +35,8 @@ const writeDatabasesConfigHandler = databases_config_worker.writeDatabasesConfig
 // reachable from the WebView or from native code; on the desktop the main process queues it on the
 // worker pool.
 //
-// The two files are named by the caller, because they sit in different places: at the root of the
-// app's storage sandbox on a phone, in the config directory on the desktop.
+// The task data gives the path of config.yaml. databases.toml is found in the Photosphere data
+// directory on every platform and is changed under the same lock as every other edit of it.
 //
 // create-database is left alone and still creates a database on its own: that is the one the user
 // makes themselves, which is not the default and is recorded by the interface that asked for it.
@@ -53,9 +53,6 @@ pub const ICreateDefaultDatabaseData = struct {
 
     // The path of config.yaml, which is told which database automatic import writes to.
     configPath: []const u8 = "",
-
-    // The path of databases.toml, which the database is added to so it appears in the list.
-    databasesConfigPath: []const u8 = "",
 
     // Whether the app should open this database once it exists.
     //
@@ -83,6 +80,50 @@ pub const IDatabaseOpenedEvent = struct {
 };
 
 //
+// The databases.toml mutator of the create-default-database task: lists the default database unless
+// an entry already has its exact path.
+//
+// The check and the append happen together under the file's lock, so two passes recording the same
+// database at once list it once. A different database already named DEFAULT_DATABASE_DISPLAY_NAME
+// is refused with an error naming it, as addDatabaseEntry refuses it, because the name is how a
+// database is looked up and two entries sharing it would make one of them unreachable.
+//
+const ListDefaultDatabaseMutator = struct {
+    // The path of the default database.
+    databasePath: []const u8,
+
+    //
+    // Appends the default database's entry when no entry has its path.
+    //
+    pub fn run(self: *const ListDefaultDatabaseMutator, allocator: std.mem.Allocator, config: IDatabasesConfig) !IDatabasesConfig {
+        for (config.databases) |entry| {
+            if (std.mem.eql(u8, entry.path, self.databasePath)) {
+                return config;
+            }
+        }
+        for (config.databases) |entry| {
+            if (databases_config.namesMatch(entry.name, DEFAULT_DATABASE_DISPLAY_NAME)) {
+                return errors.throwError("A database named \"{s}\" already exists at {s}, so the default database at {s} cannot be listed under that name.", .{
+                    DEFAULT_DATABASE_DISPLAY_NAME,
+                    entry.path,
+                    self.databasePath,
+                });
+            }
+        }
+        var databases: std.ArrayList(databases_config.IDatabaseEntry) = .empty;
+        try databases.appendSlice(allocator, config.databases);
+        try databases.append(allocator, .{
+            .name = DEFAULT_DATABASE_DISPLAY_NAME,
+            .description = "",
+            .path = self.databasePath,
+        });
+        var updated = config;
+        updated.databases = databases.items;
+        return updated;
+    }
+};
+
+//
 // Handler for the create-default-database task.
 // (Zig: the task data is a JSON value holding ICreateDefaultDatabaseData, and the task returns no value, so the handler
 // returns JSON null. The handlers it calls take and give JSON values, so the data for each is built as one.)
@@ -100,7 +141,7 @@ pub fn createDefaultDatabaseHandler(
     const data = std.json.parseFromValueLeaky(ICreateDefaultDatabaseData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     }) catch {
-        return errors.throwError("The create-default-database task data is not valid: databasePath, configPath and databasesConfigPath must be strings and open must be a boolean", .{});
+        return errors.throwError("The create-default-database task data is not valid: databasePath and configPath must be strings and open must be a boolean", .{});
     };
     if (data.databasePath.len == 0) {
         return errors.throwError("databasePath is required", .{});
@@ -108,14 +149,11 @@ pub fn createDefaultDatabaseHandler(
     if (data.configPath.len == 0) {
         return errors.throwError("configPath is required", .{});
     }
-    if (data.databasesConfigPath.len == 0) {
-        return errors.throwError("databasesConfigPath is required", .{});
-    }
 
     // Only made when it is not there. A pass that was killed between making the database and
     // recording it leaves one behind, and create-database refuses a directory that already holds a
     // database, so without this the next pass would fail on it and every pass after that.
-    if (!try checkDatabaseExists(allocator, io, log, data.databasePath, context.nativeCaller)) {
+    if (!try checkDatabaseExists(allocator, io, log, try database_base_dir.taskDatabaseBaseDir(allocator, taskData), data.databasePath, context.nativeCaller)) {
         var createData: std.json.ObjectMap = .empty;
         try createData.put(allocator, "databasePath", .{
             .string = data.databasePath,
@@ -146,56 +184,10 @@ pub fn createDefaultDatabaseHandler(
         .object = writeConfigData,
     }, context);
 
-    var readDatabasesData: std.json.ObjectMap = .empty;
-    try readDatabasesData.put(allocator, "configPath", .{
-        .string = data.databasesConfigPath,
-    });
-    const databasesConfig = (try readDatabasesConfigHandler(allocator, io, timers, log, .{
-        .object = readDatabasesData,
-    }, context)).object;
-    const existingDatabases = databasesConfig.get("databases").?.array.items;
-    var alreadyListed = false;
-    for (existingDatabases) |entry| {
-        if (std.mem.eql(u8, entry.object.get("path").?.string, data.databasePath)) {
-            alreadyListed = true;
-            break;
-        }
-    }
-    if (!alreadyListed) {
-        var databases: std.json.Array = .init(allocator);
-        try databases.appendSlice(existingDatabases);
-        var newEntry: std.json.ObjectMap = .empty;
-        try newEntry.put(allocator, "name", .{
-            .string = DEFAULT_DATABASE_DISPLAY_NAME,
-        });
-        try newEntry.put(allocator, "description", .{
-            .string = "",
-        });
-        try newEntry.put(allocator, "path", .{
-            .string = data.databasePath,
-        });
-        try databases.append(.{
-            .object = newEntry,
-        });
-
-        var writeDatabasesData: std.json.ObjectMap = .empty;
-        try writeDatabasesData.put(allocator, "configPath", .{
-            .string = data.databasesConfigPath,
-        });
-        try writeDatabasesData.put(allocator, "databases", .{
-            .array = databases,
-        });
-        try writeDatabasesData.put(allocator, "recentDatabaseNames", databasesConfig.get("recentDatabaseNames").?);
-
-        // Carried through rather than dropped: this rewrites the whole file to add one entry, and
-        // writing undefined here would close the database the user had open.
-        if (databasesConfig.get("lastDatabase")) |lastDatabase| {
-            try writeDatabasesData.put(allocator, "lastDatabase", lastDatabase);
-        }
-        _ = try writeDatabasesConfigHandler(allocator, io, timers, log, .{
-            .object = writeDatabasesData,
-        }, context);
-    }
+    const listMutator: ListDefaultDatabaseMutator = .{
+        .databasePath = data.databasePath,
+    };
+    try databases_config.updateDatabasesConfig(allocator, io, &listMutator);
 
     // Said last, so the interface is told to open a database that is made, recorded and listed.
     if (data.open) {
