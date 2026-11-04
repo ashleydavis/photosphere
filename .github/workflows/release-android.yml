@@ -446,6 +446,25 @@ jobs:
           # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
           script: bun run test:ziggy:and
 
+      # A failed scenario keeps its directory, which holds the app's log, the device's log and the core's own log. Without this upload
+      # a failure that did not happen again left nothing to diagnose it from once the runner had gone.
+      - name: Collect the logs of failed scenarios
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-smoke-logs"
+          if [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then
+              cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"
+          fi
+
+      - name: Upload the logs of failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-smoke-logs-android
+          path: ${{ runner.temp }}/app-smoke-logs
+          retention-days: 5
+
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:
     timeout-minutes: 20

@@ -470,6 +470,7 @@ jobs:
         with:
           name: cli-smoke-logs-linux
           path: ${{ runner.temp }}/cli-smoke-logs
+          retention-days: 5
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on Linux, run under xvfb, on the app app-build built, which PHOTOSPHERE_SMOKE_BUILD names.
@@ -565,6 +566,25 @@ jobs:
           # cli-smoke-tests runs this same restored psi only after giving it the executable bit (exit 126 without it), so this does too.
           chmod +x out/photosphere-cli-zig-linux-x64
           PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" bun run test:ziggy
+
+      # A failed scenario keeps its directory, which holds the app's log, its output and the core's own log. Without this upload a
+      # failure that did not happen again left nothing to diagnose it from once the runner had gone.
+      - name: Collect the logs of failed scenarios
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-smoke-logs"
+          if [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then
+              cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"
+          fi
+
+      - name: Upload the logs of failed scenarios
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-smoke-logs-linux
+          path: ${{ runner.temp }}/app-smoke-logs
+          retention-days: 5
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:

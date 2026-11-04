@@ -468,6 +468,7 @@ jobs:
         with:
           name: cli-smoke-logs-macos-arm64
           path: ${{ runner.temp }}/cli-smoke-logs
+          retention-days: 5
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on macOS, in a real window on the runner's own display, on the app app-build built,
@@ -585,6 +586,7 @@ jobs:
         with:
           name: app-smoke-logs-macos-arm64
           path: ${{ runner.temp }}/app-smoke-logs
+          retention-days: 5
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:

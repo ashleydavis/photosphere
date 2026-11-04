@@ -380,6 +380,12 @@ photosphere_platform_start() {
     fi
 
     photosphere_adb logcat -c
+    # The device's log, where the app's own output, a crash and the system ending the app are written, kept for each start beside
+    # app.log. app.log is only the core's log file, so an app that died once it had started left nothing to say why: on iOS that is
+    # what scenario 30-receive-database-cancel did in the Release iOS workflow (run 41906049357).
+    local logcat_pid logcat_pgid
+    read -r logcat_pid logcat_pgid < <(launch_in_process_group "$test_dir/logcat-$generation.log" photosphere_adb logcat -v threadtime) || return 1
+    echo "$logcat_pgid" > "$test_dir/logcat-stream.pgid"
     photosphere_adb shell "am start -W -n $ANDROID_APP_ID/.MainActivity $extras" > "$test_dir/am-start.log" 2>&1 || {
         cat "$test_dir/am-start.log" >&2
         return 1
@@ -421,10 +427,13 @@ photosphere_platform_stop() {
         : > "$test_dir/reverse-port.txt"
     fi
     photosphere_adb shell am force-stop "$ANDROID_APP_ID" || true
-    if [ -s "$test_dir/log-stream.pgid" ]; then
-        kill_process_group "$(cat "$test_dir/log-stream.pgid")" || true
-        : > "$test_dir/log-stream.pgid"
-    fi
+    local stream_name
+    for stream_name in log-stream logcat-stream; do
+        if [ -s "$test_dir/$stream_name.pgid" ]; then
+            kill_process_group "$(cat "$test_dir/$stream_name.pgid")" || true
+            : > "$test_dir/$stream_name.pgid"
+        fi
+    done
 }
 
 #

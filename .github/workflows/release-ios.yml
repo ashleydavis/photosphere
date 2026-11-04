@@ -391,6 +391,7 @@ jobs:
         with:
           name: app-smoke-logs-ios
           path: ${{ runner.temp }}/app-smoke-logs
+          retention-days: 5
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
   typescript-compile:
