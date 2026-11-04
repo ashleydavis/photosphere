@@ -211,7 +211,7 @@ photosphere_platform_start() {
         SIMCTL_CHILD_PHOTOSPHERE_LOG_DIR="$log_dir" \
         SIMCTL_CHILD_PHOTOSPHERE_NEWS_URL="${PHOTOSPHERE_NEWS_URL:-}" \
         SIMCTL_CHILD_TEST_TMP_DIR="$test_dir" \
-        xcrun simctl launch "$udid" "$IOS_BUNDLE_ID" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL")" || return 1
+        xcrun simctl launch --stdout="$test_dir/app-stdout-$generation.log" --stderr="$test_dir/app-stderr-$generation.log" "$udid" "$IOS_BUNDLE_ID" --remote-control "$PHOTOSPHERE_REMOTE_CONTROL")" || return 1
     local pid="${launched##*: }"
     echo "$pid" > "$test_dir/$IOS_PID_FILE_NAME"
 
@@ -281,6 +281,48 @@ photosphere_platform_wait_exit() {
 #
 photosphere_platform_is_running() {
     kill -0 "$(cat "$1/$IOS_PID_FILE_NAME")" 2>/dev/null
+}
+
+#
+# Says what became of an app that did not get ready, for dump_app_stacks: whether its process is still running, with the stacks of
+# every thread when it is, what it wrote to stdout and stderr, and the simulator's own log of the app and of the services that start
+# and end it. Scenario 30-receive-database-cancel failed in the Release iOS workflow (run 41906049357) with the app's log stopping a
+# second after "Main window created", its remote control connection gone and no crash report, and nothing kept said whether the app
+# had been killed, had exited or was still running.
+# Usage: photosphere_ios_dump_app_diagnostics <test_dir>
+#
+photosphere_ios_dump_app_diagnostics() {
+    local test_dir="$1"
+    local pid udid output_file
+    pid="$(cat "$test_dir/$IOS_PID_FILE_NAME" 2>/dev/null)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        if command -v lldb > /dev/null 2>&1; then
+            log_error "The app (pid $pid) is still running. Its stacks:"
+            lldb -p "$pid" -b -o "thread backtrace all" 2>&1 | tee -a "$test_dir/hang-stacks.txt"
+        else
+            log_error "The app (pid $pid) is still running. No stacks: lldb is not installed."
+        fi
+    else
+        log_error "The app (pid ${pid:-unknown}) is no longer running."
+    fi
+    for output_file in "$test_dir"/app-stdout-*.log "$test_dir"/app-stderr-*.log; do
+        if [ -f "$output_file" ]; then
+            log_error "What the app wrote to $(basename "$output_file"):"
+            cat "$output_file"
+        fi
+    done
+    udid="$(cat "$test_dir/$IOS_UDID_FILE_NAME" 2>/dev/null)"
+    if [ -z "$udid" ]; then
+        log_error "No simulator log: $test_dir/$IOS_UDID_FILE_NAME is missing, so the simulator is not known."
+        return 0
+    fi
+    if ! xcrun simctl spawn "$udid" log show --last 10m --info --style compact --predicate "process == \"Photosphere\" OR eventMessage CONTAINS \"$IOS_BUNDLE_ID\"" > "$test_dir/simulator-system.log" 2>&1; then
+        log_error "Could not read the simulator's log. It said:"
+        cat "$test_dir/simulator-system.log"
+        return 0
+    fi
+    log_error "The last 100 lines of the simulator's log of the app, all of it in $test_dir/simulator-system.log:"
+    tail -100 "$test_dir/simulator-system.log"
 }
 
 #

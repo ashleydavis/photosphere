@@ -387,6 +387,14 @@ dump_app_stacks() {
                 lldb -p "$stack_pid" -b -o "thread backtrace all" 2>&1 | tee -a "$test_dir/hang-stacks.txt"
             done
             ;;
+        ios)
+            # Defined only on the simulator: ios.sh returns before defining it when the scenarios run on a connected device.
+            if declare -F photosphere_ios_dump_app_diagnostics > /dev/null; then
+                photosphere_ios_dump_app_diagnostics "$test_dir"
+            else
+                log_error "No stacks: there is no stack tool for an iOS device."
+            fi
+            ;;
         *)
             log_error "No stacks: there is no stack tool for $PLATFORM."
             ;;
@@ -1108,7 +1116,13 @@ seed_databases_state() {
     local last_database="$2"
     local rendered
     rendered="$(mktemp)"
-    read_config_file state.yaml | sed -e '/^databases:/,/^[^[:space:]]/{/^databases:/d;/^[[:space:]]/d}' > "$rendered"
+    # The ; before the closing brace is required by BSD sed on macOS and iOS. Without it the Release iOS smoke tests printed "extra
+    # characters at the end of d command", wrote nothing and so dropped every other section of state.yaml without failing.
+    if ! read_config_file state.yaml | sed -e '/^databases:/,/^[^[:space:]]/{/^databases:/d;/^[[:space:]]/d;}' > "$rendered"; then
+        echo "Could not remove the databases section from the app's state." >&2
+        rm -f "$rendered"
+        return 1
+    fi
     if ! jq -rn --argjson recent "$recent_json" --arg last "$last_database" '
         if ($recent | length) > 0 or $last != "" then
             "databases:",
