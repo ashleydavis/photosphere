@@ -3,6 +3,7 @@ import { usePlatform, type INetworkStatus } from "./platform-context";
 import { useConfigStore } from "./config-store-context";
 import { computeSyncAllowed } from "../lib/sync-gate";
 import { SYNC_ENABLED_CONFIG_KEY, SYNC_ONLY_ON_WIFI_CONFIG_KEY } from "../lib/sync-config";
+import { readBrowserNetworkStatus, subscribeBrowserNetworkStatus } from "../lib/network-info";
 import { log } from "utils";
 
 //
@@ -111,9 +112,9 @@ export function SyncContextProvider({ children }: ISyncContextProviderProps) {
     // the gate reflects online/offline (and, on mobile, connection-type) changes.
     //
     useEffect(() => {
-        platform.getNetworkStatus().then(setNetworkStatus);
-        return platform.onNetworkStatusChange(setNetworkStatus);
-    }, [platform]);
+        setNetworkStatus(readBrowserNetworkStatus());
+        return subscribeBrowserNetworkStatus(setNetworkStatus);
+    }, []);
 
     //
     // Push the combined gate decision to the host scheduler whenever an input

@@ -16,6 +16,7 @@ import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IReceiveSecretDialogProps {
     // Whether the dialog is visible.
@@ -52,6 +53,9 @@ interface IReceivedSecretPayload {
 //
 export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps) {
     const platform = usePlatform();
+
+    // The LAN sharing flow, run as tasks on the shared task queue.
+    const lanShare = useLanShareTasks();
     const { importSharePayload } = useApp();
     const [step, setStep] = useState<ReceiveStep>("enter-code");
     const [enteredCode, setEnteredCode] = useState("");
@@ -77,10 +81,10 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
     //
     const handleStartReceiving = useCallback(async () => {
         try {
-            await platform.startShareReceive(enteredCode);
+            await lanShare.startShareReceive(enteredCode);
             setStep("waiting");
 
-            const received = await platform.waitShareReceive();
+            const received = await lanShare.waitShareReceive();
 
             if (!received) {
                 setErrorMessage("No sender connected within 60 seconds.");
@@ -131,7 +135,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
     //
     const handleCancel = useCallback(async () => {
         if (step === "waiting") {
-            await platform.cancelShareReceive();
+            await lanShare.cancelShareReceive();
         }
         onClose();
     }, [step, platform, onClose]);

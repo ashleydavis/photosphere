@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, useLanShareTasks, readBrowserNetworkStatus, subscribeBrowserNetworkStatus, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type INetworkStatus, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
@@ -88,10 +88,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         backgroundImportDescription = "Keeps importing when the app is closed and the screen is off, showing a notification while it does.";
     }
 
-
-    // LAN database-sharing methods, dispatched through the shared task queue.
-    const { startShareReceive, waitShareReceive, cancelShareReceive, waitForReceiver, sendToReceiver, cancelShareSend } = useLanShareTasks();
-
     // In test mode, the outcome a test staged for the next phone export in place of the native app's share or save sheet. Read
     // and cleared by the export it applies to, so each staged outcome serves exactly one export.
     const stagedExportOutcomeRef = useRef<ExportTestOutcome | undefined>(undefined);
@@ -143,9 +139,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     // Called when one of the settings the background work depends on is written, or a database is opened, so the work is told to start
     // or stop straight away rather than finding out later.
     const autoImportChangedRef = useRef<(() => void) | undefined>(undefined);
-
-    // Called when the open database's content changed in a way the interface was not told about, so it reloads the database.
-    const databaseContentChangedCallbacksRef = useRef<Set<() => void>>(new Set());
 
     // Writes the syncing settings a fresh installation starts from, if nobody has written them yet. The background sync loop reads
     // config.yaml, and a section it cannot read means syncing off, which is the safe answer for a loop that would otherwise push photos
@@ -791,26 +784,8 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         return allSecrets.map((secretEntry: ISecret) => ({ name: secretEntry.name, type: secretEntry.type }));
     }, [ziggy]);
 
-    const addSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> => {
-        const existing = await ziggy.invoke<ISecret | null>('vault-get', entry.name);
-        if (existing) {
-            throw new Error(`A secret named '${entry.name}' already exists.`);
-        }
+    const setSecret = useCallback(async (entry: ISharedSecretEntry, value: string): Promise<void> => {
         await ziggy.invoke('vault-set', { name: entry.name, type: entry.type, value });
-        return { name: entry.name, type: entry.type };
-    }, [ziggy]);
-
-    const updateSecret = useCallback(async (originalName: string, entry: ISharedSecretEntry, value?: string): Promise<void> => {
-        if (value === undefined) {
-            return;
-        }
-
-        // Set the new entry first, then delete the old one if the name changed.
-        // Order matters: a crash between the two leaves data rather than losing it.
-        await ziggy.invoke('vault-set', { name: entry.name, type: entry.type, value });
-        if (originalName !== entry.name) {
-            await ziggy.invoke('vault-delete', originalName);
-        }
     }, [ziggy]);
 
     const deleteSecret = useCallback(async (name: string): Promise<void> => {
@@ -885,22 +860,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
     }, [ziggy, platform.platformKind]);
 
     //
-    // Reports online state and connection type from the browser's Network Information API (navigator.connection).
-    // The browser's answer is used on every platform, because the Capacitor Network plugin, which a phone app used
-    // to fall back on where the web view reports no connection type, does not exist here.
-    //
-    const getNetworkStatus = useCallback(async (): Promise<INetworkStatus> => {
-        return readBrowserNetworkStatus();
-    }, []);
-
-    //
-    // Fires the callback when the page reports going online/offline or the connection type changes.
-    //
-    const onNetworkStatusChange = useCallback((callback: (status: INetworkStatus) => void): (() => void) => {
-        return subscribeBrowserNetworkStatus(callback);
-    }, []);
-
-    //
     // Pushes the shared sync decision (whether syncing is allowed) to the core via the generic main-command channel, so no
     // sync-specific channel is needed.
     //
@@ -956,35 +915,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         };
     }, [ziggy, notifyDatabaseEdited, notifyDatabaseOpened]);
 
-    const onDatabaseContentChanged = useCallback((callback: () => void): (() => void) => {
-        databaseContentChangedCallbacksRef.current.add(callback);
-        return () => {
-            databaseContentChangedCallbacksRef.current.delete(callback);
-        };
-    }, []);
-
-    // Tells the interface to reload the open database whenever the app comes back to the screen, on a phone.
-    //
-    // Photos reach the gallery as task events announcing each one, and those are delivered to whatever is listening at the time.
-    // While the app is off screen the web view is suspended, so every photo the background import takes in is announced to nobody, and
-    // nothing replays them when it wakes. Without this the gallery goes on showing what it held when the user left, however many
-    // photos have been backed up since, until they think to open the database again.
-    //
-    // The whole database is reloaded rather than the missed photos being worked out, because there is no record of what was missed:
-    // the messages were sent while nothing was listening.
-    useEffect(() => {
-        const onVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                return;
-            }
-            databaseContentChangedCallbacksRef.current.forEach(callback => callback());
-        };
-        document.addEventListener("visibilitychange", onVisibilityChange);
-        return () => {
-            document.removeEventListener("visibilitychange", onVisibilityChange);
-        };
-    }, []);
-
     const platformContext: IPlatformContext = {
         openDatabase,
         onDatabaseOpened,
@@ -998,7 +928,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         copyToClipboard,
         backgroundImportDescription,
         onShowNotification,
-        onDatabaseContentChanged,
         onDatabasesChanged,
         onUpdateAvailable,
         openFolder,
@@ -1021,26 +950,17 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         pickFiles,
         saveDownloadedFiles,
         listSecrets,
-        addSecret,
-        updateSecret,
+        setSecret,
         deleteSecret,
         getSecretValue,
         getRecentDatabases,
         getLastDatabase,
         removeRecentDatabaseName,
         listS3Dirs,
-        startShareReceive,
-        waitShareReceive,
-        cancelShareReceive,
-        waitForReceiver,
-        sendToReceiver,
-        cancelShareSend,
         importSharePayload,
         markUpdateAsShown,
         markNewsAsShown,
         toggleDevTools,
-        getNetworkStatus,
-        onNetworkStatusChange,
         setSyncAllowed,
     };
 

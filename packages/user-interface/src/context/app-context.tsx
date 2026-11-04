@@ -140,16 +140,30 @@ export function AppContextProvider({ children }: IProps) {
     // Adds a new shared secret to the vault.
     //
     async function addSecret(entry: ISharedSecretEntry, value: string): Promise<ISharedSecretEntry> {
-        const created = await platform.addSecret(entry, value);
+        const existing = await platform.getSecretValue(entry.name);
+        if (existing !== undefined) {
+            throw new Error(`A secret named '${entry.name}' already exists.`);
+        }
+        await platform.setSecret(entry, value);
         await refreshSecrets();
-        return created;
+        return {
+            name: entry.name,
+            type: entry.type,
+        };
     }
 
     //
     // Updates an existing shared secret.
     //
     async function updateSecret(originalName: string, entry: ISharedSecretEntry, value?: string): Promise<void> {
-        await platform.updateSecret(originalName, entry, value);
+        if (value !== undefined) {
+            // Set the new entry first, then delete the old one if the name changed.
+            // Order matters: a crash between the two leaves data rather than losing it.
+            await platform.setSecret(entry, value);
+            if (originalName !== entry.name) {
+                await platform.deleteSecret(originalName);
+            }
+        }
         await refreshSecrets();
     }
 

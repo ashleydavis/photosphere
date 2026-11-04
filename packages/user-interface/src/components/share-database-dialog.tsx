@@ -16,6 +16,7 @@ import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
 import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'api';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 import { ResponsiveDialog } from './responsive-dialog';
 
 export interface IShareDatabaseDialogProps {
@@ -62,6 +63,9 @@ interface IShareFormState {
 //
 export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDialogProps) {
     const platform = usePlatform();
+
+    // The LAN sharing flow, run as tasks on the shared task queue.
+    const lanShare = useLanShareTasks();
     const [step, setStep] = useState<ShareStep>("review");
     const [form, setForm] = useState<IShareFormState>({
         name: "",
@@ -149,14 +153,14 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
                 geocodingKey,
             };
 
-            const foundEndpoint = await platform.waitForReceiver(payload, code);
+            const foundEndpoint = await lanShare.waitForReceiver(payload, code);
             if (!foundEndpoint) {
                 setErrorMessage("No receiver found within 60 seconds.");
                 setStep("error");
                 return;
             }
 
-            const success = await platform.sendToReceiver(foundEndpoint);
+            const success = await lanShare.sendToReceiver(foundEndpoint);
             if (success) {
                 setStep("success");
             }
@@ -178,7 +182,7 @@ export function ShareDatabaseDialog({ open, entry, onClose }: IShareDatabaseDial
     //
     const handleCancel = useCallback(async () => {
         if (step === "showing-code") {
-            await platform.cancelShareSend();
+            await lanShare.cancelShareSend();
         }
         onClose();
     }, [step, platform, onClose]);

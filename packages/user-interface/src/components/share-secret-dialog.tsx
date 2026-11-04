@@ -12,6 +12,7 @@ import Box from '@mui/joy/Box';
 import { usePlatform, type ISharedSecretEntry } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IShareSecretDialogProps {
     // Whether the dialog is visible.
@@ -34,6 +35,9 @@ type ShareStep = "confirm" | "searching" | "showing-code" | "success" | "error";
 //
 export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogProps) {
     const platform = usePlatform();
+
+    // The LAN sharing flow, run as tasks on the shared task queue.
+    const lanShare = useLanShareTasks();
     const [step, setStep] = useState<ShareStep>("confirm");
     const [pairingCode, setPairingCode] = useState("");
     const [errorMessage, setErrorMessage] = useState("");
@@ -71,14 +75,14 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
                 value,
             };
 
-            const foundEndpoint = await platform.waitForReceiver(payload, code);
+            const foundEndpoint = await lanShare.waitForReceiver(payload, code);
             if (!foundEndpoint) {
                 setErrorMessage("No receiver found within 60 seconds.");
                 setStep("error");
                 return;
             }
 
-            const success = await platform.sendToReceiver(foundEndpoint);
+            const success = await lanShare.sendToReceiver(foundEndpoint);
             if (success) {
                 setStep("success");
             }
@@ -100,7 +104,7 @@ export function ShareSecretDialog({ open, entry, onClose }: IShareSecretDialogPr
     //
     const handleCancel = useCallback(async () => {
         if (step === "showing-code") {
-            await platform.cancelShareSend();
+            await lanShare.cancelShareSend();
         }
         onClose();
     }, [step, platform, onClose]);

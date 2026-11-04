@@ -20,6 +20,7 @@ import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IReceiveDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -96,6 +97,9 @@ interface ISecretConflict {
 //
 export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogProps) {
     const platform = usePlatform();
+
+    // The LAN sharing flow, run as tasks on the shared task queue.
+    const lanShare = useLanShareTasks();
     const { removeDatabase, importSharePayload } = useApp();
     const [step, setStep] = useState<ReceiveStep>("enter-code");
     const [enteredCode, setEnteredCode] = useState("");
@@ -152,10 +156,10 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         receiveAbandoned.current = false;
         const startedAt = Date.now();
         try {
-            await platform.startShareReceive(enteredCode);
+            await lanShare.startShareReceive(enteredCode);
             setStep("waiting");
 
-            const received = await platform.waitShareReceive();
+            const received = await lanShare.waitShareReceive();
 
             // A receive the user cancelled has nothing to report. Its outcome would otherwise land
             // in a dialog that has already closed and reset.
@@ -393,7 +397,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             // Marked before the cancel rather than after, because cancelling is what makes the
             // in-flight wait finish, and it can resolve while this is still awaiting.
             receiveAbandoned.current = true;
-            await platform.cancelShareReceive();
+            await lanShare.cancelShareReceive();
         }
         onClose();
     }, [step, platform, onClose]);

@@ -15,9 +15,7 @@ import type {
 const LAN_SHARE_SOURCE = "lan-share";
 
 //
-// The set of LAN-share operations exposed by useLanShareTasks. Signatures match
-// the corresponding methods on IPlatformContext exactly, keeping the opaque
-// unknown payload/endpoint types so the platform interface needs no change.
+// The set of LAN-share operations exposed by useLanShareTasks.
 //
 export interface ILanShareTasks {
     // Starts hosting a receiver advertising the given pairing code. Does not wait.
