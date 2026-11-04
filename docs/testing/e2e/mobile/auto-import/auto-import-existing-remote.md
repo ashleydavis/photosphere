@@ -10,16 +10,18 @@ The end state is the same as the other test's: one database in two places, the b
 
 - Run from the repo root, in one terminal, which the later CLI steps use too. Run the Android lines on Android and the iOS lines on iOS. The reset scripts work on an Android emulator or an iOS simulator only. On a real phone, clear the app's data by hand instead: on Android **Settings > Apps > Photosphere > Storage > Clear storage**, on iOS delete the app.
 - `bun run android:reset` and `bun run ios:reset` wipe everything the app has stored (databases, settings, secrets and the photo permission) so the test starts from a fresh install. They leave the device photo library alone.
-- **A Photosphere database that already exists in an S3 bucket, with photos in it.** It is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). `--from 50-assets` fills it with a copy of the `50-assets` test database (60 photos) and registers it on this machine as the entry `existing-remote-test`, with the credentials `existing-remote-test-s3`. The phone must be on the same network as this machine.
+- **A Photosphere database that already exists in an S3 bucket, with photos in it.** It is a fresh bucket on a local MinIO server on this machine, set up by `bun run start-minio`: see [MinIO for the manual tests](../../minio.md). `--from 50-assets` fills it with a copy of the `50-assets` test database (50 photos) and registers it on this machine as the entry `existing-remote-test`, with the credentials `existing-remote-test-s3`. The phone must be on the same network as this machine.
 - `$S3_DB` in the steps is the database's path, `s3:photosphere-smoke-test/existing-remote-test`.
 - `psi summary` checks the database reads, which also proves those are the right secrets.
-- The device needs to be able to take a photo with the camera partway through.
+- The device needs at least two photos in its photo library before you start, for step 8 to import, and you need to be able to take one more with the camera partway through. On an emulator or simulator the Prep commands put two in.
 - The phone must be on Wi-Fi. Syncing refuses a cellular connection by default, and a phone on mobile data will sit there doing nothing with no error.
 
 ```bash
 bun run android:reset   # Android
+bun run android:add-fixtures -- test/multiple-files/test-1.jpeg test/multiple-files/test-2.png   # Android
 bun run android   # Android
 bun run ios:reset   # iOS
+bun run ios:add-fixtures -- test/multiple-files/test-1.jpeg test/multiple-files/test-2.png   # iOS
 bun run ios   # iOS
 bun run start-minio -- existing-remote-test --from 50-assets
 source tmp/minio/existing-remote-test.env
@@ -77,21 +79,16 @@ Expected:
 
 Expected:
 - It finishes in seconds, however large the library is. A partial replication copies the README, the files merkle tree and the merkle trees of the record database, and nothing else: it deliberately does not walk the tree.
-- **Nothing appears on the Manage Databases page.** A replication does not register its destination, so the list is unchanged. That is the next step.
+- The dialog says "Replication completed. The replica has been added to your databases at my-photos." and the replica is listed on the Manage Databases page under the name typed as the destination path.
 
-### 4. Register the copy and make it the one the app uses
+### 4. Make the copy the one the app uses
 
-1. On **Manage Databases**, press the **⋮** at the top and choose **Add database**.
-2. **Name**: whatever you want to see in the app. Entry names have to be unique, so if the name you want is the one the remote arrived under, rename the remote's entry first (**⋮** then **Edit** on it). Renaming an entry is safe: an origin is matched to its keys by path, never by name.
-3. **Type**: `File system`. **Path**: the name typed in step 3.
-4. Press **Add**.
-5. Back on **Manage Databases**, press the **⋮** on it and choose **Set as default**.
+1. On **Manage Databases**, press the **⋮** on the replica and choose **Set as default**.
+2. Tap the replica's row to open it.
 
 Expected:
-- The copy is listed and the app opens it.
 - **Set as default** is what makes automatic import write into this database. Without it, switching automatic import on in step 6 makes a database of its own called **My Photos** and imports into that instead, because automatic import reads the default recorded in `config.yaml` and opening a database does not set it.
-- **⋮** then **View details** on it shows **Origin** blank, and you have to set it: **⋮** then **Edit**, and beside **Origin** use the **Choose…** dropdown to pick the remote's entry, then Save. Do not type the path: credentials are matched to an origin by exact path, so a typo finds no keys and fails minutes later in a log rather than when you save.
-- Setting it by hand is a gap rather than the intent. The replication records the origin in the copy's own `.db/config.json`, and the desktop refreshes the list entry from that whenever a database is opened, but mobile does not, so the field a phone shows stays empty. Origin is what background syncing looks for, and a database without it imports happily and never syncs.
+- **⋮** then **View details** on it shows **Origin** set to the remote's path, `s3:photosphere-smoke-test/existing-remote-test`. The replication sets it when it registers the replica. Origin is what background syncing looks for, and a database without it imports happily and never syncs.
 
 ### 5. The library appears on the phone
 
@@ -159,7 +156,7 @@ Expected:
 ### 11. The record survives a restart
 
 1. Close the app completely and reopen it.
-2. Open the copy made in step 4.
+2. Open the copy made in step 3.
 3. Go to the **Import** page.
 
 Expected: the list still shows what this device imported, including from before the restart.

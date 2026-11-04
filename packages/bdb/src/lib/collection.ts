@@ -420,9 +420,12 @@ export class BsonCollection<RecordT extends IRecord> implements IBsonCollection<
             this.shardCache.set(shardId, cached);
             return cached;
         }
+        // Evicted before the new shard goes in, never after: the new shard is not dirty yet, because
+        // its caller has not written to it, so evicting after would drop it while the caller still
+        // holds it, and whatever the caller then wrote into it would never be committed.
+        this.evictShards();
         const bsonShard = new BsonShard(shardId, this.storage, this.bsonDbPath, this.name, this.uuidGenerator);
         this.shardCache.set(shardId, bsonShard);
-        this.evictShards();
         return bsonShard;
     }
 

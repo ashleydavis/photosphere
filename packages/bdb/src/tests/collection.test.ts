@@ -910,4 +910,89 @@ describe('BsonCollection', () => {
         expect(collection.shard(dirtyShardId)).toBe(dirtyShard);
         expect(await collection.getOne(user._id)).toMatchObject({ name: 'John Doe' });
     });
+
+    test('records inserted into more shards than the cache holds are all committed', async () => {
+        // An import inserts a batch of records and then commits once, so the batch dirties many
+        // shards at once. Every one of them has to reach storage.
+        const recordIds: string[] = [];
+        const shardIds = new Set<string>();
+        for (let recordNumber = 0; recordNumber < 60; recordNumber += 1) {
+            const recordId = `123e4567-e89b-12d3-a456-4266141740${recordNumber.toString(16).padStart(2, '0')}`;
+            recordIds.push(recordId);
+            shardIds.add(collection.getShardId(recordId));
+            await collection.insertOne({
+                _id: recordId,
+                name: 'User',
+                email: 'user@example.com',
+                age: 30,
+                role: 'user',
+            });
+        }
+        await collection.commit();
+
+        // More shards than the cache holds, or the test would not reach the case it is about.
+        expect(shardIds.size).toBeGreaterThan(8);
+
+        const reader = new BsonCollection<TestUser>(
+            'users',
+            '',
+            storage,
+            '',
+            new RandomUuidGenerator(),
+            new TimestampProvider(),
+            () => {},
+        );
+        let recordsFound = 0;
+        for (const recordId of recordIds) {
+            if (await reader.getOne(recordId)) {
+                recordsFound += 1;
+            }
+        }
+        expect(recordsFound).toBe(recordIds.length);
+    });
+
+    test('a sort index built from more shards than the cache holds has every record', async () => {
+        // Building a sort index walks every shard of the collection, far more than the cache holds,
+        // so the walk evicts shards as it goes. Every record has to end up in the index.
+        const recordCount = 2000;
+        for (let recordNumber = 0; recordNumber < recordCount; recordNumber += 1) {
+            await collection.insertOne({
+                _id: `123e4567-e89b-12d3-a456-42661417${recordNumber.toString(16).padStart(4, '0')}`,
+                name: `User ${recordNumber}`,
+                email: 'user@example.com',
+                age: recordNumber,
+                role: 'user',
+            });
+        }
+        await collection.commit();
+
+        const reader = new BsonCollection<TestUser>(
+            'users',
+            '',
+            storage,
+            '',
+            new RandomUuidGenerator(),
+            new TimestampProvider(),
+            () => {},
+        );
+        let recordsInShards = 0;
+        for await (const shardRecords of reader.iterateShards()) {
+            recordsInShards += Array.from(shardRecords).length;
+        }
+        expect(recordsInShards).toBe(recordCount);
+
+        const sortIndex = reader.sortIndex('age', 'asc');
+        await sortIndex.ensure(reader, 'number');
+        let recordsInIndex = 0;
+        let pageId: string | undefined = undefined;
+        while (true) {
+            const page = await sortIndex.getPage(pageId);
+            recordsInIndex += page.records.length;
+            if (!page.nextPageId) {
+                break;
+            }
+            pageId = page.nextPageId;
+        }
+        expect(recordsInIndex).toBe(recordCount);
+    });
 });

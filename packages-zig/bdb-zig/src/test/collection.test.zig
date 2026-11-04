@@ -621,6 +621,41 @@ test "a shard with uncommitted writes is never dropped, because its records are 
     try std.testing.expectEqualStrings("John Doe", record.fields.get("name").?.string);
 }
 
+test "records inserted into more shards than the cache holds are all committed" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var storage = MemoryStorage.init(allocator);
+    const writer = try newCollection(allocator, &storage);
+
+    // An import inserts a batch of records and then commits once, so the batch dirties many
+    // shards at once. Every one of them has to reach storage.
+    var recordIds: std.ArrayList([]const u8) = .empty;
+    var shardIds: std.StringArrayHashMapUnmanaged(void) = .empty;
+    var recordNumber: u32 = 0;
+    while (recordNumber < 60) : (recordNumber += 1) {
+        const recordId = try std.fmt.allocPrint(allocator, "123e4567-e89b-12d3-a456-4266141740{x:0>2}", .{recordNumber});
+        try recordIds.append(allocator, recordId);
+        try shardIds.put(allocator, try writer.getShardId(recordId), {});
+        var user = try makeExternalUser(allocator, recordId, "User", 30, "user");
+        try writer.insertOne(io, log, &user, null);
+    }
+    try writer.commit(io, log);
+
+    // More shards than the cache holds, or the test would not reach the case it is about.
+    try std.testing.expect(shardIds.count() > 8);
+
+    const reader = try newCollection(allocator, &storage);
+    var recordsFound: usize = 0;
+    for (recordIds.items) |recordId| {
+        if (try reader.getOne(io, log, recordId) != null) {
+            recordsFound += 1;
+        }
+    }
+    try std.testing.expectEqual(recordIds.items.len, recordsFound);
+}
+
 test "iterateShards reads the shards a listing finds as well as the ones held in memory" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

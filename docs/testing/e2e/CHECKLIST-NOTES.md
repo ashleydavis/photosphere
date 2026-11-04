@@ -215,6 +215,11 @@ All desktop results below come from a test-hooks build of the app driven through
 
 - Android: fails at step 3. Starting the partial replication to `my-photos` shows "Replication failed: ReadOnlyFileSystem", raised from `replicateDatabase`. Steps 1 and 2 passed. The button is labelled **Start replication**, not **Replicate**.
 - Android rerun: fails at step 3 again, the same way. The log has two `[WARN] [Worker 3] An operation failed. Retrying after: ReadOnlyFileSystem` lines, then `[ERROR] [Frontend] Replication error: Error: ReadOnlyFileSystem at replicateDatabase`. Prep and steps 1 and 2 passed. The first attempt at this rerun was lost part way through, when the pool monitor restarted the emulator with its data wiped.
+- There should be a "default" label on the entry for the database that we can check is there.
+- Sorting is broken for newly imported items.
+- Sorting comes good when reopening or maybe when refreshing the database.
+- Android: step 10, the Import page lists the 2 fixture photos badged Automatic but not the photo taken with the camera in step 9, though it is in the gallery and in the bucket. The database was last opened after the fixtures were imported and before the camera photo, which fits the Import page reading the record only when the database is opened. Each row shows the app's temp-folder path rather than the photo's name. Not counted as a failure of this test.
+- Android: passed, run on Android only. Every step went as expected after the shard cache fix and with the `50-assets` fixture down to 50 photos, each with a record: the camera photo was imported 10 seconds after it was taken, the bucket went from 50 to 53 photos after a sync pass, and `psi verify` on the bucket passed with 0 record mismatches. Step 10 showed the same empty Import page as above, because the database was opened before the imports ran; after the restart in step 11 all 3 imports were listed.
 
 #### auto-import-no-permission
 

@@ -100,8 +100,9 @@ export class MockStorage implements IStorage {
             names.push(relativePath.startsWith('/') ? relativePath.substring(1) : relativePath);
         }
         
+        // The marker is the last name returned, because the next call resumes after it.
         if (endIndex < keys.length) {
-            nextMarker = keys[endIndex];
+            nextMarker = keys[endIndex - 1];
         }
         
         return { names, next: nextMarker };
@@ -131,8 +132,9 @@ export class MockStorage implements IStorage {
             names.push(relativePath.startsWith('/') ? relativePath.substring(1) : relativePath);
         }
         
+        // The marker is the last name returned, because the next call resumes after it.
         if (endIndex < dirs.length) {
-            nextMarker = dirs[endIndex];
+            nextMarker = dirs[endIndex - 1];
         }
         
         return { names, next: nextMarker };

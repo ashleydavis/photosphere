@@ -523,11 +523,14 @@ pub const BsonCollection = struct {
             try self.shardCache.put(self.allocator, cachedShardId, cached);
             return cached;
         }
+        // Evicted before the new shard goes in, never after: the new shard is not dirty yet, because
+        // its caller has not written to it, so evicting after would drop it while the caller still
+        // holds it, and whatever the caller then wrote into it would never be committed.
+        try self.evictShards();
         const bsonShard = try self.allocator.create(BsonShard);
         const ownedShardId = try self.allocator.dupe(u8, shardId);
         bsonShard.* = BsonShard.init(self.allocator, ownedShardId, self.storage, self.bsonDbPath, self.name, self.uuidGenerator);
         try self.shardCache.put(self.allocator, ownedShardId, bsonShard);
-        try self.evictShards();
         return bsonShard;
     }
 

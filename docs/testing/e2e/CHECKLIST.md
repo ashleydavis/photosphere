@@ -222,7 +222,7 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 
 ### Automatic import
 - [x] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
-- [-] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
+- [x] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
 - [-] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
 - [-] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
 

@@ -216,6 +216,11 @@ refute_service_log 'a prefetch is still filling this database in' \
 
 # The origin registered with its credentials, which is the one thing that changes. Everything else,
 # including the replica and the settings, stays exactly as it was.
+#
+# The phase-one app is stopped before the list is written, because it reads the list on every pass:
+# left running, its next pass finds the credentials and fills the replica in, and phase two then has
+# nothing left to fetch.
+photosphere_platform_stop "$TMP_DIR"
 "${PLATFORM}_seed_databases_config" "[{\"name\":\"$DB_NAME\",\"path\":\"$DATABASE_APP_PATH\"},{\"name\":\"$DB_NAME-origin\",\"path\":\"$S3_ORIGIN_PATH\",\"s3Key\":\"$SECRET_NAME\"}]" || exit 1
 
 restart_app_and_wait_for_service || exit 1
