@@ -356,8 +356,10 @@ photosphere_platform_start() {
     local log_dir="cache/logs-$generation"
 
     # The app connects to the remote control server at 127.0.0.1 on the device, and adb reverse carries that port to the same port on
-    # the host, where the server listens. The device is claimed for the scenario, so no other run uses the port there.
-    photosphere_start_remote_control_server "$test_dir" || return 1
+    # the host, where the server listens. The device is claimed for the scenario, so no other run uses the port there. The locks'
+    # descriptors are closed for the server, the way photosphere_adb closes them for adb: a server left behind by a killed scenario
+    # kept emulator-5556, 5560 and 5562 locked, and later runs could use only the other two emulators of the pool.
+    photosphere_start_remote_control_server "$test_dir" {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- || return 1
     local app_port="${PHOTOSPHERE_REMOTE_CONTROL##*:}"
     photosphere_adb reverse "tcp:$app_port" "tcp:$app_port" > /dev/null || return 1
     echo "$app_port" > "$test_dir/reverse-port.txt"
