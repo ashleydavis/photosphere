@@ -365,8 +365,58 @@ process_control_verify_job_control() {
 }
 
 #
+# File descriptors a launched command must not inherit, as a space-separated list of numbers. A
+# runner sets it while it holds something the command must not keep, such as the lock that claims an
+# Android device: a command that inherits that lock holds the device for as long as the command lives,
+# however the runner that claimed it ended. Closed inside the launched job, because a redirection on
+# the call to launch_in_process_group is not enough: bash keeps a copy of a descriptor it closes for a
+# function call so it can put it back, and a background job started during the call inherits that copy.
+#
+PROCESS_CONTROL_CLOSE_FDS=""
+
+#
+# Runs beside a launched command, inside its process group, and kills the whole group when the shell
+# that launched it dies while the command is still running.
+#
+# This is what cleans up after a launcher that was killed outright. Its own cleanup (a trap, or a stop
+# step at the end of a test) never runs when it is sent SIGKILL, and its launches survive it, because
+# each is in a process group of its own, which a kill of the launcher's group does not reach. A test
+# timed out by `timeout`, or a whole run stopped from outside, left launches running for days before
+# this. The group is sent SIGTERM and then SIGKILL, with the watchdog ignoring the SIGTERM so it is
+# still there to send the SIGKILL. It returns quietly as soon as the command exits by itself, so it
+# outlives nothing it was started for.
+# Usage: process_control_watch_launcher <launcher_pid> <job_pid>
+#
+process_control_watch_launcher() {
+    local launcher_pid="$1"
+    local job_pid="$2"
+    local job_state own_pgid
+    while kill -0 "$launcher_pid" 2>/dev/null; do
+        job_state="$(ps -o stat= -p "$job_pid" 2>/dev/null || true)"
+        case "$job_state" in
+            ""|Z*)
+                return 0
+                ;;
+        esac
+        sleep 1
+    done
+    own_pgid="$(process_group_of "$BASHPID")"
+    if [ -z "$own_pgid" ]; then
+        return 0
+    fi
+    trap '' TERM
+    kill -TERM -- "-$own_pgid" 2>/dev/null || true
+    sleep "$PROCESS_CONTROL_TERM_GRACE_SECONDS"
+    kill -KILL -- "-$own_pgid" 2>/dev/null || true
+}
+
+#
 # Starts a command in the background with its output redirected to <log_file>, in a process group of
 # its own, and prints "<pid> <pgid>" for the caller to record.
+#
+# The command runs in a subshell that first closes PROCESS_CONTROL_CLOSE_FDS and starts
+# process_control_watch_launcher beside it, so the group is killed if the calling shell dies without
+# cleaning it up. The pid printed is the subshell's, which leads the group.
 #
 # The group comes from bash job control. With monitor mode on, the shell puts a background job in a
 # new process group whose pgid is the job's own pid, so the group is known the instant the launch
@@ -388,6 +438,7 @@ launch_in_process_group() {
     if ! process_control_verify_job_control; then
         return 1
     fi
+    local launcher_pid="$$"
     own_pgid="$(process_group_of "$$")"
     monitor_was_on="no"
     case "$-" in
@@ -397,7 +448,14 @@ launch_in_process_group() {
     esac
 
     set -m
-    "$@" > "$log_file" 2>&1 &
+    (
+        local close_fd
+        for close_fd in $PROCESS_CONTROL_CLOSE_FDS; do
+            exec {close_fd}>&-
+        done
+        process_control_watch_launcher "$launcher_pid" "$BASHPID" &
+        "$@"
+    ) > "$log_file" 2>&1 &
     launched_pid=$!
     if [ "$monitor_was_on" = "no" ]; then
         set +m

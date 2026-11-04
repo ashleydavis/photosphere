@@ -718,6 +718,13 @@ start_s3_emulator() {
         log_error "Could not start the local S3 emulator"
         exit 1
     fi
+    # The server is started by the emulator script, which returns once it is up, so it is in no process group this scenario
+    # recorded. The stopper is, and it stops the server when its group is killed, including by the watchdog when the scenario's
+    # shell is killed before its own trap can run. Servers left by killed scenarios had been running for a day.
+    local stopper_pid stopper_pgid
+    read -r stopper_pid stopper_pgid < <(launch_in_process_group "$state_dir/stopper.log" s3_emulator_stopper "$state_dir") || exit 1
+    echo "$stopper_pgid" > "$state_dir/stopper.pgid"
+
     # shellcheck disable=SC1090
     source "$state_dir/env"
     local host_address="127.0.0.1"
@@ -742,7 +749,24 @@ start_s3_emulator() {
 stop_s3_emulator() {
     local state_dir="$1"
     (cd "$SMOKE_REPO_ROOT" && bun run s3-emulator stop "$state_dir") >/dev/null 2>&1 || true
+    if [ -s "$state_dir/stopper.pgid" ]; then
+        kill_process_group "$(cat "$state_dir/stopper.pgid")" || true
+        : > "$state_dir/stopper.pgid"
+    fi
     return 0
+}
+
+#
+# Waits until it is sent SIGTERM, then stops the S3 emulator server recorded in the given state directory. Launched by
+# start_s3_emulator so the server is stopped when the stopper's process group is killed, whoever kills it.
+# Usage: s3_emulator_stopper <state-dir>
+#
+s3_emulator_stopper() {
+    local state_dir="$1"
+    trap 'kill -TERM "$(cat "$state_dir/minio.pid" 2>/dev/null)" 2>/dev/null; exit 0' TERM
+    while true; do
+        sleep 1
+    done
 }
 
 #

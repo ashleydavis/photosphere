@@ -207,6 +207,10 @@ photosphere_android_claim_device() {
                         ANDROID_SERIAL_CLAIMED="$serial"
                         ANDROID_LOCK_FD="$fd"
                         ANDROID_ZIGGY_LOCK_FD="$ziggy_fd"
+
+                        # Nothing launched in the background may hold the device's locks: a log stream or a server left running after
+                        # its scenario was killed kept its device claimed for hours, and every run after it was a device short.
+                        PROCESS_CONTROL_CLOSE_FDS="$fd $ziggy_fd"
                         return 0
                     fi
                 fi
