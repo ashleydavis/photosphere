@@ -85,6 +85,9 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
 
     const isS3Dest = form.storageType === 's3';
     const browseDisabled = isS3Dest && !form.secrets.s3Key;
+
+    // A phone has no folder dialog for a database location: the user types a name for the copy into the path field instead.
+    const showBrowse = isS3Dest || platform.platformKind === "desktop";
     const startDisabled = form.destPath.trim().length === 0
         || form.destPath.trim() === sourceEntry.path
         || (isS3Dest && !form.secrets.s3Key);
@@ -224,16 +227,19 @@ export function ReplicateDatabaseDialog({ open, sourceEntry, encryptionSecrets, 
                                     data-id="replicate-dest-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.destPath}
+                                    placeholder={showBrowse ? undefined : 'Type a name for the copy'}
                                     onChange={event => setForm(prev => ({ ...prev, destPath: event.target.value }))}
                                 />
-                                <Button
-                                    data-id="replicate-dest-browse-button"
-                                    variant="outlined"
-                                    disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                                >
-                                    {isS3Dest ? 'Browse S3' : 'Browse'}
-                                </Button>
+                                {showBrowse && (
+                                    <Button
+                                        data-id="replicate-dest-browse-button"
+                                        variant="outlined"
+                                        disabled={browseDisabled}
+                                        onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                    >
+                                        {isS3Dest ? 'Browse S3' : 'Browse'}
+                                    </Button>
+                                )}
                             </Box>
                         </FormControl>
 

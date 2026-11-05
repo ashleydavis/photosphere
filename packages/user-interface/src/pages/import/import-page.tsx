@@ -287,7 +287,7 @@ export function ImportPage() {
 
     // Drag-and-drop import is only offered on platforms that support it (desktop) and once the media
     // tools are available. Mobile/web hide the drop zone and offer the native photo picker instead.
-    const allowDragAndDrop = platform.supportsDragAndDropImport && (toolsStatus?.allAvailable ?? false);
+    const allowDragAndDrop = platform.platformKind === "desktop" && (toolsStatus?.allAvailable ?? false);
 
     const successCount = importItems.filter(item => item.status === 'success').length;
     const skippedCount = importItems.filter(item => item.status === 'skipped').length;
@@ -409,9 +409,9 @@ export function ImportPage() {
                                         disabled={isPicking}
                                         sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
                                     >
-                                        {platform.supportsDragAndDropImport ? "Import files" : "Select photos"}
+                                        {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
                                     </Button>
-                                    {platform.supportsDragAndDropImport && (
+                                    {platform.platformKind === "desktop" && (
                                         <Button
                                             data-id="import-directory-button"
                                             variant="soft"

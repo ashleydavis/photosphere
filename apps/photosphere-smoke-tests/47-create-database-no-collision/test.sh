@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Proves the mobile Browse folder picker yields a distinct sandbox-relative path per database. Two databases are created in a row, each
-# with its path filled by Browse (the folder picker's answer is staged with the control connection's pick-answer command, because a
-# test cannot type into the native prompt). If both Browse calls returned the same path, the second create would land on the first's
-# non-empty directory and fail.
+# Creates two databases in a row from the New Database dialog and proves each lands in its own directory and opens. On a desktop each
+# path is filled by Browse (the folder dialog's answer is staged with the control connection's pick-answer command, because a test
+# cannot drive the native dialog). On a phone there is no folder dialog for a database location: the dialog must not offer Browse, and
+# the user types a name, which the app resolves to a directory in its own data directory. If both databases resolved to the same
+# directory, the second create would land on the first's non-empty directory and fail.
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -17,39 +18,74 @@ trap 'cleanup_apps "$TMP_DIR"' EXIT
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# Create needs an empty directory at each target path.
-"${PLATFORM}_reset_path" "db-one" || exit 1
-"${PLATFORM}_reset_path" "db-two" || exit 1
+#
+# Creates the database with the given name through the New Database dialog, the way a user on this platform does, then checks it was
+# created in the app's data directory and opened.
+# Usage: create_database_from_dialog <name>
+#
+create_database_from_dialog() {
+    local name="$1"
+    local db_path
+    db_path="$("${PLATFORM}_app_path" "$name")"
 
-DB_ONE_PATH="$("${PLATFORM}_app_path" "db-one")"
-DB_TWO_PATH="$("${PLATFORM}_app_path" "db-two")"
+    # Create needs an empty directory at the target path.
+    "${PLATFORM}_reset_path" "$name" || exit 1
 
-# First database, path chosen via Browse.
-click_sidebar_item "$APP_PORT" new-database || exit 1
-wait_for_log "$TMP_DIR" "Create database dialog opened"
-send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"db-one"}' || exit 1
-send_command "$APP_PORT" pick-answer "$(jq -cn --arg path "$DB_ONE_PATH" '{paths: [$path]}')" || exit 1
-send_command "$APP_PORT" click '{"dataId":"database-browse-button"}' || exit 1
-# Browse fills the path field from an async handler, and Create stays disabled while the field is empty, so a Create click sent before
-# the path lands is swallowed and nothing happens at all.
-wait_for_value "$APP_PORT" "database-path-input" "$DB_ONE_PATH"
-send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
-wait_for_log "$TMP_DIR" "Database created"
-# "Database created" is logged just before the dialog is told to close, and a New database sent before that close has rendered asks
-# for a dialog that is still open, which does nothing. A user cannot be that quick, so the second request waits for the dialog to go.
-wait_for_value_gone "$APP_PORT" "create-database-confirm" "Create" || exit 1
+    click_sidebar_item "$APP_PORT" new-database || exit 1
+    wait_for_log "$TMP_DIR" "Create database dialog opened"
+    send_command "$APP_PORT" type "$(jq -cn --arg text "$name" '{dataId: "database-name-input", text: $text}')" || exit 1
 
-# Second database, a different path chosen via Browse: it must not collide with the first.
-click_sidebar_item "$APP_PORT" new-database || exit 1
-wait_for_log "$TMP_DIR" "Create database dialog opened"
-send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"db-two"}' || exit 1
-send_command "$APP_PORT" pick-answer "$(jq -cn --arg path "$DB_TWO_PATH" '{paths: [$path]}')" || exit 1
-send_command "$APP_PORT" click '{"dataId":"database-browse-button"}' || exit 1
-# Here the wait carries the scenario's own assertion too: the field has to read the second path, so a Browse that handed back the first path again
-# fails here rather than further downstream.
-wait_for_value "$APP_PORT" "database-path-input" "$DB_TWO_PATH"
-send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
-wait_for_log "$TMP_DIR" "Database created"
+    case "$PLATFORM" in
+        android|ios)
+            # The dialog is on screen once its Create button reads back, so an empty Browse read is the button being absent and not
+            # the dialog still rendering.
+            wait_for_value "$APP_PORT" "create-database-confirm" "Create"
+            local browse
+            browse="$(read_value "$APP_PORT" "database-browse-button")"
+            if [ -n "$browse" ]; then
+                log_error "The New Database dialog offers Browse on a phone ('$browse'), where there is no folder dialog for a database location"
+                exit 1
+            fi
+            send_command "$APP_PORT" type "$(jq -cn --arg text "$name" '{dataId: "database-path-input", text: $text}')" || exit 1
+            wait_for_value "$APP_PORT" "database-path-input" "$name"
+            ;;
+        *)
+            send_command "$APP_PORT" pick-answer "$(jq -cn --arg path "$db_path" '{paths: [$path]}')" || exit 1
+            send_command "$APP_PORT" click '{"dataId":"database-browse-button"}' || exit 1
+            # Browse fills the path field from an async handler, and Create stays disabled while the field is empty, so a Create click
+            # sent before the path lands is swallowed and nothing happens at all. The wait also asserts the field reads this database's
+            # own path, so a Browse that handed back an earlier path fails here.
+            wait_for_value "$APP_PORT" "database-path-input" "$db_path"
+            ;;
+    esac
+
+    send_command "$APP_PORT" click '{"dataId":"create-database-confirm"}' || exit 1
+    # Create opens the new database before the dialog logs that it was created, so the two lines are waited for in that order.
+    wait_for_log "$TMP_DIR" "Database opened: $name"
+    wait_for_log "$TMP_DIR" "Database created"
+
+    case "$PLATFORM" in
+        android|ios)
+            if ! "${PLATFORM}_path_exists" "$name/.db"; then
+                log_error "Expected the database to be created at $db_path"
+                exit 1
+            fi
+            ;;
+        *)
+            if [ ! -d "$db_path/.db" ]; then
+                log_error "Expected the database to be created at $db_path"
+                exit 1
+            fi
+            ;;
+    esac
+
+    # "Database created" is logged just before the dialog is told to close, and a New database sent before that close has rendered asks
+    # for a dialog that is still open, which does nothing. A user cannot be that quick, so the next request waits for the dialog to go.
+    wait_for_value_gone "$APP_PORT" "create-database-confirm" "Create" || exit 1
+}
+
+create_database_from_dialog "db-one"
+create_database_from_dialog "db-two"
 
 # A collision would have failed the second create (non-empty directory) and logged an error.
 check_no_errors "$TMP_DIR"

@@ -207,6 +207,9 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
 
     const browseDisabled = form.storageType === 's3' && !form.s3Key;
 
+    // A phone has no folder dialog for a database location: the user types the database's name into the Path field instead.
+    const showBrowse = form.storageType === 's3' || platform.platformKind === "desktop";
+
     return (
         <>
             <ResponsiveDialog
@@ -256,16 +259,19 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                                     data-id="database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
+                                    placeholder={showBrowse ? undefined : 'Type the name of the database'}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
-                                <Button
-                                    data-id="database-browse-button"
-                                    variant="outlined"
-                                    disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                                >
-                                    {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
-                                </Button>
+                                {showBrowse && (
+                                    <Button
+                                        data-id="database-browse-button"
+                                        variant="outlined"
+                                        disabled={browseDisabled}
+                                        onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                    >
+                                        {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
+                                    </Button>
+                                )}
                             </Box>
                         </FormControl>
 

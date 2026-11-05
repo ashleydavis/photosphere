@@ -195,7 +195,7 @@ export function mockPlatform(): IPlatformContext {
         onUpdateAvailable: () => noUnsubscribe,
         openFolder: async () => {},
         getPathForFile: () => undefined,
-        supportsDragAndDropImport: true,
+        platformKind: "desktop",
         checkTools: async () => emptyToolsStatus,
         onTaskMessage: () => noUnsubscribe,
         onTaskComplete: () => noUnsubscribe,

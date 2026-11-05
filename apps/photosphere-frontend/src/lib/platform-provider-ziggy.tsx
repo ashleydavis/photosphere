@@ -959,7 +959,7 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         getPathForFile,
         registerAction,
         runAction,
-        supportsDragAndDropImport: platform.platformKind === "desktop",
+        platformKind: platform.platformKind,
         checkTools,
         onTaskMessage,
         onTaskComplete,

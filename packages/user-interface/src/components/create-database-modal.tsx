@@ -102,6 +102,9 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
     // Inline name-conflict error shown under the Name field.
     const [nameError, setNameError] = useState<string | undefined>(undefined);
 
+    // The error of the last Create that failed, shown above the dialog's buttons.
+    const [createError, setCreateError] = useState<string | undefined>(undefined);
+
     React.useEffect(() => {
         if (open) {
             setForm(emptyFormState());
@@ -109,6 +112,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
             setEncryptionSecretName(undefined);
             setGeocodingSecretName(undefined);
             setNameError(undefined);
+            setCreateError(undefined);
             log.info('Create database dialog opened');
         }
     }, [open]);
@@ -155,6 +159,20 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
         await createDatabaseAtPath(form.path.trim());
         log.info(`Database created: ${form.path.trim()}`);
         onClose();
+    }
+
+    //
+    // Runs Create from the button or the Enter key, and shows any error it fails with in the dialog.
+    //
+    async function createAndShowError(): Promise<void> {
+        setCreateError(undefined);
+        try {
+            await handleCreate();
+        }
+        catch (err) {
+            log.exception('Create database error:', err as Error);
+            setCreateError(err instanceof Error ? err.message : String(err));
+        }
     }
 
     //
@@ -208,6 +226,9 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
 
     const browseDisabled = form.storageType === 's3' && !form.s3Key;
 
+    // A phone has no folder dialog for a database location: the user types a name into the Path field instead.
+    const showBrowse = form.storageType === 's3' || platform.platformKind === "desktop";
+
     return (
         <>
             <ResponsiveDialog
@@ -215,7 +236,7 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                 onClose={onClose}
                 minWidth={520}
                 maxWidth={700}
-                onKeyDown={createDialogKeyHandler(handleCreate, !form.path || nameError !== undefined)}
+                onKeyDown={createDialogKeyHandler(createAndShowError, !form.path || nameError !== undefined)}
                 >
                 <DialogTitle>New Database</DialogTitle>
                 <DialogContent>
@@ -265,16 +286,19 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                                 data-id="database-path-input"
                                 sx={{ flexGrow: 1 }}
                                 value={form.path}
+                                placeholder={showBrowse ? undefined : 'Type a name for the database'}
                                 onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                             />
-                            <Button
-                                data-id="database-browse-button"
-                                variant="outlined"
-                                disabled={browseDisabled}
-                                onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                            >
-                                {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
-                            </Button>
+                            {showBrowse && (
+                                <Button
+                                    data-id="database-browse-button"
+                                    variant="outlined"
+                                    disabled={browseDisabled}
+                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                >
+                                    {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
+                                </Button>
+                            )}
                         </Box>
                     </FormControl>
 
@@ -291,13 +315,19 @@ export function CreateDatabaseModal({ open, onClose }: ICreateDatabaseModalProps
                     {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, undefined, 'select-encryption-button')}
 
                     {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, undefined, 'select-geocoding-button')}
+
+                    {createError && (
+                        <Typography data-id="create-database-error" level="body-sm" color="danger">
+                            {createError}
+                        </Typography>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button data-id="create-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                     <Button
                         data-id="create-database-confirm"
                         disabled={!form.path || nameError !== undefined}
-                        onClick={() => handleCreate().catch(err => log.exception('Create database error:', err as Error))}
+                        onClick={createAndShowError}
                     >
                         Create
                     </Button>
