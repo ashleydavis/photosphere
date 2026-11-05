@@ -40,7 +40,6 @@ These are the places in Photosphere's code where two threads touch the same memo
 
 - Atomic flags: the LAN share sender and receiver's cancel and done flags (`lan-share-network-zig`), the CLI's pending signals, the spinner's stop flag and the `sync` command's stop flag.
 - The CLI spinner's mutexes (`apps/cli-zig/src/lib/clack/prompts/spinner.zig`).
-- The mutex that keeps lines written to standard output whole (`utils-zig/src/lib/console.zig`).
 
 ## Key files
 

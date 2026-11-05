@@ -213,7 +213,7 @@ fn formatNumber(allocator: std.mem.Allocator, value: f64) ![]const u8 {
 }
 
 //
-// The delay used for a requested timer delay (utils-zig's sleep.zig).
+// The delay used for a requested timer delay (utils-zig's `sleep`).
 //
 const setTimeoutDelay = utils.sleep.setTimeoutDelay;
 

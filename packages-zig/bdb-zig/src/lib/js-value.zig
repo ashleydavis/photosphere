@@ -138,7 +138,7 @@ fn writeUuid(writer: *std.Io.Writer, bytes: []const u8) std.Io.Writer.Error!void
 }
 
 //
-// Converts a string to a number like JavaScript's StringToNumber (`Number(string)`). (Moved to utils-zig's js-number.zig so
+// Converts a string to a number like JavaScript's StringToNumber (`Number(string)`). (Moved to utils-zig's `js_number` so
 // the packages below this one, tools-zig among them, can use it.)
 //
 pub const stringToNumber = @import("utils-zig").js_number.stringToNumber;
