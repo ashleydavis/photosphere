@@ -83,21 +83,6 @@
         "typescript": "^5.6.3",
       },
     },
-    "packages/encryption": {
-      "name": "encryption",
-      "version": "1.0.0",
-      "dependencies": {
-        "node-utils": "workspace:*",
-        "utils": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/jest": "^29.4.0",
-        "@types/node": "^22.9.1",
-        "jest": "^29.0.1",
-        "ts-jest": "^29.0.5",
-        "typescript": "^5.6.3",
-      },
-    },
     "packages/lan-share-core": {
       "name": "lan-share-core",
       "version": "1.0.0",
@@ -958,8 +943,6 @@
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
     "encodeurl": ["encodeurl@2.0.0", "", {}, "sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg=="],
-
-    "encryption": ["encryption@workspace:packages/encryption"],
 
     "entities": ["entities@6.0.1", "", {}, "sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g=="],
 
