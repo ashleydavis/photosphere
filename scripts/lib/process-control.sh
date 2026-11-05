@@ -416,7 +416,8 @@ process_control_watch_launcher() {
 #
 # The command runs in a subshell that first closes PROCESS_CONTROL_CLOSE_FDS and starts
 # process_control_watch_launcher beside it, so the group is killed if the calling shell dies without
-# cleaning it up. The pid printed is the subshell's, which leads the group.
+# cleaning it up. The subshell then execs the command, so the pid printed is the command's own and
+# leads the group. A shell function cannot be exec'd, so for one the pid is the subshell's.
 #
 # The group comes from bash job control. With monitor mode on, the shell puts a background job in a
 # new process group whose pgid is the job's own pid, so the group is known the instant the launch
@@ -454,7 +455,17 @@ launch_in_process_group() {
             exec {close_fd}>&-
         done
         process_control_watch_launcher "$launcher_pid" "$BASHPID" &
-        "$@"
+        # A program is exec'd so the pid printed below is the program's own, as it was before this
+        # subshell existed. Run as a child, the program had a pid of its own and the subshell's pid
+        # never became it: on Windows the app's Windows pid is read from /proc/<pid>/winpid until it
+        # names photosphere.exe, which the subshell's pid never does, so no scenario could find its
+        # app, and the Release Windows app-smoke-tests job ran past every time limit. A shell
+        # function cannot be exec'd, and runs here as it did before, in this subshell.
+        if declare -F "$1" > /dev/null; then
+            "$@"
+            exit $?
+        fi
+        exec "$@"
     ) > "$log_file" 2>&1 &
     launched_pid=$!
     if [ "$monitor_was_on" = "no" ]; then
