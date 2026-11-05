@@ -14,10 +14,12 @@ Test that changes made on the phone reach another copy of the database, and that
 - `psi dbs send` sends the other copy's entry and its credentials to the phone, prints a pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database** and enter the code.
 - `bun run android:50` and `bun run ios:50` put the `50-assets` test database on the device as `test-50-assets` and open it on launch.
 - Then set the origin of the open database: on the **Databases** page, open its **⋮** menu, choose **Edit**, pick `mobile-test-remote` from the **Choose…** dropdown beside **Origin**, and save.
-- Then switch syncing on: open the menu, choose **Configuration** and turn **Enable syncing** on. A fresh installation starts with it off.
+- On Android, `bun run android:set-sync-interval -- 10` switches syncing on and makes it sync every 10 seconds instead of the default 5 minutes, so the steps that wait for a sync do not wait long. See [set-sync-interval-android](../../../../../apps/photosphere/scripts/set-sync-interval-android.md).
+- On iOS, switch syncing on after the app starts: open the menu, choose **Configuration** and turn **Enable syncing** on. A fresh installation starts with it off, and syncs every 5 minutes.
 
 ```bash
 bun run android:reset   # Android
+bun run android:set-sync-interval -- 10   # Android
 bun run android:add-fixtures -- test/test.png   # Android
 bun run android:50   # Android
 bun run ios:reset   # iOS

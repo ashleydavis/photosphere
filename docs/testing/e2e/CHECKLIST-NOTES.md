@@ -235,12 +235,21 @@ All desktop results below come from a test-hooks build of the app driven through
 #### import-photo-and-video
 
 - Android: fails at step 1. The photo is imported and shows in the gallery, but its row on the Import page has no **manual** badge, and after **Clear** the page shows no import record. In step 2 the video imported with a thumbnail, but tapping it in the gallery crashed the emulator twice (once with a SEGV in the emulator process), so playback was not checked and steps 3 and 4 were not reached.
+- Android rerun: fails at step 2. Prep and step 1 passed (the **manual** badge is no longer required). The video imports and shows in the gallery with a thumbnail, but tapping it takes the whole emulator down within 2 seconds, twice more this run (adb "error: closed", then the device is gone). The emulator log has repeated "ERROR | Failed to find ColorBuffer: <n>" and "bad color buffer handle <n>", and just before the last crash "Created VkInstance", "Destroyed VkInstance" then "ERROR | Failed to find ColorBuffer: 543". Playback was not seen; steps 3 and 4 were not run.
+- Known problem to be fixed later.
+- Android: passed, run on Android only. The video played and the emulator did not crash. Step 3 showed "Already there 1" on the card while the summary under it said "0 skipped" and listed no row. Step 4 listed no imports, the known problem above.
 
 ### Gallery
 
 #### view-and-edit-asset
 
 - Android: fails at step 2. Test fixed first: a tap opens a photo and press and hold selects it. The info panel shows the file name, width × height and date, but no file size and no camera details, although the fixture photos carry camera EXIF (the camera block in `asset-info.tsx` is commented out). Step 5: swiping does not move to the next photo; the on-screen arrows do. The edited description survived closing and reopening the database. Pinch zoom was not checked.
+- Android rerun: stopped at step 1. `adb shell input tap` on a gallery thumbnail does not open the photo (three tries, including a 100 ms touch) and nothing is logged, while an adb tap on the menu button works. A finger tap on a thumbnail opens it ("AssetView opened"). Pan and zoom were not checked; steps 2 to 5 were not run.
+- Zooming doesn't work. Confirmed on emulator, not real device.
+- These details should be fixed later. Not important right now.
+- We'll fix this later.
+- Swipe can be fixed later.
+- Android: passed, run on Android only. An adb tap opened the photo. The edited description survived reopening the database through **Open database** (a **Close database** item exists in the ⋮ menu; the side menu has none). The on-screen arrows move to the next and previous photo and Quick Info follows. Zoom, file size and swipe are the problems noted above. A first attempt was lost part way through step 5 when an Android smoke run took over the emulator and reinstalled the app.
 
 #### export-asset
 
@@ -251,12 +260,16 @@ All desktop results below come from a test-hooks build of the app driven through
 #### download-assets
 
 - Android: fails at step 2: no progress is shown for a multi-photo download. Step 4: there is no cancel control, and backing out of the folder picker returns with no message. Test fixed first: the full-photo check, and a step that downloads the same photos again so the same-name case happens. Same-name files are saved as `x.jpg (1)`, which Android does not recognise as an image.
+- Android rerun: fails at step 2 again. Prep and step 1 passed: the single download saved `L0Bte153mM8.jpg` to `Download/`, byte for byte the same as the stored original, and it is in the device's media store. Downloading 3 selected photos to `Pictures` saved all 3 in under a second with only a "Downloaded 3 assets" toast at the end: no progress was shown, and `downloadAssets` in `asset-database-source.tsx` reports none. The repeat download into the same folder (rest of step 2) and steps 3 and 4 were not run.
+- Should show progress of downloads, that's not a reason to fail this test.
+- Android rerun continued: step 2 passed otherwise. All 3 photos arrived, and downloading them again into `Pictures` put copies beside them named `x.jpg (1)`, which the media store lists as `application/octet-stream`, not images. Step 3 passed: `test.mp4` saved, byte for byte the same as the source, and played in Google Photos. Fails at step 4: downloading 9 selected photos finished in under a second with no cancel control on screen at any point, and the multi-download code (`downloadAssets` and `saveDownloadedFiles` in `platform-provider-ziggy.tsx`) has no cancel. All 9 were saved (duplicates as `x.jpg (2)`).
 
 ### Database
 
 #### create-and-open-database
 
 - Android: fails at step 1. Choosing a new folder with **Browse** and pressing Create does nothing and shows no error; the dialog stays open. The log has `create-database task did not succeed: ReadOnlyFileSystem`: the folder picker gives a `content://` path the app cannot write to. Steps 2 to 5 could not run.
+- Android rerun: fails at step 1 again, the same way. Prep passed. Name `manual-test`; **Create** stays disabled until a path is set, and the test does not say which path to use, so a new folder `Pictures/manual-test` was made in the **Browse** picker and allowed. The path became `content://com.android.external…`. Create showed nothing and the dialog stayed open. Errors log: `[ERROR] [Frontend] Create database error: Error: create-database task did not succeed: ReadOnlyFileSystem at createDatabaseAtPath`, after two `[WARN] [Worker 2] An operation failed. Retrying after: ReadOnlyFileSystem`.
 
 #### load-large-database
 
@@ -277,6 +290,8 @@ All desktop results below come from a test-hooks build of the app driven through
 #### edit-database-origin
 
 - Android: fails at step 4. A made-up origin is skipped without telling anyone: the log has only an INFO line, "Sync skipped … origin not accessible", and nothing shows on screen. Steps 1 to 3 passed; the origin is set from **Edit**, the details sheet cannot set it. The quick sync after start-up did not run ("Sync debounce triggered" was logged, but nothing was queued until the 5-minute timer).
+- Android rerun: fails at step 4 again. Prep and steps 1 to 3 passed: the origin was picked with **Choose…** in **Edit**, survived a force-stop, and a photo added to the remote with `psi add` reached the phone on the next sync (50 to 51 photos). With the origin set to `s3:no-such-bucket/made-up-origin`, the periodic sync failed and nothing showed on screen. Errors log: `[ERROR] [Worker 2] Sync failed for "…/files/50-assets" Error: Failed to check if file exists: Could not load credentials from any providers`, which does not say the origin does not exist. The start-up sync again did not run; each sync waited for the 5-minute timer.
+- Android rerun with `bun run android:set-sync-interval -- 10` in Prep (it was a raw `adb` line at the time): syncs ran every 10 seconds. Steps 1 to 3 passed; the photo added to the remote arrived within seconds. Fails at step 4 the same way as the first run: with the origin set to `s3:no-such-bucket/made-up-origin`, every pass logs only `[INFO] Sync skipped … origin not accessible (S3:no-such-bucket/made-up-origin)`, nothing in the errors log and nothing on screen.
 
 ### Sync
 

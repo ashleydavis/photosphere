@@ -57,7 +57,7 @@ When the human asks you to run desktop steps yourself, drive the app through a r
 - When a step fails, check that every prep command ran before calling it a failure.
 - **Only "y" runs a command.** Every other request to go to, start, restart or run a test ("run that", "run this test") means walk the human through it: give its prep step and wait. Never run a step yourself unless the human answers that step with "y".
 - **Never reset or rerun prep in the middle of a test.** Once the test's prep has run, do not run a reset (`android:reset`, `ios:reset` or anything else that wipes the app), reinstall the app or rerun prep, and do not propose it. When a step cannot be repeated as written, report the state the app is in and wait.
-- Notes go only in `CHECKLIST-NOTES.md`, never in `CHECKLIST.md`. A note says what happened to the app or the test, never who did or decided something: no mention of "the human". Use the same `##` section, `###` group and `####` test name headings as the checklist, adding a heading when it is missing.
+- Notes go only in `CHECKLIST-NOTES.md`, never in `CHECKLIST.md`. A note says what happened to the app or the test, never who did or decided something: no mention of "the human". A note never names a particular emulator, simulator or device (no serial, AVD name or pool index); name the platform only. Use the same `##` section, `###` group and `####` test name headings as the checklist, adding a heading when it is missing.
 - Commands given to the human never start with `mise exec --`.
 - Keep every message short: the step, the command, what to expect. No waffle.
 

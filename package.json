@@ -57,6 +57,7 @@
     "app:log": "bash ./apps/photosphere/scripts/app-log.sh",
     "ios:reset": "bun run --filter=ziggy ios:reset",
     "android:add-fixtures": "bun run --filter=ziggy android:add-fixtures",
+    "android:set-sync-interval": "bun run --filter=ziggy android:set-sync-interval",
     "ios:add-fixtures": "bun run --filter=ziggy ios:add-fixtures",
     "open:ziggy:linux": "bun run --filter=ziggy open:linux",
     "open:ziggy:windows": "bun run --filter=ziggy open:windows",

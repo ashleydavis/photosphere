@@ -46,6 +46,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 - Delete a `### General` note only when this run showed the problem it describes is gone.
 - Notes use the same `##` section, `###` group and `####` test name headings as the checklist.
 - A note says what happened to the app or the test, never who did or decided something: no mention of "the human".
+- A note never names a particular emulator, simulator or device (no serial, AVD name or pool index). Name the platform only.
 
 ## At the end
 

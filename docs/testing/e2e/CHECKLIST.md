@@ -227,10 +227,10 @@ Run each of these on Android and on iOS. Tick a test only when it has passed on 
 - [-] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
 
 ### Import
-- [-] [import-photo-and-video](mobile/import/import-photo-and-video.md)
+- [x] [import-photo-and-video](mobile/import/import-photo-and-video.md)
 
 ### Gallery
-- [-] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
+- [x] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
 - [x] [export-asset](mobile/gallery/export-asset.md)
 
 ### Download

@@ -12,10 +12,12 @@ Test setting a database's origin on the phone, so it syncs with a remote copy.
 - The remote is filled with a copy of the `50-assets` test database (`--from 50-assets`), so it shares that database's identity and the two can sync.
 - `psi dbs send` sends the remote's entry and its credentials to the phone, prints a pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database** and enter the code.
 - `bun run android:50` and `bun run ios:50` put the `50-assets` test database on the device as `test-50-assets` and open it on launch. That is the database the test sets the origin on.
-- Then switch syncing on: open the menu, choose **Configuration** and turn **Enable syncing** on. A fresh installation starts with it off.
+- On Android, `bun run android:set-sync-interval -- 10` switches syncing on and makes it sync every 10 seconds instead of the default 5 minutes, so steps 3 and 4 do not wait. See [set-sync-interval-android](../../../../../apps/photosphere/scripts/set-sync-interval-android.md).
+- On iOS, switch syncing on after the app starts: open the menu, choose **Configuration** and turn **Enable syncing** on. A fresh installation starts with it off, and syncs every 5 minutes.
 
 ```bash
 bun run android:reset   # Android
+bun run android:set-sync-interval -- 10   # Android
 bun run android:50   # Android
 bun run ios:reset   # iOS
 bun run ios:50   # iOS
