@@ -1,7 +1,6 @@
 //
 // The helpers that Ziggy is written with are taken from Ziggy's utils, so that Photosphere and Ziggy share one
-// copy of their types and of the state they keep (the log, the last error, the process environment and the console). The files of
-// those helpers here are not used.
+// copy of their types and of the state they keep (the log, the last error, the process environment and the console).
 //
 const ziggy_utils = @import("ziggy").utils;
 

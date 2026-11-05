@@ -12,7 +12,7 @@ const updateFileOptimistic = node_utils.fs.updateFileOptimistic;
 //
 // Default directory under which the plain-text vault stores its vault file.
 // It is the "vault" directory under ".config/photosphere" in the home directory.
-// Zig has no process-wide environment until `main` sets it (see node-utils process-env.zig), so it is computed on demand.
+// Zig has no process-wide environment until `main` sets it (see Ziggy's utils process-env.zig), so it is computed on demand.
 //
 pub fn DEFAULT_VAULT_DIR(allocator: std.mem.Allocator) ![]const u8 {
     return node_utils.path.join(allocator, &.{ node_utils.fs.osHomedir(), ".config", "photosphere", "vault" });
