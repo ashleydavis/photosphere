@@ -42,7 +42,6 @@
     "jszip": "^3.10.1",
     "lan-share-network": "workspace:*",
     "lodash": "^4.17.21",
-    "merkle-tree": "workspace:*",
     "mime": "^4.0.7",
     "mime-types": "^2.1.35",
     "node-utils": "workspace:*",
