@@ -16,4 +16,3 @@ export * from "./lib/auto-import-mobile";
 export * from "./lib/sync-settings";
 export * from "./lib/sync-gate";
 export * from "./lib/retention-policy";
-export * from "./lan-share/index";

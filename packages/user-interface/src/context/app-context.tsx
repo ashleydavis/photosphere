@@ -1,7 +1,7 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from "./platform-context";
 import { log } from "utils";
-import type { IConflictResolution } from "api";
+import type { IConflictResolution } from "../lib/lan-share";
 
 //
 // Application-wide reactive data layer for configured databases and shared secrets.

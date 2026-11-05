@@ -1,5 +1,6 @@
 import React, { ReactNode, createContext, useContext } from "react";
-import type { IConflictResolution, ISaveAssetItem } from "api";
+import type { ISaveAssetItem } from "api";
+import type { IConflictResolution } from "../lib/lan-share";
 import type { NetworkConnectionType } from "../lib/sync-gate";
 
 //

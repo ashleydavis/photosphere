@@ -7,7 +7,8 @@ import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type 
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
-import type { ISaveAssetItem, IConflictResolution } from "api";
+import type { ISaveAssetItem } from "api";
+import type { IConflictResolution } from "user-interface/src/lib/lan-share";
 import type { IJsonValue, IMenuEvent, IPlatformInfo, ITaskCompletedEvent, IZiggyBridge } from "ziggy";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
 import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";

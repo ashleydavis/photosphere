@@ -1,4 +1,4 @@
-import { importShareSecrets, IDatabaseSharePayload, IShareSecretStore, IConflictResolution } from "../index";
+import { importShareSecrets, IDatabaseSharePayload, IShareSecretStore, IConflictResolution } from "../../lib/lan-share-core";
 
 //
 // A fake secret store backed by a plain map, recording writes so tests can assert what was persisted.

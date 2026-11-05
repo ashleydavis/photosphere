@@ -2,7 +2,7 @@
 // lan-share-core package, so mobile (which cannot import this Node package) can share them and the
 // import logic. Imported for local use by the task types below and re-exported so existing
 // `from "api"` importers are unchanged.
-import type { IDatabaseSharePayload, ISecretSharePayload } from "lan-share-core";
+import type { IDatabaseSharePayload, ISecretSharePayload } from "./lan-share-core";
 export type {
     IShareS3Credentials,
     IShareEncryptionKey,
@@ -11,7 +11,7 @@ export type {
     ISecretSharePayload,
     IConflictResolution,
     ConflictResolver,
-} from "lan-share-core";
+} from "./lan-share-core";
 
 //
 // Represents a database configuration entry with vault key references,

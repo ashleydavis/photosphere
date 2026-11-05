@@ -15,7 +15,7 @@ import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import type { IConflictResolution } from 'api';
+import type { IConflictResolution } from '../lib/lan-share';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';

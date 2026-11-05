@@ -7,7 +7,7 @@ import type {
     IFindReceiverTaskResult,
     ISendPayloadTaskResult,
     IShareReceiverEndpoint,
-} from "api";
+} from "./lan-share";
 
 //
 // Source tag used to group and cancel all LAN-share background tasks.

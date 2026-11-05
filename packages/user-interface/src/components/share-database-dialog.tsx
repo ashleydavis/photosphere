@@ -13,7 +13,7 @@ import CircularProgress from '@mui/joy/CircularProgress';
 import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import { usePlatform, type IDatabaseEntry } from '../context/platform-context';
-import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from 'api';
+import type { IDatabaseSharePayload, IShareS3Credentials, IShareEncryptionKey, IShareGeocodingKey } from '../lib/lan-share';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 import { lanShareErrorMessage } from '../lib/lan-share-error-message';
 import { useLanShareTasks } from "../lib/use-lan-share-tasks";
