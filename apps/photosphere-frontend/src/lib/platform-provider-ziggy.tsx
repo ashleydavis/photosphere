@@ -8,7 +8,6 @@ import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
 import type { IImportProgressEvent } from "api/src/lib/import-assets.types";
 import { AUTO_IMPORT_ENABLED_KEY } from "user-interface";
 import type { ISaveAssetItem, IConflictResolution } from "api";
-import type { ISecret } from "vault";
 import type { IJsonValue, IMenuEvent, IPlatformInfo, ITaskCompletedEvent, IZiggyBridge } from "ziggy";
 import { planBackgroundWork, readPermissionState, resolveMediaPermission, type IRawPermissionResult } from "./background-work";
 import { readAutoImportSettings, readSyncSettings, recordSyncDatabase, seedSyncSettings } from "./mobile-settings";
@@ -19,6 +18,30 @@ import { firstSeededNewsNotification } from "./seeded-news";
 import { signalTestPageReady } from "./ziggy-test-transport";
 import { isTestMode } from "./test-mode";
 import { toJsonValue } from "./to-json-value";
+
+//
+// Represents a secret stored in a vault.
+// The type field is a caller-defined string that categorises the secret
+// (e.g. "password", "api-key", "private-key", "s3-credentials").
+//
+interface ISecret {
+    //
+    // Unique name that identifies the secret within the vault.
+    //
+    name: string;
+
+    //
+    // Caller-defined category string for the secret.
+    // The vault package places no restrictions on this value.
+    //
+    type: string;
+
+    //
+    // The secret value, stored as a plain string.
+    // Callers are responsible for serialising structured values (e.g. JSON).
+    //
+    value: string;
+}
 
 //
 // Whether the app is running in test mode (?testMode=1 on the page's address).
