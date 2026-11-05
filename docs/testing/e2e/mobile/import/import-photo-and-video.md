@@ -33,7 +33,7 @@ Expected:
 
 Expected:
 - The import completes and the photo appears in the gallery.
-- The Import page lists it, badged **manual**.
+- The Import page lists it.
 
 ### 2. Import a video
 
@@ -59,8 +59,8 @@ Expected:
 1. Stay on the **Import** page.
 
 Expected:
-- Both imports are listed, newest first, badged **manual**.
-- If automatic import has also run on this database, its rows are in the same list badged **automatic**.
+- Both imports are listed, newest first.
+- If automatic import has also run on this database, its rows are in the same list.
 
 ## Agent notes
 

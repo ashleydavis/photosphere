@@ -164,23 +164,9 @@ function ImportItemRow({ item }: { item: IImportItem }) {
                 }
             </Box>
 
-            <Typography level="body-sm" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Typography data-id="import-item-path" level="body-sm" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.logicalPath}
             </Typography>
-
-            {/* Which asked for it. A photo that arrived on its own is the one a user is most likely
-                to be asking about, so it is marked rather than left to be guessed at. */}
-            {item.source && (
-                <Chip
-                    size="sm"
-                    variant="soft"
-                    color={item.source === 'automatic' ? 'primary' : 'neutral'}
-                    data-id={`import-source-${item.source}`}
-                    sx={{ flexShrink: 0 }}
-                >
-                    {item.source === 'automatic' ? 'Automatic' : 'Manual'}
-                </Chip>
-            )}
         </Box>
     );
 }

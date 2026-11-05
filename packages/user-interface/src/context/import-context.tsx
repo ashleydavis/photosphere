@@ -18,7 +18,6 @@ function entryToImportItem(entry: IImportRecordEntry): IImportItem {
         logicalPath: entry.logicalPath,
         status: entry.outcome === "imported" ? "success" : entry.outcome === "skipped" ? "skipped" : "failure",
         micro: entry.micro,
-        source: entry.source,
     };
 }
 
@@ -145,10 +144,6 @@ export interface IImportItem {
     // Base64-encoded JPEG micro-thumbnail. Populated when status transitions to 'success'.
     // Undefined while pending, on failure, on skip, or when no thumbnail was generated.
     micro?: string;
-
-    // Whether the user asked for this import or it arrived on its own. Undefined for an item still
-    // in flight from a manual import, which the user is already watching happen.
-    source?: 'manual' | 'automatic';
 }
 
 //

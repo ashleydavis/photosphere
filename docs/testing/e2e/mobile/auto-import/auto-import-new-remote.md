@@ -85,7 +85,6 @@ Expected:
 
 Expected:
 - The photos that were imported are listed, newest first.
-- Each row is badged **automatic**.
 - A count of what has been imported is shown while an import is running.
 
 ### 7. The record survives a restart
@@ -96,7 +95,6 @@ Expected:
 
 Expected:
 - The list still shows what was imported, including from before the restart.
-- The badges still say **automatic**.
 
 ### 8. Get the credentials for the bucket onto the phone
 

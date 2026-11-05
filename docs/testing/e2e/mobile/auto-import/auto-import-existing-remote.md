@@ -150,7 +150,7 @@ Expected:
 1. Go to the **Import** page.
 
 Expected:
-- The photos the phone imported are listed, newest first, badged **automatic**.
+- The photos the phone imported are listed, newest first.
 - The photos that came down from the bucket are **not** listed. They were not imported on this device; they arrived by replication, and the import record is this device's record of what it took in.
 
 ### 11. The record survives a restart

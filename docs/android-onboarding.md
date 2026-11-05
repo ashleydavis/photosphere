@@ -217,7 +217,7 @@ psi verify --db s3:<bucket>/<prefix>
 
 ## After it is running
 
-**The Import page** (**Import** in the top bar, or in the menu) lists what came in, newest first, badged **automatic** or **manual**. It survives restarts, so it answers "what came in while I was not looking?" rather than only showing what has happened since the app started.
+**The Import page** (**Import** in the top bar, or in the menu) lists what came in, newest first. It survives restarts, so it answers "what came in while I was not looking?" rather than only showing what has happened since the app started.
 
 **The photo count in the top bar** opens the database summary: how many photos and files, how big it is, where it is, and whether it holds all its own originals.
 

@@ -178,7 +178,7 @@ Two machines each connected to the same remote end up with each other's photos: 
 
 ## What was imported
 
-Every import, whether the user asked for it or it arrived on its own, is written to this machine's import record for that database. The Import page shows it, newest first, so opening a database answers "what came in?" rather than only showing what has happened since the app started. Each row is badged **manual** or **automatic**, because a photo that arrived on its own is the one a user is most likely to be asking about.
+Every import, whether the user asked for it or it arrived on its own, is written to this machine's import record for that database. The Import page shows it, newest first, so opening a database answers "what came in?" rather than only showing what has happened since the app started.
 
 The record holds the last 1000 imports. When it is full the oldest go and the page says so, rather than presenting a partial history as a complete one.
 

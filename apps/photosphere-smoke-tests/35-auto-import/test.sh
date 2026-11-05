@@ -455,10 +455,10 @@ YAMLEOF
         log_success "The imports were recorded at $RECORD_FILE"
 
         if ! grep -q '"source":"automatic"' "$RECORD_FILE"; then
-            log_error "Photos brought in by automatic import were not badged automatic in $RECORD_FILE"
+            log_error "Photos brought in by automatic import were not recorded as automatic in $RECORD_FILE"
             exit 1
         fi
-        log_success "The automatic imports are badged automatic"
+        log_success "The automatic imports are recorded as automatic"
 
         # The record belongs to the machine, not the database. Nothing may appear inside the database.
         RECORD_INSIDE_DATABASE="$(find "$DEFAULT_DB_DIR" -name "imports.dat" -print -quit 2>/dev/null)"
@@ -489,9 +489,9 @@ YAMLEOF
         send_command "$APP_PORT" navigate '{"page":"/import"}' || exit 1
         wait_for_log "$TMP_DIR" "Import page ready"
 
-        # The badge is the proof: this row came from the record on disk, not from an import that happened while the page was open,
-        # because no import has happened since the app started.
-        wait_for_value "$APP_PORT" "import-source-automatic" "Automatic"
+        # A listed row is the proof: it came from the record on disk, not from an import that happened while the page was open, because
+        # no import has happened since the app started.
+        wait_for_value_matching "$APP_PORT" "import-item-path" "(arrived\.png|cleaned-up\.jpg)"
         log_success "Reopening the database shows what it imported before"
 
         check_no_errors "$TMP_DIR"
