@@ -443,6 +443,11 @@ jobs:
           # which says why): the newest emulator never gives back the memory of an app it has stopped, and this suite starts the app
           # many times.
           emulator-build: 15507667
+          # The action's default options with `-gpu swangle_indirect` in place of its `-gpu swiftshader_indirect`, which is what the
+          # local pool's emulators use (scripts/android/emulator.sh). Under swiftshader_indirect the emulator crashes when Chromium on
+          # the guest plays video: scenario 21-import-video opens a video, and the emulator vanished during it ("device
+          # 'emulator-5554' not found"), failing every scenario after it.
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
           # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
           script: bun run test:ziggy:and
 
