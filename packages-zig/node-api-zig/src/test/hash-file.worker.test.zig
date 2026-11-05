@@ -7,7 +7,6 @@ const task_queue_zig = @import("ziggy").task_queue;
 const node_api = @import("node-api-zig");
 const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
-const marking_tool_programs = @import("marking-tool-programs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const hash_file_worker = node_api.hash_file_worker;
@@ -19,7 +18,6 @@ const forgetSharedHashCaches = node_api.hash_cache.forgetSharedHashCaches;
 const TaskContext = task_queue_zig.task_context.TaskContext;
 const MediaTools = media_tools.MediaTools;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
-const MarkingToolPrograms = marking_tool_programs.MarkingToolPrograms;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 const errors = utils.errors;
@@ -321,18 +319,14 @@ test "does not send any messages" {
     try std.testing.expectEqual(@as(usize, 0), context.messages.count);
 }
 
-test "fails without starting a program when the task was run with no runner" {
+test "fails when the task was run with no runner" {
     const log = utils.mute_log.MuteLog.init();
     var context: HandlerTest = undefined;
     try context.init();
     defer context.deinit(log);
-    var programs: MarkingToolPrograms = undefined;
-    try programs.create(context.arena.allocator(), std.testing.io, log, context.tempDir);
-    defer programs.destroy();
     context.toolRunner = null;
 
     try std.testing.expectError(error.Thrown, context.run(log, context.makeData()));
 
     try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", errors.lastErrorMessage());
-    try std.testing.expect(!programs.anyStarted(std.testing.io));
 }

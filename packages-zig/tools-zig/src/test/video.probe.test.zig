@@ -174,8 +174,7 @@ test "extractScreenshot writes the time the way JavaScript writes a number" {
     var video = Video.init("../test/multiple-files/test.mp4");
     _ = try video.extractScreenshot(allocator, io, log, fakeTools.runner(), "out.jpg", 1e-7);
 
-    // The command quotes both paths (`ffmpeg -i "<file>" ... -y "<output>"`), and the runner gets the words with the
-    // quotes taken off.
+    // Both paths are passed as arguments of their own (`ffmpeg -i <file> ... -y <output>`), unquoted.
     try std.testing.expectEqualStrings("-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg", try fakeTools.argumentsOf("ffmpeg"));
 }
 

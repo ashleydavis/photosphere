@@ -9,7 +9,6 @@ const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
 const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
-const marking_tool_programs = @import("marking-tool-programs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const check_worker = node_api.check_worker;
@@ -20,7 +19,6 @@ const HashCache = node_api.hash_cache.HashCache;
 const TaskContext = task_queue_zig.task_context.TaskContext;
 const MediaTools = media_tools.MediaTools;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
-const MarkingToolPrograms = marking_tool_programs.MarkingToolPrograms;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
@@ -260,18 +258,14 @@ test "returns an empty result without opening storage when the file cannot be ha
     try std.testing.expectEqual(false, result.hashFromCache);
 }
 
-test "fails without starting a program when the task was run with no runner" {
+test "fails when the task was run with no runner" {
     const log = utils.mute_log.MuteLog.init();
     var context: CheckTest = undefined;
     try context.init(log);
     defer context.deinit(log);
-    var programs: MarkingToolPrograms = undefined;
-    try programs.create(context.arena.allocator(), std.testing.io, log, context.tempDir);
-    defer programs.destroy();
     context.toolRunner = null;
 
     try std.testing.expectError(error.Thrown, context.run(log, context.makeData()));
 
     try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", utils.errors.lastErrorMessage());
-    try std.testing.expect(!programs.anyStarted(std.testing.io));
 }

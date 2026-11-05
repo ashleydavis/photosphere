@@ -7,6 +7,7 @@ const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
 const Image = tools.Image;
 const MediaTools = media_tools.MediaTools;
+const builtin = @import("builtin");
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 
 //
@@ -543,4 +544,70 @@ test "parseExifOutput reads the tags as String.prototype.trim and the regular ex
     // An "exif:" with nothing before the "=" does not match there, so the search goes on to the next "exif:".
     const later = try Image.parseExifOutput(allocator, "exif:=x exif:Make=Nikon");
     try std.testing.expectEqualStrings("Nikon", later.get("Make").?);
+}
+
+test "every operation works on a file whose name holds $, a backtick and a double quote" {
+    // The goal is to show that a path holding a space, `$`, a backtick and `"` reaches ImageMagick unchanged, as the source and as
+    // the output. The method is to copy test.jpg under such a name, write every output into a directory whose name holds them too,
+    // and check that each operation gives what the same operation gives on test.jpg written to an ordinary path.
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireImageMagick(log, allocator, runner);
+    errdefer std.debug.print("The last error: {s}\n", .{utils.errors.lastErrorMessage()});
+    const tempDir = try makeTempDir(allocator, "special-file-name");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
+    // `"` is a reserved character in Windows file names, so it is left out there.
+    const specialName = if (builtin.os.tag == .windows) "Trip $5 `a`" else "Trip $5 `a` \"b\"";
+    const specialDir = try std.fs.path.join(allocator, &.{ tempDir, "out $x `y`" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, specialDir);
+    const specialPath = try std.fs.path.join(allocator, &.{ tempDir, specialName ++ ".jpg" });
+    try std.Io.Dir.cwd().copyFile("../test/test.jpg", std.Io.Dir.cwd(), specialPath, std.testing.io, .{});
+
+    var special = Image.init(specialPath);
+    var plain = Image.init("../test/test.jpg");
+
+    const specialInfo = try special.getInfo(allocator, std.testing.io, log, runner);
+    const plainInfo = try plain.getInfo(allocator, std.testing.io, log, runner);
+    try std.testing.expectEqual(plainInfo.dimensions, specialInfo.dimensions);
+    try std.testing.expectEqual(plainInfo.createdAt, specialInfo.createdAt);
+
+    const specialExif = try special.getExifData(allocator, std.testing.io, log, runner);
+    const plainExif = try plain.getExifData(allocator, std.testing.io, log, runner);
+    try std.testing.expect(plainExif.count() > 0);
+    try std.testing.expectEqual(plainExif.count(), specialExif.count());
+    var plainEntries = plainExif.iterator();
+    while (plainEntries.next()) |entry| {
+        try std.testing.expectEqualStrings(entry.value_ptr.*, specialExif.get(entry.key_ptr.*).?);
+    }
+
+    // With a format, the output goes to ImageMagick as one "jpeg:<path>" argument; without one, as the path alone.
+    for ([_]?[]const u8{ "jpeg", null }) |format| {
+        const options: tools.types.ResizeOptions = .{
+            .width = 100,
+            .height = 0,
+            .quality = 90,
+            .format = format,
+            .ext = "jpg",
+        };
+        var specialGenerator: FixedUuidGenerator = .{ .id = if (format == null) "special-plain" else "special-format" };
+        var plainGenerator: FixedUuidGenerator = .{ .id = if (format == null) "plain-plain" else "plain-format" };
+        const specialResized = try special.resize(allocator, std.testing.io, log, runner, options, specialDir, specialGenerator.uuidGenerator());
+        const plainResized = try plain.resize(allocator, std.testing.io, log, runner, options, tempDir, plainGenerator.uuidGenerator());
+        try std.testing.expect(std.mem.startsWith(u8, specialResized, specialDir));
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainResized), try describeImage(log, allocator, runner, specialResized));
+    }
+
+    var specialTransformGenerator: FixedUuidGenerator = .{ .id = "special-transform" };
+    var plainTransformGenerator: FixedUuidGenerator = .{ .id = "plain-transform" };
+    const specialTransformed = try special.transform(allocator, std.testing.io, log, runner, .{ .rotate = 90 }, specialDir, specialTransformGenerator.uuidGenerator());
+    const plainTransformed = try plain.transform(allocator, std.testing.io, log, runner, .{ .rotate = 90 }, tempDir, plainTransformGenerator.uuidGenerator());
+    try std.testing.expect(std.mem.startsWith(u8, specialTransformed, specialDir));
+    try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainTransformed), try describeImage(log, allocator, runner, specialTransformed));
+
+    try std.testing.expectEqual(try plain.getDominantColor(allocator, std.testing.io, log, runner), try special.getDominantColor(allocator, std.testing.io, log, runner));
 }

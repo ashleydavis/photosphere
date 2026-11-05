@@ -6,7 +6,6 @@ const ziggy_utils = @import("ziggy").utils;
 
 pub const exit_codes = @import("lib/exit-codes.zig");
 pub const termination = @import("lib/termination.zig");
-pub const exec = @import("lib/exec.zig");
 pub const in_process_tools = @import("lib/in-process-tools.zig");
 pub const test_uuid_generator = ziggy_utils.file_test_uuid_generator;
 pub const test_timestamp_provider = ziggy_utils.test_timestamp_provider;

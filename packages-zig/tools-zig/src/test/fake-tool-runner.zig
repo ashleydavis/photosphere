@@ -17,9 +17,8 @@ pub const IFakeTool = struct {
 
 //
 // A runner that stands in for the tools built into the program, for the tests that need a tool to print a given text or to
-// fail. It handles every tool exec hands a runner, so no command is ever started as a program: a tool it was given prints its
-// output and ends with exit code 0, and any other tool ends with exit code 1 and prints nothing, as a tool that does not run
-// does. It records the arguments of the last call to each tool.
+// fail. It answers for every tool runTool calls it for: a tool it was given prints its output and ends with exit code 0, and any
+// other tool ends with exit code 1 and prints nothing, as a tool that does not run does. It records the arguments of the last call to each tool.
 //
 pub const FakeToolRunner = struct {
     // Owns the recorded arguments. Must outlive the runner.
@@ -43,12 +42,11 @@ pub const FakeToolRunner = struct {
     }
 
     //
-    // The runner exec calls. It points at this, so this must not move while the runner is used.
+    // The runner runTool calls. It points at this, so this must not move while the runner is used.
     //
     pub fn runner(self: *FakeToolRunner) in_process_tools.InProcessRunner {
         return .{
             .context = self,
-            .handles = handles,
             .run = run,
         };
     }
@@ -61,15 +59,6 @@ pub const FakeToolRunner = struct {
             std.debug.print("The fake {s} was never called.\n", .{tool});
             return error.TestUnexpectedResult;
         };
-    }
-
-    //
-    // Takes every tool, so that none is started as a program.
-    //
-    fn handles(context: ?*anyopaque, tool: []const u8) bool {
-        _ = context;
-        _ = tool;
-        return true;
     }
 
     //

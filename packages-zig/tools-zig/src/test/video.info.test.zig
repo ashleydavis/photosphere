@@ -1,5 +1,6 @@
 const std = @import("std");
 const inherited_environment = @import("inherited-environment.zig");
+const builtin = @import("builtin");
 const ILog = @import("utils-zig").log.ILog;
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
@@ -42,10 +43,10 @@ const TEST_MP4_METADATA = [_]IMetadataEntry{
 //
 // Expects the information to be what Video reports for test/multiple-files/test.mp4: 1280x720,
 // 7.874533 seconds (format.duration), 30000/1001 frames a second (r_frame_rate), 2100080 bits a second
-// (format.bit_rate), with audio, no creation_time tag and the metadata above.
+// (format.bit_rate), with audio, no creation_time tag and the metadata above, read from the file at expectedFilePath.
 //
-fn expectTestMp4Info(info: tools.types.AssetInfo) !void {
-    try std.testing.expectEqualStrings("../test/multiple-files/test.mp4", info.filePath);
+fn expectTestMp4Info(expectedFilePath: []const u8, info: tools.types.AssetInfo) !void {
+    try std.testing.expectEqualStrings(expectedFilePath, info.filePath);
     try std.testing.expectEqual(@as(f64, 1280), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 720), info.dimensions.height);
     try std.testing.expectEqual(@as(?f64, 7.874533), info.duration);
@@ -115,7 +116,7 @@ test "getInfo reads a video" {
     try requireFfmpeg(log, allocator, runner);
     var video = Video.init("../test/multiple-files/test.mp4");
     const info = try video.getInfo(allocator, std.testing.io, log, runner);
-    try expectTestMp4Info(info);
+    try expectTestMp4Info("../test/multiple-files/test.mp4", info);
     try std.testing.expectEqual(info.dimensions, try video.getDimensions(allocator, std.testing.io, log, runner));
 }
 
@@ -193,7 +194,7 @@ test "getFileInfo reads images and videos and nothing else" {
     try std.testing.expect(image.metadata == null);
 
     // A video goes to the Video.
-    try expectTestMp4Info((try tools.getFileInfo(allocator, std.testing.io, log, runner, "../test/multiple-files/test.mp4", "video/mp4")).?);
+    try expectTestMp4Info("../test/multiple-files/test.mp4", (try tools.getFileInfo(allocator, std.testing.io, log, runner, "../test/multiple-files/test.mp4", "video/mp4")).?);
 
     // Anything else has no information.
     try std.testing.expect((try tools.getFileInfo(allocator, std.testing.io, log, runner, "../test/test.png", "text/plain")) == null);
@@ -314,4 +315,35 @@ test "getFileInfo fails loudly for a video it cannot read" {
     const allocator = arena.allocator();
     try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, log, runner, "../test/missing.mp4", "video/mp4"));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info for ../test/missing.mp4: Error: File not found: ../test/missing.mp4"));
+}
+
+test "getInfo and extractScreenshot work on a video whose name holds $, a backtick and a double quote" {
+    // The goal is to show that a path holding a space, `$`, a backtick and `"` reaches ffprobe and ffmpeg unchanged, as the source
+    // and as the output. The method is to copy test.mp4 under such a name, read it, and take a screenshot to a file with such a name.
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireFfmpeg(log, allocator, runner);
+    errdefer std.debug.print("The last error: {s}\n", .{utils.errors.lastErrorMessage()});
+    const dir = try makeTempDir(allocator, "special-file-name");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
+    // `"` is a reserved character in Windows file names, so it is left out there.
+    const specialName = if (builtin.os.tag == .windows) "Trip $5 `a`" else "Trip $5 `a` \"b\"";
+    const videoPath = try std.fs.path.join(allocator, &.{ dir, specialName ++ ".mp4" });
+    try std.Io.Dir.cwd().copyFile("../test/multiple-files/test.mp4", std.Io.Dir.cwd(), videoPath, std.testing.io, .{});
+
+    var video = Video.init(videoPath);
+    try expectTestMp4Info(videoPath, try video.getInfo(allocator, std.testing.io, log, runner));
+
+    const screenshotPath = try std.fs.path.join(allocator, &.{ dir, specialName ++ ".jpg" });
+    try std.testing.expectEqualStrings(screenshotPath, try video.extractScreenshot(allocator, std.testing.io, log, runner, screenshotPath, 1));
+    const screenshot = (try tools.getFileInfo(allocator, std.testing.io, log, runner, screenshotPath, "image/jpeg")).?;
+    try std.testing.expectEqual(@as(f64, 1280), screenshot.dimensions.width);
+    try std.testing.expectEqual(@as(f64, 720), screenshot.dimensions.height);
 }

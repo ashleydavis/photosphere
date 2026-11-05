@@ -236,7 +236,7 @@ fn magickVersionHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers
     _ = timers;
     _ = data;
     var tools = media_tools.ThreadTools.init();
-    const result = try node_utils.exec.exec(allocator, io, log, tools.runner(), "magick -version");
+    const result = try node_utils.in_process_tools.runTool(allocator, io, log, tools.runner(), "magick", &.{"-version"});
     return .{ .string = result.stdout };
 }
 

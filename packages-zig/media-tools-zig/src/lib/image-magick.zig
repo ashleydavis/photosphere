@@ -26,8 +26,8 @@ const ThreadAllocator = @import("ziggy").utils.thread_allocator.ThreadAllocator;
 // ImageMagick's warnings and errors are never printed to the process's standard error. They are handed back the way the standard
 // error of a `magick` program was:
 //
-//   * A command that fails hands back its messages as its output, which exec puts in the error it fails with.
-//   * The warnings of a command that works go to the log as the tool's standard error (`log.tool`), where execLogged puts the
+//   * A command that fails hands back its messages as its output, which runTool puts in the error it fails with.
+//   * The warnings of a command that works go to the log as the tool's standard error (`log.tool`), where runToolLogged puts the
 //     standard error of a program that worked.
 //
 

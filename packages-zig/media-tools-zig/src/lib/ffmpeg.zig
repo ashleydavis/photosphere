@@ -22,7 +22,7 @@ const in_process_tools = node_utils.in_process_tools;
 // thread logs, which for a run is the thread that runs the command or one of the threads the run starts, so it finds the run through
 // the run itself: each run is given a queue of its own, the callback posts each message of the run to it, and the thread that runs the
 // command reads the queue when the run has ended and sends each message to its own log: an error to the log's errors, and anything
-// else to the log as the program's standard error (`log.tool`), where execLogged puts the standard error of a program that worked.
+// else to the log as the program's standard error (`log.tool`), where runToolLogged puts the standard error of a program that worked.
 // A message logged on a thread of no run (a thread of FFmpeg's libraries' own) goes to that thread's log when it is an error.
 //
 // A failed `ffprobe` hands back its error in its report, because the runner asks for it with `-show_error`. A failed `ffmpeg` hands

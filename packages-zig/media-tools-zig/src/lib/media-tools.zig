@@ -45,7 +45,7 @@ pub const MediaTools = struct {
     }
 
     //
-    // The main thread's runner, which exec calls. The runner points at this, so this must not move while the runner is used.
+    // The main thread's runner, which runTool and runToolLogged call. The runner points at this, so this must not move while the runner is used.
     //
     pub fn runner(self: *MediaTools) in_process_tools.InProcessRunner {
         return self.tools.runner();
@@ -64,22 +64,13 @@ pub const ThreadTools = struct {
     }
 
     //
-    // The runner exec calls, backed by these tools. The runner points at this, so this must not move while the runner is used.
+    // The runner runTool and runToolLogged call, backed by these tools. The runner points at this, so this must not move while the runner is used.
     //
     pub fn runner(self: *ThreadTools) in_process_tools.InProcessRunner {
         return .{
             .context = self,
-            .handles = handles,
             .run = run,
         };
-    }
-
-    //
-    // Whether the tool is one of the built in ones.
-    //
-    fn handles(context: ?*anyopaque, tool: []const u8) bool {
-        _ = context;
-        return std.mem.eql(u8, tool, "magick") or std.mem.eql(u8, tool, "ffmpeg") or std.mem.eql(u8, tool, "ffprobe");
     }
 
     //

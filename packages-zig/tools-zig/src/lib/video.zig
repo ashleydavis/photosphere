@@ -2,8 +2,8 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
-const exec = node_utils.exec.exec;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
+const runTool = node_utils.in_process_tools.runTool;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
@@ -54,7 +54,7 @@ pub const Video = struct {
     // Verify that ffprobe is available. It runs `ffprobe -version` through the runner on every call.
     //
     pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !VideoToolStatus {
-        const result = exec(allocator, io, log, tools, "ffprobe -version") catch |err| {
+        const result = runTool(allocator, io, log, tools, "ffprobe", &.{"-version"}) catch |err| {
             return .{
                 .available = false,
                 .@"error" = try std.fmt.allocPrint(allocator, "The ffprobe built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -72,7 +72,7 @@ pub const Video = struct {
     // Verify that ffmpeg is available. It runs `ffmpeg -version` through the runner on every call.
     //
     pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !VideoToolStatus {
-        const result = exec(allocator, io, log, tools, "ffmpeg -version") catch |err| {
+        const result = runTool(allocator, io, log, tools, "ffmpeg", &.{"-version"}) catch |err| {
             return .{
                 .available = false,
                 .@"error" = try std.fmt.allocPrint(allocator, "The ffmpeg built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -110,8 +110,7 @@ pub const Video = struct {
     fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
 
         // Run ffprobe to get video information in JSON format
-        const command = try std.fmt.allocPrint(allocator, "ffprobe -v quiet -print_format json -show_format -show_streams \"{s}\"", .{self.filePath});
-        const result = try exec(allocator, io, log, tools, command);
+        const result = try runTool(allocator, io, log, tools, "ffprobe", &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", self.filePath });
 
         const probeData = switch (try jsonParse(allocator, result.stdout)) {
             .document => |document| document,
@@ -209,19 +208,15 @@ pub const Video = struct {
 
         const quality: f64 = 85;
 
-        var command: std.Io.Writer.Allocating = .init(allocator);
-        try command.writer.print("ffmpeg -i \"{s}\" -ss ", .{self.filePath});
-        try utils.js_number.writeNumber(&command.writer, timeInSeconds);
-        try command.writer.writeAll(" -vframes 1");
+        var timeText: std.Io.Writer.Allocating = .init(allocator);
+        try utils.js_number.writeNumber(&timeText.writer, timeInSeconds);
 
-        // Add quality
-        try command.writer.writeAll(" -q:v ");
-        try utils.js_number.writeNumber(&command.writer, jsRound((100 - quality) / 10));
+        // The quality ffmpeg takes.
+        var qualityText: std.Io.Writer.Allocating = .init(allocator);
+        try utils.js_number.writeNumber(&qualityText.writer, jsRound((100 - quality) / 10));
 
-        // Force overwrite and specify output
-        try command.writer.print(" -y \"{s}\"", .{outputPath});
-
-        _ = exec(allocator, io, log, tools, command.written()) catch |err| {
+        // -y forces the overwrite of the output.
+        _ = runTool(allocator, io, log, tools, "ffmpeg", &.{ "-i", self.filePath, "-ss", timeText.written(), "-vframes", "1", "-q:v", qualityText.written(), "-y", outputPath }) catch |err| {
             return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;

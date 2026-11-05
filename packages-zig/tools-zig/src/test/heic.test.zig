@@ -1,6 +1,8 @@
 const std = @import("std");
 const inherited_environment = @import("inherited-environment.zig");
+const builtin = @import("builtin");
 const MuteLog = @import("utils-zig").mute_log.MuteLog;
+const utils = @import("utils-zig");
 const tools = @import("tools-zig");
 const media_tools = @import("media-tools-zig");
 const heic = tools.heic;
@@ -113,4 +115,36 @@ test "getFileInfo reads a HEIC with ffprobe rather than ImageMagick" {
     const info = (try tools.getFileInfo(arena.allocator(), std.testing.io, log, mediaTools.runner(), test_heic, "image/heic")).?;
     try std.testing.expectEqual(@as(f64, 1000), info.dimensions.width);
     try std.testing.expectEqual(@as(f64, 700), info.dimensions.height);
+}
+
+test "getHeicInfo and decodeHeic work on a HEIC whose name holds $, a backtick and a double quote" {
+    // The goal is to show that a path holding a space, `$`, a backtick and `"` reaches ffprobe and ffmpeg unchanged, as the source
+    // and as the output. The method is to copy the tiled HEIC under such a name, read its size, and decode it to a JPEG with such a
+    // name.
+    const log = MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
+    defer mediaTools.deinit();
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    errdefer std.debug.print("The last error: {s}\n", .{utils.errors.lastErrorMessage()});
+
+    // `"` is a reserved character in Windows file names, so it is left out there.
+    const specialName = if (builtin.os.tag == .windows) "Trip $5 `a`" else "Trip $5 `a` \"b\"";
+    const heicPath = try tempFilePath(allocator, tmp_dir, specialName ++ ".heic");
+    try std.Io.Dir.cwd().copyFile(test_heic, std.Io.Dir.cwd(), heicPath, std.testing.io, .{});
+
+    const info = try heic.getHeicInfo(allocator, std.testing.io, log, mediaTools.runner(), heicPath);
+    try std.testing.expectEqual(@as(f64, 1000), info.dimensions.width);
+    try std.testing.expectEqual(@as(f64, 700), info.dimensions.height);
+
+    const outputPath = try tempFilePath(allocator, tmp_dir, specialName ++ ".jpg");
+    try heic.decodeHeic(allocator, std.testing.io, log, mediaTools.runner(), heicPath, outputPath);
+    const decoded = (try tools.getFileInfo(allocator, std.testing.io, log, mediaTools.runner(), outputPath, "image/jpeg")).?;
+    try std.testing.expectEqual(@as(f64, 1000), decoded.dimensions.width);
+    try std.testing.expectEqual(@as(f64, 700), decoded.dimensions.height);
 }

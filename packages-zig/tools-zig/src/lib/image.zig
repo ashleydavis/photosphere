@@ -3,9 +3,9 @@ const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
-const exec = node_utils.exec.exec;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
-const execLogged = node_utils.exec.execLogged;
+const runTool = node_utils.in_process_tools.runTool;
+const runToolLogged = node_utils.in_process_tools.runToolLogged;
 const pathExists = node_utils.fs.pathExists;
 const join = node_utils.path.join;
 const errors = utils.errors;
@@ -62,7 +62,7 @@ pub const Image = struct {
     // is never remembered for a later call.
     //
     pub fn verifyImageMagick(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !ImageMagickStatus {
-        const result = exec(allocator, io, log, tools, "magick -version") catch |err| {
+        const result = runTool(allocator, io, log, tools, "magick", &.{"-version"}) catch |err| {
             return .{
                 .available = false,
                 .@"error" = try std.fmt.allocPrint(allocator, "The ImageMagick built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
@@ -87,8 +87,7 @@ pub const Image = struct {
         }
 
         // Get format, dimensions
-        const command = try std.fmt.allocPrint(allocator, "magick identify -format \"%w %h\" \"{s}\"", .{self.filePath});
-        const result = try execLogged(allocator, io, log, tools, "magick", command, null);
+        const result = try runToolLogged(allocator, io, log, tools, "magick", &.{ "identify", "-format", "%w %h", self.filePath }, null);
 
         var parts = std.mem.splitScalar(u8, utils.js_string.trim(result.stdout), ' ');
         const width = parseInt(parts.next() orelse "undefined", null);
@@ -152,8 +151,7 @@ pub const Image = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        const command = try std.fmt.allocPrint(allocator, "magick identify -format \"%[EXIF:*]\" \"{s}\"", .{self.filePath});
-        const result = execLogged(allocator, io, log, tools, "magick", command, null) catch |err| {
+        const result = runToolLogged(allocator, io, log, tools, "magick", &.{ "identify", "-format", "%[EXIF:*]", self.filePath }, null) catch |err| {
             return errors.throwError("Failed to get EXIF data: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
 
@@ -271,24 +269,24 @@ pub const Image = struct {
         // Stripped rather than picked at, because on the ImageMagick bundled for Android the
         // surgical forms do not work. The cost is that a derivative loses its colour profile too,
         // which is why the original is stored untouched and keeps everything.
-        var command: std.ArrayList(u8) = .empty;
-        try command.print(allocator, "magick \"{s}\" -resize {s} -strip", .{ self.filePath, geometry });
+        var arguments: std.ArrayList([]const u8) = .empty;
+        try arguments.appendSlice(allocator, &.{ self.filePath, "-resize", geometry, "-strip" });
 
         // Add quality if specified
         if (options.quality) |quality| {
             if (quality < 0 or quality > 100) {
                 return errors.throwError("Quality must be between 0 and 100", .{});
             }
-            try command.print(allocator, " -quality {s}", .{try numberText(allocator, quality)});
+            try arguments.appendSlice(allocator, &.{ "-quality", try numberText(allocator, quality) });
         }
 
         // Add format specification and output file
         if (options.format != null and options.format.?.len > 0) {
             // For explicit format conversion, specify the format before the output path
-            try command.print(allocator, " {s}:\"{s}\"", .{ options.format.?, outputPath1 });
+            try arguments.append(allocator, try std.mem.concat(allocator, u8, &.{ options.format.?, ":", outputPath1 }));
         }
         else {
-            try command.print(allocator, " \"{s}\"", .{outputPath1});
+            try arguments.append(allocator, outputPath1);
         }
 
         var validation: IResizeValidation = .{
@@ -297,7 +295,7 @@ pub const Image = struct {
             .actualOutputPath = outputPath1,
         };
 
-        _ = try execLogged(allocator, io, log, tools, "magick", command.items, .{ .context = &validation, .function = IResizeValidation.validate });
+        _ = try runToolLogged(allocator, io, log, tools, "magick", arguments.items, .{ .context = &validation, .function = IResizeValidation.validate });
 
         return validation.actualOutputPath;
     }
@@ -321,8 +319,7 @@ pub const Image = struct {
     //
     fn getDominantColorInner(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) ![3]f64 {
         // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
-        const command = try std.fmt.allocPrint(allocator, "magick \"{s}\" -resize 1x1! -format \"%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]\" info:", .{self.filePath});
-        const result = try execLogged(allocator, io, log, tools, "magick", command, null);
+        const result = try runToolLogged(allocator, io, log, tools, "magick", &.{ self.filePath, "-resize", "1x1!", "-format", "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]", "info:" }, null);
 
         const rgbString = utils.js_string.trim(result.stdout);
         var rgbValues: std.ArrayList(f64) = .empty;
@@ -351,23 +348,26 @@ pub const Image = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        var transformCommand: std.ArrayList(u8) = .empty;
+        var operations: std.ArrayList([]const u8) = .empty;
 
         if (options.flipX orelse false) {
-            try transformCommand.appendSlice(allocator, " -flop");
+            try operations.append(allocator, "-flop");
         }
 
         if (options.rotate) |rotate| {
             if (isTruthy(rotate)) {
-                try transformCommand.print(allocator, " -rotate {s}", .{try numberText(allocator, rotate)});
+                try operations.appendSlice(allocator, &.{ "-rotate", try numberText(allocator, rotate) });
             }
         }
 
-        if (transformCommand.items.len > 0) {
+        if (operations.items.len > 0) {
             // Transform to a temporary file and return the path.
             const outputPath = try join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_transform_output_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
-            const command = try std.fmt.allocPrint(allocator, "magick \"{s}\" {s} \"{s}\"", .{ self.filePath, transformCommand.items, outputPath });
-            _ = try execLogged(allocator, io, log, tools, "magick", command, null);
+            var arguments: std.ArrayList([]const u8) = .empty;
+            try arguments.append(allocator, self.filePath);
+            try arguments.appendSlice(allocator, operations.items);
+            try arguments.append(allocator, outputPath);
+            _ = try runToolLogged(allocator, io, log, tools, "magick", arguments.items, null);
 
             // Check if the output file was created successfully.
             if (!pathExists(io, outputPath)) {

@@ -140,8 +140,7 @@ test "resize and transform write their numbers as a template string writes a num
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("../test/test.png");
 
-    // The command quotes both paths (`magick "<file>" -resize <geometry> -strip "<output>"`), and the runner gets the words
-    // with the quotes taken off. The output path is joined with node-utils' path.join, which normalizes every `/` to a `\`
+    // Both paths are passed as arguments of their own (`magick <file> -resize <geometry> -strip <output>`), unquoted. The output path is joined with node-utils' path.join, which normalizes every `/` to a `\`
     // on Windows.
     const resizeArguments = if (builtin.os.tag == .windows)
         "../test/test.png -resize 1e+21x -strip -quality 1e-7 out\\temp_resize_fixed.jpg"

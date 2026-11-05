@@ -14,7 +14,7 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
   - CLI: `apps/cli-zig/index.zig`, in `main`.
   - App: `packages-zig/photosphere-core/src/lib/main-state.zig`, in `MainState.create`.
 - Each task makes a `ThreadTools` (`packages-zig/node-api-zig/src/lib/task-handlers.zig`, `withTools`).
-- Callers in `packages-zig/tools-zig` build shell-style command strings such as `magick "path" -resize ...`. `exec` in `packages-zig/node-utils-zig/src/lib/exec.zig` hands them to `in-process-tools.zig`, where `splitCommand` parses them back into an argument list.
+- Callers in `packages-zig/tools-zig` pass the tool and an argument list to `runTool` or `runToolLogged` in `packages-zig/node-utils-zig/src/lib/in-process-tools.zig`, which call the runner directly.
 
 ### What uses the tools
 
@@ -30,15 +30,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
   - `ffprobe` for the size, since ImageMagick cannot read HEIC.
   - `ffmpeg` decodes it to a JPEG, which ImageMagick then works on.
 - Tool checks: `tools`, `version` and `bug` in the CLI, `ensureMediaProcessingTools` before `init`, `info` and `upgrade`, and the app's `check-tools` message.
-
-## Bug
-
-- **File paths containing `$`, a backtick or `"` fail.**
-  - Paths are put inside double quotes with no escaping in `tools-zig/src/lib/image.zig`, `video.zig` and `heic.zig`.
-  - `splitCommand` throws on `$` and backtick inside double quotes, which its test `node-utils-zig/src/test/in-process-tools.test.zig` confirms (`magick "$HOME"`). A `"` in a path breaks the quoting.
-  - So a file such as `Trip $5.jpg` would fail to import. This is inferred from the code and not reproduced.
-  - On Windows, `\$` inside double quotes loses its backslash, so such a path is changed before it reaches the tool.
-  - Fix: pass an argument list to the runner instead of building a string and parsing it again.
 
 ## Inefficiencies
 
@@ -56,7 +47,7 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 ## `ThreadTools`
 
-- `ThreadTools` (`media-tools-zig/src/lib/media-tools.zig`) is an empty struct. `init()` returns `.{}` and `runner()` returns an `InProcessRunner` whose `handles` and `run` ignore `context`.
+- `ThreadTools` (`media-tools-zig/src/lib/media-tools.zig`) is an empty struct. `init()` returns `.{}` and `runner()` returns an `InProcessRunner` whose `run` ignores `context`.
 - The interface needs a context pointer, because `FakeToolRunner` (`tools-zig/src/test/fake-tool-runner.zig`) uses it to record arguments. `taskEntries` takes a `Tools` type with `init()` and `runner()`, and the tests pass `NoTools` (`node-api-zig/src/test/test-environment.zig`).
 - `ThreadTools` does not need any of that:
   - It has no state, so making one per thread achieves nothing.
@@ -74,19 +65,18 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 - `media-tools-zig` is the only package that links libc and the ImageMagick and FFmpeg libraries. `tools-zig` and `node-api-zig` link neither and do not depend on `media-tools-zig` (see the package table in `build.zig`).
 - `InProcessRunner` is the indirection that lets those two packages run the tools without linking them. The program hands a runner in from the top, and `taskEntries` takes a `Tools` type so the CLI and app pass `ThreadTools` while the `node-api-zig` tests pass `NoTools`.
-- The string commands, `splitCommand` and the shell fallback in `exec` are left over from when the tools were separate programs.
+- `node-utils-zig` runs the tools through `runTool`, which hands the runner the tool and an argument list.
 
 ### Proposal
 
 - `tools-zig` depends on `media-tools-zig` and calls `ImageMagick.runMagick` and `Ffmpeg.runFfmpeg` / `runFfprobe` directly, with an argument list.
-- Delete `InProcessRunner`, `ThreadTools`, `NoTools`, `in-process-tools.zig` (`splitCommand`, `tryRun`), the `Tools` parameter of `taskEntries`, and the `tools`/`toolRunner` parameter threaded through every caller (39 files mention `InProcessRunner`).
+- Delete `InProcessRunner`, `ThreadTools`, `NoTools`, `in-process-tools.zig` (`runTool`, `runToolLogged`), the `Tools` parameter of `taskEntries` and the `tools`/`toolRunner` parameter threaded through every caller (39 files mention `InProcessRunner`).
 - `MediaTools` keeps only the start and stop of the libraries.
-- This also fixes the path quoting bug above, since no string is parsed.
 
 ### Costs
 
 - `tools-zig` and `node-api-zig` link libc, ImageMagick and FFmpeg, so their test binaries get larger and slower to build.
-- The tests that use `FakeToolRunner` (`image.command.test.zig`, `video.probe.test.zig`, `tool-verification.test.zig`) assert command strings. They are replaced by tests that run the real tools on fixture files.
+- The tests that use `FakeToolRunner` (`image.command.test.zig`, `video.probe.test.zig`, `tool-verification.test.zig`) assert the argument list joined with spaces. They are replaced by tests that run the real tools on fixture files.
 - The `node-api-zig` test environment, which runs tasks with no tools, runs them with the real tools. `MediaTools` has to be started in that environment.
 
 ## Trade-offs worth deciding

@@ -2,9 +2,9 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const exec = node_utils.exec.exec;
-const execLogged = node_utils.exec.execLogged;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
+const runTool = node_utils.in_process_tools.runTool;
+const runToolLogged = node_utils.in_process_tools.runToolLogged;
 const pathExists = node_utils.fs.pathExists;
 const errors = utils.errors;
 const types = @import("types.zig");
@@ -101,8 +101,7 @@ pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: I
     if (!pathExists(io, filePath)) {
         return errors.throwError("File not found: {s}", .{filePath});
     }
-    const command = try std.fmt.allocPrint(allocator, "ffprobe -v error -print_format json -show_streams -show_stream_groups \"{s}\"", .{filePath});
-    const result = try exec(allocator, io, log, tools, command);
+    const result = try runTool(allocator, io, log, tools, "ffprobe", &.{ "-v", "error", "-print_format", "json", "-show_streams", "-show_stream_groups", filePath });
     return .{
         .filePath = filePath,
         .dimensions = try dimensionsFromProbe(allocator, result.stdout),
@@ -125,8 +124,7 @@ pub fn decodeHeic(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: In
     if (pathExists(io, outputPath)) {
         return errors.throwError("Output file already exists: {s}", .{outputPath});
     }
-    const command = try std.fmt.allocPrint(allocator, "ffmpeg -v error -i \"{s}\" -frames:v 1 -q:v 2 \"{s}\"", .{ filePath, outputPath });
-    _ = execLogged(allocator, io, log, tools, "ffmpeg", command, null) catch |err| {
+    _ = runToolLogged(allocator, io, log, tools, "ffmpeg", &.{ "-v", "error", "-i", filePath, "-frames:v", "1", "-q:v", "2", outputPath }, null) catch |err| {
         return errors.throwError("Failed to decode the HEIC {s}: {s}", .{ filePath, try utils.errors.errorToString(allocator, err) });
     };
     if (!pathExists(io, outputPath)) {

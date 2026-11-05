@@ -5,16 +5,6 @@ const ziggy = @import("ziggy");
 
 const MediaTools = media_tools.MediaTools;
 
-test "the runner handles magick, ffmpeg and ffprobe and no other tool" {
-    var tools = try MediaTools.init();
-    defer tools.deinit();
-    const runner = tools.runner();
-    try std.testing.expect(runner.handles(runner.context, "magick"));
-    try std.testing.expect(runner.handles(runner.context, "ffmpeg"));
-    try std.testing.expect(runner.handles(runner.context, "ffprobe"));
-    try std.testing.expect(!runner.handles(runner.context, "convert"));
-}
-
 test "the runner runs magick" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

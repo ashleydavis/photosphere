@@ -172,9 +172,9 @@ fn findEscapeMatch(text: []const u8) EscapeMatch {
 }
 
 //
-// Wraps a single line (wrap-ansi `exec` with `{ hard: true, trim: false }`).
+// Wraps a single line (the line wrapper of wrap-ansi, with `{ hard: true, trim: false }`).
 //
-fn exec(allocator: std.mem.Allocator, writer: *std.Io.Writer, string: []const u8, columns: usize) !void {
+fn wrapLine(allocator: std.mem.Allocator, writer: *std.Io.Writer, string: []const u8, columns: usize) !void {
     var escapeCode: ?u32 = null;
     var escapeUrl: ?[]const u8 = null;
 
@@ -293,7 +293,7 @@ pub fn wrapAnsi(allocator: std.mem.Allocator, string: []const u8, columns: ?usiz
             try writer.writeByte('\n');
         }
         first = false;
-        try exec(allocator, writer, line, column_count);
+        try wrapLine(allocator, writer, line, column_count);
     }
     return allocating_writer.written();
 }

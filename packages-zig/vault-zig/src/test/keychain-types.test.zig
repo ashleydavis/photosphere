@@ -98,7 +98,7 @@ test "spawn stops waiting for the child's output when its task is cancelled" {
     defer tmpDir.cleanup();
     const currentPath = try std.process.currentPathAlloc(io, allocator);
     const readyPath = try std.fs.path.join(allocator, &.{ currentPath, ".zig-cache", "tmp", &tmpDir.sub_path, "ready" });
-    const args: []const []const u8 = &.{ "sh", "-c", try std.fmt.allocPrint(allocator, "echo started; touch '{s}'; exec sleep 60", .{readyPath}) };
+    const args: []const []const u8 = &.{ "sh", "-c", try std.fmt.allocPrint(allocator, "echo started; touch '{s}'; while :; do :; done", .{readyPath}) };
 
     var future = try io.concurrent(spawnTask, .{ allocator, io, args });
     var waitedMilliseconds: i64 = 0;

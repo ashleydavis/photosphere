@@ -28,22 +28,12 @@ fn failingRun(context: ?*anyopaque, io: std.Io, _: ILog, allocator: std.mem.Allo
     return utils.errors.throwError("{s} is broken in this test", .{tool});
 }
 
-//
-// Says the failing runner takes the tool, so no command is started as a program.
-//
-fn handlesEveryTool(context: ?*anyopaque, tool: []const u8) bool {
-    _ = context;
-    _ = tool;
-    return true;
-}
-
 test "ensureMediaProcessingTools throws with the tool's error when the built-in ImageMagick does not run" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const failingRunner: InProcessRunner = .{
         .context = null,
-        .handles = handlesEveryTool,
         .run = failingRun,
     };
 
