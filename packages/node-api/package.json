@@ -34,7 +34,6 @@
   "dependencies": {
     "api": "workspace:*",
     "axios": "^0.27.2",
-    "bdb": "workspace:*",
     "dayjs": "^1.11.7",
     "exif-parser": "^0.1.12",
     "express": "^5.0.0-beta.1",

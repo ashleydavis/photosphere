@@ -12,7 +12,6 @@ export * from "./lib/asset";
 export * from "./lib/op";
 export * from "./lib/database-op";
 export * from "./lib/database-op-record";
-export * from "./lib/asset-query";
 export * from "./lib/replicate-database.types";
 export * from "./lib/sync-database.types";
 export * from "./lib/auto-import-settings";

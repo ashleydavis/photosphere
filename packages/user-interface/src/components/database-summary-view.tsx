@@ -9,10 +9,75 @@ import { Storage, Photo, Folder, Save, CloudSync } from "@mui/icons-material";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useUuidGenerator } from "../context/uuid-generator-context";
 import { formatBytes, getStorageType } from "../lib/database-summary-format";
-import type { IDatabaseSummary } from "node-api";
-import type { IGetDatabaseSummaryData } from "node-api";
 import Button from "@mui/joy/Button";
 import { ConsolidateDatabaseDialog } from "./consolidate-database-dialog";
+
+//
+// Whether the database holds every asset or only a partial set.
+// "partial" means only the thumb directory's assets are present locally and the rest are fetched
+// lazily from the database's origin.
+//
+type DatabaseMode = "full" | "partial";
+
+//
+// Summary of a database, as computed by the get-database-summary task.
+//
+interface IDatabaseSummary {
+    //
+    // Whether this database is a full copy or a partial replica.
+    //
+    mode: DatabaseMode;
+
+    //
+    // Total number of files imported into the database.
+    //
+    totalImports: number;
+
+    //
+    // Total number of files in the database (including thumbnails, display images, BSON files, etc.).
+    //
+    totalFiles: number;
+
+    //
+    // Total size of all files in bytes.
+    //
+    totalSize: number;
+
+    //
+    // Total number of nodes in the merkle tree.
+    //
+    totalNodes: number;
+
+    //
+    // Full hash of the tree root.
+    //
+    fullHash: string;
+
+    //
+    // Root hash of the files merkle tree.
+    //
+    filesHash: string | undefined;
+
+    //
+    // Root hash of the BSON database merkle tree.
+    //
+    databaseHash: string | undefined;
+
+    //
+    // Database version from merkle tree.
+    //
+    databaseVersion: number;
+}
+
+//
+// Input data for the get-database-summary task.
+//
+interface IGetDatabaseSummaryData {
+    //
+    // Filesystem path (or S3 path) to the database directory.
+    //
+    databasePath: string;
+}
 
 //
 // Props for a single headline statistic.

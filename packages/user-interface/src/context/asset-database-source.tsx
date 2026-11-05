@@ -3,7 +3,6 @@ import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "api";
 import type { ISaveAssetItem } from "api";
-import type { IMoveAssetsData } from "node-api";
 import { log, retry } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
@@ -18,6 +17,26 @@ import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
 import { planOpenDatabase } from "../lib/open-database-plan";
+
+//
+// Input data for the move-assets background task.
+//
+interface IMoveAssetsData {
+    //
+    // Filesystem path (or S3 path) to the source database.
+    //
+    sourceDatabasePath: string;
+
+    //
+    // Filesystem path (or S3 path) to the destination database.
+    //
+    destDatabasePath: string;
+
+    //
+    // IDs of the assets to move from source to destination.
+    //
+    assetIds: string[];
+}
 
 //
 // How many times an asset request is attempted, and how long apart.
