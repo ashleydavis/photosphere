@@ -14,6 +14,7 @@ This is what lets a phone carry a collection larger than the phone.
 - The remote is filled with a copy of the `50-assets` test database (`--from 50-assets`).
 - `psi dbs send` sends the remote's entry and its credentials to the phone, prints a pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database** and enter the code.
 - Then make the partial replica on the phone: open `mobile-test-remote`, use **Replicate** with **Partial** to copy it to a new folder on the phone, and open that copy. A replica's origin is the database it was replicated from, so its origin is the remote and it holds photos the phone has not downloaded.
+- Then switch syncing on: open the menu, choose **Configuration** and turn **Enable syncing** on. A fresh installation starts with it off.
 
 ```bash
 bun run android:reset   # Android

@@ -174,13 +174,13 @@ export interface IMobileSyncSettings {
 
     // Whether the syncing settings have ever been written. It is the section and not the file: automatic import writing its own
     // section brings the file into being, and answering for the file would tell a fresh install that its syncing settings had already
-    // been chosen, leaving syncing off on a phone whose toggles say it is on.
+    // been chosen, so the fresh-install settings would never be recorded.
     written: boolean;
 }
 
 //
 // What the syncing section should become when a fresh installation is seeded, or undefined to leave it exactly as it is. A section
-// that has been written is left alone: overwriting it would put syncing back on for somebody who had switched it off, every time the
+// that has been written is left alone: overwriting it would put syncing back off for somebody who had switched it on, every time the
 // app started.
 //
 export function planSyncSeed(current: IMobileSyncSettings): ISyncFile | undefined {

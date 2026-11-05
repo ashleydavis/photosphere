@@ -224,6 +224,7 @@ All desktop results below come from a test-hooks build of the app driven through
 #### auto-import-no-permission
 
 - Android: fails at step 1. After **Don't allow**, the Automatic import toggle stays on and no message asks for the photo permission. No database is created. The notifications prompt still appears after the photo permission is refused.
+- Android rerun: fails at step 1 again, the same way. The setting is switched off underneath (`config.yaml` has `auto_import: enabled: false`, and the log has "Automatic import switched off: Photosphere needs permission to read your photos before it can import them automatically. Grant photo access in your device settings, under Apps, Photosphere, Permissions."), but the screen still shows the toggle on, also after closing and reopening Configuration, and the message is never shown. Steps 2 and 3 were not run.
 
 #### auto-import-delete-after-backup
 

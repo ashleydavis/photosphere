@@ -14,6 +14,7 @@ Test that changes made on the phone reach another copy of the database, and that
 - `psi dbs send` sends the other copy's entry and its credentials to the phone, prints a pairing code and waits. On the phone, go to the **Databases** page, choose **Receive database** and enter the code.
 - `bun run android:50` and `bun run ios:50` put the `50-assets` test database on the device as `test-50-assets` and open it on launch.
 - Then set the origin of the open database: on the **Databases** page, open its **⋮** menu, choose **Edit**, pick `mobile-test-remote` from the **Choose…** dropdown beside **Origin**, and save.
+- Then switch syncing on: open the menu, choose **Configuration** and turn **Enable syncing** on. A fresh installation starts with it off.
 
 ```bash
 bun run android:reset   # Android

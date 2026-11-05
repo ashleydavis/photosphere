@@ -55,9 +55,10 @@ export function SyncContextProvider({ children }: ISyncContextProviderProps) {
     const config = useConfigStore();
 
     //
-    // Whether syncing is enabled. Loaded from persistent config on mount (default true).
+    // Whether syncing is enabled. Loaded from persistent config on mount (default false, so a new
+    // user is never asked for the notification permission for syncing they have not switched on).
     //
-    const [syncEnabled, setSyncEnabled] = useState<boolean>(true);
+    const [syncEnabled, setSyncEnabled] = useState<boolean>(false);
 
     //
     // Whether syncing is restricted to Wi-Fi. Loaded from persistent config on mount (default true).

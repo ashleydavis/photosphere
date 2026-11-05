@@ -54,7 +54,7 @@ pub const IAppConfig = struct {
     savedSearches: ?[]const []const u8 = null,
 
     //
-    // Whether automatic syncing is enabled. Defaults to true when unset (applied by the UI).
+    // Whether automatic syncing is enabled. Defaults to false when unset (applied by the UI).
     //
     syncEnabled: ?bool = null,
 

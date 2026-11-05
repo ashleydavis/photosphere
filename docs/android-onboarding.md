@@ -171,11 +171,11 @@ Check it: **⋮** then **View details** shows the bucket's path against **Origin
 
 ## Part 2: switch it all on
 
-### Check syncing is on
+### Switch syncing on
 
 Open the menu and choose **Configuration**. Under **Syncing**:
 
-- **Enable syncing** should be on. A fresh install starts with it on, so this is a check rather than a change.
+- Turn **Enable syncing** on. A fresh install starts with it off.
 - **Only sync over Wi-Fi** should be on, and the phone on Wi-Fi. Turn it off only if you want the phone uploading photos over mobile data.
 
 There is no interval to set. A pass runs every five minutes, and a pass with nothing to do costs two small reads, one of them over the network.

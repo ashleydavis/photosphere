@@ -45,8 +45,8 @@ function written(enabled: boolean, onlyOnWifi: boolean, databasePath: string | u
 describe("seeding the syncing settings", () => {
 
     test("writes the settings a fresh installation starts from", () => {
-        // A section nobody has written reads as syncing off, which is the safe answer for the
-        // background loop and the wrong one for a new user whose toggles show syncing on.
+        // Seeding records the settings the toggles show, so the file and the toggles agree from the
+        // first launch.
         expect(planSyncSeed(neverWritten())).toEqual({
             settings: { ...INITIAL_SYNC_SETTINGS },
             databasePath: undefined,
@@ -54,10 +54,19 @@ describe("seeding the syncing settings", () => {
         });
     });
 
+    test("a fresh installation starts with syncing off and restricted to Wi-Fi", () => {
+        // Running the sync asks for the notification permission, which a new user must not be
+        // asked for until they switch syncing on.
+        expect(planSyncSeed(neverWritten())?.settings).toEqual({
+            enabled: false,
+            onlyOnWifi: true,
+        });
+    });
+
     test("leaves settings that have been written exactly as they are", () => {
-        // Otherwise syncing would go back on for somebody who switched it off, every time the app
+        // Otherwise syncing would go back off for somebody who switched it on, every time the app
         // started.
-        expect(planSyncSeed(written(false, false, "a-database"))).toBeUndefined();
+        expect(planSyncSeed(written(true, false, "a-database"))).toBeUndefined();
     });
 
     test("keeps the database and the pacing already recorded", () => {
@@ -115,8 +124,8 @@ describe("recording the database the background sync pushes", () => {
     });
 
     test("starts from the fresh-install settings when nobody has chosen any yet", () => {
-        // Opening a database can happen before the seeding has run. Writing the reader's defaults
-        // here would record syncing as switched off without anybody having switched it off.
+        // Opening a database can happen before the seeding has run, so it records the settings a
+        // fresh installation starts from.
         expect(planSyncDatabase(neverWritten(), "opened-database")?.settings)
             .toEqual({ ...INITIAL_SYNC_SETTINGS });
     });

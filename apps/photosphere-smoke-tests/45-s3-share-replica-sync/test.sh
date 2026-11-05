@@ -126,6 +126,9 @@ cli_expect_success "Adding a photo to the encrypted database" \
 # so nothing can write state back underneath it.
 "${PLATFORM}_reset_app_state" || exit 1
 
+# Syncing is off on a fresh install, so it is switched on before launch, where the app reads it.
+"${PLATFORM}_seed_sync_config" "true" "true" || exit 1
+
 # The path given to the replicate dialog. A user on a phone types the short name, which the app resolves into its own storage. A
 # desktop user types the full path, asked for after the reset, not before it, because a reset can move the app's data directory.
 case "$PLATFORM" in

@@ -144,6 +144,9 @@ cli_expect_success "Registering the database with its credentials and key" \
 # so nothing can write state back underneath it.
 "${PLATFORM}_reset_app_state" || exit 1
 
+# Syncing is off on a fresh install, so it is switched on before launch, where the app reads it.
+"${PLATFORM}_seed_sync_config" "true" "true" || exit 1
+
 start_app "$TMP_DIR" || exit 1
 wait_for_ready "$APP_PORT" || exit 1
 

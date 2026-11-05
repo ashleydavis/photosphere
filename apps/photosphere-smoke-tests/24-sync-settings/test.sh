@@ -52,20 +52,25 @@ wait_for_config() {
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
-# On startup the SyncContext mounts and pushes its computed decision to the host. With the defaults (syncing enabled, online) syncing
-# is allowed.
-wait_for_log "$TMP_DIR" "Sync gate set to true"
+# On startup the SyncContext mounts and pushes its computed decision to the host. A fresh install has syncing switched off, so syncing
+# is not allowed until the user switches it on.
+wait_for_log "$TMP_DIR" "Sync gate set to false"
 
 # Open the Configuration dialog and confirm the sync settings rendered.
 click_sidebar_item "$APP_PORT" configuration || exit 1
 wait_for_value "$APP_PORT" "configuration-dialog" "Syncing"
 
-# Turning off "Enable syncing" disallows syncing and persists syncEnabled=false.
+# Turning on "Enable syncing" allows syncing and persists syncEnabled=true.
+send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
+wait_for_log "$TMP_DIR" "Sync gate set to true"
+wait_for_config "sync" "^[[:space:]]+enabled:[[:space:]]*true"
+
+# Turning it off disallows syncing and persists syncEnabled=false.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to false"
 wait_for_config "sync" "^[[:space:]]+enabled:[[:space:]]*false"
 
-# Turning it back on allows syncing again and persists syncEnabled=true.
+# Turning it back on allows syncing again and persists syncEnabled=true, so the Wi-Fi-only check below runs with syncing on.
 send_command "$APP_PORT" click '{"dataId":"sync-enabled-toggle"}' || exit 1
 wait_for_log "$TMP_DIR" "Sync gate set to true"
 wait_for_config "sync" "^[[:space:]]+enabled:[[:space:]]*true"

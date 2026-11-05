@@ -72,6 +72,9 @@ printf '{"origin":"%s"}\n' "$S3_ORIGIN_PATH" > "$LOCAL_REPLICA/.db/config.json"
 # Wipe everything the app has stored on the device so this test starts from a known state.
 "${PLATFORM}_reset_app_state" || exit 1
 
+# Syncing is off on a fresh install, so it is switched on before launch, where the app reads it.
+"${PLATFORM}_seed_sync_config" "true" "true" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 

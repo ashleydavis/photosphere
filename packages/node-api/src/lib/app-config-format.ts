@@ -53,7 +53,7 @@ export interface IAppConfig {
     savedSearches?: string[];
 
     //
-    // Whether automatic syncing is enabled. Defaults to true when unset (applied by the UI).
+    // Whether automatic syncing is enabled. Defaults to false when unset (applied by the UI).
     //
     syncEnabled?: boolean;
 

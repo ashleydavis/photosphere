@@ -36,12 +36,14 @@ export const DEFAULT_SYNC_SETTINGS: ISyncSettings = {
 //
 // The settings a fresh installation starts from.
 //
-// Syncing on and restricted to Wi-Fi, which is what the two toggles show before anyone touches
-// them. Separate from DEFAULT_SYNC_SETTINGS above because they answer different questions: this one
-// is what a new user should get, that one is what to do when a file cannot be read.
+// Syncing off and restricted to Wi-Fi, which is what the two toggles show before anyone touches
+// them. Syncing starts off because running it asks a new user for the notification permission, for
+// a feature they have not switched on. Separate from DEFAULT_SYNC_SETTINGS above because they answer
+// different questions: this one is what a new user should get, that one is what to do when a file
+// cannot be read.
 //
 export const INITIAL_SYNC_SETTINGS: ISyncSettings = {
-    enabled: true,
+    enabled: false,
     onlyOnWifi: true,
 };
 

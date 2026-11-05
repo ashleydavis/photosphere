@@ -115,6 +115,10 @@ trap on_exit EXIT
 # database path is seeded, because the app creating its own is part of what is under test.
 "${PLATFORM}_seed_library_auto_import_config" "false" "" "$PASS_GAP_MS" "$LIBRARY" "$FIRST_PHOTO_NAME" || exit 1
 
+# Syncing is off on a fresh install. It is switched on here, because the scenario checks that the service stays up for syncing after
+# automatic import is switched off.
+"${PLATFORM}_seed_sync_config" "true" "true" || exit 1
+
 # Grant the photo permission from outside the app. The system dialog cannot be tapped by a script, and the app's own request resolves
 # straight away once the permission is already held.
 "${PLATFORM}_grant_media_permission" || exit 1
@@ -218,7 +222,7 @@ wait_for_value_matching "$APP_PORT" "database-photo-count" "^3 photos$" 240 || e
 # Switching automatic import off stops the import, and leaves the service up for syncing.
 #
 # The service hosts both loops and the two features are switched on separately, so it stops when NEITHER is on and not before. Syncing
-# is on by default and this scenario has opened a database, which is what gives the sync loop something to push, so this first toggle
+# is switched on above and this scenario has opened a database, which is what gives the sync loop something to push, so this first toggle
 # must not take the service down: doing so would stop background syncing for somebody who only switched automatic import off.
 #
 # The settings card is still on screen from when the toggle was switched on: nothing in this scenario closed the configuration dialog,

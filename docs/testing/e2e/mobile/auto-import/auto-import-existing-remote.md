@@ -111,12 +111,12 @@ Expected:
 - On Android a notification appears saying **Backing up your photos**.
 - The app does not ask which database to import into: it uses the one recorded as the default, which step 4 set to the copy. A database called **My Photos** appearing instead means step 4's **Set as default** was missed.
 
-### 7. Check automatic syncing is on
+### 7. Switch automatic syncing on
 
-1. Still in **Configuration**, look at the **Syncing** section.
+1. Still in **Configuration**, in the **Syncing** section, turn **Enable syncing** on. A fresh installation starts with it off.
 
 Expected:
-- **Enable syncing** is on. A fresh installation starts with it on, so this is a check rather than a change.
+- **Enable syncing** is on.
 - **Only sync over Wi-Fi** is on, and the phone is on Wi-Fi.
 
 ### 8. The phone's own photos are imported

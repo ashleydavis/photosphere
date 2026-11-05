@@ -22,6 +22,9 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 # with the app stopped, so nothing can write state back underneath it.
 "${PLATFORM}_reset_app_state" || exit 1
 
+# Syncing is off on a fresh install, so it is switched on before launch, where the app reads it.
+"${PLATFORM}_seed_sync_config" "true" "true" || exit 1
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
@@ -48,7 +51,7 @@ send_command "$APP_PORT" click '{"dataId":"database-list-item-0"}' || exit 1
 wait_for_log "$TMP_DIR" "Database opened"
 
 # Make an edit to trigger the debounced sync. The sync gate is not forced open by the test: the app's
-# own SyncContext already permits automatic syncs here (syncing enabled and the emulator is online), so
+# own SyncContext permits automatic syncs here (syncing switched on above and the device is online), so
 # what runs below is the real gate, not a test override.
 send_command "$APP_PORT" notify-database-edited '{}' || exit 1
 

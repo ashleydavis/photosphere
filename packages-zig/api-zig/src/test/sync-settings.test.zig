@@ -60,8 +60,8 @@ test "a missing field falls back to its own default" {
     try std.testing.expect(settings.onlyOnWifi);
 }
 
-test "a fresh installation starts with syncing on and Wi-Fi only" {
-    try std.testing.expect(sync_settings.INITIAL_SYNC_SETTINGS.enabled);
+test "a fresh installation starts with syncing off and Wi-Fi only" {
+    try std.testing.expect(!sync_settings.INITIAL_SYNC_SETTINGS.enabled);
     try std.testing.expect(sync_settings.INITIAL_SYNC_SETTINGS.onlyOnWifi);
 }
 

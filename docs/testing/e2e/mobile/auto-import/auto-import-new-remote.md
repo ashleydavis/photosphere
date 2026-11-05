@@ -149,13 +149,13 @@ Expected:
 - The origin is accepted and shown against the database on the Databases page.
 - Nothing else is asked for. Syncing needs no separate setup of its own.
 
-### 11. Check automatic syncing is on
+### 11. Switch automatic syncing on
 
 1. Open the menu and choose **Configuration**.
-2. Look at the **Syncing** section.
+2. In the **Syncing** section, turn **Enable syncing** on. A fresh installation starts with it off.
 
 Expected:
-- **Enable syncing** is on. A fresh installation starts with it on, so this is a check rather than a change.
+- **Enable syncing** is on.
 - **Only sync over Wi-Fi** is on, and the phone is on Wi-Fi.
 
 ### 12. The backup reaches the bucket on its own
