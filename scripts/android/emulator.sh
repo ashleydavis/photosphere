@@ -549,7 +549,7 @@ hw.lcd.width=1080
 hw.lcd.height=2400
 hw.lcd.density=440
 hw.gpu.enabled=yes
-hw.gpu.mode=swiftshader_indirect
+hw.gpu.mode=swangle_indirect
 hw.keyboard=yes
 disk.dataPartition.size=$AVD_DATA_PARTITION_SIZE
 CONFIG
@@ -853,31 +853,30 @@ ensure_pool_slice() {
 # partition is sized when userdata-qemu.img is created and never afterwards. It also throws away
 # everything the guest had, including the installed app.
 #
-# -gpu swiftshader_indirect pins software rendering. Two settings have been tried here and both are
-# recorded, because the second was chosen on evidence produced by the first.
+# -gpu swangle_indirect pins software rendering, served through ANGLE on SwiftShader Vulkan
+# (lib64/gles_angle/ in the emulator). Rendering stays on the host CPU, so nothing depends on the
+# host GPU or its driver. Every pool emulator gets the same backend.
 #
-# "auto", the original, let the emulator pick a backend at runtime. It chose software rendering
-# anyway (Vulkan 'lavapipe', GLES 'swangle'), and four of five pool emulators crashed inside ten
-# minutes during a suite run, each log ending in crash-handler output with a minidump written.
+# swiftshader_indirect, the other software mode, cannot be used: it serves GLES through SwiftShader's
+# own GLES library (lib64/gles_swiftshader/libGLESv2.so). On emulator 36.6.11 that library
+# segfaults the whole emulator when Chromium on the guest composites video. The fault is a read out
+# of range in a JIT-compiled rasteriser routine (movdqu 0x18520(%rax,%rcx,1) with a wild index) on a
+# renderer thread that library started. Chrome on the guest showing a bare <video> page is enough to
+# set it off. So is opening a video in the Photosphere App: under swiftshader_indirect 6 of 24
+# cold Chrome starts on a video page killed the emulator (SIGSEGV), while 15 cold starts on a page
+# without video killed none. Under swangle_indirect, 60 cold starts on the same video pages (H.264
+# and VP9, on two emulators) and 15 opens of a video in the Photosphere App killed none. The
+# video played.
 #
-# "off" was tried next. It removed GPU emulation entirely and produced a new, repeatable failure: the
-# app started, its WebView took fifteen seconds to bring up a sandboxed rendering process, and the
-# main thread then hung with an ANR. Two separate occurrences, both inside WebView start-up, one
-# blocked on a mutex in WebView class initialisation. The devices were healthy throughout, so this was
-# the app hanging rather than the emulator dying. "off" leaves Chromium with no GL path at all, which
-# is what its start-up needs.
+# off cannot be used either: with no GPU emulation Chromium has no GL path, the app's WebView takes
+# about fifteen seconds to bring up its rendering process and the main thread then hangs in WebView
+# start-up with an ANR.
 #
-# "swiftshader_indirect" keeps rendering in software, so nothing depends on the host GPU and the
-# backend no longer varies between emulators, while still giving the WebView something to render on.
-# It is the usual choice for unattended runs.
+# auto is not used because it picks the backend at runtime, so it can differ between emulators and
+# between machines.
 #
 # It is passed on the command line as well as set in the AVD config, because the command line
-# overrides the config and an AVD cloned before that change would otherwise keep the old setting.
-#
-# None of this has been shown to stop the original crashes. There is no stack trace for those (no
-# minidump symboliser is installed), and the dump has been kept for that. What is established is
-# narrower: "off" causes WebView start-up hangs, and this setting exists to avoid them without going
-# back to a backend chosen at runtime.
+# overrides the config and an AVD cloned from an older base would otherwise keep the old setting.
 #
 # -crash-report-mode never stops the emulator asking a human for permission before it will start.
 #
@@ -941,7 +940,7 @@ emulator_launch_argv() {
     echo "-no-snapshot"
     echo "-no-boot-anim"
     echo "-gpu"
-    echo "swiftshader_indirect"
+    echo "swangle_indirect"
     echo "-crash-report-mode"
     echo "never"
     echo "-no-metrics"
@@ -1420,12 +1419,11 @@ wait_for_pool_units_released() {
 }
 
 #
-# Stops the pool and removes only its taps. Never touches the single hand-testing emulator: the
-# emulators stopped are exactly those whose AVD is one of the pool's clones, and the taps removed
-# are exactly the pool's. The clone AVDs are left on disk (about 8KB each) so a later pool start
-# does not have to rebuild them.
+# Stops every pool emulator and waits until systemd has let go of their units, leaving the bridge and
+# the taps exactly as they are, so it never runs sudo. Never touches the single hand-testing emulator:
+# the emulators stopped are exactly those whose AVD is one of the pool's clones.
 #
-cmd_pool_down() {
+stop_pool_emulators() {
     local adb serial stopped=0
     adb="$(adb_path)"
     for serial in $(pool_serials); do
@@ -1445,8 +1443,16 @@ cmd_pool_down() {
         echo "Stopped $stopped pool emulator(s)."
     fi
 
-    # Before the taps go, so a failure here leaves the pool as it was rather than half torn down.
     wait_for_pool_units_released || exit 1
+}
+
+#
+# Stops the pool and removes only its taps. The emulators stop first, so a failure there leaves the
+# pool as it was rather than half torn down. The taps removed are exactly the pool's. The clone AVDs
+# are left on disk (about 8KB each) so a later pool start does not have to rebuild them.
+#
+cmd_pool_down() {
+    stop_pool_emulators
 
     local index taps=""
     for index in $(seq 0 $((PHOTOSPHERE_EMULATOR_COUNT - 1))); do
@@ -1508,9 +1514,9 @@ cmd_restart() {
 }
 
 #
-# Stops the pool and brings it straight back up. Only the pool: the hand-testing emulator is left
-# running, exactly as pool-down leaves it, and so is the bridge, which pool-up finds already in
-# place. This is the way to pick up a change to the emulators' memory limits, since the limits are
+# Stops the pool's emulators and brings them straight back up. Only the emulators: the hand-testing
+# emulator, the bridge and the pool's taps are all left in place, and pool-up finds the taps already
+# there, so a restart never runs sudo and can run without anyone at the keyboard. This is the way to pick up a change to the emulators' memory limits, since the limits are
 # read when an emulator starts and cannot be applied to one already running.
 #
 # It also resets each pool emulator's data partition to baseline, by starting it with -wipe-data.
@@ -1526,7 +1532,7 @@ cmd_restart() {
 # second run onwards.
 #
 cmd_pool_restart() {
-    cmd_pool_down
+    stop_pool_emulators
     cmd_pool_up --wipe
 }
 
@@ -2014,8 +2020,8 @@ repair_pool_index_locked() {
 # Restarts broken pool emulators, one at a time, without needing any privileges.
 #
 # It never touches the bridge, a tap or the DHCP server, and so never runs sudo and never blocks on a
-# password prompt. That is what makes it the repair an unattended run, or an agent with no terminal,
-# can actually perform: `pool-restart` cannot, because it begins by removing the pool's taps.
+# password prompt, and it restarts one emulator at a time, skipping any a test run holds. That makes
+# it the repair for one broken emulator; `pool-restart` stops and restarts the whole pool at once.
 #
 # With no arguments it works out which indexes are broken and repairs those. --index N repairs one,
 # whatever state it is in. --all repairs every index.
@@ -2368,7 +2374,8 @@ case "${1:-}" in
         echo "              Keeps each emulator's userdata, so the installed app survives; pass"
         echo "              --wipe to reset it instead."
         echo "  pool-down   Stop only the pool's emulators and remove only the pool's taps."
-        echo "  pool-restart pool-down then pool-up --wipe. Leaves the hand-testing emulator alone."
+        echo "  pool-restart Stop the pool's emulators, then pool-up --wipe. Keeps the taps and the bridge, so"
+        echo "              it needs no sudo. Leaves the hand-testing emulator alone."
         echo "              The wipe resets each emulator's data partition to baseline, which is how"
         echo "              a disk-size change takes effect and how a full partition is cleared. The"
         echo "              app is reinstalled on the first 'test:and' afterwards."

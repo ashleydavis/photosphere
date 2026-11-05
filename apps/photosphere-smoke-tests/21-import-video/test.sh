@@ -3,8 +3,8 @@
 # Imports a video on a phone, exercising the bundled ffmpeg path (ffprobe for metadata and ffmpeg for the screenshot thumbnail) end to
 # end, which the image-only import scenario does not cover. Same flow as import-photos but with a single .mp4: seed it into the app's
 # import temp directory, answer the native picker with its path, import it through the photo picker button, and assert it lands in the
-# gallery. The video is never played: the Android emulator pool's software video decoding crashes the emulator itself, so the scenario
-# only imports it and reads its metadata.
+# gallery. It then opens the video, checks on Android that playback started, and checks the device survives it. Playing a video kills an Android emulator whose host renderer is
+# SwiftShader's own GLES library, which is why the pool runs on another one (see the -gpu comment in scripts/android/emulator.sh).
 
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$TEST_DIR/../lib/common.sh"
@@ -57,6 +57,33 @@ wait_for_log "$TMP_DIR" "1 assets imported"
 # The gallery must now show the imported video asset.
 send_command "$APP_PORT" navigate '{"page":"/"}' || exit 1
 wait_for_log "$TMP_DIR" "Gallery loaded: 1 assets"
+
+# Open the video. Nothing rendered gallery items before the import, so the line can only be this gallery's, but it can land either side
+# of the gallery load line, so it is looked for anywhere in the log.
+wait_for_log_anywhere "$TMP_DIR" "Gallery items rendered"
+# The thumb uses a long press hook, which only reacts to mousedown and mouseup, so a plain click is not enough.
+send_command "$APP_PORT" long-press-click '{"dataId":"gallery-thumb"}' || exit 1
+wait_for_log "$TMP_DIR" "AssetView opened"
+
+# On Android the web view creates a hardware video decoder when playback starts, and the device's log, which the harness copies to
+# logcat-<start>.log, says so. That is read from outside the app, so the app carries nothing that exists only for this check.
+if [ "$PLATFORM" = "android" ]; then
+    LOGCAT_FILE="$TMP_DIR/logcat-$(cat "$TMP_DIR/log-generation.txt").log"
+    DECODER_DEADLINE=$((SECONDS + DEFAULT_WAIT_TIMEOUT))
+    until grep -q "create MediaCodec video decoder" "$LOGCAT_FILE" 2>/dev/null; do
+        if [ "$SECONDS" -ge "$DECODER_DEADLINE" ]; then
+            log_error "The video never started playing: no video decoder was created in $LOGCAT_FILE within ${DEFAULT_WAIT_TIMEOUT}s"
+            exit 1
+        fi
+        sleep "$WAIT_POLL_INTERVAL"
+    done
+    log_info "The video decoder started: $(grep -m1 "create MediaCodec video decoder" "$LOGCAT_FILE")"
+fi
+
+# The emulator crash this scenario guards against came within two seconds of playback starting. Letting the video play for five seconds
+# and then closing it, which the app has to answer, shows the device survived playback.
+sleep 5
+send_command "$APP_PORT" click '{"dataId":"asset-view-close-button"}' || exit 1
 
 # Thumbnail fetches for the freshly imported asset go through the asset-serving layer; ignore only those.
 check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1

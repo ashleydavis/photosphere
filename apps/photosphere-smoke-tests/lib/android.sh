@@ -366,17 +366,24 @@ photosphere_platform_start() {
     # be deleted from under the stream that copies it to app.log, and the lines the app writes after the reset would never reach the host.
     local log_dir="cache/logs-$generation"
 
-    # The app connects to the remote control server at 127.0.0.1 on the device, and adb reverse carries that port to the same port on
-    # the host, where the server listens. The device is claimed for the scenario, so no other run uses the port there. The locks'
-    # descriptors are closed for the server, the way photosphere_adb closes them for adb: a server left behind by a killed scenario
-    # kept emulator-5556, 5560 and 5562 locked, and later runs could use only the other two emulators of the pool.
+    # The app connects to the remote control server at 127.0.0.1 on the device, and adb reverse carries a device port to the host port
+    # the server listens on. The device port is the device's own choice (tcp:0), because a port free on the host can be taken inside
+    # the guest: reusing the host's number failed scenario 3-open-database with "cannot bind listener: Address already in use". The
+    # locks' descriptors are closed for the server, the way photosphere_adb closes them for adb: a server left behind by a killed
+    # scenario kept emulator-5556, 5560 and 5562 locked, and later runs could use only the other two emulators of the pool.
     photosphere_start_remote_control_server "$test_dir" {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- || return 1
     local app_port="${PHOTOSPHERE_REMOTE_CONTROL##*:}"
-    photosphere_adb reverse "tcp:$app_port" "tcp:$app_port" > /dev/null || return 1
-    echo "$app_port" > "$test_dir/reverse-port.txt"
+    local device_port
+    device_port="$(photosphere_adb reverse tcp:0 "tcp:$app_port")" || return 1
+    device_port="$(printf '%s' "$device_port" | tr -d '\r')"
+    if ! [[ "$device_port" =~ ^[0-9]+$ ]]; then
+        echo "adb reverse tcp:0 did not print the device port it chose, it printed: $device_port" >&2
+        return 1
+    fi
+    echo "$device_port" > "$test_dir/reverse-port.txt"
 
     # Every value is quoted for the device's shell, which adb hands the whole command line to.
-    local extras="--es ziggy.remoteControl '$PHOTOSPHERE_REMOTE_CONTROL'"
+    local extras="--es ziggy.remoteControl '127.0.0.1:$device_port'"
     extras="$extras --es PHOTOSPHERE_TEST_MODE '1'"
     extras="$extras --es PHOTOSPHERE_CONFIG_DIR '/data/data/$ANDROID_APP_ID/files/config'"
     extras="$extras --es PHOTOSPHERE_DATA_DIR '/data/data/$ANDROID_APP_ID/files'"

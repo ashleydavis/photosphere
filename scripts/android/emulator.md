@@ -43,9 +43,9 @@ lan bridge`, the emulator ignored `-wifi-tap` and is still behind the virtual ro
 
 ### Repairing the pool without root
 
-`pool-restart` cannot be run unattended, and cannot be run by an agent at all: it starts by removing the pool's taps, which needs `sudo`, and a `sudo` prompt with nobody at the keyboard is where a recovery stops. On 2026-08-09 all five pool emulators died during a run and nothing could bring them back for exactly that reason.
+`pool-restart` needs no privileges: it stops the pool's emulators and starts them again with `--wipe`, keeping the bridge and the taps, so it never prompts for `sudo`. It restarts the whole pool at once and does not wait for a test run to let go of an emulator.
 
-`pool-repair` is the repair that needs no privileges:
+`pool-repair` restarts only the broken emulators, one at a time, and skips any a test run holds:
 
 ```
 bun run emu:and:pool:repair             # restart whichever are broken
