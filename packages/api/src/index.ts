@@ -1,11 +1,9 @@
 export * from "./lib/constants";
-export * from "./lib/write-lock";
 export * from "./lib/database-update";
 export * from "./lib/load-assets";
 export * from "./lib/load-assets.types";
 export * from "./lib/save-assets.types";
 export * from "./lib/import-assets.types";
-export * from "./lib/database-config";
 export * from "./lib/database-descriptor";
 export * from "./lib/asset";
 export * from "./lib/op";
@@ -19,5 +17,4 @@ export * from "./lib/sync-settings";
 export * from "./lib/sync-gate";
 export * from "./lib/retention-policy";
 export * from "./lan-share/index";
-export * from "./lan-share/lan-share-resolve";
 export * from "./lan-share/lan-share-receive";
