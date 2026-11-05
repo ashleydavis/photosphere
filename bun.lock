@@ -58,7 +58,6 @@
         "node-utils": "workspace:*",
         "serialize-error": "^12.0.0",
         "task-queue": "workspace:*",
-        "tools": "workspace:*",
         "utils": "workspace:*",
       },
       "devDependencies": {
@@ -99,7 +98,6 @@
         "node-utils": "workspace:*",
         "serialize-error": "^12.0.0",
         "task-queue": "workspace:*",
-        "tools": "workspace:*",
         "utils": "workspace:*",
       },
       "devDependencies": {
@@ -152,21 +150,6 @@
       },
       "devDependencies": {
         "@types/bun": "latest",
-        "@types/jest": "^29.4.0",
-        "@types/node": "^22.9.1",
-        "jest": "^29.0.1",
-        "ts-jest": "^29.0.5",
-        "typescript": "^5.6.3",
-      },
-    },
-    "packages/tools": {
-      "name": "tools",
-      "version": "1.0.0",
-      "dependencies": {
-        "node-utils": "workspace:*",
-        "utils": "workspace:*",
-      },
-      "devDependencies": {
         "@types/jest": "^29.4.0",
         "@types/node": "^22.9.1",
         "jest": "^29.0.1",
@@ -1541,8 +1524,6 @@
     "toidentifier": ["toidentifier@1.0.1", "", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
 
     "token-types": ["token-types@4.2.1", "", { "dependencies": { "@tokenizer/token": "^0.3.0", "ieee754": "^1.2.1" } }, "sha512-6udB24Q737UD/SDsKAHI9FCRP7Bqc9D/MQUV02ORQg5iskjtLJlZJNdN4kKtcdtwCeWIwIHDGaUsTsCCAa8sFQ=="],
-
-    "tools": ["tools@workspace:packages/tools"],
 
     "tough-cookie": ["tough-cookie@4.1.4", "", { "dependencies": { "psl": "^1.1.33", "punycode": "^2.1.1", "universalify": "^0.2.0", "url-parse": "^1.5.3" } }, "sha512-Loo5UUvLD9ScZ6jh8beX1T6sO1w2/MpCRpEP7V280GKMVUQ0Jzar2U3UJPsrdbziLEMMhu3Ujnq//rhiFuIeag=="],
 

@@ -46,7 +46,6 @@
     "node-utils": "workspace:*",
     "serialize-error": "^12.0.0",
     "task-queue": "workspace:*",
-    "tools": "workspace:*",
     "utils": "workspace:*"
   }
 }
