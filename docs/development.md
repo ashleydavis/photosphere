@@ -113,6 +113,7 @@ Everything below is run from the repo root.
 | Command | What it does |
 |---|---|
 | `bun run build:ziggy:<platform>` / `bun run <platform>` | Build, or build and launch, the Photosphere App on `linux`, `windows`, `macos`, `android` or `ios`. See the [Photosphere App README](../apps/photosphere/README.md) for every command and where each runs. |
+| `bun run build:cli` | Build the Zig CLI (`zig-out/bin/psi`). It runs `zig build`. |
 | `zig build` / `zig build test` | Build the Zig CLI (`zig-out/bin/psi`), or run every Zig test: the packages in `packages-zig` and the CLI. Both are steps of the one `build.zig` at the root of the repository, which also has `photosphere-backend`, `photosphere-linux` and `photosphere-windows`; `zig build --help` lists them. `bun run test:zig` runs the tests. |
 | `bun run test:ziggy` / `bun run test:ziggy:and` / `bun run test:ziggy:ios` | Photosphere App smoke tests, on the host operating system, the Android emulator/device or the iOS simulator/device. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` runs one scenario. |
 | `bun run compile` | Compile all TypeScript. Optional, but the way to check a change still compiles. |
@@ -123,7 +124,7 @@ Everything below is run from the repo root.
 
 The commands that run the app rebuild it first, so what you are running is always built from the current source.
 
-To run the CLI on its own, build it with `zig build` at the repository root and run `zig-out/bin/psi`.
+To run the CLI on its own, build it with `bun run build:cli` at the repository root and run `zig-out/bin/psi`.
 
 ## Automatic import
 

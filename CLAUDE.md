@@ -108,6 +108,7 @@ Photosphere is a self-hosted, cross-platform photo and video management applicat
 - `bun run test -- <test-name-or-pattern>` - Run a single test by name or pattern.
 - `bun run clean` - Clean all build artifacts
 - `bun run <linux|windows|macos|ios|android>` - Build and run the Photosphere App on that platform
+- `bun run build:cli` - Build the Zig CLI to `zig-out/bin/psi`
 - `bun run test:zig` - Unit tests of the Zig CLI and of every Zig package (`zig build test` at the repository root)
 - `bun run test:cli:zig` - Zig CLI smoke tests (apps/cli-zig/smoke-tests-zig), with a `psi verify` of every database the tests write
 - `bun run test:cli:zig -- <number|name>` - Run a single Zig CLI smoke test by number or name
