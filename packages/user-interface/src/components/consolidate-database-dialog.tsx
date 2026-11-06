@@ -14,7 +14,10 @@ import Typography from '@mui/joy/Typography';
 import Alert from '@mui/joy/Alert';
 import CircularProgress from '@mui/joy/CircularProgress';
 import Box from '@mui/joy/Box';
+import Select from '@mui/joy/Select';
+import Option from '@mui/joy/Option';
 import { type IDatabaseEntry } from '../context/platform-context';
+import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
 
 //
@@ -46,6 +49,17 @@ type ConsolidateStep = "configure" | "running" | "success" | "error";
 //
 export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidateDatabaseDialogProps) {
     const uuidGenerator = useUuidGenerator();
+    const { dbs } = useApp();
+
+    //
+    // The databases that can be picked as the remote: every entry but this one.
+    //
+    // The remote's credentials are found by matching its path against the database list, so a typed
+    // path that differs by one character finds no entry and gets no credentials. Picking from the list
+    // cannot produce that. The field stays typeable, because a remote that is not in the list is still
+    // allowed.
+    //
+    const remoteCandidates = dbs.filter(candidate => candidate.path !== entry.path);
 
     const [remotePath, setRemotePath] = useState('');
     const [step, setStep] = useState<ConsolidateStep>("configure");
@@ -126,15 +140,42 @@ export function ConsolidateDatabaseDialog({ open, entry, onClose }: IConsolidate
                             different database, the two are joined and nothing it already has is
                             uploaded again.
                         </Typography>
-                        <FormControl>
-                            <FormLabel>Remote path</FormLabel>
-                            <Input
-                                data-id="consolidate-remote-path-input"
-                                value={remotePath}
-                                placeholder="/path/to/backup or s3:bucket/prefix"
-                                onChange={event => setRemotePath(event.target.value)}
-                            />
-                        </FormControl>
+                        {/* The picker sits outside the FormControl, not beside the Input inside it: Joy
+                            allows a FormControl only one control component, and a Select is one. */}
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+                            <FormControl sx={{ flexGrow: 1 }}>
+                                <FormLabel>Remote path</FormLabel>
+                                <Input
+                                    data-id="consolidate-remote-path-input"
+                                    value={remotePath}
+                                    placeholder="/path/to/backup or s3:bucket/prefix"
+                                    onChange={event => setRemotePath(event.target.value)}
+                                />
+                            </FormControl>
+                            {remoteCandidates.length > 0
+                                && <Select
+                                    sx={{ minWidth: 160 }}
+                                    value=""
+                                    placeholder="Choose…"
+                                    onChange={(_event, selectedPath) => {
+                                        if (selectedPath) {
+                                            setRemotePath(selectedPath as string);
+                                        }
+                                    }}
+                                    slotProps={{ button: { 'data-id': 'consolidate-remote-select' } }}
+                                >
+                                    {remoteCandidates.map(candidate => (
+                                        <Option
+                                            data-id={`consolidate-remote-option-${candidate.name}`}
+                                            key={candidate.path}
+                                            value={candidate.path}
+                                            >
+                                            {candidate.name}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            }
+                        </Box>
                     </>
                 }
 
