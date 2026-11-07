@@ -30,6 +30,9 @@ pub const FakeToolRunner = struct {
     // The arguments of the last call to each tool, joined with a space, by the tool's name.
     lastArguments: std.StringArrayHashMapUnmanaged([]const u8),
 
+    // The arguments of every call, in the order they were made, each joined with a space and led by the tool's name.
+    calls: std.ArrayListUnmanaged([]const u8),
+
     //
     // Makes a runner for the tools. A tool not in the list fails.
     //
@@ -38,6 +41,7 @@ pub const FakeToolRunner = struct {
             .allocator = allocator,
             .tools = tools,
             .lastArguments = .empty,
+            .calls = .empty,
         };
     }
 
@@ -68,6 +72,7 @@ pub const FakeToolRunner = struct {
         _ = allocator;
         const self: *FakeToolRunner = @ptrCast(@alignCast(context.?));
         try self.lastArguments.put(self.allocator, try self.allocator.dupe(u8, tool), try std.mem.join(self.allocator, " ", arguments));
+        try self.calls.append(self.allocator, try std.fmt.allocPrint(self.allocator, "{s} {s}", .{ tool, try std.mem.join(self.allocator, " ", arguments) }));
         for (self.tools) |fakeTool| {
             if (std.mem.eql(u8, fakeTool.name, tool)) {
                 return .{
