@@ -569,3 +569,76 @@ test "getImageDetails makes the pictures of a HEIC from FFmpeg's decode of it, w
     try std.testing.expectApproxEqAbs(@as(f64, -27.4705), details.coordinates.?.lat, 0.00001);
     try std.testing.expectApproxEqAbs(@as(f64, 153.026), details.coordinates.?.lng, 0.00001);
 }
+
+//
+// Expects fitInBox to fit an image of the first size into a box of the second at the third.
+//
+fn expectFit(size: [2]f64, box: [2]f64, expected: [2]f64) !void {
+    const fitted = image.fitInBox(.{
+        .width = size[0],
+        .height = size[1],
+    }, .{
+        .width = box[0],
+        .height = box[1],
+    });
+    try std.testing.expectEqual(expected[0], fitted.width);
+    try std.testing.expectEqual(expected[1], fitted.height);
+}
+
+test "fitInBox gives the size ImageMagick fits an image into a box at" {
+    // The long side fills the box and the short side is rounded half up: 2560x1920 into 1333x1000 is scaled by
+    // 1333 / 2560, which makes the short side 999.75, so 1000.
+    try expectFit(.{ 2560, 1920 }, .{ 1333, 1000 }, .{ 1333, 1000 });
+
+    // The 1111x1000 display of a 100x90 PNG into 333x300 is scaled by 333 / 1111, the smaller scale, which makes the short
+    // side 299.73, so 300.
+    try expectFit(.{ 1111, 1000 }, .{ 333, 300 }, .{ 333, 300 });
+
+    // When the height needs the smaller scale it is the one that fills the box: 3000x4000 into 1000x1000 is 750x1000.
+    try expectFit(.{ 3000, 4000 }, .{ 1000, 1000 }, .{ 750, 1000 });
+
+    // A side is never less than 1: 4000x10 into 40x40 makes the short side 0.1.
+    try expectFit(.{ 4000, 10 }, .{ 40, 40 }, .{ 40, 1 });
+
+    // An image already the box's size is left alone, and a smaller one is scaled up.
+    try expectFit(.{ 53, 40 }, .{ 53, 40 }, .{ 53, 40 });
+    try expectFit(.{ 100, 80 }, .{ 1250, 1000 }, .{ 1250, 1000 });
+}
+
+test "getImageDetails makes pictures of a JPEG the same sizes as resizing it without the reduced decode does" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+
+    // Sizes whose sides are not multiples of 8, so libjpeg rounds the sides of each reduced decode up, and a 20 megapixel
+    // camera's photo, landscape and portrait.
+    for ([_][]const u8{ "5472x3648", "3648x5472", "4001x2999", "2999x4001", "1111x1000", "1601x1203" }) |sizeText| {
+        errdefer std.debug.print("size: {s}\n", .{sizeText});
+        const tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "image-details-sizes");
+        defer temp_dirs.removeTempDir(std.testing.io, tempDir);
+        const photoPath = try std.fs.path.join(allocator, &.{ tempDir, "photo.jpg" });
+        const made = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ "-size", sizeText, "gradient:red-blue", "-quality", "90", photoPath });
+        try std.testing.expectEqual(@as(u8, 0), made.exit_code);
+
+        var generator: CountingUuidGenerator = .{};
+        const details = try image.getImageDetails(allocator, std.testing.io, log, runner, photoPath, tempDir, "image/jpeg", generator.uuidGenerator(), photoPath);
+
+        // The pictures as resizeImage makes them, each fitted into its box from the one before it with no reduced decode.
+        var plainGenerator: CountingUuidGenerator = .{
+            .generated = 100,
+        };
+        const plainDisplay = try image.resizeImage(allocator, std.testing.io, log, runner, photoPath, tempDir, details.resolution, node_api.media_file_database.DISPLAY_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.DISPLAY_QUALITY);
+        const plainThumbnail = try image.resizeImage(allocator, std.testing.io, log, runner, plainDisplay, tempDir, details.resolution, node_api.media_file_database.THUMBNAIL_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.THUMBNAIL_QUALITY);
+        const plainMicro = try image.resizeImage(allocator, std.testing.io, log, runner, plainThumbnail, tempDir, details.resolution, node_api.media_file_database.MICRO_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.MICRO_QUALITY);
+
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainDisplay), try describeImage(log, allocator, runner, details.displayPath.?));
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainThumbnail), try describeImage(log, allocator, runner, details.thumbnailPath));
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainMicro), try describeImage(log, allocator, runner, details.microPath));
+    }
+}

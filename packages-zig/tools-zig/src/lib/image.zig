@@ -270,6 +270,27 @@ pub const Image = struct {
         // surgical forms do not work. The cost is that a derivative loses its colour profile too,
         // which is why the original is stored untouched and keeps everything.
         var arguments: std.ArrayList([]const u8) = .empty;
+
+        // When asked for, a JPEG is decoded straight to a reduced size (libjpeg's DCT scaling, in
+        // eighths) rather than decoded whole and then shrunk, which is most of the time and memory of
+        // resizing a large photo. Every other format ignores the hint.
+        //
+        // The hint is half as big again as the target, not the target itself, so the reduced image is
+        // never smaller than the target on either side. The ImageMagick bundled here (over IJG libjpeg
+        // 9) rounds the scale to the nearest eighth, not up: hinted at exactly 1333x1000, a 2560x1920
+        // photo decodes at 4/8 to 1280x960, which the resize then has to blow back up. At 1.5 times the
+        // target the nearest eighth is always at least the scale the target needs.
+        //
+        // libjpeg rounds each side of the reduced image up, which shifts its proportions a little, so a
+        // caller that needs the same size as without the hint gives an exact size (maintainAspectRatio
+        // false) rather than a box to fit into.
+        if (options.reducedJpegDecode) {
+            if (!isTruthy(width) or !isTruthy(height)) {
+                return errors.throwError("A reduced JPEG decode needs both a width and a height, given {s}x{s}", .{ try numberText(allocator, width), try numberText(allocator, height) });
+            }
+            try arguments.appendSlice(allocator, &.{ "-define", try std.fmt.allocPrint(allocator, "jpeg:size={s}x{s}", .{ try numberText(allocator, @ceil(width * 1.5)), try numberText(allocator, @ceil(height * 1.5)) }) });
+        }
+
         try arguments.appendSlice(allocator, &.{ self.filePath, "-resize", geometry, "-strip" });
 
         // Add quality if specified

@@ -207,17 +207,21 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
         }
     }
 
-    // Produced largest first, each from the one before it rather than from the full size original.
+    // Produced largest first, each from the one before it rather than from the full size original. The image at imagePath
+    // is the size resolution says (the frame header's or the image tool's, swapped with the turn that made it), and each
+    // picture after it is the size the one before it was written at.
     const displayStartedAt = dateNow(io);
-    const displayPath = try resizeImage(allocator, io, log, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const display = try resizePhoto(allocator, io, log, toolRunner, imagePath, tempDir, resolution, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const displayPath = display.path;
     const displayMs = dateNow(io) - displayStartedAt;
 
     const thumbnailStartedAt = dateNow(io);
-    const thumbnailPath = try resizeImage(allocator, io, log, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnail = try resizePhoto(allocator, io, log, toolRunner, displayPath, tempDir, resolution, display.size, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailPath = thumbnail.path;
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = (try resizePhoto(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, thumbnail.size, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY)).path;
     const microMs = dateNow(io) - microStartedAt;
 
     return .{
@@ -390,24 +394,80 @@ fn jsRound(value: f64) f64 {
 }
 
 //
+// The box an image of the resolution given is resized into: the short side minSize and the long side
+// trunc(long / short * minSize).
+//
+fn resizeBox(resolution: IResolution, minSize: f64) IResolution {
+    if (resolution.width > resolution.height) {
+        return .{
+            .width = @trunc((resolution.width / resolution.height) * minSize),
+            .height = minSize,
+        };
+    }
+    else {
+        return .{
+            .width = minSize,
+            .height = @trunc((resolution.height / resolution.width) * minSize),
+        };
+    }
+}
+
+//
+// The size ImageMagick's `-resize <box>` gives an image of the size given: scaled by the smaller of the two scales the
+// sides need, each side rounded half up and at least 1, and left alone when it is already the box's size. It is the
+// arithmetic of ParseMetaGeometry in the bundled ImageMagick's MagickCore/geometry.c, done in the same doubles.
+//
+pub fn fitInBox(size: IResolution, box: IResolution) IResolution {
+    if (size.width == box.width and size.height == box.height) {
+        return size;
+    }
+    var scale = box.width / size.width;
+    if (scale > box.height / size.height) {
+        scale = box.height / size.height;
+    }
+    return .{
+        .width = @max(@floor(scale * size.width + 0.5), 1),
+        .height = @max(@floor(scale * size.height + 0.5), 1),
+    };
+}
+
+//
 // Resize an image.
 //
 pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
-
-    var width: f64 = undefined;
-    var height: f64 = undefined;
-
-    if (resolution.width > resolution.height) {
-        height = minSize;
-        width = @trunc((resolution.width / resolution.height) * minSize);
-    }
-    else {
-        height = @trunc((resolution.height / resolution.width) * minSize);
-        width = minSize;
-    }
-
+    const box = resizeBox(resolution, minSize);
     var image = Image.init(inputPath);
-    return image.resize(allocator, io, log, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
+    return image.resize(allocator, io, log, toolRunner, .{ .width = box.width, .height = box.height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
+}
+
+//
+// A picture resizePhoto wrote.
+//
+pub const IResizedPhoto = struct {
+    // The file it was written to.
+    path: []const u8,
+
+    // Its width and height.
+    size: IResolution,
+};
+
+//
+// Resize a photo whose real size is known, decoding a JPEG at a reduced size on the way, to the size resizeImage would
+// give it.
+//
+// The size is worked out here, as ImageMagick fits inputSize into the box, and written as an exact size (`WxH!`) rather
+// than as the box. libjpeg rounds each side of the reduced image up, which shifts its proportions a little, and the box
+// is built in the image's own proportions, so fitting the reduced image into it can come out a pixel short on one side:
+// the 1111x1000 display of a 100x90 PNG, decoded at 556x500 and fitted into 333x300, is 333x299 rather than 333x300.
+//
+pub fn resizePhoto(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, inputSize: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) !IResizedPhoto {
+    const size = fitInBox(inputSize, resizeBox(resolution, minSize));
+    var image = Image.init(inputPath);
+    const path = try image.resize(allocator, io, log, toolRunner, .{ .width = size.width, .height = size.height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true }, tempDir, uuidGenerator);
+    return .{
+        .path = path,
+        .size = size,
+    };
 }
 
 //
