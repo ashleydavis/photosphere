@@ -82,16 +82,7 @@ pub const Image = struct {
             return info;
         }
 
-        if (!pathExists(io, self.filePath)) {
-            return errors.throwError("File not found: {s}", .{self.filePath});
-        }
-
-        // Get format, dimensions
-        const result = try runToolLogged(allocator, io, log, tools, "magick", &.{ "identify", "-format", "%w %h", self.filePath }, null);
-
-        var parts = std.mem.splitScalar(u8, utils.js_string.trim(result.stdout), ' ');
-        const width = parseInt(parts.next() orelse "undefined", null);
-        const height = parseInt(parts.next() orelse "undefined", null);
+        const dimensions = try self.readDimensions(allocator, io, log, tools);
 
         // Get EXIF data for created date
         //
@@ -114,7 +105,7 @@ pub const Image = struct {
         self._info = .{
             .filePath = self.filePath,
 
-            .dimensions = .{ .width = width, .height = height },
+            .dimensions = dimensions,
 
             .createdAt = createdAt,
 
@@ -129,11 +120,35 @@ pub const Image = struct {
     }
 
     //
-    // Gets the width and height of the image.
+    // Reads the width and height of the image with one `identify -format "%w %h"`, and nothing else.
+    //
+    fn readDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !Dimensions {
+        if (!pathExists(io, self.filePath)) {
+            return errors.throwError("File not found: {s}", .{self.filePath});
+        }
+
+        // Get format, dimensions
+        const result = try runToolLogged(allocator, io, log, tools, "magick", &.{ "identify", "-format", "%w %h", self.filePath }, null);
+
+        var parts = std.mem.splitScalar(u8, utils.js_string.trim(result.stdout), ' ');
+        const width = parseInt(parts.next() orelse "undefined", null);
+        const height = parseInt(parts.next() orelse "undefined", null);
+        return .{
+            .width = width,
+            .height = height,
+        };
+    }
+
+    //
+    // Gets the width and height of the image. When getInfo has already read the image its answer is used; otherwise only the
+    // size is asked for, because the EXIF identify getInfo also runs is a second pass over the file that a caller wanting the
+    // size alone has no use for.
     //
     pub fn getDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !Dimensions {
-        const info = try self.getImageInfo(allocator, io, log, tools);
-        return info.dimensions;
+        if (self._info) |info| {
+            return info.dimensions;
+        }
+        return self.readDimensions(allocator, io, log, tools);
     }
 
     //
