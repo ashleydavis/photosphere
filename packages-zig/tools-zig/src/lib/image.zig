@@ -269,8 +269,16 @@ pub const Image = struct {
         // Stripped rather than picked at, because on the ImageMagick bundled for Android the
         // surgical forms do not work. The cost is that a derivative loses its colour profile too,
         // which is why the original is stored untouched and keeps everything.
+        //
+        // A flip or turn asked for is applied before the resize, in this same command, so a photo
+        // whose EXIF says it is on its side is not first written out whole and turned and then read
+        // back: that cost a full size decode, a full size encode and a generation of JPEG loss.
         var arguments: std.ArrayList([]const u8) = .empty;
-        try arguments.appendSlice(allocator, &.{ self.filePath, "-resize", geometry, "-strip" });
+        try arguments.append(allocator, self.filePath);
+        if (options.transformation) |transformation| {
+            try arguments.appendSlice(allocator, try transformOperations(allocator, transformation));
+        }
+        try arguments.appendSlice(allocator, &.{ "-resize", geometry, "-strip" });
 
         // Add quality if specified
         if (options.quality) |quality| {
@@ -348,24 +356,14 @@ pub const Image = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        var operations: std.ArrayList([]const u8) = .empty;
+        const operations = try transformOperations(allocator, options);
 
-        if (options.flipX orelse false) {
-            try operations.append(allocator, "-flop");
-        }
-
-        if (options.rotate) |rotate| {
-            if (isTruthy(rotate)) {
-                try operations.appendSlice(allocator, &.{ "-rotate", try numberText(allocator, rotate) });
-            }
-        }
-
-        if (operations.items.len > 0) {
+        if (operations.len > 0) {
             // Transform to a temporary file and return the path.
             const outputPath = try join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_transform_output_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
             var arguments: std.ArrayList([]const u8) = .empty;
             try arguments.append(allocator, self.filePath);
-            try arguments.appendSlice(allocator, operations.items);
+            try arguments.appendSlice(allocator, operations);
             try arguments.append(allocator, outputPath);
             _ = try runToolLogged(allocator, io, log, tools, "magick", arguments.items, null);
 
@@ -381,6 +379,26 @@ pub const Image = struct {
         }
     }
 };
+
+//
+// The ImageMagick operators of a flip and a turn: `-flop` for a horizontal flip, then `-rotate <degrees>`
+// for a turn that is not zero. None at all when there is nothing to do.
+//
+fn transformOperations(allocator: std.mem.Allocator, options: IImageTransformation) ![]const []const u8 {
+    var operations: std.ArrayList([]const u8) = .empty;
+
+    if (options.flipX orelse false) {
+        try operations.append(allocator, "-flop");
+    }
+
+    if (options.rotate) |rotate| {
+        if (isTruthy(rotate)) {
+            try operations.appendSlice(allocator, &.{ "-rotate", try numberText(allocator, rotate) });
+        }
+    }
+
+    return operations.items;
+}
 
 //
 // JavaScript truthiness of a number.

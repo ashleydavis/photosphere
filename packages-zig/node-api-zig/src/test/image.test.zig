@@ -465,11 +465,30 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     var generator: CountingUuidGenerator = .{};
     const details = try image.getImageDetails(allocator, io, memory.log, runner, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
 
-    // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, before the smaller versions are made from it:
-    // the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
+    // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, as the display is made, and the smaller versions
+    // are made from the display: the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
     try std.testing.expectEqual(node_api.media_file_database.IResolution{ .width = 80, .height = 100 }, details.resolution);
-    try std.testing.expectEqualStrings("80 100", (try describeImage(memory.log, allocator, runner, try std.fs.path.join(allocator, &.{ tempDir, "temp_transform_output_generated-1.jpg" })))[0..6]);
     try std.testing.expectEqualStrings("1000 1250 JPEG 95 exif:[]", try describeImage(memory.log, allocator, runner, details.displayPath.?));
+
+    // The turn is made by the command that writes the display, so no whole turned copy of the photo is written: the
+    // temp directory holds the photo and the three pictures, named by the first three generated IDs.
+    var tempEntries: std.ArrayList([]const u8) = .empty;
+    var tempDirHandle = try std.Io.Dir.cwd().openDir(io, tempDir, .{ .iterate = true });
+    defer tempDirHandle.close(io);
+    var entries = tempDirHandle.iterate();
+    while (try entries.next(io)) |entry| {
+        try tempEntries.append(allocator, try allocator.dupe(u8, entry.name));
+    }
+    std.mem.sort([]const u8, tempEntries.items, {}, struct {
+        //
+        // Orders names alphabetically.
+        //
+        fn lessThan(_: void, left: []const u8, right: []const u8) bool {
+            return std.mem.lessThan(u8, left, right);
+        }
+    }.lessThan);
+    try std.testing.expectEqualStrings("exif.jpg temp_resize_generated-1.jpg temp_resize_generated-2.jpg temp_resize_generated-3.jpg", try std.mem.join(allocator, " ", tempEntries.items));
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-1.jpg" }), details.displayPath.?);
     try std.testing.expectEqualStrings("300 375 JPEG 90 exif:[]", try describeImage(memory.log, allocator, runner, details.thumbnailPath));
     try std.testing.expectEqualStrings("40 50 JPEG 75 exif:[]", try describeImage(memory.log, allocator, runner, details.microPath));
 
