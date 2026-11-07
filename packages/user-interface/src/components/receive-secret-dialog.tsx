@@ -1,7 +1,6 @@
 import { log } from "utils";
 import React, { useState, useEffect, useCallback } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -16,6 +15,8 @@ import Box from '@mui/joy/Box';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IReceiveSecretDialogProps {
     // Whether the dialog is visible.
@@ -52,6 +53,9 @@ interface IReceivedSecretPayload {
 //
 export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps) {
     const platform = usePlatform();
+
+    // The LAN sharing flow, run as tasks on the shared task queue.
+    const lanShare = useLanShareTasks();
     const { importSharePayload } = useApp();
     const [step, setStep] = useState<ReceiveStep>("enter-code");
     const [enteredCode, setEnteredCode] = useState("");
@@ -76,22 +80,30 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
     // Starts the receiver with the entered code, waits for the sender payload, then moves to review.
     //
     const handleStartReceiving = useCallback(async () => {
-        await platform.startShareReceive(enteredCode);
-        setStep("waiting");
+        try {
+            await lanShare.startShareReceive(enteredCode);
+            setStep("waiting");
 
-        const received = await platform.waitShareReceive();
+            const received = await lanShare.waitShareReceive();
 
-        if (!received) {
-            setErrorMessage("No sender connected within 60 seconds.");
-            setStep("error");
-            return;
+            if (!received) {
+                setErrorMessage("No sender connected within 60 seconds.");
+                setStep("error");
+                return;
+            }
+
+            const receivedPayload = received as IReceivedSecretPayload;
+            setPayload(receivedPayload);
+            setSaveName(receivedPayload.name);
+            setStep("review");
+            log.event('Secret review step');
         }
-
-        const receivedPayload = received as IReceivedSecretPayload;
-        setPayload(receivedPayload);
-        setSaveName(receivedPayload.name);
-        setStep("review");
-        log.event('Secret review step');
+        catch (err) {
+            // Surface the failure instead of leaving the dialog spinning on "Waiting for sender...".
+            log.exception("Receive error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [enteredCode, platform]);
 
     //
@@ -102,12 +114,20 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
             return;
         }
 
-        await importSharePayload({
-            ...payload,
-            saveName: saveName.trim(),
-        }, {});
-        setStep("success");
-        log.event('Secret saved');
+        try {
+            await importSharePayload({
+                ...payload,
+                saveName: saveName.trim(),
+            }, {});
+            setStep("success");
+            log.event('Secret saved');
+        }
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the review step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [payload, saveName, importSharePayload]);
 
     //
@@ -115,7 +135,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
     //
     const handleCancel = useCallback(async () => {
         if (step === "waiting") {
-            await platform.cancelShareReceive();
+            await lanShare.cancelShareReceive();
         }
         onClose();
     }, [step, platform, onClose]);
@@ -143,8 +163,13 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
         || step === "waiting";
 
     return (
-        <Modal open={open} onClose={handleCancel}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 420, maxWidth: 520 }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={handleCancel}
+            minWidth={420}
+            maxWidth={520}
+            onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
+            >
                 <DialogTitle>Receive Secret</DialogTitle>
                 <DialogContent>
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
@@ -180,6 +205,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                             <FormControl>
                                 <FormLabel>Save as (name)</FormLabel>
                                 <Input
+                                    data-id="receive-secret-name-input"
                                     value={saveName}
                                     onChange={event => setSaveName(event.target.value)}
                                     placeholder="my-secret"
@@ -189,7 +215,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {step === "success" && (
-                        <Alert color="success">
+                        <Alert data-id="receive-secret-success" color="success">
                             Secret imported successfully!
                         </Alert>
                     )}
@@ -207,7 +233,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                             <Button
                                 data-id="receive-secret-start-button"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
-                                onClick={() => { handleStartReceiving().catch(err => log.exception("Receive error:", err as Error)); }}
+                                onClick={() => { handleStartReceiving(); }}
                             >
                                 Start
                             </Button>
@@ -215,7 +241,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                     )}
 
                     {step === "waiting" && (
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="receive-secret-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {step === "review" && (
@@ -224,7 +250,7 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                             <Button
                                 data-id="receive-secret-save-button"
                                 disabled={!saveName.trim()}
-                                onClick={() => { handleSave().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleSave(); }}
                             >
                                 Save
                             </Button>
@@ -235,7 +261,6 @@ export function ReceiveSecretDialog({ open, onClose }: IReceiveSecretDialogProps
                         <Button data-id="receive-secret-close-button" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

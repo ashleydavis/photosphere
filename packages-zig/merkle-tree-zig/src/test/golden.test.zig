@@ -1,0 +1,630 @@
+//
+// Golden tests against the committed fixtures:
+// - compare-names.json: compareNames must give the sign the ICU ordering gives.
+// - test-db-trees.json: every tree in test/dbs/v2..v6 must load exactly as the fixture says.
+// - scenarios.json and scenario-*.dat: replaying the same add/upsert/update/delete/prune/build sequence must give the
+//   same results and trees as the fixtures, and the saved scenario trees must load identically.
+// - the trees Zig saves must load back to the fixture summaries, and the replayed scenario trees Zig saves must be
+//   byte-identical to scenario-*.dat.
+//
+
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const utils = @import("utils-zig");
+const merkle_tree_zig = @import("merkle-tree-zig");
+const serialization_zig = @import("serialization-zig");
+const memory_storage = @import("memory-storage.zig");
+const saved_file = @import("saved-file.zig");
+const merkle_tree = merkle_tree_zig.merkle_tree;
+const merkle_diff = merkle_tree_zig.merkle_diff;
+const bson = serialization_zig.bson;
+const IMerkleTree = merkle_tree.IMerkleTree;
+const SortNode = merkle_tree.SortNode;
+const MerkleNode = merkle_tree.MerkleNode;
+const HashedItem = merkle_tree.HashedItem;
+const MemoryStorage = memory_storage.MemoryStorage;
+
+//
+// The Io used by the tests.
+//
+const io = std.testing.io;
+
+//
+// The directory of the fixtures (tests run with the package directory as cwd).
+//
+const FIXTURES_DIR = "merkle-tree-zig/src/test/fixtures";
+
+//
+// The repo's test databases, relative to the package directory.
+//
+const TEST_DBS_DIR = "../test/dbs";
+
+//
+// A tree summary.
+//
+const TreeSummary = struct {
+    // The tree id.
+    id: []const u8,
+
+    // The version of the tree file format.
+    version: u32,
+
+    // True when the merkle tree must be rebuilt.
+    dirty: bool,
+
+    // The database metadata as BSON hex (null when the tree has no metadata).
+    metadataBson: ?[]const u8,
+
+    // The shape of the sort tree.
+    sortShape: []const u8,
+
+    // Every sort node in pre-order.
+    sortNodes: []const []const u8,
+
+    // Every merkle node in pre-order.
+    merkleNodes: []const []const u8,
+};
+
+//
+// The layout of compare-names.json. Each pair is [left, right, sign].
+//
+const CompareNamesFixture = struct {
+    // The pairs of names and the sign localeCompare gives.
+    pairs: []const std.json.Value,
+};
+
+//
+// A tree of the test databases (an entry of test-db-trees.json).
+//
+const TestDbTree = struct {
+    // Path relative to test/dbs.
+    file: []const u8,
+
+    // The type code passed to loadTree.
+    typeCode: []const u8,
+
+    // How the tree loads, as recorded in the fixture.
+    summary: TreeSummary,
+};
+
+//
+// The layout of test-db-trees.json.
+//
+const TestDbTreesFixture = struct {
+    // Every tree.
+    trees: []const TestDbTree,
+};
+
+//
+// An item of an operation.
+//
+const Item = struct {
+    // The item name.
+    name: []const u8,
+
+    // The item hash as hex.
+    hash: []const u8,
+
+    // The item length.
+    length: u64,
+
+    // The item last modified time in milliseconds.
+    lastModified: i64,
+};
+
+//
+// A scenario operation.
+//
+const Operation = struct {
+    // The operation name.
+    op: []const u8,
+
+    // The item for add, upsert and update.
+    item: ?Item = null,
+
+    // The name for delete, info and find.
+    name: ?[]const u8 = null,
+
+    // The items of the other tree for pruneDiff.
+    others: ?[]const Item = null,
+};
+
+//
+// A scenario.
+//
+const Scenario = struct {
+    // The scenario name.
+    name: []const u8,
+
+    // The tree id.
+    treeId: []const u8,
+
+    // The database metadata as BSON hex.
+    metadataBson: ?[]const u8,
+
+    // The operations in order.
+    operations: []const Operation,
+
+    // What the operations returned, in order.
+    results: []const []const u8,
+
+    // The tree summary at every checkpoint.
+    checkpoints: []const TreeSummary,
+};
+
+//
+// The layout of scenarios.json.
+//
+const ScenariosFixture = struct {
+    // Every scenario.
+    scenarios: []const Scenario,
+};
+
+//
+// Reads and parses a JSON fixture.
+//
+fn readFixture(comptime T: type, allocator: std.mem.Allocator, name: []const u8) !T {
+    const fixturePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, name });
+    const text = try std.Io.Dir.cwd().readFileAlloc(io, fixturePath, allocator, .unlimited);
+    return std.json.parseFromSliceLeaky(T, allocator, text, .{ .ignore_unknown_fields = true });
+}
+
+//
+// Formats bytes as lowercase hex.
+//
+fn toHex(allocator: std.mem.Allocator, bytes: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "{x}", .{bytes});
+}
+
+//
+// Parses lowercase hex.
+//
+fn fromHex(allocator: std.mem.Allocator, text: []const u8) ![]const u8 {
+    const bytes = try allocator.alloc(u8, text.len / 2);
+    _ = try std.fmt.hexToBytes(bytes, text);
+    return bytes;
+}
+
+//
+// Writes the layout of a sort tree.
+//
+fn writeSortShape(writer: *std.Io.Writer, node: ?*const SortNode) !void {
+    const currentNode = node orelse {
+        return;
+    };
+    if (currentNode.left == null and currentNode.right == null) {
+        try writer.writeAll(currentNode.name orelse "?");
+        return;
+    }
+    try writer.writeAll("(");
+    try writeSortShape(writer, currentNode.left);
+    try writer.writeAll(",");
+    try writeSortShape(writer, currentNode.right);
+    try writer.writeAll(")");
+}
+
+//
+// Adds the sort nodes in pre-order.
+//
+fn collectSortNodes(allocator: std.mem.Allocator, node: ?*const SortNode, output: *std.ArrayList([]const u8)) !void {
+    const currentNode = node orelse {
+        return;
+    };
+    const contentHash = if (currentNode.contentHash) |hash| try toHex(allocator, hash) else "";
+    const lastModified = if (currentNode.lastModified) |timestamp| try std.fmt.allocPrint(allocator, "{d}", .{timestamp}) else "";
+    try output.append(allocator, try std.fmt.allocPrint(allocator, "{d}|{d}|{d}|{s}|{s}|{s}|{s}", .{
+        currentNode.nodeCount,
+        currentNode.leafCount,
+        currentNode.size,
+        currentNode.minName,
+        currentNode.name orelse "",
+        contentHash,
+        lastModified,
+    }));
+    try collectSortNodes(allocator, currentNode.left, output);
+    try collectSortNodes(allocator, currentNode.right, output);
+}
+
+//
+// Adds the merkle nodes in pre-order.
+//
+fn collectMerkleNodes(allocator: std.mem.Allocator, node: ?*const MerkleNode, output: *std.ArrayList([]const u8)) !void {
+    const currentNode = node orelse {
+        return;
+    };
+    try output.append(allocator, try std.fmt.allocPrint(allocator, "{d}|{s}|{s}", .{
+        currentNode.nodeCount,
+        try toHex(allocator, currentNode.hash),
+        currentNode.name orelse "",
+    }));
+    try collectMerkleNodes(allocator, currentNode.left, output);
+    try collectMerkleNodes(allocator, currentNode.right, output);
+}
+
+//
+// Summarizes a tree.
+//
+fn summarizeTree(allocator: std.mem.Allocator, tree: *const IMerkleTree) !TreeSummary {
+    var shape: std.Io.Writer.Allocating = .init(allocator);
+    try writeSortShape(&shape.writer, tree.sort);
+    var sortNodes: std.ArrayList([]const u8) = .empty;
+    try collectSortNodes(allocator, tree.sort, &sortNodes);
+    var merkleNodes: std.ArrayList([]const u8) = .empty;
+    try collectMerkleNodes(allocator, tree.merkle, &merkleNodes);
+    const metadataBson = if (tree.databaseMetadata) |metadata| try toHex(allocator, try bson.serialize(allocator, metadata)) else null;
+    return .{
+        .id = tree.id,
+        .version = tree.version,
+        .dirty = tree.dirty,
+        .metadataBson = metadataBson,
+        .sortShape = shape.written(),
+        .sortNodes = sortNodes.items,
+        .merkleNodes = merkleNodes.items,
+    };
+}
+
+//
+// Returns the results without the "find" results.
+//
+fn withoutFindResults(allocator: std.mem.Allocator, results: []const []const u8) ![]const []const u8 {
+    var filtered: std.ArrayList([]const u8) = .empty;
+    for (results) |result| {
+        if (!std.mem.startsWith(u8, result, "find ")) {
+            try filtered.append(allocator, result);
+        }
+    }
+    return filtered.items;
+}
+
+//
+// Checks two lists of strings are equal.
+//
+fn expectStringLists(expected: []const []const u8, actual: []const []const u8) !void {
+    const count = @min(expected.len, actual.len);
+    for (expected[0..count], actual[0..count]) |expectedText, actualText| {
+        try std.testing.expectEqualStrings(expectedText, actualText);
+    }
+    try std.testing.expectEqual(expected.len, actual.len);
+}
+
+//
+// Checks a tree summary equals the expected one.
+//
+fn expectSummary(expected: TreeSummary, actual: TreeSummary) !void {
+    try std.testing.expectEqualStrings(expected.id, actual.id);
+    try std.testing.expectEqual(expected.version, actual.version);
+    try std.testing.expectEqual(expected.dirty, actual.dirty);
+    if (expected.metadataBson) |expectedMetadata| {
+        try std.testing.expect(actual.metadataBson != null);
+        try std.testing.expectEqualStrings(expectedMetadata, actual.metadataBson.?);
+    }
+    else {
+        try std.testing.expect(actual.metadataBson == null);
+    }
+    try std.testing.expectEqualStrings(expected.sortShape, actual.sortShape);
+    try expectStringLists(expected.sortNodes, actual.sortNodes);
+    try expectStringLists(expected.merkleNodes, actual.merkleNodes);
+}
+
+//
+// Loads a tree file from disk through the in-memory storage.
+//
+fn loadTreeFile(log: ILog, allocator: std.mem.Allocator, filePath: []const u8, typeCode: []const u8) !IMerkleTree {
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    var storage = MemoryStorage.init(allocator);
+    try storage.putFile("tree.dat", bytes);
+    return (try merkle_tree.loadTree(allocator, io, log, "tree.dat", storage.asStorage(), typeCode)).?;
+}
+
+//
+// Loads a tree from the bytes of a tree file through the in-memory storage.
+//
+fn loadTreeBytes(log: ILog, allocator: std.mem.Allocator, bytes: []const u8, typeCode: []const u8) !IMerkleTree {
+    var storage = MemoryStorage.init(allocator);
+    try storage.putFile("tree.dat", bytes);
+    return (try merkle_tree.loadTree(allocator, io, log, "tree.dat", storage.asStorage(), typeCode)).?;
+}
+
+//
+// Saves a tree and returns the bytes of the file.
+//
+fn saveTreeBytes(log: ILog, allocator: std.mem.Allocator, tree: *const IMerkleTree, typeCode: []const u8) ![]const u8 {
+    var storage = MemoryStorage.init(allocator);
+    try merkle_tree.saveTree(allocator, io, log, "tree.dat", tree, storage.asStorage(), typeCode);
+    return storage.getFile("tree.dat").?;
+}
+
+//
+// Converts a fixture item to a hashed item.
+//
+fn toHashedItem(allocator: std.mem.Allocator, item: Item) !HashedItem {
+    return .{
+        .name = item.name,
+        .hash = try fromHex(allocator, item.hash),
+        .length = item.length,
+        .lastModified = item.lastModified,
+    };
+}
+
+//
+// The results and checkpoints of replaying a scenario.
+//
+const ReplayResult = struct {
+    // The final tree.
+    tree: IMerkleTree,
+
+    // What the operations returned.
+    results: []const []const u8,
+
+    // The summaries at every checkpoint.
+    checkpoints: []const TreeSummary,
+};
+
+//
+// Replays a scenario.
+//
+fn replayScenario(allocator: std.mem.Allocator, scenario: Scenario) !ReplayResult {
+    var tree = merkle_tree.createTree(scenario.treeId);
+    if (scenario.metadataBson) |metadataHex| {
+        tree.databaseMetadata = try bson.deserialize(allocator, try fromHex(allocator, metadataHex));
+    }
+    var results: std.ArrayList([]const u8) = .empty;
+    var checkpoints: std.ArrayList(TreeSummary) = .empty;
+
+    for (scenario.operations) |operation| {
+        if (std.mem.eql(u8, operation.op, "add")) {
+            tree = try merkle_tree.addItem(allocator, &tree, try toHashedItem(allocator, operation.item.?));
+        }
+        else if (std.mem.eql(u8, operation.op, "upsert")) {
+            tree = try merkle_tree.upsertItem(allocator, &tree, try toHashedItem(allocator, operation.item.?));
+        }
+        else if (std.mem.eql(u8, operation.op, "update")) {
+            const updated = try merkle_tree.updateItem(&tree, try toHashedItem(allocator, operation.item.?));
+            try results.append(allocator, if (updated) "update true" else "update false");
+        }
+        else if (std.mem.eql(u8, operation.op, "delete")) {
+            try merkle_tree.deleteItem(allocator, &tree, operation.name.?);
+        }
+        else if (std.mem.eql(u8, operation.op, "build")) {
+            tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
+            tree.dirty = false;
+        }
+        else if (std.mem.eql(u8, operation.op, "info")) {
+            if (try merkle_tree.getItemInfo(&tree, operation.name.?)) |info| {
+                try results.append(allocator, try std.fmt.allocPrint(allocator, "info {s}|{d}|{d}", .{ try toHex(allocator, info.hash), info.length, info.lastModified }));
+            }
+            else {
+                try results.append(allocator, "info none");
+            }
+        }
+        else if (std.mem.eql(u8, operation.op, "find")) {
+            // Find operations are not replayed.
+        }
+        else if (std.mem.eql(u8, operation.op, "pruneDiff")) {
+            var other = merkle_tree.createTree(scenario.treeId);
+            for (operation.others.?) |item| {
+                other = try merkle_tree.addItem(allocator, &other, try toHashedItem(allocator, item));
+            }
+            other.merkle = try merkle_tree.buildMerkleTree(allocator, other.sort);
+            const diff = try merkle_diff.findMerkleTreeDifferences(allocator, tree.merkle, other.merkle);
+            var onlyInTree2: std.ArrayList([]const u8) = .empty;
+            for (diff.onlyInTree2) |node| {
+                try onlyInTree2.append(allocator, try std.fmt.allocPrint(allocator, "{d}:{s}", .{ node.nodeCount, try toHex(allocator, node.hash) }));
+            }
+            try results.append(allocator, try std.fmt.allocPrint(allocator, "diff {} {s}", .{ diff.identical, try std.mem.join(allocator, ",", onlyInTree2.items) }));
+            const prunedFiles = try merkle_tree.pruneTree(allocator, &tree, diff.onlyInTree1);
+            try results.append(allocator, try std.fmt.allocPrint(allocator, "pruned {s}", .{try std.mem.join(allocator, ",", prunedFiles)}));
+        }
+        else if (std.mem.eql(u8, operation.op, "checkpoint")) {
+            try checkpoints.append(allocator, try summarizeTree(allocator, &tree));
+        }
+        else {
+            return error.UnknownOperation;
+        }
+    }
+
+    return .{ .tree = tree, .results = results.items, .checkpoints = checkpoints.items };
+}
+
+test "compareNames matches localeCompare for generated names" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const fixture = try readFixture(CompareNamesFixture, allocator, "compare-names.json");
+    try std.testing.expect(fixture.pairs.len > 4000);
+    var mismatches: usize = 0;
+    for (fixture.pairs) |pair| {
+        const left = pair.array.items[0].string;
+        const right = pair.array.items[1].string;
+        const expectedSign: i64 = switch (pair.array.items[2]) {
+            .integer => |value| value,
+            .float => |value| @intFromFloat(value),
+            else => return error.InvalidFixture,
+        };
+        const actualSign: i64 = merkle_tree.compareNames(left, right);
+        if (actualSign != expectedSign) {
+            if (mismatches < 10) {
+                std.debug.print("compareNames(\"{f}\", \"{f}\") = {d}, localeCompare = {d}\n", .{ std.zig.fmtString(left), std.zig.fmtString(right), actualSign, expectedSign });
+            }
+            mismatches += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 0), mismatches);
+}
+
+test "loads every tree in test/dbs v2 to v6 like the fixture" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const fixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
+    try std.testing.expectEqual(@as(usize, 14), fixture.trees.len);
+    for (fixture.trees) |testDbTree| {
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
+        const tree = try loadTreeFile(log, allocator, filePath, testDbTree.typeCode);
+        expectSummary(testDbTree.summary, try summarizeTree(allocator, &tree)) catch |err| {
+            std.debug.print("Tree differs from the fixture: {s}\n", .{testDbTree.file});
+            return err;
+        };
+    }
+}
+
+test "loadTreeVersion reads the version of every tree in test/dbs" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const fixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
+    for (fixture.trees) |testDbTree| {
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+        var storage = MemoryStorage.init(allocator);
+        try storage.putFile("tree.dat", bytes);
+        try std.testing.expectEqual(@as(?u32, testDbTree.summary.version), merkle_tree.loadTreeVersion(allocator, io, log, "tree.dat", storage.asStorage()));
+    }
+}
+
+test "getItemInfo finds every file of the v6 files tree" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const tree = try loadTreeFile(log, allocator, TEST_DBS_DIR ++ "/v6/.db/files.dat", "FTRE");
+    var leaves = merkle_tree.iterateLeaves(SortNode, allocator, tree.sort);
+    var leafCount: usize = 0;
+    while (try leaves.next()) |leaf| {
+        const info = (try merkle_tree.getItemInfo(&tree, leaf.name.?)).?;
+        try std.testing.expectEqualSlices(u8, leaf.contentHash.?, info.hash);
+        try std.testing.expectEqual(leaf.size, info.length);
+        try std.testing.expectEqual(leaf.lastModified.?, info.lastModified);
+        try std.testing.expectEqual(leaf, (merkle_tree.findItemInTree(tree.sort, leaf.name.?)).?);
+        leafCount += 1;
+    }
+    try std.testing.expect(leafCount > 0);
+    try std.testing.expect((try merkle_tree.getItemInfo(&tree, "no/such/file")) == null);
+}
+
+test "loadTree rejects a v6 tree with the wrong type code" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, TEST_DBS_DIR ++ "/v6/.db/bson/db.dat", allocator, .unlimited);
+    var storage = MemoryStorage.init(allocator);
+    try storage.putFile("db.dat", bytes);
+    try std.testing.expectError(error.Thrown, merkle_tree.loadTree(allocator, io, log, "db.dat", storage.asStorage(), "COLT"));
+}
+
+test "replays the fixture scenarios with the same results and trees" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const fixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
+    try std.testing.expectEqual(@as(usize, 5), fixture.scenarios.len);
+    for (fixture.scenarios) |scenario| {
+        const replay = try replayScenario(allocator, scenario);
+        expectStringLists(try withoutFindResults(allocator, scenario.results), replay.results) catch |err| {
+            std.debug.print("Scenario results differ from the fixture: {s}\n", .{scenario.name});
+            return err;
+        };
+        try std.testing.expectEqual(scenario.checkpoints.len, replay.checkpoints.len);
+        for (scenario.checkpoints, replay.checkpoints, 0..) |expected, actual, index| {
+            expectSummary(expected, actual) catch |err| {
+                std.debug.print("Scenario {s} checkpoint {d} differs from the fixture\n", .{ scenario.name, index });
+                return err;
+            };
+        }
+    }
+}
+
+test "loads the saved fixture trees identically" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const fixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
+    for (fixture.scenarios) |scenario| {
+        const filePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, try std.mem.concat(allocator, u8, &.{ "scenario-", scenario.name, ".dat" }) });
+        const tree = try loadTreeFile(log, allocator, filePath, "FTRE");
+        var expected = scenario.checkpoints[scenario.checkpoints.len - 1];
+
+        // A tree saved without metadata loads with an empty document.
+        if (expected.metadataBson == null) {
+            expected.metadataBson = "0500000000";
+        }
+        expectSummary(expected, try summarizeTree(allocator, &tree)) catch |err| {
+            std.debug.print("Saved scenario tree differs: {s}\n", .{scenario.name});
+            return err;
+        };
+    }
+}
+
+test "trees Zig saves load back exactly like the fixture trees" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Every test database tree, re-saved by Zig in the current format, must load back to the summary
+    // recorded for the original tree in test-db-trees.json (apart from the version, which saving upgrades).
+    const testDbFixture = try readFixture(TestDbTreesFixture, allocator, "test-db-trees.json");
+    for (testDbFixture.trees) |testDbTree| {
+        const filePath = try std.fs.path.join(allocator, &.{ TEST_DBS_DIR, testDbTree.file });
+        const tree = try loadTreeFile(log, allocator, filePath, testDbTree.typeCode);
+        const reloaded = try loadTreeBytes(log, allocator, try saveTreeBytes(log, allocator, &tree, testDbTree.typeCode), testDbTree.typeCode);
+        var expected = testDbTree.summary;
+        expected.version = merkle_tree.CURRENT_DATABASE_VERSION;
+
+        // A tree saved without metadata loads with an empty document.
+        if (expected.metadataBson == null) {
+            expected.metadataBson = "0500000000";
+        }
+        expectSummary(expected, try summarizeTree(allocator, &reloaded)) catch |err| {
+            std.debug.print("Re-saved tree loads differently from the fixture: {s}\n", .{testDbTree.file});
+            return err;
+        };
+    }
+}
+
+test "saves the replayed scenario trees byte-identical to the saved fixture trees" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const scenarioFixture = try readFixture(ScenariosFixture, allocator, "scenarios.json");
+    for (scenarioFixture.scenarios) |scenario| {
+        const replay = try replayScenario(allocator, scenario);
+        const filePath = try std.fs.path.join(allocator, &.{ FIXTURES_DIR, try std.mem.concat(allocator, u8, &.{ "scenario-", scenario.name, ".dat" }) });
+        const expected = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+        const actual = try saveTreeBytes(log, allocator, &replay.tree, "FTRE");
+        saved_file.expectSavedFileMatches(expected, actual) catch |err| {
+            std.debug.print("Zig-saved scenario tree differs from the fixture: {s}\n", .{scenario.name});
+            return err;
+        };
+    }
+}
+
+test "compareNames reads invalid UTF-8 as the replacement character" {
+    // An invalid start byte, a truncated sequence and an overlong encoding read as U+FFFD, one for each byte
+    // (decodeCodePoint does not group the bytes of a broken sequence).
+    try std.testing.expectEqual(@as(i32, 0), merkle_tree.compareNames("a\xff", "a\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), merkle_tree.compareNames("a\xe2\x82", "a\u{FFFD}\u{FFFD}"));
+    try std.testing.expectEqual(@as(i32, 0), merkle_tree.compareNames("\xc0\x80", "\u{FFFD}\u{FFFD}"));
+}
+
+test "lessThanUtf16 orders strings by UTF-16 code units like Array.prototype.sort" {
+    // U+1F600 is the surrogate pair D83D DE00, which sorts before U+FFFF in UTF-16 (though after it in UTF-8).
+    try std.testing.expect(merkle_tree.lessThanUtf16({}, "a\u{1F600}", "a\u{FFFF}"));
+    try std.testing.expect(!merkle_tree.lessThanUtf16({}, "a\u{FFFF}", "a\u{1F600}"));
+    try std.testing.expect(merkle_tree.lessThanUtf16({}, "a\u{1F600}", "a\u{1F601}"));
+    try std.testing.expect(merkle_tree.lessThanUtf16({}, "a", "ab"));
+    try std.testing.expect(!merkle_tree.lessThanUtf16({}, "ab", "ab"));
+}

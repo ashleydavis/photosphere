@@ -1,10 +1,64 @@
 import React, { ReactNode, createContext, useContext } from "react";
-import type { IConflictResolution } from "api";
+import type { ISaveAssetItem } from "api";
+import type { IConflictResolution } from "../lib/lan-share";
+import type { NetworkConnectionType } from "../lib/sync-gate";
+
+//
+// The current network state reported by a platform. Combines whether the device
+// is online with the connection type so the shared sync gate can apply the
+// Wi-Fi-only restriction.
+//
+export interface INetworkStatus {
+    //
+    // True when the device currently has a network connection.
+    //
+    connected: boolean;
+
+    //
+    // The connection type; "unknown" on platforms that cannot detect it.
+    //
+    connectionType: NetworkConnectionType;
+}
 
 //
 // Unsubscribe function type for event listeners.
 //
 export type Unsubscribe = () => void;
+
+//
+// A named UI action pushed from the host (for example a native menu item on
+// desktop, or a smoke-test injection). Formerly delivered on its own
+// "menu-action" channel; now one kind of platform event.
+//
+export interface IMenuActionEvent {
+    // Discriminant identifying this platform event as a menu action.
+    type: "menu-action";
+
+    // The action name for the renderer to dispatch on.
+    action: string;
+}
+
+//
+// Reports that the host developer tools were opened or closed, including via
+// their native close button, so the renderer can reflect the real state.
+//
+export interface IDevToolsStateEvent {
+    // Discriminant identifying this platform event as a dev-tools state change.
+    type: "devtools-state";
+
+    // True when the developer tools are open.
+    open: boolean;
+}
+
+//
+// A message pushed from the host platform to the renderer. Desktop delivers
+// these from the Electron main process; mobile from its native/bridge layer.
+// New host-to-renderer messages are added as members of this union so every
+// platform shares a single delivery path instead of a channel per message.
+//
+export type IPlatformEvent =
+    | IMenuActionEvent
+    | IDevToolsStateEvent;
 
 //
 // S3 credentials for accessing an S3-compatible object store.
@@ -70,6 +124,10 @@ export interface IDatabaseEntry {
 
     // Vault secret name for the geocoding API key.
     geocodingKey?: string;
+
+    // Whether this is the database automatic import writes to. Exactly one entry may hold it, and
+    // making a second one the default clears the first.
+    isDefault?: boolean;
 }
 
 
@@ -203,7 +261,7 @@ export interface IPickFolderOptions {
 
     //
     // Config key to read the default path from and persist the chosen path back to. The Electron
-    // implementation maps this to a key in IDesktopConfig ('lastFolder' is the existing default).
+    // implementation maps this to a key in IAppConfig ('lastFolder' is the existing default).
     //
     folderKey?: string;
 
@@ -237,6 +295,38 @@ export interface IToolsStatus {
 // Platform-specific operations interface.
 // Implemented by Electron for desktop and Capacitor for mobile.
 //
+//
+// The outcome of saving downloaded assets, so the caller can surface the right toast.
+//
+export interface ISaveDownloadResult {
+    //
+    // "saved" when the files reached the user, "cancelled" when the destination picker or share sheet
+    // was dismissed, "failed" when the save did not complete.
+    //
+    outcome: "saved" | "cancelled" | "failed";
+
+    //
+    // How many assets were written successfully.
+    //
+    savedCount: number;
+
+    //
+    // How many assets failed to write (a batch save can partially fail).
+    //
+    failedCount: number;
+
+    //
+    // Error message when outcome is "failed".
+    //
+    errorMessage?: string;
+
+    //
+    // The folder the files were saved into, for the "Open Folder" toast action. Undefined on mobile,
+    // where files are handed out via the share sheet.
+    //
+    savedFolder?: string;
+}
+
 export interface IPlatformContext {
     //
     // Opens a database file dialog.
@@ -275,18 +365,13 @@ export interface IPlatformContext {
     onThemeChanged: (callback: (theme: 'light' | 'dark' | 'system') => void) => Unsubscribe;
 
     //
-    // Subscribes to menu actions sent from the main process (excluding theme changes).
-    // The callback receives the action name and should switch on it.
+    // Subscribes to platform events pushed from the host (menu actions,
+    // dev-tools state, and future host-to-renderer messages). Delivered from the
+    // Electron main process on desktop and from the native/bridge layer on
+    // mobile. The callback should switch on `event.type`.
     // Returns an unsubscribe function.
     //
-    onMenuAction: (callback: (action: string) => void) => Unsubscribe;
-
-    //
-    // Subscribes to navigate events sent from the main process.
-    // The page argument is the route to navigate to (e.g. '/gallery', '/databases').
-    // Returns an unsubscribe function.
-    //
-    onNavigate: (callback: (page: string) => void) => Unsubscribe;
+    onPlatformEvent: (callback: (event: IPlatformEvent) => void) => Unsubscribe;
 
     //
     // Notifies the platform that the user has edited the database.
@@ -298,6 +383,18 @@ export interface IPlatformContext {
     // Copies a blob to the system clipboard.
     //
     copyToClipboard: (blob: Blob, contentType: string) => Promise<void>;
+
+    //
+    // One sentence saying what automatic import does while the app is not on screen, shown under the
+    // toggle on the settings card.
+    //
+    // It comes from the platform because what each one can honestly promise differs enormously:
+    // Android keeps importing in a foreground service, iOS catches up when the system allows, and a
+    // desktop is only ever running when it is running. The card must not work this out for itself,
+    // because a component that decides which platform it is on is a component that says the wrong
+    // thing on the next one.
+    //
+    backgroundImportDescription: string;
 
 
     //
@@ -327,7 +424,7 @@ export interface IPlatformContext {
 
     //
     // Subscribes to update-available events fired from the desktop main process when a
-    // newer GitHub release is detected and has not already been recorded in news.yaml's
+    // newer GitHub release is detected and has not already been recorded in the config file's
     // `last_shown_update_version`. The renderer uses this to render the navbar pill
     // and fire a one-off primary-coloured toast. No-op on web/mobile (which have no main process
     // and rely on the update check baked into the host app store update flow).
@@ -347,16 +444,15 @@ export interface IPlatformContext {
     getPathForFile: (file: File) => string | undefined;
 
     //
+    // Whether the app is running on a desktop or on a mobile device.
+    //
+    platformKind: "desktop" | "mobile";
+
+    //
     // Checks whether ImageMagick and FFmpeg are available on PATH.
     // On web (no-op platform), returns allAvailable: true.
     //
     checkTools: () => Promise<IToolsStatus>;
-
-    //
-    // Checks whether a database directory exists at the given path.
-    // On web, always returns true.
-    //
-    checkDatabaseExists: (databasePath: string) => Promise<boolean>;
 
     //
     // Subscribes to task messages (worker progress events).
@@ -419,15 +515,18 @@ export interface IPlatformContext {
     pickFolder: (options?: IPickFolderOptions) => Promise<string | undefined>;
 
     //
-    // Opens a save-file dialog and returns the chosen path, or undefined if cancelled.
-    // The default path is derived from the last download folder and the given filename.
-    //
-    pickFile: (defaultFilename: string) => Promise<string | undefined>;
-
-    //
     // Opens a multi-file picker dialog and returns the chosen paths, or undefined if cancelled.
     //
     pickFiles: (title: string) => Promise<string[] | undefined>;
+
+    //
+    // Saves downloaded assets to a user-chosen location and hands them to the user, reporting the
+    // outcome. The platform owns the whole operation so it can do it in a single native call: desktop
+    // shows one dialog (Save-As for one asset, folder picker for several) and writes straight there;
+    // mobile writes to app-private storage then hands the files out via the native share sheet. One
+    // item is a single download, several is a batch.
+    //
+    saveDownloadedFiles: (items: ISaveAssetItem[], databasePath: string) => Promise<ISaveDownloadResult>;
 
     //
     // Returns all shared secrets stored in the vault.
@@ -435,15 +534,9 @@ export interface IPlatformContext {
     listSecrets: () => Promise<ISharedSecretEntry[]>;
 
     //
-    // Adds a new shared secret to the vault.
+    // Writes a shared secret to the vault, replacing any secret of the same name.
     //
-    addSecret: (entry: ISharedSecretEntry, value: string) => Promise<ISharedSecretEntry>;
-
-    //
-    // Updates an existing shared secret in the vault.
-    // originalName is the prior vault key, used to delete the old entry when the secret is renamed.
-    //
-    updateSecret: (originalName: string, entry: ISharedSecretEntry, value?: string) => Promise<void>;
+    setSecret: (entry: ISharedSecretEntry, value: string) => Promise<void>;
 
     //
     // Deletes a shared secret by name.
@@ -461,6 +554,16 @@ export interface IPlatformContext {
     getRecentDatabases: () => Promise<IDatabaseEntry[]>;
 
     //
+    // Returns the path of the database to reopen on this launch, or undefined when none should be.
+    //
+    // Read once on startup. It is the platform's to answer rather than a config value the interface
+    // reads, because each platform keeps it in its own databases.toml, beside the recents list above:
+    // on desktop that file is under the user's config directory, on mobile in the app's storage
+    // sandbox, and neither is reachable from the interface.
+    //
+    getLastDatabase: () => Promise<string | undefined>;
+
+    //
     // Removes the given name from the recently opened list only; the underlying database entry is preserved.
     //
     removeRecentDatabaseName: (name: string) => Promise<void>;
@@ -470,39 +573,6 @@ export interface IPlatformContext {
     // identified by s3Key (a vault secret name).
     //
     listS3Dirs: (s3Key: string, bucket: string, prefix: string) => Promise<string[]>;
-
-    //
-    // Starts a share receiver using the caller-supplied pairing code (generated by the sender).
-    //
-    startShareReceive: (code: string) => Promise<void>;
-
-    //
-    // Waits for a sender to deliver a payload to the active receiver.
-    // Returns the payload on success, or null on timeout.
-    //
-    waitShareReceive: () => Promise<unknown>;
-
-    //
-    // Cancels the active share receiver.
-    //
-    cancelShareReceive: () => Promise<void>;
-
-    //
-    // Creates a sender with the given payload and pairing code, then waits for a receiver on the LAN.
-    // Returns the discovered endpoint, or null on timeout.
-    //
-    waitForReceiver: (payload: unknown, code: string) => Promise<unknown>;
-
-    //
-    // Sends the payload to the discovered receiver. The sender uses the code it was constructed with.
-    // Returns true on success, false if the code was rejected.
-    //
-    sendToReceiver: (endpoint: unknown) => Promise<boolean>;
-
-    //
-    // Cancels the active share sender.
-    //
-    cancelShareSend: () => Promise<void>;
 
     //
     // Imports a share payload (database or secret) into the local vault and config.
@@ -524,6 +594,32 @@ export interface IPlatformContext {
     // the user clicks the close button. No-op on web/mobile.
     //
     markNewsAsShown: (newsId: string) => Promise<void>;
+
+    //
+    // Toggles the developer tools for the current platform. The desktop app
+    // opens or closes the native Electron dev tools; the web and mobile apps
+    // show or hide an in-page console. The shared UI calls this without knowing
+    // which inspector is used.
+    //
+    toggleDevTools: () => void;
+
+    //
+    // Pushes the shared sync gate's decision to the host scheduler. When false
+    // the host must not enqueue automatic syncs. Computed by the shared
+    // SyncContext from the user toggles and the current network status.
+    //
+    setSyncAllowed: (allowed: boolean) => void;
+
+    //
+    // Registers the frontend handler of one of the app's Ziggy actions, which runs whatever runs the action: its menu item, its
+    // shortcut or runAction. Returns the call that removes it, so a component that registers on mount removes it on unmount.
+    //
+    registerAction: (name: string, handler: () => void) => Unsubscribe;
+
+    //
+    // Runs one of the app's Ziggy actions by its name, through the handler registered for it.
+    //
+    runAction: (name: string) => Promise<void>;
 }
 
 const PlatformContext = createContext<IPlatformContext | undefined>(undefined);

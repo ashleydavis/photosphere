@@ -1,7 +1,6 @@
 import { log } from "utils";
-import React, { useState, useEffect, useCallback } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -16,10 +15,12 @@ import Checkbox from '@mui/joy/Checkbox';
 import Box from '@mui/joy/Box';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import type { IConflictResolution } from 'api';
+import type { IConflictResolution } from '../lib/lan-share';
 import { usePlatform } from '../context/platform-context';
 import { useApp } from '../context/app-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { lanShareErrorMessage } from '../lib/lan-share-error-message';
+import { useLanShareTasks } from "../lib/use-lan-share-tasks";
 
 export interface IReceiveDatabaseDialogProps {
     // Whether the dialog is visible.
@@ -96,6 +97,9 @@ interface ISecretConflict {
 //
 export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogProps) {
     const platform = usePlatform();
+
+    // The LAN sharing flow, run as tasks on the shared task queue.
+    const lanShare = useLanShareTasks();
     const { removeDatabase, importSharePayload } = useApp();
     const [step, setStep] = useState<ReceiveStep>("enter-code");
     const [enteredCode, setEnteredCode] = useState("");
@@ -117,43 +121,87 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // The existing entry that the new database collides with (used for the Replace path).
     const [existingDbName, setExistingDbName] = useState<string | undefined>(undefined);
 
-    // Reset state when dialog opens
+    // Set when the user cancels a receive that is already waiting for a sender.
+    //
+    // Cancelling closes the dialog, but the wait for the sender is still in flight and finishes
+    // afterwards, reporting that no sender connected. Without this it writes that outcome into a
+    // dialog that has already closed and reset itself, leaving it on the error step, so reopening
+    // shows the error rather than the code field. A ref rather than state because the in-flight
+    // wait needs to read the current value when it resolves, not the one captured when it started.
+    const receiveAbandoned = useRef(false);
+
+    // Reset state when the dialog closes, and announce it only once it is open.
+    //
+    // The reset happens on the way out rather than on the way in so that the dialog is always
+    // already showing the code step by the time it becomes visible. Resetting on open cannot do
+    // that: an effect runs after the render that opened the dialog, so setting the step there
+    // leaves one render in which the dialog is open and still showing whichever step it was on
+    // when it was last closed. Reopening after a cancel lands on the waiting step, which has no
+    // code field and no Start button, and anything acting on the line below finds neither.
     useEffect(() => {
         if (!open) {
+            setStep("enter-code");
+            setEnteredCode("");
+            setPayload(null);
+            setErrorMessage("");
             return;
         }
         log.event('Receive database dialog opened');
-        setStep("enter-code");
-        setEnteredCode("");
-        setPayload(null);
-        setErrorMessage("");
     }, [open]);
 
     //
     // Starts the receiver with the entered code, waits for the sender payload, then moves to review.
     //
     const handleStartReceiving = useCallback(async () => {
-        await platform.startShareReceive(enteredCode);
-        setStep("waiting");
+        receiveAbandoned.current = false;
+        const startedAt = Date.now();
+        try {
+            await lanShare.startShareReceive(enteredCode);
+            setStep("waiting");
 
-        const received = await platform.waitShareReceive();
+            const received = await lanShare.waitShareReceive();
 
-        if (!received) {
-            setErrorMessage("No sender connected within 60 seconds.");
-            setStep("error");
-            return;
+            // A receive the user cancelled has nothing to report. Its outcome would otherwise land
+            // in a dialog that has already closed and reset.
+            if (receiveAbandoned.current) {
+                return;
+            }
+
+            if (!received) {
+                // Logged as well as shown, and with how long it waited, because this is the one way
+                // a receive ends without an error to report. Nothing was written here before, so a
+                // receive that was never reached left no trace at all: the smoke tests that wait on
+                // the review step below failed with a bare timeout, and the elapsed time is what
+                // separates a receiver that waited out its full 60s from one whose task was
+                // cancelled after a few hundred milliseconds. Diagnosing that took a whole session.
+                log.error(`Receive gave up after ${Date.now() - startedAt}ms with no payload: it either waited out its full timeout with no sender, or its task was cancelled.`);
+                setErrorMessage("No sender connected within 60 seconds.");
+                setStep("error");
+                return;
+            }
+
+            const receivedPayload = received as IReceivedDatabasePayload;
+            setPayload(receivedPayload);
+            setEditedName(receivedPayload.name);
+            setEditedDescription(receivedPayload.description || "");
+            setEditedPath(receivedPayload.path);
+            setImportS3(!!receivedPayload.s3Credentials);
+            setImportEncryption(!!receivedPayload.encryptionKey);
+            setImportGeocoding(!!receivedPayload.geocodingKey);
+            setStep("review");
+            log.event('Database review step');
         }
-
-        const receivedPayload = received as IReceivedDatabasePayload;
-        setPayload(receivedPayload);
-        setEditedName(receivedPayload.name);
-        setEditedDescription(receivedPayload.description || "");
-        setEditedPath(receivedPayload.path);
-        setImportS3(!!receivedPayload.s3Credentials);
-        setImportEncryption(!!receivedPayload.encryptionKey);
-        setImportGeocoding(!!receivedPayload.geocodingKey);
-        setStep("review");
-        log.event('Database review step');
+        catch (err) {
+            // Same reason as above: a cancelled receive that fails on its way out is not a failure
+            // the user needs telling about, and the dialog it would report into has gone.
+            if (receiveAbandoned.current) {
+                return;
+            }
+            // Surface the failure instead of leaving the dialog spinning on "Waiting for sender...".
+            log.exception("Receive error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [enteredCode, platform]);
 
     //
@@ -194,14 +242,22 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
             return;
         }
 
-        const found = await detectConflicts(payload);
-        if (found.length > 0) {
-            setConflicts(found);
-            setStep("conflict");
-            return;
-        }
+        try {
+            const found = await detectConflicts(payload);
+            if (found.length > 0) {
+                setConflicts(found);
+                setStep("conflict");
+                return;
+            }
 
-        await proceedAfterSecretConflicts({});
+            await proceedAfterSecretConflicts({});
+        }
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the review step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [payload, importS3, importEncryption, importGeocoding, editedName]);
 
     //
@@ -233,11 +289,19 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // Proceeds with the import after secret conflicts have been resolved.
     //
     const handleConflictsResolved = useCallback(async () => {
-        const resolutions: Record<string, IConflictResolution> = {};
-        for (const conflict of conflicts) {
-            resolutions[conflict.secretName] = conflict.resolution;
+        try {
+            const resolutions: Record<string, IConflictResolution> = {};
+            for (const conflict of conflicts) {
+                resolutions[conflict.secretName] = conflict.resolution;
+            }
+            await proceedAfterSecretConflicts(resolutions);
         }
-        await proceedAfterSecretConflicts(resolutions);
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the conflict step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
+        }
     }, [conflicts, editedName]);
 
     //
@@ -246,25 +310,33 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     // For Rename: imports under the user's chosen unique name.
     //
     const handleDbNameConflictResolved = useCallback(async () => {
-        if (dbNameConflictAction === "replace") {
-            if (existingDbName !== undefined) {
-                await removeDatabase(existingDbName);
+        try {
+            if (dbNameConflictAction === "replace") {
+                if (existingDbName !== undefined) {
+                    await removeDatabase(existingDbName);
+                }
+                await doImport(pendingSecretResolutions, editedName.trim());
+                return;
             }
-            await doImport(pendingSecretResolutions, editedName.trim());
-            return;
-        }
 
-        const trimmedRename = dbNameConflictRename.trim();
-        if (trimmedRename.length === 0) {
-            setDbNameConflictRenameError('Name is required');
-            return;
+            const trimmedRename = dbNameConflictRename.trim();
+            if (trimmedRename.length === 0) {
+                setDbNameConflictRenameError('Name is required');
+                return;
+            }
+            const stillCollides = await platform.findDatabase(trimmedRename);
+            if (stillCollides) {
+                setDbNameConflictRenameError(`A database named "${trimmedRename}" already exists.`);
+                return;
+            }
+            await doImport(pendingSecretResolutions, trimmedRename);
         }
-        const stillCollides = await platform.findDatabase(trimmedRename);
-        if (stillCollides) {
-            setDbNameConflictRenameError(`A database named "${trimmedRename}" already exists.`);
-            return;
+        catch (err) {
+            // Surface the failure instead of leaving the dialog stuck on the conflict step.
+            log.exception("Import error:", err as Error);
+            setErrorMessage(lanShareErrorMessage(err as Error));
+            setStep("error");
         }
-        await doImport(pendingSecretResolutions, trimmedRename);
     }, [dbNameConflictAction, dbNameConflictRename, existingDbName, pendingSecretResolutions, editedName, platform, removeDatabase]);
 
     //
@@ -322,7 +394,10 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
     //
     const handleCancel = useCallback(async () => {
         if (step === "waiting") {
-            await platform.cancelShareReceive();
+            // Marked before the cancel rather than after, because cancelling is what makes the
+            // in-flight wait finish, and it can resolve while this is still awaiting.
+            receiveAbandoned.current = true;
+            await lanShare.cancelShareReceive();
         }
         onClose();
     }, [step, platform, onClose]);
@@ -360,8 +435,13 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
         || step === "waiting";
 
     return (
-        <Modal open={open} onClose={handleCancel}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)} sx={{ minWidth: 480, maxWidth: 600 }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={handleCancel}
+            minWidth={480}
+            maxWidth={600}
+            onKeyDown={createDialogKeyHandler(handleDialogConfirm, dialogConfirmDisabled)}
+            >
                 <DialogTitle>Receive Database</DialogTitle>
                 <DialogContent>
                     <Typography level="body-sm" sx={{ mb: 2 }} color="neutral">
@@ -393,6 +473,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <FormControl sx={{ mb: 1 }}>
                                 <FormLabel>Name</FormLabel>
                                 <Input
+                                    data-id="receive-database-name-input"
                                     value={editedName}
                                     onChange={event => setEditedName(event.target.value)}
                                 />
@@ -401,6 +482,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <FormControl sx={{ mb: 1 }}>
                                 <FormLabel>Description</FormLabel>
                                 <Input
+                                    data-id="receive-database-description-input"
                                     value={editedDescription}
                                     onChange={event => setEditedDescription(event.target.value)}
                                 />
@@ -409,6 +491,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <FormControl sx={{ mb: 2 }}>
                                 <FormLabel>Path</FormLabel>
                                 <Input
+                                    data-id="receive-database-path-input"
                                     value={editedPath}
                                     onChange={event => setEditedPath(event.target.value)}
                                 />
@@ -416,6 +499,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.s3Credentials && (
                                 <Checkbox
+                                    data-id="receive-database-import-s3-checkbox"
                                     label={`Import S3 credentials (${payload.s3Credentials.name})`}
                                     checked={importS3}
                                     onChange={event => setImportS3(event.target.checked)}
@@ -425,6 +509,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.encryptionKey && (
                                 <Checkbox
+                                    data-id="receive-database-import-encryption-checkbox"
                                     label={`Import encryption key (${payload.encryptionKey.name})`}
                                     checked={importEncryption}
                                     onChange={event => setImportEncryption(event.target.checked)}
@@ -434,6 +519,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
 
                             {payload.geocodingKey && (
                                 <Checkbox
+                                    data-id="receive-database-import-geocoding-checkbox"
                                     label={`Import geocoding key (${payload.geocodingKey.name})`}
                                     checked={importGeocoding}
                                     onChange={event => setImportGeocoding(event.target.checked)}
@@ -519,7 +605,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
 
                     {step === "success" && (
-                        <Alert color="success">
+                        <Alert data-id="receive-database-success" color="success">
                             Database imported successfully!
                         </Alert>
                     )}
@@ -533,11 +619,11 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                 <DialogActions>
                     {step === "enter-code" && (
                         <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button data-id="receive-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-database-start-button"
                                 disabled={!/^\d{4}$/.test(enteredCode)}
-                                onClick={() => { handleStartReceiving().catch(err => log.exception("Receive error:", err as Error)); }}
+                                onClick={() => { handleStartReceiving(); }}
                             >
                                 Start
                             </Button>
@@ -545,16 +631,16 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                     )}
 
                     {step === "waiting" && (
-                        <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                        <Button data-id="receive-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                     )}
 
                     {step === "review" && (
                         <>
-                            <Button variant="plain" onClick={handleCancel}>Cancel</Button>
+                            <Button data-id="receive-database-cancel-button" variant="plain" onClick={handleCancel}>Cancel</Button>
                             <Button
                                 data-id="receive-database-save-button"
                                 disabled={!editedName || !editedPath}
-                                onClick={() => { handleSave().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleSave(); }}
                             >
                                 Save
                             </Button>
@@ -566,7 +652,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={() => setStep("review")}>Back</Button>
                             <Button
                                 disabled={conflictResolutionInvalid}
-                                onClick={() => { handleConflictsResolved().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleConflictsResolved(); }}
                             >
                                 Continue
                             </Button>
@@ -578,7 +664,7 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                             <Button variant="plain" onClick={() => setStep("review")}>Cancel</Button>
                             <Button
                                 data-id="receive-database-name-conflict-continue"
-                                onClick={() => { handleDbNameConflictResolved().catch(err => log.exception("Import error:", err as Error)); }}
+                                onClick={() => { handleDbNameConflictResolved(); }}
                             >
                                 Continue
                             </Button>
@@ -589,7 +675,6 @@ export function ReceiveDatabaseDialog({ open, onClose }: IReceiveDatabaseDialogP
                         <Button data-id="receive-database-close-button" onClick={onClose}>Close</Button>
                     )}
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

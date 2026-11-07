@@ -18,6 +18,7 @@ export function Video({ asset }: IVideoProps) {
 
     return (
         <video
+            data-id="asset-video"
             muted={true}
             autoPlay={true}
             controls={true}

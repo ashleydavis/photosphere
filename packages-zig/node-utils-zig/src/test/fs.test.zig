@@ -1,0 +1,2299 @@
+const std = @import("std");
+const builtin = @import("builtin");
+const node_utils = @import("node-utils-zig");
+const utils = @import("utils-zig");
+const fs = node_utils.fs;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
+const thread_messages = @import("../../../utils-zig/src/test/thread-messages.zig");
+const MessageQueue = thread_messages.MessageQueue;
+const ThreadAllocator = thread_messages.ThreadAllocator;
+const errors = utils.errors;
+
+//
+// Creates a unique temp file path under the package's .zig-cache directory.
+//
+fn tempFilePath(allocator: std.mem.Allocator, io: std.Io, suffix: []const u8) ![]const u8 {
+    var random_bytes: [8]u8 = undefined;
+    io.random(&random_bytes);
+    const fileName = try std.fmt.allocPrint(allocator, "photosphere-fs-test-{x}-{s}", .{ std.mem.readInt(u64, &random_bytes, .little), suffix });
+    return std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", fileName });
+}
+
+//
+// Builds an object value from key/value pairs.
+//
+fn makeObject(allocator: std.mem.Allocator, keys: []const []const u8, values: []const std.json.Value) !std.json.Value {
+    var object: std.json.ObjectMap = .empty;
+    for (keys, values) |key, value| {
+        try object.put(allocator, key, value);
+    }
+    return .{ .object = object };
+}
+
+test "round-trips a flat object" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "flat.toml");
+    const original = try makeObject(allocator, &.{ "name", "count", "flag" }, &.{ .{ .string = "test" }, .{ .integer = 42 }, .{ .bool = true } });
+
+    try fs.writeToml(allocator, io, filePath, original);
+    const result = try fs.readToml(allocator, io, filePath);
+
+    try std.testing.expectEqualStrings("test", result.object.get("name").?.string);
+    try std.testing.expectEqual(@as(i64, 42), result.object.get("count").?.integer);
+    try std.testing.expectEqual(true, result.object.get("flag").?.bool);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "round-trips an object with string arrays" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "arrays.toml");
+    var tags = std.json.Array.init(allocator);
+    try tags.appendSlice(&.{ .{ .string = "alpha" }, .{ .string = "beta" }, .{ .string = "gamma" } });
+    const original = try makeObject(allocator, &.{"tags"}, &.{.{ .array = tags }});
+
+    try fs.writeToml(allocator, io, filePath, original);
+    const result = try fs.readToml(allocator, io, filePath);
+
+    const result_tags = result.object.get("tags").?.array.items;
+    try std.testing.expectEqual(@as(usize, 3), result_tags.len);
+    try std.testing.expectEqualStrings("alpha", result_tags[0].string);
+    try std.testing.expectEqualStrings("beta", result_tags[1].string);
+    try std.testing.expectEqualStrings("gamma", result_tags[2].string);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "round-trips a nested object (array of tables)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "nested.toml");
+    var items = std.json.Array.init(allocator);
+    try items.append(try makeObject(allocator, &.{ "name", "value" }, &.{ .{ .string = "a" }, .{ .integer = 1 } }));
+    try items.append(try makeObject(allocator, &.{ "name", "value" }, &.{ .{ .string = "b" }, .{ .integer = 2 } }));
+    const original = try makeObject(allocator, &.{"items"}, &.{.{ .array = items }});
+
+    try fs.writeToml(allocator, io, filePath, original);
+    const result = try fs.readToml(allocator, io, filePath);
+
+    const result_items = result.object.get("items").?.array.items;
+    try std.testing.expectEqual(@as(usize, 2), result_items.len);
+    try std.testing.expectEqualStrings("a", result_items[0].object.get("name").?.string);
+    try std.testing.expectEqual(@as(i64, 2), result_items[1].object.get("value").?.integer);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "writeToml creates parent directories if missing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "subdir/nested.toml");
+    const original = try makeObject(allocator, &.{"key"}, &.{.{ .string = "value" }});
+
+    try fs.writeToml(allocator, io, filePath, original);
+    const result = try fs.readToml(allocator, io, filePath);
+
+    try std.testing.expectEqualStrings("value", result.object.get("key").?.string);
+
+    try std.Io.Dir.cwd().deleteTree(io, std.fs.path.dirname(filePath).?);
+}
+
+test "readJson parses a JSON file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "data.json");
+    try fs.outputFile(allocator, io, filePath, "{\"databases\": [{\"name\": \"a\"}], \"count\": 3}");
+
+    const result = try fs.readJson(allocator, io, filePath);
+
+    try std.testing.expectEqualStrings("a", result.object.get("databases").?.array.items[0].object.get("name").?.string);
+    try std.testing.expectEqual(@as(i64, 3), result.object.get("count").?.integer);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "readJson keeps the last value of a repeated key, as JSON.parse does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "repeated.json");
+    try fs.outputFile(allocator, io, filePath, "{\"name\": \"first\", \"name\": \"second\"}");
+
+    const result = try fs.readJson(allocator, io, filePath);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+    try std.testing.expectEqualStrings("second", result.object.get("name").?.string);
+}
+
+test "readJson and readToml fail when the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "missing.json");
+    try std.testing.expectError(error.FileNotFound, fs.readJson(allocator, io, filePath));
+    try std.testing.expectError(error.FileNotFound, fs.readToml(allocator, io, filePath));
+}
+
+test "ensureDir creates nested directories and accepts existing ones" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    const nestedPath = try std.fs.path.join(allocator, &.{ dirPath, "a", "b" });
+
+    try fs.ensureDir(io, nestedPath);
+    try std.testing.expect(fs.pathExists(io, nestedPath));
+    try fs.ensureDir(io, nestedPath);
+    try fs.ensureDirSync(io, nestedPath);
+
+    try fs.remove(io, dirPath);
+    try std.testing.expect(!fs.pathExists(io, dirPath));
+}
+
+test "ensureDir throws when the path is a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "file.txt");
+    try fs.outputFile(allocator, io, filePath, "data");
+
+    try std.testing.expectError(error.Thrown, fs.ensureDir(io, filePath));
+    const expected = try std.fmt.allocPrint(allocator, "Path exists but is not a directory: {s}", .{filePath});
+    try std.testing.expectEqualStrings(expected, errors.lastErrorMessage());
+
+    try fs.remove(io, filePath);
+}
+
+test "ensureFileDir creates the parent directory of a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "parent");
+    const filePath = try std.fs.path.join(allocator, &.{ dirPath, "child", "file.txt" });
+
+    try fs.ensureFileDir(io, filePath);
+
+    try std.testing.expect(fs.pathExists(io, std.fs.path.dirname(filePath).?));
+    try std.testing.expect(!fs.pathExists(io, filePath));
+    try fs.remove(io, dirPath);
+}
+
+test "pathExists reports files and missing paths" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "exists.txt");
+
+    try std.testing.expect(!fs.pathExists(io, filePath));
+    try fs.outputFile(allocator, io, filePath, "data");
+    try std.testing.expect(fs.pathExists(io, filePath));
+    try fs.remove(io, filePath);
+    try std.testing.expect(!fs.pathExists(io, filePath));
+}
+
+test "remove ignores missing paths and removes directory trees" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "tree");
+
+    try fs.remove(io, dirPath);
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "a", "b.txt" }), "b");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "c.txt" }), "c");
+    try fs.remove(io, dirPath);
+    try std.testing.expect(!fs.pathExists(io, dirPath));
+}
+
+test "outputFile writes the data" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "out/data.txt");
+
+    try fs.outputFile(allocator, io, filePath, "hello");
+
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("hello", data);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "getProcessTmpDir returns PHOTOSPHERE_TMP_DIR/tmp when set, otherwise the system temp dir" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    const currentPath = try std.process.currentPathAlloc(io, allocator);
+
+    // Windows paths and temp dir variables follow Node's win32 rules.
+    if (builtin.os.tag == .windows) {
+        try environ_map.put("TEMP", "C:\\custom\\tmp\\");
+        try std.testing.expectEqualStrings("C:\\custom\\tmp", try fs.getProcessTmpDir(allocator, io));
+
+        _ = environ_map.swapRemove("TEMP");
+        try environ_map.put("SystemRoot", "C:\\Windows");
+        try std.testing.expectEqualStrings("C:\\Windows\\temp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("PHOTOSPHERE_TMP_DIR", "C:\\isolated\\test");
+        try std.testing.expectEqualStrings("C:\\isolated\\test\\tmp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("PHOTOSPHERE_TMP_DIR", "relative\\dir");
+        const expected = try std.mem.concat(allocator, u8, &.{ currentPath, "\\relative\\dir\\tmp" });
+        try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
+    }
+    else {
+        try environ_map.put("TMPDIR", "/custom/tmp/");
+        try std.testing.expectEqualStrings("/custom/tmp", try fs.getProcessTmpDir(allocator, io));
+
+        _ = environ_map.swapRemove("TMPDIR");
+        try std.testing.expectEqualStrings("/tmp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("PHOTOSPHERE_TMP_DIR", "/isolated/test");
+        try std.testing.expectEqualStrings("/isolated/test/tmp", try fs.getProcessTmpDir(allocator, io));
+
+        try environ_map.put("PHOTOSPHERE_TMP_DIR", "relative/dir");
+        const expected = try std.fs.path.join(allocator, &.{ currentPath, "relative", "dir", "tmp" });
+        try std.testing.expectEqualStrings(expected, try fs.getProcessTmpDir(allocator, io));
+    }
+}
+
+test "osTmpDir follows the os.tmpdir() rules of the platform" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    if (builtin.os.tag == .windows) {
+        try environ_map.put("SystemRoot", "C:\\Windows");
+        try std.testing.expectEqualStrings("C:\\Windows\\temp", try fs.osTmpDir(allocator));
+        try environ_map.put("TMP", "D:\\tmp\\");
+        try std.testing.expectEqualStrings("D:\\tmp", try fs.osTmpDir(allocator));
+        try environ_map.put("TEMP", "E:\\");
+        try std.testing.expectEqualStrings("E:\\", try fs.osTmpDir(allocator));
+    }
+    else {
+        try std.testing.expectEqualStrings("/tmp", try fs.osTmpDir(allocator));
+        try environ_map.put("TEMP", "/temp/");
+        try std.testing.expectEqualStrings("/temp", try fs.osTmpDir(allocator));
+        try environ_map.put("TMP", "/tmp2");
+        try std.testing.expectEqualStrings("/tmp2", try fs.osTmpDir(allocator));
+        try environ_map.put("TMPDIR", "/");
+        try std.testing.expectEqualStrings("/", try fs.osTmpDir(allocator));
+    }
+}
+
+//
+// Creates a file path inside a directory of this test's own (the directory is created).
+//
+fn tempFilePathInOwnDir(allocator: std.mem.Allocator, io: std.Io, suffix: []const u8) ![]const u8 {
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.ensureDir(io, dirPath);
+    return std.fs.path.join(allocator, &.{ dirPath, suffix });
+}
+
+//
+// What a writer's thread is given: the file and the content it writes there.
+//
+const WriteOrder = struct {
+    filePath: []const u8,
+    content: []const u8,
+};
+
+//
+// A writer's thread, for running writers concurrently: makes its own allocator and Io, takes its order and writes the content to
+// the file with outputFile.
+//
+fn outputFileTask(orders: *MessageQueue) void {
+    var thread_allocator: ThreadAllocator = .init;
+    defer thread_allocator.deinit();
+    var arena_state = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+    defer arena_state.deinit();
+    const allocator = arena_state.allocator();
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    threaded.allocator = thread_allocator.allocator();
+    defer threaded.deinit();
+    const io = threaded.io();
+    const order = thread_messages.take(WriteOrder, orders, io, allocator) catch |err| {
+        std.debug.panic("The writer got no order: {s}", .{@errorName(err)});
+    };
+    fs.outputFile(allocator, io, order.filePath, order.content) catch |err| {
+        std.debug.panic("outputFile failed: {s}", .{@errorName(err)});
+    };
+}
+
+test "concurrent writes to the same file never leave a torn result" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "atomic-concurrent.txt");
+
+    // Each writer emits content of a different length so a byte-level interleave
+    // would produce a mix that matches none of the inputs. Distinct lengths make
+    // any torn write detectable.
+    var contents: [20][]const u8 = undefined;
+    var orders: [20]MessageQueue = undefined;
+    for (&contents, &orders, 0..) |*content, *queue, index| {
+        const padding = try allocator.alloc(u8, index);
+        @memset(padding, 'x');
+        content.* = try std.fmt.allocPrint(allocator, "value-{d}-{s}", .{ index, padding });
+        queue.* = MessageQueue.init();
+    }
+    defer {
+        for (&orders) |*queue| {
+            queue.deinit();
+        }
+    }
+
+    var writers: [20]std.Thread = undefined;
+    for (contents, &orders, &writers) |content, *queue, *writer| {
+        try thread_messages.post(queue, io, allocator, WriteOrder{
+            .filePath = filePath,
+            .content = content,
+        });
+        writer.* = try std.Thread.spawn(.{}, outputFileTask, .{queue});
+    }
+    for (writers) |writer| {
+        writer.join();
+    }
+
+    const finalContent = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+
+    // The file must equal exactly one of the complete writes, never a fragment or a blend.
+    var matched = false;
+    for (contents) |content| {
+        if (std.mem.eql(u8, content, finalContent)) {
+            matched = true;
+        }
+    }
+    try std.testing.expect(matched);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "leaves no temporary files behind after writing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "atomic-cleanup.txt");
+
+    try fs.outputFile(allocator, io, filePath, "done");
+
+    var dir = try std.Io.Dir.cwd().openDir(io, std.fs.path.dirname(filePath).?, .{ .iterate = true });
+    defer dir.close(io);
+    const baseName = std.fs.path.basename(filePath);
+    const tempPrefix = try std.mem.concat(allocator, u8, &.{ baseName, ".tmp-" });
+    var leftoverTempFiles: usize = 0;
+    var iterator = dir.iterate();
+    while (try iterator.next(io)) |entry| {
+        if (std.mem.startsWith(u8, entry.name, tempPrefix)) {
+            leftoverTempFiles += 1;
+        }
+    }
+    try std.testing.expectEqual(@as(usize, 0), leftoverTempFiles);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+//
+// Identity parse for the updateFileOptimistic tests (`raw => raw`).
+//
+const IdentityParse = struct {
+    // Unused. Present so the parser is a value with methods.
+    unused: u8 = 0,
+
+    //
+    // Returns the text as it is.
+    //
+    pub fn run(self: IdentityParse, allocator: std.mem.Allocator, raw: []const u8) ![]const u8 {
+        _ = self;
+        _ = allocator;
+        return raw;
+    }
+};
+
+//
+// Identity serialize for the updateFileOptimistic tests (`value => value`).
+//
+const IdentitySerialize = struct {
+    // Unused. Present so the serializer is a value with methods.
+    unused: u8 = 0,
+
+    //
+    // Returns the value as it is.
+    //
+    pub fn run(self: IdentitySerialize, allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+        _ = self;
+        _ = allocator;
+        return value;
+    }
+};
+
+//
+// A mutator for the updateFileOptimistic tests. Appends `suffix` to the current value and, when
+// `externalWriteFile` is set, first changes the file underneath the update the way a concurrent
+// writer would: once when `injectOnce` is set, otherwise on every attempt with a growing size.
+//
+const AppendMutator = struct {
+    // The text appended to the current value.
+    suffix: []const u8,
+
+    // The file to change underneath the update, or null to change nothing.
+    externalWriteFile: ?[]const u8,
+
+    // Whether the external write happens only on the first call.
+    injectOnce: bool,
+
+    // Whether the external write has happened.
+    injected: bool = false,
+
+    // Grows with each external write so each has a different size.
+    external: usize = 1,
+
+    // The io used for the external write.
+    io: std.Io,
+
+    //
+    // Applies the change.
+    //
+    pub fn run(self: *AppendMutator, allocator: std.mem.Allocator, current: []const u8) ![]const u8 {
+        if (self.externalWriteFile) |externalPath| {
+            if (self.injectOnce) {
+                if (!self.injected) {
+                    self.injected = true;
+
+                    // Simulate a concurrent writer changing the file after our read, before the check.
+                    try std.Io.Dir.cwd().writeFile(self.io, .{
+                        .sub_path = externalPath,
+                        .data = "changed-by-other",
+                    });
+                }
+            }
+            else {
+                // Grow the file each attempt to a size that always differs from the current file,
+                // so the pre-move check always sees a conflict regardless of timestamp resolution.
+                const grown = try allocator.alloc(u8, self.external + 4);
+                @memset(grown, 'y');
+                try std.Io.Dir.cwd().writeFile(self.io, .{
+                    .sub_path = externalPath,
+                    .data = grown,
+                });
+                self.external += 1;
+            }
+        }
+        return std.mem.concat(allocator, u8, &.{ current, self.suffix });
+    }
+};
+
+test "uses the fallback, applies the mutator, and serializes the result" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-generic.txt");
+
+    // Identity parse/serialize so the test exercises the core loop independent of any format.
+    var mutator: AppendMutator = .{
+        .suffix = "-mutated",
+        .externalWriteFile = null,
+        .injectOnce = true,
+        .io = io,
+    };
+    try fs.updateFileOptimistic([]const u8, allocator, io, filePath, "seed", &mutator, IdentityParse{}, IdentitySerialize{}, 3);
+
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("seed-mutated", content);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateFileOptimistic reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-generic-retry.txt");
+    try fs.outputFile(allocator, io, filePath, "base");
+
+    var mutator: AppendMutator = .{
+        .suffix = "!",
+        .externalWriteFile = filePath,
+        .injectOnce = true,
+        .io = io,
+    };
+    try fs.updateFileOptimistic([]const u8, allocator, io, filePath, "", &mutator, IdentityParse{}, IdentitySerialize{}, 3);
+
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("changed-by-other!", content);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateFileOptimistic throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-generic-exhaust.txt");
+    try fs.outputFile(allocator, io, filePath, "x");
+
+    var mutator: AppendMutator = .{
+        .suffix = "!",
+        .externalWriteFile = filePath,
+        .injectOnce = false,
+        .io = io,
+    };
+    try std.testing.expectError(error.Thrown, fs.updateFileOptimistic([]const u8, allocator, io, filePath, "", &mutator, IdentityParse{}, IdentitySerialize{}, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+//
+// A raw mutator for the updateFileRawOptimistic tests: records what it was given and returns
+// `result`, or appends `suffix` to the current bytes when `result` is null. Like AppendMutator it
+// can change the file underneath the update.
+//
+const RawMutator = struct {
+    // The bytes to return, or null to append `suffix` to the current bytes.
+    result: ?[]const u8,
+
+    // The text appended to the current bytes when `result` is null.
+    suffix: []const u8,
+
+    // Whether the mutator has been called.
+    called: bool = false,
+
+    // The bytes the mutator was last given (null for a missing file).
+    receivedCurrent: ?[]const u8 = null,
+
+    // The shared external-writer behaviour.
+    external: AppendMutator,
+
+    //
+    // Applies the change.
+    //
+    pub fn run(self: *RawMutator, allocator: std.mem.Allocator, current: ?[]const u8) ![]const u8 {
+        self.called = true;
+        self.receivedCurrent = current;
+        if (self.result) |result| {
+            return result;
+        }
+        return self.external.run(allocator, current orelse "");
+    }
+};
+
+test "passes undefined for a missing file and writes the mutator result" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-create.bin");
+
+    // Bytes that are not valid utf8, proving the raw path never decodes the content.
+    const newBytes = [_]u8{ 0x00, 0xff, 0xfe, 0x01 };
+    var mutator: RawMutator = .{
+        .result = &newBytes,
+        .suffix = "",
+        .receivedCurrent = "not called",
+        .external = .{
+            .suffix = "",
+            .externalWriteFile = null,
+            .injectOnce = true,
+            .io = io,
+        },
+    };
+    try fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3);
+
+    try std.testing.expect(mutator.called);
+    try std.testing.expect(mutator.receivedCurrent == null);
+    const written = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, &newBytes, written);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "passes the existing bytes to the mutator and publishes its result" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-update.bin");
+    const originalBytes = [_]u8{ 0x10, 0x20, 0x30 };
+    try fs.outputFile(allocator, io, filePath, &originalBytes);
+
+    var mutator: RawMutator = .{
+        .result = null,
+        .suffix = "",
+        .external = .{
+            .suffix = &.{0x40},
+            .externalWriteFile = null,
+            .injectOnce = true,
+            .io = io,
+        },
+    };
+    try fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3);
+
+    try std.testing.expectEqualSlices(u8, &originalBytes, mutator.receivedCurrent.?);
+    const written = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, &.{ 0x10, 0x20, 0x30, 0x40 }, written);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateFileRawOptimistic reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-retry.bin");
+    try fs.outputFile(allocator, io, filePath, "base");
+
+    var mutator: RawMutator = .{
+        .result = null,
+        .suffix = "",
+        .external = .{
+            .suffix = "!",
+            .externalWriteFile = filePath,
+            .injectOnce = true,
+            .io = io,
+        },
+    };
+    try fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3);
+
+    const written = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("changed-by-other!", written);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateFileRawOptimistic throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-exhaust.bin");
+    try fs.outputFile(allocator, io, filePath, "x");
+
+    var mutator: RawMutator = .{
+        .result = null,
+        .suffix = "",
+        .external = .{
+            .suffix = "!",
+            .externalWriteFile = filePath,
+            .injectOnce = false,
+            .io = io,
+        },
+    };
+    try std.testing.expectError(error.Thrown, fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+
+    // The lock is released on the way out.
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
+    try std.testing.expect(!fs.pathExists(io, lockPath));
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "throws a failure that is not contention straight away, without retrying" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // Renaming onto a path held by a non-empty directory fails for a reason that has nothing to
+    // do with anything holding the file, so it must come back at once rather than being tried ten
+    // times over a second. The elapsed time is what tells those apart.
+    const occupiedPath = try tempFilePathInOwnDir(allocator, io, "occupied");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ occupiedPath, "child.txt" }), "in the way");
+
+    const startedAt = std.Io.Timestamp.now(io, .awake).toMilliseconds();
+    try std.testing.expect(std.meta.isError(fs.outputFile(allocator, io, occupiedPath, "replacement")));
+    try std.testing.expect(std.Io.Timestamp.now(io, .awake).toMilliseconds() - startedAt < 500);
+
+    try fs.remove(io, std.fs.path.dirname(occupiedPath).?);
+}
+
+test "still writes normally when nothing refuses" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "rename-ok.txt");
+
+    try fs.outputFile(allocator, io, filePath, "written");
+
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("written", content);
+
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "getConfigDir is .config/photosphere under the home directory on desktop and the CLI" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
+    try environ_map.put(home_variable, "/some-home");
+
+    const expected = try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" });
+    try std.testing.expectEqualStrings(expected, try fs.getConfigDir(allocator));
+}
+
+//
+// The home directory of the user's passwd entry, which Bun's os.homedir falls back to when HOME is unset or empty.
+//
+fn passwdHome() []const u8 {
+    const entry = std.c.getpwuid(std.c.getuid()).?;
+    return std.mem.span(entry.dir.?);
+}
+
+test "osHomedir falls back to the passwd entry when HOME is unset or empty, as Bun's os.homedir does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var environ_map = std.process.Environ.Map.init(arena.allocator());
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    // Windows reads USERPROFILE alone.
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings("", fs.osHomedir());
+        return;
+    }
+    try std.testing.expect(passwdHome().len > 0);
+    try std.testing.expectEqualStrings(passwdHome(), fs.osHomedir());
+    try environ_map.put("HOME", "");
+    try std.testing.expectEqualStrings(passwdHome(), fs.osHomedir());
+    try environ_map.put("HOME", "/some-home/");
+    try std.testing.expectEqualStrings("/some-home/", fs.osHomedir());
+}
+
+test "getConfigDir is the storage sandbox root when there is no home directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    // Only Windows goes without a home directory when its variable is unset: elsewhere the passwd entry gives one.
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings(".", try fs.getConfigDir(allocator));
+    }
+    else {
+        const expected = try node_utils.path.join(allocator, &.{ passwdHome(), ".config", "photosphere" });
+        try std.testing.expectEqualStrings(expected, try fs.getConfigDir(allocator));
+    }
+}
+
+test "getConfigDir uses PHOTOSPHERE_CONFIG_DIR when it is set" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
+    try environ_map.put(home_variable, "/some-home");
+    try environ_map.put("PHOTOSPHERE_CONFIG_DIR", "/chosen-config");
+
+    try std.testing.expectEqualStrings("/chosen-config", try fs.getConfigDir(allocator));
+}
+
+test "getConfigDir uses the override on a device too, where there is no home directory to fall back on" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("PHOTOSPHERE_CONFIG_DIR", "/chosen-config");
+
+    try std.testing.expectEqualStrings("/chosen-config", try fs.getConfigDir(allocator));
+}
+
+test "a file that does not exist reads as undefined" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // Absence is not an error, unlike readToml: the config file does not exist until something
+    // writes it, and a caller that had to check first would be checking then reading, which a
+    // concurrent writer can arrive between.
+    const filePath = try tempFilePath(allocator, io, "missing.yaml");
+
+    try std.testing.expect(try fs.readYaml(allocator, io, filePath) == null);
+}
+
+test "a file reads back as the object it holds" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "round-trip.yaml");
+    try fs.outputFile(allocator, io, filePath, "name: test\ncount: 42\nflag: true\nnested:\n  list:\n    - a\n    - b\n");
+
+    const result = (try fs.readYaml(allocator, io, filePath)).?;
+
+    try std.testing.expectEqualStrings("{\"name\":\"test\",\"count\":42,\"flag\":true,\"nested\":{\"list\":[\"a\",\"b\"]}}", try std.json.Stringify.valueAlloc(allocator, result, .{}));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "writeYaml creates parent directories if missing and the object reads back" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "write-yaml-subdir/nested.yaml");
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "name", .{
+        .string = "test",
+    });
+    try object.put(allocator, "count", .{
+        .integer = 42,
+    });
+
+    try fs.writeYaml(allocator, io, filePath, .{
+        .object = object,
+    });
+    const result = (try fs.readYaml(allocator, io, filePath)).?;
+
+    try std.testing.expectEqualStrings("{\"name\":\"test\",\"count\":42}", try std.json.Stringify.valueAlloc(allocator, result, .{}));
+    try std.Io.Dir.cwd().deleteTree(io, std.fs.path.dirname(filePath).?);
+}
+
+test "an empty file reads as undefined rather than as an empty object" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "empty.yaml");
+    try fs.outputFile(allocator, io, filePath, "");
+
+    try std.testing.expect(try fs.readYaml(allocator, io, filePath) == null);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "a read that fails for a reason other than a missing file is not reported as not configured" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // Only ENOENT means "not configured". The error a directory gives is the platform's own (EISDIR on
+    // Unix, a refusal on Windows), so this asserts that a failure is a failure and not a null result.
+    const dirPath = try tempFilePath(allocator, io, "a-directory");
+    try fs.ensureDir(io, dirPath);
+
+    if (fs.readYaml(allocator, io, dirPath)) |document| {
+        std.debug.print("readYaml of a directory returned {any}\n", .{document});
+        return error.TestExpectedError;
+    }
+    else |_| {}
+    try std.Io.Dir.cwd().deleteTree(io, dirPath);
+}
+
+test "text that is not YAML throws rather than reading as nothing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // A caller that wants the defaults for an unreadable file decides that for itself. Returning
+    // undefined here would make "there is no file" and "the file is broken" indistinguishable.
+    const filePath = try tempFilePath(allocator, io, "broken.yaml");
+    try fs.outputFile(allocator, io, filePath, "a:\n  b: 1\n   c: [");
+
+    try std.testing.expectError(error.Thrown, fs.readYaml(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+//
+// A mutator for the updateYaml tests: adds `amount` to the `count` of the current document, optionally
+// writing the file itself first (a concurrent writer) on the first call or on every call.
+//
+const CountMutator = struct {
+    // What is added to the count.
+    amount: i64,
+
+    // The file a concurrent writer changes, or null for none.
+    externalWriteFile: ?[]const u8,
+
+    // True to change the file on the first call only, false to change it on every call.
+    injectOnce: bool,
+
+    // How many times the file has been changed from outside.
+    external: usize = 0,
+
+    // Used to write the file.
+    io: std.Io,
+
+    //
+    // Returns `{ count: current.count + amount }`.
+    //
+    pub fn run(self: *CountMutator, allocator: std.mem.Allocator, current: std.json.Value) !std.json.Value {
+        if (self.externalWriteFile) |externalPath| {
+            if (!self.injectOnce or self.external == 0) {
+                self.external += 1;
+                var text: std.ArrayList(u8) = .empty;
+                try text.print(allocator, "count: {d}\n", .{if (self.injectOnce) 99 else self.external});
+                var padIndex: usize = 0;
+                while (!self.injectOnce and padIndex < self.external) {
+                    try text.appendSlice(allocator, "# pad\n");
+                    padIndex += 1;
+                }
+                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text.items });
+            }
+        }
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "count", .{ .integer = current.object.get("count").?.integer + self.amount });
+        return .{ .object = object };
+    }
+};
+
+//
+// Makes `{ count: value }`.
+//
+fn countDocument(allocator: std.mem.Allocator, value: i64) !std.json.Value {
+    var object: std.json.ObjectMap = .empty;
+    try object.put(allocator, "count", .{ .integer = value });
+    return .{ .object = object };
+}
+
+//
+// Reads the count of a YAML file.
+//
+fn readCount(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !i64 {
+    return (try fs.readYaml(allocator, io, filePath)).?.object.get("count").?.integer;
+}
+
+test "uses the fallback and writes when the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-yaml-new.yaml");
+
+    var mutator: CountMutator = .{ .amount = 5, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateYaml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 5), try readCount(allocator, io, filePath));
+    try std.testing.expectEqualStrings("count: 5\n", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "reads existing contents and applies the mutator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-yaml-existing.yaml");
+    try fs.outputFile(allocator, io, filePath, "count: 10\n");
+
+    var mutator: CountMutator = .{ .amount = 1, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateYaml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 11), try readCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "uses the fallback when the file is there but empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-yaml-empty.yaml");
+    try fs.outputFile(allocator, io, filePath, "");
+
+    var mutator: CountMutator = .{ .amount = 1, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateYaml(allocator, io, filePath, try countDocument(allocator, 7), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 8), try readCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateYaml reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-yaml-retry.yaml");
+    try fs.outputFile(allocator, io, filePath, "count: 0\n");
+
+    // Simulate a concurrent writer changing the file after our read but before the pre-move check.
+    var mutator: CountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = true, .io = io };
+    try fs.updateYaml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    // The mutator ran twice: once on the stale read (discarded), once on the reloaded value 99 -> 100.
+    try std.testing.expectEqual(@as(i64, 100), try readCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateYaml throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-yaml-exhaust.yaml");
+    try fs.outputFile(allocator, io, filePath, "count: 0\n");
+
+    // Change the file under every attempt (growing its size) so the pre-move check always
+    // sees a conflict regardless of mtime resolution.
+    var mutator: CountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = false, .io = io };
+    try std.testing.expectError(error.Thrown, fs.updateYaml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+//
+// A mutator for the updateToml tests: adds `amount` to the `count` of the current document, optionally
+// writing the file itself first (a concurrent writer) on the first call or on every call.
+//
+const TomlCountMutator = struct {
+    // What is added to the count.
+    amount: i64,
+
+    // The file a concurrent writer changes, or null for none.
+    externalWriteFile: ?[]const u8,
+
+    // True to change the file on the first call only, false to change it on every call.
+    injectOnce: bool,
+
+    // How many times the file has been changed from outside.
+    external: usize = 0,
+
+    // Used to write the file.
+    io: std.Io,
+
+    //
+    // Returns `{ count: current.count + amount }`.
+    //
+    pub fn run(self: *TomlCountMutator, allocator: std.mem.Allocator, current: std.json.Value) !std.json.Value {
+        if (self.externalWriteFile) |externalPath| {
+            if (!self.injectOnce or self.external == 0) {
+                self.external += 1;
+                var text: std.ArrayList(u8) = .empty;
+                try text.print(allocator, "count = {d}\n", .{if (self.injectOnce) 99 else self.external});
+                var padIndex: usize = 0;
+                while (!self.injectOnce and padIndex < self.external) {
+                    try text.appendSlice(allocator, "# pad\n");
+                    padIndex += 1;
+                }
+                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text.items });
+            }
+        }
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "count", .{ .integer = current.object.get("count").?.integer + self.amount });
+        return .{ .object = object };
+    }
+};
+
+//
+// Reads the count of a TOML file.
+//
+fn readTomlCount(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !i64 {
+    return (try fs.readToml(allocator, io, filePath)).object.get("count").?.integer;
+}
+
+test "updateToml uses the fallback and writes when the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-new.toml");
+
+    var mutator: TomlCountMutator = .{ .amount = 5, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 5), try readTomlCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateToml reads existing contents and applies the mutator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-existing.toml");
+    try fs.writeToml(allocator, io, filePath, try countDocument(allocator, 10));
+
+    var mutator: TomlCountMutator = .{ .amount = 1, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 11), try readTomlCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateToml reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-retry.toml");
+    try fs.writeToml(allocator, io, filePath, try countDocument(allocator, 0));
+
+    // Simulate a concurrent writer changing the file after our read but before the pre-move check.
+    var mutator: TomlCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = true, .io = io };
+    try fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    // The mutator ran twice: once on the stale read (discarded), once on the reloaded value 99 -> 100.
+    try std.testing.expectEqual(@as(i64, 100), try readTomlCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateToml throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-toml-exhaust.toml");
+    try fs.writeToml(allocator, io, filePath, try countDocument(allocator, 0));
+
+    // Change the file under every attempt (growing its size) so the pre-move check always
+    // sees a conflict regardless of mtime resolution.
+    var mutator: TomlCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = false, .io = io };
+    try std.testing.expectError(error.Thrown, fs.updateToml(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+//
+// Sets up an environment for the getCacheDir tests: a home directory and nothing else.
+//
+fn cacheDirEnvironment(environ_map: *std.process.Environ.Map) !void {
+    node_utils.process_env.setEnvironMap(environ_map);
+    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
+    try environ_map.put(home_variable, "/some-home");
+}
+
+test "getCacheDir is ~/.cache/photosphere on Linux" {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("/some-home/.cache/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir follows XDG_CACHE_HOME on Linux, which is what says where caches go there" {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("XDG_CACHE_HOME", "/xdg-cache");
+
+    try std.testing.expectEqualStrings("/xdg-cache/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir ignores an XDG_CACHE_HOME that is set but empty, which means the same as unset" {
+    if (builtin.os.tag == .macos or builtin.os.tag == .windows) {
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("XDG_CACHE_HOME", "");
+
+    try std.testing.expectEqualStrings("/some-home/.cache/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is ~/Library/Caches/photosphere on macOS" {
+    if (builtin.os.tag != .macos) {
+        // getCacheDir answers for the platform it was built for, so the macOS location can only be checked on macOS.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("/some-home/Library/Caches/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir ignores XDG_CACHE_HOME on macOS, which has a location of its own" {
+    if (builtin.os.tag != .macos) {
+        // getCacheDir answers for the platform it was built for, so the macOS location can only be checked on macOS.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("XDG_CACHE_HOME", "/xdg-cache");
+
+    try std.testing.expectEqualStrings("/some-home/Library/Caches/photosphere", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is under LOCALAPPDATA on Windows" {
+    if (builtin.os.tag != .windows) {
+        // getCacheDir answers for the platform it was built for, so the Windows location can only be checked on Windows.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("LOCALAPPDATA", "C:\\AppDataLocal");
+
+    try std.testing.expectEqualStrings("C:\\AppDataLocal\\photosphere\\cache", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir falls back to AppData/Local on Windows when LOCALAPPDATA is not set" {
+    if (builtin.os.tag != .windows) {
+        // getCacheDir answers for the platform it was built for, so the Windows location can only be checked on Windows.
+        return error.SkipZigTest;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    try std.testing.expectEqualStrings("\\some-home\\AppData\\Local\\photosphere\\cache", try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is the storage sandbox root when there is no home directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    // Only Windows goes without a home directory when its variable is unset: elsewhere the passwd entry gives one.
+    if (builtin.os.tag == .windows) {
+        try std.testing.expectEqualStrings(".", try fs.getCacheDir(allocator));
+    }
+    else if (builtin.os.tag == .macos) {
+        const expected = try node_utils.path.join(allocator, &.{ passwdHome(), "Library", "Caches", "photosphere" });
+        try std.testing.expectEqualStrings(expected, try fs.getCacheDir(allocator));
+    }
+    else {
+        const expected = try node_utils.path.join(allocator, &.{ passwdHome(), ".cache", "photosphere" });
+        try std.testing.expectEqualStrings(expected, try fs.getCacheDir(allocator));
+    }
+}
+
+test "getCacheDir uses PHOTOSPHERE_CACHE_DIR when it is set, on every platform" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("PHOTOSPHERE_CACHE_DIR", "/chosen-cache");
+
+    try std.testing.expectEqualStrings("/chosen-cache", try fs.getCacheDir(allocator));
+}
+
+test "an empty override is the same as an unset one, which is how an environment variable is read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    // An empty PHOTOSPHERE_CONFIG_DIR falls back to the home directory rather than naming the empty path.
+    try environ_map.put("PHOTOSPHERE_CONFIG_DIR", "");
+    const expected_config = try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" });
+    try std.testing.expectEqualStrings(expected_config, try fs.getConfigDir(allocator));
+
+    // An empty PHOTOSPHERE_TMP_DIR falls back to the system temp directory rather than resolving to cwd/tmp.
+    // os.tmpdir() reads TEMP then TMP, and falls back to %SystemRoot%\temp when neither is set, so the
+    // expected value is named here rather than left to whatever the runner's own environment holds.
+    try environ_map.put("PHOTOSPHERE_TMP_DIR", "");
+    const expected_tmp = if (builtin.os.tag == .windows) blk: {
+        try environ_map.put("SystemRoot", "C:\\Windows");
+        break :blk "C:\\Windows\\temp";
+    } else
+        try fs.osTmpDir(allocator);
+    try std.testing.expectEqualStrings(expected_tmp, try fs.getProcessTmpDir(allocator, io));
+
+    // An empty PHOTOSPHERE_CACHE_DIR falls back to the platform's own cache location, not to the empty path.
+    try environ_map.put("PHOTOSPHERE_CACHE_DIR", "");
+    const expected_cache = if (builtin.os.tag == .macos)
+        "/some-home/Library/Caches/photosphere"
+    else if (builtin.os.tag == .windows)
+        "\\some-home\\AppData\\Local\\photosphere\\cache"
+    else
+        "/some-home/.cache/photosphere";
+    try std.testing.expectEqualStrings(expected_cache, try fs.getCacheDir(allocator));
+}
+
+test "getCacheDir is not the config directory, because nothing in it is a setting" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try cacheDirEnvironment(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    try environ_map.put("PHOTOSPHERE_CONFIG_DIR", "/chosen-config");
+
+    try std.testing.expect(!std.mem.eql(u8, try fs.getCacheDir(allocator), try fs.getConfigDir(allocator)));
+}
+
+test "readFileHead reads the first bytes of a file, or the whole file when it is shorter" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "head.txt");
+    try fs.outputFile(allocator, io, filePath, "0123456789");
+
+    try std.testing.expectEqualStrings("0123", try fs.readFileHead(allocator, io, filePath, 4));
+    try std.testing.expectEqualStrings("0123456789", try fs.readFileHead(allocator, io, filePath, 10));
+    try std.testing.expectEqualStrings("0123456789", try fs.readFileHead(allocator, io, filePath, 1000));
+    try std.testing.expectEqualStrings("", try fs.readFileHead(allocator, io, filePath, 0));
+    try std.testing.expectError(error.FileNotFound, fs.readFileHead(allocator, io, "no-such-file.txt", 4));
+}
+
+test "mathRandom returns numbers in [0, 1) that vary like Math.random()" {
+    var smallest: f64 = 1;
+    var largest: f64 = 0;
+    var count: usize = 0;
+    while (count < 1000) : (count += 1) {
+        const value = fs.mathRandom(std.testing.io);
+        try std.testing.expect(value >= 0);
+        try std.testing.expect(value < 1);
+        smallest = @min(smallest, value);
+        largest = @max(largest, value);
+    }
+
+    // A thousand uniform draws all landing in one tenth of the range would mean the bits are not being spread.
+    try std.testing.expect(smallest < 0.1);
+    try std.testing.expect(largest > 0.9);
+}
+
+//
+// Creates the update lock of a file, as another process holding it would, last modified `ageMs` ago.
+//
+fn holdUpdateLock(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, ageMs: i64) ![]const u8 {
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
+    const lockFile = try std.Io.Dir.cwd().createFile(io, lockPath, .{});
+    defer lockFile.close(io);
+    const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - ageMs) * std.time.ns_per_ms);
+    try lockFile.setTimestamps(io, .{ .modify_timestamp = .{ .new = modified } });
+    return lockPath;
+}
+
+test "updateFileRawOptimistic breaks an update lock older than the stale limit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-stale-lock.bin");
+
+    // A lock left behind a minute ago by a process that died holding it.
+    const lockPath = try holdUpdateLock(allocator, io, filePath, 60_000);
+    var mutator: RawMutator = .{
+        .result = "published",
+        .suffix = "",
+        .external = .{ .suffix = "", .externalWriteFile = null, .injectOnce = true, .io = io },
+    };
+    try fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3);
+    try std.testing.expectEqualStrings("published", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try std.testing.expect(!fs.pathExists(io, lockPath));
+}
+
+test "updateFileRawOptimistic gives up on an update lock another process holds" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-held-lock.bin");
+
+    // A lock taken just now, which is held for as long as the update waits.
+    const lockPath = try holdUpdateLock(allocator, io, filePath, 0);
+    var mutator: RawMutator = .{
+        .result = "never",
+        .suffix = "",
+        .external = .{ .suffix = "", .externalWriteFile = null, .injectOnce = true, .io = io },
+    };
+    try std.testing.expectError(error.Thrown, fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3));
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to update {s}: could not take the update lock after 50 attempts.", .{filePath}), utils.errors.lastErrorMessage());
+    try std.testing.expect(!mutator.called);
+    try std.testing.expect(fs.pathExists(io, lockPath));
+}
+
+//
+// Sets the last modified time of a directory. std's openDir asks Windows only for read and
+// traverse access, so NtSetInformationFile refuses a timestamp through that handle with
+// ACCESS_DENIED. On Windows the directory is therefore opened here with FILE_WRITE_ATTRIBUTES too.
+//
+fn setDirectoryModified(io: std.Io, dirPath: []const u8, modified: std.Io.Timestamp) !void {
+    if (builtin.os.tag == .windows) {
+        const windows = std.os.windows;
+        const pathSpace = try std.Io.Threaded.sliceToPrefixedFileW(std.Io.Dir.cwd().handle, dirPath, .{});
+        const pathWide = pathSpace.span();
+        var ioStatusBlock: windows.IO_STATUS_BLOCK = undefined;
+        var dirHandle: windows.HANDLE = undefined;
+        const status = windows.ntdll.NtCreateFile(
+            &dirHandle,
+            .{
+                .SPECIFIC = .{ .FILE_DIRECTORY = .{
+                    .READ_ATTRIBUTES = true,
+                    .WRITE_ATTRIBUTES = true,
+                } },
+                .STANDARD = .{
+                    .SYNCHRONIZE = true,
+                },
+            },
+            &.{
+                .RootDirectory = if (std.fs.path.isAbsoluteWindowsWtf16(pathWide)) null else std.Io.Dir.cwd().handle,
+                .ObjectName = @constCast(&windows.UNICODE_STRING.init(pathWide)),
+            },
+            &ioStatusBlock,
+            null,
+            .{ .NORMAL = true },
+            .VALID_FLAGS,
+            .OPEN,
+            .{
+                .DIRECTORY_FILE = true,
+                .IO = .SYNCHRONOUS_NONALERT,
+                .OPEN_FOR_BACKUP_INTENT = true,
+            },
+            null,
+            0,
+        );
+        if (status != .SUCCESS) {
+            return windows.unexpectedStatus(status);
+        }
+        const dirFile: std.Io.File = .{
+            .handle = dirHandle,
+            .flags = .{
+                .nonblocking = false,
+            },
+        };
+        defer dirFile.close(io);
+        try dirFile.setTimestamps(io, .{
+            .modify_timestamp = .{
+                .new = modified,
+            },
+        });
+    }
+    else {
+        // (Opened for iterating, so the handle is a real one that can take a timestamp.)
+        var dir = try std.Io.Dir.cwd().openDir(io, dirPath, .{
+            .iterate = true,
+        });
+        defer dir.close(io);
+        const dirFile: std.Io.File = .{
+            .handle = dir.handle,
+            .flags = .{
+                .nonblocking = false,
+            },
+        };
+        try dirFile.setTimestamps(io, .{
+            .modify_timestamp = .{
+                .new = modified,
+            },
+        });
+    }
+}
+
+test "setDirectoryModified backdates a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePathInOwnDir(allocator, io, "backdated-directory");
+    try std.Io.Dir.cwd().createDirPath(io, dirPath);
+    const modifiedMs = std.Io.Timestamp.now(io, .real).toMilliseconds() - 60_000;
+
+    try setDirectoryModified(io, dirPath, std.Io.Timestamp.fromNanoseconds(@as(i96, modifiedMs) * std.time.ns_per_ms));
+
+    try std.testing.expectEqual(modifiedMs, (try std.Io.Dir.cwd().statFile(io, dirPath, .{})).mtime.toMilliseconds());
+}
+
+test "an update lock that has gone stale but is a directory cannot be broken, and the update fails" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "optimistic-raw-directory-lock.bin");
+
+    // fs.rm(lockPath, { force: true }) refuses a directory (EISDIR), and so does the port.
+    const lockPath = try std.mem.concat(allocator, u8, &.{ filePath, ".lock" });
+    try std.Io.Dir.cwd().createDirPath(io, lockPath);
+    const modified = std.Io.Timestamp.fromNanoseconds(@as(i96, std.Io.Timestamp.now(io, .real).toMilliseconds() - 60_000) * std.time.ns_per_ms);
+    try setDirectoryModified(io, lockPath, modified);
+    var mutator: RawMutator = .{
+        .result = "published",
+        .suffix = "",
+        .external = .{
+            .suffix = "",
+            .externalWriteFile = null,
+            .injectOnce = true,
+            .io = io,
+        },
+    };
+
+    try std.testing.expectError(error.IsDir, fs.updateFileRawOptimistic(allocator, io, filePath, &mutator, 3));
+}
+
+test "readFileHead fails for a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePathInOwnDir(allocator, io, "head-of-a-directory");
+    try std.Io.Dir.cwd().createDirPath(io, dirPath);
+
+    try std.testing.expectError(error.IsDir, fs.readFileHead(allocator, io, dirPath, 16));
+}
+
+test "readFileHead reads only the first bytes of a longer file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "long.bin");
+    const contents = try allocator.alloc(u8, 1024 * 1024);
+    for (contents, 0..) |*byte, index| {
+        byte.* = @intCast(index % 251);
+    }
+    try fs.outputFile(allocator, io, filePath, contents);
+
+    const head = try fs.readFileHead(allocator, io, filePath, 4096);
+
+    try std.testing.expectEqual(@as(usize, 4096), head.len);
+    try std.testing.expectEqualSlices(u8, contents[0..4096], head);
+}
+
+test "readFileHead reads the whole of a file shorter than the count asked for" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "short.bin");
+    try fs.outputFile(allocator, io, filePath, "short");
+
+    const head = try fs.readFileHead(allocator, io, filePath, 4096);
+
+    try std.testing.expectEqualSlices(u8, "short", head);
+}
+
+test "readFileHead reads nothing from an empty file rather than failing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "empty.bin");
+    try fs.outputFile(allocator, io, filePath, "");
+
+    try std.testing.expectEqual(@as(usize, 0), (try fs.readFileHead(allocator, io, filePath, 4096)).len);
+}
+
+test "getConfigDir is the same Unix-style path on Windows, so one support answer covers every machine" {
+    // getConfigDir reads the platform it was built for, so this checks the same path on whichever platform runs it.
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    const home_variable = if (builtin.os.tag == .windows) "USERPROFILE" else "HOME";
+    try environ_map.put(home_variable, "/some-home");
+
+    // Joined with `path.join`, because getConfigDir joins with the platform's own
+    // separator. The Windows job failed here (node-utils-zig fs test "getConfigDir is the same Unix-style path on
+    // Windows") expecting "/some-home/.config/photosphere" and finding "\some-home\.config\photosphere".
+    try std.testing.expectEqualStrings(try node_utils.path.join(allocator, &.{ "/some-home", ".config", "photosphere" }), try fs.getConfigDir(allocator));
+}
+
+test "outputFile writes binary data" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "binary.bin");
+
+    try fs.outputFile(allocator, io, filePath, &.{ 0, 255, 1, 128 });
+
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 255, 1, 128 }, data);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "outputFile overwrites an existing file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "file.txt");
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filePath, .data = "old content" });
+
+    try fs.outputFile(allocator, io, filePath, "new content");
+
+    const data = try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("new content", data);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "readJson throws if the file contains invalid JSON" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "invalid.json");
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filePath, .data = "not valid json" });
+
+    try std.testing.expectError(error.SyntaxError, fs.readJson(allocator, io, filePath));
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "ensureFileDir accepts a file directly in an existing directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "existing");
+    try fs.ensureDir(io, dirPath);
+    const filePath = try std.fs.path.join(allocator, &.{ dirPath, "file.txt" });
+
+    try fs.ensureFileDir(io, filePath);
+
+    try std.testing.expect(fs.pathExists(io, dirPath));
+    try fs.remove(io, dirPath);
+}
+
+test "writeJson writes an object as a JSON file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "data.json");
+    const data = try makeObject(allocator, &.{ "name", "value" }, &.{ .{ .string = "test" }, .{ .integer = 123 } });
+
+    try fs.writeJson(allocator, io, filePath, data, .minified);
+
+    try std.testing.expect(fs.pathExists(io, filePath));
+    try std.testing.expectEqualStrings("{\"name\":\"test\",\"value\":123}", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "writeJson creates parent directories" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "writejson");
+    const filePath = try std.fs.path.join(allocator, &.{ dirPath, "parent", "child", "data.json" });
+    const data = try makeObject(allocator, &.{"name"}, &.{.{ .string = "test" }});
+
+    try fs.writeJson(allocator, io, filePath, data, .minified);
+
+    try std.testing.expect(fs.pathExists(io, filePath));
+    try fs.remove(io, dirPath);
+}
+
+test "writeJson formats JSON with spaces" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "data.json");
+    const data = try makeObject(allocator, &.{"name"}, &.{.{ .string = "test" }});
+
+    try fs.writeJson(allocator, io, filePath, data, .indent_2);
+
+    try std.testing.expectEqualStrings("{\n  \"name\": \"test\"\n}", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "writeJson handles nested objects" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "data.json");
+    var numbers = std.json.Array.init(allocator);
+    try numbers.appendSlice(&.{ .{ .integer = 1 }, .{ .integer = 2 }, .{ .integer = 3 } });
+    const nested = try makeObject(allocator, &.{ "value", "array" }, &.{ .{ .integer = 123 }, .{ .array = numbers } });
+    const data = try makeObject(allocator, &.{ "name", "nested" }, &.{ .{ .string = "test" }, nested });
+
+    try fs.writeJson(allocator, io, filePath, data, .minified);
+
+    const result = try fs.readJson(allocator, io, filePath);
+    try std.testing.expectEqualStrings("test", result.object.get("name").?.string);
+    const readNested = result.object.get("nested").?.object;
+    try std.testing.expectEqual(@as(i64, 123), readNested.get("value").?.integer);
+    try std.testing.expectEqual(@as(usize, 3), readNested.get("array").?.array.items.len);
+    try std.testing.expectEqual(@as(i64, 3), readNested.get("array").?.array.items[2].integer);
+    try fs.remove(io, std.fs.path.dirname(filePath).?);
+}
+
+test "emptyDir creates the directory if it does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "empty-dir");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expect(fs.pathExists(io, dirPath));
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dirPath)).len);
+    try fs.remove(io, dirPath);
+}
+
+test "emptyDir removes all files from the directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file1.txt" }), "test1");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file2.txt" }), "test2");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dirPath)).len);
+    try fs.remove(io, dirPath);
+}
+
+test "emptyDir removes nested directories" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "nested", "file.txt" }), "test");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expectEqual(@as(usize, 0), (try node_utils.node_fs.readdir(allocator, io, dirPath)).len);
+    try fs.remove(io, dirPath);
+}
+
+test "emptyDir keeps the directory itself" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file.txt" }), "test");
+
+    try fs.emptyDir(allocator, io, dirPath);
+
+    try std.testing.expect(fs.pathExists(io, dirPath));
+    try fs.remove(io, dirPath);
+}
+
+test "copy copies a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test content");
+
+    try fs.copy(allocator, io, srcPath, destPath);
+
+    try std.testing.expect(fs.pathExists(io, destPath));
+    try std.testing.expectEqualStrings("test content", try std.Io.Dir.cwd().readFileAlloc(io, destPath, allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "copy copies a directory recursively" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcDir = try std.fs.path.join(allocator, &.{ dirPath, "source" });
+    const destDir = try std.fs.path.join(allocator, &.{ dirPath, "dest" });
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "file1.txt" }), "test1");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "nested", "file2.txt" }), "test2");
+
+    try fs.copy(allocator, io, srcDir, destDir);
+
+    try std.testing.expect(fs.pathExists(io, destDir));
+    try std.testing.expectEqualStrings("test1", try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ destDir, "file1.txt" }), allocator, .unlimited));
+    try std.testing.expectEqualStrings("test2", try std.Io.Dir.cwd().readFileAlloc(io, try std.fs.path.join(allocator, &.{ destDir, "nested", "file2.txt" }), allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "copy creates parent directories for the destination" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "parent", "child", "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test");
+
+    try fs.copy(allocator, io, srcPath, destPath);
+
+    try std.testing.expect(fs.pathExists(io, destPath));
+    try fs.remove(io, dirPath);
+}
+
+test "copy overwrites an existing file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "new content");
+    try fs.outputFile(allocator, io, destPath, "old content");
+
+    try fs.copy(allocator, io, srcPath, destPath);
+
+    try std.testing.expectEqualStrings("new content", try std.Io.Dir.cwd().readFileAlloc(io, destPath, allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync creates a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "sync-dir");
+
+    try fs.ensureDirSync(io, dirPath);
+
+    const stats = try std.Io.Dir.cwd().statFile(io, dirPath, .{});
+    try std.testing.expect(stats.kind == .directory);
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync creates nested directories recursively" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "sync");
+    const nestedPath = try std.fs.path.join(allocator, &.{ dirPath, "nested", "deep", "sync-dir" });
+
+    try fs.ensureDirSync(io, nestedPath);
+
+    try std.testing.expect(fs.pathExists(io, nestedPath));
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync does not throw if the directory already exists" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "existing-sync-dir");
+    try fs.ensureDirSync(io, dirPath);
+
+    try fs.ensureDirSync(io, dirPath);
+
+    try fs.remove(io, dirPath);
+}
+
+test "ensureDirSync throws if the path exists as a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "file.txt");
+    try fs.outputFile(allocator, io, filePath, "test");
+
+    try std.testing.expectError(error.Thrown, fs.ensureDirSync(io, filePath));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "Path exists but is not a directory") != null);
+    try fs.remove(io, filePath);
+}
+
+test "removeSync removes a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "file.txt");
+    try fs.outputFile(allocator, io, filePath, "test");
+
+    try fs.removeSync(io, filePath);
+
+    try std.testing.expect(!fs.pathExists(io, filePath));
+}
+
+test "removeSync removes a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "dir");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ dirPath, "file.txt" }), "test");
+
+    try fs.removeSync(io, dirPath);
+
+    try std.testing.expect(!fs.pathExists(io, dirPath));
+}
+
+test "removeSync does not throw if the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePath(allocator, io, "non-existent.txt");
+
+    try fs.removeSync(io, filePath);
+}
+
+test "copySync copies a file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy-sync");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test content");
+
+    try fs.copySync(allocator, io, srcPath, destPath);
+
+    try std.testing.expectEqualStrings("test content", try std.Io.Dir.cwd().readFileAlloc(io, destPath, allocator, .unlimited));
+    try fs.remove(io, dirPath);
+}
+
+test "copySync copies a directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy-sync");
+    const srcDir = try std.fs.path.join(allocator, &.{ dirPath, "source" });
+    const destDir = try std.fs.path.join(allocator, &.{ dirPath, "dest" });
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "file1.txt" }), "test1");
+    try fs.outputFile(allocator, io, try std.fs.path.join(allocator, &.{ srcDir, "nested", "file2.txt" }), "test2");
+
+    try fs.copySync(allocator, io, srcDir, destDir);
+
+    try std.testing.expect(fs.pathExists(io, destDir));
+    try std.testing.expect(fs.pathExists(io, try std.fs.path.join(allocator, &.{ destDir, "file1.txt" })));
+    try std.testing.expect(fs.pathExists(io, try std.fs.path.join(allocator, &.{ destDir, "nested", "file2.txt" })));
+    try fs.remove(io, dirPath);
+}
+
+test "copySync creates parent directories for the destination" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "copy-sync");
+    const srcPath = try std.fs.path.join(allocator, &.{ dirPath, "source.txt" });
+    const destPath = try std.fs.path.join(allocator, &.{ dirPath, "parent", "child", "dest.txt" });
+    try fs.outputFile(allocator, io, srcPath, "test");
+
+    try fs.copySync(allocator, io, srcPath, destPath);
+
+    try std.testing.expect(fs.pathExists(io, destPath));
+    try fs.remove(io, dirPath);
+}
+
+//
+// The document a concurrent writer puts in the file in the updateJson tests: a count, and padding that makes each write a
+// different length.
+//
+const IExternalCountDocument = struct {
+    // The count the concurrent writer sets.
+    count: usize,
+
+    // A string of `x` characters, as long as the number of outside changes so far.
+    pad: []const u8,
+};
+
+//
+// A mutator for the updateJson tests: adds `amount` to the `count` of the current document, optionally
+// writing the file itself first (a concurrent writer) on the first call or on every call.
+//
+const JsonCountMutator = struct {
+    // What is added to the count.
+    amount: i64,
+
+    // The file a concurrent writer changes, or null for none.
+    externalWriteFile: ?[]const u8,
+
+    // True to change the file on the first call only, false to change it on every call.
+    injectOnce: bool,
+
+    // How many times the file has been changed from outside.
+    external: usize = 0,
+
+    // Used to write the file.
+    io: std.Io,
+
+    //
+    // Returns `{ count: current.count + amount }`.
+    //
+    pub fn run(self: *JsonCountMutator, allocator: std.mem.Allocator, current: std.json.Value) !std.json.Value {
+        if (self.externalWriteFile) |externalPath| {
+            if (!self.injectOnce or self.external == 0) {
+                self.external += 1;
+                const pad = try allocator.alloc(u8, if (self.injectOnce) 0 else self.external);
+                @memset(pad, 'x');
+                const document: IExternalCountDocument = .{
+                    .count = if (self.injectOnce) 99 else self.external,
+                    .pad = pad,
+                };
+                const text = try utils.json.stringify(allocator, document);
+                try std.Io.Dir.cwd().writeFile(self.io, .{ .sub_path = externalPath, .data = text });
+            }
+        }
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "count", .{ .integer = current.object.get("count").?.integer + self.amount });
+        return .{ .object = object };
+    }
+};
+
+//
+// Reads the count of a JSON file.
+//
+fn readJsonCount(allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !i64 {
+    return (try fs.readJson(allocator, io, filePath)).object.get("count").?.integer;
+}
+
+test "updateJson uses the fallback and writes when the file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-new.json");
+
+    var mutator: JsonCountMutator = .{ .amount = 5, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 5), try readJsonCount(allocator, io, filePath));
+    try std.testing.expectEqualStrings("{\"count\":5}", try std.Io.Dir.cwd().readFileAlloc(io, filePath, allocator, .unlimited));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateJson reads existing contents and applies the mutator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-existing.json");
+    try fs.writeJson(allocator, io, filePath, try countDocument(allocator, 10), .minified);
+
+    var mutator: JsonCountMutator = .{ .amount = 1, .externalWriteFile = null, .injectOnce = true, .io = io };
+    try fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 11), try readJsonCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateJson reloads and re-applies the mutator when the file changed under it" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-retry.json");
+    try fs.writeJson(allocator, io, filePath, try countDocument(allocator, 0), .minified);
+
+    var mutator: JsonCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = true, .io = io };
+    try fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 3);
+
+    try std.testing.expectEqual(@as(i64, 100), try readJsonCount(allocator, io, filePath));
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "updateJson throws after the configured retries when the file keeps changing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "update-json-exhaust.json");
+    try fs.writeJson(allocator, io, filePath, try countDocument(allocator, 0), .minified);
+
+    // Grow the file each attempt so the pre-move check always sees a conflict.
+    var mutator: JsonCountMutator = .{ .amount = 1, .externalWriteFile = filePath, .injectOnce = false, .io = io };
+    try std.testing.expectError(error.Thrown, fs.updateJson(allocator, io, filePath, try countDocument(allocator, 0), &mutator, 2));
+    try std.testing.expect(std.mem.indexOf(u8, errors.lastErrorMessage(), "kept changing") != null);
+    try std.Io.Dir.cwd().deleteFile(io, filePath);
+}
+
+test "readFileHead reports running out of memory, and not as a failed read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const filePath = try tempFilePathInOwnDir(allocator, io, "head-without-memory.txt");
+    try fs.outputFile(allocator, io, filePath, "0123456789");
+
+    // The first allocation readFileHead makes, the room for the bytes it reads, is refused.
+    var failingAllocator = std.testing.FailingAllocator.init(allocator, .{
+        .fail_index = 0,
+    });
+    try std.testing.expectError(error.OutOfMemory, fs.readFileHead(failingAllocator.allocator(), io, filePath, 4));
+}
+
+//
+// A rename that always fails with EBUSY, as a Windows rename does while something has the target open.
+//
+fn busyDirRename(userdata: ?*anyopaque, oldDir: std.Io.Dir, oldSubPath: []const u8, newDir: std.Io.Dir, newSubPath: []const u8) std.Io.Dir.RenameError!void {
+    _ = userdata;
+    _ = oldDir;
+    _ = oldSubPath;
+    _ = newDir;
+    _ = newSubPath;
+    return error.FileBusy;
+}
+
+test "outputFile retries a rename that is refused as busy, then gives up with the refusal" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const dirPath = try tempFilePath(allocator, io, "busy-rename");
+    try fs.ensureDir(io, dirPath);
+
+    // The refusal is retried with a growing wait before it is thrown, and the waits add up to far more
+    // than a rename that was tried only once could take.
+    //
+    // On Windows the refusal is the real one: a rename onto a file that another handle holds open without
+    // sharing delete access fails with a sharing violation, which is EBUSY to Node and FileBusy to Zig.
+    // POSIX has no such refusal, and macOS does not refuse a rename onto "." of a directory with EBUSY as
+    // Linux does, so there the Io handed to outputFile is the real one with only its rename replaced by
+    // one that is always refused as busy: the temporary file is really written and every rename of it into
+    // place is refused.
+    const targetPath = try std.fs.path.join(allocator, &.{ dirPath, if (builtin.os.tag == .windows) "held-open.txt" else "target.txt" });
+    const heldOpen: ?std.Io.File = if (builtin.os.tag == .windows) try holdOpenWithoutDeleteSharing(targetPath) else null;
+    errdefer if (heldOpen) |file| {
+        file.close(io);
+    };
+    var busyRenameVtable = io.vtable.*;
+    busyRenameVtable.dirRename = busyDirRename;
+    const busyRenameIo: std.Io = if (builtin.os.tag == .windows) io else .{
+        .userdata = io.userdata,
+        .vtable = &busyRenameVtable,
+    };
+
+    const startedAt = std.Io.Timestamp.now(io, .awake).toMilliseconds();
+    try std.testing.expectError(error.FileBusy, fs.outputFile(allocator, busyRenameIo, targetPath, "data"));
+    try std.testing.expect(std.Io.Timestamp.now(io, .awake).toMilliseconds() - startedAt >= 500);
+
+    if (heldOpen) |file| {
+        file.close(io);
+    }
+    try fs.remove(io, dirPath);
+}
+
+//
+// Opens or creates a file (kernel32). Used to hold a file open with a sharing mode that std's openFile never asks for.
+//
+extern "kernel32" fn CreateFileW(
+    fileName: [*:0]const u16,
+    desiredAccess: std.os.windows.DWORD,
+    shareMode: std.os.windows.DWORD,
+    securityAttributes: ?*anyopaque,
+    creationDisposition: std.os.windows.DWORD,
+    flagsAndAttributes: std.os.windows.DWORD,
+    templateFile: ?std.os.windows.HANDLE,
+) callconv(.winapi) std.os.windows.HANDLE;
+
+//
+// Creates a file and holds it open the way a virus scanner or the search indexer does on Windows,
+// sharing read and write access but not delete access, so a rename onto it is refused while the
+// returned handle stays open. std's own openFile always shares delete access, so this asks Windows
+// directly. The caller closes the returned file.
+//
+fn holdOpenWithoutDeleteSharing(filePath: []const u8) !std.Io.File {
+    const windows = std.os.windows;
+    var pathWide: [windows.PATH_MAX_WIDE:0]u16 = undefined;
+    const pathLength = try std.unicode.wtf8ToWtf16Le(&pathWide, filePath);
+    pathWide[pathLength] = 0;
+
+    // GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, OPEN_ALWAYS and FILE_ATTRIBUTE_NORMAL.
+    const fileHandle = CreateFileW(&pathWide, 0x80000000, 0x1 | 0x2, null, 4, 0x80, null);
+    if (fileHandle == windows.INVALID_HANDLE_VALUE) {
+        return windows.unexpectedError(windows.GetLastError());
+    }
+    return .{
+        .handle = fileHandle,
+        .flags = .{
+            .nonblocking = false,
+        },
+    };
+}
+
+test "remove throws when a file that exists cannot be deleted, rather than treating it as gone" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    if (builtin.os.tag == .windows) {
+        // Windows has no directory permission that stops a file in it being deleted.
+        return error.SkipZigTest;
+    }
+    const filePath = try tempFilePathInOwnDir(allocator, io, "undeletable.txt");
+    try fs.outputFile(allocator, io, filePath, "stays");
+    const dirPath = std.fs.path.dirname(filePath).?;
+
+    // A directory that cannot be written to refuses to give up its files.
+    const dir = try std.Io.Dir.cwd().openDir(io, dirPath, .{
+        .iterate = true,
+    });
+    defer dir.close(io);
+    try dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o500));
+    defer dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o700)) catch {};
+
+    try std.testing.expectError(error.AccessDenied, fs.remove(io, filePath));
+    try std.testing.expect(fs.pathExists(io, filePath));
+
+    try dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o700));
+    try fs.remove(io, dirPath);
+}

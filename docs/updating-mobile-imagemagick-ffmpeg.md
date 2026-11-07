@@ -1,0 +1,20 @@
+# Updating the bundled ImageMagick and FFmpeg
+
+1. Take the new source: `third-party/imagemagick/update-imagemagick.sh <version>`, `third-party/ffmpeg/update-ffmpeg.sh <version>` (and `third-party/imagemagick/update-libjpeg.sh`, `third-party/imagemagick/update-libpng.sh`, `third-party/imagemagick/update-libwebp.sh` for the delegates). Each moves the old copy to `vendor/<name>.previous`; compare it, then delete it.
+2. Make the generated files again for every target: run `generate-config.sh` of `third-party/imagemagick` and of `third-party/ffmpeg` with each target named in their `.md` files (Android targets need the NDK libc file `apps/photosphere/scripts/sync-android.sh` writes).
+3. Build each library alone for each target: `zig build -Dtarget=<target>` in `third-party/imagemagick` and in `third-party/ffmpeg`.
+4. Run `bun run test:everything`, which covers the unit tests of `packages-zig/media-tools-zig` and the Linux and Android smoke tests that import photos and videos.
+5. Check the security policy in `packages-zig/media-tools-zig/src/lib/image-magick.zig` against the new ImageMagick: any coder the update adds that reaches outside the file being read (a network protocol, a script, another file named inside the input) is added to the coders the policy denies. See [Security policy](mobile-native-media.md#security-policy).
+6. Update `THIRD-PARTY-NOTICES.md` if a licence or a delegate changed.
+
+An update changes what the Zig CLI (`psi`) ships as well as the Photosphere App, because both link the same libraries.
+
+The vendored source is never edited, except for FFmpeg's command line programs, which `third-party/ffmpeg/update-ffmpeg.sh` patches with `third-party/ffmpeg/fftools-per-run-state.patch` (see `third-party/ffmpeg/update-ffmpeg.md`). If a new version does not build unchanged for a target, or the patch does not apply to it, stop for that target and report which target failed and why.
+
+## Phones
+
+On Android the libraries are built into `libphotosphere.so` by the core build, and on iOS into the core static library, so the app projects hold no copy of them and carry no ImageMagick or FFmpegKit dependency. ImageMagick has the JPEG, PNG and WebP delegates on every platform, so a WebP picture is read the same way everywhere (no system decoder is used).
+
+## Old mobile apps (deprecated)
+
+The Capacitor apps are updated with `scripts/update-mobile-media-tools.sh`, which is kept until they are removed.

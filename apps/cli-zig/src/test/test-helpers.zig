@@ -1,0 +1,704 @@
+//
+// Helpers shared by the tests (not a test file itself).
+//
+
+const std = @import("std");
+const utils = @import("utils-zig");
+const builtin = @import("builtin");
+const node_utils = @import("node-utils-zig");
+const lan_share_network = @import("lan-share-network-zig");
+const ziggy = @import("ziggy");
+
+// The paths of the programs this `zig build test` built, handed in by build.zig, so the tests run exactly those
+// rather than whatever was last installed in the shared zig-out.
+const cli_test_options = @import("cli-test-options");
+
+//
+// Makes a path the build handed in absolute: build.zig gives them relative to the directory the build ran from (build_cwd),
+// and the tests run from apps/cli-zig.
+//
+fn buildPath(comptime path: []const u8) []const u8 {
+    if (comptime std.fs.path.isAbsolute(path)) {
+        return path;
+    }
+    return cli_test_options.build_cwd ++ std.fs.path.sep_str ++ path;
+}
+
+//
+// Reads and parses a JSON fixture from src/test/fixtures (the tests run with the package directory as cwd).
+//
+pub fn loadFixture(allocator: std.mem.Allocator, name: []const u8) !std.json.Value {
+    const path = try std.fs.path.join(allocator, &.{ "src/test/fixtures", name });
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, allocator, .unlimited);
+    return std.json.parseFromSliceLeaky(std.json.Value, allocator, bytes, .{});
+}
+
+//
+// Gets a string field of a JSON object.
+//
+pub fn stringField(value: std.json.Value, name: []const u8) []const u8 {
+    return value.object.get(name).?.string;
+}
+
+//
+// Gets a boolean field of a JSON object.
+//
+pub fn boolField(value: std.json.Value, name: []const u8) bool {
+    return value.object.get(name).?.bool;
+}
+
+//
+// Gets an integer field of a JSON object.
+//
+pub fn intField(value: std.json.Value, name: []const u8) i64 {
+    return switch (value.object.get(name).?) {
+        .integer => |integer| integer,
+        .float => |float| @intFromFloat(float),
+        else => unreachable,
+    };
+}
+
+//
+// Converts a JSON array of strings to a slice.
+//
+pub fn stringArray(allocator: std.mem.Allocator, value: std.json.Value) ![]const []const u8 {
+    const items = value.array.items;
+    const result = try allocator.alloc([]const u8, items.len);
+    for (items, 0..) |item, index| {
+        result[index] = item.string;
+    }
+    return result;
+}
+
+//
+// Creates a unique temporary directory for a test and returns its path (absolute; under /tmp, or on Windows,
+// which has no /tmp, under the package's .zig-cache).
+//
+pub fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+    var random_bytes: [8]u8 = undefined;
+    std.testing.io.random(&random_bytes);
+    const dirName = try std.fmt.allocPrint(allocator, "cli-zig-test-{s}-{x}", .{ name, std.mem.readInt(u64, &random_bytes, .little) });
+    const path = if (builtin.os.tag == .windows)
+        try std.fs.path.join(allocator, &.{ try std.process.currentPathAlloc(std.testing.io, allocator), ".zig-cache", "tmp-tests", dirName })
+    else
+        try std.fs.path.join(allocator, &.{ "/tmp", dirName });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, path);
+    return path;
+}
+
+//
+// The plaintext vault directory shared by every test that runs commands in the test process.
+//
+var shared_vault_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+//
+// The length of the shared vault directory path (0 until the first call of emptySharedVaultDir).
+//
+var shared_vault_dir_length: usize = 0;
+
+//
+// Empties the plaintext vault directory shared by the tests that run commands in the test process, creating
+// it on the first call, and returns its path. getVault caches the first plaintext vault it makes for the rest
+// of the process, so a test that set PHOTOSPHERE_VAULT_DIR to a directory of its own would read and write the
+// vault of whichever test ran first. Every in-process test therefore uses this one directory.
+//
+pub fn emptySharedVaultDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (shared_vault_dir_length == 0) {
+        const path = try makeTempDir(allocator, "vault");
+        @memcpy(shared_vault_dir_buffer[0..path.len], path);
+        shared_vault_dir_length = path.len;
+    }
+    const vaultDir = shared_vault_dir_buffer[0..shared_vault_dir_length];
+    std.Io.Dir.cwd().deleteTree(std.testing.io, vaultDir) catch {};
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    return vaultDir;
+}
+
+//
+// A reader that delivers its input one chunk per read, like a terminal delivers keypresses (and like the
+// recorded fixtures hold one key per chunk).
+//
+pub const ChunkedReader = struct {
+    // The reader interface.
+    interface: std.Io.Reader,
+
+    // The chunks, in order.
+    chunks: []const []const u8,
+
+    // The index of the next chunk.
+    next: usize,
+
+    //
+    // Creates the reader (it must not move after init).
+    //
+    pub fn init(self: *ChunkedReader, buffer: []u8, chunks: []const []const u8) void {
+        self.* = .{
+            .interface = .{ .vtable = &.{ .stream = stream }, .buffer = buffer, .seek = 0, .end = 0 },
+            .chunks = chunks,
+            .next = 0,
+        };
+    }
+
+    //
+    // Writes the next chunk.
+    //
+    fn stream(reader: *std.Io.Reader, writer: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
+        _ = limit;
+        const self: *ChunkedReader = @fieldParentPtr("interface", reader);
+        if (self.next >= self.chunks.len) {
+            return error.EndOfStream;
+        }
+        const chunk = self.chunks[self.next];
+        self.next += 1;
+        try writer.writeAll(chunk);
+        return chunk.len;
+    }
+};
+
+//
+// Creates a prompt input that delivers the keys one chunk per read.
+//
+pub fn chunkedInput(allocator: std.mem.Allocator, chunks: []const []const u8) !*@import("cli-zig").prompts.PromptInput {
+    const reader = try allocator.create(ChunkedReader);
+    reader.init(try allocator.alloc(u8, 4096), chunks);
+    const input = try allocator.create(@import("cli-zig").prompts.PromptInput);
+    input.* = @import("cli-zig").prompts.PromptInput.init(allocator, &reader.interface, null);
+    return input;
+}
+
+//
+// Splits typed text into one chunk per key (as a terminal delivers them).
+//
+pub fn splitKeys(allocator: std.mem.Allocator, bytes: []const u8) ![]const []const u8 {
+    var chunks: std.ArrayList([]const u8) = .empty;
+    var position: usize = 0;
+    while (position < bytes.len) {
+        const result = (try @import("cli-zig").readline.parseKeypress(allocator, bytes[position..], true)).?;
+        try chunks.append(allocator, bytes[position .. position + result.length]);
+        position += result.length;
+    }
+    return chunks.items;
+}
+
+//
+// Copies a directory tree (`cp -r`, done in Zig so that it also works on Windows).
+//
+pub fn copyDirectory(allocator: std.mem.Allocator, source: []const u8, dest: []const u8) !void {
+    const io = std.testing.io;
+    const cwd = std.Io.Dir.cwd();
+    var sourceDir = try cwd.openDir(io, source, .{ .iterate = true });
+    defer sourceDir.close(io);
+    try cwd.createDirPath(io, dest);
+    var destDir = try cwd.openDir(io, dest, .{});
+    defer destDir.close(io);
+    var walker = try sourceDir.walk(allocator);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        switch (entry.kind) {
+            .directory => try destDir.createDirPath(io, entry.path),
+            .file => try sourceDir.copyFile(entry.path, destDir, entry.path, io, .{}),
+            else => {},
+        }
+    }
+}
+
+//
+// The result of running a CLI.
+//
+pub const CliResult = struct {
+    // The exit code.
+    exitCode: u8,
+
+    // What the CLI wrote to stdout.
+    stdout: []const u8,
+
+    // What the CLI wrote to stderr.
+    stderr: []const u8,
+};
+
+//
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run in.
+//
+pub fn runCli(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map) !CliResult {
+    const cliDir = try std.Io.Dir.cwd().openDir(std.testing.io, ".", .{});
+    defer cliDir.close(std.testing.io);
+    const result = try std.process.run(allocator, std.testing.io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = environment,
+    });
+    const exitCode: u8 = switch (result.term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    return .{ .exitCode = exitCode, .stdout = result.stdout, .stderr = result.stderr };
+}
+
+//
+// The test environment of the CLI tests: an isolated config dir, plaintext vault, temp dir and an empty news feed
+// (so no network is used), plus PATH and HOME.
+//
+pub fn cliEnvironment(allocator: std.mem.Allocator, root: []const u8) !*std.process.Environ.Map {
+    const map = try allocator.create(std.process.Environ.Map);
+    map.* = std.process.Environ.Map.init(allocator);
+    const parent = try std.testing.environ.createMap(allocator);
+    try map.put("PATH", parent.get("PATH") orelse "/usr/bin:/bin");
+    try map.put("HOME", parent.get("HOME") orelse "/root");
+
+    // Windows programs need SystemRoot, and USERPROFILE is the Windows home directory.
+    if (builtin.os.tag == .windows) {
+        for ([_][]const u8{ "SystemRoot", "USERPROFILE" }) |name| {
+            if (parent.get(name)) |value| {
+                try map.put(name, value);
+            }
+        }
+    }
+    const configDir = try std.fs.path.join(allocator, &.{ root, "config" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, configDir);
+    try map.put("PHOTOSPHERE_CONFIG_DIR", configDir);
+    // picocolors turns colour on for every process on Windows; the expected output of the tests has none.
+    try map.put("NO_COLOR", "1");
+    try map.put("PHOTOSPHERE_VAULT_TYPE", "plaintext");
+    try map.put("PHOTOSPHERE_VAULT_DIR", try std.fs.path.join(allocator, &.{ root, "vault" }));
+    // Discovery broadcasts go to one UDP port for the whole machine, so each test has a port of its own, or its sender hears the receivers of
+    // the tests and suites running beside it.
+    try map.put("PHOTOSPHERE_LAN_SHARE_PORT", try std.fmt.allocPrint(allocator, "{d}", .{try lan_share_network.socket.freeUdpPort()}));
+    const tmpDir = try std.fs.path.join(allocator, &.{ root, "tmp" });
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, tmpDir);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
+    try map.put("TMPDIR", tmpDir);
+    try map.put("TEMP", tmpDir);
+    const feed = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feed, .data = "items: []\n" });
+    try map.put("PHOTOSPHERE_NEWS_URL", try fileUrl(allocator, feed));
+    return map;
+}
+
+//
+// Converts an absolute path to a file:// URL (forward slashes, and "file:///C:/..." for a Windows drive path).
+//
+pub fn fileUrl(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    const forwardSlashPath = try allocator.dupe(u8, path);
+    std.mem.replaceScalar(u8, forwardSlashPath, '\\', '/');
+    const slashBeforeDrive = if (std.mem.startsWith(u8, forwardSlashPath, "/")) "" else "/";
+    return std.mem.concat(allocator, u8, &.{ "file://", slashBeforeDrive, forwardSlashPath });
+}
+
+//
+// The path of the psi this `zig build test` built (in the build cache, psi.exe on Windows).
+//
+pub const psi_path = buildPath(cli_test_options.psi_path);
+
+//
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run in, with its
+// stdout written to a file (as `psi ... > file` does) rather than a pipe. Returns what the file holds as stdout.
+//
+pub fn runCliToFile(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map, outputPath: []const u8) !CliResult {
+    const io = std.testing.io;
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
+    defer cliDir.close(io);
+    const outputFile = try std.Io.Dir.cwd().createFile(io, outputPath, .{});
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = environment,
+        .stdout = .{ .file = outputFile },
+        .stderr = .ignore,
+    });
+    const term = try child.wait(io);
+    outputFile.close(io);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    const stdout = try std.Io.Dir.cwd().readFileAlloc(io, outputPath, allocator, .unlimited);
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = "" };
+}
+
+//
+// Writes the input to a program's stdin and closes it. A program that has already exited has closed the pipe, which is
+// then reported: the test reads what it wrote before it exited.
+//
+fn writeAndClose(stdinFile: std.Io.File, input: []const u8) void {
+    stdinFile.writeStreamingAll(std.testing.io, input) catch |err| {
+        std.debug.print("writing the input of the program failed: {t}\n", .{err});
+    };
+    stdinFile.close(std.testing.io);
+}
+
+//
+// Runs a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run in, writing the
+// input to its stdin (a pipe) and then closing it, as `printf '...' | psi ...` does.
+//
+pub fn runCliWithInput(allocator: std.mem.Allocator, argv: []const []const u8, input: []const u8, environment: *const std.process.Environ.Map) !CliResult {
+    const io = std.testing.io;
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
+    defer cliDir.close(io);
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = environment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(allocator, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    // The input is written from a thread of its own while this one reads the output: a program that answers as it
+    // reads can fill its output pipe before it has read all of its input, and would wait on this test forever if the
+    // test were still waiting to finish writing.
+    const stdinFile = child.stdin.?;
+    child.stdin = null;
+    const writer = try std.Thread.spawn(.{}, writeAndClose, .{ stdinFile, input });
+    defer writer.join();
+
+    while (true) {
+        multi_reader.fill(64, .none) catch |err| {
+            if (err == error.EndOfStream) {
+                break;
+            }
+            return err;
+        };
+    }
+    try multi_reader.checkAnyError();
+    const term = try child.wait(io);
+    const stdout = try multi_reader.toOwnedSlice(0);
+    const stderr = try multi_reader.toOwnedSlice(1);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr };
+}
+
+//
+// Starts a CLI command line (argv[0] is the program) with the environment, from the apps/cli-zig directory the tests run in, and returns
+// once its stdout shows the text, leaving it running: the other device of a share test, which the test then talks to
+// with a second command. The caller ends it with `child.kill(io)`, so a failed assertion still stops it. Fails when
+// the text does not appear (a program waiting for something that will never come would otherwise hang the test).
+//
+pub fn startCliAndWaitFor(allocator: std.mem.Allocator, argv: []const []const u8, environment: *const std.process.Environ.Map, waitFor: []const u8) !std.process.Child {
+    const io = std.testing.io;
+    const cliDir = try std.Io.Dir.cwd().openDir(io, ".", .{});
+    defer cliDir.close(io);
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cliDir },
+        .environ_map = environment,
+        .stdin = .ignore,
+        .stdout = .pipe,
+        .stderr = .ignore,
+    });
+    errdefer child.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(1) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(allocator, io, multi_reader_buffer.toStreams(), &.{child.stdout.?});
+    defer multi_reader.deinit();
+
+    while (std.mem.indexOf(u8, multi_reader.reader(0).buffered(), waitFor) == null) {
+        multi_reader.fill(64, .{ .duration = .{ .raw = .fromSeconds(prompt_wait_limit_seconds), .clock = .awake } }) catch |err| {
+            const problem = try std.fmt.allocPrint(allocator, "\"{s}\" did not appear ({t})", .{ waitFor, err });
+            printProgramOutput(argv, problem, multi_reader.reader(0).buffered(), "");
+            return error.TextDidNotAppear;
+        };
+    }
+    return child;
+}
+
+//
+// The path of the program the Windows `psi bug` tests put where `psi bug` looks for PowerShell
+// (src/test/drivers/opener-recorder.zig), as this `zig build test` built it (in the build cache).
+//
+pub const opener_recorder_path = buildPath(cli_test_options.opener_recorder_path);
+
+//
+// Keys typed into one prompt of psi: once the prompt's text has appeared on stdout, the keys are
+// written to stdin in one go. A prompt drops the rest of the chunk it was reading when it
+// finishes, so each prompt's keys are only written once that prompt is showing (as a person types them).
+//
+pub const IPromptKeys = struct {
+    // Text of the prompt (its message) to wait for on stdout.
+    waitFor: []const u8,
+
+    // The keys to type into it.
+    keys: []const u8,
+};
+
+//
+// How long psi may take to show a prompt before the test fails (it is waiting for input that will
+// never come, so without a limit the test would hang).
+//
+const prompt_wait_limit_seconds = 60;
+
+//
+// Prints what the program (psi) wrote so far, for a failure.
+//
+fn printProgramOutput(programArguments: []const []const u8, problem: []const u8, stdout: []const u8, stderr: []const u8) void {
+    std.debug.print("running {f}: {s}\nstdout:\n{s}\nstderr:\n{s}\n", .{ std.json.fmt(programArguments, .{}), problem, stdout, stderr });
+}
+
+//
+// Runs a program with the environment, typing the keys of each prompt on its stdin (a pipe, so the prompts see an
+// input that is not a TTY, as they do when psi is fed from a pipe) once the prompt has appeared on its stdout, and
+// then closing its stdin. Fails when a prompt does not appear.
+//
+pub fn runWithPrompts(allocator: std.mem.Allocator, argv: []const []const u8, prompts: []const IPromptKeys, environment: *const std.process.Environ.Map) !CliResult {
+    return runWithPromptsIn(allocator, .inherit, argv, prompts, environment);
+}
+
+//
+// The absolute path of the built psi binary, for a program that runs it from another working directory.
+//
+pub fn absolutePsiPath(allocator: std.mem.Allocator) ![]const u8 {
+    return std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, psi_path, allocator);
+}
+
+//
+// Runs psi with the arguments from the working directory, in an isolated configuration, vault and temporary directory
+// of its own, typing the keys of each prompt (see runWithPrompts). The isolated directories are deleted afterwards.
+//
+pub fn runPsiWithPromptsIn(allocator: std.mem.Allocator, workingDirectory: std.process.Child.Cwd, args: []const []const u8, prompts: []const IPromptKeys) !CliResult {
+    const environmentRoot = try makeTempDir(allocator, "psi-prompts");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, environmentRoot) catch {};
+    const environment = try cliEnvironment(allocator, environmentRoot);
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try absolutePsiPath(allocator));
+    try argv.appendSlice(allocator, args);
+    return runWithPromptsIn(allocator, workingDirectory, argv.items, prompts, environment);
+}
+
+//
+// Like runWithPrompts, with the working directory the program starts in.
+//
+pub fn runWithPromptsIn(allocator: std.mem.Allocator, workingDirectory: std.process.Child.Cwd, argv: []const []const u8, prompts: []const IPromptKeys, environment: *const std.process.Environ.Map) !CliResult {
+    const io = std.testing.io;
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = workingDirectory,
+        .environ_map = environment,
+        .stdin = .pipe,
+        .stdout = .pipe,
+        .stderr = .pipe,
+    });
+    defer child.kill(io);
+
+    var multi_reader_buffer: std.Io.File.MultiReader.Buffer(2) = undefined;
+    var multi_reader: std.Io.File.MultiReader = undefined;
+    multi_reader.init(allocator, io, multi_reader_buffer.toStreams(), &.{ child.stdout.?, child.stderr.? });
+    defer multi_reader.deinit();
+
+    var searchStart: usize = 0;
+    for (prompts) |prompt| {
+        while (true) {
+            const shown = multi_reader.reader(0).buffered();
+            if (std.mem.indexOfPos(u8, shown, searchStart, prompt.waitFor)) |position| {
+                searchStart = position + prompt.waitFor.len;
+                break;
+            }
+            multi_reader.fill(64, .{ .duration = .{ .raw = .fromSeconds(prompt_wait_limit_seconds), .clock = .awake } }) catch |err| {
+                const problem = try std.fmt.allocPrint(allocator, "the prompt \"{s}\" did not appear ({t})", .{ prompt.waitFor, err });
+                printProgramOutput(argv, problem, multi_reader.reader(0).buffered(), multi_reader.reader(1).buffered());
+                return error.PromptDidNotAppear;
+            };
+        }
+        try child.stdin.?.writeStreamingAll(io, prompt.keys);
+    }
+    child.stdin.?.close(io);
+    child.stdin = null;
+
+    while (true) {
+        multi_reader.fill(64, .none) catch |err| {
+            if (err == error.EndOfStream) {
+                break;
+            }
+            return err;
+        };
+    }
+    try multi_reader.checkAnyError();
+    const term = try child.wait(io);
+    const stdout = try multi_reader.toOwnedSlice(0);
+    const stderr = try multi_reader.toOwnedSlice(1);
+    const exitCode: u8 = switch (term) {
+        .exited => |code| code,
+        else => 255,
+    };
+    return .{ .exitCode = exitCode, .stdout = stdout, .stderr = stderr };
+}
+
+//
+// Runs the built psi with the arguments, typing the keys of each prompt on its stdin once that prompt has appeared on
+// its stdout (see runWithPrompts), in a terminal that draws the Unicode symbols of the prompts.
+//
+pub fn runPsiWithPrompts(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8, prompts: []const IPromptKeys) !CliResult {
+    const terminalEnvironment = try allocator.create(std.process.Environ.Map);
+    terminalEnvironment.* = try environment.clone(allocator);
+    try terminalEnvironment.put("TERM", "xterm-256color");
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, psi_path, allocator));
+    try argv.appendSlice(allocator, args);
+    return runWithPrompts(allocator, argv.items, prompts, terminalEnvironment);
+}
+
+//
+// Runs the built psi with the arguments from the apps/cli-zig directory, as runCli does.
+//
+pub fn runPsi(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, args: []const []const u8) !CliResult {
+    var argv: std.ArrayList([]const u8) = .empty;
+    try argv.append(allocator, try std.Io.Dir.cwd().realPathFileAlloc(std.testing.io, psi_path, allocator));
+    try argv.appendSlice(allocator, args);
+    return runCli(allocator, argv.items, environment);
+}
+
+//
+// Creates a test root whose config holds the databases.toml given (none when it is null) and whose plaintext vault
+// holds the vault.json given, and returns its environment.
+//
+pub fn setupConfigAndVault(allocator: std.mem.Allocator, root: []const u8, databasesTomlText: ?[]const u8, vaultJson: []const u8) !*std.process.Environ.Map {
+    const environment = try cliEnvironment(allocator, root);
+    if (databasesTomlText) |toml| {
+        try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+            .sub_path = try std.fmt.allocPrint(allocator, "{s}/config/databases.toml", .{root}),
+            .data = toml,
+        });
+    }
+    const vaultDir = try std.fmt.allocPrint(allocator, "{s}/vault", .{root});
+    try std.Io.Dir.cwd().createDirPath(std.testing.io, vaultDir);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = try std.fmt.allocPrint(allocator, "{s}/vault.json", .{vaultDir}),
+        .data = vaultJson,
+    });
+    return environment;
+}
+
+//
+// Reads a file below a test root.
+//
+pub fn readRootFile(allocator: std.mem.Allocator, root: []const u8, relative: []const u8) ![]const u8 {
+    return std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ root, relative }), allocator, .unlimited);
+}
+
+//
+// Fails, printing the output, unless the text appears in it.
+//
+pub fn expectContains(haystack: []const u8, needle: []const u8) !void {
+    if (std.mem.indexOf(u8, haystack, needle) == null) {
+        std.debug.print("the output does not hold the expected text \"{s}\":\n{s}\n", .{ needle, haystack });
+        return error.TestExpectedEqual;
+    }
+}
+
+//
+// The text of a databases.toml holding one entry, written by the TOML writer the app uses so the path is quoted however TOML
+// needs it. A Windows path holds backslashes, which a TOML basic string reads as escapes. Returned memory belongs to the allocator.
+//
+pub fn databasesToml(allocator: std.mem.Allocator, name: []const u8, description: []const u8, path: []const u8) ![]const u8 {
+    return node_utils.toml.stringifyStruct(allocator, .{
+        .databases = .{
+            .{
+                .name = name,
+                .description = description,
+                .path = path,
+            },
+        },
+    });
+}
+
+//
+// What a blocking task posts to the test thread when it starts and when it ends.
+//
+const IBlockingTaskEvent = struct {
+    // "started" or "ended".
+    type: []const u8,
+};
+
+//
+// The queues the blocking tasks of a test and the test's own thread talk through: the only thing the worker threads and the test
+// thread both touch. A blocking task posts "started" when it starts and "ended" when it returns to `events`, which the test thread
+// takes from, and runs until the test thread closes `release` or the task's source is cancelled.
+//
+pub const BlockingTaskQueues = struct {
+    // Where the blocking tasks post "started" and "ended", for the test thread.
+    events: ziggy.message_queue.MessageQueue,
+
+    // Closed by the test thread to release every blocking task. Nothing is posted to it.
+    release: ziggy.message_queue.MessageQueue,
+
+    //
+    // Two empty queues.
+    //
+    pub fn init() BlockingTaskQueues {
+        return .{
+            .events = ziggy.message_queue.MessageQueue.init(),
+            .release = ziggy.message_queue.MessageQueue.init(),
+        };
+    }
+
+    //
+    // Frees the queues and makes them empty again, for the next test. No task of an earlier test may still be running.
+    //
+    pub fn reset(self: *BlockingTaskQueues) void {
+        self.events.deinit();
+        self.release.deinit();
+        self.* = init();
+    }
+
+    //
+    // Runs one blocking task, on its worker's thread, with that thread's Io and allocator: says it started, waits until it is
+    // released or cancelled, and says it ended.
+    //
+    pub fn runBlockingTask(self: *BlockingTaskQueues, io: std.Io, allocator: std.mem.Allocator, context: ziggy.task_queue.types.ITaskContext) void {
+        self.events.post(io, 0, comptime ziggy.json.stringifyComptime(IBlockingTaskEvent{ .type = "started" })) catch @panic("out of memory telling the test a task started");
+        defer self.events.post(io, 0, comptime ziggy.json.stringifyComptime(IBlockingTaskEvent{ .type = "ended" })) catch @panic("out of memory telling the test a task ended");
+        while (!context.isCancelled(io, allocator)) {
+            if (self.release.take(io, allocator, .{ .duration = .{ .raw = .fromMilliseconds(2), .clock = .awake } })) |message| {
+                allocator.free(message.text);
+            }
+            if (self.release.isClosed(io)) {
+                return;
+            }
+        }
+    }
+};
+
+//
+// What the test thread has read of the blocking tasks' events: how many are running and the most that ran at once. Only the test
+// thread uses it.
+//
+pub const BlockingTaskCount = struct {
+    // How many blocking tasks are running.
+    running: usize = 0,
+
+    // The most blocking tasks that ran at the same time.
+    maxRunning: usize = 0,
+
+    //
+    // Reads every event waiting in the queue without waiting for one, with the test thread's allocator.
+    //
+    pub fn readEvents(self: *BlockingTaskCount, queues: *BlockingTaskQueues, allocator: std.mem.Allocator) void {
+        while (queues.events.tryTake(std.testing.io, allocator)) |message| {
+            defer allocator.free(message.text);
+            const parsed = std.json.parseFromSlice(IBlockingTaskEvent, allocator, message.text, .{
+                .ignore_unknown_fields = false,
+            }) catch |err| {
+                std.debug.panic("a blocking task sent an event that could not be read ({s}): {s}", .{ @errorName(err), message.text });
+            };
+            defer parsed.deinit();
+            if (std.mem.eql(u8, parsed.value.type, "started")) {
+                self.running += 1;
+                self.maxRunning = @max(self.maxRunning, self.running);
+            }
+            else if (std.mem.eql(u8, parsed.value.type, "ended")) {
+                self.running -= 1;
+            }
+            else {
+                std.debug.panic("a blocking task sent an unknown event: {s}", .{message.text});
+            }
+        }
+    }
+};

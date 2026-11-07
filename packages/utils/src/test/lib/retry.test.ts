@@ -12,6 +12,7 @@ jest.mock("../../lib/sleep", () => ({
 jest.mock("../../lib/log", () => ({
     log: {
         exception: jest.fn(),
+        warn: jest.fn(),
         verbose: jest.fn(),
         verboseEnabled: false,
     },
@@ -50,6 +51,27 @@ describe("retry", () => {
         expect(sleep).toHaveBeenCalledTimes(2);
         expect(sleep).toHaveBeenNthCalledWith(1, 100);
         expect(sleep).toHaveBeenNthCalledWith(2, 200);
+    });
+
+    //
+    // Every attempt that is going to be tried again says why it failed, once, in one line.
+    //
+    // Only the last attempt's error used to be reported, and at verbose level nothing else was said
+    // at all. A failure that takes three attempts and a minute and a half then looks like a single
+    // event with a single cause, which is how an upload whose first attempt failed one way and whose
+    // retries failed another went undiagnosed on a phone.
+    //
+    test("each attempt that will be tried again says what went wrong", async () => {
+        const operation = jest.fn()
+            .mockRejectedValueOnce(new Error("First failure"))
+            .mockRejectedValueOnce(new Error("Second failure"))
+            .mockResolvedValue("success");
+
+        await retry(operation, 3, 100, 2, 30_000, "Failed to copy a file");
+
+        expect(log.warn).toHaveBeenCalledTimes(2);
+        expect(log.warn).toHaveBeenNthCalledWith(1, "Failed to copy a file. Retrying after: First failure");
+        expect(log.warn).toHaveBeenNthCalledWith(2, "Failed to copy a file. Retrying after: Second failure");
     });
 
     test("should throw error after all retries exhausted", async () => {
@@ -201,7 +223,7 @@ describe("retry", () => {
         const thrown = await retry<any>(operation, 1, 100, 2, 30_000, "context message").catch(err => err);
 
         expect(thrown).toBeInstanceOf(WrappedError);
-        expect(thrown.message).toBe("context message");
+        expect(thrown.message).toBe("context message: original error");
         expect(thrown.options.cause).toBe(cause);
     });
 

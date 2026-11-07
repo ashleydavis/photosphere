@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Refuses a commit whose tests do not pass.
+#
+# Runs the whole set for this platform, all at once, via `bun run test:everything`: compile, the unit
+# tests, the CLI and Electron smoke suites, and both mobile suites. In parallel that is about three and
+# a half minutes rather than the eleven it would take one after another, and it stops the moment
+# anything fails, so a broken commit is refused in seconds rather than at the end of the slowest suite.
+#
+# This is the only hook. There was a pre-push as well, holding the expensive suites while this one kept
+# to compile and the unit tests. That split is gone: checking at push time lets a broken commit exist
+# and only complains later, and the commit is the thing worth keeping honest.
+#
+# Note what this means in practice. The mobile suites need a device or emulator attached, so with none
+# running every commit is refused, including a docs-only one. Use --no-verify for those.
+#
+# Nothing here fixes or stages anything: it reports and refuses, leaving the working copy alone.
+#
+# Bypass with `git commit --no-verify` (git handles that natively; there is no flag here).
+#
+# See docs/git-hooks.md.
+#
+# Named without a .sh extension against the repository's usual convention because git only recognises
+# hooks by these exact filenames.
+set -uo pipefail
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$HOOK_DIR/.." && pwd)"
+
+cd "$REPO_DIR"
+
+echo "pre-commit: running the full test set for this platform"
+
+# Runs the set through `bun run test:everything`, going through mise when it is available so the pinned
+# toolchain versions are used rather than whatever happens to be first on PATH.
+run_everything() {
+    if command -v mise >/dev/null 2>&1; then
+        mise exec -- bun run test:everything
+    else
+        bun run test:everything
+    fi
+}
+
+if ! run_everything; then
+    echo "" >&2
+    echo "pre-commit FAILED. Commit anyway with: git commit --no-verify" >&2
+    exit 1
+fi
+
+echo "pre-commit: passed"

@@ -7,6 +7,7 @@ import { IObservable, Observable } from "../lib/subscription";
 import { useAssetDatabase } from "./asset-database-source";
 import dayjs from "dayjs";
 import { isArray } from "lodash";
+import { useStateStore } from "./state-store-context";
 
 export interface IAssetDataLoad {
     //
@@ -281,6 +282,8 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
 
     const { moveToDatabase } = useAssetDatabase();
 
+    const state = useStateStore();
+
     //
     // List all loaded items before searching and sorting.
     //
@@ -350,7 +353,10 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // The way the gallery is sorted.
     //
-    const sortByRef = useRef<string>(localStorage.getItem("gallery-sort") || "date");
+    // Starts at the default and is replaced by what was remembered once the store answers. The store
+    // is a file now rather than the browser's own, so it cannot be read while this is being built.
+    //
+    const sortByRef = useRef<string>("date");
 
     //
     // A cache entry for a loaded asset.
@@ -468,9 +474,14 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
     //
     // Invokes subscriptions for new assets.
     //
-    function _onNewItems(items: IGalleryItem[]) { 
+    function _onNewItems(items: IGalleryItem[]) {
 
-        const newItems = removeDeletedAssets(items);
+        // An asset the gallery already holds is not new, and appending it again shows the same photo
+        // twice. It happens for real: a photo taken in before the database had finished loading is
+        // announced by the import and then arrives again in the load, and neither knows about the
+        // other, so the list is what has to refuse the duplicate.
+        const newItems = removeDeletedAssets(items)
+            .filter(item => !allItemsIndex.current.has(item._id));
         const baseIndex = allItems.current.length;
         allItems.current = allItems.current.concat(newItems);
         for (let i = 0; i < newItems.length; i++) {
@@ -842,8 +853,22 @@ export function GalleryContextProvider({ children }: IGalleryContextProviderProp
         sortByRef.current = sortBy;
         setTime(Date.now());
 
-        localStorage.setItem("gallery-sort", sortBy);
+        state.set<string>("gallerySort", sortBy);
     }
+
+    //
+    // Applies the sort order the app remembered, once the store has answered.
+    //
+    // Nothing happens when there is none, or when it names an order this build does not have: the
+    // gallery stays on its default rather than throwing on a value that came off disk.
+    useEffect(() => {
+        state.get<string>("gallerySort")
+            .then(remembered => {
+                if (remembered && sortingMap[remembered] && remembered !== sortByRef.current) {
+                    setSortBy(remembered);
+                }
+            });
+    }, []);
 
     //
     // Moves selected items to the specified database (identified by path).

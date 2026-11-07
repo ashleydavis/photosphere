@@ -1,65 +1,45 @@
 # CLI Manual Test: Remove an Asset by ID
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `remove` deletes an asset from the database and from on-disk storage.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file and read its asset ID:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database and add a file
-
-```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-remove-remove-asset-by-id
+psi init --db /tmp/psi-cli-remove-remove-asset-by-id/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-remove-remove-asset-by-id/source --yes
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/asset
 ```
 
 Expected:
 - Database created and the file is reported as added.
+- `ls` lists one UUID-named file. Record that UUID and use it as `<asset-id>` below.
 
----
+## Test
 
-### 3. Read the asset ID from disk
-
-```bash
-ls /tmp/psi-test/source/asset
-```
-
-Expected:
-- One UUID-named file is listed. Record that UUID and use it as `<asset-id>` below.
-
----
-
-### 4. Remove the asset
+### 1. Remove the asset
 
 ```bash
-bun run start -- remove --db /tmp/psi-test/source <asset-id> --verbose --yes
+psi remove --db /tmp/psi-cli-remove-remove-asset-by-id/source <asset-id> --verbose --yes
 ```
 
 Expected:
 - Output includes `Successfully removed asset`.
 
----
+## Check
 
-### 5. Confirm the asset files are gone from storage
+### 2. Confirm the asset files are gone from storage
 
 ```bash
-ls /tmp/psi-test/source/asset
-ls /tmp/psi-test/source/display
-ls /tmp/psi-test/source/thumb
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/asset
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/display
+ls /tmp/psi-cli-remove-remove-asset-by-id/source/thumb
 ```
 
 Expected:
@@ -67,10 +47,10 @@ Expected:
 
 ---
 
-### 6. Confirm the database listing no longer shows the asset
+### 3. Confirm the database listing no longer shows the asset
 
 ```bash
-bun run start -- list --db /tmp/psi-test/source
+psi list --db /tmp/psi-cli-remove-remove-asset-by-id/source
 ```
 
 Expected:
@@ -78,10 +58,10 @@ Expected:
 
 ---
 
-### 7. Verify the database
+### 4. Verify the database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-remove-remove-asset-by-id/source
 ```
 
 Expected:

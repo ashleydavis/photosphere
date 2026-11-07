@@ -1,68 +1,60 @@
 # CLI Manual Test: Sync After Deleting an Asset (Copy Side)
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that deleting an asset on the **copy** removes it from the original after
 `sync`.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture and replicate it to a copy:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-delete-asset-copy
+mkdir -p /tmp/psi-cli-sync-sync-delete-asset-copy
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-delete-asset-copy/original
+psi replicate --db /tmp/psi-cli-sync-sync-delete-asset-copy/original --dest /tmp/psi-cli-sync-sync-delete-asset-copy/copy --yes --force
 ```
 
 Expected:
 - Replication completes successfully.
 
----
+## Test
 
-### 3. Remove an asset from the **copy**
+### 1. Remove an asset from the **copy**
 
 ```bash
-bun run start -- remove --db /tmp/psi-test/copy 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
+psi remove --db /tmp/psi-cli-sync-sync-delete-asset-copy/copy 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
 ```
 
 Expected:
 - Output includes `Successfully removed asset`.
-- The asset files are gone from `/tmp/psi-test/copy/asset/`, `display/`, and `thumb/`.
-- The asset files are still present in `/tmp/psi-test/original/asset/`.
+- The asset files are gone from `/tmp/psi-cli-sync-sync-delete-asset-copy/copy/asset/`, `display/`, and `thumb/`.
+- The asset files are still present in `/tmp/psi-cli-sync-sync-delete-asset-copy/original/asset/`.
 
 ---
 
-### 4. Sync
+### 2. Sync
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-delete-asset-copy/original --dest /tmp/psi-cli-sync-sync-delete-asset-copy/copy --yes
 ```
 
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 5. Confirm the asset is gone from the original
+### 3. Confirm the asset is gone from the original
 
 ```bash
-ls /tmp/psi-test/original/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
+ls /tmp/psi-cli-sync-sync-delete-asset-copy/original/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
+psi root-hash --db /tmp/psi-cli-sync-sync-delete-asset-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-delete-asset-copy/copy
 ```
 
 Expected:
-- The command produces no output (the asset has been removed from the original).
-- `bun run start -- root-hash --db /tmp/psi-test/original` and `... --db /tmp/psi-test/copy` produce the same value.
+- The `ls | grep` produces no output (the asset has been removed from the original).
+- The two root hashes are identical.

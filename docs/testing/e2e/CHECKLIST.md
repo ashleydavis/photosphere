@@ -1,57 +1,71 @@
 # E2E Test Checklist
 
+**Do not skip steps.** Every test linked below is run in full, every step, in the order it is written. An agent taking someone through a test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
+**Do not skip prep.** Every command in a test's Prep section is run, from every code block in it. A skipped prep command makes a test fail for no reason, so when a test fails, first check that every prep command ran.
+
+**An unexpected error fails the test.** Read the app's errors log (`bun run app:log -- --platform <p> --errors`) before and after every step. A new `[ERROR]` line, or an error shown on screen, that the test does not expect fails the test. As soon as one is seen, note the error word for word in [CHECKLIST-NOTES.md](CHECKLIST-NOTES.md) and mark the test `- [-]`.
+
 Work through these manual tests and check them off as they pass.
 
-Upcoming version: 0.0.8
+Upcoming version: 0.0.9
 
 ## Platforms
 
 Run a basic manual test of the CLI and desktop app on each platform.
 
 ### CLI
-- [x] Linux
-- [x] macOS
-- [x] Windows
+- [ ] Linux
+- [ ] macOS
+- [ ] Windows
+
+### Mobile
+- [ ] Android
+- [ ] iOS
 
 ### Desktop
-- [x] Linux (.deb installer)
-- [x] Linux (.zip portable)
-- [x] macOS (.dmg installer)
-- [-] macOS (.zip portable) - there is none for x86 yet.
-- [x] Windows (.exe installer)
-- [x] Windows (.zip portable)
+- [ ] Linux (.deb installer)
+- [ ] Linux (.zip portable)
+- [ ] macOS (.dmg installer)
+- [ ] macOS (.zip portable) - there is none for x86 yet.
+- [ ] Windows (.msi installer)
+- [ ] Windows (.zip portable)
 
 ### UI stories
 
-Open the desktop app at `/#/stories?cycle=1` and check every story cycles through without failures.
+Run the story player and check every story cycles through without failures, then review the generated screenshot index for pages that look wrong or do not fit the screen. `bun run stories:ziggy` (desktop), `bun run stories:ziggy:and`, `bun run stories:ziggy:ios`. See [the stories README](../../../packages/user-interface/src/stories/README.md).
 
-- [?] Linux
+- [ ] Linux
 - [ ] macOS
 - [ ] Windows
+- [ ] Android
+- [ ] iOS
 
 ## CLI
 
 ### Import
 - [x] [add-and-verify](cli/import/add-and-verify.md)
-- [x] [add-duplicate-content](cli/import/add-duplicate-content.md)
+- [-] [add-duplicate-content](cli/import/add-duplicate-content.md)
 - [x] [add-mp4](cli/import/add-mp4.md)
 - [x] [add-multiple-files](cli/import/add-multiple-files.md)
 - [x] [add-png](cli/import/add-png.md)
 - [x] [add-same-file-twice](cli/import/add-same-file-twice.md)
 - [-] [add-zip](cli/import/add-zip.md)
-    - This needs testing and needs a smoke test.
 - [x] [no-overwrite-existing-database](cli/import/no-overwrite-existing-database.md)
+- [x] [check-new-files](cli/import/check-new-files.md)
 
 ### Inspect
 - [x] [database-summary](cli/inspect/database-summary.md)
 - [x] [export-asset](cli/inspect/export-asset.md)
+- [x] [export-display-and-thumb](cli/inspect/export-display-and-thumb.md)
+- [-] [list-paging](cli/inspect/list-paging.md)
 
 ### Verify
 - [x] [detect-deleted-file](cli/verify/detect-deleted-file.md)
 - [x] [detect-modified-file](cli/verify/detect-modified-file.md)
 - [x] [repair-clean-database](cli/verify/repair-clean-database.md)
 - [x] [repair-damaged-database](cli/verify/repair-damaged-database.md)
-- [x] [verify-full](cli/verify/verify-full.md)
+- [-] [verify-full](cli/verify/verify-full.md)
 
 ### Remove
 - [x] [remove-asset-by-id](cli/remove/remove-asset-by-id.md)
@@ -70,14 +84,13 @@ Open the desktop app at `/#/stories?cycle=1` and check every story cycles throug
 
 ### Move
 - [-] [move-file-between-databases](cli/move/move-file-between-databases.md)
-    - This command doesn't exist yet.
 
 ### Replication
 - [x] [replicate-deleted-asset](cli/replication/replicate-deleted-asset.md)
 - [x] [replicate-full-copy](cli/replication/replicate-full-copy.md)
 - [x] [replicate-incremental-changes](cli/replication/replicate-incremental-changes.md)
 - [x] [replicate-no-changes](cli/replication/replicate-no-changes.md)
-- [x] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
+- [-] [replicate-partial-copy](cli/replication/replicate-partial-copy.md)
 - [x] [replicate-unrelated-fails](cli/replication/replicate-unrelated-fails.md)
 
 ### Upgrade
@@ -115,29 +128,56 @@ Open the desktop app at `/#/stories?cycle=1` and check every story cycles throug
 - [x] [view-secret](cli/vault/plaintext/view-secret.md)
 
 ### Vault (keychain)
-- [x] [add-view-edit-delete](cli/vault/keychain/add-view-edit-delete.md)
-- [x] [list-multiple](cli/vault/keychain/list-multiple.md)
+- [ ] [add-view-edit-delete](cli/vault/keychain/add-view-edit-delete.md)
+- [ ] [list-multiple](cli/vault/keychain/list-multiple.md)
 
 ### LAN Share
 - [x] [share-database](cli/lan-share/share-database.md)
 - [x] [share-secret](cli/lan-share/share-secret.md)
 
-### Misc
-- [x] [config-timestamps](cli/misc/config-timestamps.md)
-- [-] [mcp-server](cli/misc/mcp-server.md)
+### Encryption
+- [x] [encrypt-in-place](cli/encryption/encrypt-in-place.md)
+- [x] [decrypt-in-place](cli/encryption/decrypt-in-place.md)
+- [x] [replicate-encrypted](cli/encryption/replicate-encrypted.md)
+- [x] [sync-encrypted](cli/encryption/sync-encrypted.md)
+
+### S3
+- [x] [s3-database](cli/s3/s3-database.md)
+- [x] [s3-replicate-and-sync](cli/s3/s3-replicate-and-sync.md)
+
+### Origin
+- [x] [set-origin](cli/origin/set-origin.md)
+- [x] [consolidate-new-remote](cli/origin/consolidate-new-remote.md)
+- [x] [consolidate-unrelated-remote](cli/origin/consolidate-unrelated-remote.md)
+
+### MCP
+- [x] [mcp-server](cli/mcp/mcp-server.md)
+
+### Info
+- [-] [info](cli/info/info.md)
+
+### Hash
+- [x] [hash](cli/hash/hash.md)
+
+### Tools
+- [x] [tools](cli/tools/tools.md)
+
+### Version
+- [x] [version](cli/version/version.md)
+
+### News
+- [x] [news](cli/news/news.md)
+
+### Bug
+- [-] [bug](cli/bug/bug.md)
 
 ## Desktop
 
 ### Import
 - [x] [import-directory](desktop/import/import-directory.md)
-    - Problem importing from the zip file
-        - Import files have uuid for file name and a wierd path.
-        - No immediate need to fix this.
 - [x] [import-files](desktop/import/import-files.md)
 - [x] [import-video](desktop/import/import-video.md)
-    - Video imports, but doesn't play back.
 - [-] [import-zip](desktop/import/import-zip.md)
-    - This will work but will have a similar problem as above.
 
 ### Move
 - [x] [move-file-between-databases](desktop/move/move-file-between-databases.md)
@@ -148,7 +188,7 @@ Open the desktop app at `/#/stories?cycle=1` and check every story cycles throug
 
 ### Replication
 - [x] [replicate-full-copy](desktop/replication/replicate-full-copy.md)
-- [x] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
+- [-] [replicate-partial-copy](desktop/replication/replicate-partial-copy.md)
 
 ### Database
 - [x] [edit-database-origin](desktop/database/edit-database-origin.md)
@@ -160,11 +200,7 @@ Open the desktop app at `/#/stories?cycle=1` and check every story cycles throug
 
 ### Secrets
 - [-] [add-duplicate-name](desktop/secrets/add-duplicate-name.md)
-    - This fails. Clicking Save has no effect for the duplicate secret, no error/toast is shown.
-    - It would be good when typing in the duplicate secret name in the Add Secret modal if it shows you in the form that the name is duplicate.
 - [x] [add-api-key](desktop/secrets/add-api-key.md)
-    - Should not be able to save unless a value is entered. Blank values are useless and should not be allowed.
-    - The should be a button that reveals the secret in the input while we are entering it.
 - [x] [add-encryption-key](desktop/secrets/add-encryption-key.md)
 - [x] [add-s3-credentials](desktop/secrets/add-s3-credentials.md)
 - [x] [rename-secret](desktop/secrets/rename-secret.md)
@@ -172,11 +208,64 @@ Open the desktop app at `/#/stories?cycle=1` and check every story cycles throug
 
 ### LAN Share
 - [x] [share-database](desktop/lan-share/share-database.md)
-    - When it tried to create db (with a fake path), the Create Database modal didn't dismiss automatically even though the new db appeared in the Manage Databases list.
 - [x] [share-secret](desktop/lan-share/share-secret.md)
 
 ### News
 - [x] [news-notifications](desktop/news/news-notifications.md)
 
 ### MCP
-- [-] [mcp-server](desktop/mcp/mcp-server.md)
+- [x] [mcp-server](desktop/mcp/mcp-server.md)
+
+## Mobile
+
+Run each of these on Android and on iOS. Tick a test only when it has passed on both, and say which platform failed when one does.
+
+### Automatic import
+- [x] [auto-import-new-remote](mobile/auto-import/auto-import-new-remote.md)
+- [x] [auto-import-existing-remote](mobile/auto-import/auto-import-existing-remote.md)
+- [-] [auto-import-no-permission](mobile/auto-import/auto-import-no-permission.md)
+- [-] [auto-import-delete-after-backup](mobile/auto-import/auto-import-delete-after-backup.md)
+
+### Import
+- [x] [import-photo-and-video](mobile/import/import-photo-and-video.md)
+
+### Gallery
+- [x] [view-and-edit-asset](mobile/gallery/view-and-edit-asset.md)
+- [x] [export-asset](mobile/gallery/export-asset.md)
+
+### Download
+- [-] [download-assets](mobile/download/download-assets.md)
+
+### Database
+- [-] [create-and-open-database](mobile/database/create-and-open-database.md)
+- [x] [load-large-database](mobile/database/load-large-database.md)
+- [x] [view-database-details](mobile/database/view-database-details.md)
+- [-] [remove-recent-database](mobile/database/remove-recent-database.md)
+- [x] [open-encrypted-database](mobile/database/open-encrypted-database.md)
+- [-] [edit-database-origin](mobile/database/edit-database-origin.md)
+
+### Sync
+- [-] [sync-with-another-database](mobile/sync/sync-with-another-database.md)
+
+### Move
+- [-] [move-file-between-databases](mobile/move/move-file-between-databases.md)
+
+### Replication
+- [-] [replicate-to-another-database](mobile/replication/replicate-to-another-database.md)
+- [-] [partial-replica-and-prefetch](mobile/replication/partial-replica-and-prefetch.md)
+
+### S3
+- [-] [s3-database](mobile/s3/s3-database.md)
+
+### Secrets
+- [-] [add-and-view-secret](mobile/secrets/add-and-view-secret.md)
+- [-] [add-encryption-key](mobile/secrets/add-encryption-key.md)
+- [-] [add-s3-credentials](mobile/secrets/add-s3-credentials.md)
+
+### LAN Share
+- [-] [mobile-to-mobile](mobile/lan-share/mobile-to-mobile.md)
+- [x] [desktop-to-mobile](mobile/lan-share/desktop-to-mobile.md)
+- [-] [cli-to-mobile](mobile/lan-share/cli-to-mobile.md)
+
+### News
+- [-] [news-notifications](mobile/news/news-notifications.md)

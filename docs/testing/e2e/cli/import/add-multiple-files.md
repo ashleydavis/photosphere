@@ -1,65 +1,54 @@
 # CLI Manual Test: Add Multiple Files
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that multiple files can be imported in a single `add` command.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and create a new database:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-add-multiple-files
+psi init --db /tmp/psi-cli-import-add-multiple-files/source --yes
 ```
 
-## Steps
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-add-multiple-files/source`.
 
-### 1. Clean up any previous test run
+## Test
 
-```bash
-rm -rf /tmp/psi-test
-```
+### 1. Add a directory containing multiple files
 
----
-
-### 2. Create a new database
+The repo ships a `test/multiple-files/` directory holding `test-1.jpeg`, `test-2.png`, `test.mp4` and a `test-archive.zip`. The zip holds two more files, `PXL_20260322_023611216.mp4` and `test-3.jpg`, which differ from the others, so five files are imported in all.
 
 ```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-```
-
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
-
----
-
-### 3. Add a directory containing multiple files
-
-The repo ships a `test/multiple-files/` directory holding `test-1.jpeg`, `test-2.png`, `test.mp4`, and a `test-archive.zip`. The zip contains the same files, so they are skipped as duplicates.
-
-```bash
-bun run start -- add ../../test/multiple-files/ --db /tmp/psi-test/source --yes
+psi add test/multiple-files/ --db /tmp/psi-cli-import-add-multiple-files/source --yes
 ```
 
 Expected:
-- Output shows `Files added: 3` and `Files failed: 0`.
+- Output shows `Files added: 5` and `Files failed: 0`.
 
----
+## Check
 
-### 4. Confirm all files are now in the database
+### 2. Confirm all files are now in the database
 
 ```bash
-bun run start -- check ../../test/multiple-files/ --db /tmp/psi-test/source --yes
+psi check test/multiple-files/ --db /tmp/psi-cli-import-add-multiple-files/source --yes
 ```
 
 Expected:
-- Output shows `Already added: 3`.
+- Output shows `Already added: 5`.
 
 ---
 
-### 5. Verify the database
+### 3. Verify the database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-add-multiple-files/source
 ```
 
 Expected:
 - Verification completes without errors.
-- `Files imported:` reports `3`.
+- `Files imported:` reports `5`.

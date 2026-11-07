@@ -1,0 +1,76 @@
+// Photosphere's Android app. The Zig library per ABI and the built page are generated into build/ziggy by
+// scripts/sync-android.sh before Gradle runs, so Gradle never runs zig.
+
+apply plugin: 'com.android.application'
+
+android {
+    namespace "au.com.codecapers.photosphere.ziggy"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    ndkVersion rootProject.ext.ndkVersion
+
+    defaultConfig {
+        applicationId "au.com.codecapers.photosphere.ziggy"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode project.hasProperty('ziggyVersionCode') ? ziggyVersionCode.toInteger() : 1
+        versionName project.hasProperty('ziggyVersionName') ? ziggyVersionName : "1.0.0"
+        ndk {
+            abiFilters 'x86_64', 'arm64-v8a'
+        }
+
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['build/ziggy/jniLibs']
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key so the APK installs, as the package script documents.
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    // Ziggy's Android native app, at the version tag every other place that takes Ziggy names (see settings.gradle).
+    implementation 'dev.ziggy:ziggy-native-android:v0.0.23'
+
+    // Jetpack Security: EncryptedSharedPreferences backed by the Android Keystore, which holds the phone's secrets encrypted at rest.
+    implementation "androidx.security:security-crypto:$androidxSecurityCryptoVersion"
+
+    // Plain-JVM unit tests of the Java that does not need the platform.
+    testImplementation "junit:junit:$junitVersion"
+}
+
+// Print failing and skipped tests and a run/passed/failed summary line, so the output shows what ran.
+tasks.withType(Test).configureEach {
+    testLogging {
+        events "failed", "skipped"
+        exceptionFormat "full"
+    }
+    afterSuite { desc, result ->
+        if (desc.parent == null) {
+            println "Unit tests: ${result.testCount} run, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped"
+        }
+    }
+}
+
+// A build run without scripts/sync-android.sh would package an app with no library, which fails only when
+// it runs on a device. Fail the build instead, with the command that fixes it.
+tasks.register('checkZiggySync') {
+    doLast {
+        if (!fileTree('build/ziggy/jniLibs').matching { include '**/libphotosphere.so' }.any()) {
+            throw new GradleException("No libphotosphere.so under build/ziggy/jniLibs.\nRun scripts/sync-android.sh (bun run --filter=ziggy sync:android) first.")
+        }
+    }
+}
+preBuild.dependsOn checkZiggySync

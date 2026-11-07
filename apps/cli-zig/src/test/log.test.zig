@@ -1,0 +1,145 @@
+const std = @import("std");
+const cli = @import("cli-zig");
+const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const media_tools = @import("media-tools-zig");
+const helpers = @import("test-helpers.zig");
+const ConsoleLog = utils.log.ConsoleLog;
+const MuteLog = utils.mute_log.MuteLog;
+
+//
+// Captured console output.
+//
+const Capture = struct {
+    // What was written to stdout.
+    stdout: std.Io.Writer.Allocating,
+
+    // What was written to stderr.
+    stderr: std.Io.Writer.Allocating,
+};
+
+test "the CLI's console log writes each kind of message to the right stream" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var capture = Capture{ .stdout = .init(allocator), .stderr = .init(allocator) };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+
+    const quietLog = ConsoleLog.initWith(.{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    const quiet = quietLog;
+    quiet.info("info");
+    quiet.verbose("verbose");
+    quiet.debug("debug");
+    quiet.tool("magick", .{ .stdout = "out", .stderr = null });
+    quiet.event("happened");
+    quiet.warn("warning");
+    quiet.@"error"("failure");
+    try std.testing.expect(!quiet.verboseEnabled());
+    try std.testing.expectEqualStrings("info\n[EVENT] happened\n", capture.stdout.written());
+    try std.testing.expectEqualStrings("warning\nfailure\n", capture.stderr.written());
+
+    capture.stdout.clearRetainingCapacity();
+    capture.stderr.clearRetainingCapacity();
+    const loudLog = ConsoleLog.initWith(.{
+        .verbose = true,
+        .debug = true,
+        .tools = true,
+    });
+    const loud = loudLog;
+    loud.verbose("verbose");
+    loud.debug("debug");
+    loud.tool("magick", .{ .stdout = "out", .stderr = "err" });
+    loud.exception("Something failed", utils.errors.throwError("Cause", .{}));
+    try std.testing.expect(loud.verboseEnabled());
+    try std.testing.expectEqualStrings("verbose\n== magick stdout ==\nout\n== magick stderr ==\nerr\n", capture.stdout.written());
+    try std.testing.expectEqualStrings("debug\nSomething failed\nError: Cause\n", capture.stderr.written());
+    const details = try loud.getLogDetails(allocator, std.testing.io);
+    try std.testing.expect(details.logFilePath == null);
+}
+
+test "the CLI's console log writes a long tool output, event and error chain whole, as the template strings do" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var capture = Capture{ .stdout = .init(allocator), .stderr = .init(allocator) };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+
+    const longText = try allocator.alloc(u8, 20000);
+    @memset(longText, 'x');
+    const loudLog = ConsoleLog.initWith(.{
+        .verbose = false,
+        .debug = false,
+        .tools = true,
+    });
+    const loud = loudLog;
+    loud.tool("ffprobe", .{ .stdout = longText, .stderr = null });
+    loud.event(longText);
+    try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "== ffprobe stdout ==\n", longText, "\n[EVENT] ", longText, "\n" }), capture.stdout.written());
+
+    // An error whose message and cause together run past 16 KB.
+    utils.errors.recordError("Error", "{s}", .{longText[0..12000]});
+    loud.exception("Something failed", utils.errors.throwErrorWithCause("{s}", .{longText[0..12000]}));
+    try std.testing.expectEqualStrings(try std.mem.concat(allocator, u8, &.{ "Something failed\nError: ", longText[0..12000], "\nCaused by:\nError: ", longText[0..12000], "\n" }), capture.stderr.written());
+}
+
+test "configureLog gives the file logger unless file logging is disabled" {
+    const console_log = MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try helpers.makeTempDir(allocator, "configure-log");
+    defer std.Io.Dir.cwd().deleteTree(io, tmpDir) catch {};
+    var environ_map = std.process.Environ.Map.init(allocator);
+    // os.tmpdir() reads TMPDIR on POSIX and TEMP on Windows.
+    try environ_map.put("TMPDIR", tmpDir);
+    try environ_map.put("TEMP", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    defer node_utils.termination.clearTerminationCallbacks();
+
+    var capture = Capture{ .stdout = .init(allocator), .stderr = .init(allocator) };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+
+    cli.process_argv.setArgv(&.{"psi"});
+    var mediaTools = try media_tools.MediaTools.init();
+    defer mediaTools.deinit();
+    const consoleLog = try cli.log_setup.configureLog(allocator, io, console_log, mediaTools.runner(), .{ .disableFileLogging = true });
+    const details = try consoleLog.getLogDetails(allocator, io);
+    try std.testing.expect(details.logFilePath == null);
+
+    const log = try cli.log_setup.configureLog(allocator, io, console_log, mediaTools.runner(), .{ .verbose = true });
+    log.info("to both");
+    try std.testing.expect(log.verboseEnabled());
+    const logFilePath = log.logFilePath().?;
+    // The CLI closes its log file as the process ends, through the termination callbacks.
+    try node_utils.termination.invokeTerminationCallbacks(io, log, 0);
+    try std.testing.expect(std.mem.startsWith(u8, std.fs.path.basename(logFilePath), "psi-"));
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, logFilePath, allocator, .unlimited);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\nCommand: unknown\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "] [INFO] to both\n") != null);
+    // (With verbose logging the tool checks of the header also print verbose messages.)
+    try std.testing.expect(std.mem.endsWith(u8, capture.stdout.written(), "to both\n"));
+}
+
+test "writeOutputLine writes a line to stdout and writeErrorLine a line to stderr" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var capture = Capture{ .stdout = .init(allocator), .stderr = .init(allocator) };
+    utils.console.setCapture(&capture.stdout.writer, &capture.stderr.writer);
+    defer utils.console.setCapture(null, null);
+
+    cli.console_output.writeOutputLine("to stdout");
+    cli.console_output.writeErrorLine("to stderr");
+
+    try std.testing.expectEqualStrings("to stdout\n", capture.stdout.written());
+    try std.testing.expectEqualStrings("to stderr\n", capture.stderr.written());
+}

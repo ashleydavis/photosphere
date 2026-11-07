@@ -1,55 +1,35 @@
 # CLI Manual Test: Sync Original to Copy
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `sync` propagates new files added on the original side over to the
 copy.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then add a new file to the original:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-original-to-copy
+mkdir -p /tmp/psi-cli-sync-sync-original-to-copy
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-original-to-copy/original
+psi replicate --db /tmp/psi-cli-sync-sync-original-to-copy/original --dest /tmp/psi-cli-sync-sync-original-to-copy/copy --yes --force
+psi add test/test.png --db /tmp/psi-cli-sync-sync-original-to-copy/original --yes
 ```
 
 Expected:
 - Replication completes successfully.
-- Both databases have the same root hash (confirm with `bun run start -- root-hash` on each path if you wish).
+- The `add` shows `Files added: 1`.
 
----
+## Test
 
-### 3. Add a new file to the original database
-
-```bash
-bun run start -- add ../../test/test.png --db /tmp/psi-test/original --yes
-```
-
-Expected:
-- Output shows `Files added: 1`.
-
----
-
-### 4. Confirm the root hashes now differ
+### 1. Confirm the root hashes now differ
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-original-to-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-original-to-copy/copy
 ```
 
 Expected:
@@ -57,22 +37,22 @@ Expected:
 
 ---
 
-### 5. Sync original to copy
+### 2. Sync original to copy
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-original-to-copy/original --dest /tmp/psi-cli-sync-sync-original-to-copy/copy --yes
 ```
 
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 6. Confirm the root hashes match again
+### 3. Confirm the root hashes match again
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-original-to-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-original-to-copy/copy
 ```
 
 Expected:

@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { version } from "config";
+import Box from "@mui/joy/Box";
+import Card from "@mui/joy/Card";
+import Chip from "@mui/joy/Chip";
+import Button from "@mui/joy/Button";
+import Typography from "@mui/joy/Typography";
+import Link from "@mui/joy/Link";
+import CircularProgress from "@mui/joy/CircularProgress";
+import { Download, OpenInNew } from "@mui/icons-material";
 import { useApi } from "../context/api-context";
+import { useIsMobile } from "../lib/use-is-mobile";
 
 //
 // URL of the GitHub API endpoint that returns the latest non-prerelease release.
@@ -145,6 +154,7 @@ function parseNewsYaml(text: string): INewsItem[] {
 //
 export function NewsPage() {
     const api = useApi();
+    const isMobile = useIsMobile();
     const [latestVersion, setLatestVersion] = useState<string | undefined>(undefined);
     const [items, setItems] = useState<INewsItem[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -185,80 +195,104 @@ export function NewsPage() {
     const orderedItems = [...items].reverse();
 
     return (
-        <div className="w-full h-full p-4 overflow-y-auto pb-32">
-            <div className="m-auto" style={{ maxWidth: "800px" }}>
-                <h1 className="mt-6 text-3xl">News</h1>
+        <Box sx={{ width: '100%', height: '100%', overflowY: 'auto', p: isMobile ? 2 : 4, pb: 16 }}>
+            <Box sx={{ mx: 'auto', maxWidth: 800 }}>
+                <Typography level="h2" sx={{ fontSize: isMobile ? '1.75rem' : '2rem', mb: 2 }}>
+                    News
+                </Typography>
 
-                <section className="pt-6">
-                    <h2 className="text-xl">Version</h2>
-                    <p className="pt-2">
-                        <span className="font-semibold">Running version:</span> v{runningVersion}
-                    </p>
-                    {latestVersion !== undefined && (
-                        <p className="pt-1">
-                            <span className="font-semibold">Latest release:</span> v{latestVersion}
-                            {hasUpdate
-                                ? <span className="ml-2 text-green-600 font-semibold">(update available)</span>
-                                : <span className="ml-2 text-gray-500">(up to date)</span>
-                            }
-                        </p>
-                    )}
-                    {hasUpdate && (
-                        <p className="pt-2">
-                            <a
+                {/* The version card leads with whether there is an update, because that is the one
+                    thing anybody opens this page to find out. The download is a full-width button
+                    on a phone rather than an underlined link. */}
+                <Card
+                    variant={hasUpdate ? 'soft' : 'outlined'}
+                    color={hasUpdate ? 'success' : 'neutral'}
+                    sx={{ borderRadius: 'lg', p: 2, gap: 1 }}
+                    >
+                    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                        <Typography level="title-md">{`Version v${runningVersion}`}</Typography>
+                        {latestVersion !== undefined
+                            && <Chip
+                                size="sm"
+                                variant="solid"
+                                color={hasUpdate ? 'success' : 'neutral'}
+                                >
+                                {hasUpdate ? 'Update available' : 'Up to date'}
+                            </Chip>
+                        }
+                    </Box>
+
+                    {latestVersion !== undefined
+                        && <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                            {`Latest release: v${latestVersion}`}
+                        </Typography>
+                    }
+
+                    {hasUpdate
+                        && <Button
+                            component="a"
+                            href="https://github.com/ashleydavis/photosphere/releases/latest"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="lg"
+                            color="success"
+                            startDecorator={<Download />}
+                            sx={{ minHeight: 48, mt: 0.5 }}
+                            >
+                            Download the latest release
+                        </Button>
+                    }
+                </Card>
+
+                <Typography level="title-lg" sx={{ mt: 3, mb: 1.5 }}>News items</Typography>
+
+                {loading
+                    && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
+                        <CircularProgress size="sm" />
+                        <Typography level="body-md" sx={{ color: 'text.tertiary' }}>Loading...</Typography>
+                    </Box>
+                }
+
+                {!loading && orderedItems.length === 0
+                    && <Typography level="body-md" sx={{ color: 'text.tertiary' }}>
+                        No news items available.
+                    </Typography>
+                }
+
+                {!loading && orderedItems.map(item => (
+                    <Card
+                        key={item.id}
+                        variant="soft"
+                        sx={{ borderRadius: 'lg', p: 2, mb: 1.5, gap: 1 }}
+                        >
+                        <Typography level="body-md">{item.message}</Typography>
+                        {item.link
+                            && <Link
+                                href={item.link.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                href="https://github.com/ashleydavis/photosphere/releases/latest"
-                                className="text-blue-600 underline"
+                                endDecorator={<OpenInNew fontSize="small" />}
+                                sx={{ minHeight: 44, alignItems: 'center' }}
                                 >
-                                Download the latest release
-                            </a>
-                        </p>
-                    )}
-                </section>
-
-                <section className="pt-8">
-                    <h2 className="text-xl">News items</h2>
-                    {loading
-                        ? <p className="pt-2 text-gray-500">Loading...</p>
-                        : orderedItems.length === 0
-                            ? <p className="pt-2 text-gray-500">No news items available.</p>
-                            : (
-                                <ul className="pt-2 space-y-4">
-                                    {orderedItems.map(item => (
-                                        <li key={item.id} className="border-l-4 border-gray-300 pl-3">
-                                            <p>{item.message}</p>
-                                            {item.link && (
-                                                <p className="pt-1">
-                                                    <a
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        href={item.link.url}
-                                                        className="text-blue-600 underline"
-                                                        >
-                                                        {item.link.label}
-                                                    </a>
-                                                </p>
-                                            )}
-                                            {item.action && (
-                                                <p className="pt-1">
-                                                    <a
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        href={item.action.url}
-                                                        className="text-blue-600 underline"
-                                                        >
-                                                        {item.action.label}
-                                                    </a>
-                                                </p>
-                                            )}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )
-                    }
-                </section>
-            </div>
-        </div>
+                                {item.link.label}
+                            </Link>
+                        }
+                        {item.action
+                            && <Button
+                                component="a"
+                                href={item.action.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                variant="solid"
+                                size={isMobile ? 'lg' : 'md'}
+                                sx={{ minHeight: isMobile ? 48 : undefined, alignSelf: isMobile ? 'stretch' : 'flex-start' }}
+                                >
+                                {item.action.label}
+                            </Button>
+                        }
+                    </Card>
+                ))}
+            </Box>
+        </Box>
     );
 }

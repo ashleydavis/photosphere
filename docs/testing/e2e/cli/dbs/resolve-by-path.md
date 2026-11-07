@@ -1,66 +1,52 @@
 # CLI Manual Test: Resolve Database by Path
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that passing `--db <path>` resolves to the matching entry in
-`databases.json` and auto-loads the linked encryption key.
+`databases.toml` and auto-loads the linked encryption key.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
+From the repo root, build the CLI, put it on the PATH, point the CLI at empty config and vault directories, initialise an encrypted database with a generated key, add a file, republish the key under a shared id in the same `vault.json`, and register the database with that shared id:
 
 ```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-resolve-by-path
+mkdir -p /tmp/psi-cli-dbs-resolve-by-path/config /tmp/psi-cli-dbs-resolve-by-path/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-resolve-by-path/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-dbs-resolve-by-path/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
-```
-
----
-
-### 2. Initialise an encrypted database with a generated key
-
-```bash
-bun run start -- init --db /tmp/psi-test/db --key dbs-path-enc-key --generate-key --yes
-bun run start -- add ../../test/test.png --db /tmp/psi-test/db --key dbs-path-enc-key --yes
+psi init --db /tmp/psi-cli-dbs-resolve-by-path/db --key dbs-path-enc-key --generate-key --yes
+psi add test/test.png --db /tmp/psi-cli-dbs-resolve-by-path/db --key dbs-path-enc-key --yes
+jq -c '. + {"enc00002":{"name":"enc00002","type":"encryption-key","value":.["dbs-path-enc-key"].value}}' \
+    /tmp/psi-cli-dbs-resolve-by-path/vault/vault.json > /tmp/psi-cli-dbs-resolve-by-path/vault/vault.json.new
+mv /tmp/psi-cli-dbs-resolve-by-path/vault/vault.json.new /tmp/psi-cli-dbs-resolve-by-path/vault/vault.json
+cat > /tmp/psi-cli-dbs-resolve-by-path/config/databases.toml <<'TOML'
+[[databases]]
+name = "resolve-path-db"
+description = ""
+path = "/tmp/psi-cli-dbs-resolve-by-path/db"
+encryption_key = "enc00002"
+TOML
 ```
 
 Expected:
 - The database is initialised and the asset is added.
+- `/tmp/psi-cli-dbs-resolve-by-path/vault/vault.json` holds both a `dbs-path-enc-key` key and an `enc00002` key.
 
----
+## Test
 
-### 3. Republish the encryption key under a shared id
-
-```bash
-bun -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/psi-test/vault/dbs-path-enc-key.json','utf8'));fs.writeFileSync('/tmp/psi-test/vault/enc00002.json',JSON.stringify({name:'enc00002',type:'encryption-key',value:d.value}));"
-```
-
----
-
-### 4. Register the database with the shared key id
+### 1. Run `summary` by path
 
 ```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"resolve-path-db","description":"","path":"/tmp/psi-test/db","encryptionKey":"enc00002"}]
-EOF
-```
-
----
-
-### 5. Run `summary` by path (the encryption key should auto-resolve)
-
-```bash
-bun run start -- summary --db /tmp/psi-test/db --yes
+psi summary --db /tmp/psi-cli-dbs-resolve-by-path/db --yes
 ```
 
 Expected:
-- The command exits successfully (the linked encryption key was loaded automatically via the path lookup).
-- The summary output reflects the previously-added asset.
+- The command exits successfully (the encryption key was auto-resolved through `databases.toml`).
+- The summary output reflects the one previously-added asset (`Files imported: 1`).
+
+## Check
+
+The summary output in step 1 is the check.

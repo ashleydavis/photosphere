@@ -1,0 +1,247 @@
+const std = @import("std");
+const cli = @import("cli-zig");
+const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const node_api = @import("node-api-zig");
+const helpers = @import("test-helpers.zig");
+const MockLog = @import("mock-log.zig").MockLog;
+
+//
+// Sets up a config dir and a news feed file, and returns the environment.
+//
+fn setup(allocator: std.mem.Allocator, root: []const u8, feed: []const u8) !*std.process.Environ.Map {
+    const map = try allocator.create(std.process.Environ.Map);
+    map.* = std.process.Environ.Map.init(allocator);
+    try map.put("PHOTOSPHERE_CONFIG_DIR", try std.fs.path.join(allocator, &.{ root, "config" }));
+    const feedPath = try std.fs.path.join(allocator, &.{ root, "news.yaml" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = feedPath, .data = feed });
+    try map.put("PHOTOSPHERE_NEWS_URL", try helpers.fileUrl(allocator, feedPath));
+    node_utils.process_env.setEnvironMap(map);
+    return map;
+}
+
+test "checkForUpdates returns nothing for the dev version" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expect(cli.check_for_updates.checkForUpdates(arena.allocator(), std.testing.io, log) == null);
+}
+
+test "getLatestVersion returns nothing for the dev version" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expect(cli.check_for_updates.getLatestVersion(arena.allocator(), std.testing.io) == null);
+}
+
+test "tagName reads the tag_name of a release response, and nothing from a response without one" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const tagName = cli.check_for_updates.tagName;
+
+    try std.testing.expectEqualStrings("v1.2.3", tagName(allocator, "{\"tag_name\":\"v1.2.3\"}").?);
+    try std.testing.expect(tagName(allocator, "{\"tag_name\":\"\"}") == null);
+    try std.testing.expect(tagName(allocator, "{\"tag_name\":3}") == null);
+    try std.testing.expect(tagName(allocator, "{\"name\":\"v1.2.3\"}") == null);
+    try std.testing.expect(tagName(allocator, "[\"v1.2.3\"]") == null);
+    try std.testing.expect(tagName(allocator, "not json") == null);
+}
+
+test "printNotifications prints the next unseen news item once" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const memory = try utils.memory_log.MemoryLog.init(allocator, .{
+        .verbose = false,
+        .debug = false,
+        .tools = false,
+    });
+    defer memory.deinit();
+    const root = try helpers.makeTempDir(allocator, "notifications");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root,
+        \\items:
+        \\  - id: first
+        \\    message: "Hello there"
+        \\    link:
+        \\      label: "Docs"
+        \\      url: "https://example.com/docs"
+        \\  - id: second
+        \\    message: Second item
+        \\    action:
+        \\      label: Go
+        \\      url: https://example.com/go
+        \\
+    );
+    defer node_utils.process_env.setEnvironMap(null);
+    cli.picocolors.setColorSupportOverride(false);
+    defer cli.picocolors.setColorSupportOverride(null);
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, memory.log, false);
+    try std.testing.expectEqualStrings("\n\u{1F4F0} News:\n   Hello there\n   Docs: https://example.com/docs\n", memory.stdout());
+    // What each later call writes starts where the previous call's text ends.
+    const secondStart = memory.stdout().len;
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, memory.log, false);
+    try std.testing.expectEqualStrings("\n\u{1F4F0} News:\n   Second item\n   Go: https://example.com/go\n", memory.stdout()[secondStart..]);
+    const thirdStart = memory.stdout().len;
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, memory.log, false);
+    try std.testing.expectEqualStrings("", memory.stdout()[thirdStart..]);
+    const state = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" }), allocator, .unlimited);
+    try std.testing.expectEqualStrings("news:\n  shown_news_ids:\n    - first\n    - second\n", state);
+}
+
+test "checkForNews returns nothing when the feed cannot be read" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-bad");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: [unclosed");
+    defer node_utils.process_env.setEnvironMap(null);
+    try std.testing.expect(cli.check_for_news.checkForNews(allocator, std.testing.io, log) == null);
+}
+
+test "prints nothing when quiet is set, and does not even check" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-quiet");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root,
+        \\items:
+        \\  - id: first
+        \\    message: Some news
+        \\
+    );
+    defer node_utils.process_env.setEnvironMap(null);
+    var capture = std.Io.Writer.Allocating.init(allocator);
+    utils.console.setCapture(&capture.writer, &capture.writer);
+    defer utils.console.setCapture(null, null);
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, log, true);
+
+    try std.testing.expectEqualStrings("", capture.written());
+    try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
+
+    // The news was not even checked, so it is not recorded as shown.
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ root, "config", "state.yaml" })));
+}
+
+test "does not record any update when no update is available" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-no-update");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: []\n");
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, log, false);
+
+    try std.testing.expect(try node_api.news_state.getLastShownUpdateVersion(allocator, std.testing.io, log) == null);
+}
+
+test "omits update line when checkForUpdates returns undefined" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-omit-update");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: []\n");
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, log, false);
+
+    try std.testing.expect(!mock.wasCalledContaining(.info, "A new version is available"));
+}
+
+test "prints news heading and message when a news item is available" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-heading");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root,
+        \\items:
+        \\  - id: a
+        \\    message: Hello users
+        \\
+    );
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, log, false);
+
+    try std.testing.expect(mock.wasCalledContaining(.info, "\u{1F4F0} News:"));
+    try std.testing.expect(mock.wasCalledContaining(.info, "Hello users"));
+}
+
+test "renders link and action when present on the news item" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-link-action");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root,
+        \\items:
+        \\  - id: a
+        \\    message: Hello
+        \\    link:
+        \\      label: Read more
+        \\      url: https://example.com/read
+        \\    action:
+        \\      label: Try it
+        \\      url: https://example.com/try
+        \\
+    );
+    defer node_utils.process_env.setEnvironMap(null);
+    cli.picocolors.setColorSupportOverride(false);
+    defer cli.picocolors.setColorSupportOverride(null);
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, log, false);
+
+    try std.testing.expect(mock.wasCalledWith(.info, "   Read more: https://example.com/read"));
+    try std.testing.expect(mock.wasCalledWith(.info, "   Try it: https://example.com/try"));
+}
+
+test "prints nothing extra when both checks return undefined" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const root = try helpers.makeTempDir(allocator, "notifications-nothing");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
+    _ = try setup(allocator, root, "items: []\n");
+    defer node_utils.process_env.setEnvironMap(null);
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNotifications(allocator, std.testing.io, log, false);
+
+    try std.testing.expectEqual(@as(usize, 0), mock.callCount(.info));
+}
+
+test "printNewsItem prints message body without link or action sections when neither is set" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var mock = MockLog.init(allocator);
+    const log = mock.ilog();
+
+    try cli.print_notifications.printNewsItem(log, allocator, .{
+        .id = "a",
+        .message = "Bare message",
+    });
+
+    try std.testing.expect(mock.wasCalledContaining(.info, "\u{1F4F0} News:"));
+    try std.testing.expect(mock.wasCalledContaining(.info, "Bare message"));
+    try std.testing.expectEqual(@as(usize, 3), mock.callCount(.info));
+}

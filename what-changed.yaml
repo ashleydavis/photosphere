@@ -1,0 +1,111 @@
+# Which test scripts still need to run, decided by what has changed since the last passing run.
+#
+# what-changed reports; scripts/test-everything-parallel.sh reads that report, runs the affected
+# scripts, and records a new baseline only when they all pass. See docs/git-hooks.md.
+#
+# Every target name here is passed straight to scripts/test-everything-parallel.sh as a script name,
+# so they must match the script names in package.json exactly.
+
+# Paths that fall under every target: anything that changes how every suite runs.
+#
+# bun.lock is here because installed dependencies live in node_modules, which is gitignored and
+# therefore never hashed. The lockfile is the only tracked evidence that they changed.
+always:
+  - package.json
+  - bun.lock
+  - mise.toml
+  - what-changed.yaml
+  - scripts
+  - .githooks
+
+# Extensions left out of the file list entirely, so a documentation-only change runs nothing.
+ignore:
+  - .md
+  - .txt
+  - .log
+
+targets:
+  - name: compile
+    paths:
+      - packages
+      - apps
+
+  - name: test
+    paths:
+      - packages
+      - apps
+
+  # The smoke tests of the Zig port of psi (apps/cli-zig and the packages-zig ports): copies of the
+  # TypeScript smoke suites with the ported commands run in the Zig CLI.
+  - name: test:cli:zig
+    paths:
+      - apps/cli-zig
+      - packages
+      - packages-zig
+      - third-party
+      - build.zig
+      - build.zig.zon
+
+  # The Photosphere App: its smoke tests on the host and on each phone platform. A change anywhere in the app, in the shared packages
+  # or in the user interface runs these, so the app can never change without its suite seeing it. Ziggy is taken from its repository at
+  # the version tag named in build.zig.zon, apps/photosphere-frontend/package.json, apps/photosphere/native/android/app/build.gradle and
+  # the Xcode projects, which are listed by name so that a change of the Ziggy version runs these.
+  - name: test:ziggy
+    paths:
+      - apps/photosphere
+      - apps/photosphere-frontend
+      - apps/photosphere-smoke-tests
+      - packages
+      - packages-zig
+      - third-party
+      - build.zig
+      - build.zig.zon
+      - apps/photosphere-frontend/package.json
+      - apps/photosphere/native/android/app/build.gradle
+      - apps/photosphere/native/ios/Photosphere.xcodeproj
+      - apps/photosphere/native/macos/Photosphere.xcodeproj
+
+  # The same suite on the Android emulator pool, for the same changes.
+  - name: test:ziggy:and
+    paths:
+      - apps/photosphere
+      - apps/photosphere-frontend
+      - apps/photosphere-smoke-tests
+      - packages
+      - packages-zig
+      - third-party
+      - build.zig
+      - build.zig.zon
+      - apps/photosphere-frontend/package.json
+      - apps/photosphere/native/android/app/build.gradle
+      - apps/photosphere/native/ios/Photosphere.xcodeproj
+      - apps/photosphere/native/macos/Photosphere.xcodeproj
+    platforms:
+      - linux
+
+  # The same suite on the iOS simulator, for the same changes.
+  - name: test:ziggy:ios
+    paths:
+      - apps/photosphere
+      - apps/photosphere-frontend
+      - apps/photosphere-smoke-tests
+      - packages
+      - packages-zig
+      - third-party
+      - build.zig
+      - build.zig.zon
+      - apps/photosphere-frontend/package.json
+      - apps/photosphere/native/android/app/build.gradle
+      - apps/photosphere/native/ios/Photosphere.xcodeproj
+      - apps/photosphere/native/macos/Photosphere.xcodeproj
+    platforms:
+      - darwin
+
+  # The Zig unit tests of the packages and the CLI. build.zig.zon names the Ziggy version they are built over.
+  - name: test:zig
+    paths:
+      - apps/cli-zig
+      - packages-zig
+      - third-party
+      - build.zig
+      - build.zig.zon

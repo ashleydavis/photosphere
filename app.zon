@@ -1,0 +1,7 @@
+// The app's details, which Ziggy's build reads: its name, which names its log files, its title, which heads them, and its version,
+// which they give. "dev" for a local build; the release workflow's scripts/set-build-config.sh writes the release's version here.
+.{
+    .name = "photosphere",
+    .title = "Photosphere",
+    .version = "dev",
+}

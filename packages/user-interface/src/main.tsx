@@ -4,7 +4,7 @@ import { Route, Routes, Navigate, useNavigate } from "react-router-dom";
 import { GalleryPage } from "./pages/gallery/gallery";
 import classNames from "classnames";
 import { usePlatform } from "./context/platform-context";
-import { useConfig } from "./context/config-context";
+import { useIsMobile, MOBILE_BREAKPOINT_PX } from "./lib/use-is-mobile";
 import { useAssetDatabase } from "./context/asset-database-source";
 import { useSearch } from "./context/search-context";
 import { FullscreenSpinner } from "./components/full-screen-spinnner";
@@ -13,9 +13,12 @@ import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import Drawer from "@mui/joy/Drawer/Drawer";
 import { LeftSidebar } from "./components/left-sidebar";
 import { RightSidebar } from "./components/right-sidebar";
+import { JobsDialog } from "./components/jobs-dialog";
+import { DatabaseSummaryDialog } from "./components/database-summary-dialog";
 import { Navbar } from "./components/navbar";
 import { Fps } from "./components/fps";
 import { AboutPage } from "./pages/about";
+import { DeveloperPage } from "./pages/developer";
 import { NewsPage } from "./pages/news";
 import { MapPage } from "./pages/map/map-page";
 import { ConfigurationDialog } from "./components/configuration-dialog";
@@ -33,11 +36,6 @@ import { openBugReport } from "./lib/bug-report";
 
 export interface IMainProps {
     //
-    // Set to true if running on mobile device to enable mobile-specific styles.
-    //
-    isMobile: boolean;
-
-    //
     // Initial theme mode to use before loading from platform.
     //
     initialTheme: 'light' | 'dark' | 'system';
@@ -46,12 +44,19 @@ export interface IMainProps {
 //
 // The main page of the Photosphere app.
 //
-function __Main({ isMobile, initialTheme }: IMainProps) {
-    const { 
+function __Main({ initialTheme }: IMainProps) {
+    const {
         isWorking,
         databasePath,
         openDatabase,
     } = useAssetDatabase();
+
+    //
+    // Whether the mobile (compact) layout is active, derived from the viewport
+    // width and updated live as the window is resized or a device rotates. This
+    // drives only layout/CSS; platform and native behaviour are unaffected.
+    //
+    const isMobile = useIsMobile();
 
     //
     // Set to true to open the left sidebar.
@@ -62,6 +67,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     // Set to true to open the right sidebar.
     //
     const [rightSidebarOpen, setRightSidebarOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to show the background jobs, opened from the navbar spinner.
+    //
+    const [jobsDialogOpen, setJobsDialogOpen] = useState<boolean>(false);
+
+    //
+    // Set to true to show the database summary, opened from the navbar's photo count.
+    //
+    const [databaseSummaryDialogOpen, setDatabaseSummaryDialogOpen] = useState<boolean>(false);
 
     //
     // Set to true to open the configuration dialog.
@@ -86,7 +101,6 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
     const { openSearch } = useSearch();
 
     const platform = usePlatform();
-    const config = useConfig();
 
     const theme = useTheme();
 
@@ -149,7 +163,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                 action = undefined;
             }
 
-            // News toasts carry a newsId so we can persist "seen" state in news.yaml
+            // News toasts carry a newsId so we can persist "seen" state in the config file
             // only when the user clicks the close button (via markNewsAsShown). Other
             // toasts (sync results, generic notifications) have no newsId and need no
             // dismissal callback.
@@ -185,13 +199,63 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
         return unsubscribe;
     }, [platform, setMode]);
 
-
     //
-    // Listen for menu actions from the main process and dispatch by action name.
+    // Open the right sidebar when the navbar's job indicator is clicked, which is where the jobs are
+    // listed and cancelled. A window event rather than a prop, so the indicator can sit anywhere in
+    // the navbar without the sidebar's open state being threaded down to it.
     //
     useEffect(() => {
-        return platform.onMenuAction((action) => {
-            switch (action) {
+        const showJobs = () => setJobsDialogOpen(true);
+        window.addEventListener("photosphere:show-jobs", showJobs);
+        return () => {
+            window.removeEventListener("photosphere:show-jobs", showJobs);
+        };
+    }, []);
+
+    //
+    // Open the database summary when the navbar's photo count is clicked, which is where the number
+    // it shows comes from. A window event for the same reason as the jobs listener above it.
+    //
+    useEffect(() => {
+        const showDatabaseSummary = () => setDatabaseSummaryDialogOpen(true);
+        window.addEventListener("photosphere:show-database-summary", showDatabaseSummary);
+        return () => {
+            window.removeEventListener("photosphere:show-database-summary", showDatabaseSummary);
+        };
+    }, []);
+
+    //
+    // Opens the Open Database dialog when the Ziggy action open-database runs, from the File menu, its shortcut or the sidebar's item.
+    //
+    useEffect(() => {
+        return platform.registerAction("open-database", () => setOpenDatabaseModalOpen(true));
+    }, [platform]);
+
+    //
+    // Listen to the host: menu actions it dispatches by name, and messages from the tasks it runs.
+    //
+    // A task message is how a task reaches the interface on every platform, the Electron main process
+    // forwarding it to the renderer and the native plugin emitting it to the WebView, so a task that
+    // has made a database the user asked for says so here and this is the one place that opens it.
+    // A database the user already has open is left alone: taking them out of what they are looking at
+    // is worse than not opening anything, and nothing is lost, since the new database is in the list
+    // and is recorded as the one automatic import writes to.
+    //
+    useEffect(() => {
+        const unsubscribeTaskMessage = platform.onTaskMessage((_taskId, message) => {
+            if (message.type !== "database-opened" || databasePath) {
+                return;
+            }
+
+            openDatabase(message.databasePath as string)
+                .catch(error => log.exception("Failed to open the database a background task made", error as Error));
+        });
+
+        const unsubscribePlatformEvent = platform.onPlatformEvent((event) => {
+            if (event.type !== 'menu-action') {
+                return;
+            }
+            switch (event.action) {
                 case 'open-configuration':
                     setConfigurationOpen(true);
                     break;
@@ -202,10 +266,6 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 
                 case 'add-database':
                     setAddDatabaseModalOpen(true);
-                    break;
-
-                case 'open-database':
-                    setOpenDatabaseModalOpen(true);
                     break;
 
                 case 'import-assets':
@@ -219,33 +279,28 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                     });
                     break;
 
-                case 'open-stories':
-                    navigate('/stories');
-                    break;
-
                 case 'report-bug':
                     openBugReport();
                     break;
             }
         });
-    }, [platform, startImportDirectories, addToast, navigate]);
+
+        return () => {
+            unsubscribeTaskMessage();
+            unsubscribePlatformEvent();
+        };
+    }, [platform, databasePath, openDatabase, startImportDirectories, addToast, navigate]);
 
     //
-    // Listen for navigate events from the main process.
+    // Adds the mobile or desktop class to the body based on the current form
+    // factor, re-running whenever the viewport crosses the mobile breakpoint.
     //
     useEffect(() => {
-        return platform.onNavigate((page) => {
-            navigate(page);
-        });
-    }, [platform, navigate]);
-
-    //
-    // Adds mobile or desktop class to body based on isMobile prop.
-    //
-    useEffect(() => {
+        const formFactor = isMobile ? 'mobile' : 'desktop';
         document.body.classList.remove('mobile', 'desktop');
-        document.body.classList.add(isMobile ? 'mobile' : 'desktop');
-        
+        document.body.classList.add(formFactor);
+        log.info(`Form factor: ${formFactor} (viewport width ${window.innerWidth}px, breakpoint ${MOBILE_BREAKPOINT_PX}px)`);
+
         // Cleanup: remove class on unmount
         return () => {
             document.body.classList.remove('mobile', 'desktop');
@@ -263,7 +318,7 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
             }
 
             try {
-                const lastDatabase = await config.get<string>('lastDatabase');
+                const lastDatabase = await platform.getLastDatabase();
                 if (lastDatabase) {
                     await openDatabase(lastDatabase);
                 }
@@ -296,7 +351,6 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                     onOpenConfiguration={() => setConfigurationOpen(true)}
                     onNewDatabase={() => setCreateDatabaseModalOpen(true)}
                     onAddDatabase={() => setAddDatabaseModalOpen(true)}
-                    onOpenDatabase={() => setOpenDatabaseModalOpen(true)}
                     />
             </Drawer>
 
@@ -310,6 +364,16 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                     setSidebarOpen={setRightSidebarOpen}
                     />
             </Drawer>
+
+            <JobsDialog
+                open={jobsDialogOpen}
+                onClose={() => setJobsDialogOpen(false)}
+                />
+
+            <DatabaseSummaryDialog
+                open={databaseSummaryDialogOpen}
+                onClose={() => setDatabaseSummaryDialogOpen(false)}
+                />
 
             <div
                 id="main"
@@ -338,6 +402,11 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
                         <Route
                             path="/about"
                             element={<AboutPage />}
+                            />
+
+                        <Route
+                            path="/developer"
+                            element={<DeveloperPage />}
                             />
 
                         <Route
@@ -414,10 +483,10 @@ function __Main({ isMobile, initialTheme }: IMainProps) {
 //
 // Wrapped/exported version of Main that ties in the MUI theme.
 //
-export function Main({ isMobile, initialTheme }: IMainProps) {
+export function Main({ initialTheme }: IMainProps) {
     return (
         <CssVarsProvider defaultMode={initialTheme}>
-            <__Main isMobile={isMobile} initialTheme={initialTheme} />
+            <__Main initialTheme={initialTheme} />
         </CssVarsProvider>
     );
 }

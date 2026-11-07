@@ -8,6 +8,7 @@ import IconButton from '@mui/joy/IconButton';
 import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
 import ModalDialog from '@mui/joy/ModalDialog';
+import { ResponsiveDialog } from '../../components/responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -17,9 +18,12 @@ import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import Select from '@mui/joy/Select';
 import Option from '@mui/joy/Option';
-import { Edit, Delete, Add, Refresh, IosShare, Visibility } from '@mui/icons-material';
+import { Edit, Delete, Add, Refresh, IosShare, Visibility, Download, Key } from '@mui/icons-material';
 import { usePlatform, type ISharedSecretEntry, type IDatabaseEntry } from '../../context/platform-context';
 import { useApp } from '../../context/app-context';
+import { useIsMobile } from '../../lib/use-is-mobile';
+import { MobilePageHeader } from '../../components/mobile-page-header';
+import { EntityCard, type IEntityCardAction } from '../../components/entity-card';
 import { ShareSecretDialog } from '../../components/share-secret-dialog';
 import { ReceiveSecretDialog } from '../../components/receive-secret-dialog';
 import { ViewSecretDialog } from '../../components/view-secret-dialog';
@@ -37,6 +41,9 @@ const SECRET_TYPES = ['s3-credentials', 'encryption-key', 'api-key'] as const;
 export function SecretsPage() {
     const platform = usePlatform();
     const { secrets, dbs, refresh, addSecret, updateSecret, deleteSecret } = useApp();
+
+    // On a phone the secrets are shown as cards rather than as a table.
+    const isMobile = useIsMobile();
 
     // Whether the add/edit dialog is open.
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -71,9 +78,30 @@ export function SecretsPage() {
     // The secret currently being viewed (undefined when dialog is closed).
     const [viewingSecret, setViewingSecret] = useState<ISharedSecretEntry | undefined>(undefined);
 
+    // Whether the mount refresh has finished, so the list on screen is the loaded one rather than the
+    // empty initial state.
+    const [loaded, setLoaded] = useState(false);
+
+    // Re-read the secrets/databases lists when the page mounts, so state seeded or changed outside
+    // this provider instance (e.g. mobile test setup) is reflected when the page is entered.
     useEffect(() => {
-        log.info('Secrets page loaded');
-    }, [secrets]);
+        refresh()
+            .then(() => setLoaded(true))
+            .catch(err => log.exception('Failed to refresh on secrets page mount:', err as Error));
+    }, []);
+
+    // Announced once the secrets have been read, and again whenever the list changes. The count is part
+    // of the line because "loaded" alone is ambiguous: the load flag and the list arrive in separate
+    // renders, so the line can be emitted once with the list still empty and again with it populated. A
+    // smoke test that waited for the bare text matched the first of those and read a row that had not
+    // rendered yet, concluding the secret was lost. With the count a test can wait for the state it
+    // actually needs. Only visible once secret reads became real keychain round-trips rather than reads
+    // of an in-memory cache.
+    useEffect(() => {
+        if (loaded) {
+            log.info(`Secrets page loaded: ${secrets.length} secret(s)`);
+        }
+    }, [secrets, loaded]);
 
     //
     // Reloads secrets via the context with a minimum delay so the spin animation is visible.
@@ -183,6 +211,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Endpoint (optional)</FormLabel>
                         <Input
+                            data-id="secret-s3-endpoint-input"
                             value={form.s3Endpoint}
                             onChange={event => setForm(prev => ({ ...prev, s3Endpoint: event.target.value }))}
                         />
@@ -198,6 +227,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Access Key ID</FormLabel>
                         <Input
+                            data-id="secret-s3-access-key-input"
                             value={form.s3AccessKeyId}
                             onChange={event => setForm(prev => ({ ...prev, s3AccessKeyId: event.target.value }))}
                         />
@@ -205,6 +235,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Secret Access Key</FormLabel>
                         <Input
+                            data-id="secret-s3-secret-key-input"
                             type="password"
                             value={form.s3SecretAccessKey}
                             onChange={event => setForm(prev => ({ ...prev, s3SecretAccessKey: event.target.value }))}
@@ -219,6 +250,7 @@ export function SecretsPage() {
                     <FormControl sx={{ mb: 1 }}>
                         <FormLabel>Private Key PEM</FormLabel>
                         <Textarea
+                            data-id="secret-private-key-input"
                             minRows={4}
                             value={form.privateKeyPem}
                             onChange={event => setForm(prev => ({ ...prev, privateKeyPem: event.target.value }))}
@@ -249,46 +281,100 @@ export function SecretsPage() {
         );
     }
 
-    return (
-        <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography level="h3">Manage Secrets</Typography>
-                <Box sx={{ flexGrow: 1 }} />
-                <IconButton
-                    variant="outlined"
-                    sx={{ mr: 1 }}
-                    disabled={refreshing}
-                    title="Refresh"
-                    onClick={() => handleRefresh().catch(err => log.exception('Failed to refresh secrets:', err as Error))}
-                >
-                    <Refresh
-                        sx={refreshing ? {
-                            animation: 'spin 0.8s linear infinite',
-                            '@keyframes spin': {
-                                from: { transform: 'rotate(0deg)' },
-                                to: { transform: 'rotate(360deg)' },
-                            },
-                        } : undefined}
-                    />
-                </IconButton>
-                <Button
-                    data-id="add-secret-button"
-                    startDecorator={<Add />}
-                    sx={{ mr: 1 }}
-                    onClick={openAddDialog}
-                >
-                    Add secret
-                </Button>
-                <Button
-                    data-id="receive-secret-button"
-                    variant="outlined"
-                    onClick={() => setReceiveDialogOpen(true)}
-                >
-                    Receive secret
-                </Button>
-            </Box>
+    //
+    // The actions offered for a single secret, in the order they appear in a card's ⋮ menu. Viewing
+    // is the card's tap action, so it is not repeated in the menu on mobile.
+    //
+    function secretActions(secret: ISharedSecretEntry): IEntityCardAction[] {
+        return [
+            {
+                label: 'View',
+                icon: <Visibility fontSize="small" />,
+                dataId: 'view-secret-button',
+                onClick: () => { log.info('View secret dialog opened'); setViewingSecret(secret); },
+            },
+            {
+                label: 'Share',
+                icon: <IosShare fontSize="small" />,
+                dataId: 'share-secret-button',
+                onClick: () => setSharingSecret(secret),
+            },
+            {
+                label: 'Edit',
+                icon: <Edit fontSize="small" />,
+                dataId: 'edit-secret-button',
+                onClick: () => openEditDialog(secret).catch(err => log.exception('Failed to open edit dialog:', err as Error)),
+            },
+            {
+                label: 'Delete',
+                icon: <Delete fontSize="small" />,
+                danger: true,
+                onClick: () => promptDelete(secret),
+            },
+        ];
+    }
 
-            <Table>
+    return (
+        <Box sx={{ p: isMobile ? 2 : 3 }}>
+            <MobilePageHeader
+                title="Manage Secrets"
+                subtitle={secrets.length === 1 ? '1 secret' : `${secrets.length} secrets`}
+                refreshing={refreshing}
+                onRefresh={() => handleRefresh().catch(err => log.exception('Failed to refresh secrets:', err as Error))}
+                primaryAction={{
+                    label: 'Add secret',
+                    icon: <Add />,
+                    dataId: 'add-secret-button',
+                    onClick: openAddDialog,
+                }}
+                secondaryActions={[
+                    {
+                        label: 'Receive secret',
+                        icon: <Download fontSize="small" />,
+                        dataId: 'receive-secret-button',
+                        onClick: () => setReceiveDialogOpen(true),
+                    },
+                ]}
+                />
+
+            {secrets.length === 0
+                && <Box
+                    sx={{
+                        textAlign: 'center',
+                        py: 6,
+                        px: 2,
+                        borderRadius: 'lg',
+                        backgroundColor: 'background.level1',
+                    }}
+                    >
+                    <Key sx={{ fontSize: 48, color: 'text.tertiary', mb: 1 }} />
+                    <Typography level="title-md" sx={{ mb: 0.5 }}>No secrets yet</Typography>
+                    <Typography level="body-sm" sx={{ color: 'text.tertiary' }}>
+                        Add a secret, or receive one from another device.
+                    </Typography>
+                </Box>
+            }
+
+            {/* Cards on a phone (name across the full width, actions in the ⋮ menu), the table on a
+                wide screen where the columns are worth having. */}
+            {secrets.length > 0 && isMobile
+                && <Box>
+                    {secrets.map(secret => (
+                        <EntityCard
+                            key={secret.name}
+                            title={secret.name}
+                            titleDataId={`secret-row-name-${secret.name}`}
+                            subtitle={secret.type}
+                            icon={<Key />}
+                            onClick={() => { log.info('View secret dialog opened'); setViewingSecret(secret); }}
+                            actions={secretActions(secret)}
+                            />
+                    ))}
+                </Box>
+            }
+
+            {secrets.length > 0 && !isMobile
+                && <Table>
                 <thead>
                     <tr>
                         <th>Name</th>
@@ -297,13 +383,6 @@ export function SecretsPage() {
                     </tr>
                 </thead>
                 <tbody>
-                    {secrets.length === 0 && (
-                        <tr>
-                            <td colSpan={3}>
-                               <p className="pt-2 text-gray-500">No secrets yet. Click Add secret to create one, or Receive secret to import one from another device.</p>
-                            </td>
-                        </tr>
-                    )}
                     {secrets.map(secret => (
                         <tr key={secret.name}>
                             <td data-id={`secret-row-name-${secret.name}`}>{secret.name}</td>
@@ -337,6 +416,7 @@ export function SecretsPage() {
                                     <Edit fontSize="small" />
                                 </IconButton>
                                 <IconButton
+                                    data-id="delete-secret-button"
                                     size="sm"
                                     variant="plain"
                                     color="danger"
@@ -349,52 +429,55 @@ export function SecretsPage() {
                         </tr>
                     ))}
                 </tbody>
-            </Table>
+                </Table>
+            }
 
             {/* Add / Edit dialog */}
-            <Modal open={dialogOpen} onClose={() => setDialogOpen(false)}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleSave, false)}
-                    sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}
+            <ResponsiveDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                minWidth={500}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                    <ModalClose />
-                    <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
-                    <DialogContent>
-                        <FormControl sx={{ mb: 1 }}>
-                            <FormLabel>Name</FormLabel>
-                            <Input
-                                data-id="secret-name-input"
-                                value={form.name}
-                                onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
-                            />
-                        </FormControl>
+                <ModalClose data-id="add-secret-close" />
+                <DialogTitle>{editingSecret ? 'Edit Secret' : 'Add Secret'}</DialogTitle>
+                <DialogContent>
+                    <FormControl sx={{ mb: 1 }}>
+                        <FormLabel>Name</FormLabel>
+                        <Input
+                            data-id="secret-name-input"
+                            value={form.name}
+                            onChange={event => setForm(prev => ({ ...prev, name: event.target.value }))}
+                        />
+                    </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
-                            <FormLabel>Type</FormLabel>
-                            <Select
-                                value={form.type}
-                                onChange={(_event, value) => setForm(prev => ({ ...prev, type: value as string }))}
-                                disabled={!!editingSecret}
-                            >
-                                {SECRET_TYPES.map(secretType => (
-                                    <Option key={secretType} value={secretType}>{secretType}</Option>
-                                ))}
-                            </Select>
-                        </FormControl>
-
-                        {renderTypeFields()}
-                    </DialogContent>
-                    <DialogActions>
-                        <Button variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                        <Button
-                            data-id="add-secret-confirm"
-                            onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}
+                    <FormControl sx={{ mb: 2 }}>
+                        <FormLabel>Type</FormLabel>
+                        <Select
+                            value={form.type}
+                            onChange={(_event, value) => setForm(prev => ({ ...prev, type: value as string }))}
+                            disabled={!!editingSecret}
+                            slotProps={{ button: { 'data-id': 'secret-type-select' } }}
                         >
-                            Save
-                        </Button>
-                    </DialogActions>
-                </ModalDialog>
-            </Modal>
+                            {SECRET_TYPES.map(secretType => (
+                                <Option key={secretType} data-id={`secret-type-option-${secretType}`} value={secretType}>{secretType}</Option>
+                            ))}
+                        </Select>
+                    </FormControl>
+
+                    {renderTypeFields()}
+                </DialogContent>
+                <DialogActions>
+                    <Button data-id="add-secret-cancel" variant="plain" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button
+                        data-id="add-secret-confirm"
+                        onClick={() => handleSave().catch(err => log.exception('Save error:', err as Error))}
+                    >
+                        Save
+                    </Button>
+                </DialogActions>
+            </ResponsiveDialog>
 
             {/* First delete confirmation */}
             <Modal open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>

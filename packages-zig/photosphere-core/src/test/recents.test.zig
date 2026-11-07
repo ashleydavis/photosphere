@@ -1,0 +1,112 @@
+const std = @import("std");
+const support = @import("test-support.zig");
+
+const TestApp = support.TestApp;
+
+//
+// Writes the test's databases.toml, in the settings directory the app reads (PHOTOSPHERE_CONFIG_DIR).
+//
+fn writeDatabasesToml(app: *TestApp, text: []const u8) !void {
+    const allocator = std.testing.allocator;
+    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "databases.toml" });
+    defer allocator.free(path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = path,
+        .data = text,
+    });
+}
+
+//
+// Writes the test's state.yaml, beside databases.toml in the settings directory the app reads.
+//
+fn writeStateYaml(app: *TestApp, text: []const u8) !void {
+    const allocator = std.testing.allocator;
+    const path = try std.fs.path.join(allocator, &.{ app.tmp_path, "config", "state.yaml" });
+    defer allocator.free(path);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = path,
+        .data = text,
+    });
+}
+
+test "get-recent-databases replies an empty array when there is no databases.toml" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const reply = try app.requestOk("get-recent-databases", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("[]", reply);
+}
+
+test "get-recent-databases replies the entries in recents order and leaves out names with no entry" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try writeStateYaml(&app, "databases:\n  recent_names:\n    - beta\n    - gone\n    - alpha\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
+    const reply = try app.requestOk("get-recent-databases", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("[{\"name\":\"beta\",\"description\":\"\",\"path\":\"/b\"},{\"name\":\"alpha\",\"description\":\"\",\"path\":\"/a\"}]", reply);
+}
+
+test "get-last-database replies null when no database is open" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const reply = try app.requestOk("get-last-database", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("null", reply);
+}
+
+test "get-last-database replies the path recorded in state.yaml" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try writeStateYaml(&app, "databases:\n  last_opened_path: /some/db\n");
+    const reply = try app.requestOk("get-last-database", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("\"/some/db\"", reply);
+}
+
+test "remove-recent-database-name removes only the recent name, and replies null" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const allocator = std.testing.allocator;
+    try writeStateYaml(&app, "databases:\n  recent_names:\n    - alpha\n    - beta\n");
+    try writeDatabasesToml(&app, "[[databases]]\nname = \"alpha\"\ndescription = \"\"\npath = \"/a\"\n\n[[databases]]\nname = \"beta\"\ndescription = \"\"\npath = \"/b\"\n");
+    const remove_reply = try app.requestOk("remove-recent-database-name", "\"ALPHA\"");
+    defer allocator.free(remove_reply);
+    try std.testing.expectEqualStrings("null", remove_reply);
+    const recent_reply = try app.requestOk("get-recent-databases", "null");
+    defer allocator.free(recent_reply);
+    try std.testing.expectEqualStrings("[{\"name\":\"beta\",\"description\":\"\",\"path\":\"/b\"}]", recent_reply);
+    const list_reply = try app.requestOk("get-databases", "null");
+    defer allocator.free(list_reply);
+    try std.testing.expectEqualStrings("[{\"name\":\"alpha\",\"description\":\"\",\"path\":\"/a\"},{\"name\":\"beta\",\"description\":\"\",\"path\":\"/b\"}]", list_reply);
+}
+
+test "remove-recent-database-name without a name is an error reply" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    const reply = try app.requestError("remove-recent-database-name", "null");
+    defer std.testing.allocator.free(reply);
+    try std.testing.expectEqualStrings("InvalidMessageData: UnexpectedToken", reply);
+}
+
+test "remove-recent-database-name logs which name was removed" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    std.testing.allocator.free(try app.requestOk("remove-recent-database-name", "\"alpha\""));
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleOut()), "Recent database removed: alpha") != null);
+}
+
+test "a failing recent database request logs the error with the message of its handler" {
+    var app: TestApp = undefined;
+    try app.start();
+    defer app.stop();
+    try app.queueFailingTask("remove-recent-database-name", "null");
+    try std.testing.expect(std.mem.indexOf(u8, (try app.consoleErr()), "Error removing recent database name") != null);
+}

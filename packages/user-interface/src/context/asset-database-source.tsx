@@ -3,19 +3,50 @@ import { IGalleryItem } from "../lib/gallery-item";
 import { GallerySourceContext, IItemsUpdate, IGalleryItemMap, IGallerySource } from "./gallery-source";
 import { IAsset, IDatabaseOp } from "api";
 import type { ISaveAssetItem } from "api";
-import type { IMoveAssetsData } from "node-api";
-import { log } from "utils";
+import { log, retry } from "utils";
 import { IObservable, Observable } from "../lib/subscription";
 import { loadAssets as loadAssetsApi } from "api/src/lib/load-assets";
 import type { ILoadAssetsData, ILoadAssetsResult } from "api/src/lib/load-assets.types";
-import type { ISyncBatchMessage } from "api/src/lib/sync-database.types";
-import { TaskStatus, TaskQueue, getQueueBackend } from "task-queue";
+import type { ISyncBatchEvent } from "api/src/lib/sync-database.types";
+import { TaskStatus, TaskQueue, TaskPriority, getQueueBackend } from "task-queue";
 import type { IQueueBackend } from "task-queue";
 import { usePlatform } from "./platform-context";
 import { useApi } from "./api-context";
 import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { markRecentArrival } from "../lib/recent-arrivals";
+import { planOpenDatabase } from "../lib/open-database-plan";
+
+//
+// Input data for the move-assets background task.
+//
+interface IMoveAssetsData {
+    //
+    // Filesystem path (or S3 path) to the source database.
+    //
+    sourceDatabasePath: string;
+
+    //
+    // Filesystem path (or S3 path) to the destination database.
+    //
+    destDatabasePath: string;
+
+    //
+    // IDs of the assets to move from source to destination.
+    //
+    assetIds: string[];
+}
+
+//
+// How many times an asset request is attempted, and how long apart.
+//
+// Three, a quarter of a second apart, because the failure this exists for is a single request to a
+// live loopback port getting no reply at all. Something that fails three times over half a second is
+// not that, and is reported rather than waited on.
+//
+const ASSET_REQUEST_ATTEMPTS = 3;
+const ASSET_RETRY_DELAY_MS = 250;
 
 //
 // Adds "asset database" specific functionality to the gallery source.
@@ -25,6 +56,16 @@ export interface IAssetDatabase extends IGallerySource {
     // The currently viewed database path.
     //
     databasePath: string | undefined;
+
+    //
+    // How many loads of a database have finished, succeeded or failed, since the provider mounted.
+    //
+    // Counted so that a load finishing is visible to a render even when React never rendered the
+    // load in progress: on a fast enough device the whole load finishes before the render that would
+    // show isLoading true, the true and the false are batched into one render, and nothing that
+    // watches isLoading sees a change at all.
+    //
+    loadsFinished: number;
 
     //
     // Sets the viewed database.
@@ -68,6 +109,15 @@ export interface IAssetDatabase extends IGallerySource {
     isSyncing: boolean;
 
     //
+    // True from the moment a database is asked for until that open has resolved or failed.
+    //
+    // Opening a database is not instant: it probes the storage through a queued task and then starts
+    // the load. Until this existed nothing anywhere said that was happening, so tapping a database in
+    // the list looked like tapping a dead button for as long as the probe took.
+    //
+    isOpening: boolean;
+
+    //
     // Returns a direct URL for an asset, suitable for use in img src attributes.
     //
     assetUrl(assetId: string, assetType: string): string;
@@ -91,6 +141,15 @@ export interface IAssetDatabaseProviderProps {
     restApiUrl: string;
 }
 
+//
+// Shape of the check-database-exists task result payload. Declared locally because user-interface does
+// not depend on node-api's worker types; the result is read structurally.
+//
+interface ICheckDatabaseExistsOutputs {
+    // True when a real database is accessible at the probed path.
+    exists: boolean;
+}
+
 export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IAssetDatabaseProviderProps) {
     const platform = usePlatform();
     const api = useApi();
@@ -103,9 +162,19 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     const [ isLoading, setIsLoading ] = useState(false);
 
     //
+    // How many loads have finished. See IAssetDatabase.loadsFinished for why it is counted.
+    //
+    const [ loadsFinished, setLoadsFinished ] = useState(0);
+
+    //
     // Set to true while a background sync with the origin database is in progress.
     //
     const [ isSyncing, setIsSyncing ] = useState(false);
+
+    //
+    // Set to true while a database is being opened, so the lists a database is tapped in can say so.
+    //
+    const [ isOpening, setIsOpening ] = useState(false);
 
     //
     // The database path currently being loaded (if any).
@@ -165,6 +234,15 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         await api.post(`${restApiUrl}/apply-database-ops`, { ops }, {
             headers: { "Content-Type": "application/json" },
         });
+
+        // Logged because until now the success of a metadata write was observable nowhere at all.
+        // Every caller reaches this through a debounce with nothing awaiting the promise, and the app
+        // installs no unhandledrejection handler, so a write that failed left the app looking exactly
+        // like one that succeeded: the edit sits in React state either way. This is the same kind of
+        // lifecycle line as "Database opened" and "Sync completed", and it is what says the record is
+        // on disk rather than only on screen.
+        log.info(`Database ops applied: ${ops.length} op(s)`);
+
         platform.notifyDatabaseEdited();
     }
 
@@ -328,7 +406,9 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     async function selectAndOpenDatabase(): Promise<void> {
         // Call platform.openDatabase which will trigger the platform to show the dialog
-        // and send a 'database-opened' event when a file is selected
+        // and send a 'database-opened' event when a file is selected. On mobile, openDatabase
+        // is currently a no-op (there is no native database picker yet), so this path opens
+        // a database on desktop only.
         await platform.openDatabase();
 
         // The database-opened event will be handled by the useEffect listener
@@ -342,7 +422,8 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     async function createDatabaseAtPath(dbPath: string): Promise<void> {
         const queue = new TaskQueue(uuidGenerator, dbPath);
         try {
-            const taskId = queue.addTask("create-database", { databasePath: dbPath });
+            // Interactive: the user tapped to open this database and is waiting on the empty gallery.
+            const taskId = queue.addTask("create-database", { databasePath: dbPath }, undefined, TaskPriority.Interactive);
             const result = await queue.awaitTask(taskId);
             if (!result || result.status !== TaskStatus.Succeeded) {
                 throw new Error(`create-database task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
@@ -370,35 +451,128 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }
 
     //
+    // Whether an accessible database lives at the given path. Runs the check as a worker task (the same
+    // check-database-exists handler registered on desktop and mobile) rather than a per-platform call, so
+    // "exists" means the same thing everywhere: checkDatabaseExists reports a directory that holds no
+    // database as absent.
+    //
+    // The source is namespaced per database rather than being dbPath itself. This queue shuts down as
+    // soon as it has its answer, and shutdown() cancels its whole source, so tagging it dbPath would
+    // cancel every other task running against that database: openDatabase calls this first, which is
+    // enough to kill a replication of the same database that is already under way. dbPath is shared by
+    // load-assets, create-database, move-assets, import, verify and check, so nothing that cancels on
+    // completion may use it.
+    //
+    // The id is generated per call rather than being stable per database, for the same reason
+    // read-databases-config generates one. Two checks of the same database can overlap, and with a
+    // stable tag they shared a source: the first to finish ran shutdown(), which cancelled the
+    // source, which cancelled the second one's task while it was still running. awaitTask resolves
+    // undefined for a cancelled task, that became "check-database-exists task did not succeed:
+    // unknown error", and openDatabase reported it to the user as "Could not reach the database" for
+    // a database that was reachable all along. Desktop test 26 failed that way on two of three CI
+    // runs, once on macOS and once on Windows.
+    //
+    async function checkDatabaseExists(dbPath: string): Promise<boolean> {
+        const queue = new TaskQueue(uuidGenerator, `check-database-exists-${uuidGenerator.generate()}`);
+        try {
+            // Interactive: this runs in front of opening a database, with the user waiting on it.
+            const taskId = queue.addTask("check-database-exists", { databasePath: dbPath }, undefined, TaskPriority.Interactive);
+            const result = await queue.awaitTask(taskId);
+            if (!result || result.status !== TaskStatus.Succeeded) {
+                throw new Error(`check-database-exists task did not succeed: ${result?.errorMessage ?? "unknown error"}`);
+            }
+            const outputs = result.outputs as ICheckDatabaseExistsOutputs | undefined;
+            return outputs?.exists === true;
+        }
+        finally {
+            queue.shutdown();
+        }
+    }
+
+    //
     // Opens a database by path directly (without showing file dialog).
     // Checks accessibility first; if not found, notifies the user and returns without
     // changing state so the previously open database stays loaded.
     //
     async function openDatabase(dbPath: string): Promise<void> {
-        const exists = await platform.checkDatabaseExists(dbPath);
-        if (!exists) {
-            addToast({
-                message: `Database not found: ${dbPath}`,
-                color: 'warning',
+        // Said out loud because the opening state that follows is all the user sees for as long as
+        // the open takes, and a state that clears itself is not something a smoke test can catch by
+        // polling. This line and "Database opened" bracket the wait, so a test can assert the app
+        // entered the state and left it again.
+        log.info(`Opening database: ${dbPath}`);
+
+        // Cleared in a finally rather than at each exit, so a throw from anything below leaves the
+        // lists usable. A stuck flag disables every entry in them for the life of the app.
+        setIsOpening(true);
+        try {
+            // A database that cannot be reached is a different problem from one that is not there, and
+            // saying "not found" for an unreachable bucket tells the user their photos are gone when they
+            // are merely out of reach. checkDatabaseExists throws for anything that stopped it getting an
+            // answer, and only reports false when the storage answered and held no database.
+            let exists: boolean;
+            try {
+                exists = await checkDatabaseExists(dbPath);
+            }
+            catch (err) {
+                log.exception(`Could not reach the database at ${dbPath}`, err as Error);
+                addToast({
+                    message: `Could not reach the database: ${dbPath}`,
+                    color: 'danger',
+                    duration: 8000,
+                });
+                return;
+            }
+
+            if (!exists) {
+                addToast({
+                    message: `Database not found: ${dbPath}`,
+                    color: 'warning',
+                });
+                return;
+            }
+
+            // What to do about the database already on screen is decided by planOpenDatabase, which
+            // carries the reasoning and the tests. The short of it: a database being reopened while its
+            // own load is still running is left alone, and one being reopened after its load has finished
+            // is closed and then reloaded from here, because setting the path to the value it already
+            // holds does not re-run the effect that loads on a path change.
+            const plan = planOpenDatabase({
+                openDatabasePath: databasePath,
+                requestedDatabasePath: dbPath,
+                loadingDatabasePath: loadingDatabasePath.current,
             });
-            return;
-        }
 
-        if (databasePath) {
-            await closeDatabase();
-        }
+            if (plan.closeFirst) {
+                await closeDatabase();
+            }
 
-        setDatabasePath(dbPath);
-        await platform.notifyDatabaseOpened(dbPath);
+            setDatabasePath(dbPath);
+
+            if (plan.startLoadDirectly) {
+                loadAssets(dbPath)
+                    .catch(err => {
+                        log.exception(`Failed to load assets:`, err as Error);
+                    });
+            }
+
+            // Recording this database as the one to reopen next time is part of what being told it was
+            // opened means, so it happens inside notifyDatabaseOpened rather than here. Each platform
+            // keeps it in its own databases.toml, which the interface cannot reach.
+            await platform.notifyDatabaseOpened(dbPath);
+        }
+        finally {
+            setIsOpening(false);
+        }
     }
     
     //
     // Closes the current database.
     //
     async function closeDatabase(): Promise<void> {
-        if (databasePath) {
-            cancelDatabaseLoad(databasePath);
-        }
+        // The load is cancelled whatever path this render's closure holds. A handler registered in an
+        // earlier render can call this with databasePath unset while a load runs, and leaving that load
+        // subscribed let its completion tear down the next load of the same database.
+        cancelDatabaseLoad(databasePath ?? "");
 
         setIsLoading(false);
         setIsSyncing(false);
@@ -406,6 +580,9 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         setDatabasePath(undefined);
         loadedAssets.current = {};
         onReset.current.invoke();
+
+        // The mirror of the open above: being told the database was closed is what makes the platform
+        // forget it, so a database the user closed is not reopened for them on the next start.
         await platform.notifyDatabaseClosed();
     }
    
@@ -436,18 +613,6 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }
 
     //
-    // Extracts the parent folder and the file name from an absolute path.
-    // Works for both POSIX and Windows separators so the browser does not need a path module.
-    //
-    function splitDestPath(destPath: string): { folder: string; filename: string } {
-        const lastSep = Math.max(destPath.lastIndexOf("/"), destPath.lastIndexOf("\\"));
-        if (lastSep === -1) {
-            return { folder: "", filename: destPath };
-        }
-        return { folder: destPath.substring(0, lastSep), filename: destPath.substring(lastSep + 1) };
-    }
-
-    //
     // Downloads a single asset by showing the platform save picker, queueing a save-asset
     // task on the local task queue, and surfacing a success or failure toast when the task completes.
     // On Electron destPath is an absolute file path and the success toast offers an "Open Folder" action.
@@ -455,40 +620,33 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     async function downloadAsset(asset: IGalleryItem): Promise<void> {
         const filename = asset.origFileName || asset._id;
-        const destPath = await platform.pickFile(filename);
-        if (!destPath) {
+        const result = await platform.saveDownloadedFiles([{ assetId: asset._id, assetType: "asset", filename }], databasePath!);
+        if (result.outcome === "cancelled") {
+            // Logged for the same reason the completed path below is: cancelling is an outcome the
+            // user chose, and until this line existed it was the only outcome of a download that left
+            // no trace at all. That silence is what made the export-cancel smoke test unable to tell
+            // a cancel that worked from a button that did nothing.
+            log.event(`Download cancelled: ${filename}`);
             return;
         }
 
-        const queue = new TaskQueue(uuidGenerator, databasePath!);
-        const taskId = queue.addTask("save-asset", {
-            assetId: asset._id,
-            assetType: "asset",
-            destPath,
-            contentType: asset.contentType,
-            databasePath: databasePath!,
-        });
-        const result = await queue.awaitTask(taskId);
-        queue.shutdown();
-
-        const { folder, filename: savedFilename } = splitDestPath(destPath);
-        if (result && result.status === TaskStatus.Succeeded) {
-            log.event(`Download completed: ${savedFilename}`);
+        if (result.outcome === "failed") {
             addToast({
-                message: `Downloaded "${savedFilename}"`,
-                color: "success",
-                action: folder
-                    ? { label: "Open Folder", onClick: () => platform.openFolder(folder) }
-                    : undefined,
-            });
-        }
-        else {
-            addToast({
-                message: `Failed to download "${savedFilename}": ${result?.errorMessage ?? "unknown error"}`,
+                message: `Failed to download "${filename}": ${result.errorMessage ?? "unknown error"}`,
                 color: "danger",
                 duration: 8000,
             });
+            return;
         }
+
+        log.event(`Download completed: ${filename}`);
+        addToast({
+            message: `Downloaded "${filename}"`,
+            color: "success",
+            action: result.savedFolder
+                ? { label: "Open Folder", onClick: () => platform.openFolder(result.savedFolder!) }
+                : undefined,
+        });
     }
 
     //
@@ -496,58 +654,52 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // queueing a save-assets-batch task, and surfacing success/partial/failure toasts when it completes.
     //
     async function downloadAssets(assets: IDownloadAssetItem[]): Promise<void> {
-        const folderPath = await platform.pickFolder({
-            title: 'Choose folder to save assets',
-            folderKey: 'lastDownloadFolder',
-            createDirectory: true,
-        });
-        if (!folderPath) {
-            return;
-        }
-
         const saveItems: ISaveAssetItem[] = assets.map(asset => ({
             assetId: asset.assetId,
             assetType: asset.assetType,
             filename: asset.filename,
         }));
 
-        const queue = new TaskQueue(uuidGenerator, databasePath!);
-        const taskId = queue.addTask("save-assets-batch", { assets: saveItems, folderPath, databasePath: databasePath! });
-        const result = await queue.awaitTask(taskId);
-        queue.shutdown();
+        const result = await platform.saveDownloadedFiles(saveItems, databasePath!);
+        if (result.outcome === "cancelled") {
+            return;
+        }
 
-        if (result && result.status === TaskStatus.Succeeded) {
-            const { succeededFiles, failedFiles } = result.outputs as { succeededFiles: string[]; failedFiles: Array<{ filename: string; error: string }> };
-            const total = succeededFiles.length + failedFiles.length;
-            log.event(`Download to folder completed: ${succeededFiles.length} assets downloaded`);
-            if (failedFiles.length === 0) {
-                addToast({
-                    message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
-                    color: 'success',
-                    action: { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) },
-                });
-            }
-            else if (succeededFiles.length === 0) {
-                addToast({
-                    message: `Failed to download ${failedFiles.length} asset${failedFiles.length !== 1 ? 's' : ''}`,
-                    color: 'danger',
-                    duration: 8000,
-                });
-            }
-            else {
-                addToast({
-                    message: `Downloaded ${succeededFiles.length} of ${total} assets (${failedFiles.length} failed)`,
-                    color: 'warning',
-                    duration: 8000,
-                    action: { label: 'Open Folder', onClick: () => platform.openFolder(folderPath) },
-                });
-            }
+        if (result.outcome === "failed") {
+            addToast({
+                message: `Failed to download assets: ${result.errorMessage ?? "unknown error"}`,
+                color: 'danger',
+                duration: 8000,
+            });
+            return;
+        }
+
+        const total = result.savedCount + result.failedCount;
+        log.event(`Download to folder completed: ${result.savedCount} assets downloaded`);
+        if (result.failedCount === 0) {
+            addToast({
+                message: `Downloaded ${total} asset${total !== 1 ? 's' : ''}`,
+                color: 'success',
+                action: result.savedFolder
+                    ? { label: 'Open Folder', onClick: () => platform.openFolder(result.savedFolder!) }
+                    : undefined,
+            });
+        }
+        else if (result.savedCount === 0) {
+            addToast({
+                message: `Failed to download ${result.failedCount} asset${result.failedCount !== 1 ? 's' : ''}`,
+                color: 'danger',
+                duration: 8000,
+            });
         }
         else {
             addToast({
-                message: `Failed to download assets: ${result?.errorMessage ?? "unknown error"}`,
-                color: 'danger',
+                message: `Downloaded ${result.savedCount} of ${total} assets (${result.failedCount} failed)`,
+                color: 'warning',
                 duration: 8000,
+                action: result.savedFolder
+                    ? { label: 'Open Folder', onClick: () => platform.openFolder(result.savedFolder!) }
+                    : undefined,
             });
         }
     }
@@ -560,11 +712,21 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             throw new Error("No database path provided.");
         }
 
-        const response = await api.get<Blob>(
-            `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
-            {
-                responseType: "blob",
-            }
+        // Tried again when it fails. The asset server is on loopback and up long before any of this
+        // runs, and yet a thumbnail fetch occasionally fails having got no answer at all: seen in the
+        // desktop smoke tests, where every other step passed and only the two thumbnails failed. The
+        // cause is not known, so this does not claim to fix it. What it does is stop one lost request
+        // from leaving a hole in the gallery.
+        const response = await retry(
+            () => api.get<Blob>(
+                `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath)}`,
+                {
+                    responseType: "blob",
+                }
+            ),
+            ASSET_REQUEST_ATTEMPTS,
+            ASSET_RETRY_DELAY_MS,
+            1
         );
         return response.data;
     }
@@ -643,9 +805,19 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                     log.error(`Load assets task failed: ${result.errorMessage}`);
                 }
 
+                // Only the current load may finish the loading state. Matching on the path alone let a
+                // superseded load of the same database, finishing after its replacement had started,
+                // unsubscribe the replacement's listeners (they were in unsubscribeCurrentLoad by then), so
+                // the replacement's pages never arrived and the gallery stayed empty: scenario 26 on macOS
+                // arm64 timed out on "Gallery loaded: 2 assets" with "Gallery loaded: 0 assets" in the log.
+                if (currentLoadQueue.current !== queue) {
+                    return;
+                }
+
                 if (result.inputs?.databasePath === currentDatabasePath) {
                     loadingDatabasePath.current = undefined;
                     setIsLoading(false);
+                    setLoadsFinished(finished => finished + 1);
 
                     if (result.status !== TaskStatus.Succeeded) {
                         // Loading failed — cancel pending tasks and unsubscribe.
@@ -667,6 +839,12 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         const unsubscribeMessage = queue.onTaskMessage("asset-page", data => {
             // Discard messages that belong to a different (now-closed) database.
             if (data.message.databasePath !== currentDatabasePath) {
+                return;
+            }
+
+            // Pages of a superseded load of the same database are not added to the gallery the
+            // current load is filling.
+            if (currentLoadQueue.current !== queue) {
                 return;
             }
 
@@ -712,6 +890,29 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }, [platform]);
 
     //
+    // Reload the open database whenever the app comes back to the screen.
+    //
+    // On mobile the background import runs while the WebView is suspended, so the messages that
+    // would have added each photo to the gallery were sent while nothing was listening. A reload is
+    // the only way back to the truth: there is no record of what was missed.
+    //
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (document.visibilityState !== "visible" || !databasePath) {
+                return;
+            }
+
+            loadAssets(databasePath).catch(err => {
+                log.exception('Error reloading the database after it changed in the background:', err as Error);
+            });
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () => {
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+        };
+    }, [databasePath]);
+
+    //
     // Subscribe to sync-started and sync-completed events from the platform.
     //
     useEffect(() => {
@@ -734,7 +935,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     //
     useEffect(() => {
         const unsubscribeSyncBatch = queueBackend.onTaskMessage("sync-batch", (data) => {
-            const batch = data.message as ISyncBatchMessage;
+            const batch = data.message as ISyncBatchEvent;
             if (batch.databasePath !== databasePath) {
                 return;
             }
@@ -765,6 +966,10 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // Subscribe to import-success task messages and add newly imported assets to the gallery
     // immediately, so the user sees them without needing to reload.
     //
+    // Automatic import arrivals come down the same path as manual ones. That is the point: a photo
+    // that turned up on its own should land in the gallery exactly as one the user imported does,
+    // rather than through a second arrival route that can drift out of step with the first.
+    //
     useEffect(() => {
         const unsubscribeImportSuccess = platform.onTaskMessage((_taskId, message) => {
             if (message.type !== 'import-success') {
@@ -776,11 +981,25 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 return;
             }
 
+            // An import writes to the database it was pointed at, which is not necessarily the one on
+            // screen: automatic import uses the default database. An arrival in another database is
+            // not this gallery's to show, and one taken in before this database has loaded is shown
+            // twice: once now and once by the load. Both are the same check.
+            if (!databasePath || message.databasePath !== databasePath) {
+                return;
+            }
+
+            if (message.source === 'automatic') {
+                // Only automatic arrivals are marked. A photo the user imported is something they
+                // are already watching happen, so animating it would be noise.
+                markRecentArrival(asset._id, Date.now());
+            }
+
             _onNewItems([asset]);
         });
 
         return () => { unsubscribeImportSuccess(); };
-    }, [platform]);
+    }, [platform, databasePath]);
 
     //
     // Load assets when database path changes.
@@ -805,6 +1024,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     const value: IAssetDatabase = {
         // Gallery source.
         isLoading,
+        loadsFinished,
         isSyncing,
         isWorking,
         isReadOnly: false,
@@ -823,6 +1043,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
         // Asset database source.
         assetUrl: (assetId, assetType) => `${restApiUrl}/asset?id=${encodeURIComponent(assetId)}&type=${encodeURIComponent(assetType)}&db=${encodeURIComponent(databasePath || "")}`,
+        isOpening,
         databasePath,
         setDatabasePath,
         closeDatabase,

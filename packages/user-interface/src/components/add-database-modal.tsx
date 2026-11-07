@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
 import Box from '@mui/joy/Box';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -183,13 +182,14 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
         label: string,
         secretType: string,
         chosenName: string | undefined,
+        chosenNameDataId: string | undefined,
         buttonDataId: string
     ): React.ReactNode {
         return (
             <FormControl sx={{ mb: 1 }}>
                 <FormLabel>{label}</FormLabel>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <Typography level="body-sm" sx={{ flexGrow: 1 }}>
+                    <Typography data-id={chosenNameDataId} level="body-sm" sx={{ flexGrow: 1 }}>
                         {chosenName ?? 'None selected'}
                     </Typography>
                     <Button
@@ -207,12 +207,17 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
 
     const browseDisabled = form.storageType === 's3' && !form.s3Key;
 
+    // A phone has no folder dialog for a database location: the user types the database's name into the Path field instead.
+    const showBrowse = form.storageType === 's3' || platform.platformKind === "desktop";
+
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleAdd, !form.path)}
-                    sx={{ minWidth: 520, maxWidth: 700, overflowY: 'auto' }}
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={520}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleAdd, !form.path)}
                 >
                     <DialogTitle>Add Database</DialogTitle>
                     <DialogContent>
@@ -238,13 +243,14 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             <Select
                                 value={form.storageType}
                                 onChange={(_event, value) => setForm(prev => ({ ...prev, storageType: value as StorageType, path: '', s3Key: undefined }))}
+                                slotProps={{ button: { 'data-id': 'database-storage-type-select' } }}
                             >
                                 <Option value="filesystem">File system</Option>
-                                <Option value="s3">S3</Option>
+                                <Option data-id="database-storage-type-option-s3" value="s3">S3</Option>
                             </Select>
                         </FormControl>
 
-                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'select-s3-button')}
+                        {form.storageType === 's3' && renderSecretButton('S3 Credentials', 's3-credentials', s3SecretName, 'chosen-s3-secret', 'select-s3-button')}
 
                         <FormControl sx={{ mb: 2 }}>
                             <FormLabel>Path</FormLabel>
@@ -253,21 +259,26 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                                     data-id="database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
+                                    placeholder={showBrowse ? undefined : 'Type the name of the database'}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
-                                <Button
-                                    variant="outlined"
-                                    disabled={browseDisabled}
-                                    onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
-                                >
-                                    {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
-                                </Button>
+                                {showBrowse && (
+                                    <Button
+                                        data-id="database-browse-button"
+                                        variant="outlined"
+                                        disabled={browseDisabled}
+                                        onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}
+                                    >
+                                        {form.storageType === 's3' ? 'Browse S3' : 'Browse'}
+                                    </Button>
+                                )}
                             </Box>
                         </FormControl>
 
                         <FormControl sx={{ mb: 2 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Switch
+                                    data-id="database-encrypted-switch"
                                     checked={form.encrypted}
                                     onChange={event => setForm(prev => ({ ...prev, encrypted: event.target.checked, encryptionKey: undefined }))}
                                 />
@@ -275,12 +286,12 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             </Box>
                         </FormControl>
 
-                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, 'select-encryption-button')}
+                        {form.encrypted && renderSecretButton('Encryption Key', 'encryption-key', encryptionSecretName, 'chosen-encryption-secret', 'select-encryption-button')}
 
-                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, 'select-geocoding-button')}
+                        {renderSecretButton('Geocoding API Key (optional)', 'api-key', geocodingSecretName, 'chosen-geocoding-secret', 'select-geocoding-button')}
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="add-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="add-database-confirm"
                             disabled={!form.path}
@@ -289,8 +300,7 @@ export function AddDatabaseModal({ open, onClose }: IAddDatabaseModalProps) {
                             Add
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </ResponsiveDialog>
 
             {selectSecretType !== undefined && (
                 <SelectSecretModal

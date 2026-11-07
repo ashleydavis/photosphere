@@ -2,20 +2,27 @@ import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Spinner } from "./spinner";
 import IconButton from '@mui/joy/IconButton';
+import Box from '@mui/joy/Box';
 import MoreVert from '@mui/icons-material/MoreVert';
 import Star from "@mui/icons-material/Star";
 import StarBorder from "@mui/icons-material/StarBorder";
 import FileUpload from "@mui/icons-material/FileUpload";
+import Menu from "@mui/icons-material/Menu";
+import Search from "@mui/icons-material/Search";
+import PhotoLibrary from "@mui/icons-material/PhotoLibrary";
+import Map from "@mui/icons-material/Map";
 import Input from "@mui/joy/Input/Input";
 import { useTheme } from "@mui/joy/styles/ThemeProvider";
 import classNames from "classnames";
 import { useSearch } from "../context/search-context";
+import { useIsMobile } from "../lib/use-is-mobile";
 import { useDebounce } from "../lib/use-debounce";
 import { useGallery } from "../context/gallery-context";
 import { useAssetDatabase } from "../context/asset-database-source";
 import { useToast } from "../context/toast-context";
 import { usePlatform } from "../context/platform-context";
 import { ThemeToggle } from "./theme-toggle";
+import { NavbarJobsIndicator } from "./navbar-jobs-indicator";
 import { findTemporaryNavPage } from "../lib/nav-pages";
 
 export interface INavbarProps {
@@ -51,6 +58,20 @@ export function Navbar({
 }: INavbarProps) {
     const theme = useTheme();
     const { openSearch, setOpenSearch, searchInput, onCommitSearch, onCloseSearch, savedSearches, saveSearch, unsaveSearch } = useSearch();
+
+    //
+    // Drives the phone layout of the bar: icon-only controls, sized and spaced for a thumb.
+    //
+    const isMobile = useIsMobile();
+
+    //
+    // Sizing shared by every control in the bar. On a phone each one is a 44px square, which is the
+    // smallest comfortable touch target; on desktop the buttons keep their natural size and their
+    // labels, so the bar is unchanged there.
+    //
+    const navButtonSx = isMobile
+        ? { minWidth: 44, minHeight: 44, borderRadius: 'md' }
+        : { borderRadius: 'md' };
 
     //
     // Local input state so keystrokes don't re-render all context consumers.
@@ -129,76 +150,100 @@ export function Navbar({
             }}
         >
             <div className="flex flex-col">
-                <div className="flex flex-row items-center pl-4 pt-3 pb-2">
-                    <button
+                {/* The bar's controls are 44px targets with real gaps between them on a phone. The
+                    old bar packed four ~32px icons together with a 4px gap and pushed the right-hand
+                    buttons against the screen edge, which is fine with a mouse and awful with a
+                    thumb. Labels still appear from the `sm` breakpoint up. */}
+                <div className={classNames("flex flex-row items-center pt-2 pb-2", isMobile ? "pl-2 pr-2 gap-1" : "pl-4")}>
+                    <IconButton
                         data-id="sidebar-toggle-button"
+                        variant="plain"
+                        color="neutral"
+                        size={isMobile ? "lg" : "md"}
                         title="Toggle sidebar"
                         onClick={() => setSidebarOpen(!sidebarOpen)}
+                        sx={{ ...navButtonSx, flexShrink: 0 }}
                     >
-                        <i className="fa-solid fa-bars"></i>
-                    </button>
+                        <Menu />
+                    </IconButton>
 
-                    <h1 className="ml-3 sm:ml-4">Photosphere</h1>
+                    {/* Everything between the two sidebar buttons scrolls sideways when it does not
+                        fit, so neither button can be pushed off the screen. See .navbar-scroll. */}
+                    <div className={classNames("navbar-scroll flex flex-row items-center", isMobile ? "gap-1" : "")}>
 
-                    <button
-                        className="ml-4 mr-1 sm:ml-8 sm:mr-3"
+                    {!isMobile && <h1 className="ml-3 sm:ml-4">Photosphere</h1>}
+
+                    <IconButton
+                        variant="plain"
+                        color="neutral"
+                        size={isMobile ? "lg" : "md"}
                         title="Search"
                         onClick={event => {
                             navigate("/gallery");
                             setOpenSearch(true);
                         }}
+                        sx={{ ...navButtonSx, ml: isMobile ? 0 : 3 }}
                     >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-search"></i>
-                            <div className="hidden sm:block ml-2">Search</div>
-                        </div>
-                    </button>
+                        <Search />
+                        {!isMobile && <span className="hidden sm:block ml-2">Search</span>}
+                    </IconButton>
 
-                    <NavLink
-                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
-                        to="/gallery"
-                        title="Gallery"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-images"></i>
-                            <div className="hidden sm:block ml-2">Gallery</div>
-                        </div>
+                    <NavLink to="/gallery" title="Gallery">
+                        {({ isActive }) => (
+                            <IconButton
+                                variant={isActive && isMobile ? "soft" : "plain"}
+                                color={isActive ? "primary" : "neutral"}
+                                size={isMobile ? "lg" : "md"}
+                                sx={navButtonSx}
+                                >
+                                <PhotoLibrary />
+                                {!isMobile && <span className="hidden sm:block ml-2">Gallery</span>}
+                            </IconButton>
+                        )}
                     </NavLink>
 
-                    <NavLink
-                        className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
-                        to="/map"
-                        title="Map"
-                    >
-                        <div className="flex flex-row items-center">
-                            <i className="w-5 text-center fa-solid fa-map"></i>
-                            <div className="hidden sm:block ml-2">Map</div>
-                        </div>
+                    <NavLink to="/map" title="Map">
+                        {({ isActive }) => (
+                            <IconButton
+                                variant={isActive && isMobile ? "soft" : "plain"}
+                                color={isActive ? "primary" : "neutral"}
+                                size={isMobile ? "lg" : "md"}
+                                sx={navButtonSx}
+                                >
+                                <Map />
+                                {!isMobile && <span className="hidden sm:block ml-2">Map</span>}
+                            </IconButton>
+                        )}
                     </NavLink>
 
                     {databasePath && (
-                        <NavLink
-                            className={({ isActive }) => "mr-1 sm:mr-3" + (isActive ? " font-semibold text-sky-500" : "")}
-                            to="/import"
-                            title="Import"
-                        >
-                            <div className="flex flex-row items-center">
-                                <FileUpload fontSize="small" />
-                                <div className="hidden sm:block ml-2">Import</div>
-                            </div>
+                        <NavLink to="/import" title="Import">
+                            {({ isActive }) => (
+                                <IconButton
+                                    variant={isActive && isMobile ? "soft" : "plain"}
+                                    color={isActive ? "primary" : "neutral"}
+                                    size={isMobile ? "lg" : "md"}
+                                    sx={navButtonSx}
+                                    data-id="navbar-import-button"
+                                    >
+                                    <FileUpload />
+                                    {!isMobile && <span className="hidden sm:block ml-2">Import</span>}
+                                </IconButton>
+                            )}
                         </NavLink>
                     )}
 
                     {temporaryNavPage && TemporaryNavPageIcon && (
-                        <NavLink
-                            className="mr-1 sm:mr-3 font-semibold text-sky-500"
-                            to={temporaryNavPage.path}
-                            title={temporaryNavPage.label}
-                        >
-                            <div className="flex flex-row items-center">
-                                <TemporaryNavPageIcon fontSize="small" />
-                                <div className="hidden sm:block ml-2">{temporaryNavPage.label}</div>
-                            </div>
+                        <NavLink to={temporaryNavPage.path} title={temporaryNavPage.label}>
+                            <IconButton
+                                variant={isMobile ? "soft" : "plain"}
+                                color="primary"
+                                size={isMobile ? "lg" : "md"}
+                                sx={navButtonSx}
+                                >
+                                <TemporaryNavPageIcon />
+                                {!isMobile && <span className="hidden sm:block ml-2">{temporaryNavPage.label}</span>}
+                            </IconButton>
                         </NavLink>
                     )}
 
@@ -213,14 +258,8 @@ export function Navbar({
                         </div>
                     }
 
-                    {isSyncing && !isLoading
-                        && <div className="flex flex-row items-center ml-1 mr-2">
-                            <span className="text-sm hidden sm:block mr-1">Syncing</span>
-                            <div className="mx-1 sm:mx-2">
-                                <Spinner show={true} />
-                            </div>
-                        </div>
-                    }
+                    <NavbarJobsIndicator />
+
 
                     {databasePath && (
                         <div
@@ -237,7 +276,36 @@ export function Navbar({
                                     </button>
                                     {selectedItemsCount} selected
                                 </div>
-                                || <div>{sortedItemsCount} photos</div>
+                                /*
+                                    A real <button>, not a Joy Chip like the jobs indicator beside
+                                    it, because Joy hangs a Chip's onClick on a nested button of its
+                                    own and the smoke-test driver clicks the element carrying the
+                                    data-id. The data-id has to stay on the element holding the
+                                    count, which several tests read the number from. The soft pill
+                                    below is the chip's look, so the two still match.
+                                */
+                                || <Box
+                                    component="button"
+                                    data-id="database-photo-count"
+                                    title="Show database summary"
+                                    onClick={() => window.dispatchEvent(new CustomEvent("photosphere:show-database-summary"))}
+                                    sx={{
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                        border: 'none',
+                                        font: 'inherit',
+                                        color: 'text.primary',
+                                        borderRadius: 'sm',
+                                        px: 1,
+                                        py: 0.5,
+                                        backgroundColor: 'neutral.softBg',
+                                        '&:hover': {
+                                            backgroundColor: 'neutral.softHoverBg',
+                                        },
+                                    }}
+                                    >
+                                    {sortedItemsCount} photos
+                                </Box>
                             }                        
                         </div>
                     )}
@@ -267,11 +335,29 @@ export function Navbar({
 
                     <ThemeToggle />
 
+                    </div>
+
+                    {/*
+                        Machine-readable sync state for the smoke tests: the driver reads this data-id to
+                        assert the navbar reflects a running background sync ("syncing") and its return to
+                        rest ("idle"). It always renders so the value is never empty, and it is taken
+                        off-screen (rather than display:none, which the driver treats as absent) so it adds
+                        no visible chrome while staying present in the DOM. It sits outside the scrolling
+                        middle so it can never contribute to that region's scroll width.
+                    */}
+                    <span
+                        data-id="navbar-sync-state"
+                        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+                    >
+                        {isSyncing ? "syncing" : "idle"}
+                    </span>
+
                     <IconButton
                         data-id="right-sidebar-button"
-                        sx={{ mr: 1 }}
+                        sx={{ ...navButtonSx, flexShrink: 0 }}
                         variant="soft"
                         color="neutral"
+                        size={isMobile ? "lg" : "md"}
                         title="Open menu"
                         onClick={() => setRightSidebarOpen(true)}
                     >

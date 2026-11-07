@@ -8,7 +8,8 @@ describe("TaskContext", () => {
             new TestTimestampProvider(),
             "session-1",
             "task-1",
-            jest.fn()
+            jest.fn(),
+            10
         );
 
         expect(context.isCancelled()).toBe(false);
@@ -20,7 +21,8 @@ describe("TaskContext", () => {
             new TestTimestampProvider(),
             "session-1",
             "task-1",
-            jest.fn()
+            jest.fn(),
+            10
         );
 
         context.cancel();
@@ -35,7 +37,8 @@ describe("TaskContext", () => {
             new TestTimestampProvider(),
             "session-1",
             "task-1",
-            sendMessageFn
+            sendMessageFn,
+            10
         );
 
         const msg = { type: "progress", value: 42 };
@@ -45,7 +48,7 @@ describe("TaskContext", () => {
         expect(sendMessageFn).toHaveBeenCalledWith(msg);
     });
 
-    test("uuidGenerator, timestampProvider, sessionId, and taskId are exposed as provided", () => {
+    test("everything the task needs is exposed as provided", () => {
         const uuidGenerator = new TestUuidGenerator();
         const timestampProvider = new TestTimestampProvider();
         const context = new TaskContext(
@@ -53,12 +56,16 @@ describe("TaskContext", () => {
             timestampProvider,
             "my-session",
             "my-task",
-            jest.fn()
+            jest.fn(),
+            7
         );
 
         expect(context.uuidGenerator).toBe(uuidGenerator);
         expect(context.timestampProvider).toBe(timestampProvider);
         expect(context.sessionId).toBe("my-session");
         expect(context.taskId).toBe("my-task");
+        // How many child tasks a task may run at once comes from the platform that built the
+        // context, because only it knows what the machine can take.
+        expect(context.maxConcurrentChildTasks).toBe(7);
     });
 });

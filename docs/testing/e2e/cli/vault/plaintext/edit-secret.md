@@ -1,51 +1,45 @@
 # CLI Manual Test: Edit a Plaintext Vault Secret
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `secrets edit` can update the value of a secret and rename it.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories, then seed a secret:
 
 ```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-edit-secret
+mkdir -p /tmp/psi-cli-vault-plaintext-edit-secret/config /tmp/psi-cli-vault-plaintext-edit-secret/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-edit-secret/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-edit-secret/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
+cat > /tmp/psi-cli-vault-plaintext-edit-secret/vault/vault.json <<'JSON'
+{"edit-secret":{"name":"edit-secret","type":"plain","value":"original-value"}}
+JSON
 ```
+
+Expected: no output.
+
+## Test
+
+### 1. Update the value
+
+```bash
+psi secrets edit --name edit-secret --yes --value updated-value
+```
+
+Expected:
+- The command exits successfully.
 
 ---
 
-### 2. Seed a secret
+### 2. Confirm the value updated
 
 ```bash
-cat > /tmp/psi-test/vault/edit-secret.json <<'EOF'
-{"name":"edit-secret","type":"plain","value":"original-value"}
-EOF
-```
-
----
-
-### 3. Update the value
-
-```bash
-bun run start -- secrets edit --name edit-secret --yes --value updated-value
-```
-
----
-
-### 4. Confirm the value updated
-
-```bash
-bun run start -- secrets view --name edit-secret --yes
+psi secrets view --name edit-secret --yes
 ```
 
 Expected:
@@ -53,18 +47,21 @@ Expected:
 
 ---
 
-### 5. Rename the secret
+### 3. Rename the secret
 
 ```bash
-bun run start -- secrets edit --name edit-secret --yes --new-name renamed-secret
+psi secrets edit --name edit-secret --yes --new-name renamed-secret
 ```
 
----
+Expected:
+- The command exits successfully.
 
-### 6. Confirm the rename
+## Check
+
+### 4. Confirm the rename
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:

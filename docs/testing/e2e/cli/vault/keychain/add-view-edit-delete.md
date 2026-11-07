@@ -1,14 +1,17 @@
 # CLI Manual Test: Keychain Vault Add / View / Edit / Delete / List Cycle
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that the OS keychain backend supports the same `secrets` subcommands as
 the plaintext backend.
 
 ## Prerequisites
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI and put it on the PATH:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
 ```
 
 Each step opts the CLI into the OS-keychain vault by setting
@@ -21,9 +24,9 @@ this walkthrough.
 ### 1. Switch to the keychain backend with an isolated config
 
 ```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+rm -rf /tmp/psi-cli-vault-keychain-add-view-edit-delete
+mkdir -p /tmp/psi-cli-vault-keychain-add-view-edit-delete/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-keychain-add-view-edit-delete/config
 export PHOTOSPHERE_VAULT_TYPE=keychain
 ```
 
@@ -33,7 +36,7 @@ export PHOTOSPHERE_VAULT_TYPE=keychain
 
 ```bash
 for name in keychain-test-secret view-keychain edit-keychain renamed-keychain keep-keychain delete-keychain; do
-    bun run start -- secrets remove --name "$name" --yes 2>/dev/null || true
+    psi secrets remove --name "$name" --yes 2>/dev/null || true
 done
 ```
 
@@ -45,7 +48,7 @@ Expected:
 ### 3. Add a secret
 
 ```bash
-bun run start -- secrets add --yes --name keychain-test-secret --type plain --value hello123
+psi secrets add --yes --name keychain-test-secret --type plain --value hello123
 ```
 
 Expected:
@@ -56,7 +59,7 @@ Expected:
 ### 4. List secrets and confirm it appears
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:
@@ -67,7 +70,7 @@ Expected:
 ### 5. View the secret
 
 ```bash
-bun run start -- secrets view --name keychain-test-secret --yes
+psi secrets view --name keychain-test-secret --yes
 ```
 
 Expected:
@@ -78,8 +81,8 @@ Expected:
 ### 6. Edit the secret value
 
 ```bash
-bun run start -- secrets edit --name keychain-test-secret --yes --value updated123
-bun run start -- secrets view --name keychain-test-secret --yes
+psi secrets edit --name keychain-test-secret --yes --value updated123
+psi secrets view --name keychain-test-secret --yes
 ```
 
 Expected:
@@ -90,8 +93,8 @@ Expected:
 ### 7. Delete the secret and confirm it is gone
 
 ```bash
-bun run start -- secrets remove --name keychain-test-secret --yes
-bun run start -- secrets list
+psi secrets remove --name keychain-test-secret --yes
+psi secrets list
 ```
 
 Expected:

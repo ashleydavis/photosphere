@@ -1,0 +1,268 @@
+# Syncing
+
+A Photosphere database can be connected to a remote copy of itself, and syncing is what keeps the two the same. This describes what a sync does, how it works out whether there is anything to do, what it costs to ask, when each platform runs one, and what happens while the app is not on screen.
+
+## What it does
+
+A sync is two-way between a local database and its origin. It pulls what the origin has and the local database does not, then pushes what the local database has and the origin does not, and stamps both sides as synced. When it finishes, both hold the same records.
+
+**Files are a different matter, and a partial replica is a different matter again.** See [What a sync does and does not move](#what-a-sync-does-and-does-not-move) below, which is the part that has been measured and is not what it was once assumed to be.
+
+Because it is two-way, two phones and a desktop connected to one remote end up with each other's photos. Each pushes what the remote does not have and pulls the rest.
+
+What it moves is decided by comparing the two merkle trees name by name, rather than by remembering what was sent last time. Name by name, and not by the merkle diff, which matches by hash: two files holding the same content under different names, which is what a photo imported twice leaves behind, are one file to the diff, and the one it called already present was whichever it visited second. Measured on a phone, that left 243 files of 101 assets behind at the origin after five passes that had each reported nothing left to do. There is no queue of pending uploads anywhere, and nothing has to be replayed after a crash: a sync interrupted half way leaves both databases valid, and the next one works out what is still missing by looking.
+
+**Importing and syncing are separate operations, deliberately.** An import takes photos in from a folder or the device photo library and writes them to the local database. A sync moves what is in the local database to the origin, and knows nothing about where any of it came from. `psi add --watch` and `psi sync --watch` are two commands for that reason, and the mobile app runs them as separate background loops for the same reason (three of them now: importing, syncing, and filling a partial replica in). Merging them would make each half untestable without the other, and neither is useful only in company: a database with no origin still imports, and a database nothing imports into still syncs edits.
+
+## What a sync does and does not move
+
+Everything in this section was measured on a Pixel 6 against a partial replica of a database of 8,231 photos and 24,260 files, over Wi-Fi to an S3 origin. The numbers and the log lines behind them are in [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md).
+
+**A sync between a partial replica and its origin does nothing at all, and that is not the partial filter.** `copyFile` in `packages/node-api/src/lib/sync.ts` will copy thumbnails and root-level files into a partial target, and skip originals and display copies. But at this scale that code is never reached, because the early-out below fires first.
+
+The early-out compares the two content hashes, and a content hash is of the merkle tree. A partial replica made by `psi replicate --partial` has the whole tree, so its content hash equals the origin's from the moment it is made. **Files it is missing do not change it.** Both sides therefore say they are identical, and every pass returns in about a seventh of a second having moved nothing.
+
+**So do not reach for a sync to complete a partial replica.** Syncing believes the two are already the same, and it will go on believing that for ever. What fills a replica in is the [prefetch](automatic-photo-backup.md), and on a phone it now runs as a background loop of its own rather than only when a database is opened, so a pass that fails is tried again on the next one.
+
+The loop obeys the two syncing settings and the same gap between passes, because it is traffic to the origin on the user's connection and a user who switches syncing off means stop using my data for this database. It has no settings of its own and adds no configuration key. It ends itself when a pass finds nothing left to fetch, because asking again means walking every object at the origin every gap, which on the measured library is 8,231 listings and 8,231 local existence checks for nothing; opening a database starts it again. The prefetch that opening a database queues is deliberately not held to the syncing settings, because that one is the user opening the database in front of them.
+
+Before that loop existed, a prefetch that failed part way left a replica nothing would ever repair: on the measured phone one died 38 minutes in with all 8,185 thumbnails fetched and the database index files missing, and nothing queued another.
+
+## It refuses to sync unrelated databases
+
+Sync moves content between two databases that are copies of each other. It will not run between two that are not, because there is no correct answer to what should happen: the content of two unrelated databases merged by asset id is neither database.
+
+`psi consolidate` is the separate, explicit operation that relates them, and it records the origin in the local database's config as it goes. See [Automatic photo backup](automatic-photo-backup.md) for what consolidation does in each of the cases it handles.
+
+So a database with no origin recorded is not a failure and is not reported as one. Sync skips it and says why, which is what a database nobody has connected to a remote looks like.
+
+## How it knows whether there is anything to do
+
+Each database keeps a small state file holding the content hash of everything in it. A sync reads both, and if the two hashes are equal the databases are identical and it stops there: no write lock is taken on either side, and no merkle tree is downloaded.
+
+The hash is of the merkle tree rather than of the files on disk, so it says the two databases describe the same content, not that both hold every file. That distinction is invisible for a full database and decisive for a partial one: see [What a sync does and does not move](#what-a-sync-does-and-does-not-move).
+
+That early-out is what makes running a sync over and over affordable, and it is why nothing has to keep track of whether the database has changed since the last sync. Asking is cheap enough to be the whole mechanism.
+
+The state files are also what the two sides stamp when a sync completes, so a sync that ran leaves both hashes equal and the next one early-outs.
+
+## What a pass costs
+
+There are two costs, and they are far apart.
+
+- **Nothing to do.** Two small file reads, one of them at the origin. On an S3 origin that is a single small object fetched over the network. This is what almost every pass costs on a phone that is sitting still. **Measured on a Pixel 6 against an S3 origin over Wi-Fi: 154 milliseconds for the whole pass**, of which 21 ms is reading the plan, 97 ms is reaching the origin's merkle tree, and 24 ms is the comparison itself.
+- **Something to do.** The write lock at each side, the merkle trees loaded and compared, and then the records and files that differ, transferred.
+
+The second cost is proportional to what changed rather than to the size of the database, which is what makes a frequent sync cheaper than a rare one: the same work is done either way, in smaller pieces.
+
+Every file that moves is checked against the hash of what was sent, and nothing has to compute that hash: it is already in the merkle tree, which is what the tree is made of. It goes up with the file, S3 checks the body against it and refuses a write that does not match, and it is then there to be read back in a HEAD request. A store that cannot check a hash (a filesystem, or encrypted storage, whose stored bytes are ciphertext and hash to something else) ignores it, and the file is read back and hashed as before.
+
+That matters most on a phone. The embedded engine's SHA-256 is pure JavaScript and runs at well under a megabyte a second, so a sync that hashed what it uploaded, or read every file back to hash it, spent almost all of its time hashing: measured on a Pixel 6, a single 100MB video held one upload for over a quarter of an hour without a byte reaching the server.
+
+**Between two databases encrypted under the same key, the stored bytes go across as they are.** Each encrypted database carries `.db/encryption.pub` naming its key, and when the two files are the same byte for byte, the ciphertext one holds is exactly the ciphertext the other would write, so a sync copies it between the raw stores with no decryption on the way out and no encryption on the way in. The hash it hands the target is then of the stored bytes, taken natively from the source's copy. This is what makes pushing originals from a phone possible at all: AES-256-CBC in the embedded engine is pure JavaScript at about a fifth of a megabyte a second in each direction, so twenty originals measured on a Pixel 6 went up at about 100KB/s, and a ninety megabyte video was a quarter of an hour, on a network that carries 11.8MB/s from the same phone. Two databases under different keys, or one of them unencrypted, still go through the databases and are decrypted and encrypted on the way.
+
+The consequence to know about is that the cheap case is not free. A pass over a metered connection is a small network request, and a loop that asked every few seconds would spend a phone's battery and data allowance finding out that nothing had happened. That is what sets the gap between passes, not the cost of the sync itself.
+
+## The command
+
+```bash
+psi sync --db ./photos                          # push and pull once, then exit
+psi sync --db ./photos --watch                  # keep syncing, every thirty seconds
+psi sync --db ./photos --watch --interval 300   # keep syncing, every five minutes
+```
+
+`psi sync` without `--watch` runs one sync and exits, and says whether it moved anything. That is what makes it usable from a scheduler.
+
+With `--watch` it runs the same sync over and over until interrupted. A sync that fails is reported and the watch carries on, because a network that is down now may be up in thirty seconds and stopping would mean nothing syncs again until somebody notices.
+
+Run it beside `psi add --watch` to get both halves. Each is separately useful and separately testable.
+
+## When a sync runs
+
+| | What starts one |
+|---|---|
+| CLI | Nothing, unless asked. `psi sync` runs one; `psi sync --watch` runs them on an interval. |
+| Desktop | The main process: a debounced sync ten seconds after the open database is edited, and one every five minutes regardless. |
+| Mobile | A native loop, one pass at a time with a gap in between, running whether or not the app is on screen. An edit made in the app also starts one, once, at the moment it happens. |
+
+The desktop's debounce is what makes an edit reach the remote promptly without a sync per keystroke: rapid edits coalesce into one.
+
+Mobile waits the same ten seconds and has nothing periodic in the app. The loop that runs one pass after another is native, and the only sync the app itself starts is the one after the edits stop: no interval, just the database that edit was made in, synced once. The wait is what makes it one sync rather than a stream of them, because one user action writes many edits, and it keeps the enqueue out of the code that is persisting them.
+
+## The two settings
+
+Two toggles on the configuration dialog control automatic syncing, on every platform:
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Enable syncing** | The master switch. Off means no automatic sync runs at all. | On |
+| **Only sync over Wi-Fi** | Refuses an automatic sync while the connection is cellular. | On |
+
+Neither affects a sync the user asks for explicitly, and neither affects the CLI, which syncs when the command says to.
+
+**They live in the `sync` section of `config.yaml`**, in the app's storage sandbox on mobile and in `~/.config/photosphere` on desktop and the CLI. A file there is readable by the native loop that runs while the app is off screen, which has to find out whether syncing is switched on at all before it does anything. The [configuration file](https://github.com/ashleydavis/photosphere/wiki/Configuration-File) page in the wiki describes the whole file.
+
+The section holds the two toggles and the gap between passes:
+
+```yaml
+sync:
+  enabled: true
+  only_on_wifi: true
+  database_path: photosphere-default
+  pause_between_runs_ms: 300000
+```
+
+`database_path` is not a setting the user chooses: it is the database the app last opened, written as it is opened, so the background loop knows what to push.
+
+**The background prefetch reads this same section and adds nothing to it.** Both toggles and the same gap decide whether it may fetch and how often, so there is no new key, nothing further to configure, and no change to the wiki's configuration file page. One rule to keep in step rather than two.
+
+A gap of zero, a negative gap, or anything that is not a number falls back to the default, because a gap of zero is a loop with no gap at all.
+
+**A file that is missing or will not parse reads as syncing switched off.** That is the opposite of what the toggle defaults to in a fresh install, and deliberately: the app writes the file as soon as the settings are touched, so an unreadable one means something is wrong, and the safe answer to "should this phone start pushing over its cellular connection?" when nothing can be read is no.
+
+On the desktop the same two settings are held by the main process, in the same `sync` section of the same file. Nothing outside the app needs to read them there, because the loop that uses them is in the same process.
+
+## When a sync is refused
+
+Every automatic sync, on every platform, is decided by one function: `computeSyncAllowed` in `packages/api/src/lib/sync-gate.ts`. It refuses when
+
+- syncing is switched off;
+- the device is offline;
+- the connection type is `none`;
+- the Wi-Fi-only restriction is on and the connection type is `cellular`.
+
+A connection type of `unknown` is permitted, including under the Wi-Fi-only restriction. The desktop and the browser cannot tell a cellular connection from any other, so they report `unknown`, and treating that as cellular would make the Wi-Fi-only setting mean "never sync" everywhere but a phone.
+
+There is one implementation of that rule and both callers use it: the app's own interface, and the mobile background loop. A second copy would be a second thing to keep in step, and the failure when they drift is somebody's mobile data bill.
+
+The mobile background loop cannot ask the WebView what the connection is, because there may be no WebView. It asks the native side directly, through a host function that reports `wifi`, `cellular`, `none` or `unknown` from `ConnectivityManager` on Android and `NWPathMonitor` on iOS. Anything the platform reports that does not map onto those comes back as `unknown` rather than throwing, so a connection nobody anticipated does not stop syncing.
+
+**A periodic sync also waits while a prefetch of the same database is making progress.** A sync that overlaps a working prefetch does the same work slowly and gets in its own way: reaching the origin's merkle tree took 81.5 seconds during such a pass against 97 milliseconds when the phone was idle, and the record merge in that pass took 15 minutes, because it was pulling the metadata shards down one at a time through the lazy storage, which is the same set of files the prefetch was fetching. Letting the prefetch finish first means the merge reads a local database instead.
+
+It waits only while the prefetch is making progress, never until it is finished, and the distinction is the whole point: a sync that waited for a prefetch that cannot finish would be a phone that had silently stopped backing up, which is worse than the contention. So the prefetch driver reports what its last pass found and `plan-sync` decides what it means:
+
+| What the last prefetch pass found | What the sync does |
+| --- | --- |
+| Fetched files, and more are missing | Waits |
+| Fetched nothing, files still missing (or the pass failed) | Runs: the prefetch is stuck and is not worth waiting for |
+| Fetched nothing, nothing missing | Runs: the replica is filled in |
+| No pass has completed yet | Runs: refusing on no evidence is how a loop gets stuck |
+
+Only the periodic background sync waits. A sync the user asks for, and the one an edit in the app triggers, do not go through `plan-sync` and are never deferred: a user who presses sync means now. Automatic import is not deferred either; it writes locally, and whether it should also wait for a prefetch is a real question that has not been answered.
+
+## What gets synced in the background on mobile
+
+The database the app last opened, recorded in `sync.database_path` as it is opened. Failing that, the one automatic import writes to, from `auto_import.default_database_path`. Both are in `config.yaml`, so resolving this costs one file read rather than two.
+
+The opened one comes first because it is what the user is actually using, and because syncing must not need automatic import switched on to have anything to push. The import's database is the fallback for a phone that has been importing in the background without anybody opening it.
+
+One consequence follows: a phone that has never opened a database syncs nothing in the background, because there is nothing to push yet. Opening one is what records it.
+
+**Syncing does not need automatic import.** The two are switched on separately and either one is a reason for the background work to run: a phone that imports by hand and syncs gets background syncing, and switching automatic import off leaves the sync loop running. They share one Android foreground service, because the platform requires a service to post an ongoing notification and a second service would mean a second notification for one feature, but sharing a service is not sharing a switch. The service stops when neither is on.
+
+## While the app is not on screen
+
+The loop that runs one sync pass after another lives on the native side of the mobile apps, not in the WebView, for the same reason the import loop does: the operating system throttles and then stops a WebView's timers once the app is backgrounded, so a phone that imported photos in the background pushed none of them until somebody opened the app. Nothing in the WebView starts a sync on any platform now.
+
+The native side holds no decisions. It asks the `plan-sync` worker task whether a sync should run, and that task reads the settings file, asks for the connection type, applies the same rule the interface applies, checks the database has an origin, and hands back the `sync-database` task to queue, already built. Native code forwards it unchanged and never assembles a task payload of its own, so what a pass does is decided once, in TypeScript, and cannot drift between the two platforms.
+
+The gap between passes is honoured. Measured on a Pixel 6 over a session of many passes, every pause logged the gap it asked for and the gap it waited, and they were equal to the millisecond: 300,000 ms asked, 300,000 ms waited, nothing cutting it short. A pass is 154 ms of that five minutes.
+
+A refused pass never ends the loop, which is the one way the sync loop differs from the import loop. Every reason to refuse a sync can go away without the app being touched: a phone moves onto Wi-Fi, a network comes back, a database gets an origin, the user switches syncing on again. A loop that ended on a refusal would need something to notice each of those and start it again, and a loop nobody restarted is the silent kind of broken this app has been bitten by before. A refused pass costs one settings file read.
+
+What differs between the platforms is only what keeps the loop alive:
+
+| | Android | iOS |
+|---|---|---|
+| While the app is on screen | Keeps syncing | Keeps syncing |
+| While the app is backgrounded | Keeps syncing, in the same foreground service that runs the import and the prefetch | The system runs a pass when it chooses |
+| While the screen is off | Keeps syncing, holding a wake lock for the length of a pass | The system runs a pass when it chooses |
+| Fills a partial replica in | Yes, in a loop of its own beside the sync, until nothing is left to fetch | While the app is on screen, and otherwise when the system chooses |
+| What the user sees | The one ongoing notification automatic import already posts | Nothing |
+
+**On Android** the sync loop runs on its own thread inside `AutoImportService`, the foreground service automatic import already uses, and so does the prefetch loop: three threads, one service. There is deliberately not a service each: a second service means a second ongoing notification for one feature, which is a visible product change nobody asked for. The loops start and stop with the service, under the one notification and the one wake lock, and the lock is reference counted because their passes overlap, each taking a hold for its own pass; it is held only while a pass is actually running, because a lock held all night flattens the phone.
+
+The prefetch loop differs from the other two in one way: it ends itself when a pass finds the replica filled in, and the service starts it again on the next request, which is what opening a database produces. That start is deliberately placed before the check that returns early when the import loop is already running, because the moment the prefetch loop most needs starting again is exactly when the import loop is alive.
+
+**On iOS** the loop runs while the app is foregrounded, and what happens when it is not is the system's decision. The app registers a `BGProcessingTask` for sync beside the one for import and asks for another after each pass. iOS runs them when it sees fit, typically while the phone is charging and idle, and may kill one part way. The honest description is that iOS catches up when the system allows, not that it syncs continuously. A phone in a pocket all day may push nothing until the app is opened.
+
+Two sync passes at once is unreachable rather than unlikely, by the same construction the import driver uses: one driver for the life of the app, with one entry point that runs a pass, serialised so that asking while a pass is in flight waits for that pass and returns its outcome rather than starting a second. On Android only the service's loop asks; on iOS the foreground loop and the system's background task both do, and neither knows about the other.
+
+It is all opt-in and stays opt-in. Switching syncing off stops the loop, and on iOS the background request is withdrawn rather than left with the system.
+
+## A sync runs while an import is running
+
+The import and sync loops are independent and their passes overlap. That is the point: a first backup of a whole photo library is a single import pass lasting the better part of an hour, and syncing has to push what that pass has already imported rather than wait for the end of it. The prefetch loop is the one exception to that independence, in one direction only: a periodic sync waits while a prefetch of the same database is making progress, for the reasons and with the bound given under "When a sync is refused" above.
+
+The two loops did once take a single lock around a whole pass, so a sync skipped its pass whenever an import was running. Measured against a real library on a Pixel 6, 2,292 assets, that meant no sync at all: the import pass ran for over half an hour, the next one started a few seconds after it, and the sync loop skipped every pass and pushed nothing.
+
+What the two contend on is the database write lock, and neither holds it for a whole pass. `import-assets` takes it per batch of imported assets and releases it in a `finally`, and `syncDatabases` takes it around the pull and again around the push. A sync that finds the lock held retries for a few seconds and then fails that pass with the reason in the log; the loop waits its usual gap and asks again, and the pass after that lands in one of the gaps between the import's batches. Neither loop can be starved by the other for good, because neither holds the lock for anything like the length of a pass.
+
+Engine slots are not contended either. A sync pass queues one `sync-database` task and that task queues no children, so it occupies one slot of `EnginePool.POOL_SIZE` for its own length and cannot exhaust the pool underneath an import. See [Mobile background tasks](mobile-background-tasks.md) for what a slot is and why running out is a hang rather than a slowdown.
+
+## What each platform can do
+
+| | CLI | Desktop | Mobile |
+|---|---|---|---|
+| Sync on demand | Yes | Yes | Yes |
+| Sync on a timer | With `--watch` | Yes | Yes |
+| Sync while the app is not on screen | Not applicable | Not applicable | Android continuously, iOS when the system allows |
+| Fill a partial replica in on a loop | No, `psi replicate` again | No | Android continuously, iOS when the system allows |
+| Enable syncing and Wi-Fi-only settings | No, the command decides | Yes | Yes |
+| Refuse over cellular | No connection type is reported | No connection type is reported | Yes |
+| Consolidate an unrelated remote | Yes | Yes | No |
+
+The sync engine itself is platform-neutral: `syncDatabases` in `packages/node-api/src/lib/sync.ts`, reached on every platform through the `sync-database` background task. What differs per platform is only what decides to run one.
+
+## What the app shows while it is happening
+
+The `sync-database` task sends `sync-started`, `sync-completed` and `sync-skipped` messages as it goes, and the app turns the first two into the spinner in the navbar. A sync that skipped early says why, in the app log, which is the only place that reason is visible.
+
+A background sync sends the same messages into a WebView that may not exist. Nothing depends on them arriving: they drive a spinner and a log line, and the sync itself is finished by the task, not by anything that hears about it. That is also why the smoke tests read the origin rather than waiting for a message.
+
+## Tests
+
+Unit tests sit beside the code under `src/test/`.
+
+| Test | What it covers |
+|---|---|
+| `packages/api/src/test/lib/sync-gate.test.ts` | The rule that decides an automatic sync is permitted: the two settings, offline, and each connection type. |
+| `packages/node-api/src/test/lib/sync-database.worker.test.ts` | The `sync-database` task itself, which is what every platform queues. |
+| `packages/node-api/src/test/lib/sync-early-out.test.ts` | A sync doing nothing, cheaply, when both sides already hold the same content. |
+| `packages/node-api/src/test/lib/sync-metadata-edit.test.ts` | An edit reaching the origin. |
+
+End to end:
+
+| Test | What it proves |
+|---|---|
+| `84-watch-sync-evict` (CLI) | Imports reach the origin once `psi sync` pushes them, and the local originals stay. |
+| `85-consolidate` (CLI) | Sync working after consolidation where it refused before. |
+| `86-multi-device` (CLI) | Two databases connected to one remote each end up with the other's photos. |
+| `bun run test:cli:sync` | Several processes syncing one database at once. |
+| `24-sync-settings` (Electron) | Each toggle recomputes whether syncing is permitted and pushes that to the main process, and both values persist to the `sync` section of `config.yaml`. |
+| `36-consolidate-database` (Electron) | Consolidating through the UI leaves ordinary sync working. |
+| `45-s3-share-replica-sync` (mobile, Android) | An edit made on the phone reaching an encrypted S3 origin, and the early-out firing when there is nothing to sync. |
+| `50-background-sync` (mobile, Android) | A photo imported while the app is backgrounded, and again while the screen is off, reaching an S3 origin without the app being opened. With **Enable syncing** switched off nothing reaches the origin while the app and its service are still running; switched back on, the same photo arrives. Everything is measured by reading the bucket, because a backgrounded WebView may have its socket to the harness suspended, which is the exact moment the test cares about. |
+| `56-large-asset-push` (mobile, Android) | A photo imported on the device reaching an encrypted S3 origin as an object, read back out of the bucket from the host and compared byte for byte. Its fixture is generated rather than committed and is larger than one upload part, so the multi-part path is the one exercised. This is the test that would have caught every upload from an encrypted database failing inside the SDK. |
+| `57-prefetch-retries` (mobile, Android) | The background prefetch loop filling a partial replica in, with nothing having opened the database, which is what rules out the prefetch that opening one queues. Then the loop stopping once there is nothing left to fetch. |
+| `58-sync-waits-for-prefetch` (mobile, Android) | Both halves of the ordering: a sync is still attempted while a prefetch is stuck, and is held back while one is working, and runs again once the replica is filled in. |
+| `59-prefetch-encrypted-replica` (mobile, Android) | The same loop as 57 against an **encrypted** replica, whose encryption key reaches the device keychain through a real LAN share because nothing else can put it there. It asserts the loop could decide what to do at all: reading the merkle tree that says whether a replica is partial needs the key, and without it every pass of the loop threw on a checksum, so a real phone could not fill a replica in while 57 stayed green. |
+
+`50-background-sync` runs against a real phone as well as an emulator, and passes on both. On a phone it wipes nothing: it borrows the phone's settings files and keychain and hands them back, and syncs a database named for the test rather than the phone's own. Two things differ on a phone, and both are the route to the host rather than anything about syncing. Automatic import is pointed at an album of the test's own, because watching the whole library would import somebody's photo collection into a test database. And the last photo is a small one: a phone reaches the host through the port reverses adb sets up over USB, since the app permits cleartext only to localhost, and a two megabyte upload through that tunnel times out every time, measured with the screen on and with it off. The emulator keeps the large photo, because it reaches the host over a real network and carries it.
+
+A phone showing its lock screen cannot run the test at all, and it says so rather than failing later: from Android 12 an app that is not in the foreground may not start a foreground service, and an app launched behind a lock screen is not in the foreground.
+
+The **Only sync over Wi-Fi** restriction is not covered end to end. Driving it means changing the device's connection type to cellular, and reconfiguring a pool emulator's radios is forbidden: the emulators are shared with every other test run on the machine. The rule itself is covered by unit tests on both sides of the bridge, including the cellular case, which is where the decision is actually made.
+
+The background tests are Android only. Each of `50-background-sync`, `57-prefetch-retries`, `58-sync-waits-for-prefetch` and `59-prefetch-encrypted-replica` has an `IOS-NOT-COVERED.md` beside it saying what iOS cannot cover and why: a `BGProcessingTask` is scheduled by the system, and the only way to force one is an lldb command against a running app, which this harness cannot issue on Xcode 14.2.
+
+`59-prefetch-encrypted-replica` is separate from `57-prefetch-retries` rather than being it, because the encryption key cannot be seeded into the device keychain from the host and so only a real LAN share puts it there, and a run that declares it has no bridge would then lose every bit of coverage of the loop instead of just the encrypted half.
+
+`56-large-asset-push` is not one of those: it drives the app's own interface rather than a background loop, so it runs on both platforms and passes on both, which is what proves an upload from an encrypted database on iOS as well. It needs the host LAN bridge and skips where there is none, which is the Android CI emulator.
+
+## See also
+
+- [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md) - what all of this actually costs on a Pixel 6 against a database of 8,231 photos, and what does not work at that size.
+- [Automatic photo backup](automatic-photo-backup.md) - what puts the photos in the database in the first place, and the loop this one is modelled on.
+- [Mobile background tasks](mobile-background-tasks.md) - the engine pool both background loops run on.
+- [Tasks](tasks.md) - adding a new task type and wiring it up on every platform.

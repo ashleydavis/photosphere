@@ -1,18 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 import { useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import Stack from "@mui/joy/Stack/Stack";
 import Typography from "@mui/joy/Typography";
 import ToggleButtonGroup from "@mui/joy/ToggleButtonGroup/ToggleButtonGroup";
 import Button from "@mui/joy/Button/Button";
 import Slider from "@mui/joy/Slider/Slider";
-import Modal from "@mui/joy/Modal";
+import Switch from "@mui/joy/Switch";
 import ModalClose from "@mui/joy/ModalClose";
-import ModalDialog from "@mui/joy/ModalDialog";
+import { ResponsiveDialog } from "./responsive-dialog";
 import DialogTitle from "@mui/joy/DialogTitle";
 import DialogContent from "@mui/joy/DialogContent";
-import { useConfig } from "../context/config-context";
+import { useConfigStore } from "../context/config-store-context";
 import { useGalleryLayout } from "../context/gallery-layout-context";
+import { useSync } from "../context/sync-context";
 import { createDialogKeyHandler } from "../lib/dialog-keys";
+import { AutoImportSettings } from "./auto-import-settings";
+import { ResetDeviceDialog } from "./reset-device-dialog";
 
 export interface IConfigurationDialogProps {
     //
@@ -31,13 +34,25 @@ export interface IConfigurationDialogProps {
 //
 export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps) {
     const { mode, setMode } = useColorScheme();
-    const config = useConfig();
+    const config = useConfigStore();
     const { targetRowHeight, setTargetRowHeight } = useGalleryLayout();
+    const { syncEnabled, toggleSyncEnabled, syncOnlyOnWifi, toggleSyncOnlyOnWifi } = useSync();
+
+    //
+    // Whether the reset-device confirmation is open.
+    //
+    const [resetDialogOpen, setResetDialogOpen] = useState<boolean>(false);
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)}>
-                <ModalClose />
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={300}
+            maxWidth={440}
+            dataId="configuration-dialog"
+            onKeyDown={createDialogKeyHandler(onClose, false)}
+            >
+                <ModalClose data-id="configuration-dialog-close" />
                 <DialogTitle>Configuration</DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ maxWidth: 400, pt: 1 }}>
@@ -69,9 +84,59 @@ export function ConfigurationDialog({ open, onClose }: IConfigurationDialogProps
                                 onChange={(_e, value) => setTargetRowHeight(value as number)}
                             />
                         </Stack>
+
+                        <Stack>
+                            <Typography level="body-xs">Syncing</Typography>
+                            <Stack
+                                data-id="sync-enabled-toggle"
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                onClick={() => toggleSyncEnabled()}
+                                sx={{ mt: 1, cursor: "pointer" }}
+                            >
+                                <Typography level="body-sm">Enable syncing</Typography>
+                                <Switch readOnly checked={syncEnabled} sx={{ pointerEvents: "none" }} />
+                            </Stack>
+                            <Stack
+                                data-id="sync-wifi-only-toggle"
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                onClick={() => toggleSyncOnlyOnWifi()}
+                                sx={{ mt: 1, cursor: "pointer" }}
+                            >
+                                <Typography level="body-sm">Only sync over Wi-Fi</Typography>
+                                <Switch readOnly checked={syncOnlyOnWifi} sx={{ pointerEvents: "none" }} />
+                            </Stack>
+                        </Stack>
+
+                        <AutoImportSettings />
+
+                        {/* Last in the dialog: the one setting nobody should land on by accident. */}
+                        <Stack>
+                            <Typography level="body-xs">Reset device</Typography>
+                            <Typography level="body-sm" sx={{ mt: 1 }}>
+                                Removes the databases Photosphere keeps on this device and the photos
+                                in them, along with its secrets, settings and caches.
+                            </Typography>
+                            <Button
+                                data-id="reset-device-open"
+                                color="danger"
+                                variant="soft"
+                                sx={{ mt: 1 }}
+                                onClick={() => setResetDialogOpen(true)}
+                            >
+                                Reset device
+                            </Button>
+                        </Stack>
                     </Stack>
                 </DialogContent>
-            </ModalDialog>
-        </Modal>
+
+                <ResetDeviceDialog
+                    open={resetDialogOpen}
+                    onClose={() => setResetDialogOpen(false)}
+                />
+        </ResponsiveDialog>
     );
 }

@@ -1,7 +1,13 @@
 import type { IAsset } from "./asset";
+import type { IJobTag } from "task-queue";
 
 export interface ILoadAssetsData {
     databasePath: string;
+
+    //
+    // Names the job this task belongs to, so the load shows up in the interface's job list.
+    //
+    job?: IJobTag;
 }
 
 export interface ILoadAssetsResult {
@@ -9,7 +15,7 @@ export interface ILoadAssetsResult {
     batchesSent: number;
 }
 
-export interface IAssetPageMessage {
+export interface IAssetPageEvent {
     type: "asset-page";
     //
     // The database path this batch belongs to. Used by the frontend to discard messages

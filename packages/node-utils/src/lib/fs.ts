@@ -2,7 +2,89 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { parse as tomlParse, stringify as tomlStringify } from 'smol-toml';
+import yaml from 'js-yaml';
+
+//
+// Sleeps for the given number of milliseconds. Kept local rather than imported from the `utils`
+// package so this low-level module does not pull the whole `utils` barrel (and its ESM-only
+// transitive dependencies) into `node-utils`'s test path.
+//
+function sleep(timeMs: number): Promise<void> {
+    return new Promise<void>(resolve => {
+        setTimeout(resolve, timeMs);
+    });
+}
+
+//
+// The base delay before an optimistic update retries after losing to another writer. Retrying
+// immediately makes things worse: the losers re-read and re-write straight away, which keeps the
+// file changing and starves everyone, so a burst of concurrent writers exhausts its retries
+// instead of making progress. The wait doubles with each attempt and is randomized, so writers
+// that collided spread out rather than colliding again in lockstep.
+//
+const UPDATE_BACKOFF_BASE_MS = 5;
+
+//
+// The longest a single backoff waits, so a busy file never stalls a writer for long.
+//
+const UPDATE_BACKOFF_MAX_MS = 250;
+
+//
+// How long an update lock may sit untouched before it is treated as abandoned by a process that
+// died holding it, and broken. Far longer than any read-modify-write takes.
+//
+const LOCK_STALE_MS = 30000;
+
+//
+// How many times to poll for the update lock before giving up on it. Waiting for the lock is not
+// the same as losing a write race: the holder is making progress and we simply have to wait our
+// turn, so this is deliberately generous and is counted separately from the caller's retry budget.
+// Spending the caller's retries on waiting would make a slow write by one process look like a
+// failure to every other process.
+//
+const LOCK_WAIT_ATTEMPTS = 50;
+
+//
+// How many times a rename into place is retried when the operating system refuses it, and the base
+// wait between tries. The waits grow, so ten attempts cover a little over a second in total.
+//
+const RENAME_RETRY_ATTEMPTS = 10;
+const RENAME_RETRY_DELAY_MS = 20;
+
+//
+// Renames a freshly written temporary file over its target, retrying the refusals Windows gives while
+// something else has the target open.
+//
+// Writing to a temporary file and renaming it over the target is atomic on POSIX whatever else is
+// reading, and is how every write here is made safe. Windows does not allow it: a rename onto a path
+// another handle has open fails outright with EPERM, and virus scanners and the search indexer open
+// files behind your back, so the refusal is transient and arrives without warning.
+//
+// The desktop app hit exactly that on the windows-latest runner, failing a smoke test with
+// "EPERM: operation not permitted, rename 'databases.toml.tmp-...' -> 'databases.toml'" while opening
+// a database. The update lock beside the file does not help, because it only keeps writers apart and
+// this is a reader, or the operating system itself, holding the target.
+//
+// Only the refusals that come of contention are retried. Anything else, a missing directory or a bad
+// path, is thrown on the first attempt as it always was.
+//
+async function renameIntoPlace(tempPath: string, filePath: string): Promise<void> {
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            await fs.rename(tempPath, filePath);
+            return;
+        }
+        catch (error: any) {
+            const refusedForContention = error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY';
+            if (!refusedForContention || attempt >= RENAME_RETRY_ATTEMPTS) {
+                throw error;
+            }
+            await sleep(RENAME_RETRY_DELAY_MS * (attempt + 1));
+        }
+    }
+}
 
 //
 // Ensures that the directory exists. If the directory structure does not exist, it is created.
@@ -69,10 +151,18 @@ export async function remove(targetPath: string): Promise<void> {
 
 //
 // Outputs a file ensuring the directory exists. Like fs-extra's outputFile.
+// The write is atomic: data is written to a unique temporary file in the same
+// directory and then renamed into place. Because rename is atomic, a concurrent
+// reader never sees a half-written file and two concurrent writers cannot
+// interleave their bytes into a corrupt result (the last rename wins, and every
+// intermediate state is a complete file). The temp name uses a fresh UUID so
+// overlapping writes to the same target never share a temp file.
 //
 export async function outputFile(filePath: string, data: string | Buffer, options?: { encoding?: BufferEncoding; mode?: number }): Promise<void> {
     await ensureFileDir(filePath);
-    await fs.writeFile(filePath, data, options);
+    const tempPath = `${filePath}.tmp-${randomUUID()}`;
+    await fs.writeFile(tempPath, data, options);
+    await renameIntoPlace(tempPath, filePath);
 }
 
 //
@@ -100,11 +190,265 @@ export async function writeToml(filePath: string, object: Record<string, any>): 
 }
 
 //
+// Reads a YAML file and parses it, or returns undefined when the file does not exist.
+//
+// Absence is not an error here, unlike readToml, because the one YAML file the app keeps is its
+// configuration and that file does not exist until something writes it. Every caller would otherwise
+// have to check for the file first, and a check followed by a read is two steps a concurrent writer
+// can arrive between.
+//
+// An empty file parses to undefined rather than to an object, which is what js-yaml returns for a
+// document with nothing in it.
+//
+export async function readYaml<T = any>(filePath: string): Promise<T | undefined> {
+    let data: string;
+    try {
+        data = await fs.readFile(filePath, { encoding: 'utf8' });
+    }
+    catch (error: any) {
+        if (error.code === 'ENOENT') {
+            return undefined;
+        }
+        throw error;
+    }
+
+    const parsed = yaml.load(data) as T | null | undefined;
+    if (parsed === null || parsed === undefined) {
+        return undefined;
+    }
+    return parsed;
+}
+
+//
+// Writes an object to a YAML file, creating parent directories as needed.
+//
+// It goes through outputFile, so the bytes land in a temporary file that is then renamed over the
+// target. That is what stops a crash part way through a write leaving half a config behind, and on
+// Windows it is what retries the rename the operating system refuses while a reader or a virus
+// scanner still holds the target open.
+//
+export async function writeYaml(filePath: string, object: Record<string, any>): Promise<void> {
+    const yamlString = yaml.dump(object);
+    await outputFile(filePath, yamlString, { encoding: 'utf8' });
+}
+
+//
+// Updates a YAML file as an optimistic read-modify-write. Same semantics as updateToml: it reads the
+// current parsed contents (or `fallback` when the file does not exist yet), passes them to `mutator`,
+// and writes the returned value back atomically, reloading and re-applying if another writer got
+// there first, up to `retries` times before throwing.
+//
+export async function updateYaml<ContentType extends Record<string, any>>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, retries: number = 3): Promise<void> {
+    await updateFileOptimistic(filePath, fallback, mutator, raw => {
+        const parsed = yaml.load(raw) as ContentType | null | undefined;
+        if (parsed === null || parsed === undefined) {
+            return fallback;
+        }
+        return parsed;
+    }, value => yaml.dump(value), retries);
+}
+
+//
 // Writes an object to a JSON file. Like fs-extra's writeJson.
 //
 export async function writeJson(filePath: string, object: any, options?: { encoding?: BufferEncoding; spaces?: number | string; mode?: number }): Promise<void> {
     const jsonString = JSON.stringify(object, null, options?.spaces);
     await outputFile(filePath, jsonString, { encoding: options?.encoding || 'utf8', mode: options?.mode });
+}
+
+//
+// Reads a file's raw bytes, or undefined when it does not exist yet.
+//
+async function readRawFileBytes(filePath: string): Promise<Buffer | undefined> {
+    if (!await pathExists(filePath)) {
+        return undefined;
+    }
+    return await fs.readFile(filePath);
+}
+
+//
+// A cheap fingerprint of a file used to detect whether it changed between our read and our write
+// without re-reading its contents. Undefined when the file does not exist. It uses only fields
+// available on every platform we target (Node on Linux/macOS/Windows and the mobile stat shim):
+// size and last-modified time. It deliberately avoids inode/nanosecond fields, which are absent on
+// mobile and unreliable on Windows. The trade-off is that two writes producing an identical size in
+// the same millisecond would not be told apart, which the optimistic retry accepts.
+//
+interface IFileFingerprint {
+    // Last-modified time in milliseconds since the epoch.
+    modifiedMs: number;
+
+    // File size in bytes.
+    size: number;
+}
+
+//
+// Returns a fingerprint of the file at the given path, or undefined when it does not exist.
+// The single stat is deliberate: checking for the file and then stat'ing it would be two steps,
+// and a file that is deleted in between (an update lock being released, for instance) would make
+// the stat fail even though "it is not there" is an answer this is meant to return.
+//
+async function fileFingerprint(filePath: string): Promise<IFileFingerprint | undefined> {
+    try {
+        const stats = await fs.stat(filePath);
+        return { modifiedMs: stats.mtime.getTime(), size: stats.size };
+    }
+    catch (error: any) {
+        if (error.code === 'ENOENT') {
+            return undefined;
+        }
+        throw error;
+    }
+}
+
+//
+// Reports whether two fingerprints describe the same file state. Two absent files (both
+// undefined) count as unchanged.
+//
+function fingerprintsMatch(before: IFileFingerprint | undefined, after: IFileFingerprint | undefined): boolean {
+    if (before === undefined || after === undefined) {
+        return before === after;
+    }
+    return before.modifiedMs === after.modifiedMs && before.size === after.size;
+}
+
+//
+// Tries to take the exclusive lock guarding updates to a file, without waiting. Creating the lock
+// file with the 'wx' flag is a single atomic operation in the filesystem: exactly one caller can
+// create it, and everyone else gets EEXIST. That is what makes the update safe. A check-then-create
+// would not be, because two callers could both pass the check before either created the file.
+//
+// A lock left behind by a process that died while holding it would otherwise block every later
+// update forever, so a lock older than LOCK_STALE_MS is broken. The threshold is far longer than
+// any read-modify-write takes, so a live holder is never robbed of its lock.
+//
+async function tryTakeUpdateLock(lockPath: string): Promise<boolean> {
+    try {
+        const lockHandle = await fs.open(lockPath, 'wx');
+        await lockHandle.close();
+        return true;
+    }
+    catch (error: any) {
+        // Anything other than "someone else holds it" is a real problem.
+        if (error.code !== 'EEXIST') {
+            throw error;
+        }
+    }
+
+    const lockFingerprint = await fileFingerprint(lockPath);
+    if (lockFingerprint !== undefined && Date.now() - lockFingerprint.modifiedMs > LOCK_STALE_MS) {
+        await fs.rm(lockPath, { force: true });
+    }
+
+    return false;
+}
+
+//
+// Returns how long to wait before another attempt: a randomized delay that grows with each one.
+//
+function updateBackoffMs(attempt: number): number {
+    return Math.random() * Math.min(UPDATE_BACKOFF_MAX_MS, UPDATE_BACKOFF_BASE_MS * Math.pow(2, attempt));
+}
+
+//
+// Waits for the exclusive lock guarding updates to a file, and reports whether it was taken.
+//
+async function takeUpdateLock(lockPath: string): Promise<boolean> {
+    for (let attempt = 0; attempt < LOCK_WAIT_ATTEMPTS; attempt += 1) {
+        if (await tryTakeUpdateLock(lockPath)) {
+            return true;
+        }
+
+        await sleep(updateBackoffMs(attempt));
+    }
+
+    return false;
+}
+
+//
+// Updates a file's raw bytes as a read-modify-write that is safe against other processes doing the
+// same thing at the same time. It takes an exclusive lock beside the file, reads the current bytes
+// (or passes `undefined` to the mutator when the file does not exist yet), applies `mutator`,
+// writes the result to a temp file whose name carries a fresh UUID, and moves it into place. The
+// lock is what makes concurrent updates lossless: without it two writers can both read the same
+// contents and both publish, and whichever renames second silently discards the other's work.
+//
+// Holding the lock is not enough on its own, because a writer that does not take the lock can
+// still change the file underneath us, so just before the atomic move it re-checks a cheap
+// fingerprint (a stat, not a second full read) and retries from the fresh contents if the file
+// moved on. `retries` bounds those conflicts only, not the wait for the lock, which is bounded
+// separately: a slow write by one process is not a failure for the others, it is just their turn
+// coming later. Waiting and retrying both back off with a randomized, growing delay, so writers
+// that collide spread out instead of colliding again in lockstep.
+//
+export async function updateFileRawOptimistic(filePath: string, mutator: (current: Buffer | undefined) => Buffer, retries: number): Promise<void> {
+    // The lock lives beside the file, so the directory has to exist before we can take it.
+    await ensureFileDir(filePath);
+    const lockPath = `${filePath}.lock`;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        if (!await takeUpdateLock(lockPath)) {
+            throw new Error(`Failed to update ${filePath}: could not take the update lock after ${LOCK_WAIT_ATTEMPTS} attempts.`);
+        }
+
+        try {
+            const fingerprintBefore = await fileFingerprint(filePath);
+            const currentBytes = await readRawFileBytes(filePath);
+            const updatedBytes = mutator(currentBytes);
+
+            const tempPath = `${filePath}.tmp-${randomUUID()}`;
+            await fs.writeFile(tempPath, updatedBytes);
+
+            // If the file is unchanged since we read it, publish our version atomically.
+            // Otherwise a writer that ignored the lock won; drop the temp and start over.
+            const fingerprintAfter = await fileFingerprint(filePath);
+            if (fingerprintsMatch(fingerprintBefore, fingerprintAfter)) {
+                await renameIntoPlace(tempPath, filePath);
+                return;
+            }
+            await fs.rm(tempPath, { force: true });
+        }
+        finally {
+            // Released on the way out however we leave, so a failed mutator does not strand the
+            // lock and make every other writer wait out the staleness timeout.
+            await fs.rm(lockPath, { force: true });
+        }
+
+        // Back off before trying again so the writers that collided do not collide again.
+        await sleep(updateBackoffMs(attempt));
+    }
+    throw new Error(`Failed to update ${filePath}: the file kept changing under concurrent writers after ${retries} retries.`);
+}
+
+//
+// Updates a file as an optimistic read-modify-write, with no cross-call locking or shared state.
+// It reads and parses the current text (or uses `fallback` when absent), applies `mutator`, and
+// publishes the serialized result through `updateFileRawOptimistic`, so a concurrent writer causes
+// a reload and re-apply rather than a lost update. After `retries` such conflicts it throws.
+//
+export async function updateFileOptimistic<ContentType>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, parse: (raw: string) => ContentType, serialize: (value: ContentType) => string, retries: number): Promise<void> {
+    await updateFileRawOptimistic(filePath, currentBytes => {
+        const current = currentBytes === undefined ? fallback : parse(currentBytes.toString('utf8'));
+        return Buffer.from(serialize(mutator(current)), 'utf8');
+    }, retries);
+}
+
+//
+// Updates a TOML file as an optimistic read-modify-write: reads the current parsed contents
+// (or `fallback` when the file does not exist yet), passes them to `mutator`, and writes the
+// returned value back atomically. If another writer changed the file first, it reloads and
+// re-applies the mutator, up to `retries` times (default 3) before throwing.
+//
+export async function updateToml<ContentType extends Record<string, any>>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, retries: number = 3): Promise<void> {
+    await updateFileOptimistic(filePath, fallback, mutator, raw => tomlParse(raw) as ContentType, value => tomlStringify(value), retries);
+}
+
+//
+// Updates a JSON file as an optimistic read-modify-write. Same semantics as updateToml,
+// but for JSON files.
+//
+export async function updateJson<ContentType>(filePath: string, fallback: ContentType, mutator: (current: ContentType) => ContentType, retries: number = 3): Promise<void> {
+    await updateFileOptimistic(filePath, fallback, mutator, raw => JSON.parse(raw) as ContentType, value => JSON.stringify(value), retries);
 }
 
 //
@@ -209,15 +553,120 @@ export function copySync(src: string, dest: string): void {
 }
 
 //
-// Returns the temp directory to use for this process.
-// When TEST_TMP_DIR env var is set (test isolation mode), uses a subdirectory of the
-// test's isolated dir so temp files are scoped per-test and cleaned up between runs.
-// Otherwise returns the system temp dir.
+// Returns the temp directory to use for this process, the system temp directory by default.
+//
+// PHOTOSPHERE_TMP_DIR overrides it, and names a directory Photosphere may use as it likes: the
+// process temp goes in a "tmp" subdirectory of it, so whatever else lives at that path is left
+// alone. Point it at a larger disk when the system temp directory is small, at a location with a
+// different retention policy, or at a directory of your own so several Photosphere processes on one
+// machine do not share scratch space.
+//
+// That last use is why the smoke tests set it: each test gets a directory of its own and passes it
+// down, so the app writes inside the test's directory and no two tests can reach each other's files.
 //
 export function getProcessTmpDir(): string {
-    if (process.env.TEST_TMP_DIR) {
-        return path.resolve(process.env.TEST_TMP_DIR, 'tmp');
+    if (process.env.PHOTOSPHERE_TMP_DIR) {
+        return path.resolve(process.env.PHOTOSPHERE_TMP_DIR, 'tmp');
     }
     return os.tmpdir();
 }
 
+//
+// Returns the directory Photosphere keeps its settings in: config.yaml and the databases list.
+//
+// The same Unix-style path on every desktop platform, Windows included, so one support answer covers
+// every machine. PHOTOSPHERE_CONFIG_DIR overrides it, which is how a test run stays off the
+// developer's real data.
+//
+// A device has no home directory, and the mobile `os` shim returns an empty string from homedir()
+// precisely so derived paths stay inside the app's storage sandbox, so an empty home means the
+// sandbox root.
+//
+// Rebuildable data does not belong here. See getCacheDir.
+//
+export function getConfigDir(): string {
+    if (process.env.PHOTOSPHERE_CONFIG_DIR) {
+        return process.env.PHOTOSPHERE_CONFIG_DIR;
+    }
+    const homeDir = os.homedir();
+    if (homeDir) {
+        return path.join(homeDir, '.config', 'photosphere');
+    }
+    return '.';
+}
+
+//
+// Returns the directory Photosphere keeps data it could rebuild in: today, the hash caches.
+//
+// Each platform's own cache location, which is the one thing here not shared with the config. The
+// config uses one Unix-style path everywhere on purpose; a cache is the opposite case, because the
+// operating system, the backup tool and the disk cleaner all have opinions about where caches live
+// and each looks in its own place.
+//
+//  - macOS: ~/Library/Caches/photosphere.
+//  - Windows: LOCALAPPDATA\photosphere\cache. Local, not Roaming: a cache must not follow a roaming
+//    profile around a network.
+//  - Every other Unix: XDG_CACHE_HOME, else ~/.cache, then "photosphere" under it. Linux is the one
+//    that matters here, but XDG is the convention on the BSDs and Solaris too, so they are left to
+//    fall through to it rather than being named and then given the same answer.
+//  - A device: the app's storage sandbox, which goes when the app is uninstalled.
+//
+// Not the process temp directory, which is where the hash cache used to be. "Disposable" and
+// "deleted without warning" are not the same thing: Linux clears /tmp at boot and macOS reaps
+// /var/folders after a few untouched days, so the cache went at a moment nothing announced and the
+// next run copied and hashed every photo it had already imported.
+//
+// PHOTOSPHERE_CACHE_DIR overrides it, separately from PHOTOSPHERE_CONFIG_DIR because the two are
+// isolated by different things: a test run always wants its own cache, and the temp allocator gives
+// every suite one, but the encrypted CLI suite deliberately shares one config across its tests.
+//
+export function getCacheDir(): string {
+    if (process.env.PHOTOSPHERE_CACHE_DIR) {
+        return process.env.PHOTOSPHERE_CACHE_DIR;
+    }
+
+    // A device, answered first and never by asking the platform. The mobile `os` shim returns an
+    // empty home directory, which is what keeps every derived path inside the app's storage sandbox,
+    // and it is the only reliable signal there: the same shim answers platform() with "android" on
+    // iOS as well, so a device that reached the branches below would be told it was an Android one.
+    // Anything moved above this line has to be true of a phone as well as a desktop.
+    const homeDir = os.homedir();
+    if (!homeDir) {
+        return '.';
+    }
+
+    if (os.platform() === 'darwin') {
+        return path.join(homeDir, 'Library', 'Caches', 'photosphere');
+    }
+
+    if (os.platform() === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || path.join(homeDir, 'AppData', 'Local');
+        return path.join(localAppData, 'photosphere', 'cache');
+    }
+
+    // Linux, and every other Unix that is not macOS. XDG_CACHE_HOME says where caches go; ~/.cache is
+    // what to use when it does not say, which is the usual case.
+    if (process.env.XDG_CACHE_HOME) {
+        return path.join(process.env.XDG_CACHE_HOME, 'photosphere');
+    }
+    return path.join(homeDir, '.cache', 'photosphere');
+}
+
+
+//
+// Reads the first `byteCount` bytes of a file, or the whole file when it is shorter.
+//
+// This exists for reading a photo's EXIF header. Reading the whole photo to get at it costs a full
+// crossing of the engine bridge, where the bytes become a base64 string built natively and decoded
+// in the engine, and on a Pixel 6 that was 689 milliseconds per photo for a header that sits in the
+// first few kilobytes of the file.
+//
+export async function readFileHead(filePath: string, byteCount: number): Promise<Buffer> {
+    return new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        const stream = fsSync.createReadStream(filePath, { start: 0, end: byteCount - 1 });
+        stream.on("data", chunk => chunks.push(Buffer.from(chunk)));
+        stream.on("end", () => resolve(Buffer.concat(chunks)));
+        stream.on("error", reject);
+    });
+}

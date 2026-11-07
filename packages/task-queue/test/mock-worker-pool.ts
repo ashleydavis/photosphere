@@ -3,9 +3,10 @@
 // Executes tasks inline (in-process) for fast, predictable tests.
 //
 
-import type { ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn } from "../src/lib/types";
+import type { ITask, ITaskResult, WorkerTaskCompletionCallback, TaskMessageCallback, IMessageCallbackEntry, UnsubscribeFn, TaskPriority } from "../src/lib/types";
 import type { IQueueBackend } from "../src/lib/queue-backend";
 import { TaskStatus } from "../src/lib/types";
+import { insertTaskByPriority, resolveTaskPriority } from "../src/lib/pending-task-queue";
 import type { ITaskContext } from "../src/lib/types";
 import { executeTaskHandler } from "../src/lib/worker";
 import { TestUuidGenerator, TestTimestampProvider } from "node-utils";
@@ -21,7 +22,7 @@ export class MockWorkerPool implements IQueueBackend {
     private taskAddedCallbacks: Map<string, ((taskId: string) => void)[]> = new Map();
     private tasksCancelledCallbacks: Map<string, (() => void)[]> = new Map();
     private activeTaskCount: number = 0;
-    private pendingTasks: { id: string; type: string; data: any; source: string }[] = [];
+    private pendingTasks: ITask<any>[] = [];
     private maxConcurrent: number;
     private cancelledSources: Set<string> = new Set();
     private baseContext: Omit<ITaskContext, "sendMessage" | "isCancelled" | "taskId">;
@@ -32,10 +33,11 @@ export class MockWorkerPool implements IQueueBackend {
             uuidGenerator: baseContext?.uuidGenerator || new TestUuidGenerator(),
             timestampProvider: baseContext?.timestampProvider || new TestTimestampProvider(),
             sessionId: baseContext?.sessionId || "test-session",
+            maxConcurrentChildTasks: baseContext?.maxConcurrentChildTasks ?? 2,
         };
     }
 
-    addTask(type: string, data: any, source: string, taskId?: string): string {
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string {
         const id = taskId ?? `${type}-${Date.now()}-${Math.random()}`;
         const cbs = this.taskAddedCallbacks.get(source);
         if (cbs) {
@@ -43,9 +45,24 @@ export class MockWorkerPool implements IQueueBackend {
                 cb(id);
             }
         }
-        this.pendingTasks.push({ id, type, data, source });
+        insertTaskByPriority(this.pendingTasks, {
+            id,
+            type,
+            status: TaskStatus.Pending,
+            data,
+            source,
+            priority: resolveTaskPriority(priority, undefined),
+            createdAt: new Date(),
+        });
         this.tryDispatch();
         return id;
+    }
+
+    //
+    // The types of the tasks still waiting for a slot, in the order they will be dispatched.
+    //
+    getPendingTaskTypes(): string[] {
+        return this.pendingTasks.map(task => task.type);
     }
 
     private tryDispatch(): void {
@@ -58,7 +75,7 @@ export class MockWorkerPool implements IQueueBackend {
         }
     }
 
-    private async executeTask(task: { id: string; type: string; data: any; source: string }): Promise<void> {
+    private async executeTask(task: ITask<any>): Promise<void> {
         try {
             const taskSpecificSendMessage = (message: any): void => {
                 this.notifyMessageCallbacks(task.id, message);
