@@ -34,7 +34,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 ## Inefficiencies
 
 - **Slow video screenshots.** `Video.extractScreenshot` puts `-ss` after `-i`, so ffmpeg decodes from the start up to the seek point, which can be 300 seconds in. Putting `-ss` before `-i` seeks directly.
-- **Wasted `identify` call.** `Image.getImageInfo` always runs a second `identify` for EXIF. For non-JPEG images `getImageDetails` uses only the dimensions, so that result is thrown away.
 - **Extra full-size re-encode for rotated photos.** `transform` writes a full-resolution JPEG before the display resize. The `-flop` and `-rotate` could go into the resize command instead, which saves a decode, an encode and a lossy generation.
 - **No reduced-size JPEG decode.** The resize does not pass `-define jpeg:size=WxH`, so large JPEGs are decoded at full size before being shrunk.
 
