@@ -342,7 +342,7 @@ jobs:
       - name: Install media processing tools
         uses: ./.github/actions/retry-install
         with:
-          run: brew install imagemagick ffmpeg tree rsync
+          run: bash scripts/brew-install-media-tools.sh ffmpeg tree rsync
           verify: magick|convert ffmpeg ffprobe
 
       - name: Check the iOS toolchain
@@ -384,13 +384,19 @@ jobs:
               cp -R "$HOME/Library/Logs/DiagnosticReports/." "$RUNNER_TEMP/app-smoke-logs/crash-reports/"
           fi
           ls -R "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+          # upload-artifact refuses a file name holding a character NTFS forbids (" : < > | * ? and a few more), and a smoke test
+          # may name its files with them on purpose (CLI smoke test 139 does), which failed the upload of the directory itself and
+          # kept nothing. A tar archive carries every name exactly as it was. Extract it with: tar -xzf app-smoke-logs.tar.gz
+          mkdir -p "$RUNNER_TEMP/app-smoke-logs-archive"
+          cd "$RUNNER_TEMP"
+          tar -czf app-smoke-logs-archive/app-smoke-logs.tar.gz app-smoke-logs
 
       - name: Upload the logs of failed scenarios and any crash reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: app-smoke-logs-ios
-          path: ${{ runner.temp }}/app-smoke-logs
+          path: ${{ runner.temp }}/app-smoke-logs-archive
           retention-days: 5
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
@@ -505,7 +511,7 @@ jobs:
       - name: Install media processing tools (macOS)
         uses: ./.github/actions/retry-install
         with:
-          run: brew install imagemagick ffmpeg tree
+          run: bash scripts/brew-install-media-tools.sh ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       # The libraries for the runner, which the tests build for, restored from the cache.
