@@ -164,8 +164,8 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
     try std.testing.expectEqualStrings("1280,720", try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "stream=width,height", "-of", "csv=p=0", screenshotPath }));
 
     // The same bytes as the command built with the default quality of 85:
-    // `ffmpeg -i "<file>" -ss <time> -vframes 1 -q:v 2 -y "<output>"` (Math.round((100 - 85) / 10) is 2).
-    try runBuiltInFfmpeg(log, allocator, runner, &.{ "-i", "../test/multiple-files/test.mp4", "-ss", "3.9372665", "-vframes", "1", "-q:v", "2", "-y", referencePath });
+    // `ffmpeg -ss <time> -i "<file>" -vframes 1 -q:v 2 -y "<output>"` (Math.round((100 - 85) / 10) is 2).
+    try runBuiltInFfmpeg(log, allocator, runner, &.{ "-ss", "3.9372665", "-i", "../test/multiple-files/test.mp4", "-vframes", "1", "-q:v", "2", "-y", referencePath });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), screenshot));
 }
 
