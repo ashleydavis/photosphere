@@ -1,6 +1,6 @@
 # Workflows
 
-The jobs of the GitHub Actions workflows in `.github/workflows`, what each one needs, and where each one gets its input and puts its output. Jobs hand their output to each other through the GitHub Actions cache. No workflow uses GitHub artifacts. Every job also keeps the Bun and Zig package caches in the GitHub cache; they are left out below.
+The jobs of the GitHub Actions workflows in `.github/workflows`, what each one needs, and where each one gets its input and puts its output. Jobs hand their output to each other through the GitHub Actions cache. The only GitHub artifacts are the logs the smoke test jobs upload when they fail (see below). Every job also keeps the Bun and Zig package caches in the GitHub cache; they are left out below.
 
 A third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) is built by its own build action in `.github/actions/build-<library>`, which caches it under a key made from the platform, the build arguments and the library's source, so the same library is built once whichever workflow asks for it. A job that needs the libraries restores them with the `third-party-libraries` action, which runs the same build actions and gets a cache hit.
 
@@ -97,12 +97,14 @@ release-<platform>.yml
 ├── cli-smoke-tests  (desktop only)
 │   │ needs:  cli-build
 │   │ input  ← photosphere-cli-<platform> from GitHub cache
-│   │ output → none
+│   │ output → on failure only, the failed tests' directories as a GitHub
+│   │          artifact (see "Smoke test logs" below)
 │   └── <platform>                (<platform runner>)
 ├── app-smoke-tests
 │   │ needs:  app-build
 │   │ input  ← photosphere-app-<platform> from GitHub cache
-│   │ output → none
+│   │ output → on failure only, the failed tests' directories as a GitHub
+│   │          artifact (see "Smoke test logs" below)
 │   └── <platform>                (<platform runner>)
 ├── package
 │   │ needs:  prepare-tag, app-build
@@ -200,3 +202,16 @@ flowchart LR
 
 This diagram is drawn for dark mode only: its lines are white and do not show on a light background.
 
+
+## Smoke test logs
+
+When `cli-smoke-tests` or `app-smoke-tests` fails, the job copies the directories the failed tests kept (each holds the test's full log and the CLI's or app's own logs, and on macOS and iOS the crash reports go in `crash-reports/`) and uploads them as the artifact `cli-smoke-logs-<platform>` or `app-smoke-logs-<platform>`, kept for 5 days. The artifact holds a single tar archive, `cli-smoke-logs.tar.gz` or `app-smoke-logs.tar.gz`, because `actions/upload-artifact` refuses a file name containing a character Windows forbids, such as a double quote, and some smoke tests name their files that way on purpose. To read one:
+
+```
+gh run download <run-id> --name cli-smoke-logs-<platform> --dir tmp/cli-smoke-logs-<platform>
+tar -xzf tmp/cli-smoke-logs-<platform>/cli-smoke-logs.tar.gz -C tmp/cli-smoke-logs-<platform>
+```
+
+## ImageMagick on the macOS runners
+
+The macOS and iOS workflows install ImageMagick with [`scripts/brew-install-media-tools.sh`](../scripts/brew-install-media-tools.md), which pins its version, rather than with a plain `brew install imagemagick`, whose version moves with the runner image. The script's page says why and how.
