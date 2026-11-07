@@ -26,6 +26,7 @@ import { stories as receiveDatabaseDialogStories } from "./dialogs/receive-datab
 import { stories as receiveSecretDialogStories } from "./dialogs/receive-secret-dialog.stories";
 import { stories as removeDatabaseDialogStories } from "./dialogs/remove-database-dialog.stories";
 import { stories as replicateDatabaseDialogStories } from "./dialogs/replicate-database-dialog.stories";
+import { stories as resetDeviceDialogStories } from "./dialogs/reset-device-dialog.stories";
 import { stories as setLocationDialogStories } from "./dialogs/set-location-dialog.stories";
 import { stories as setPhotoDateDialogStories } from "./dialogs/set-photo-date-dialog.stories";
 import { stories as shareDatabaseDialogStories } from "./dialogs/share-database-dialog.stories";
@@ -37,7 +38,9 @@ import { stories as assetInfoStories } from "./components/asset-info.stories";
 import { stories as assetViewStories } from "./components/asset-view.stories";
 import { stories as carouselStories } from "./components/carousel.stories";
 import { stories as collapsibleSectionStories } from "./components/collapsible-section.stories";
+import { stories as databaseSummaryDialogStories } from "./components/database-summary-dialog.stories";
 import { stories as emptyDatabaseStories } from "./components/empty-database.stories";
+import { stories as entityCardStories } from "./components/entity-card.stories";
 import { stories as filmStripStories } from "./components/film-strip.stories";
 import { stories as fullImageStories } from "./components/full-image.stories";
 import { stories as fullScreenSpinnerStories } from "./components/full-screen-spinner.stories";
@@ -46,8 +49,10 @@ import { stories as galleryImageStories } from "./components/gallery-image.stori
 import { stories as galleryLayoutStories } from "./components/gallery-layout.stories";
 import { stories as galleryPreviewStories } from "./components/gallery-preview.stories";
 import { stories as galleryScrollbarStories } from "./components/gallery-scrollbar.stories";
+import { stories as jobsStories } from "./components/jobs.stories";
 import { stories as leftSidebarStories } from "./components/left-sidebar.stories";
 import { stories as mapViewStories } from "./components/map-view.stories";
+import { stories as mobilePageHeaderStories } from "./components/mobile-page-header.stories";
 import { stories as navbarStories } from "./components/navbar.stories";
 import { stories as noDatabaseLoadedStories } from "./components/no-database-loaded.stories";
 import { stories as rightSidebarStories } from "./components/right-sidebar.stories";
@@ -87,6 +92,7 @@ export const stories: IStory[] = [
     ...receiveSecretDialogStories,
     ...removeDatabaseDialogStories,
     ...replicateDatabaseDialogStories,
+    ...resetDeviceDialogStories,
     ...setLocationDialogStories,
     ...setPhotoDateDialogStories,
     ...shareDatabaseDialogStories,
@@ -98,7 +104,9 @@ export const stories: IStory[] = [
     ...assetViewStories,
     ...carouselStories,
     ...collapsibleSectionStories,
+    ...databaseSummaryDialogStories,
     ...emptyDatabaseStories,
+    ...entityCardStories,
     ...filmStripStories,
     ...fullImageStories,
     ...fullScreenSpinnerStories,
@@ -107,8 +115,10 @@ export const stories: IStory[] = [
     ...galleryLayoutStories,
     ...galleryPreviewStories,
     ...galleryScrollbarStories,
+    ...jobsStories,
     ...leftSidebarStories,
     ...mapViewStories,
+    ...mobilePageHeaderStories,
     ...navbarStories,
     ...noDatabaseLoadedStories,
     ...rightSidebarStories,

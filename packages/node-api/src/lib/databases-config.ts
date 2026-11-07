@@ -1,247 +1,138 @@
-import * as os from "os";
 import * as path from "path";
-import { readJson, readToml, writeToml, pathExists, remove } from "node-utils";
-//
-// A database entry stored in databases.toml.
-// The name field is the unique (case-insensitive) identifier for each entry.
-//
-export interface IDatabaseEntry {
-    // Human-readable display name.
-    name: string;
+import { getConfigDir, readToml, updateToml, pathExists } from "node-utils";
+import { databaseEntryToToml, tomlEntryToDatabaseEntry, type IDatabaseEntry, type ITomlDatabasesConfig } from "./databases-config-format";
 
-    // Optional description of this database.
-    description: string;
-
-    // Absolute filesystem path (or S3 path) to the database directory.
-    path: string;
-
-    // Optional origin string read from .db/config.json; refreshed each time the database is opened.
-    origin?: string;
-
-    // Vault secret name for S3 credentials.
-    s3Key?: string;
-
-    // Vault secret name for the encryption key pair.
-    encryptionKey?: string;
-
-    // Vault secret name for the geocoding API key.
-    geocodingKey?: string;
-}
-
+// Re-exported: this module has always been where the codebase imports the entry type from. The
+// definition now lives with the file format, which mobile shares.
+export type { IDatabaseEntry };
 //
 // Configuration for the databases list, stored in ~/.config/photosphere/databases.toml.
 //
-interface IDatabasesConfig {
+export interface IDatabasesConfig {
     //
     // Structured list of configured databases.
     //
     databases: IDatabaseEntry[];
 
     //
-    // Ordered list of recently opened database names (most recent first, max 5).
+    // Ordered list of recently opened database names, most recent first, capped at
+    // MAX_RECENT_DATABASES.
     //
     recentDatabaseNames: string[];
+
+    //
+    // Path of the database to reopen on the next launch; absent when none is open.
+    //
+    lastDatabase?: string;
 }
 
 //
-// TOML on-disk shape for a single database entry (snake_case keys).
+// The file holding the list of databases, in the Photosphere data directory.
 //
-interface ITomlDatabaseEntry {
-    // Human-readable display name.
-    name: string;
+// getConfigDir works out where that is per platform: under the user's home directory on desktop and
+// on the CLI, and the app's storage sandbox on a device, which has no home directory.
+//
+// Getting this wrong is not harmless. It previously always appended ".config/photosphere", so on a
+// device the lookup resolved to a file that cannot exist, every credential lookup found an empty
+// list, and S3 databases failed with "Region is missing" while working perfectly on desktop.
+//
+const DATABASES_FILE = path.join(getConfigDir(), "databases.toml");
 
-    // Optional description of this database.
-    description: string;
-
-    // Absolute filesystem path (or S3 path) to the database directory.
-    path: string;
-
-    // Optional origin string.
-    origin?: string;
-
-    // Vault secret name for S3 credentials.
-    s3_key?: string;
-
-    // Vault secret name for the encryption key pair.
-    encryption_key?: string;
-
-    // Vault secret name for the geocoding API key.
-    geocoding_key?: string;
+//
+// The path of that file, for the worker tasks that write it. They take the path as input because a
+// phone keeps the same file somewhere else, so they cannot work it out for themselves.
+//
+export function getDatabasesConfigPath(): string {
+    return DATABASES_FILE;
 }
 
 //
-// TOML on-disk shape for the databases config file (snake_case keys).
+// How many recently opened databases are remembered. Named once so the list that is trimmed and the
+// list that is read back cannot disagree about the number.
 //
-interface ITomlDatabasesConfig {
-    // Array of database entries.
-    databases?: ITomlDatabaseEntry[];
-
-    // Recently opened database names.
-    recent_database_names?: string[];
-
-    // Legacy field — recently opened database paths. Migrated on load.
-    recent_database_paths?: string[];
-}
-
-const CONFIG_DIR = process.env.PHOTOSPHERE_CONFIG_DIR || path.join(os.homedir(), ".config", "photosphere");
-const DATABASES_FILE = path.join(CONFIG_DIR, "databases.toml");
-const OLD_DATABASES_FILE = path.join(CONFIG_DIR, "databases.json");
-
-//
-// Converts a TOML-shaped database entry to the TypeScript IDatabaseEntry type.
-//
-function tomlEntryToDatabaseEntry(tomlEntry: ITomlDatabaseEntry): IDatabaseEntry {
-    const entry: IDatabaseEntry = {
-        name: tomlEntry.name,
-        description: tomlEntry.description,
-        path: tomlEntry.path,
-    };
-    if (tomlEntry.origin !== undefined) {
-        entry.origin = tomlEntry.origin;
-    }
-    if (tomlEntry.s3_key !== undefined) {
-        entry.s3Key = tomlEntry.s3_key;
-    }
-    if (tomlEntry.encryption_key !== undefined) {
-        entry.encryptionKey = tomlEntry.encryption_key;
-    }
-    if (tomlEntry.geocoding_key !== undefined) {
-        entry.geocodingKey = tomlEntry.geocoding_key;
-    }
-    return entry;
-}
-
-//
-// Converts a TypeScript IDatabaseEntry to the TOML on-disk shape.
-//
-function databaseEntryToToml(entry: IDatabaseEntry): ITomlDatabaseEntry {
-    const tomlEntry: ITomlDatabaseEntry = {
-        name: entry.name,
-        description: entry.description,
-        path: entry.path,
-    };
-    if (entry.origin !== undefined) {
-        tomlEntry.origin = entry.origin;
-    }
-    if (entry.s3Key !== undefined) {
-        tomlEntry.s3_key = entry.s3Key;
-    }
-    if (entry.encryptionKey !== undefined) {
-        tomlEntry.encryption_key = entry.encryptionKey;
-    }
-    if (entry.geocodingKey !== undefined) {
-        tomlEntry.geocoding_key = entry.geocodingKey;
-    }
-    return tomlEntry;
-}
+export const MAX_RECENT_DATABASES = 5;
 
 //
 // Converts a TOML-shaped config object to the TypeScript IDatabasesConfig type.
-// Recognises only the new `recent_database_names` field; legacy `recent_database_paths`
-// migration is handled separately in `loadDatabasesConfig`.
 //
-function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
+export function tomlToDatabasesConfig(toml: ITomlDatabasesConfig): IDatabasesConfig {
     const databases = Array.isArray(toml.databases)
         ? toml.databases.map(tomlEntryToDatabaseEntry)
         : [];
     const recentDatabaseNames = Array.isArray(toml.recent_database_names)
         ? toml.recent_database_names
         : [];
-    return { databases, recentDatabaseNames };
+    const config: IDatabasesConfig = { databases, recentDatabaseNames };
+    if (typeof toml.last_database === "string") {
+        config.lastDatabase = toml.last_database;
+    }
+    return config;
 }
 
 //
 // Converts the TypeScript IDatabasesConfig to the TOML on-disk shape.
 //
-function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
-    return {
+export function databasesConfigToToml(config: IDatabasesConfig): ITomlDatabasesConfig {
+    const toml: ITomlDatabasesConfig = {
         databases: config.databases.map(databaseEntryToToml),
         recent_database_names: config.recentDatabaseNames,
     };
+
+    // Only written when there is one. An absent key is what "no database is open" looks like on
+    // disk, so writing an empty string instead would reopen a database whose path is nothing.
+    if (config.lastDatabase !== undefined) {
+        toml.last_database = config.lastDatabase;
+    }
+    return toml;
 }
 
 //
 // Returns true if the two names match case-insensitively.
 //
-function namesMatch(left: string, right: string): boolean {
+export function namesMatch(left: string, right: string): boolean {
     return left.toLowerCase() === right.toLowerCase();
 }
 
 //
 // Loads the databases configuration from disk.
-// If the TOML file does not exist but an old JSON file does, migrates automatically.
-// If the loaded TOML still uses the legacy `recent_database_paths` field, converts it
-// to `recent_database_names` (resolving each path to its current entry's name; dropping
-// paths that no longer match any entry) and rewrites the file.
-// Returns a default config with an empty list if neither file exists.
+// Returns a default config with an empty list if the file does not exist.
 //
 export async function loadDatabasesConfig(): Promise<IDatabasesConfig> {
     if (!await pathExists(DATABASES_FILE)) {
-        if (await pathExists(OLD_DATABASES_FILE)) {
-            const jsonConfig = await readJson<{ databases?: IDatabaseEntry[]; recentDatabasePaths?: string[]; recentDatabaseNames?: string[] }>(OLD_DATABASES_FILE);
-            const databases = Array.isArray(jsonConfig.databases) ? jsonConfig.databases : [];
-            let recentDatabaseNames: string[];
-            if (Array.isArray(jsonConfig.recentDatabaseNames)) {
-                recentDatabaseNames = jsonConfig.recentDatabaseNames;
-            }
-            else if (Array.isArray(jsonConfig.recentDatabasePaths)) {
-                recentDatabaseNames = recentPathsToNames(jsonConfig.recentDatabasePaths, databases);
-            }
-            else {
-                recentDatabaseNames = [];
-            }
-            const migrated: IDatabasesConfig = { databases, recentDatabaseNames };
-            await saveDatabasesConfig(migrated);
-            await remove(OLD_DATABASES_FILE);
-            return migrated;
-        }
         return { databases: [], recentDatabaseNames: [] };
     }
 
     const toml = await readToml<ITomlDatabasesConfig>(DATABASES_FILE);
-
-    // Legacy migration: convert recent_database_paths to recent_database_names and rewrite the file once.
-    if (!Array.isArray(toml.recent_database_names) && Array.isArray(toml.recent_database_paths)) {
-        const databases = Array.isArray(toml.databases)
-            ? toml.databases.map(tomlEntryToDatabaseEntry)
-            : [];
-        const migrated: IDatabasesConfig = {
-            databases,
-            recentDatabaseNames: recentPathsToNames(toml.recent_database_paths, databases),
-        };
-        await saveDatabasesConfig(migrated);
-        return migrated;
-    }
-
     return tomlToDatabasesConfig(toml);
 }
 
 //
-// Resolves the legacy recent-paths array into the new recent-names array by looking up
-// each path in the current databases list. Paths that don't match any entry are dropped.
+// Changes the databases configuration on disk. Every edit in this module goes through here.
 //
-function recentPathsToNames(recentPaths: string[], databases: IDatabaseEntry[]): string[] {
-    const result: string[] = [];
-    for (const recentPath of recentPaths) {
-        const match = databases.find(dbEntry => dbEntry.path === recentPath);
-        if (match) {
-            result.push(match.name);
-        }
-    }
-    return result;
-}
-
+// The mutator is handed the file's CURRENT contents and returns the new ones. updateToml runs it
+// under the update lock beside the file, checks the file has not moved before renaming, and re-runs
+// the mutator against the new contents if it has. So two edits arriving together both survive: the
+// second is applied on top of the first rather than overwriting it.
 //
-// Saves the databases configuration to disk.
+// This replaced a saveDatabasesConfig that took a whole config and wrote it. Every caller was
+// load-then-save, so two overlapping edits meant the later write silently discarded the earlier
+// one's change, with nothing to show for it. Several processes write this one file: the Electron
+// main process, the REST API and MCP utility processes, and the worker pool.
 //
-export async function saveDatabasesConfig(config: IDatabasesConfig): Promise<void> {
-    if (!Array.isArray(config.databases)) {
-        config.databases = [];
-    }
-    if (!Array.isArray(config.recentDatabaseNames)) {
-        config.recentDatabaseNames = [];
-    }
-    await writeToml(DATABASES_FILE, databasesConfigToToml(config));
+// Windows is where that stopped being silent. It refuses to rename over a file another handle still
+// holds, so the overlapping renames surfaced as "EPERM: operation not permitted, rename ...
+// databases.toml", failing one to six of the thirty three desktop smoke tests per run. Taking turns
+// fixes the visible failure on Windows and the invisible one everywhere else.
+//
+// A mutator that throws is left to throw. The lock is released on the way out, and the caller gets
+// its error rather than a half-applied change.
+//
+export async function updateDatabasesConfig(mutate: (config: IDatabasesConfig) => IDatabasesConfig): Promise<void> {
+    const emptyConfig: ITomlDatabasesConfig = { databases: [], recent_database_names: [] };
+    await updateToml<ITomlDatabasesConfig>(DATABASES_FILE, emptyConfig, currentToml => {
+        const updated = mutate(tomlToDatabasesConfig(currentToml));
+        return databasesConfigToToml(updated);
+    });
 }
 
 //
@@ -267,13 +158,16 @@ export async function findDatabase(name: string): Promise<IDatabaseEntry | undef
 // a storage-layer invariant in addition to any UX checks.
 //
 export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const existing = config.databases.find(dbEntry => namesMatch(dbEntry.name, entry.name));
-    if (existing) {
-        throw new Error(`A database named "${entry.name}" already exists.`);
-    }
-    config.databases = [...config.databases, entry];
-    await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => {
+        const existing = config.databases.find(dbEntry => namesMatch(dbEntry.name, entry.name));
+        if (existing) {
+            throw new Error(`A database named "${entry.name}" already exists.`);
+        }
+        return {
+            ...config,
+            databases: [...config.databases, entry],
+        };
+    });
 }
 
 //
@@ -284,25 +178,28 @@ export async function addDatabaseEntry(entry: IDatabaseEntry): Promise<void> {
 // `originalName` is found.
 //
 export async function updateDatabaseEntry(originalName: string, entry: IDatabaseEntry): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, originalName));
-    if (matchIndex === -1) {
-        throw new Error(`No database named "${originalName}" found.`);
-    }
-    const renamed = !namesMatch(entry.name, originalName);
-    if (renamed) {
-        const collision = config.databases.find((dbEntry, dbIndex) => dbIndex !== matchIndex && namesMatch(dbEntry.name, entry.name));
-        if (collision) {
-            throw new Error(`A database named "${entry.name}" already exists.`);
+    await updateDatabasesConfig(config => {
+        const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, originalName));
+        if (matchIndex === -1) {
+            throw new Error(`No database named "${originalName}" found.`);
         }
-    }
-    const updatedDatabases = config.databases.slice();
-    updatedDatabases[matchIndex] = entry;
-    config.databases = updatedDatabases;
-    if (renamed) {
-        config.recentDatabaseNames = config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName);
-    }
-    await saveDatabasesConfig(config);
+        const renamed = !namesMatch(entry.name, originalName);
+        if (renamed) {
+            const collision = config.databases.find((dbEntry, dbIndex) => dbIndex !== matchIndex && namesMatch(dbEntry.name, entry.name));
+            if (collision) {
+                throw new Error(`A database named "${entry.name}" already exists.`);
+            }
+        }
+        const updatedDatabases = config.databases.slice();
+        updatedDatabases[matchIndex] = entry;
+        return {
+            ...config,
+            databases: updatedDatabases,
+            recentDatabaseNames: renamed
+                ? config.recentDatabaseNames.map(recentName => namesMatch(recentName, originalName) ? entry.name : recentName)
+                : config.recentDatabaseNames,
+        };
+    });
 }
 
 //
@@ -312,26 +209,23 @@ export async function updateDatabaseEntry(originalName: string, entry: IDatabase
 // No-op if no entry matches.
 //
 export async function removeDatabaseEntry(name: string): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, name));
-    if (matchIndex === -1) {
-        // Still clean recents in case of stale state.
-        const filteredRecents = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
-        if (filteredRecents.length !== config.recentDatabaseNames.length) {
-            config.recentDatabaseNames = filteredRecents;
-            await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => {
+        const matchIndex = config.databases.findIndex(dbEntry => namesMatch(dbEntry.name, name));
+        // Recents are cleaned whether or not the entry is there, in case of stale state naming an
+        // entry that has already gone.
+        const recentDatabaseNames = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
+        if (matchIndex === -1) {
+            return { ...config, recentDatabaseNames };
         }
-        return;
-    }
-    const updatedDatabases = config.databases.slice();
-    updatedDatabases.splice(matchIndex, 1);
-    config.databases = updatedDatabases;
-    config.recentDatabaseNames = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
-    await saveDatabasesConfig(config);
+        const updatedDatabases = config.databases.slice();
+        updatedDatabases.splice(matchIndex, 1);
+        return { ...config, databases: updatedDatabases, recentDatabaseNames };
+    });
 }
 
 //
-// Returns the top-5 most recently opened databases, ordered most-recent first.
+// Returns the most recently opened databases, ordered most-recent first, at most
+// MAX_RECENT_DATABASES of them.
 // Names that no longer resolve to an entry in the databases list are silently dropped.
 //
 export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
@@ -351,29 +245,51 @@ export async function getRecentDatabases(): Promise<IDatabaseEntry[]> {
 // in `databases` untouched. No-op if the name is not in the recent list.
 //
 export async function removeRecentDatabaseName(name: string): Promise<void> {
-    const config = await loadDatabasesConfig();
-    const filtered = config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name));
-    if (filtered.length === config.recentDatabaseNames.length) {
-        return;
-    }
-    config.recentDatabaseNames = filtered;
-    await saveDatabasesConfig(config);
+    await updateDatabasesConfig(config => ({
+        ...config,
+        recentDatabaseNames: config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, name)),
+    }));
 }
 
 //
 // Moves the database entry matching the given name (case-insensitive) to the front of
-// recentDatabaseNames, trimming the list to a maximum of 5 entries, then saves.
+// recentDatabaseNames, trimming the list to MAX_RECENT_DATABASES entries.
 // No-op if no entry matches.
 //
 export async function markDatabaseOpened(name: string): Promise<void> {
+    await updateDatabasesConfig(config => {
+        const found = config.databases.find(dbEntry => namesMatch(dbEntry.name, name));
+        if (!found) {
+            return config;
+        }
+        return {
+            ...config,
+            recentDatabaseNames: [
+                found.name,
+                ...config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, found.name)),
+            ].slice(0, MAX_RECENT_DATABASES),
+        };
+    });
+}
+
+//
+// Returns the path of the database to reopen on the next launch, or undefined when none is open.
+//
+export async function getLastDatabase(): Promise<string | undefined> {
     const config = await loadDatabasesConfig();
-    const found = config.databases.find(dbEntry => namesMatch(dbEntry.name, name));
-    if (!found) {
-        return;
-    }
-    config.recentDatabaseNames = [
-        found.name,
-        ...config.recentDatabaseNames.filter(recentName => !namesMatch(recentName, found.name)),
-    ].slice(0, 5);
-    await saveDatabasesConfig(config);
+    return config.lastDatabase;
+}
+
+//
+// Records the database to reopen on the next launch. undefined clears it, which is what closing a
+// database does.
+//
+// Written through updateDatabasesConfig like every other edit here, so the databases and recents
+// lists are carried through untouched rather than being rewritten from a copy read earlier.
+//
+export async function setLastDatabase(databasePath: string | undefined): Promise<void> {
+    await updateDatabasesConfig(config => ({
+        ...config,
+        lastDatabase: databasePath,
+    }));
 }

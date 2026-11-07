@@ -1,0 +1,90 @@
+const std = @import("std");
+const TimerList = @import("ziggy").timers.TimerList;
+const serialization_zig = @import("serialization-zig");
+const bdb = @import("bdb-zig");
+const api = @import("api-zig");
+const node_api = @import("node-api-zig");
+const mcp_zig = @import("mcp-zig");
+const protocol = mcp_zig.protocol;
+const result = @import("../result.zig");
+const types = @import("../types.zig");
+const BsonDocument = serialization_zig.bson.BsonDocument;
+const McpServer = protocol.McpServer;
+const CallToolResult = protocol.ICallToolResult;
+const IDatabaseDescriptor = api.database_descriptor.IDatabaseDescriptor;
+const addPaths = node_api.import.addPaths;
+const jsonStringifyIndented = bdb.js_value.jsonStringifyIndented;
+const requireDatabase = result.requireDatabase;
+const textResult = result.textResult;
+const toJsValue = result.toJsValue;
+const IMcpToolContext = types.IMcpToolContext;
+
+//
+// Registers the `import_media_files` tool: imports photos and videos from files or
+// directories into the open database. dryRun previews without writing.
+//
+pub fn registerImportMediaFilesTool(server: *McpServer, allocator: std.mem.Allocator, toolContext: *IMcpToolContext) !void {
+    try server.registerTool(
+        allocator,
+        "import_media_files",
+        .{
+            .description = "Import photos and videos from files or directories into the open Photosphere database. Set dryRun to preview without writing.",
+            .inputSchema = &.{
+                .{
+                    .name = "paths",
+                    .fieldType = .stringArray,
+                    .presence = .required,
+                },
+                .{
+                    .name = "dryRun",
+                    .fieldType = .boolean,
+                    .presence = .{
+                        .default = .{ .boolean = false },
+                    },
+                },
+            },
+        },
+        toolContext,
+        importMediaFiles,
+    );
+}
+
+//
+// The handler of `import_media_files`. The import runs with
+// the context's allocator, because addPaths hands what it allocates to a termination callback that outlives the call.
+//
+fn importMediaFiles(context: ?*anyopaque, allocator: std.mem.Allocator, io: std.Io, arguments: BsonDocument) !CallToolResult {
+    const toolContext: *IMcpToolContext = @ptrCast(@alignCast(context.?));
+    const log = toolContext.log;
+    const database = switch (try requireDatabase(allocator, toolContext)) {
+        .database => |database| database,
+        .result => |noDatabase| {
+            return noDatabase;
+        },
+    };
+    const storageDescriptor: IDatabaseDescriptor = .{
+        .databasePath = database.databasePath,
+        .encryptionKey = database.encryptionKey,
+    };
+    const pathValues = arguments.get("paths").?.array;
+    const paths = try toolContext.allocator.alloc([]const u8, pathValues.len);
+    for (pathValues, 0..) |pathValue, pathIndex| {
+        paths[pathIndex] = try toolContext.allocator.dupe(u8, pathValue.string);
+    }
+    var timer_list = TimerList.init();
+    const summary = try addPaths(
+        toolContext.allocator,
+        io,
+        log,
+        timer_list.interface(),
+        toolContext.uuidGenerator,
+        storageDescriptor,
+        paths,
+        null,
+        toolContext.sessionId,
+        arguments.get("dryRun").?.boolean,
+        null,
+        null,
+    );
+    return textResult(allocator, try jsonStringifyIndented(allocator, try toJsValue(allocator, summary)));
+}

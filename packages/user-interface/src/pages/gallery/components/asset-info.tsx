@@ -41,6 +41,33 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
     const [description, setDescription] = React.useState(asset?.description);
 
     //
+    // The description this panel last took from the asset, so a change coming from storage can be told
+    // apart from the user's own typing.
+    //
+    const assetDescriptionRef = React.useRef(asset?.description);
+
+    //
+    // Shows the asset's description when it changes underneath the panel.
+    //
+    // Without this the field was seeded once at mount and never looked at the asset again. The only
+    // thing that remounted it was a change of asset id (the `key` on this component), so a panel
+    // opened before the asset had finished loading showed an empty description for an asset that had
+    // one, permanently. That is not only a wrong reading: the field is what the next edit is built
+    // from, so typing into it would have written the blank over the real value.
+    //
+    // Keyed on the asset's own description rather than on the asset object, so the user's typing is
+    // not thrown away by an unrelated re-render. While typing, local state runs ahead of the asset for
+    // the length of the 500ms debounce and this does not fire; when the write lands the two agree and
+    // setting it again changes nothing.
+    //
+    React.useEffect(() => {
+        if (asset?.description !== assetDescriptionRef.current) {
+            assetDescriptionRef.current = asset?.description;
+            setDescription(asset?.description);
+        }
+    }, [asset?.description]);
+
+    //
     // Controls visibility of the set date dialog.
     //
     const [editingDate, setEditingDate] = React.useState(false);
@@ -220,8 +247,9 @@ export function AssetInfo({ onClose, onDeleted, onLabelSearch }: IAssetInfoProps
                 <div className="flex flex-col flex-grow ml-5 mr-5 mt-6 mb-6 justify-center">
                     <div className="flex flex-row h-8">
                         <Textarea
+                            data-id="asset-description-input"
                             className="flex-grow"
-                            placeholder="Add a description"                            
+                            placeholder="Add a description"
                             value={description}
                             onChange={event => onUpdateDescription(event.target.value)}
                             />

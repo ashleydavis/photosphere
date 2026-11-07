@@ -19,7 +19,6 @@ export const stories: IStory[] = [
                     onOpenConfiguration={noOp}
                     onNewDatabase={noOp}
                     onAddDatabase={noOp}
-                    onOpenDatabase={noOp}
                     />
             </MockProviders>
         ),

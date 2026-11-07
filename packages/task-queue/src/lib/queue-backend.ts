@@ -7,7 +7,7 @@
 // at process startup via setQueueBackend().
 //
 
-import type { WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn } from "./types";
+import type { WorkerTaskCompletionCallback, TaskMessageCallback, UnsubscribeFn, TaskPriority } from "./types";
 
 //
 // The interface implemented by all queue backends.
@@ -18,7 +18,13 @@ export interface IQueueBackend {
     // Adds a task to the backend. Returns the task ID.
     // If taskId is provided it is used instead of generating a new one.
     //
-    addTask(type: string, data: any, source: string, taskId?: string): string;
+    // The priority decides which pending task is dispatched next. Leaving it out means "whatever is
+    // right for this task": a task queued from inside a running task runs at its parent's priority,
+    // so an import's children can never overtake something the user is waiting on, and anything else
+    // runs at DEFAULT_TASK_PRIORITY. Pass it explicitly to say the user is waiting (Interactive), or
+    // to opt a child back down to Background when it is long-running work its parent only kicked off.
+    //
+    addTask(type: string, data: any, source: string, taskId?: string, priority?: TaskPriority): string;
 
     //
     // Registers a callback that fires whenever a task with the given source is added.

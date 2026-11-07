@@ -1,42 +1,31 @@
 # CLI Manual Test: Compare Two Identical Databases
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `compare` reports no differences for two identical databases.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file and replicate it:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database, add a file, and replicate it
-
-```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-compare-compare-identical
+psi init --db /tmp/psi-cli-compare-compare-identical/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-compare-compare-identical/source --yes
+psi replicate --db /tmp/psi-cli-compare-compare-identical/source --dest /tmp/psi-cli-compare-compare-identical/replica --yes --force
 ```
 
 Expected:
 - Replica is reported as completed successfully.
 
----
+## Test
 
-### 3. Compare source and replica
+### 1. Compare source and replica
 
 ```bash
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
+psi compare --db /tmp/psi-cli-compare-compare-identical/source --dest /tmp/psi-cli-compare-compare-identical/replica --yes
 ```
 
 Expected:
@@ -44,11 +33,15 @@ Expected:
 
 ---
 
-### 4. Compare a database with itself
+### 2. Compare a database with itself
 
 ```bash
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/source --yes
+psi compare --db /tmp/psi-cli-compare-compare-identical/source --dest /tmp/psi-cli-compare-compare-identical/source --yes
 ```
 
 Expected:
 - Output includes `No differences detected`.
+
+## Check
+
+The compare output in steps 1 and 2 is the check.

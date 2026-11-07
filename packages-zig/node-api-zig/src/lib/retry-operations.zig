@@ -1,0 +1,368 @@
+//
+// The operations that several files pass to retry. utils-zig's retry takes an operation value with a
+// `run(self, io)` method, so each operation is defined here.
+// Each is a function of the operation's source text (which retryOnce puts in its timeout message), because
+// the same operation is written with different variable names in different places.
+//
+
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const storage_zig = @import("storage-zig");
+const merkle_tree_zig = @import("merkle-tree-zig");
+const hash = @import("hash.zig");
+const tree = @import("tree.zig");
+const IStorage = storage_zig.storage.IStorage;
+const IFileInfo = storage_zig.storage.IFileInfo;
+const IMerkleTree = merkle_tree_zig.merkle_tree.IMerkleTree;
+const Sha256 = std.crypto.hash.sha2.Sha256;
+
+//
+// Gets the info of a file in a storage.
+//
+pub fn InfoOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the result.
+        allocator: std.mem.Allocator,
+
+        // The storage holding the file.
+        storage: IStorage,
+
+        // The file to get information about.
+        fileName: []const u8,
+
+        //
+        // Gets the file information.
+        //
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !?IFileInfo {
+            return self.storage.info(self.allocator, io, self.fileName);
+        }
+    };
+}
+
+//
+// Reads a file from a storage.
+//
+pub fn ReadOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the result.
+        allocator: std.mem.Allocator,
+
+        // The storage holding the file.
+        storage: IStorage,
+
+        // The file to read.
+        fileName: []const u8,
+
+        //
+        // Reads the file.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?[]u8 {
+            return self.storage.read(self.allocator, io, log, self.fileName);
+        }
+    };
+}
+
+//
+// Writes a file to a storage.
+//
+pub fn WriteOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to write to.
+        storage: IStorage,
+
+        // The file to write.
+        fileName: []const u8,
+
+        // The content type of the file.
+        contentType: ?[]const u8,
+
+        // The contents of the file.
+        data: []const u8,
+
+        //
+        // Writes the file.
+        //
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
+            return self.storage.write(self.allocator, io, self.fileName, self.contentType, self.data);
+        }
+    };
+}
+
+//
+// Hashes a file by streaming it from a storage.
+//
+pub fn ComputeStorageHashOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to read the file from.
+        storage: IStorage,
+
+        // The file to hash.
+        fileName: []const u8,
+
+        //
+        // Streams the file from storage and hashes it.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) ![Sha256.digest_length]u8 {
+            const readStream = try self.storage.readStream(self.allocator, io, log, self.fileName);
+            defer readStream.destroy(io);
+            return hash.computeHash(readStream.reader());
+        }
+    };
+}
+
+//
+// Copies a file from one storage to another by streaming it.
+//
+pub fn CopyStreamOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementations' temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to copy the file from.
+        sourceStorage: IStorage,
+
+        // The storage to copy the file to.
+        destStorage: IStorage,
+
+        // The file to copy (the same path in both storages).
+        fileName: []const u8,
+
+        // The content type passed to writeStream.
+        contentType: ?[]const u8,
+
+        //
+        // Streams the file from the source storage to the destination storage.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            const readStream = try self.sourceStorage.readStream(self.allocator, io, log, self.fileName);
+            defer readStream.destroy(io);
+            try self.destStorage.writeStream(self.allocator, io, self.fileName, self.contentType, readStream.reader(), null);
+        }
+    };
+}
+
+//
+// Copies a file from one storage to another by streaming it, giving the destination the content length.
+//
+pub fn CopyStreamWithLengthOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementations' temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to copy the file from.
+        sourceStorage: IStorage,
+
+        // The storage to copy the file to.
+        destStorage: IStorage,
+
+        // The file to copy (the same path in both storages).
+        fileName: []const u8,
+
+        // The content type passed to writeStream.
+        contentType: ?[]const u8,
+
+        // The content length passed to writeStream.
+        contentLength: u64,
+
+        //
+        // Streams the file from the source storage to the destination storage.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            const readStream = try self.sourceStorage.readStream(self.allocator, io, log, self.fileName);
+            defer readStream.destroy(io);
+            try self.destStorage.writeStream(self.allocator, io, self.fileName, self.contentType, readStream.reader(), self.contentLength);
+        }
+    };
+}
+
+//
+// Checks whether a storage holds a merkle tree.
+//
+pub fn MerkleTreeExistsOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The database storage.
+        storage: IStorage,
+
+        //
+        // Checks whether the files tree exists.
+        //
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !bool {
+            return tree.merkleTreeExists(self.allocator, io, self.storage);
+        }
+    };
+}
+
+//
+// Loads the merkle tree from a storage.
+//
+pub fn LoadMerkleTreeOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the loaded tree.
+        allocator: std.mem.Allocator,
+
+        // The database storage.
+        storage: IStorage,
+
+        //
+        // Loads the files tree.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !?IMerkleTree {
+            return tree.loadMerkleTree(self.allocator, io, log, self.storage);
+        }
+    };
+}
+
+//
+// Saves a merkle tree to a storage.
+//
+pub fn SaveMerkleTreeOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the rebuilt merkle nodes and the serialized data.
+        allocator: std.mem.Allocator,
+
+        // The tree to save.
+        merkleTree: *IMerkleTree,
+
+        // The database storage.
+        storage: IStorage,
+
+        //
+        // Saves the files tree.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !void {
+            return tree.saveMerkleTree(self.allocator, io, log, self.merkleTree, self.storage);
+        }
+    };
+}
+
+//
+// Deletes a file from a storage.
+//
+pub fn DeleteFileOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to delete from.
+        storage: IStorage,
+
+        // The file to delete.
+        filePath: []const u8,
+
+        //
+        // Deletes the file.
+        //
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
+            try self.storage.deleteFile(self.allocator, io, self.filePath);
+        }
+    };
+}
+
+//
+// Writes a file to a storage from a stream.
+//
+pub fn WriteStreamOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage to write to.
+        storage: IStorage,
+
+        // The file to write.
+        fileName: []const u8,
+
+        // The content type of the file.
+        contentType: ?[]const u8,
+
+        // The stream to write from.
+        inputStream: *std.Io.Reader,
+
+        // The number of bytes the stream will hold, when known.
+        contentLength: ?u64,
+
+        //
+        // Writes the stream to the file.
+        //
+        pub fn run(self: *@This(), io: std.Io, _: ILog) !void {
+            return self.storage.writeStream(self.allocator, io, self.fileName, self.contentType, self.inputStream, self.contentLength);
+        }
+    };
+}
+
+//
+// Computes the hash of an asset by streaming it from a storage.
+//
+pub fn ComputeAssetHashOperation(comptime sourceText: []const u8) type {
+    return struct {
+        // The text retryOnce puts in its timeout message.
+        pub const source = sourceText;
+
+        // Allocates the hash and the storage implementation's temporary data.
+        allocator: std.mem.Allocator,
+
+        // The storage holding the file.
+        storage: IStorage,
+
+        // The file to hash.
+        fileName: []const u8,
+
+        // The information about the file.
+        fileInfo: IFileInfo,
+
+        //
+        // Streams the file and hashes it.
+        //
+        pub fn run(self: *@This(), io: std.Io, log: ILog) !merkle_tree_zig.merkle_tree.IHashedData {
+            const readStream = try self.storage.readStream(self.allocator, io, log, self.fileName);
+            defer readStream.destroy(io);
+            return hash.computeAssetHash(self.allocator, readStream.reader(), .{
+                .contentType = self.fileInfo.contentType,
+                .length = self.fileInfo.length,
+                .lastModified = self.fileInfo.lastModified,
+            });
+        }
+    };
+}

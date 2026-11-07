@@ -1,53 +1,52 @@
 # CLI Manual Test: `dbs remove --yes`
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `dbs remove --yes` removes a database entry from the list and leaves
 the other entries untouched.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory and seed two database entries:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-remove
+mkdir -p /tmp/psi-cli-dbs-remove/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-remove/config
+cat > /tmp/psi-cli-dbs-remove/config/databases.toml <<'TOML'
+[[databases]]
+name = "keep-db"
+description = ""
+path = "/tmp/psi-cli-dbs-remove/keep-db"
+
+[[databases]]
+name = "remove-db"
+description = ""
+path = "/tmp/psi-cli-dbs-remove/remove-db"
+TOML
 ```
 
-## Steps
+Expected: no output.
 
-### 1. Point the CLI at an empty config directory
+## Test
 
-```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-```
-
----
-
-### 2. Seed two database entries
+### 1. Remove one entry
 
 ```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"keep-db","description":"","path":"/tmp/psi-test/keep-db"},{"name":"remove-db","description":"","path":"/tmp/psi-test/remove-db"}]
-EOF
-```
-
----
-
-### 3. Remove one entry
-
-```bash
-bun run start -- dbs remove --name remove-db --yes
+psi dbs remove --name remove-db --yes
 ```
 
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 4. Confirm the listing
+### 2. Confirm the listing
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:

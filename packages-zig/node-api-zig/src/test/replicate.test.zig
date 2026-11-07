@@ -1,0 +1,1125 @@
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const merkle_tree_zig = @import("merkle-tree-zig");
+const storage_zig = @import("storage-zig");
+const bdb = @import("bdb-zig");
+const node_api = @import("node-api-zig");
+const api = @import("api-zig");
+const temp_dirs = @import("temp-dirs.zig");
+const test_files = @import("test-files.zig");
+const console_capture = @import("console-capture.zig");
+const test_environment = @import("test-environment.zig");
+const progress_recorder = @import("progress-recorder.zig");
+const string_lists = @import("string-lists.zig");
+const replicate = node_api.replicate;
+const merkle_tree = merkle_tree_zig.merkle_tree;
+const errors = utils.errors;
+const MerkleNode = merkle_tree.MerkleNode;
+const HashedItem = merkle_tree.HashedItem;
+const IMerkleTree = merkle_tree.IMerkleTree;
+const IStorage = storage_zig.storage.IStorage;
+const ICollectionRecord = replicate.ICollectionRecord;
+const Sha256 = std.crypto.hash.sha2.Sha256;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
+
+//
+// A valid uuid used as the id of the test trees.
+//
+const VALID_UUID = "12345678-1234-5678-9abc-123456789abc";
+
+//
+// sha256 of a seed string.
+//
+fn makeHash(allocator: std.mem.Allocator, seed: []const u8) ![]const u8 {
+    const digest = try allocator.create([32]u8);
+    Sha256.hash(seed, digest, .{});
+    return digest;
+}
+
+//
+// Builds a tree with the given items and its merkle tree.
+//
+fn buildTree(allocator: std.mem.Allocator, uuid: []const u8, items: []const HashedItem) !IMerkleTree {
+    var tree = merkle_tree.createTree(uuid);
+    for (items) |item| {
+        tree = try merkle_tree.addItem(allocator, &tree, item);
+    }
+    tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
+    tree.dirty = false;
+    return tree;
+}
+
+//
+// Makes the items of a tree whose leaves are the given names (hash of the name, length 0).
+//
+fn makeItems(allocator: std.mem.Allocator, leafNames: []const []const u8) ![]HashedItem {
+    const items = try allocator.alloc(HashedItem, leafNames.len);
+    for (leafNames, 0..) |name, index| {
+        items[index] = .{ .name = name, .hash = try makeHash(allocator, name), .length = 0, .lastModified = 1_700_000_000_000 };
+    }
+    return items;
+}
+
+//
+// Builds a tree whose leaves are the given names and saves it.
+//
+fn buildAndSaveTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, filePath: []const u8, uuid: []const u8, leafNames: []const []const u8, typeCode: []const u8) !void {
+    const tree = try buildTree(allocator, uuid, try makeItems(allocator, leafNames));
+    try merkle_tree.saveTree(allocator, io, log, filePath, &tree, storage, typeCode);
+}
+
+//
+// Saves a tree.
+//
+fn saveTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, tree: IMerkleTree, storage: IStorage, typeCode: []const u8) !void {
+    try merkle_tree.saveTree(allocator, io, log, filePath, &tree, storage, typeCode);
+}
+
+//
+// Collects the leaf names yielded by iterateLeaves.
+//
+fn collectLeaves(allocator: std.mem.Allocator, nodes: []const *MerkleNode) ![]const []const u8 {
+    var names: std.ArrayList([]const u8) = .empty;
+    var iterator = replicate.iterateLeaves(allocator, nodes);
+    while (try iterator.next()) |name| {
+        try names.append(allocator, name);
+    }
+    return names.items;
+}
+
+//
+// Collects the records yielded by a difference iterator.
+//
+fn collectRecords(allocator: std.mem.Allocator, log: ILog, iterator: anytype) ![]ICollectionRecord {
+    var records: std.ArrayList(ICollectionRecord) = .empty;
+    while (try iterator.next(log)) |record| {
+        try records.append(allocator, record);
+    }
+    return records.items;
+}
+
+//
+// Gets the sorted record ids of a list of records.
+//
+fn sortedRecordIds(allocator: std.mem.Allocator, records: []const ICollectionRecord) ![][]const u8 {
+    const ids = try allocator.alloc([]const u8, records.len);
+    for (records, 0..) |record, index| {
+        ids[index] = record.recordId;
+    }
+    string_lists.sortStrings(ids);
+    return ids;
+}
+
+//
+// Checks that a list of strings is as expected.
+//
+fn expectStrings(expected: []const []const u8, actual: []const []const u8) !void {
+    try std.testing.expectEqual(expected.len, actual.len);
+    for (expected, actual) |expectedString, actualString| {
+        try std.testing.expectEqualStrings(expectedString, actualString);
+    }
+}
+
+//
+// Creates a merkle node.
+//
+fn makeNode(allocator: std.mem.Allocator, seed: []const u8, nodeCount: u32, name: ?[]const u8, left: ?*MerkleNode, right: ?*MerkleNode) !*MerkleNode {
+    const node = try allocator.create(MerkleNode);
+    node.* = .{ .hash = try makeHash(allocator, seed), .nodeCount = nodeCount, .name = name, .left = left, .right = right };
+    return node;
+}
+
+//
+// Two empty storages in temporary directories.
+//
+const StoragePair = struct {
+    // The temporary directory holding both storages.
+    dir: []const u8,
+
+    // The first storage.
+    storage1: IStorage,
+
+    // The second storage.
+    storage2: IStorage,
+};
+
+//
+// Creates two empty storages.
+//
+fn makeStorages(allocator: std.mem.Allocator, io: std.Io) !StoragePair {
+    const dir = try temp_dirs.makeTempDir(allocator, io, "replicate-storages");
+    return .{
+        .dir = dir,
+        .storage1 = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ dir, "one" })),
+        .storage2 = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ dir, "two" })),
+    };
+}
+
+//
+// The path of a shard tree.
+//
+fn shardPath(allocator: std.mem.Allocator, collection: []const u8, shardId: []const u8) ![]const u8 {
+    return storage_zig.storage_factory.pathJoin(allocator, &.{ ".db", "bson", "collections", collection, "shards", try std.mem.concat(allocator, u8, &.{ shardId, ".dat" }) });
+}
+
+//
+// The path of a collection tree.
+//
+fn collCollectionPath(allocator: std.mem.Allocator, collection: []const u8) ![]const u8 {
+    return std.fs.path.join(allocator, &.{ ".db", "bson", "collections", collection, "collection.dat" });
+}
+
+test "returns empty array for empty nodes" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try collectLeaves(arena.allocator(), &.{});
+    try std.testing.expectEqual(@as(usize, 0), result.len);
+}
+
+test "yields name of a single leaf node" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const leaf = try makeNode(allocator, "a", 1, "leaf1", null, null);
+    try expectStrings(&.{"leaf1"}, try collectLeaves(allocator, &.{leaf}));
+}
+
+test "throws if leaf has no name" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const leaf = try makeNode(allocator, "a", 1, null, null, null);
+    try std.testing.expectError(error.Thrown, collectLeaves(allocator, &.{leaf}));
+    try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
+}
+
+//
+// An empty name is refused the same way a missing one is, rather than being yielded as a name nothing can look up.
+//
+test "throws if leaf has an empty name" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const emptyName = try makeNode(allocator, "a", 1, "", null, null);
+    try std.testing.expectError(error.Thrown, collectLeaves(allocator, &.{emptyName}));
+    try std.testing.expectEqualStrings("Leaf node has no name", errors.lastErrorMessage());
+
+    // The same check applies to a leaf nested under an internal node, which is where a diff walks it.
+    const parent = try makeNode(allocator, "b", 3, null, emptyName, null);
+    try std.testing.expectError(error.Thrown, collectLeaves(allocator, &.{parent}));
+}
+
+test "yields names from multiple leaf nodes" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const leaves = [_]*MerkleNode{ try makeNode(allocator, "a", 1, "a", null, null), try makeNode(allocator, "b", 1, "b", null, null) };
+    try expectStrings(&.{ "a", "b" }, try collectLeaves(allocator, &leaves));
+}
+
+test "recurses into left child" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const inner = try makeNode(allocator, "inner", 1, "inner", null, null);
+    const root = try makeNode(allocator, "root", 2, null, inner, null);
+    try expectStrings(&.{"inner"}, try collectLeaves(allocator, &.{root}));
+}
+
+test "recurses into right child" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const inner = try makeNode(allocator, "inner", 1, "inner", null, null);
+    const root = try makeNode(allocator, "root", 2, null, null, inner);
+    try expectStrings(&.{"inner"}, try collectLeaves(allocator, &.{root}));
+}
+
+test "recurses into both left and right children" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const leftLeaf = try makeNode(allocator, "l", 1, "left", null, null);
+    const rightLeaf = try makeNode(allocator, "r", 1, "right", null, null);
+    const root = try makeNode(allocator, "root", 3, null, leftLeaf, rightLeaf);
+    try expectStrings(&.{ "left", "right" }, try collectLeaves(allocator, &.{root}));
+}
+
+test "yields nothing when tree1 does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage2, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{"rec1"}, "COLT");
+    var iterator = try replicate.iterateShardDifferences(allocator, io, log, "coll", "s1", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try std.testing.expectEqual(@as(usize, 0), results.len);
+}
+
+test "yields all record ids from tree1 when tree2 does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{ "rec1", "rec2" }, "COLT");
+    var iterator = try replicate.iterateShardDifferences(allocator, io, log, "coll", "s1", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try std.testing.expectEqual(@as(usize, 2), results.len);
+    try expectStrings(&.{ "rec1", "rec2" }, try sortedRecordIds(allocator, results));
+    for (results) |result| {
+        try std.testing.expectEqualStrings("coll", result.collectionName);
+    }
+}
+
+test "yields differing record ids when both trees exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{ "rec1", "rec2", "rec3" }, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage2, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{"rec1"}, "COLT");
+    var iterator = try replicate.iterateShardDifferences(allocator, io, log, "coll", "s1", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try expectStrings(&.{ "rec2", "rec3" }, try sortedRecordIds(allocator, results));
+    for (results) |result| {
+        try std.testing.expectEqualStrings("coll", result.collectionName);
+    }
+}
+
+test "yields nothing when both trees are identical" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{ "rec1", "rec2" }, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage2, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{ "rec1", "rec2" }, "COLT");
+    var iterator = try replicate.iterateShardDifferences(allocator, io, log, "coll", "s1", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try std.testing.expectEqual(@as(usize, 0), results.len);
+}
+
+test "yields nothing when tree1 collection does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage2, try collCollectionPath(allocator, "coll"), VALID_UUID, &.{"s1"}, "COLT");
+    var iterator = try replicate.iterateCollectionDifferences(allocator, io, log, "coll", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try std.testing.expectEqual(@as(usize, 0), results.len);
+}
+
+test "yields record ids from all shards when tree2 collection does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try collCollectionPath(allocator, "coll"), VALID_UUID, &.{ "s1", "s2" }, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "coll", "s1"), VALID_UUID, &.{"rec1"}, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "coll", "s2"), VALID_UUID, &.{ "rec2", "rec3" }, "COLT");
+    var iterator = try replicate.iterateCollectionDifferences(allocator, io, log, "coll", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try expectStrings(&.{ "rec1", "rec2", "rec3" }, try sortedRecordIds(allocator, results));
+    for (results) |result| {
+        try std.testing.expectEqualStrings("coll", result.collectionName);
+    }
+}
+
+test "yields differing record ids when both collections exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    const shardTree1 = try buildTree(allocator, VALID_UUID, try makeItems(allocator, &.{ "a", "b", "c" }));
+    const shardTree2 = try buildTree(allocator, VALID_UUID, try makeItems(allocator, &.{"a"}));
+    try saveTree(allocator, io, log, try shardPath(allocator, "coll", "s1"), shardTree1, storages.storage1, "COLT");
+    try saveTree(allocator, io, log, try shardPath(allocator, "coll", "s1"), shardTree2, storages.storage2, "COLT");
+    const collTree1 = try buildTree(allocator, VALID_UUID, &.{.{ .name = "s1", .hash = shardTree1.merkle.?.hash, .length = 0, .lastModified = 0 }});
+    const collTree2 = try buildTree(allocator, VALID_UUID, &.{.{ .name = "s1", .hash = shardTree2.merkle.?.hash, .length = 0, .lastModified = 0 }});
+    try saveTree(allocator, io, log, try collCollectionPath(allocator, "coll"), collTree1, storages.storage1, "COLT");
+    try saveTree(allocator, io, log, try collCollectionPath(allocator, "coll"), collTree2, storages.storage2, "COLT");
+    var iterator = try replicate.iterateCollectionDifferences(allocator, io, log, "coll", storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try expectStrings(&.{ "b", "c" }, try sortedRecordIds(allocator, results));
+    for (results) |result| {
+        try std.testing.expectEqualStrings("coll", result.collectionName);
+    }
+}
+
+test "yields nothing when tree1 database does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage2, ".db/bson/db.dat", VALID_UUID, &.{"coll"}, "BDBT");
+    var iterator = try replicate.iterateDatabaseDifferences(allocator, io, log, storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try std.testing.expectEqual(@as(usize, 0), results.len);
+}
+
+test "yields record ids from all collections when tree2 database does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    try buildAndSaveTree(allocator, io, log, storages.storage1, ".db/bson/db.dat", VALID_UUID, &.{ "c1", "c2" }, "BDBT");
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try collCollectionPath(allocator, "c1"), VALID_UUID, &.{"s1"}, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "c1", "s1"), VALID_UUID, &.{"r1"}, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try collCollectionPath(allocator, "c2"), VALID_UUID, &.{"s1"}, "COLT");
+    try buildAndSaveTree(allocator, io, log, storages.storage1, try shardPath(allocator, "c2", "s1"), VALID_UUID, &.{"r2"}, "COLT");
+    var iterator = try replicate.iterateDatabaseDifferences(allocator, io, log, storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try std.testing.expectEqual(@as(usize, 2), results.len);
+    for (results) |result| {
+        if (std.mem.eql(u8, result.collectionName, "c1")) {
+            try std.testing.expectEqualStrings("r1", result.recordId);
+        }
+        else {
+            try std.testing.expectEqualStrings("c2", result.collectionName);
+            try std.testing.expectEqualStrings("r2", result.recordId);
+        }
+    }
+}
+
+test "yields differing record ids when both databases exist" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const storages = try makeStorages(allocator, io);
+    defer temp_dirs.removeTempDir(io, storages.dir);
+    const shardTree1 = try buildTree(allocator, VALID_UUID, try makeItems(allocator, &.{ "id1", "id2" }));
+    const shardTree2 = try buildTree(allocator, VALID_UUID, try makeItems(allocator, &.{"id1"}));
+    try saveTree(allocator, io, log, try shardPath(allocator, "coll", "s1"), shardTree1, storages.storage1, "COLT");
+    try saveTree(allocator, io, log, try shardPath(allocator, "coll", "s1"), shardTree2, storages.storage2, "COLT");
+    const collTree1 = try buildTree(allocator, VALID_UUID, &.{.{ .name = "s1", .hash = shardTree1.merkle.?.hash, .length = 0, .lastModified = 0 }});
+    const collTree2 = try buildTree(allocator, VALID_UUID, &.{.{ .name = "s1", .hash = shardTree2.merkle.?.hash, .length = 0, .lastModified = 0 }});
+    try saveTree(allocator, io, log, try collCollectionPath(allocator, "coll"), collTree1, storages.storage1, "COLT");
+    try saveTree(allocator, io, log, try collCollectionPath(allocator, "coll"), collTree2, storages.storage2, "COLT");
+    const dbTree1 = try buildTree(allocator, VALID_UUID, &.{.{ .name = "coll", .hash = collTree1.merkle.?.hash, .length = 0, .lastModified = 0 }});
+    const dbTree2 = try buildTree(allocator, VALID_UUID, &.{.{ .name = "coll", .hash = collTree2.merkle.?.hash, .length = 0, .lastModified = 0 }});
+    try saveTree(allocator, io, log, ".db/bson/db.dat", dbTree1, storages.storage1, "BDBT");
+    try saveTree(allocator, io, log, ".db/bson/db.dat", dbTree2, storages.storage2, "BDBT");
+    var iterator = try replicate.iterateDatabaseDifferences(allocator, io, log, storages.storage1, storages.storage2);
+    const results = try collectRecords(allocator, log, &iterator);
+    try expectStrings(&.{"id2"}, try sortedRecordIds(allocator, results));
+    try std.testing.expectEqualStrings("coll", results[0].collectionName);
+}
+
+//
+// The generators and storages of a replicate test.
+//
+const ReplicateFixture = struct {
+    // The temporary directory holding the storages.
+    dir: []const u8,
+
+    // Deterministic uuids.
+    uuidGenerator: node_utils.test_uuid_generator.TestUuidGenerator,
+
+    // Deterministic time.
+    timestampProvider: node_utils.test_timestamp_provider.TestTimestampProvider,
+
+    // The source database storage.
+    sourceAsset: IStorage,
+
+    // The destination database storage.
+    destAsset: IStorage,
+
+    // The source BSON database (in an empty storage, like `new BsonDatabase(new MockStorage(), "", ...)`).
+    sourceBdb: *bdb.database.BsonDatabase,
+};
+
+//
+// Creates the fixture of a replicate test.
+//
+fn makeReplicateFixture(allocator: std.mem.Allocator, io: std.Io) !*ReplicateFixture {
+    const fixture = try allocator.create(ReplicateFixture);
+    fixture.dir = try temp_dirs.makeTempDir(allocator, io, "replicate");
+    fixture.uuidGenerator = try node_utils.test_uuid_generator.TestUuidGenerator.init(allocator);
+    fixture.timestampProvider = .{};
+    fixture.sourceAsset = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "source" }));
+    fixture.destAsset = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "dest" }));
+    const bdbStorage = try test_files.directoryStorage(allocator, io, try std.fs.path.join(allocator, &.{ fixture.dir, "bdb" }));
+    fixture.sourceBdb = try bdb.database.BsonDatabase.init(allocator, bdbStorage, "", fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    return fixture;
+}
+
+//
+// Saves an empty files tree with the given id and `{ filesImported: 0 }` metadata.
+//
+fn saveEmptyFilesTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, id: []const u8) !void {
+    var tree = merkle_tree.createTree(id);
+    tree.databaseMetadata = try node_api.media_file_database.emptyDatabaseMetadata(allocator);
+    tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
+    tree.dirty = false;
+    try merkle_tree.saveTree(allocator, io, log, ".db/files.dat", &tree, storage, "FTRE");
+}
+
+test "throws when source merkle tree fails to load" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    try std.testing.expectError(error.Thrown, replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, null, null));
+    try std.testing.expectEqualStrings("Failed to load merkle tree", errors.lastErrorMessage());
+}
+
+test "throws when dest has different database ID and force is not set" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+    try saveEmptyFilesTree(allocator, io, log, fixture.sourceAsset, dbId);
+    const destDbId = try fixture.uuidGenerator.generate(allocator, io);
+    try saveEmptyFilesTree(allocator, io, log, fixture.destAsset, destDbId);
+    try std.testing.expectError(error.FatalError, replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, null, null));
+    const expected = try std.fmt.allocPrint(allocator, "You are trying to replicate to a database that has a different ID than the source database.\nSource database ID: {s}\nDestination database ID: {s}\nThe destination database is not related to the source database.\nUse the --force flag to proceed anyway.", .{ dbId, destDbId });
+    try std.testing.expectEqualStrings(expected, errors.lastErrorMessage());
+}
+
+test "succeeds when force is true and database IDs differ" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+    try saveEmptyFilesTree(allocator, io, log, fixture.sourceAsset, dbId);
+    try saveEmptyFilesTree(allocator, io, log, fixture.destAsset, try fixture.uuidGenerator.generate(allocator, io));
+    const result = try replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, .{ .force = true }, null);
+    try std.testing.expectEqual(@as(u64, 0), result.filesImported);
+    try std.testing.expectEqual(@as(u64, 0), result.copiedFiles);
+    try std.testing.expectEqual(@as(u64, 0), result.copiedRecords);
+    try std.testing.expectEqual(@as(usize, 0), result.prunedFiles.len);
+}
+
+//
+// Saves a source files tree holding the named files (each with the hash of its own name, which is the hash of the
+// content writeSourceFiles gives it), with `{ filesImported: <count> }` metadata plus isPartial when asked.
+//
+fn saveSourceTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, storage: IStorage, id: []const u8, fileNames: []const []const u8, filesImported: f64, isPartial: bool) !void {
+    var tree = merkle_tree.createTree(id);
+    for (fileNames) |fileName| {
+        tree = try merkle_tree.addItem(allocator, &tree, .{
+            .name = fileName,
+            .hash = try makeHash(allocator, fileName),
+            .length = fileName.len,
+            .lastModified = 1_700_000_000_000,
+        });
+    }
+    var metadata = try node_api.media_file_database.emptyDatabaseMetadata(allocator);
+    try metadata.put(allocator, "filesImported", .{ .number = filesImported });
+    if (isPartial) {
+        try metadata.put(allocator, "isPartial", .{ .boolean = true });
+    }
+    tree.databaseMetadata = metadata;
+    tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
+    tree.dirty = false;
+    try merkle_tree.saveTree(allocator, io, log, ".db/files.dat", &tree, storage, "FTRE");
+}
+
+//
+// Writes each named file into the storage with its own name as its content.
+//
+fn writeSourceFiles(allocator: std.mem.Allocator, io: std.Io, storage: IStorage, fileNames: []const []const u8) !void {
+    for (fileNames) |fileName| {
+        try storage.write(allocator, io, fileName, "image/jpeg", fileName);
+    }
+}
+
+//
+// Answers that the replication has been cancelled (`() => true`).
+//
+fn alwaysCancelled(context: ?*anyopaque, _: std.Io, _: std.mem.Allocator) bool {
+    _ = context;
+    return true;
+}
+
+test "stops copying files once the caller says the replication has been cancelled" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+
+    // A source tree with files in it, so the copy loop has something to walk. Without files the
+    // loop never runs and a cancelled run would look identical to a finished one.
+    const fileNames = [_][]const u8{ "asset/one.jpg", "asset/two.jpg", "asset/three.jpg" };
+    try writeSourceFiles(allocator, io, fixture.sourceAsset, &fileNames);
+    try saveSourceTree(allocator, io, log, fixture.sourceAsset, dbId, &fileNames, fileNames.len, false);
+
+    try std.testing.expectError(error.Thrown, replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, .{ .isCancelled = .{ .context = null, .function = alwaysCancelled } }, null));
+    try std.testing.expectEqualStrings("Replication was cancelled.", errors.lastErrorMessage());
+
+    // Nothing copied, because the cancel is noticed before the first file rather than after the
+    // last one.
+    for (fileNames) |fileName| {
+        try std.testing.expect(!try fixture.destAsset.fileExists(allocator, io, fileName));
+    }
+}
+
+//
+// The readStream of the source storage that the slow read test wraps (the original one).
+//
+var slowReadOriginal: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!storage_zig.storage.IReadStream = undefined;
+
+//
+// How long the one file takes to come out of the source, in milliseconds. Comfortably over retry's 30 second default
+// and far under the long timeout a file copy is meant to get, so it separates the two: with the default the copy is
+// abandoned, with the long one it finishes. A real library has files like this in it, and the first of them ended a
+// whole replication.
+//
+const SLOW_READ_DELAY_MS: i64 = 45_000;
+
+//
+// Hands the file over slowly, after waiting first.
+// The wait is on the virtual clock of the test's Io, so it takes no real time.
+//
+fn slowReadStream(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) anyerror!storage_zig.storage.IReadStream {
+    try io.sleep(.fromMilliseconds(SLOW_READ_DELAY_MS), .awake);
+    return slowReadOriginal(ptr, allocator, io, log, filePath);
+}
+
+test "copies a file that takes longer than the default retry timeout to read" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+
+    const fileName = "asset/slow.jpg";
+    try writeSourceFiles(allocator, io, fixture.sourceAsset, &.{fileName});
+
+    // The source hands the file over slowly. Wrapped on the instance rather than in a subclass so everything else
+    // about the storage is untouched.
+    var slowVTable = fixture.sourceAsset.vtable.*;
+    slowReadOriginal = slowVTable.readStream;
+    slowVTable.readStream = slowReadStream;
+    var sourceAsset = fixture.sourceAsset;
+    sourceAsset.vtable = &slowVTable;
+
+    // The tree's hash has to be the real hash of the content, because the copy is checked against it.
+    try saveSourceTree(allocator, io, log, sourceAsset, dbId, &.{fileName}, 1, false);
+
+    const result = try replicate.replicate(allocator, io, log, "mock://source", sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, null, null);
+
+    try std.testing.expectEqual(@as(u64, 1), result.copiedFiles);
+    try std.testing.expect(try fixture.destAsset.fileExists(allocator, io, fileName));
+}
+
+test "replicates from a partial replica, leaving out the files it does not hold" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+
+    // A partial replica's merkle tree is the whole origin's, so it describes files the replica
+    // does not have: that is what makes it partial, and it is what every phone holds. Treating
+    // the first of those as fatal made a partial replica impossible to replicate or consolidate
+    // from, which matters most in the one case where it is the only copy left.
+    const presentFile = "asset/present.jpg";
+    const absentFile = "asset/absent.jpg";
+    try writeSourceFiles(allocator, io, fixture.sourceAsset, &.{presentFile});
+    try saveSourceTree(allocator, io, log, fixture.sourceAsset, dbId, &.{ presentFile, absentFile }, 2, true);
+
+    const result = try replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, null, null);
+
+    try std.testing.expectEqual(@as(u64, 1), result.copiedFiles);
+    try expectStrings(&.{absentFile}, result.missingFromSource);
+    try std.testing.expect(try fixture.destAsset.fileExists(allocator, io, presentFile));
+    try std.testing.expect(!try fixture.destAsset.fileExists(allocator, io, absentFile));
+}
+
+//
+// The write of the storage the tree-write test counts (the original write of the wrapped storage).
+//
+var countedWrite: *const fn (ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) anyerror!void = undefined;
+
+//
+// How many times the destination's files tree has been written.
+//
+var treeWrites: usize = 0;
+
+//
+// Counts writes of the destination's tree and then writes as the storage does.
+//
+fn countingWrite(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) anyerror!void {
+    if (std.mem.eql(u8, filePath, ".db/files.dat")) {
+        treeWrites += 1;
+    }
+    return countedWrite(ptr, allocator, io, filePath, contentType, data);
+}
+
+//
+// The save of the destination tree part way through is meant to happen every hundred files, and
+// it is reached once per leaf, while a leaf a partial source does not hold copies nothing. So a
+// count resting on a multiple of a hundred saved the whole tree again for every one of those
+// leaves, and at zero from the first leaf of a pass that had copied nothing yet.
+//
+test "a run of leaves that copy nothing after the hundredth file does not save the tree again" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+
+    // A hundred files the source holds, named so they sort first, then a long run it does not.
+    var present: std.ArrayList([]const u8) = .empty;
+    var index: usize = 0;
+    while (index < 100) : (index += 1) {
+        try present.append(allocator, try std.fmt.allocPrint(allocator, "asset/a-{d:0>3}.jpg", .{index}));
+    }
+    var allNames: std.ArrayList([]const u8) = .empty;
+    try allNames.appendSlice(allocator, present.items);
+    index = 0;
+    while (index < 50) : (index += 1) {
+        try allNames.append(allocator, try std.fmt.allocPrint(allocator, "asset/z-{d:0>3}.jpg", .{index}));
+    }
+    try writeSourceFiles(allocator, io, fixture.sourceAsset, present.items);
+    try saveSourceTree(allocator, io, log, fixture.sourceAsset, dbId, allNames.items, 150, true);
+
+    // Counts writes of the destination's tree, once the destination exists to write it into.
+    var countingVTable = fixture.destAsset.vtable.*;
+    countedWrite = countingVTable.write;
+    countingVTable.write = countingWrite;
+    var destAsset = fixture.destAsset;
+    destAsset.vtable = &countingVTable;
+    treeWrites = 0;
+
+    const result = try replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), destAsset, destAsset, null, null);
+
+    try std.testing.expectEqual(@as(u64, 100), result.copiedFiles);
+    try std.testing.expectEqual(@as(usize, 50), result.missingFromSource.len);
+
+    // Creating the destination, the hundredth file's save, and the one at the end.
+    try std.testing.expectEqual(@as(usize, 3), treeWrites);
+}
+
+test "a file missing from a source that is not partial is still fatal" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.initWith(std.testing.allocator, virtual_time_io.VirtualTimeIo.Options.retry);
+    defer virtual_time.deinit();
+    const io = virtual_time.io();
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+
+    // There the tree and the files are supposed to agree, so a gap between them is damage and
+    // must not be quietly copied around.
+    const absentFile = "asset/absent.jpg";
+    try saveSourceTree(allocator, io, log, fixture.sourceAsset, dbId, &.{absentFile}, 1, false);
+
+    // The retries warn on the console; captured so nothing reaches the test program's stderr.
+    var stderr_capture = std.Io.Writer.Allocating.init(allocator);
+    console_capture.captureStderr(&stderr_capture.writer);
+    defer console_capture.endConsoleCapture();
+
+    try std.testing.expectError(error.Thrown, replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, null, null));
+    try std.testing.expectEqualStrings("Failed to copy file asset/absent.jpg: Source file \"asset/absent.jpg\" does not exist in the source database.", errors.lastErrorMessage());
+}
+
+test "returns result shape with zero counts when source has no files and empty dest" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    try saveEmptyFilesTree(allocator, io, log, fixture.sourceAsset, try fixture.uuidGenerator.generate(allocator, io));
+    const result = try replicate.replicate(allocator, io, log, "mock://source", fixture.sourceAsset, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), fixture.destAsset, fixture.destAsset, null, null);
+    try std.testing.expectEqual(@as(u64, 0), result.filesImported);
+    try std.testing.expectEqual(@as(u64, 0), result.copiedFiles);
+    try std.testing.expectEqual(@as(u64, 0), result.copiedRecords);
+
+    // The README.md that createDatabase added to the new destination is not in the empty source, so it is pruned.
+    try std.testing.expectEqual(@as(usize, 1), result.prunedFiles.len);
+    try std.testing.expectEqualStrings("README.md", result.prunedFiles[0]);
+}
+
+test "replicate copies a v6 database, reports progress, and a second replicate copies nothing" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
+    const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
+    const source = try node_api.open_storage.openStorage(allocator, io, log, "", sourceDir, null, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, log, "", destDir, null, null, null);
+    const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+
+    var recorder: progress_recorder.ProgressRecorder = .{ .allocator = allocator };
+    const Record = struct {
+        fn call(context: ?*anyopaque, _: std.Io, _: ILog, message: ?[]const u8) void {
+            const self: *progress_recorder.ProgressRecorder = @ptrCast(@alignCast(context.?));
+            self.record(message orelse "");
+        }
+    };
+    const progressCallback: node_api.media_file_database.ProgressCallback = .{ .context = &recorder, .function = Record.call };
+
+    const result = try replicate.replicate(allocator, io, log, sourceDir, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, null, progressCallback);
+    try std.testing.expectEqual(@as(u64, 1), result.filesImported);
+    try std.testing.expectEqual(@as(u64, 3), result.copiedFiles);
+    try std.testing.expectEqual(@as(u64, 1), result.copiedRecords);
+    try std.testing.expectEqual(@as(usize, 0), result.prunedFiles.len);
+    try std.testing.expectEqualStrings("Copied 1", recorder.messages.items[0]);
+    try std.testing.expectEqualStrings("Copied 3 files, 1 records", recorder.messages.items[recorder.messages.items.len - 1]);
+
+    const config = (try node_api.open_storage.openStorage(allocator, io, log, "", destDir, null, null, null)).rawStorage;
+    const configData = (try config.read(allocator, io, log, ".db/config.json")).?;
+    try std.testing.expectEqualStrings(try std.json.Stringify.valueAlloc(allocator, .{
+        .origin = sourceDir,
+    }, .{ .whitespace = .indent_2 }), configData);
+
+    // The replication time and the content hash are in the state file.
+    const state = (try api.database_state.loadDatabaseState(allocator, io, log, config)).?;
+    try std.testing.expectEqualStrings("2022-01-01T00:00:00.000Z", state.lastReplicatedAt.?);
+    try std.testing.expectEqualSlices(u8, (try node_api.tree.getDatabaseContentHash(allocator, io, log, dest.storage)).?, state.contentHash.?);
+
+    const secondSourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    const secondResult = try replicate.replicate(allocator, io, log, sourceDir, source.storage, secondSourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, null, null);
+    try std.testing.expectEqual(@as(u64, 0), secondResult.copiedFiles);
+    try std.testing.expectEqual(@as(u64, 0), secondResult.copiedRecords);
+}
+
+test "replicate with a path filter only copies the matching files" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
+    const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
+    const source = try node_api.open_storage.openStorage(allocator, io, log, "", sourceDir, null, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, log, "", destDir, null, null, null);
+    const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+
+    const result = try replicate.replicate(allocator, io, log, sourceDir, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, .{ .pathFilter = "thumb" }, null);
+    try std.testing.expectEqual(@as(u64, 1), result.copiedFiles);
+    try std.testing.expect(test_files.fileExists(io, try std.fs.path.join(allocator, &.{ destDir, "thumb", "89171cd9-a652-4047-b869-1154bf2c95a1" })));
+    try std.testing.expect(!test_files.fileExists(io, try std.fs.path.join(allocator, &.{ destDir, "asset", "89171cd9-a652-4047-b869-1154bf2c95a1" })));
+}
+
+//
+// A file to put in a database: its name and its contents.
+//
+const IFileToStore = struct {
+    // Where the file lives.
+    name: []const u8,
+
+    // What it holds.
+    contents: []const u8,
+};
+
+//
+// Builds a storage holding the given files and a merkle tree describing exactly them.
+//
+fn makeDatabase(allocator: std.mem.Allocator, io: std.Io, log: ILog, dir: []const u8, id: []const u8, files: []const IFileToStore) !IStorage {
+    const storage = try test_files.directoryStorage(allocator, io, dir);
+    var tree = merkle_tree.createTree(id);
+    for (files) |file| {
+        try storage.write(allocator, io, file.name, "image/jpeg", file.contents);
+        tree = try merkle_tree.addItem(allocator, &tree, .{
+            .name = file.name,
+            .hash = try makeHash(allocator, file.contents),
+            .length = file.contents.len,
+            .lastModified = 1_767_225_600_000,
+        });
+    }
+    var metadata = try node_api.media_file_database.emptyDatabaseMetadata(allocator);
+    try metadata.put(allocator, "filesImported", .{ .number = @floatFromInt(files.len) });
+    tree.databaseMetadata = metadata;
+    tree.merkle = try merkle_tree.buildMerkleTree(allocator, tree.sort);
+    tree.dirty = false;
+    try merkle_tree.saveTree(allocator, io, log, ".db/files.dat", &tree, storage, "FTRE");
+    return storage;
+}
+
+//
+// The same photo imported twice.
+//
+const PHOTO = "the same photo imported twice";
+
+test "a file the destination lacks arrives under its own name" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+    const source = try makeDatabase(allocator, io, log, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-source" }), dbId, &.{
+        .{ .name = "asset/first-import", .contents = PHOTO },
+        .{ .name = "asset/second-import", .contents = PHOTO },
+    });
+    const destination = try makeDatabase(allocator, io, log, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-dest" }), dbId, &.{
+        .{ .name = "asset/second-import", .contents = PHOTO },
+    });
+
+    _ = try replicate.replicate(allocator, io, log, "mock://source", source, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), destination, destination, null, null);
+
+    try std.testing.expect(try destination.fileExists(allocator, io, "asset/first-import"));
+    const destinationTree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", destination, "FTRE")).?;
+    try std.testing.expect(try merkle_tree.getItemInfo(&destinationTree, "asset/first-import") != null);
+}
+
+test "a name only the destination has is the one pruned from its tree" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const dbId = try fixture.uuidGenerator.generate(allocator, io);
+    const source = try makeDatabase(allocator, io, log, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-source" }), dbId, &.{
+        .{ .name = "asset/second-import", .contents = PHOTO },
+    });
+    const destination = try makeDatabase(allocator, io, log, try std.fs.path.join(allocator, &.{ fixture.dir, "dup-dest" }), dbId, &.{
+        .{ .name = "asset/first-import", .contents = PHOTO },
+        .{ .name = "asset/second-import", .contents = PHOTO },
+    });
+
+    const result = try replicate.replicate(allocator, io, log, "mock://source", source, fixture.sourceBdb, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), destination, destination, null, null);
+
+    try expectStrings(&.{"asset/first-import"}, result.prunedFiles);
+    const destinationTree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", destination, "FTRE")).?;
+    try std.testing.expect(try merkle_tree.getItemInfo(&destinationTree, "asset/first-import") == null);
+    try std.testing.expect(try merkle_tree.getItemInfo(&destinationTree, "asset/second-import") != null);
+}
+
+//
+// Replicates from one path to another in the given mode, and returns the destination's files tree.
+//
+fn replicateTo(allocator: std.mem.Allocator, io: std.Io, log: ILog, fixture: *ReplicateFixture, sourcePath: []const u8, destPath: []const u8, partial: bool) !IMerkleTree {
+    const source = try node_api.open_storage.openStorage(allocator, io, log, "", sourcePath, null, null, null);
+    const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    const dest = try node_api.open_storage.openStorage(allocator, io, log, "", destPath, null, null, null);
+    _ = try replicate.replicate(allocator, io, log, sourcePath, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, .{ .partial = partial }, null);
+    return (try node_api.tree.loadMerkleTree(allocator, io, log, dest.storage)).?;
+}
+
+test "is not marked partial" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const originPath = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(originPath).?);
+
+    // The phone's replica: partial, and marked so.
+    const partialPath = try std.fs.path.join(allocator, &.{ fixture.dir, "partial" });
+    const partialTree = try replicateTo(allocator, io, log, fixture, originPath, partialPath, true);
+    try std.testing.expect(node_api.media_file_database.isPartialDatabase(partialTree.databaseMetadata));
+
+    // A lost origin rebuilt from it, in full.
+    const rebuiltTree = try replicateTo(allocator, io, log, fixture, partialPath, try std.fs.path.join(allocator, &.{ fixture.dir, "rebuilt" }), false);
+
+    try std.testing.expect(rebuiltTree.databaseMetadata.?.get("isPartial").?.boolean == false);
+}
+
+test "keeps the rest of the source's metadata" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const originPath = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(originPath).?);
+    const partialPath = try std.fs.path.join(allocator, &.{ fixture.dir, "partial" });
+    const partialTree = try replicateTo(allocator, io, log, fixture, originPath, partialPath, true);
+
+    const rebuiltTree = try replicateTo(allocator, io, log, fixture, partialPath, try std.fs.path.join(allocator, &.{ fixture.dir, "rebuilt" }), false);
+
+    try std.testing.expectEqual(node_api.media_file_database.getFilesImported(partialTree.databaseMetadata), node_api.media_file_database.getFilesImported(rebuiltTree.databaseMetadata));
+}
+
+test "replicate deletes a record the destination holds and the source does not" {
+    const log = utils.mute_log.MuteLog.init();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const fixture = try makeReplicateFixture(allocator, io);
+    defer temp_dirs.removeTempDir(io, fixture.dir);
+    const sourceDir = try temp_dirs.copyTestDatabase(allocator, io, "v6");
+    defer temp_dirs.removeTempDir(io, std.fs.path.dirname(sourceDir).?);
+    const destDir = try std.fs.path.join(allocator, &.{ fixture.dir, "replica" });
+    const source = try node_api.open_storage.openStorage(allocator, io, log, "", sourceDir, null, null, null);
+    const dest = try node_api.open_storage.openStorage(allocator, io, log, "", destDir, null, null, null);
+    const sourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    _ = try replicate.replicate(allocator, io, log, sourceDir, source.storage, sourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, null, null);
+
+    // The replica gains a record the source never had.
+    const extraId = "00000000-0000-4000-8000-0000000000ee";
+    const destDb = try node_api.media_file_database.createMediaFileDatabase(allocator, dest.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    var extraRecord = try @import("serialization-zig").bson.BsonDocument.fromFields(allocator, &.{
+        .{
+            .key = "_id",
+            .value = .{ .string = extraId },
+        },
+        .{
+            .key = "origFileName",
+            .value = .{ .string = "extra.jpg" },
+        },
+    });
+    try destDb.metadataCollection.insertOne(io, log, &extraRecord, null);
+    try destDb.bsonDatabase.commit(io, log);
+    try destDb.bsonDatabase.flush();
+
+    const secondSourceDb = try node_api.media_file_database.createMediaFileDatabase(allocator, source.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    const result = try replicate.replicate(allocator, io, log, sourceDir, source.storage, secondSourceDb.bsonDatabase, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider(), dest.storage, dest.rawStorage, null, null);
+
+    try std.testing.expectEqual(@as(u64, 1), result.copiedRecords);
+    const checkDb = try node_api.media_file_database.createMediaFileDatabase(allocator, dest.storage, fixture.uuidGenerator.uuidGenerator(), fixture.timestampProvider.timestampProvider());
+    try std.testing.expect((try checkDb.metadataCollection.getOne(io, log, extraId)) == null);
+    try checkDb.bsonDatabase.flush();
+}

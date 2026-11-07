@@ -1,40 +1,40 @@
 # CLI Manual Test: `dbs list` With No Entries
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `psi dbs list` shows an empty-state message when no databases are
 configured.
 
-## Prerequisites
-
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-Each `dbs` test isolates the user's databases.json by overriding
+Each `dbs` test isolates the user's `databases.toml` by overriding
 `PHOTOSPHERE_CONFIG_DIR`. The smoke-test infrastructure does this with an
 auto-cleared temp dir. Use the same approach below.
 
-## Steps
+## Prep
 
-### 1. Point the CLI at an empty config directory
+From the repo root, build the CLI, put it on the PATH and point the CLI at an empty config directory:
 
 ```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-list-empty
+mkdir -p /tmp/psi-cli-dbs-list-empty/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-list-empty/config
 ```
 
 Expected:
-- `/tmp/psi-test/config` exists and contains no `databases.json` file.
+- `/tmp/psi-cli-dbs-list-empty/config` exists and contains no `databases.toml` file.
 
----
+## Test
 
-### 2. List databases
+### 1. List databases
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:
 - Output includes `No databases`.
+
+## Check
+
+The list output in step 1 is the check.

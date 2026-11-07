@@ -1,70 +1,59 @@
 # CLI Manual Test: Replicate a Database With a Deleted Asset
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that replicating a database which has had an asset removed produces a
 replica that also lacks the deleted asset.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, take a working copy of the v6 fixture and remove its known asset `89171cd9-a652-4047-b869-1154bf2c95a1`:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Take a working copy of the v6 fixture and remove an asset
-
-The v6 fixture ships a known asset id `89171cd9-a652-4047-b869-1154bf2c95a1`.
-
-```bash
-cp -r ../../test/dbs/v6 /tmp/psi-test/source
-bun run start -- remove --db /tmp/psi-test/source 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-replication-replicate-deleted-asset
+mkdir -p /tmp/psi-cli-replication-replicate-deleted-asset
+cp -r test/dbs/v6 /tmp/psi-cli-replication-replicate-deleted-asset/source
+psi remove --db /tmp/psi-cli-replication-replicate-deleted-asset/source 89171cd9-a652-4047-b869-1154bf2c95a1 --verbose --yes
 ```
 
 Expected:
 - Output includes `Successfully removed asset`.
-- The asset files are gone from `/tmp/psi-test/source/asset/`, `display/`, and `thumb/`.
+- The asset files are gone from `/tmp/psi-cli-replication-replicate-deleted-asset/source/asset/`, `display/`, and `thumb/`.
 
----
+## Test
 
-### 3. Replicate the source to a fresh destination
+### 1. Replicate the source to a fresh destination
 
 ```bash
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+psi replicate --db /tmp/psi-cli-replication-replicate-deleted-asset/source --dest /tmp/psi-cli-replication-replicate-deleted-asset/replica --yes --force
 ```
 
 Expected:
 - Replication completes successfully.
 
----
+## Check
 
-### 4. Confirm the deleted asset is also absent from the replica
+### 2. Confirm the deleted asset is also absent from the replica
 
 ```bash
-ls /tmp/psi-test/replica/asset | grep 89171cd9-a652-4047-b869-1154bf2c95a1
+find /tmp/psi-cli-replication-replicate-deleted-asset/replica -name '89171cd9-a652-4047-b869-1154bf2c95a1*'
 ```
 
 Expected:
-- The command produces no output.
+- The command produces no output. The v6 fixture holds only this one asset, so the replica has no `asset/`, `display/` or `thumb/` file for it, and those folders may not exist at all.
 
 ---
 
-### 5. Confirm the replica's root hash matches the source's
+### 3. Confirm the replica matches the source
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/source
-bun run start -- root-hash --db /tmp/psi-test/replica
+psi root-hash --db /tmp/psi-cli-replication-replicate-deleted-asset/source
+psi root-hash --db /tmp/psi-cli-replication-replicate-deleted-asset/replica
+psi compare --db /tmp/psi-cli-replication-replicate-deleted-asset/source --dest /tmp/psi-cli-replication-replicate-deleted-asset/replica --yes
 ```
 
 Expected:
-- The two values are identical.
-- `bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes` reports `No differences detected`.
+- The two root hashes are identical.
+- `compare` reports `No differences detected`.

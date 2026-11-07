@@ -1,0 +1,126 @@
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const utils = @import("utils-zig");
+const task_queue_zig = @import("ziggy").task_queue;
+const api = @import("api-zig");
+const replicate = @import("replicate.zig");
+const errors = utils.errors;
+const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
+const TaskQueue = task_queue_zig.task_queue.TaskQueue;
+const Timers = @import("ziggy").timers.Timers;
+const TaskStatus = task_queue_zig.types.TaskStatus;
+const ITaskEventData = task_queue_zig.types.ITaskEventData;
+const IReplicationResult = replicate.IReplicationResult;
+const IReplicateDatabaseData = api.replicate_database_types.IReplicateDatabaseData;
+const IReplicateProgressEvent = api.replicate_database_types.IReplicateProgressEvent;
+
+//
+// Progress callback fired for each progress event emitted by the replicate-database worker.
+// A closure: `function` is called with `context`. The progress string is only valid during the call.
+//
+pub const ReplicateProgressCallback = struct {
+    // The state of the callback, passed to function.
+    context: ?*anyopaque,
+
+    // The callback function.
+    function: *const fn (context: ?*anyopaque, io: std.Io, log: ILog, progress: []const u8) void,
+
+    //
+    // Invokes the callback.
+    //
+    pub fn call(self: ReplicateProgressCallback, io: std.Io, log: ILog, progress: []const u8) void {
+        self.function(self.context, io, log, progress);
+    }
+};
+
+//
+// Converts the replicate-database task data to the JSON value that is queued (optional keys
+// that are not set are left out).
+//
+pub fn replicateDatabaseDataToJson(allocator: std.mem.Allocator, data: IReplicateDatabaseData) !std.json.Value {
+    const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
+    return std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
+}
+
+//
+// Forwards replicate-progress task events to the ReplicateProgressCallback.
+//
+fn onReplicateProgressMessage(context: ?*anyopaque, io: std.Io, _: std.mem.Allocator, _: Timers, log: ILog, data: ITaskEventData) anyerror!void {
+    const onProgress: *const ReplicateProgressCallback = @ptrCast(@alignCast(context.?));
+    const message = switch (data.event) {
+        .object => |object| object,
+        else => {
+            return;
+        },
+    };
+    const progress = message.get("progress") orelse {
+        return;
+    };
+    switch (progress) {
+        .string => |text| onProgress.call(io, log, text),
+        else => {},
+    }
+}
+
+//
+// The last non-empty part of a path split on either separator, or null when there is none.
+//
+fn lastPathPart(path: []const u8) ?[]const u8 {
+    var parts = std.mem.tokenizeAny(u8, path, "\\/");
+    var last: ?[]const u8 = null;
+    while (parts.next()) |part| {
+        last = part;
+    }
+    return last;
+}
+
+//
+// Replicates a database via the replicate-database background task and waits for completion.
+// Both the CLI and the desktop dialog call this: it encapsulates the TaskQueue dance (subscribe,
+// addTask, awaitTask, shutdown) so callers do not duplicate it.
+//
+// The task is queued against the registered IQueueBackend (set up at process startup by the caller).
+//
+// Throws the task error message when replication fails; returns the replication summary on success.
+//
+pub fn replicateDatabase(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    log: ILog,
+    timers: Timers,
+    uuidGenerator: IUuidGenerator,
+    data: IReplicateDatabaseData,
+    onProgress: ?*const ReplicateProgressCallback,
+) !IReplicationResult {
+    const queue = try TaskQueue.init(allocator, uuidGenerator, data.sourcePath);
+    defer queue.deinit(io, allocator, log);
+
+    if (onProgress) |progressCallback| {
+        _ = try queue.onTaskEvent(allocator, "replicate-progress", .{
+            .context = @constCast(progressCallback),
+            .function = onReplicateProgressMessage,
+        });
+    }
+
+    // Named after the destination, because that is what tells two replications of the same database
+    // apart, and it is what the user picked.
+    const destName = lastPathPart(data.destPath) orelse data.destPath;
+    var taggedData: IReplicateDatabaseData = data;
+    taggedData.job = .{
+        .id = try std.fmt.allocPrint(allocator, "replicate:{s}", .{data.destPath}),
+        .name = try std.fmt.allocPrint(allocator, "Replicating to {s}", .{destName}),
+        .cancelSource = data.sourcePath,
+    };
+    const taskId = try queue.addTask(io, allocator, log, "replicate-database", try replicateDatabaseDataToJson(allocator, taggedData), null, null);
+    const result = try queue.awaitTask(io, allocator, timers, log, taskId);
+    queue.shutdown(io, allocator, log);
+
+    const taskResult = result orelse {
+        return errors.throwError("Replication was cancelled before completion", .{});
+    };
+    if (taskResult.status != TaskStatus.Succeeded) {
+        const errorMessage = taskResult.errorMessage orelse "";
+        return errors.throwError("{s}", .{if (errorMessage.len > 0) errorMessage else "Replication failed"});
+    }
+    return try std.json.parseFromValueLeaky(IReplicationResult, allocator, taskResult.outputs orelse .null, .{ .ignore_unknown_fields = true });
+}

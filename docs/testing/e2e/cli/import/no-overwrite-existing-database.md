@@ -1,51 +1,40 @@
 # CLI Manual Test: Cannot Create Database Over Existing
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `init` refuses to overwrite an existing database directory.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and create a new database:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-no-overwrite-existing-database
+psi init --db /tmp/psi-cli-import-no-overwrite-existing-database/source --yes
 ```
 
-## Steps
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-no-overwrite-existing-database/source`.
 
-### 1. Clean up any previous test run
+## Test
 
-```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a new database
+### 1. Attempt to create a second database in the same directory
 
 ```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-```
-
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
-
----
-
-### 3. Attempt to create a second database in the same directory
-
-```bash
-bun run start -- init --db /tmp/psi-test/source --yes
+psi init --db /tmp/psi-cli-import-no-overwrite-existing-database/source --yes
 ```
 
 Expected:
 - The command exits with a non-zero status.
 - An error message indicates the database directory already contains a database.
 
----
+## Check
 
-### 4. Confirm the original database is intact
+### 2. Confirm the original database is intact
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-no-overwrite-existing-database/source
 ```
 
 Expected:

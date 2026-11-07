@@ -1,45 +1,43 @@
 # CLI Manual Test: `dbs add` via CLI Flags
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `dbs add` can register a database non-interactively using `--name`
 and `--path`.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI, put it on the PATH and point the CLI at an empty config directory:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-add-via-flags
+mkdir -p /tmp/psi-cli-dbs-add-via-flags/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-add-via-flags/config
 ```
 
-## Steps
+Expected: no output.
 
-### 1. Point the CLI at an empty config directory
+## Test
 
-```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-```
-
----
-
-### 2. Add a database entry via CLI flags
+### 1. Add a database entry via CLI flags
 
 ```bash
-bun run start -- dbs add --yes --name cli-db --path /tmp/psi-test/cli-db-path
+psi dbs add --yes --name cli-db --path /tmp/psi-cli-dbs-add-via-flags/cli-db-path
 ```
 
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 3. Confirm the new entry is listed
+### 2. Confirm the new entry is listed
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:
 - Output contains `cli-db`.
-- Output contains `/tmp/psi-test/cli-db-path`.
+- Output contains `/tmp/psi-cli-dbs-add-via-flags/cli-db-path`.

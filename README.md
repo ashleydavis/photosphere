@@ -23,8 +23,7 @@ Visit the [Photosphere website](https://photosphere.codecapers.com.au/) to learn
 Note: The self-hosted server option has been discontinued for now, but may be reinstated later if there's demand for it.
 
 Contained herein are the code for Photosphere's:
-- Desktop app
-- Mobile apps
+- Photosphere App (desktop and mobile)
 - CLI tool
 
 Early development of Photosphere was covered in the book [The Feedback-Driven Developer](https://tfdd.codecapers.com.au/).
@@ -47,156 +46,20 @@ To move assets from Google Photos:
 - Use Google Takeout to export all your assets to a series of large zip files.
 - Then use `psi add` on the directory containing the zip files (it can unpack zip files for you).
 
-## Project layout
+To have Photosphere do it for you, switch on "Automatic import" in the desktop or mobile app's settings: it makes a private photo database for you, reads your photo folders or your phone's photo library, and takes in whatever is new. From the command line the same thing is `psi add --watch`, with `psi consolidate` to keep a remote copy in step. See [Automatic photo backup](docs/automatic-photo-backup.md).
 
-- photosphere/
-    - apps/
-        - bdb-cli - BSON database CLI tool (for testing and debugging)
-        - cli - Main CLI tool (psi)
-        - desktop - Electron desktop application
-        - desktop-frontend - React UI for Electron app
-        - dev-frontend - Development web frontend
-        - dev-server - WebSocket development server
-        - mk-cli - Merkle tree CLI tool (for testing and debugging)
-    - packages/
-        - api - Core API for database operations
-        - bdb - BSON database implementation
-        - config - Shared configuration values such as the application version
-        - encryption - Encryption primitives (AES-256-CBC + RSA hybrid, key management, streaming)
-        - fuzzy-match - Fuzzy string matching based on Levenshtein edit distance
-        - lan-share - Local-network sharing of database configs and secrets between devices
-        - merkle-tree - Merkle tree data structure
-        - node-api - Node.js API for database operations
-        - node-utils - Node.js utility functions
-        - rest-api - REST API server (used by the desktop app to serve local photos)
-        - serialization - Serialization utilities
-        - storage - Storage abstraction layer
-        - task-queue - Task queue system
-        - tools - Tool management and media processing (ffmpeg, ffprobe, ImageMagick)
-        - user-interface - Shared React UI components
-        - utils - General utility functions
-        - vault - Cross-platform secrets management with multiple vault backends
-    - test - Data for testing.
+## Bundled tools and licences
+
+The Photosphere App bundles ImageMagick (ImageMagick licence) and FFmpeg (LGPL-2.1+), with ImageMagick's libjpeg, libpng, libwebp and zlib delegates, built from source into the app and called in process, so image and video processing works without anything installed. The CLI (`psi`) bundles them the same way, built into the program and called in process, so it needs no ImageMagick or ffmpeg installed either. The built-in ImageMagick has only the JPEG, PNG, WebP and zlib delegates, so it cannot read AVIF, TIFF, JPEG 2000, JPEG XL, OpenEXR, DjVu, FlashPix, WMF, XWD or DNG files, and importing one of those fails in the CLI and the App. HEIC and HEIF pictures are read by the built-in FFmpeg instead: it gives their size, and decodes them into the JPEG the app makes its smaller pictures from, while their EXIF is read straight from the file. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Photosphere's own code is MIT licensed (see [LICENSE](LICENSE)). To update the bundled versions, see [docs/updating-mobile-imagemagick-ffmpeg.md](docs/updating-mobile-imagemagick-ffmpeg.md).
 
 ## Running Photosphere locally for development
 
-### Pre-reqs
+After `bun install`, run `bun run setup` for the one-time, per-platform environment setup. It fans out to each package's own `setup` script (`bun --filter '*' setup`): the Android SDK and NDK on Linux/macOS, an Xcode check on macOS, and the WebView2 SDK, WiX Toolset and C++ toolchain on Windows, each skipping cleanly where it does not apply. Install the git hooks (`bash scripts/install-hooks.sh`) and the pinned toolchain (`mise install`) separately. See [Development](docs/development.md) for the full walkthrough.
 
-You need [Bun](https://bun.sh/docs/installation) installed to run this code. Tested against Bun v1.3.10 on Ubuntu Linux, Windows 10/11 and MacOS.
-
-### Setup
-
-First, clone a local copy of the code repository:
-
-```bash
-git clone git@github.com:ashleydavis/photosphere.git
-```
-
-Then install all dependencies at the root of the monorepo:
-
-```bash
-cd photosphere
-bun install
-```
-
-### Compile the project
-
-THIS STEP IS OPTIONAL
-
-You don't have to compile the project before doing a build. You only should do this step if you change the code and want to make sure the TypeScript code still compiles after your change.
-
-```bash
-bun run compile
-```
-
-### Running tests
-
-You can run tests for all packages and apps from the root of the monorepo:
-
-**Run all tests**
-
-```bash
-bun run test
-```
-
-**Run tests in watch mode**
-
-```bash
-bun run test:watch
-```
-
-**Run smoke tests for the Electron app**
-
-```bash
-bun run test:electron
-```
-
-This will build the Electron app and run Playwright smoke tests.
-
-**Run a single unit test by name or pattern**
-
-```bash
-bun run test -- <test-name-or-pattern>
-```
-
-**Run CLI smoke tests**
-
-```bash
-bun run test:cli
-```
-
-**Run a single CLI smoke test by number or name**
-
-```bash
-bun run test:cli -- <number-or-name>
-```
-
-**Run encrypted CLI smoke tests**
-
-```bash
-bun run test:cli:encrypted
-```
-
-**Run tests using the shell script**
-
-Using the shell script doesn't run the tests in parallel and that makes it easier to see where a failure originates.
-
-
-```bash
-./run-tests.sh
-```
-
-This script runs all tests across the monorepo and provides a summary of results.
-
-**Run performance benchmarks**
-
-```bash
-bun run perf
-```
-
-### Building and running the Electron app
-
-You can build and run the Electron desktop application directly from the root of the monorepo:
-
-**Development mode:**
-```bash
-bun run dev
-```
-
-This will bundle the renderer process and start the Electron app in development mode with hot reload.
-
-**Production build:**
-```bash
-bun run build
-```
-
-This will bundle the renderer process and build the Electron app for distribution.
-
-### Other instructions
-
-To run the CLI tool, follow the instructions in [./apps/cli/README.md](./apps/cli/README.md).
-
-To start the dev-server, follow the instructions in [./apps/dev-server/README.md](./apps/dev-server/README.md).
-
-To start the dev-frontend, follow the instructions in [./apps/dev-frontend/README.md](./apps/dev-frontend/README.md).
+- [Development](docs/development.md) - Setup, the project layout, the common commands, and how to run each app.
+- [Ziggy](https://github.com/ashleydavis/ziggy) - Ziggy, the application framework the Photosphere App runs on for Windows, macOS, Linux, Android and iOS, in its own repository. Its [architecture guide](https://github.com/ashleydavis/ziggy/blob/main/docs/architecture.md) covers its parts and protocol.
+- [Photosphere on Ziggy](docs/photosphere-on-ziggy.md) - How Photosphere takes Ziggy and how it is built on it.
+- [Photosphere App](apps/photosphere/README.md) - Building, running and packaging the app on each platform.
+- [Testing](docs/testing/README.md) - Unit tests, CLI and Photosphere App smoke tests, and the manual end-to-end scripts.
+- [UI stories](packages/user-interface/src/stories/README.md) - Every page, modal, dialog, and component in isolation, and the story player that cycles them on desktop, Android, and iOS.
 

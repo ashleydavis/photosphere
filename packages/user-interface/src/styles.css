@@ -97,6 +97,45 @@ body.mobile #navbar {
     height: 100px;
 }
 
+/*
+ * The middle of the nav bar, between the two sidebar buttons, which are pinned to the edges.
+ *
+ * Everything that can pile up in the bar lives in here: the page links, the loading and syncing
+ * spinners, the jobs indicator, the photo count, the update badge. On a phone there is not room for
+ * all of it at once, and when it overflowed the whole bar it pushed the right sidebar button off the
+ * screen, leaving no way to open that sidebar at all. Scrolling this part sideways means the bar
+ * runs out of room here rather than at the edges, so both sidebar buttons stay reachable however
+ * much is in the middle.
+ *
+ * min-width: 0 is what actually lets it shrink: a flex item defaults to min-width: auto, which is
+ * its content width, so without this the middle refuses to get smaller than its contents and pushes
+ * the buttons out exactly as before.
+ *
+ * The scrollbar is hidden because a horizontal bar across the nav bar reads as breakage rather than
+ * as an affordance, and touch scrolling needs no bar. Same treatment as .gallery-scroller.
+ */
+.navbar-scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+.navbar-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+/*
+ * Stop the contents squashing instead of scrolling. A flex item shrinks by default, so without this
+ * the buttons and indicators would compress themselves to fit the narrower middle and the overflow
+ * that is supposed to become scroll would never happen.
+ */
+.navbar-scroll > * {
+    flex-shrink: 0;
+}
+
 #main {
     padding-top: 52px;
 }
@@ -226,6 +265,47 @@ body.mobile #navbar {
     bottom: 0 !important;
     left: 0 !important;
     width: auto !important;
+}
+
+/* Dialog animation.
+
+   Joy's Modal has no transition of its own, so a centred dialog and its backdrop would otherwise
+   appear instantly. They are animated here rather than through an `sx` prop so that every dialog
+   picks it up, including the few that do not use `desktopDialogSx`.
+
+   This covers the desktop form only. On a phone a dialog is a Joy Drawer, which slides itself;
+   see `mobileSheetDrawerSx`. There is no matching exit animation because Joy's Modal unmounts the
+   moment it closes, leaving nothing to animate out. */
+
+@keyframes modal-backdrop-enter {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes modal-dialog-enter {
+    /* Joy centres its dialog with a translate, so the animation has to carry that translate or the
+       dialog lurches out of the centre for the length of it. */
+    from { transform: translate(-50%, -50%) scale(0.96); opacity: 0; }
+    to   { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+}
+
+.MuiModal-backdrop {
+    animation: modal-backdrop-enter 0.15s ease-out;
+}
+
+.MuiModalDialog-root {
+    animation: modal-dialog-enter 0.15s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .MuiModal-backdrop,
+    .MuiModalDialog-root {
+        animation: none;
+    }
+
+    .MuiDrawer-root {
+        --Drawer-transitionDuration: 0s;
+    }
 }
 
 /* Info page */
@@ -459,3 +539,30 @@ body.mobile .photo-container .full.loaded {
     background-color: #f0f0f0;
 }
 
+
+/*
+ * A photo that automatic import brought in on its own fades and scales into place, so the user can
+ * see something happened. Only automatic arrivals get this class: a photo the user imported is
+ * something they are already watching, and animating the whole gallery on load would be noise.
+ */
+@keyframes gallery-thumb-arrive {
+    from {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.gallery-thumb-arrived {
+    animation: gallery-thumb-arrive 400ms ease-out;
+}
+
+/* Anyone who has asked not to be shown motion gets the photo, without the movement. */
+@media (prefers-reduced-motion: reduce) {
+    .gallery-thumb-arrived {
+        animation: none;
+    }
+}

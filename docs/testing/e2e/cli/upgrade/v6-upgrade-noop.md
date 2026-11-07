@@ -1,50 +1,43 @@
 # CLI Manual Test: Upgrading a v6 Database Is a No-Op
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that running `upgrade` on a v6 database reports that no upgrade is needed
 and leaves the database unchanged.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and copy the v6 fixture to a working directory:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-upgrade-v6-upgrade-noop
+mkdir -p /tmp/psi-cli-upgrade-v6-upgrade-noop
+cp -r test/dbs/v6 /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade
 ```
 
-## Steps
+Expected:
+- The fixture is copied to `/tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade`.
 
-### 1. Clean up any previous test run
+## Test
 
-```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Copy the v6 fixture to a working directory
+### 1. Run upgrade
 
 ```bash
-cp -r ../../test/dbs/v6 /tmp/psi-test/upgrade
-```
-
----
-
-### 3. Run upgrade
-
-```bash
-bun run start -- upgrade --db /tmp/psi-test/upgrade --yes
+psi upgrade --db /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade --yes
 ```
 
 Expected:
 - Output includes `Database is already at the latest version (6)`.
 
----
+## Check
 
-### 4. Confirm version and integrity
+### 2. Confirm version and integrity
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/upgrade --yes
-bun run start -- verify --db /tmp/psi-test/upgrade --yes
+psi summary --db /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade --yes
+psi verify --db /tmp/psi-cli-upgrade-v6-upgrade-noop/upgrade --yes
 ```
 
 Expected:

@@ -1,0 +1,184 @@
+const std = @import("std");
+const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
+const virtual_time_io = @import("../../../utils-zig/src/test/virtual-time-io.zig");
+
+//
+// Creates a unique directory path under the package's .zig-cache directory for test isolation.
+//
+fn uniqueTmpDir(allocator: std.mem.Allocator, io: std.Io) ![]const u8 {
+    var random_bytes: [8]u8 = undefined;
+    io.random(&random_bytes);
+    return std.fmt.allocPrint(allocator, ".zig-cache/tmp/photosphere-uuid-gen-test-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
+}
+
+test "generate() succeeds and creates the counter directory when TEST_TMP_DIR does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    try std.testing.expect(!node_utils.fs.pathExists(io, tmpDir));
+
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    const uuid = try generator.generate(allocator, io);
+
+    try std.testing.expect(uuid.len > 0);
+    try std.testing.expect(node_utils.fs.pathExists(io, tmpDir));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}
+
+test "generate() returns unique values on successive calls" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    const first = try generator.generate(allocator, io);
+    const second = try generator.generate(allocator, io);
+
+    try std.testing.expect(!std.mem.eql(u8, first, second));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}
+
+test "generate() continues the counter stored in the file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    // The values the generator gives for counters 1 and 2.
+    try std.testing.expectEqualStrings("93694f6e-3acb-4a1c-afd2-5fb8397575a5", try generator.uuidGenerator().generate(allocator, io));
+
+    // A second generator (like a second process) continues from the counter file.
+    var other_generator = try TestUuidGenerator.init(allocator);
+    try std.testing.expectEqualStrings("5c724a85-6b64-4e6a-9e15-dfa0821821e1", try other_generator.generate(allocator, io));
+    const counter_text = try std.Io.Dir.cwd().readFileAlloc(io, generator.counterFilePath, allocator, .unlimited);
+    try std.testing.expectEqualStrings("2", counter_text);
+    try std.testing.expect(!node_utils.fs.pathExists(io, generator.lockFilePath));
+
+    // reset() restarts the sequence.
+    generator.reset(io);
+    try std.testing.expectEqualStrings("93694f6e-3acb-4a1c-afd2-5fb8397575a5", try generator.generate(allocator, io));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}
+
+test "the counter directory defaults to ./test/tmp" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    node_utils.process_env.setEnvironMap(null);
+    const generator = try TestUuidGenerator.init(arena.allocator());
+    // path.join normalizes away the leading "./".
+    try std.testing.expectEqualStrings("test" ++ std.fs.path.sep_str ++ "tmp" ++ std.fs.path.sep_str ++ "photosphere-test-uuid-counter", generator.counterFilePath);
+    try std.testing.expectEqualStrings("test" ++ std.fs.path.sep_str ++ "tmp" ++ std.fs.path.sep_str ++ "photosphere-test-uuid-counter.lock", generator.lockFilePath);
+}
+
+//
+// Writes the counter file, generates one UUID and expects the UUID and the counter written back.
+//
+fn expectNextFromCounterText(counterText: []const u8, expectedUuid: []const u8, expectedCounterText: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+    try std.Io.Dir.cwd().createDirPath(io, tmpDir);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = generator.counterFilePath, .data = counterText });
+
+    const uuid = try generator.generate(allocator, io);
+    const writtenText = try std.Io.Dir.cwd().readFileAlloc(io, generator.counterFilePath, allocator, .unlimited);
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+    try std.testing.expectEqualStrings(expectedUuid, uuid);
+    try std.testing.expectEqualStrings(expectedCounterText, writtenText);
+}
+
+test "the counter file is read with String.prototype.trim and parseInt" {
+    // The values the generator gives for these counter files.
+    try expectNextFromCounterText("\u{00A0}7\u{3000}", "03861e30-e852-4589-96cf-87cd760ff662", "8");
+    try expectNextFromCounterText("-0", "93694f6e-3acb-4a1c-afd2-5fb8397575a5", "1");
+    try expectNextFromCounterText("abc", "93694f6e-3acb-4a1c-afd2-5fb8397575a5", "1");
+}
+
+test "a counter past the integers a double holds exactly counts on" {
+    // parseInt reads 123456789012345680000, adding one changes nothing, and String() writes it in full.
+    try expectNextFromCounterText("123456789012345678901", "00000000-ec8d-4817-8f1e-babec817ec8d", "123456789012345680000");
+}
+
+test "generate() reads a signed counter like parseInt" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+    try std.Io.Dir.cwd().createDirPath(io, tmpDir);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = generator.counterFilePath, .data = "-5" });
+
+    // The generator gives this for the counter -4, which it then stores.
+    try std.testing.expectEqualStrings("453d39f8-f079-498a-a32e-b7d6fcb7c981", try generator.generate(allocator, io));
+    try std.testing.expectEqualStrings("-4", try std.Io.Dir.cwd().readFileAlloc(io, generator.counterFilePath, allocator, .unlimited));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}
+
+test "generate() takes over a lock that has been held for more than five seconds" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var virtual_time: virtual_time_io.VirtualTimeIo = undefined;
+    virtual_time.init(std.testing.allocator);
+    defer virtual_time.deinit();
+
+    const io = virtual_time.io();
+    const tmpDir = try uniqueTmpDir(allocator, io);
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("TEST_TMP_DIR", tmpDir);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+    var generator = try TestUuidGenerator.init(allocator);
+
+    // A lock left behind by a process that died holding it.
+    try std.Io.Dir.cwd().createDirPath(io, tmpDir);
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = generator.lockFilePath, .data = "" });
+    try std.testing.expectEqualStrings("93694f6e-3acb-4a1c-afd2-5fb8397575a5", try generator.generate(allocator, io));
+    try std.testing.expect(!node_utils.fs.pathExists(io, generator.lockFilePath));
+
+    generator.reset(io);
+    try std.Io.Dir.cwd().deleteDir(io, tmpDir);
+}

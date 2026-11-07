@@ -10,11 +10,6 @@ import { useTheme } from "@mui/joy";
 export const SCROLLBAR_WIDTH = 22;
 
 //
-// Defines the size of the scrollbar hit test area.
-//
-const SCROLLBAR_HITTEST_MULTIPLIER = 3;
-
-//
 // Gutter above and below the scrollbar.
 //
 const VERTICAL_GUTTER = 2;
@@ -56,18 +51,8 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
     const [thumbHeight, setThumbHeight] = useState<number>(0);
     const [isDraggingTouch, setIsDraggingTouch] = useState(false);
     const [isDraggingMouse, setIsDraggingMouse] = useState(false);
-    const [isTouchDevice, setIsTouchDevice] = useState(false);
     const deltaY = useRef(0);
     const theme = useTheme();
-
-    useEffect(() => {
-        const checkTouchDevice = () => {
-            setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
-        };
-        checkTouchDevice();
-        window.addEventListener('resize', checkTouchDevice);
-        return () => window.removeEventListener('resize', checkTouchDevice);
-    }, []);
 
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -249,44 +234,6 @@ export function GalleryScrollbar({ scrollContainerRef, galleryLayout, scrollTo }
                 </div>
             </div>
 
-            {/* Invisible scrollbar for hit testing */  }
-            {isTouchDevice &&
-                <div
-                    className="gallery-scrollbar"
-                    style={{
-                        width: `${SCROLLBAR_WIDTH*SCROLLBAR_HITTEST_MULTIPLIER}px`,
-                        opacity: 0,
-                        pointerEvents: "auto",
-                    }}
-                    onMouseUp={event => {
-                        if (isDraggingTouch || isDraggingMouse) {
-                            return;
-                        }
-                        
-                        //
-                        // Calculate the percentage of the scrollbar clicked and scroll the gallery to that position.
-                        //
-                        const scrollbarTop = containerRef.current!.getBoundingClientRect().top;
-                        const newScrollPos = calcScrollPos(event.clientY - scrollbarTop - VERTICAL_GUTTER);
-                        scrollTo(newScrollPos);
-                    }}
-                    >
-
-                    {/* The thumb */}
-                    <div
-                        className="gallery-scrollbar-thumb"
-                        onMouseDown={onMouseDown}
-                        onTouchStart={onTouchStart}
-                        style={{
-                            position: "fixed",
-                            top: `${thumbPos}px`,
-                            height: `${thumbHeight}px`,
-                            width: `${SCROLLBAR_WIDTH*SCROLLBAR_HITTEST_MULTIPLIER}px`,
-                        }}
-                        >
-                    </div>
-                </div>
-            }
         </>
     );
 }

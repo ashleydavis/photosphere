@@ -10,7 +10,7 @@ import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import SettingsBrightness from "@mui/icons-material/SettingsBrightness";
 import Check from "@mui/icons-material/Check";
-import { useConfig } from "../context/config-context";
+import { useConfigStore } from "../context/config-store-context";
 
 //
 // The set of theme modes the user can choose between.
@@ -43,7 +43,7 @@ function renderModeIcon(mode: ThemeMode): React.ReactNode {
 //
 export function ThemeToggle() {
     const { mode, setMode } = useColorScheme();
-    const config = useConfig();
+    const config = useConfigStore();
 
     //
     // The currently selected mode, defaulting to "system" until the color scheme has hydrated.

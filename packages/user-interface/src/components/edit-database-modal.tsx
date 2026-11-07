@@ -3,13 +3,14 @@ import { log, logExceptions } from 'utils';
 import Box from '@mui/joy/Box';
 import Typography from '@mui/joy/Typography';
 import Button from '@mui/joy/Button';
-import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
-import ModalDialog from '@mui/joy/ModalDialog';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
 import Input from '@mui/joy/Input';
+import Select from '@mui/joy/Select';
+import Option from '@mui/joy/Option';
 import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
 import { usePlatform, type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
@@ -119,6 +120,14 @@ export function EditDatabaseModal({
     // Whether the Configure Secrets modal is open over the dialog.
     const [secretsModalOpen, setSecretsModalOpen] = useState(false);
 
+    // The databases that can be picked as this one's origin: every entry but this one.
+    //
+    // Typing the origin by hand is what breaks syncing. The credentials for an origin are found by
+    // matching its path against the database list, so a path with a typo in it finds no entry, gets
+    // no credentials, and names a location that does not exist. Picking from the list cannot produce
+    // either. The field stays typeable, because an origin that is not in the list is still allowed.
+    const originCandidates = databases.filter(candidate => candidate.path !== form.path);
+
     // Reset the form each time the modal becomes visible so prior state does not leak into a new session.
     useEffect(() => {
         if (open) {
@@ -176,7 +185,7 @@ export function EditDatabaseModal({
         const entryData: Omit<IDatabaseEntry, 'id'> = {
             name: trimmedName,
             description: form.description,
-            path: form.path,
+            path: form.path.trim(),
             origin: trimmedOrigin.length === 0 ? undefined : trimmedOrigin,
             s3Key: form.s3Key,
             encryptionKey: form.encryptionKey,
@@ -195,10 +204,12 @@ export function EditDatabaseModal({
         }
 
         if (entry) {
-            const originChanged = (entry.origin ?? '') !== (entryData.origin ?? '');
-            if (originChanged) {
-                await platform.setDatabaseOrigin(entryData.path, entryData.origin);
-            }
+            // Written every save, not only when the field changed. The origin is kept in two places,
+            // this entry and the database's own config, and only the second is what a sync reads.
+            // Skipping the write when the entry already agrees assumes the two cannot disagree, and
+            // when they do the disagreement is unfixable: the field shows the right origin, saving
+            // does nothing, and the database goes on never syncing with nothing to say why.
+            await platform.setDatabaseOrigin(entryData.path, entryData.origin);
             await updateDatabase(entry.name, { ...entry, ...entryData });
             log.event('Database entry updated');
         }
@@ -211,17 +222,20 @@ export function EditDatabaseModal({
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog
-                    onKeyDown={createDialogKeyHandler(handleSave, false)}
-                    sx={{ minWidth: 500, maxWidth: 700, overflowY: 'auto' }}
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={500}
+                maxWidth={700}
+                onKeyDown={createDialogKeyHandler(handleSave, false)}
                 >
-                    <ModalClose />
+                    <ModalClose data-id="edit-database-close" />
                     <DialogTitle>{entry ? 'Edit Database' : 'Add Database'}</DialogTitle>
                     <DialogContent>
                         <FormControl sx={{ mb: 1 }} error={nameError !== undefined}>
                             <FormLabel>Name</FormLabel>
                             <Input
+                                data-id="edit-database-name-input"
                                 value={form.name}
                                 onChange={event => {
                                     setForm(prev => ({ ...prev, name: event.target.value }));
@@ -238,6 +252,7 @@ export function EditDatabaseModal({
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Description</FormLabel>
                             <Input
+                                data-id="edit-database-description-input"
                                 value={form.description}
                                 onChange={event => setForm(prev => ({ ...prev, description: event.target.value }))}
                             />
@@ -247,39 +262,70 @@ export function EditDatabaseModal({
                             <FormLabel>Path</FormLabel>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <Input
+                                    data-id="edit-database-path-input"
                                     sx={{ flexGrow: 1 }}
                                     value={form.path}
                                     onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))}
                                 />
-                                <Button variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
-                                    Browse
-                                </Button>
+                                {/* A phone has no folder dialog for a database location: the user types its name instead. */}
+                                {platform.platformKind === "desktop" && (
+                                    <Button data-id="edit-database-browse-button" variant="outlined" onClick={() => handleBrowse().catch(err => log.exception('Browse error:', err as Error))}>
+                                        Browse
+                                    </Button>
+                                )}
                             </Box>
                         </FormControl>
 
-                        <FormControl sx={{ mb: 2 }}>
-                            <FormLabel>Origin</FormLabel>
-                            <Input
-                                data-id="database-origin-input"
-                                value={form.origin}
-                                onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
-                            />
-                        </FormControl>
+                        {/* The picker sits outside the FormControl, not beside the Input inside it: Joy
+                            allows a FormControl only one control component, and a Select is one. */}
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', mb: 2 }}>
+                            <FormControl sx={{ flexGrow: 1 }}>
+                                <FormLabel>Origin</FormLabel>
+                                <Input
+                                    data-id="database-origin-input"
+                                    value={form.origin}
+                                    onChange={event => setForm(prev => ({ ...prev, origin: event.target.value }))}
+                                />
+                            </FormControl>
+                            {originCandidates.length > 0
+                                && <Select
+                                    sx={{ minWidth: 160 }}
+                                    value=""
+                                    placeholder="Choose…"
+                                    onChange={(_event, selectedPath) => {
+                                        if (selectedPath) {
+                                            setForm(prev => ({ ...prev, origin: selectedPath as string }));
+                                        }
+                                    }}
+                                    slotProps={{ button: { 'data-id': 'database-origin-select' } }}
+                                >
+                                    {originCandidates.map(candidate => (
+                                        <Option
+                                            data-id={`database-origin-option-${candidate.name}`}
+                                            key={candidate.path}
+                                            value={candidate.path}
+                                            >
+                                            {candidate.name}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            }
+                        </Box>
 
                         <FormControl sx={{ mb: 1 }}>
                             <FormLabel>Secrets</FormLabel>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
+                                <Typography data-id="edit-database-secrets-summary" level="body-sm" sx={{ flexGrow: 1 }} color="neutral">
                                     {summariseSecrets()}
                                 </Typography>
-                                <Button variant="outlined" size="sm" onClick={() => setSecretsModalOpen(true)}>
+                                <Button data-id="edit-database-configure-secrets-button" variant="outlined" size="sm" onClick={() => setSecretsModalOpen(true)}>
                                     Configure secrets…
                                 </Button>
                             </Box>
                         </FormControl>
                     </DialogContent>
                     <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Cancel</Button>
+                        <Button data-id="edit-database-cancel" variant="plain" onClick={onClose}>Cancel</Button>
                         <Button
                             data-id="save-database-button"
                             onClick={logExceptions(handleSave, 'Save error')}
@@ -287,8 +333,7 @@ export function EditDatabaseModal({
                             Save
                         </Button>
                     </DialogActions>
-                </ModalDialog>
-            </Modal>
+            </ResponsiveDialog>
 
             <ConfigureSecretsModal
                 open={secretsModalOpen}

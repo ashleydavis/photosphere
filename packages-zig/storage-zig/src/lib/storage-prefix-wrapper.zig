@@ -1,0 +1,206 @@
+//
+// An implementation of storage that operates under a particular prefix.
+//
+
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const utils = @import("utils-zig");
+const storage_factory = @import("storage-factory.zig");
+
+const errors = utils.errors;
+const IFileInfo = @import("storage.zig").IFileInfo;
+const IListResult = @import("storage.zig").IListResult;
+const IStorage = @import("storage.zig").IStorage;
+const IReadStream = @import("storage.zig").IReadStream;
+const IWriteLockInfo = @import("storage.zig").IWriteLockInfo;
+const pathJoin = storage_factory.pathJoin;
+
+//
+// Storage that prepends a prefix to every path before passing it to the wrapped storage.
+//
+pub const StoragePrefixWrapper = struct {
+    // The wrapped storage (not called `storage` because `storage()` returns the interface).
+    wrappedStorage: IStorage,
+
+    // The prefix added to every path.
+    prefix: []const u8,
+
+    // The location of the storage, computed once at creation.
+    location: []const u8,
+
+    //
+    // Creates the wrapper.
+    //
+    pub fn init(allocator: std.mem.Allocator, wrappedStorage: IStorage, prefix: []const u8) !StoragePrefixWrapper {
+        if (prefix.len == 0) {
+            return errors.throwError("Prefix must not be empty.", .{});
+        }
+        return .{
+            .wrappedStorage = wrappedStorage,
+            .prefix = prefix,
+            .location = try pathJoin(allocator, &.{ wrappedStorage.location, prefix }),
+        };
+    }
+
+    //
+    // Gets the IStorage interface of this storage.
+    //
+    pub fn storage(self: *StoragePrefixWrapper) IStorage {
+        return .{ .ptr = self, .vtable = @import("storage.zig").implement(StoragePrefixWrapper), .location = self.location };
+    }
+
+    //
+    // Make a full path using the prefix.
+    //
+    fn makeFullPath(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+        if (std.mem.endsWith(u8, self.prefix, ":")) {
+            return std.mem.concat(allocator, u8, &.{ self.prefix, path });
+        }
+        else {
+            return pathJoin(allocator, &.{ self.prefix, path });
+        }
+    }
+
+    //
+    // Returns true if the specified directory is empty.
+    //
+    pub fn isEmpty(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, path: []const u8) !bool {
+        return self.wrappedStorage.isEmpty(allocator, io, try self.makeFullPath(allocator, path));
+    }
+
+    //
+    // List files in storage.
+    //
+    pub fn listFiles(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) !IListResult {
+        return self.wrappedStorage.listFiles(allocator, io, try self.makeFullPath(allocator, path), max, next);
+    }
+
+    //
+    // List directories in storage.
+    //
+    pub fn listDirs(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, path: []const u8, max: u32, next: ?[]const u8) !IListResult {
+        return self.wrappedStorage.listDirs(allocator, io, try self.makeFullPath(allocator, path), max, next);
+    }
+
+    //
+    // Returns true if the specified file exists.
+    //
+    pub fn fileExists(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !bool {
+        return self.wrappedStorage.fileExists(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Returns true if the specified directory exists (contains at least one file or subdirectory).
+    //
+    pub fn dirExists(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, dirPath: []const u8) !bool {
+        return self.wrappedStorage.dirExists(allocator, io, try self.makeFullPath(allocator, dirPath));
+    }
+
+    //
+    // How many bytes a read hands out, which only the storage underneath can say.
+    //
+    pub fn readableLength(self: *StoragePrefixWrapper, fileInfo: IFileInfo) ?u64 {
+        return self.wrappedStorage.readableLength(fileInfo);
+    }
+
+    //
+    // Writes a stream whose SHA-256 the caller already knows.
+    //
+    pub fn writeStreamHashed(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64, sha256: []const u8) !bool {
+        return self.wrappedStorage.writeStreamHashed(allocator, io, try self.makeFullPath(allocator, filePath), contentType, inputStream, contentLength, sha256);
+    }
+
+    //
+    // The SHA-256 the store kept of a file, when it can say without sending the bytes back.
+    //
+    pub fn storedHash(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?[]const u8 {
+        return self.wrappedStorage.storedHash(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Gets info about a file.
+    //
+    pub fn info(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IFileInfo {
+        return self.wrappedStorage.info(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Reads a file from storage.
+    // Returns undefined if the file doesn't exist.
+    //
+    pub fn read(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !?[]u8 {
+        return self.wrappedStorage.read(allocator, io, log, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Writes a file to storage.
+    //
+    pub fn write(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) !void {
+        return self.wrappedStorage.write(allocator, io, try self.makeFullPath(allocator, filePath), contentType, data);
+    }
+
+    //
+    // Streams a file from stroage.
+    //
+    pub fn readStream(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !IReadStream {
+        return self.wrappedStorage.readStream(allocator, io, log, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Writes an input stream to storage.
+    //
+    pub fn writeStream(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, inputStream: *std.Io.Reader, contentLength: ?u64) !void {
+        return self.wrappedStorage.writeStream(allocator, io, try self.makeFullPath(allocator, filePath), contentType, inputStream, contentLength);
+    }
+
+    //
+    // Deletes the file from storage.
+    //
+    pub fn deleteFile(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+        return self.wrappedStorage.deleteFile(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Deletes the directory from storage.
+    //
+    pub fn deleteDir(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !void {
+        return self.wrappedStorage.deleteDir(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Copies a file from one location to another.
+    //
+    pub fn copyTo(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, srcPath: []const u8, destPath: []const u8) !void {
+        return self.wrappedStorage.copyTo(allocator, io, try self.makeFullPath(allocator, srcPath), try self.makeFullPath(allocator, destPath));
+    }
+
+    //
+    // Checks if a write lock is acquired for the specified file.
+    // Returns the lock information if it exists, undefined otherwise.
+    //
+    pub fn checkWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8) !?IWriteLockInfo {
+        return self.wrappedStorage.checkWriteLock(allocator, io, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Attempts to acquire a write lock for the specified file.
+    // Returns true if the lock was acquired, false if it already exists.
+    //
+    pub fn acquireWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !bool {
+        return self.wrappedStorage.acquireWriteLock(allocator, io, log, try self.makeFullPath(allocator, filePath), owner);
+    }
+
+    //
+    // Releases a write lock for the specified file.
+    //
+    pub fn releaseWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !void {
+        return self.wrappedStorage.releaseWriteLock(allocator, io, log, try self.makeFullPath(allocator, filePath));
+    }
+
+    //
+    // Refreshes a write lock for the specified file, updating its timestamp.
+    //
+    pub fn refreshWriteLock(self: *StoragePrefixWrapper, allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, owner: []const u8) !void {
+        return self.wrappedStorage.refreshWriteLock(allocator, io, log, try self.makeFullPath(allocator, filePath), owner);
+    }
+};

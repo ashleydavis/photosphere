@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Cleartext HTTP is allowed to this device's own loopback address only, for the asset server. The page asks for it as
+         http://localhost:<port>, as the existing Android app's page does, so both names of the loopback address are listed. Nothing
+         else is permitted: the app reaches every other host over HTTPS. -->
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

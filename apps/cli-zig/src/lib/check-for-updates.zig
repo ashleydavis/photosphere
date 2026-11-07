@@ -1,0 +1,105 @@
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const node_api = @import("node-api-zig");
+const config = @import("config.zig");
+const fetch = node_api.fetch.fetch;
+const getLastShownUpdateVersion = node_api.news_state.getLastShownUpdateVersion;
+const setLastShownUpdateVersion = node_api.news_state.setLastShownUpdateVersion;
+
+//
+// URL of the GitHub API endpoint that returns the latest non-prerelease release.
+//
+const LATEST_RELEASE_URL = "https://api.github.com/repos/ashleydavis/photosphere/releases/latest";
+
+//
+// The tag_name of the release response, or null when it is missing or not a string.
+//
+pub fn tagName(allocator: std.mem.Allocator, body: []const u8) ?[]const u8 {
+    // JSON.parse keeps the last value of a repeated key.
+    const data = std.json.parseFromSliceLeaky(std.json.Value, allocator, body, .{
+        .duplicate_field_behavior = .use_last,
+    }) catch return null;
+    if (data != .object) {
+        return null;
+    }
+    const tag = data.object.get("tag_name") orelse return null;
+    if (tag != .string or tag.string.len == 0) {
+        return null;
+    }
+    return tag.string;
+}
+
+//
+// The body of checkForUpdates inside its try block (errors become undefined).
+//
+fn checkForUpdatesUnsafe(allocator: std.mem.Allocator, io: std.Io, log: ILog, currentVersion: []const u8) !?[]const u8 {
+    const response = try fetch(allocator, io, LATEST_RELEASE_URL);
+    if (!response.ok) {
+        return null;
+    }
+    const tag = tagName(allocator, response.body) orelse return null;
+    const latestVersion = if (std.mem.startsWith(u8, tag, "v")) tag[1..] else tag;
+    if (std.mem.eql(u8, latestVersion, currentVersion)) {
+        return null;
+    }
+    const lastShown = try getLastShownUpdateVersion(allocator, io, log);
+    if (lastShown != null and std.mem.eql(u8, lastShown.?, latestVersion)) {
+        return null;
+    }
+    return latestVersion;
+}
+
+//
+// Checks GitHub for the latest Photosphere release and returns the version string
+// (without leading "v") when it differs from the running version AND has not
+// already been notified to the user (per the config file's news.last_shown_update_version).
+// Returns undefined when the running version is current, when it is a non-release
+// build ("dev" or nightly), when the user has already been notified about this
+// version, or when the network/parse step fails.
+//
+pub fn checkForUpdates(allocator: std.mem.Allocator, io: std.Io, log: ILog) ?[]const u8 {
+    const currentVersion: []const u8 = config.version;
+    if (std.mem.eql(u8, currentVersion, "dev") or std.mem.indexOf(u8, currentVersion, "nightly") != null) {
+        return null;
+    }
+
+    return checkForUpdatesUnsafe(allocator, io, log, currentVersion) catch null;
+}
+
+//
+// Records that the user has been notified about the given update version, so
+// subsequent checkForUpdates() calls suppress the notification until a newer
+// version ships. Persistence failures are swallowed silently.
+//
+pub fn markUpdateAsShown(allocator: std.mem.Allocator, io: std.Io, latestVersion: []const u8) void {
+    setLastShownUpdateVersion(allocator, io, latestVersion) catch {
+        // Update persistence failures must never block the user.
+    };
+}
+
+//
+// The body of getLatestVersion inside its try block (errors become undefined).
+//
+fn getLatestVersionUnsafe(allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
+    const response = try fetch(allocator, io, LATEST_RELEASE_URL);
+    if (!response.ok) {
+        return null;
+    }
+    const tag = tagName(allocator, response.body) orelse return null;
+    return if (std.mem.startsWith(u8, tag, "v")) tag[1..] else tag;
+}
+
+//
+// Returns the latest release version reported by GitHub (without the leading "v"),
+// or undefined when the running build is dev/nightly or the fetch/parse step fails.
+// Unlike checkForUpdates(), this does NOT apply the `last_shown_update_version` dedup,
+// does NOT compare to the running version, and does NOT record anything. Used by
+// `psi news` to always show the latest available version when known.
+//
+pub fn getLatestVersion(allocator: std.mem.Allocator, io: std.Io) ?[]const u8 {
+    const currentVersion: []const u8 = config.version;
+    if (std.mem.eql(u8, currentVersion, "dev") or std.mem.indexOf(u8, currentVersion, "nightly") != null) {
+        return null;
+    }
+    return getLatestVersionUnsafe(allocator, io) catch null;
+}

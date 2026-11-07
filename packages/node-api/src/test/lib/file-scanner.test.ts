@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { scanPath, scanPaths, FileScannedResult, ScannerOptions, ScannerState, constructLogicalPath } from '../../lib/file-scanner';
-import { ensureDir, remove, outputFile, getProcessTmpDir } from 'node-utils';
+import { ensureDir, remove, outputFile, getProcessTmpDir, createTestTempDir } from 'node-utils';
 import JSZip from 'jszip';
 import { RandomUuidGenerator } from 'utils';
 
@@ -10,9 +10,9 @@ describe('file-scanner', () => {
     const defaultScannerOptions: ScannerOptions = { ignorePatterns: [/node_modules/, /\.git/, /\.DS_Store/, /\.db/] };
 
     beforeEach(async () => {
-        // Create a unique test directory for each test
-        testDir = path.join(getProcessTmpDir(), `file-scanner-test-${Date.now()}-${Math.random().toString(36).substring(7)}`);
-        await ensureDir(testDir);
+        // A directory of this test's own. Uniqueness comes from the operating system, so two tests
+        // starting in the same millisecond cannot end up sharing one.
+        testDir = createTestTempDir('file-scanner-test');
     });
 
     afterEach(async () => {

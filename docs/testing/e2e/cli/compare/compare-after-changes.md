@@ -1,54 +1,38 @@
 # CLI Manual Test: Compare After Changes
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `compare` detects differences when one database is ahead of the other.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create a database, add a file, replicate it, then add a second file to the source only:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create a database, add a file, and replicate it
-
-```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source --yes
-bun run start -- replicate --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-compare-compare-after-changes
+psi init --db /tmp/psi-cli-compare-compare-after-changes/source --yes
+psi add test/test.jpg --db /tmp/psi-cli-compare-compare-after-changes/source --yes
+psi replicate --db /tmp/psi-cli-compare-compare-after-changes/source --dest /tmp/psi-cli-compare-compare-after-changes/replica --yes --force
+psi add test/test.png --db /tmp/psi-cli-compare-compare-after-changes/source --yes
 ```
 
 Expected:
-- Source and replica are identical at this point.
+- Replication completes successfully, so source and replica are identical at that point.
+- The second `add` shows `Files added: 1`.
 
----
+## Test
 
-### 3. Add a second file to the source only
-
-```bash
-bun run start -- add ../../test/test.png --db /tmp/psi-test/source --yes
-```
-
-Expected:
-- Output shows `Files added: 1`.
-
----
-
-### 4. Compare source and replica
+### 1. Compare source and replica
 
 ```bash
-bun run start -- compare --db /tmp/psi-test/source --dest /tmp/psi-test/replica --yes
+psi compare --db /tmp/psi-cli-compare-compare-after-changes/source --dest /tmp/psi-cli-compare-compare-after-changes/replica --yes
 ```
 
 Expected:
 - Output reports a non-zero number of differences (typically `Databases have 3 differences` because adding one asset adds the original, display, and thumb entries to the merkle tree).
+
+## Check
+
+The compare output in step 1 is the check.

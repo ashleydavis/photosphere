@@ -1,0 +1,6604 @@
+{
+ "files": [
+  {
+   "path": ".db/bson/collections/metadata/collection.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/0",
+   "size": 471,
+   "sha256": "38f5d9c277d0fc8cd0fcd189f6efe9ddb2d13bef4a4a150f5295f773f17692aa"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/0.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/1",
+   "size": 288,
+   "sha256": "fea773a6bd7e46b25b28b044472580fba7cdfc66081a94690aa8533e4e8de12e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/1.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/10",
+   "size": 471,
+   "sha256": "6d275e2606636ac4a1d0f20d41a616ff4f64d867522b9cefc02bd635ebe69eb7"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/10.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/11",
+   "size": 410,
+   "sha256": "5a041254d2bdd48789baf1059fe7f77f2b172185d5f9646d319de8533ecc6c22"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/11.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/12",
+   "size": 532,
+   "sha256": "957ab4a8920158f4dfefa09a3c75c6cb84899dee7248087b9de869e2e0f3aa7f"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/12.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/13",
+   "size": 471,
+   "sha256": "b6ee2837a745d6e8ceb884f6a59a734d8fdf979521d0d84829ac252bdb6d15b6"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/13.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/14",
+   "size": 471,
+   "sha256": "037cb5a538a82289fe1323ba347f1e67f29bd32fc606fec090f87f4ad805ac9d"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/14.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/15",
+   "size": 593,
+   "sha256": "0d22cd9cff633db6bcbf376ad9cdc9725432d68b8e2bddece7d83fc59e04a86e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/15.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/16",
+   "size": 654,
+   "sha256": "5f36d0c95e914aef62513c1a627ee15988145f6e05216cc4bdf56e0be0c325ea"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/16.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/17",
+   "size": 410,
+   "sha256": "7e879d3c1630b0c8df44ccd293e0fcbc535b918b595a7c4a609d44ae875bf39a"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/17.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/18",
+   "size": 471,
+   "sha256": "583d76eff1ff14780ac90145e9018400501e8ae5508c8846cfdf4de3ab46d8f4"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/18.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/19",
+   "size": 837,
+   "sha256": "c568eaf47ad98143e3dd9efed5826310a0c4aa89816e6a3e1da0858cee1fc9c9"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/19.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/2",
+   "size": 1020,
+   "sha256": "243a70982cc1bada7707c31265d2f4c09f1abe8aa9831179f447611d8d82781c"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/2.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/20",
+   "size": 471,
+   "sha256": "db3b25336a35ef1ce02d51c534d6d4c75b204700976bb07d130ad97007c22626"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/20.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/21",
+   "size": 471,
+   "sha256": "80fe86970dc3c639629faa74a743d3514392ca6c4e60496eb209bb1eba6f157d"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/21.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/22",
+   "size": 715,
+   "sha256": "9a768c9451fdd8a1299c922c8af0d3f44e950e24cd294bea3fadecb771c3bed5"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/22.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/23",
+   "size": 593,
+   "sha256": "9e8e0d849610b3f7a3f95d7e29ec96f5ff6be431b2601addddc2daa1d13d140b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/23.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/24",
+   "size": 410,
+   "sha256": "3de93d06e18f16b6196a9f793f9496e8c067103cb042594724dc5a72c2ab378b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/24.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/25",
+   "size": 959,
+   "sha256": "49b3083a6478e8d2c63d7c18614e2599d1e685beec284f8fc45bc3dc9b444400"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/25.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/26",
+   "size": 471,
+   "sha256": "272b96db3cf9c76a44979f53db3d931a7181182ccb3b7e31c66635d7a8891642"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/26.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/27",
+   "size": 288,
+   "sha256": "a259cec7571c7758d6a70eb5a0e02644a9aa61d4af2528d0a02a17958324796e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/27.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/28",
+   "size": 471,
+   "sha256": "eba4ed26e510c08e68623a2af81c2fbe065e5011ab8b9278177d0b4476b45bed"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/28.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/29",
+   "size": 593,
+   "sha256": "dd6e94e857ebc1704a80872c1ce7c542c7a5d68b7d2a4d841bd9b578280dae1b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/29.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/3",
+   "size": 593,
+   "sha256": "6917da417ff6e28033fc54eb2afcea90d197f016d453cf939a312ee99da4afaf"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/3.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/30",
+   "size": 837,
+   "sha256": "4e874e2df84ef39d98bfa4ada11f56851eb7597afe036bc915df04a90b3db2b7"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/30.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/31",
+   "size": 776,
+   "sha256": "ac34c0c5c46facc9f29f93c355a3e51e2e4d935033e0d05f54e4f3257ffaf543"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/31.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/32",
+   "size": 410,
+   "sha256": "6814f0c9268133bd26893a5280478e6f904331159e99543616de7fadf1e3fb8b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/32.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/33",
+   "size": 471,
+   "sha256": "05a3bd38bb1470fd2382399372cb47bcb7ea770ae52229316f476605d41b9f5e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/33.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/34",
+   "size": 776,
+   "sha256": "cb5335e7fc3c797cf2d9c6a0d53e23f31d57b8f1217afbc8899d1794d9412150"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/34.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/35",
+   "size": 654,
+   "sha256": "04df17bf5850b00860f2d20d8c6810f1df85d2fd8dc23cce0d8a756ff4b48581"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/35.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/36",
+   "size": 410,
+   "sha256": "e4c3e994f4fe2e86f0a1678955a27cb63e99477386fa90354b9ffdbea7fa889f"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/36.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/37",
+   "size": 593,
+   "sha256": "be73735cda76fa41258f010083b5ab0adbe593fe958c84698eaea7aaf23e1f4e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/37.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/38",
+   "size": 654,
+   "sha256": "85677e4716909f6a3e1230c34f5a95d2d449f48702bffa89911de7e5c8cfb373"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/38.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/39",
+   "size": 288,
+   "sha256": "bb20e4e950a76a120a98ae5c3e06792ae4e77870abf7a43b8d56ad6635a7be50"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/39.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/4",
+   "size": 654,
+   "sha256": "e968a9673839b5cca689f5f8a13f5c315b1fa1678f165d2db0260cdab9556329"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/4.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/40",
+   "size": 654,
+   "sha256": "fd77307f425130802ba81d2578178a82e618bf41c8cfeebb42c2d05b28450202"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/40.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/41",
+   "size": 654,
+   "sha256": "c55d7a6f845fe0d223c88d765e2adb2849be8727bc765efb2f0df37fdda2dfd8"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/41.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/42",
+   "size": 837,
+   "sha256": "ac891928f61b5ec727b6b3111dfae397257cb6bd35d6bcc1658cff9629e4065e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/42.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/43",
+   "size": 593,
+   "sha256": "3ecd1e6462c90c666bf7783f704b3e2c2e83e242c1ce20e90c3fb27985e7f119"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/43.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/44",
+   "size": 410,
+   "sha256": "e1b7161369c979992cd184267c817abbfd446962254d0f2e97e53e1c5753535b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/44.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/45",
+   "size": 532,
+   "sha256": "d4597a1e9111b824911598a1093fffdefc8f99d74db779a803faae6823852119"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/45.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/46",
+   "size": 532,
+   "sha256": "bad655bbb032564454bd4ba5ac30d4ff7d6dc8bd69f1c4863fb363d33e2d862e"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/46.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/47",
+   "size": 532,
+   "sha256": "f7b2cf19911277ceeebaa71580d5c757af5cd5983bc13bf9c12368ce9a5a7181"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/47.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/48",
+   "size": 593,
+   "sha256": "77657f05e58c002e277901b15e26ff59d8181458ecdf7e1be78932d6ffd4f643"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/48.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/49",
+   "size": 227,
+   "sha256": "736b49601e301183abe187fe5c29ca8188c9e89994f0e178459a081b7da24fad"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/49.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/5",
+   "size": 654,
+   "sha256": "90e02f4b5c7f5dc9ab63519585a08260e18dd8914de460241b464483754541d2"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/5.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/50",
+   "size": 959,
+   "sha256": "d109f039b08e748331b700c03b0f1448eb6dbdb17f5eef2b3aff08637a5e7d67"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/50.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/51",
+   "size": 410,
+   "sha256": "3a516e5fcb0e72c42c97b81ec0365c1ef4a3e11c8633b7c1be3c1944c58da0f4"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/51.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/52",
+   "size": 532,
+   "sha256": "f8f1fc0447f5fca4177a7414e4102458ce483c70a9ae3d429941f72cc6ce2819"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/52.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/53",
+   "size": 837,
+   "sha256": "a4b2d7a8fdda4253668c83c8869bee89bb7b07b35b4ed2750bc85f50537e1d72"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/53.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/54",
+   "size": 715,
+   "sha256": "39553d7ba4617db1ac631162991f92b89912a9ee5ce4f78b161c03178dd4aeb5"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/54.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/55",
+   "size": 654,
+   "sha256": "4cbb94587640aa899dca8a6fe38bfb674b35df0b93b7d8544b488e6a59eba848"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/55.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/56",
+   "size": 532,
+   "sha256": "d20bfdcb554bb06afb3508fd8873ab772e258612e686da814ed4e9fb260624ac"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/56.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/57",
+   "size": 593,
+   "sha256": "c95b7fdf7f1c562723b6ec7174f2c95dde6076c87ff98076a6d70e9491438ce0"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/57.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/58",
+   "size": 410,
+   "sha256": "6a490f3b1c038342291aea06f7c53158bd18311cd37725dcf1f81dbd0dc59477"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/58.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/59",
+   "size": 654,
+   "sha256": "0d540d18a61770891f9ceba98860c89e6cb19395f78fc90f86ec78c8d9f523a6"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/59.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/6",
+   "size": 593,
+   "sha256": "c4264338ed920c43c893441c17a5754c1b0e7f58589718e53f329c3b281a0d3c"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/6.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/60",
+   "size": 471,
+   "sha256": "3043c02c5798b73f05788414d041a989122d09f9e9a72b9432a0e540ab9279d0"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/60.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/61",
+   "size": 654,
+   "sha256": "6511043bef451ed37837cff30a02815aa05b3fe91a30277b31fea9c0a9173b26"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/61.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/62",
+   "size": 166,
+   "sha256": "e6bc61091b7fd23a49bb3a85037f984f5eb5f89736fd2c85d05ef1dc786a3201"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/62.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/63",
+   "size": 593,
+   "sha256": "16d7773b6e78da3bb24a097bec4c1a9702206923dd787c1bd4c386c5842f40fc"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/63.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/64",
+   "size": 532,
+   "sha256": "ac1cbd049529d4506ad7ff951220ddb56e9f2142ac91c50ff5bce09bae0d2575"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/64.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/65",
+   "size": 654,
+   "sha256": "e5e77d733a376e1a568455e9a1dd4799aa121e0feb1b23a2844f9eda9e5e4622"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/65.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/66",
+   "size": 715,
+   "sha256": "149bf7634777995e38d8249871b5b000938c7fd51814412452cbd980dc289a56"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/66.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/67",
+   "size": 593,
+   "sha256": "3891438e7d3157ef20a2ac3744f2147c07fc99daad252fc81fd3997f4bddcde1"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/67.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/68",
+   "size": 593,
+   "sha256": "d0e2621267495802644c8a08142122458357e72694e1cabef79858cd5ebada18"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/68.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/69",
+   "size": 532,
+   "sha256": "e16da8c141e6473504f8ad3c70b2ef89364ef4bf5f8c1913cff768895374f7c3"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/69.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/7",
+   "size": 532,
+   "sha256": "9186490cdf2f2610ccd83a887cd9b2d3c888f1aeb9e598454cbcda28463d7280"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/7.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/70",
+   "size": 471,
+   "sha256": "9218ade0e49ec7c76d42f7eceb24be5fa7ff15d2eedb57ff5222afbf30325774"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/70.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/71",
+   "size": 532,
+   "sha256": "fb542f5546f4ef78262c536768f671fa060e926e49188c37660464ea95a6daad"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/71.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/72",
+   "size": 837,
+   "sha256": "13ba00c8385007d6939825011833fd6ff71a087405b143d65d9354c950524454"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/72.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/73",
+   "size": 776,
+   "sha256": "0dc0820b05fde38de9b3a4ae04a9c965b203c270f79f1efa2c45d98cfa5a673d"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/73.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/74",
+   "size": 593,
+   "sha256": "de8bf81a5fa2758964fc0e70ab42fae9410f8fcfaf83cfcd02c982d57219bbc5"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/74.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/75",
+   "size": 715,
+   "sha256": "3f68445fc69872545c70e031a02f0b69de1bacd9e7365efd86102d3d2002bef3"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/75.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/76",
+   "size": 349,
+   "sha256": "1b3f53480e3d5ffb027e298a0a334d2df7966aaae069be9efdf5df055d7b419f"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/76.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/77",
+   "size": 837,
+   "sha256": "20a2e4bac77ce7bd09bff258dfb441427bf51271d02d04200f2f31f32b4db1f8"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/77.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/78",
+   "size": 959,
+   "sha256": "716e682f4c1e62f6e6167f4903c1bbc0534b3ce2ec11aa43507e985e5a60efe3"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/78.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/79",
+   "size": 532,
+   "sha256": "8e329f797adfaa873295b1ac6a96b7da2c7dd8750991081f13bde9e620427c96"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/79.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/8",
+   "size": 654,
+   "sha256": "27a87feef9e19a7c5c6b45c90fa6c829caa1c91645d4c24d9d24d6b149051f75"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/8.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/80",
+   "size": 715,
+   "sha256": "fb63c63b1d651b4738f9cb77349e47396b2146c45b984b97c08ec0d4a3c5ea3a"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/80.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/81",
+   "size": 593,
+   "sha256": "c5b380bb8177b287ec23fef4e38931bee78e415e132f8e5962efa58ec41ffe35"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/81.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/82",
+   "size": 532,
+   "sha256": "63f395a6c0af21aca148c2e959b15a65986aa2da9138a0927ce1c9c079bc2392"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/82.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/83",
+   "size": 410,
+   "sha256": "75c94db8adf0afc5ca0b0e46eecb27fc8e4faaa2434a18af5746dc90a1a6c36b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/83.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/84",
+   "size": 349,
+   "sha256": "bd2f271568cac4b4482dc6df5c0b19c7370ed8c22b14bbd2517fb150c987c5b2"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/84.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/85",
+   "size": 532,
+   "sha256": "e9180425855aaf2fe378bd7bbd852a86c9fe38b34235941c082b1709e63bb190"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/85.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/86",
+   "size": 410,
+   "sha256": "c0da66b43e299618a1472fe5d383135260de3ca71492f870cd28f8fa4a1a6c4c"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/86.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/87",
+   "size": 593,
+   "sha256": "ae6f8914a996d21dae5093e30aa0fc2cc32e27770da9dfa8043f4156cf334b59"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/87.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/88",
+   "size": 471,
+   "sha256": "e39abe303def829176bec3a8d5d3f3184222f20e083a20a9eebecc6e90702537"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/88.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/89",
+   "size": 288,
+   "sha256": "4a2312bcc63073ed7abaed18dab5856ae69db1bdae08f399164c53b5348f4094"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/89.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/9",
+   "size": 349,
+   "sha256": "443992975b1241573544e0d3a6551f0b6feedd57a0c7d88c3c19d26cffb8a7cf"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/9.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/90",
+   "size": 410,
+   "sha256": "d98b0b5c2a0b203e0b373f3694a6bfe474902d40dbd7d596a71aa75db3f2d60c"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/90.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/91",
+   "size": 776,
+   "sha256": "fac48dfc6f2eb672e730c69b09a05fef905219c6b7c26cb76ed6775c4991209f"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/91.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/92",
+   "size": 288,
+   "sha256": "3f3dcca8811849ddba66ad8508b279a07ef16615077112ff31d60a26fa7b1afa"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/92.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/93",
+   "size": 288,
+   "sha256": "2196a24aaf29688961d60d79ba665f08cd616c20164adc9396ef44297879e30b"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/93.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/94",
+   "size": 593,
+   "sha256": "918c737284f587e9be6bf5ccf4cd2db41765a44dc8cc9aedbf90c442fe2018ce"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/94.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/95",
+   "size": 471,
+   "sha256": "2ee33b669cc29e3fafd9d657218610e2156d1e90db2be4551622bbdc9fd6ffda"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/95.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/96",
+   "size": 776,
+   "sha256": "728aa7236cc99caaeecb153baf16852b9e828cd3cd7ebb7ba68eeb3fa3ac93e1"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/96.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/97",
+   "size": 410,
+   "sha256": "7f47f3a0bb6bd5e51d7bd6244691945bd73d7f98d3a72cfdfd0b32ab68937c28"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/97.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/98",
+   "size": 532,
+   "sha256": "5a9d455409ed445b489814bb677bab90bc56bce59bc5dcd101aba4a294fad05d"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/98.dat"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/99",
+   "size": 410,
+   "sha256": "2cb79514748b861d834c9c5a8c1cff31e5d50e26ebacb3175a062177dc0279d7"
+  },
+  {
+   "path": ".db/bson/collections/metadata/shards/99.dat"
+  },
+  {
+   "path": ".db/bson/db.dat"
+  },
+  {
+   "path": ".db/bson/indexes/metadata/hash_asc/7acf3167-283a-4e03-bb0a-e706f4cc195d",
+   "size": 90250,
+   "sha256": "477b14134bde50fd7f685cd897d36cee870f559d706023e30b50473947b7efdc"
+  },
+  {
+   "path": ".db/bson/indexes/metadata/hash_asc/tree.dat",
+   "size": 365,
+   "sha256": "40916db099b2982f02b4f8e385535371e1df65ad88acd32e1e91eaf214dbc975"
+  }
+ ],
+ "trees": {
+  ".db/bson/collections/metadata/collection.dat": {
+   "id": "9f718fab-a175-42ae-8a5b-c6b99ddf2ede",
+   "version": 6,
+   "leafCount": 100,
+   "leavesSha256": "cf79b7d3026d9a7aa33b24376a886d80356af5890b84e40b0b25fd9b0b016429",
+   "leaves": [
+    [
+     "0",
+     "b457d21d81cf2b9fb986aa8f90c001e02206a55c75a50dbbb144efc07549a384",
+     13
+    ],
+    [
+     "1",
+     "857dfd407d95ac85b7058e7780cccf8ea7b29d158caa6fe0f6e20b6475247f64",
+     7
+    ],
+    [
+     "2",
+     "7142381658015a256afffc285bb9b0d31182ebcab0030c76d9af17f7ca723740",
+     31
+    ],
+    [
+     "3",
+     "81dd6635490a0746a39b980c9ae4ad629663a2b814b902588d70b75b4aeb200d",
+     17
+    ],
+    [
+     "4",
+     "a8019d9cca8b1b779037dfec181029ca9d02456f739d6fa0caa9c037add22ad3",
+     19
+    ],
+    [
+     "5",
+     "9632d2c94695b7afeaae3e3982cb672c721a24992ca4a7645808c5313e73a23c",
+     19
+    ],
+    [
+     "6",
+     "f46ace7efb0daf9035c36b0c1bb215e03a6d5c1e58bbe34a385f8b84fdbcfa6e",
+     17
+    ],
+    [
+     "7",
+     "816085e76a0d5d80cca5887f93d6654fb55b5bb02581afe34ec02d5cc138da6f",
+     15
+    ],
+    [
+     "8",
+     "c6311ab24a0d4cc31effb40a16f4df789579c2cda48862d8619cc34176927d3e",
+     19
+    ],
+    [
+     "9",
+     "cc123c299bc012cb27fc27a2d7942a3ee6fa900d1f4aca3169f3f5b525d91c8e",
+     9
+    ],
+    [
+     "10",
+     "9004e9b52dd2f1a06c84eb26b34008e58d488fdeebeb68783d1e7e55dd5c4567",
+     13
+    ],
+    [
+     "11",
+     "2c95c6e31133ab7c0270b140fc62f4695f15065eb1123adba2d0bfcf6c2b0f3f",
+     11
+    ],
+    [
+     "12",
+     "139a9a86d564eaf7d174c4dfc04a95654c3cbfec84ce9e54c3e4483988a9dcac",
+     15
+    ],
+    [
+     "13",
+     "87431e5b1ec0b40a29a7bcbcaf9b4f8f661513c3a17e9096682539526f2bc2a7",
+     13
+    ],
+    [
+     "14",
+     "549510f8998af65c316202a96bf792c6b1b48b6c466f12990216e5380e7453ce",
+     13
+    ],
+    [
+     "15",
+     "34a6668184a9b87d0bdfe36effd5f42b16dba737f49577a8dbd0e7f422c8ae67",
+     17
+    ],
+    [
+     "16",
+     "ba57eec98c29e551570272f9686d075bcd25c097a0556dee2df14d01c539f4e4",
+     19
+    ],
+    [
+     "17",
+     "17e27321177dcf4c686c16d07885610bb366661cec2ade9f764770b181aa7526",
+     11
+    ],
+    [
+     "18",
+     "57952dee0a1fa23ffa512dde4863bf82da4e0e0cf29dff448a561c84216c5558",
+     13
+    ],
+    [
+     "19",
+     "663d1f7d9c56e67fc453facb2bf3ca562b13115409a9f09bd39718d760f2fab2",
+     25
+    ],
+    [
+     "20",
+     "b0e05d460e1780edfa60e0f05cb13d214e04a1f84eb30091804de1ebe719fb15",
+     13
+    ],
+    [
+     "21",
+     "78313985b608984d8a3f1f0ed3b72b337a34f0127324565d3c92e6385883c910",
+     13
+    ],
+    [
+     "22",
+     "13ca756ff7c7fbb27c05a66c838d6894ac8a3dcaf2c4e4a63ed56974a49367de",
+     21
+    ],
+    [
+     "23",
+     "316a273f52dcce8ecc0d67745d7585436d95762b42e6b29d452fb4377fab9d4c",
+     17
+    ],
+    [
+     "24",
+     "bea22f0f5a2a152cde8406bf7ad2638fdce84227c1786ffb09e5c5fd0a867313",
+     11
+    ],
+    [
+     "25",
+     "2ddaeb069a31f30222cfb7e74437a0e8dd15ed28796897457c1968e014cd9eb5",
+     29
+    ],
+    [
+     "26",
+     "9ade57b59e1365171401bf7243285867554eea26b5c24008420c20d07b48ec74",
+     13
+    ],
+    [
+     "27",
+     "cbe2b5cd8c0614bb0ef0c3044753763a4b21b7b36b697539d7aa414b948587be",
+     7
+    ],
+    [
+     "28",
+     "44fef1fd5a38d23d4b74a262b2c0abbdf2cb26f55141f1408ec3c0fc8bfc9e9e",
+     13
+    ],
+    [
+     "29",
+     "8e642ea00ce146cadd96d5f4a8cfb412e9da7b27266b60fef9c03126625d6dd5",
+     17
+    ],
+    [
+     "30",
+     "9549c08db10fac7748666a7e96d648e0d7a442d7e4c189768663857d4ab83716",
+     25
+    ],
+    [
+     "31",
+     "d0a2e3500a545eba707537acfb980c99c51617ae228c1519690f85dfe0dba0a8",
+     23
+    ],
+    [
+     "32",
+     "3ff0746deaa790623fd0989a07edeb6f15c4a9f4c378618995b994ce4c1b34b6",
+     11
+    ],
+    [
+     "33",
+     "5ad81eb1d5e413f20397c0e193f9334614948263d38c005149205c52d233fed3",
+     13
+    ],
+    [
+     "34",
+     "f87a8a72eb9e18bf1fd123aae502715389ea4342e481fe2d4aa158bb7e00f78a",
+     23
+    ],
+    [
+     "35",
+     "48389eb9eaed70c594ba835a1f7a357065555e143e0e52d28902af5a6daa1a7e",
+     19
+    ],
+    [
+     "36",
+     "2eaa17e747afa94844233d8dc7a144662e574f754a8a8aa4587078b78c506d29",
+     11
+    ],
+    [
+     "37",
+     "d461b354e1bcee2b479c5e781cbc687611b8c05a649111a75932fefd5ea0dec5",
+     17
+    ],
+    [
+     "38",
+     "5d95eb8316baf1064a7333b9a98b4a53ada8eb73d52c4ffb74d5adc8e67eb412",
+     19
+    ],
+    [
+     "39",
+     "27ffe5cdcda7be509d9cae974cf30fb1d808e3fadb5641d8d377d4f73d7233c4",
+     7
+    ],
+    [
+     "40",
+     "b5609c5c8814be70bf3c04757d88e42b698daeeaa7801bfdce9c81b7e1d01b09",
+     19
+    ],
+    [
+     "41",
+     "d2fe625200bd80c4ed7f6fc7afa97f836dbcc67b4777c4a6c14a06f462270ed7",
+     19
+    ],
+    [
+     "42",
+     "fe00c8d4066b799937776a455fd9850039b0c68f0ce1bd264c0e6d75b179011a",
+     25
+    ],
+    [
+     "43",
+     "f6f13e6446b377d90156f6c2c3a30868d3159d0aada410bd5b74715439a3f8b4",
+     17
+    ],
+    [
+     "44",
+     "2a65dac65bb9e115e87a757de37ee4f3f50cf3e068f775210cbcbe299d7581c0",
+     11
+    ],
+    [
+     "45",
+     "e13640789e378746a5f5e3abc4d70482285108a5225d4b09d15d7b07528dc20f",
+     15
+    ],
+    [
+     "46",
+     "838d7c3ef15c0af74ef868dcbaaf774f9eb0554a95980f163d8af63f9b44ee70",
+     15
+    ],
+    [
+     "47",
+     "f35f2b70d5451e6ed6d6c16bb98ffaaa10f753579e8af245ce6ec99f591b520c",
+     15
+    ],
+    [
+     "48",
+     "dcc253c2952d8f8e94c7af34ec7e31643d946e1dac550b0714dda669cbefec55",
+     17
+    ],
+    [
+     "49",
+     "d6154530f147f35879cf87309799bcc9078cf879bcc7c5891873cea00c18d615",
+     5
+    ],
+    [
+     "50",
+     "e2f44547946f1b3f1d75a655adf04e22cd683c58998e55d63245344c08065037",
+     29
+    ],
+    [
+     "51",
+     "b695d10e2afb8990020af2bb817b6067d5069b72d5401393f0e3e1034896e150",
+     11
+    ],
+    [
+     "52",
+     "9a3b9137cdb515eeccb6dea335c3d136262c4f27fe3e8ad7e89a92186e7fdafc",
+     15
+    ],
+    [
+     "53",
+     "f5105833aac947b46bd8ef87f18df342a195447146a9e504dbf4d27ce26897a2",
+     25
+    ],
+    [
+     "54",
+     "5c61e522aa31942042fb642ac994e05dfa7b9376814a2e0738d2a592e6b16133",
+     21
+    ],
+    [
+     "55",
+     "3d11727524f7dcd4a3f537f20807be2f383d3d778d28a14ce31a0d81e6889c79",
+     19
+    ],
+    [
+     "56",
+     "6be5140d143a7d7c043ac65772bd282566f5547748f301acf4ac2a2be84d5813",
+     15
+    ],
+    [
+     "57",
+     "ebaa9b1191424ca278664060738357d95705a66d653a1ad90b3d4a6cade7b047",
+     17
+    ],
+    [
+     "58",
+     "103ab55de4402c18e1416f723d2c16f65e2ab24c3252b45aa721d0a56ae301db",
+     11
+    ],
+    [
+     "59",
+     "e96b0d270f8ff2f94323f6cd5ed82778ff9edc3025840542dc8e5e09c33e82ae",
+     19
+    ],
+    [
+     "60",
+     "558efade6e096944a414e2149a5321de9ccadb3b51aaa3cbf9d809efc8d149f8",
+     13
+    ],
+    [
+     "61",
+     "00f8f388587b32e88206cc70f8b61a8827096168244a3ab1a9c67890b11eb67c",
+     19
+    ],
+    [
+     "62",
+     "2ffde6455aafee20851270e536950da1d244aefea7a0693838980c79dea68838",
+     3
+    ],
+    [
+     "63",
+     "50d09cf5be0c3e8f98249d514d5bec1b3b1822a075719803879044df6e968feb",
+     17
+    ],
+    [
+     "64",
+     "a9d528a812e88b8768848d6f6dc1b2358e962e1db279079fcd301c2b051dacc1",
+     15
+    ],
+    [
+     "65",
+     "3bc0d5c8892e862b754680961813445d45a74d5bc9a1bc558a04301019776ef6",
+     19
+    ],
+    [
+     "66",
+     "8e4a13e8659d06b5c45aaf8a2cc4b3ecf65e9f577318f6f00d91d9f8081eb7ca",
+     21
+    ],
+    [
+     "67",
+     "a44b4b5195c8b38610b7f38900dd4ec03d0cf93cb0af691a969c03ba6ed8a21e",
+     17
+    ],
+    [
+     "68",
+     "4c4d02ba75857ff6d23ce425cb6913afc6aad814dbdd55a2104c9ef7f5971792",
+     17
+    ],
+    [
+     "69",
+     "3e5b61b13e7aebde956d115d6042242c26a3ee1340d5b57a891243912099e891",
+     15
+    ],
+    [
+     "70",
+     "f89850a793941606149742d9797300a977cdfabc1210e7a2d7fbc2b0ff904480",
+     13
+    ],
+    [
+     "71",
+     "3d631fb8141792fd88bd41c62ebdd49a9a3c229e89a5e5e403e316a8700498ac",
+     15
+    ],
+    [
+     "72",
+     "cc01dac3bd4d0102c3a287317a985d19a5afb6fe6424a45204001f7141d2a7e6",
+     25
+    ],
+    [
+     "73",
+     "15bd0d9793fa306117334e6c17750893525a28921a351969653be66a7651c194",
+     23
+    ],
+    [
+     "74",
+     "2ff2eacde5b4a209cb512d03c5e34a17af7640bd2ac75ab05c3812ab2e3aed8a",
+     17
+    ],
+    [
+     "75",
+     "474cc513f9008681cc58059a7bbfb1fd64e8557413a08514a1c65c3113639481",
+     21
+    ],
+    [
+     "76",
+     "50efcb0c54ac4f0094b6d19c83297e593c1d8028435f125cc33836b5c6d02a2a",
+     9
+    ],
+    [
+     "77",
+     "ca9c24bf21a474acb558bbecef0db1fece418ec9eb2d9ec786b9a4fb0023d40e",
+     25
+    ],
+    [
+     "78",
+     "d2752bc6cf182a43a01d0ac2c3389ce32fd0382dd3a5dafc170d99d2b3cc1d6b",
+     29
+    ],
+    [
+     "79",
+     "69ea6c548eaaf6cc89079d8a6db90904d45dacbc099a45fa07939a617a456b9e",
+     15
+    ],
+    [
+     "80",
+     "e6a482438c7f0555f646097e72a63caf75486a970d75c3adefd5582028893efc",
+     21
+    ],
+    [
+     "81",
+     "25d91a8874fe650f1551f040192ba5598a728fbbd5cda75134cff363027b8101",
+     17
+    ],
+    [
+     "82",
+     "ea32b64414665ed862c0f087bfb68d7578448bc00c7a4f7a2611d577ab4ea985",
+     15
+    ],
+    [
+     "83",
+     "3c22c9571ac82074c514e60cc61b7d52e268c1269884cb883850febca79d1bc5",
+     11
+    ],
+    [
+     "84",
+     "1ffe5a7025aa849cc1f776f61c0675554eccc1a9f4ba14507dfdeef83b45ae21",
+     9
+    ],
+    [
+     "85",
+     "73df2b248fb66545cf964766ac7b9e14c0c20733402d8c4f897b0e9605bc59b3",
+     15
+    ],
+    [
+     "86",
+     "a9274c1d1a6f7df9b4fb0f04d4e095853c4bdfda3a52b9e52a22354fb354e14f",
+     11
+    ],
+    [
+     "87",
+     "51cdd6d6481c2af4c3bb5cca787739ca89d6f855604006e0df1189078ab00391",
+     17
+    ],
+    [
+     "88",
+     "80aba07be2de881b6c3428885314a275a7b02590d4a7fa17d086cb2cd24fc6fc",
+     13
+    ],
+    [
+     "89",
+     "e5b7fb7cf27455871a1e3bc60bb7744d80dd76bb6783684ecf3ef17726ce13fd",
+     7
+    ],
+    [
+     "90",
+     "3936d6d370e476bebb01ae8876b0b4c086dc650e395fc6d03c613d01778e4f8c",
+     11
+    ],
+    [
+     "91",
+     "b194a9cd67ea2977b043948eaf873a6b5bb494148309d77332e62bbe93f98689",
+     23
+    ],
+    [
+     "92",
+     "ec9862498a14b8face91b68ef87b7ae819f9af9f867d87812f53dfdece1c00dd",
+     7
+    ],
+    [
+     "93",
+     "306210b52f9fc9b7261cae1e7eb95589900ac3184edf47983c469fe67f9c25e0",
+     7
+    ],
+    [
+     "94",
+     "fb673955a2ebb7ab1ed5774cba749f0d71f29984c516c300768396913537d265",
+     17
+    ],
+    [
+     "95",
+     "3053f15112287f543f6d1d357b3ccedd710caa1bf4cf8f387042eabd834f3636",
+     13
+    ],
+    [
+     "96",
+     "6f043cff6b791115f04c1b7e11005393a986a9368472af2cd2f5974e25fb3d4c",
+     23
+    ],
+    [
+     "97",
+     "99604c3597c7c69ddd013797bac869e9e0245482b059e112610d6518c218a7a4",
+     11
+    ],
+    [
+     "98",
+     "7854bdd8f25d73ddc25b749a0542b737bda5f645c27a11ef8a2627c678f5ec8c",
+     15
+    ],
+    [
+     "99",
+     "18783513e809d8f3ae0f0c778bae6304999df717d9d2d02af0828adc1c334e1c",
+     11
+    ]
+   ],
+   "merkleHash": "c557fc0ecd2906e7707e793d1477e0565cadadd115098b6dc9dee61446adbaee",
+   "merkleNodeCount": 199
+  },
+  ".db/bson/collections/metadata/shards/0.dat": {
+   "id": "73acdb7a-e338-4fbe-ad16-07a28c123842",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "ff9a28d9b5d38f7c930181917b73b75559e904d5e0840824603c67749fa382e1",
+   "leaves": [
+    [
+     "0d45e22c-50bb-46d0-83b3-87c2eb95b297",
+     "22b5a5ea0d76047ab7357fe6c1c07521eb1ed2e39eae38c0f8e7372d8c7ce3f1",
+     29
+    ],
+    [
+     "3b46663d-bd73-498a-8eae-9bb1a2ccdb4e",
+     "e7588c0a88a772aa9f54c165effc09af550696e1905b98c61cc24f1687db71cc",
+     29
+    ],
+    [
+     "9cb249b5-f8d4-4c1f-933b-bf2c30adb161",
+     "1821535ce49b3156ee6e9b80afaa89e5515ffa5900bac6fd404731d8dad74ab4",
+     29
+    ],
+    [
+     "22441028-860b-4c56-ba58-66a8de129623",
+     "91e4a580db00d5b0a55f856a900c63f9d34f26b1e703b060be55ccb66ee866b4",
+     28
+    ],
+    [
+     "d2142895-df95-4f71-8684-c106bd65f700",
+     "fca91e6b37a0547e828a489301c90bf5424ccd3cc8549270d35dd45f4502f8fb",
+     29
+    ],
+    [
+     "ea9f02c2-e762-47e8-bc2f-f1627d77e5a0",
+     "90ff8d8846d4a2f7edb2011fdb647a5cb0e2c359af62110f9d5c77b5604536b7",
+     29
+    ],
+    [
+     "ebbbd4e4-70b0-4c97-9ed7-5f98c72ca454",
+     "64f46d5291c358ff4663f4cdb631ec4d793019d3395d7e5c67d5905211ba7af7",
+     29
+    ]
+   ],
+   "merkleHash": "b457d21d81cf2b9fb986aa8f90c001e02206a55c75a50dbbb144efc07549a384",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/1.dat": {
+   "id": "d4b44297-6338-4d00-b106-4e0239b421af",
+   "version": 6,
+   "leafCount": 4,
+   "leavesSha256": "ec23289905293354648a24bfcc5257d9b1d4afd5696a50d29250bfef05fb3a6f",
+   "leaves": [
+    [
+     "2bd11482-e5fc-45dc-b379-9a8bbe0df17e",
+     "ac2a5c7a45471f726b216e7d8ddd5256ff74bd971f98d468dc3806f474bb1e27",
+     29
+    ],
+    [
+     "3af9cbc0-34fb-4ab9-9c38-e8b0f040ff3b",
+     "de7edd3b2f91ccd158b57da9973d442de5af066a128dde8163a7460292cdef3d",
+     29
+    ],
+    [
+     "4db484b7-985e-4909-8dd8-f10c04bd1ce9",
+     "73d7e8a94ed3e0f8057c2375b00ee0e15950c987b9846a4a0cfe0f8a85f5f0ff",
+     29
+    ],
+    [
+     "9d793fee-bae7-4b18-9e4d-574b16618509",
+     "818555f9317ea1f7e0bfbea7cbd7bf4bd2cd9042bd185a62fb1eae0bb9c78dc7",
+     29
+    ]
+   ],
+   "merkleHash": "857dfd407d95ac85b7058e7780cccf8ea7b29d158caa6fe0f6e20b6475247f64",
+   "merkleNodeCount": 7
+  },
+  ".db/bson/collections/metadata/shards/10.dat": {
+   "id": "479facec-a852-4d8a-aea9-79c65a1504be",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "2191cd74f2b8e962968fb86beb42bd58d6d462958f0cee1a048ce6c0fecbb45f",
+   "leaves": [
+    [
+     "0f451c2b-42b5-4c12-9f05-2c6193575e9e",
+     "61527f9c039dc3092bbb4e8affaefaf83c12efa0cc74a0a0892908da51f19d4b",
+     28
+    ],
+    [
+     "7eca8ccb-501f-46e6-86e1-85c8c82cdcd4",
+     "a24f15a86cf208f9e2a7a4b8678f955ddd5cf87b2c7cd5a6dc6d7c9520867c92",
+     28
+    ],
+    [
+     "8fcfd85d-3c85-4214-9a63-9e681ddbe4d8",
+     "14b2120695ead3f539ebb4b774be600e39472a2b532f6c8e188fec361aec4767",
+     29
+    ],
+    [
+     "26b9f1c6-b182-4d36-bbf4-3c3ffb8f4044",
+     "de67ab042cbb066b85ee1a1303cc6e58cbf45fca26b770986693db0623aaed45",
+     29
+    ],
+    [
+     "034f467a-d088-48b0-b795-c9b43bff96f2",
+     "0ba0c449b2b9d17d098af6f44c78271d92cedc1bda6ba25f41b5a78bbdcfc671",
+     29
+    ],
+    [
+     "463543bb-9679-468d-bb1b-4a0910b8d5c2",
+     "3b1520bdadfaf623d4a6ffa4e1cc600afa288753f9f199555aa45dea1f0d476d",
+     29
+    ],
+    [
+     "da86c200-78af-4116-946b-0c2dab90baaf",
+     "197717007a1900ed42ea044d05e96c053bb18dc3d7116a116f2734935c2c7c51",
+     28
+    ]
+   ],
+   "merkleHash": "9004e9b52dd2f1a06c84eb26b34008e58d488fdeebeb68783d1e7e55dd5c4567",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/11.dat": {
+   "id": "737431bd-38f8-45bd-8809-b40436c90945",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "d698ee256d51991c00b7f6292a0aeb2ae12c35b01841cb28dbdaf905d52bf1ce",
+   "leaves": [
+    [
+     "6f062e2a-ad27-4aa2-9f88-5803a5a4830d",
+     "f9745c3fa7b2535bcaa2acce9caa614605d279c567418b41fed678edc4b51448",
+     29
+    ],
+    [
+     "7c035505-44ec-48fa-bda5-718784f911e9",
+     "97370a7bb368e46f05e62e26ede0813caea1d9a9b642ddb97f94869335bf3799",
+     29
+    ],
+    [
+     "22a5ea6f-a3e0-462a-8469-3d8cf48f498f",
+     "fd85cfd8dfcd2d7a168f9d519214e22593580a01b466dc37ff4b3704643003d9",
+     29
+    ],
+    [
+     "01944122-c9bb-47f2-8ab1-f7f1b6668899",
+     "84e5e2bf3c1d2674a6bde3488ec525f042808b86b04c4d067778b5357233ea31",
+     29
+    ],
+    [
+     "adc0ab2e-824e-49ca-b0cb-28d8c40a2960",
+     "18f8f852fdec0e5a8d8c566b0badceb705b9d006deeb37b5e067b65a38a150b1",
+     28
+    ],
+    [
+     "f346ea0b-f252-454c-aac7-2bd9260a1859",
+     "bae724708a3efb883f073c0cae412c2bc1ea1e2390b7d4c32c1ea27b93c72add",
+     29
+    ]
+   ],
+   "merkleHash": "2c95c6e31133ab7c0270b140fc62f4695f15065eb1123adba2d0bfcf6c2b0f3f",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/12.dat": {
+   "id": "b6aac07b-42c3-44dd-8dfe-e3b8127782b8",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "04128cbbf51d6de07a094c20d761b10798d675700a83dd6207bd6a7ea97075a6",
+   "leaves": [
+    [
+     "7dfd87f3-114d-442b-ae2f-518729d696be",
+     "f7b1832f397e9b915badeb453ba86f7ce85526f40438173e588b4008d6ec6ddd",
+     29
+    ],
+    [
+     "57a534dc-3996-4fb5-94a4-4220a8100d4a",
+     "8ace192a330bd2aebdd54438dcc64155b38d616bc6881278535133df844e4c0b",
+     29
+    ],
+    [
+     "71abc542-9597-4d40-9313-26d33ceb50d5",
+     "f527e825fa022e0767a75d9cac00096c3a972e8aad6e84b18fc99b3a082ee449",
+     28
+    ],
+    [
+     "3986943a-f11b-41a4-b725-93cac8226521",
+     "fb1338f565028a40c98e00358da9139aa09efeda1395916cfbb82a6dc5b9dfcb",
+     29
+    ],
+    [
+     "bbaca94b-d1ea-405b-b66f-f2aa8bf778a1",
+     "d7677424b831f475bdfa6d3b26b98bd5cb652e18277a68234ce4bc0ddc140310",
+     29
+    ],
+    [
+     "cd09387a-67be-44f6-8def-0e43f9ff5fc4",
+     "893739be5d22b8b7a72eb76fbeb4de133995ee6cd589907ae653351787b468b2",
+     29
+    ],
+    [
+     "d015349d-be8f-4855-a9a7-58e458408a12",
+     "9563fa5f89e718c3dd796a2523b4d0d30ca0f91a5d5f4fca901ffb791b3360fd",
+     28
+    ],
+    [
+     "fabc92fa-beca-4cfd-b9a8-1d2566412c30",
+     "1c269b953166b12166d24251ed297e9b022188e77c31bdb21c80d28721f4652f",
+     28
+    ]
+   ],
+   "merkleHash": "139a9a86d564eaf7d174c4dfc04a95654c3cbfec84ce9e54c3e4483988a9dcac",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/13.dat": {
+   "id": "ed05d015-4927-44c7-ac5b-5ac999c29932",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "328cf932bf9238dd51f04bc5430fe63a5fb26c0a72723d154bc8b69642e959ad",
+   "leaves": [
+    [
+     "4bf05390-939f-4c71-aad2-8d360781c00f",
+     "882c40a72f18c1183b63c34ec546ad451fc1de7e9162df37ec839ae7ee0372e9",
+     28
+    ],
+    [
+     "208fde76-5aeb-469d-aaea-4cdf2612849d",
+     "23106c29b31a4681a251197f451bb3bef1c7dc7383036370116f1e823f0d8178",
+     29
+    ],
+    [
+     "7529b950-3945-43ae-b594-4d70a6878015",
+     "43897b4b461283d5c26820bfbd54fe39352aecac467efa33d43fba84add09e95",
+     28
+    ],
+    [
+     "a05944e2-339a-4ff0-980a-19f1cfa97778",
+     "9a2a9b21ac90449bef3caf6a075b345f51c7c8c396e8bd80bd1912175bdaec0f",
+     28
+    ],
+    [
+     "ac4a307a-d9a6-43b3-bfd0-37cb4ff9e9dc",
+     "7953c3907b6b7b77a539ecb30a4ee9af9b59f124f50be26b77c449a53877bc15",
+     29
+    ],
+    [
+     "c2445e12-1971-45ae-b9e5-e119c7ea4763",
+     "57eb0c5774028da1710dd85d581b7fc73c174a564a14b023e50254fd0d56dd1e",
+     29
+    ],
+    [
+     "fefad5e9-cbfe-427b-8223-155c7c811e17",
+     "0de76014492191b2c2403126894523e29546e8f8eefc068efc70038defefbccc",
+     28
+    ]
+   ],
+   "merkleHash": "87431e5b1ec0b40a29a7bcbcaf9b4f8f661513c3a17e9096682539526f2bc2a7",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/14.dat": {
+   "id": "3e4f1677-dfc1-4efe-be57-6969e0b1c9b6",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "ca582b3672c7b9203c11f4a1c7ed184f03f8445dce23b11da238b3581cb18306",
+   "leaves": [
+    [
+     "0d0bc75d-6e08-4e40-932f-35a4234ba955",
+     "ae058223286b404224053b32a07f99941884f95711e4639ef04d544ef63b2032",
+     29
+    ],
+    [
+     "5ca84b55-fef2-465c-8a8a-31d00af4b5a7",
+     "648029d0950662007a8115c0b015cc774b6ec35ca4041d203d69821747b467c0",
+     28
+    ],
+    [
+     "7c12228e-1c61-450d-a654-86fe591f3eef",
+     "b0486b992bf9de0c1c5954ee005e5e95eed3b788821efc2865eadfc04d19013a",
+     29
+    ],
+    [
+     "7d5580b3-9eb3-4f90-852f-aee8a2c51e00",
+     "c2fbb82edc83ad436e2f81c4a987acbdc0624f4f4b1af9f7eaa1389c07d1027f",
+     29
+    ],
+    [
+     "53a16b1f-bfaf-4a70-be2e-6646f9d1d4b0",
+     "ca2b8d05ced082670c6594d1ccde55a9f2bceced07d47f9cbd286542ee498f17",
+     29
+    ],
+    [
+     "475c0cf1-7d97-4114-ac4c-ec4e96487166",
+     "aa10c78b5619bedafaec955209183b1a7d17dc875205abaf5a21e06137f254c6",
+     29
+    ],
+    [
+     "04668535-fa29-4945-9456-a1531d237f1c",
+     "a7a37aad195f6943205accf70cbeeeade869a253593a7b54763cef88fb88d603",
+     29
+    ]
+   ],
+   "merkleHash": "549510f8998af65c316202a96bf792c6b1b48b6c466f12990216e5380e7453ce",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/15.dat": {
+   "id": "09109a86-01c9-44fa-96b4-b2f36dea9b4f",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "974ef5b223ccbc1697e6c41fd75bc86626cfce002b5491a726fe09bb500f46c4",
+   "leaves": [
+    [
+     "02dd75eb-95e1-463f-8313-45f974e2e00a",
+     "9487224211cbeafd5e991825dd5e91e3b9e1b4fa54cc5180d14e63ba677547b3",
+     29
+    ],
+    [
+     "3ca15c85-fd27-40a7-9c85-07785c06a1a2",
+     "496af5854157cb1efa1d80274075c9d74d8317b9474ab0a46a92e1af8a185a70",
+     29
+    ],
+    [
+     "3f3aeed8-f2dd-4bd8-a811-121a54e21c05",
+     "78222110c9f604cecc23106a7c03aacc20dff2117c32ece5ae3563390b887af4",
+     29
+    ],
+    [
+     "52b0f193-d4ad-4e15-a38a-7fca5ca5253e",
+     "6ea74a9f7dee9752556e151cc3e788df85cd72578c93bcba5c3c86ebf9746075",
+     29
+    ],
+    [
+     "03735f9a-edd0-4d58-a4a3-f8435e2bb24a",
+     "a047ba8547be5b3d041c85b7eead9e9d956be3f2cda6ab74fea69058e51c83b4",
+     29
+    ],
+    [
+     "21214182-32c4-4438-b03a-ecf035197346",
+     "942fec1e5d01dcf419f65aa5d87aad71d3ca8c0b1e10b44c302917c37e061161",
+     29
+    ],
+    [
+     "bf57fc90-d9b2-4050-9c68-d39b6f072522",
+     "80e597e1a37a04bffa0ce1364cc49446523c9056ed85c6a0272d0c9da2f77517",
+     29
+    ],
+    [
+     "c76d3358-5a72-4148-b6d3-19d20625692a",
+     "0fd890feabc5a542c7d4c6a22ddf11398296bfbfea615d278e01256c02a9cf10",
+     29
+    ],
+    [
+     "c94f6249-9787-4ff7-8cbd-fe0826b8f5ce",
+     "62287e3ce0a2a38fe7e7ddf475761ce2bcb3dc6815c4a681b31ace5a9fbaabfd",
+     29
+    ]
+   ],
+   "merkleHash": "34a6668184a9b87d0bdfe36effd5f42b16dba737f49577a8dbd0e7f422c8ae67",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/16.dat": {
+   "id": "606f1360-c9d2-41df-acaf-2284d1b0dab2",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "f13ee4375b78b286973a78847e054018b250fd61c9460baad997b250b286c2be",
+   "leaves": [
+    [
+     "3e14d0a9-1ce7-4c18-8c0a-8825a20ccc4e",
+     "46612194e646d99d611b87ded5a3a68cfdaa42a1ee18d955c36bdfec473ab3ee",
+     29
+    ],
+    [
+     "05a178ea-b28d-41d3-974a-6aa54472ca67",
+     "f888d5e4217c51a732177425257f60f94d05947bfd780b56097839be8e75e2e4",
+     29
+    ],
+    [
+     "7d924e8d-4b95-4ff0-83a4-8aaf22620518",
+     "aa7efde4ac14866a0ac7bc0c0ef88032d908c77a08d1e7e0a47b6c4bcbb8ba49",
+     29
+    ],
+    [
+     "2076ca3e-9f9d-4774-a1ed-237cc70255a3",
+     "c3f088f6964675a4d3bf43cffa54fb8c132845466193c6879044d3c5030fbf81",
+     29
+    ],
+    [
+     "b5746f8e-a830-4410-a59d-02f36164c7be",
+     "328179e6b01a2b5705739e81623ccb607809ea2094bad5e17ca915e69c1d2336",
+     29
+    ],
+    [
+     "d5bacbe3-44e2-42fc-9fe9-3e7cd7468f01",
+     "ea61d3e42d0bd3cc9ddfda193ea2230aab223b8cff26571fb61ebc98cd5c6138",
+     29
+    ],
+    [
+     "da93c8a8-f3d6-46df-9d6b-f56a7c4c3b7e",
+     "f4f64fda4812679e31037b0547615a9acc00fbff560d7b3b847ea396b6f16ced",
+     29
+    ],
+    [
+     "e4562288-f47f-4108-915b-9c6f055ed6f7",
+     "e147b9ddf73b868ccb7b683a733485e07731e46a3018cd9a2062ec7f4c2646bc",
+     28
+    ],
+    [
+     "ea985278-b9bb-4956-87f8-c8c9d3ceebc3",
+     "ff08867dc74a5f09d7a9d5d895e55ef86300a0f503dd864813749a5b83cd35bb",
+     29
+    ],
+    [
+     "f441f232-69df-40fd-840a-83c524bc9bed",
+     "4cdaa045f23f439ab0ed2d42086073c157a2f01d7de65cca66ab02bab6383595",
+     29
+    ]
+   ],
+   "merkleHash": "ba57eec98c29e551570272f9686d075bcd25c097a0556dee2df14d01c539f4e4",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/17.dat": {
+   "id": "2e9e2afa-4080-4b56-b17c-5f7de5c86a7a",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "8477ef96c532d06a65e6588d6c63b8a2fc40af628a72487c9cdbc553b0d41f9c",
+   "leaves": [
+    [
+     "2b475430-22e6-4fde-b604-b65d749976d6",
+     "74cb9829c9d8cb294eab6e87a35051f90379c25877ba27c34eafc3ca1b229550",
+     29
+    ],
+    [
+     "5b0f7e6d-fd06-4760-8e80-09645c6f836b",
+     "7e72c5fab75b45e027d33dfb17b9ea21354077b43531af397fdfd1cce1779623",
+     29
+    ],
+    [
+     "27f602b9-6c66-4529-b558-0f5b72df6edf",
+     "2f1b0925e08d06f000723c3e822958dbc96aff1854abc747d415c9fabae0a9dd",
+     28
+    ],
+    [
+     "651554b3-b4da-4f18-a0cc-1cd91a0de069",
+     "7e0813fca238f7281a1854c6d504f57fa8222992932a99d91acbc24f2db128ad",
+     29
+    ],
+    [
+     "05429415-c13e-43a2-a224-9420a6e0552b",
+     "2221b9583eaf14d044f5d2742341431d95a9de2894e17c492fec99321db162aa",
+     29
+    ],
+    [
+     "18806405-d61b-47e1-aa68-ce0b4f61b21e",
+     "031390ef45720d2c6cdb7e2abf4ec64ac04c468b3a698bb6690aeb9576a14101",
+     28
+    ]
+   ],
+   "merkleHash": "17e27321177dcf4c686c16d07885610bb366661cec2ade9f764770b181aa7526",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/18.dat": {
+   "id": "3642a818-9bd1-463d-bb92-b597c07f33c9",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "7482be1582c57959bcc99b63d087bafaadddafbe8bf85a1bccbb46b25930cd45",
+   "leaves": [
+    [
+     "0e6ee374-297a-4cab-873b-f42882c5ca0e",
+     "c04ca291c4eb72ae37efe8a537eb947cf3230a60036ef730c5d02224c3773528",
+     29
+    ],
+    [
+     "94f2cbb3-4750-4b6f-97e4-b8793f9d8ce3",
+     "a3590a85ed0576e2853d05380a81f74e39b897f91dc41bd6d75e4818c990f516",
+     29
+    ],
+    [
+     "819d5cca-10d5-4738-98f2-22ffd6a54c1f",
+     "c5a6b6e7d7955e36a50ab497d4ab19b2577ab054d2cdb618546b2074fab9c496",
+     29
+    ],
+    [
+     "a1410420-6011-4a07-927a-f1520b466431",
+     "f49cd3ed0c63f1ec792c494b8fa466d88d4011e57644555aa9b8f33bc6de6e7f",
+     28
+    ],
+    [
+     "bd34998b-1687-4c74-86d6-620921408f0c",
+     "d938ae398aeb8624f96532ddc702a8cd9ded9c95e837468c3e015c5d90ceb8a3",
+     28
+    ],
+    [
+     "cca9f17c-9e08-41c1-9d2a-6a06dd686f74",
+     "757529feb651aadc039b36d58e107803b89831c85e8f547089dcb594a2ef4c4a",
+     29
+    ],
+    [
+     "d7369701-d5b2-42b3-a61e-d69d658542b3",
+     "02556f39965bd8c89794e295d8de4f11bb991db7e72516ebb874b8b483b2e2f7",
+     29
+    ]
+   ],
+   "merkleHash": "57952dee0a1fa23ffa512dde4863bf82da4e0e0cf29dff448a561c84216c5558",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/19.dat": {
+   "id": "76e2090d-e4d2-479a-8cc8-c9b36178eddf",
+   "version": 6,
+   "leafCount": 13,
+   "leavesSha256": "620bc163f1d37c9d755ce1b14c892c10700fea3b53be4f53400f6407165ebfd1",
+   "leaves": [
+    [
+     "3cb6edb8-f0f8-4d9d-bbeb-c06b612b1d40",
+     "47049591a27287db95b433841a4dd8d59fec4c2a33695725c141796e8bea3f1e",
+     28
+    ],
+    [
+     "4a8be94d-d8b0-4a11-a91b-a046b09a31fd",
+     "4400c1b50c2150eebb7c64a013f34635ba69f4adaa7f47df47db18bc44a15b70",
+     29
+    ],
+    [
+     "4e70ab96-26ae-4ed2-bc2b-a3f0b0a28d38",
+     "6722431afc8c5507dad415bdb56f1173d73decb175cc2604fc767a57391dad71",
+     29
+    ],
+    [
+     "6b504098-30de-4ddd-8687-943cb68d7046",
+     "38c7b71ef7d0ffba62b85e5072068e663d2195e751f01c897beb7e7fa59781f5",
+     28
+    ],
+    [
+     "036ae557-3165-41e8-8474-20e79282d432",
+     "c636952a70366743d4bddccaabd1c5d3f89d3e11e1699856af4615833a0b8516",
+     29
+    ],
+    [
+     "3384afa9-3a06-4e05-851f-fe148d8195af",
+     "70f3a6fbd0363a832881d55a999c54ae5f4268787284f3e45bef9bb22fb7e9d2",
+     29
+    ],
+    [
+     "6829d754-a72c-4563-98ea-4bf7ad4a7078",
+     "32ca1dab8b38a0dd27c0a89d89c7b603bb8dacffc541c4004ec01cc3fc339bb7",
+     28
+    ],
+    [
+     "78535a84-7ce7-42ff-b42b-f3020aac2663",
+     "a70ae9a86556aad2d6d8c9504103ddda1f9e8a2c58270c836a0839942dac0b9c",
+     28
+    ],
+    [
+     "a8a17721-68e1-4a99-8b4c-418b02381fc0",
+     "a9c8cce8cca9d5c2590254cd98fb6ec7d01041124d15652dabeac2ba77471add",
+     29
+    ],
+    [
+     "b9ffb4d3-b385-4230-9266-31bdbbcf0756",
+     "785c9ed0086714ad9f2da4025dff02776c30d0110d1072c39912ea30557412cf",
+     29
+    ],
+    [
+     "be851a07-31f6-4ffd-9565-1c4cc1782bf1",
+     "d4bb1c7cc43ec3729ca83c28cb1489e0a1f5eece47ab706167299e344b33a0ac",
+     28
+    ],
+    [
+     "c7461301-4495-4d54-a94a-d6af1a125794",
+     "7bb16f81ae9984aa4b78294bbb1628b6e5a06159734dda6c836a2e704ddd0e4d",
+     29
+    ],
+    [
+     "e20e9a4c-55ae-4391-8d79-5c0d719fcfe2",
+     "1fe8ba3100072edfdd24af75ea7b1f37a13e4fefc843e4d354e79eed522df984",
+     28
+    ]
+   ],
+   "merkleHash": "663d1f7d9c56e67fc453facb2bf3ca562b13115409a9f09bd39718d760f2fab2",
+   "merkleNodeCount": 25
+  },
+  ".db/bson/collections/metadata/shards/2.dat": {
+   "id": "60dbe4c7-0e11-4743-84e2-788b4798ead6",
+   "version": 6,
+   "leafCount": 16,
+   "leavesSha256": "8326a2fa0eeba581b534bdb8ff1aaca3a806fd7e9b5d1532cb7e3751ff8b0c48",
+   "leaves": [
+    [
+     "0e028817-5857-46ae-be5a-1d1b98acd040",
+     "368d5828d3d7ca9e57b31e9aef32a8f07afd8710804e9711270696480ab38b3d",
+     29
+    ],
+    [
+     "5fe97c9c-8615-45c3-8ef9-770c7a2afa89",
+     "206254d4ddcbc55530e65b23d3ef1b75ca6c91e05fa63bd5a33357af54db72b3",
+     29
+    ],
+    [
+     "58bc47f4-5b4c-48b9-b176-8d2a40051cb8",
+     "8444d3038a52c015bc6910ea563f8fdf800ae70255b69e689b1ba42d449b4572",
+     29
+    ],
+    [
+     "9810bea3-1863-4d88-ae03-e05d1598a6c0",
+     "1f2e8b60b7ae18f7417a83d46be35792d3bff6810bfc01c229c5c176e1faab06",
+     28
+    ],
+    [
+     "92148e80-4481-4f95-847b-5fd53d81ca01",
+     "d2fc5e87b85d125c1b30c826752332662f4c2fb492bdde0be5deff73f105a5a4",
+     28
+    ],
+    [
+     "a0f6979c-75c7-427b-97c7-f53fd28de25b",
+     "4827a270181e005d3622dd48b62c43e272ac25045cf48952ea2fe5a2be2a4468",
+     29
+    ],
+    [
+     "a20c8e4c-c787-45f2-b6c5-3aa1e7fe49cb",
+     "1b215ebf346117d2e87fef448e9451f3ab8bc0e547860a06cda06207c69351ae",
+     29
+    ],
+    [
+     "ac19bee6-d3cc-497c-a504-658305656d2a",
+     "a0051a89731bf4161712863b93a80de2ade4b5be0648c5d4fbfc92ece8251bdf",
+     29
+    ],
+    [
+     "b57321bc-6cb2-4713-b932-b59b12604d0e",
+     "f716f786ed634bd0d3cbd5e3550ffbb236757df2d51ce317ce757ac05d9d5b00",
+     28
+    ],
+    [
+     "bf1f2cd6-b615-4183-beba-befa9e9c9ac3",
+     "dca8a6bc2f30a3efb1a26dcae37058db245e4c045cb9e189964e942c0cd2defc",
+     29
+    ],
+    [
+     "c40a90e5-5f5d-4d6b-8fa9-9e77d961cfb8",
+     "91cf6940cad21720624daa440364272da1eb274ce0693f99733041dcb3456035",
+     29
+    ],
+    [
+     "c0870108-83b1-4774-af11-f80597f382b9",
+     "14fa1f05b46c87347dec20f08647fa74e2ac14c0d83d5083a0b7d2eb0f31b74a",
+     28
+    ],
+    [
+     "ceec27d2-f716-4601-84c5-746ba8edd0c4",
+     "d28e8f39e335ed4e51916eb893f4498b4d469d9c52ee7cb6ea04622e82b54fb0",
+     29
+    ],
+    [
+     "eab64188-7604-4d47-9b6d-dd1717f1378c",
+     "edd8d727c516886bc5b776abfbd328eb66e58685ac4d34a3587ac1fb639c13ed",
+     29
+    ],
+    [
+     "ed9200ab-f1c6-44bf-856f-4c07092df16d",
+     "a16ab24d56492719c3d3730d23a7c5a89eb77ef0fbb15014e28587d064547f8f",
+     29
+    ],
+    [
+     "fd909cbb-6a64-4c8a-8a3f-2cb6211af6df",
+     "fff511c0e7013b765b430b0d19e7585fa3002267b33cbf183da8eab68f8bb689",
+     29
+    ]
+   ],
+   "merkleHash": "7142381658015a256afffc285bb9b0d31182ebcab0030c76d9af17f7ca723740",
+   "merkleNodeCount": 31
+  },
+  ".db/bson/collections/metadata/shards/20.dat": {
+   "id": "156b235c-602a-46c2-86e2-a019f3a94376",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "2672ad8122bca0ebf3944a02b6700ab45acad3faf61f036d3e969ae060c520a6",
+   "leaves": [
+    [
+     "3d4a815b-25ac-4477-9a57-370b693da4f7",
+     "f4b4862f3639a2b812a648f4afbfd1974cdc7bf1369f0078985106c5dd53027d",
+     29
+    ],
+    [
+     "3fa22d1e-eeee-467e-9d5d-be0e59dcc3f0",
+     "d5fad669ec8338a0ffd03cf7022858a0e448133cdde6a8d566782a1b472dbccf",
+     29
+    ],
+    [
+     "8f2fc15d-016c-43ae-ae80-3ca1fc81c031",
+     "28a7021ece936b08575f7635140f49a5f7a3f179c8dae32bf235de7a48caba3b",
+     29
+    ],
+    [
+     "42fd27f9-f863-418e-b8ee-04b51373df9a",
+     "2e41618213ac43f81a7740598cfea1b56d0b6e4a7e1341ded90d82a5cba4cb15",
+     28
+    ],
+    [
+     "62737a83-d65e-43cb-9dab-1ea561b8acdd",
+     "caf536f106bcedebe10bd765f3ed9a36727dd3e9a5d2110858aa88fcd45a29e7",
+     29
+    ],
+    [
+     "ab94c80c-b45c-4509-b6b3-296bee9d7c50",
+     "c3142d3b3e064888b46730c3dffa2db03e6e637acc2be62bdfde40796a0ee587",
+     29
+    ],
+    [
+     "ec634d21-2b5c-456c-8523-66d7190f667d",
+     "296783c7ecaa8f438f40f6f361bb2d62cd290627da39f4b083ae5de3e9524e7a",
+     29
+    ]
+   ],
+   "merkleHash": "b0e05d460e1780edfa60e0f05cb13d214e04a1f84eb30091804de1ebe719fb15",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/21.dat": {
+   "id": "d8b265a5-7576-44ee-ab0e-44d3cc5c10d3",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "4d09525ad7016953d12bd709042648c98ae925c4e7bbaa20ee385a1448e9cb8c",
+   "leaves": [
+    [
+     "4bc67421-4603-4701-967c-099b6cc73222",
+     "5eab39259dbcd883a47e855c529a4533504016a54ec4d94c161aff0a35481bc5",
+     29
+    ],
+    [
+     "498e09e2-cc00-4a41-af6c-9ce973cfc5e2",
+     "9464313a8171b8204a0e4dd2ba49a56359e0aeecfc6d0aa104a13c925d61170a",
+     29
+    ],
+    [
+     "bd55dd71-33c8-47ff-a23d-78dc7aaaeeb9",
+     "6284eb0e6355f83177e2c0452b0aecd21392532a40f184370a900858af9d97fe",
+     29
+    ],
+    [
+     "c0606c33-ce88-4b00-b0c3-501afb60a2bb",
+     "66c1e120311f914567bde6879ad131258a04fa662dc56dafa370880c6aa02380",
+     29
+    ],
+    [
+     "d1dd9cd8-b08e-4cd3-9f4c-90919d0e2c56",
+     "396e4fe504ee6a9d7b342a1125730660a2930380c7243f580ef39fb0dc091af4",
+     28
+    ],
+    [
+     "ea17dc84-735c-4fea-81a3-4486d5fdafd8",
+     "6c3aaa91a325245abaee51b585ad4578aeaa78c5d6b1d8b4e8d82ce81d472f2e",
+     29
+    ],
+    [
+     "ebee234b-4dc1-4ebe-9ff7-5f4425506e8a",
+     "737d9741170440733ff10a5ea535547f1ef54214b46411af6bd417ce2de8a047",
+     29
+    ]
+   ],
+   "merkleHash": "78313985b608984d8a3f1f0ed3b72b337a34f0127324565d3c92e6385883c910",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/22.dat": {
+   "id": "88c8f465-3963-482c-8e0f-0c6180e4cd06",
+   "version": 6,
+   "leafCount": 11,
+   "leavesSha256": "7776f8e621c0f0bbf9bc07cfdab811ece1541ab848ce7ccbb8b63bb79ab0867a",
+   "leaves": [
+    [
+     "0f5a8ad7-e44b-40de-a92c-ded3ff846e9c",
+     "f4ab2cc258ee2cd805a68844dc5170799bd321d19e45af4c8cb9120fdd04bff9",
+     29
+    ],
+    [
+     "7d9634ae-6df5-4bba-a9c0-1698e62c595b",
+     "e572d7106198c475d4df006f40de21e2463a735b2c5272c2904281f44b4830f3",
+     29
+    ],
+    [
+     "8a2ee055-f90a-4726-b3d7-a2877d08195f",
+     "9147a7e7b4fb40c18af54bc4d267afaf3f22213bb14f9dbfdfb3eb64431985fc",
+     29
+    ],
+    [
+     "9aeba17b-99fd-4739-9de5-34bd5dd23886",
+     "7ffaa08bd7823e4b5bd844698e324a22f36bb4d381ec57447d8ed010c5692b42",
+     29
+    ],
+    [
+     "58f4d5b0-36ea-4e7b-9850-e34d968fe35a",
+     "e0575d0aee64985b8047e0bf8ef6ffc594e3584968c21592d9499d42dfb478f1",
+     29
+    ],
+    [
+     "72dc01fc-d016-4086-ac90-5d60f25ad1ea",
+     "52357f485eb137320db6d707fb8a6c948eaef7ff4ac080cc250eb05c0f1bf813",
+     29
+    ],
+    [
+     "0637b4bc-c99a-4332-ae2b-c3d335057d26",
+     "05e10a18cdfffb5fc9ec348c55cd9e2bd982e516c1633e08967eb60d1c3fde25",
+     29
+    ],
+    [
+     "ad5992e7-c64b-450d-9586-bb95385454ac",
+     "a068632dc08391bc284a3cbceb107ab8532314851fbb064c2a1f2d4082858347",
+     29
+    ],
+    [
+     "b8f4b10b-240b-4b04-88fc-a15413f09500",
+     "8fc3fcc4d0ca55393f694bba0b4716bdc4a60bbda62ccd4194302a6bd11c4bb2",
+     29
+    ],
+    [
+     "f1a71604-7356-446c-9ed7-648925cb6552",
+     "8a5dcb19771f3627fa896173d733ffd044c6eb8f7901a3d65109e3bc81b2f4c1",
+     28
+    ],
+    [
+     "f1ff3bc5-4a9e-4057-9362-c16661a8715b",
+     "74dc2690b8086d09acac41c89d14399467b984c3e9010805c18a9bcefbfe123f",
+     29
+    ]
+   ],
+   "merkleHash": "13ca756ff7c7fbb27c05a66c838d6894ac8a3dcaf2c4e4a63ed56974a49367de",
+   "merkleNodeCount": 21
+  },
+  ".db/bson/collections/metadata/shards/23.dat": {
+   "id": "7ad7aba3-bb7f-486b-b40c-0d85f2bc10dc",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "93132f28b8878932493b920b9ef50fdb920d06f661c1db2e4dad1d025b3ee903",
+   "leaves": [
+    [
+     "8b6e6351-871f-4d80-8480-3341e6eee44e",
+     "b828b2a59df4afdfc70f80fcf9a9d41beb0823adef1620233f6d49667b0df1f0",
+     28
+    ],
+    [
+     "22ec2d69-c7a2-4277-a0db-891e509beacb",
+     "05b00ec5b907ead8821b58625faa126bc626c3933a5cccdaf1d5f06fb0a43339",
+     29
+    ],
+    [
+     "37fb41d7-d0e1-4c18-aed3-baffabe39136",
+     "6646a5845cac764b9f452296e43ac6f2b0571dfc094f3a92ef905cee139344a6",
+     29
+    ],
+    [
+     "57a46436-1642-494e-a7f7-8a329eea7274",
+     "b105a86de79b135ee0e354021894eee80f0c5912a35aa3008660987ea80deee7",
+     28
+    ],
+    [
+     "752fd1e3-4f5d-4c2e-a723-00c4c9019ebe",
+     "b4118a1f1e6e1336576ee28fccf890fdcdff4caa0f6c5c6d55f91f64e751f067",
+     28
+    ],
+    [
+     "74715b97-8341-44a8-97cc-43fb60d9d8d6",
+     "a2444aaa785c562f12c9a601de58b5ad34e5eb82b8a157ccc251d73c9a128bb6",
+     29
+    ],
+    [
+     "8303903c-a5e9-42bf-9c1a-890fd1bc35d5",
+     "ffdc4244b5256232f3223e061a356e14fb14d03ce79526912679c63c9cf22f71",
+     29
+    ],
+    [
+     "be019723-77a1-4832-a104-5fd27633e082",
+     "ecc3f41c1e4458ce20d3e16330c57ce443a75bd0b2979c1c92d1df318ac8a65e",
+     29
+    ],
+    [
+     "d629257c-b964-452c-933c-1397d3059c18",
+     "052ca0ab68054cc4fc5868b45e46854cea73f928baa5eae2450fa4d9b2040ef4",
+     29
+    ]
+   ],
+   "merkleHash": "316a273f52dcce8ecc0d67745d7585436d95762b42e6b29d452fb4377fab9d4c",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/24.dat": {
+   "id": "6dab1943-e57e-476e-a4e7-89484ac5fc3d",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "b4bea500318718901f273fbbb009bdff4e7cc92d412772843df0380811769499",
+   "leaves": [
+    [
+     "1f108b83-ec60-4f8b-b4ba-2ca6e09b67e3",
+     "ac1232b7532126e486d75c21b7b1b45cb52477239be82ba00191cf3f9043a915",
+     28
+    ],
+    [
+     "7c46f3a8-fd5b-424c-b6ca-0d598e0a0ef3",
+     "a4249fcdd801fe258fb022259f53d70ea12adac80276bb57e2be45d15187166b",
+     28
+    ],
+    [
+     "31f5cfa2-de59-4c4e-accb-3a788dbb11fb",
+     "68083337e2141815909d487de2cd9711103ae1e4fdbbe46d185e5145f33ff131",
+     28
+    ],
+    [
+     "518c4a36-1149-46a8-881c-494177245b7f",
+     "3154169b21cbd41767e6c16418e349156c3089e712a57890df16e9989545fbcb",
+     29
+    ],
+    [
+     "34326b9e-3655-414f-9593-c6c4857d5dcb",
+     "9f1ba605faac9a412d885f870869d2d5cc2127e8754a4fc7ba19d62301e3c75c",
+     29
+    ],
+    [
+     "22221618-78ee-44cf-b38f-0bf176ed6ef6",
+     "bdb437b2d41bce22edc35cdc931f6380ac1c13741e2b55432db726717f59b04c",
+     28
+    ]
+   ],
+   "merkleHash": "bea22f0f5a2a152cde8406bf7ad2638fdce84227c1786ffb09e5c5fd0a867313",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/25.dat": {
+   "id": "60dc6cf3-c63a-4041-93b7-bc33b09daac9",
+   "version": 6,
+   "leafCount": 15,
+   "leavesSha256": "08b7bb727faef1e5e83568d6f8205e9a489deead2a10405fb5414f6bb454a443",
+   "leaves": [
+    [
+     "9b17409c-c27a-428d-b255-d89cc99a82e6",
+     "54a79f68edf2818b78921c2706d98d3dc94e28ecea981b45dc8c4b70efd9b52a",
+     29
+    ],
+    [
+     "64a7b124-fb39-4b62-98e4-f21bdfc54a1d",
+     "6c86bde3d8b7155cdd3e36b5c97dc86497be5b9795cafd538426b71c9e3d0c28",
+     28
+    ],
+    [
+     "72cb8140-f6fe-44ee-8eec-f03a562577be",
+     "e0154bd895c73ed58bbf2782e7cd17f4cde4b207c09c2a7b5b43dd09e0bbd1ab",
+     29
+    ],
+    [
+     "558fe06a-14f5-4598-abae-6e868017f49f",
+     "28f9e336eb61a622e3ca442cca3c4a73c7919986ecc5f4a22d2e5bb5377bd088",
+     29
+    ],
+    [
+     "645d27f0-4006-43c5-8ae1-de32d79867f6",
+     "c0386743568e408ef884f28148546ac724e3f2a53515114815163813fe505854",
+     29
+    ],
+    [
+     "705d9af0-65ea-477e-ac40-3fa91723ff1a",
+     "9fd3484ebe15ddfdfa51ec5ac3adbcf3030e56c8206b8e854049128669a47bc8",
+     29
+    ],
+    [
+     "861df0ce-53fe-421f-b0f2-4dec9402a330",
+     "a3df66b8d97ef5ac478e1053e2b78d0c599ae4a4f9f6609f9550d899117c6f8f",
+     28
+    ],
+    [
+     "56974aaf-9b89-4670-8a63-ec5760e7d126",
+     "0293e98aa19a0222105afe8c64114656d4f1b02011a03f7b867df800486ca1ed",
+     28
+    ],
+    [
+     "b9c9a663-c743-4788-9ab7-5fb4ae416120",
+     "110b159552db988a1d811c7e6fa2f8aa084a3ae80f24cdc21cc40a911f9f9d0d",
+     29
+    ],
+    [
+     "b097af91-fea1-4995-9623-0c8489025130",
+     "317bac7757a71dcedd611bef2e893e54795165d91d5710b996d968e06ee08d02",
+     28
+    ],
+    [
+     "baa12d27-2bbf-4873-9052-7b2922d20698",
+     "30756ff37492828b3c470d076c8140f8e9523ec77447f317ec7772db62c2f90c",
+     29
+    ],
+    [
+     "cb84a817-d7f7-441b-b862-5eee6f9f7fe0",
+     "8c871737cbcb838df20724d4be46fd8b497839f2b8287db9252bdf923c631b16",
+     29
+    ],
+    [
+     "cc847910-871b-4de3-b19f-b956d167fe0b",
+     "04faf51122aeb0786630c14f864dad76c81850e076ee039d7a3d4362293bbf9b",
+     29
+    ],
+    [
+     "d99820f7-3ccc-441f-a493-09320d871c3b",
+     "e4d5269bed4fae4f049f531d25e271509bcb0e31bfc3b5467574a763927e6ace",
+     29
+    ],
+    [
+     "e6df2740-a341-40af-81f4-a0eb16708401",
+     "d33d7482fb299147c5c85161523919ca82c8bc58039ee5a7eb49e1f40a9378b6",
+     29
+    ]
+   ],
+   "merkleHash": "2ddaeb069a31f30222cfb7e74437a0e8dd15ed28796897457c1968e014cd9eb5",
+   "merkleNodeCount": 29
+  },
+  ".db/bson/collections/metadata/shards/26.dat": {
+   "id": "32ce167c-322f-4a45-8e9f-7578288b2453",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "cab6f34ec947ba5b135aeaf09457452cc09dae2e1bfcdffc45893e8ff083403f",
+   "leaves": [
+    [
+     "1b85d3a8-9f03-4c67-a216-d43ce7e24cab",
+     "db6b08dd34ce861b380bc6988f54e1756ec936390ffd148df9354a40d00c17a5",
+     29
+    ],
+    [
+     "5b26b2a3-82a3-4c55-9536-2bc767733000",
+     "a571d15b39bf6e42775a7dea0f0c562c7550e8807d8e530e0b05a8a393d22422",
+     28
+    ],
+    [
+     "7bccee79-83e7-4f7f-a3cb-6e8214b36d9e",
+     "9ac8fc038a14f8b39fbbbde918e6ea8f43d2bc643120bf42e906971164049443",
+     29
+    ],
+    [
+     "033f11f8-dbad-4d30-8c6d-353cae0fca55",
+     "ccd181f3688c053a750007bac29995820ce219c34b62071a29e5dbaf2beea7f1",
+     29
+    ],
+    [
+     "43839e0c-2844-4409-918b-ccd7778ab648",
+     "b89ec296624ba18d27a795cfd3b70ad4bcfe5583652e45f7e7bc90a497da3d0f",
+     29
+    ],
+    [
+     "bfbc80cb-5b69-4fec-9d73-c5f09050dba2",
+     "3b48bdeb46ede395f49ebddbf9d8a1f24c6c98858693e3d45a44db598d78eb49",
+     28
+    ],
+    [
+     "d87b2e6f-0816-4b5b-aaa6-3725e3202679",
+     "d9da88aed76f86ce2934293c7e6360ef30c1320fb534add96cc67270876731e2",
+     28
+    ]
+   ],
+   "merkleHash": "9ade57b59e1365171401bf7243285867554eea26b5c24008420c20d07b48ec74",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/27.dat": {
+   "id": "7a778a22-3707-4960-802b-f4526317bd25",
+   "version": 6,
+   "leafCount": 4,
+   "leavesSha256": "eca2402f0a20855d627830d697722b6bb194b23375c54edf19e4c9640b4b8786",
+   "leaves": [
+    [
+     "4c0df67c-3c2d-40c4-9657-74e97cc9ca51",
+     "aadf8523b77deb12e7ed8934aeeda26490f181014e8290c6ba714237c959f281",
+     28
+    ],
+    [
+     "47d7c3af-bee8-462a-b704-e727b1fd7d47",
+     "7a9d95e5d58e141a760d86cd71687157deae42adb25f7bce147f8805464aff44",
+     29
+    ],
+    [
+     "63b470bb-a159-43af-b6c8-fcdbf01bd1e2",
+     "57164782988e7bf272da39deab6a47e327eef3e5f6249256a40cdf63fbbba4a4",
+     29
+    ],
+    [
+     "66015033-4cdf-479f-82c9-66f2f19e1cec",
+     "5d996b8d8430a4f69197e9ee5ddc53a8f322536a61d56acf210f3d10b92c1224",
+     28
+    ]
+   ],
+   "merkleHash": "cbe2b5cd8c0614bb0ef0c3044753763a4b21b7b36b697539d7aa414b948587be",
+   "merkleNodeCount": 7
+  },
+  ".db/bson/collections/metadata/shards/28.dat": {
+   "id": "3feb9f53-31e7-4941-ad46-7ccb86aaaeb4",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "8337dbb2e86ab69ea47e63d0dec8c48ee96c9aa1472d3c2b0445d4c1e2e847eb",
+   "leaves": [
+    [
+     "5f7781ab-4265-4ea9-9e6c-52ffe1dec3ce",
+     "d133c158e9fe9bde10184133802ca74a77430d72cb0f08602f3261b611c7ced8",
+     29
+    ],
+    [
+     "812e5f52-46b6-4265-a786-1e90f34b19e4",
+     "4d775103d57b79533dc743d8e1daeead28feb6c7c275c517e3591f7a2a30668e",
+     29
+    ],
+    [
+     "25323f98-1ddf-4c1d-9aac-d853f92f2247",
+     "31b3032c7ca5992764e068c35b75742de4f194bca4679967f2df520474d80cbb",
+     29
+    ],
+    [
+     "177793b9-33de-4e3a-9cfe-1397294da067",
+     "025b899b16a03f055f3ff7ab346a1bf1e9ba370f8f599f18c2a0171033ad0096",
+     29
+    ],
+    [
+     "60651930-2c96-4f95-a7b5-0b4c9ff035a6",
+     "e82f733cee7e944a6e267b519e2ce87e59be2ccab30490d1b63f3f008ab5be3f",
+     28
+    ],
+    [
+     "a38aaa7d-6736-4524-8e64-b149f6aecd4b",
+     "df86e4ffc0774301dad654f5a347e772454f86dfb546ad9426adc1b0d8b93972",
+     29
+    ],
+    [
+     "aafeeddd-bbf9-41fe-94c1-a5fd9b005624",
+     "aa011839a9dea5f1954aa86542d5a88c6af13c1bd4d6be4e830851103c3a083b",
+     29
+    ]
+   ],
+   "merkleHash": "44fef1fd5a38d23d4b74a262b2c0abbdf2cb26f55141f1408ec3c0fc8bfc9e9e",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/29.dat": {
+   "id": "4146b625-9166-48ea-8f42-21a989ac2743",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "ff963d8f9c14d66ab353d2d8bab8730669b258b84901a2bf15a098a4668c5088",
+   "leaves": [
+    [
+     "2e7de3e4-5dae-4233-98ef-bff0fc4ebe4a",
+     "f19e51166dc347de1ca3474759d02355ae7e3fa4818a449828f4a955a4f7735c",
+     29
+    ],
+    [
+     "26a52220-0bdb-4e0c-b923-8bc048a929fb",
+     "9c41f99439bcbf8f5a0e07a26247abc385c71ef53e1bcf05e4ee162a137aefe2",
+     29
+    ],
+    [
+     "357f35f4-c513-4590-a887-024060eff0e7",
+     "a9ef5f5a78ed44a3f49cb2d9d4831dbe3dded2f8b63964b1c30657276332bc20",
+     29
+    ],
+    [
+     "c3350398-d95b-4728-8ea4-e013b41ddac3",
+     "3af9d9c6240004b80ed46ea40b99e3a15f8f03581318572829301dbbf1d6de67",
+     29
+    ],
+    [
+     "cea61703-a711-43e3-93e7-cc6afd45b012",
+     "129fc0664a59ac62ecb66b81bb46033d2cc21751383f4c3ff6283f056310136c",
+     29
+    ],
+    [
+     "e548947d-3e47-494d-a04f-faee5c05aa3a",
+     "0bf95a921e627ef90b5b5269addddcf27d92ae959c39c511d3d8776f09657356",
+     28
+    ],
+    [
+     "e4180779-9100-41a2-8814-e275b5ba9679",
+     "4aad8bb939ebc05734aa5a0abfab00b236838ddba2e873a00ee11e341ee73941",
+     29
+    ],
+    [
+     "f132cbaa-ccfa-439b-a173-a1d762a90750",
+     "d9213ed30b525c5c21a1b5a425c1cc69df85fb5bdd1aae19d56e6c6512070b7f",
+     29
+    ],
+    [
+     "f85864fd-b1ae-4ef4-b61c-2d52d6acd553",
+     "cba2af680b28832dcb40625e6eb07e4a3bc6a3d9538f14bef1c69f6a2bfb1938",
+     29
+    ]
+   ],
+   "merkleHash": "8e642ea00ce146cadd96d5f4a8cfb412e9da7b27266b60fef9c03126625d6dd5",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/3.dat": {
+   "id": "897f8c1e-33b9-4223-9107-3d018b5cbfa7",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "31a8828a16508dc2ec85bbb9f9c0379230f24ef98c89904ac9b3591829239e0a",
+   "leaves": [
+    [
+     "4bd522bb-e899-4b90-98c9-9d8d3045ca22",
+     "35245f64f604fbf6d9a02a68e9800ef06a15e1a916ec9645eb567d413c68db29",
+     29
+    ],
+    [
+     "6a711112-0a68-420d-b1e1-7027687c1b7a",
+     "5c30404c33ea67ac23a9d1e17d3e8caa7e7860a7738b9b6a7f00b1b4d77b0824",
+     29
+    ],
+    [
+     "16c1d90b-6c59-4b09-8467-0ebc5dc8b552",
+     "69e634cb146b8484ea10dece012a36fd4ec58bc526f1e99f4948117a9c729ea7",
+     29
+    ],
+    [
+     "1048ba41-22f4-445b-afa0-3725a41398b5",
+     "62ed1324e54ba43d9a78775f4d67e8896d96f60ee0650d1d8f99008d18986223",
+     29
+    ],
+    [
+     "74157ab6-31b8-4534-9c16-a2af11214b0e",
+     "bcf35153b4daf15e691603798027e1b456656f11c4ac7b4e830c404b636990a5",
+     29
+    ],
+    [
+     "147393e9-62e6-47d9-8533-5604a3aaf10f",
+     "f6253611713cacfd970323cdc42f1ee034c8b1f5cf449459060405356539a420",
+     29
+    ],
+    [
+     "d6df98c9-22be-4e14-9f85-7cb3a8cbba77",
+     "98788f2cabeff3a0e7bf00b23bd2ce54a9864f16c77fd07d304dc2be0e6be986",
+     28
+    ],
+    [
+     "d76f8cc9-d7ab-46f6-953c-383ea1995b62",
+     "0814e2abfb83377aec90c66cae990b3b4f7cf42557669f1bdcd01160139c1694",
+     29
+    ],
+    [
+     "e6b824f8-0810-42e0-a5d9-b36ea4582ce8",
+     "f1bcd95764a0ab06163c8d4f4f9e4ef5434e4b72d53cb6919d3d914d448b0138",
+     29
+    ]
+   ],
+   "merkleHash": "81dd6635490a0746a39b980c9ae4ad629663a2b814b902588d70b75b4aeb200d",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/30.dat": {
+   "id": "5c724a85-6b64-4e6a-9e15-dfa0821821e1",
+   "version": 6,
+   "leafCount": 13,
+   "leavesSha256": "9b0f9c2fac8f49438e5d6da597b6dc1afe51034cc95ef232b08037cd9f0e7c75",
+   "leaves": [
+    [
+     "4e59d2dd-2226-4fa3-8bd2-825eb1faf0fb",
+     "bb82c3ab69d5200ed86d8c039434c4a1a358318ac2ab7a67cee24469f45d3853",
+     29
+    ],
+    [
+     "4f3c42f1-3bec-457a-8236-d9f0ba46791d",
+     "aad989f81d39e943f9645fddd231f038679c393ec6b9ecd4f93d6289882fe2ae",
+     29
+    ],
+    [
+     "8f9de0cc-d6ca-43db-ba02-2f29dc463606",
+     "0f5bdfd2456d3eb6d0e53bc769219454e9be3a329a314c393dce2f3ad457cf50",
+     29
+    ],
+    [
+     "8fd8abe6-a754-4516-8654-d26c0ace0cb2",
+     "f1da2ed9f92736497de3a3959427721e393d2de3c9db945a76837ceaa6ca8fa8",
+     29
+    ],
+    [
+     "30e3a311-d488-49f1-abbe-a78229127799",
+     "5c13dc4d32e84c356de3905e5dc4dff8b88a857d1c8f9d506549ddef3988b524",
+     29
+    ],
+    [
+     "38f38392-ba0f-4a44-b598-7fb092b7399d",
+     "cf8e3f7e7e9dbbeb434be0909b9e98ed6ddef480ba586afbb28cf7c5ed24b414",
+     29
+    ],
+    [
+     "917b3cbd-c3fe-40ba-940a-aab431c1ff43",
+     "74a8b59a56d6fa4f855243ed7229d2403450ffb61b717591d1e58f74c50f3c5b",
+     29
+    ],
+    [
+     "8926ab17-a413-49e6-97cc-db3f10c00f04",
+     "e3e229fa38d0aaedc920411e437da4a777f16c92cb383327b2a3315effc05854",
+     29
+    ],
+    [
+     "b13f0dd4-bae2-4d9e-bc2a-bfd0eca1b736",
+     "d98443bd136432021a23834957491f0f808ae2fc34fc7a54bce8929ebb255f1a",
+     28
+    ],
+    [
+     "c4a23520-d9aa-4303-a92c-4f2717a1ec8a",
+     "99b1ff8e6fa8e63d88b2b16b26fa0bb844c5cc79ba4b1375854fc077689fcebf",
+     28
+    ],
+    [
+     "c8bdfedd-1875-4789-bd87-39dd3f34e6a8",
+     "6fd66ea99cad9c0355c1ce0f2e53a4f7e0e64103ecde73b8aa25865e66a9876e",
+     29
+    ],
+    [
+     "d0a47f17-36cf-4a79-a4ac-1555cadd49d8",
+     "eee9013416326fc8ee1b223cfa279db783dfdcc771a65fb5233e5c5748115843",
+     29
+    ],
+    [
+     "effa7ee8-b564-446a-8b40-a1952b90cb8c",
+     "ddecc39880c018c5fa62da28e2b0135b9c75cca5bd6be8d74b371e8ca4143294",
+     28
+    ]
+   ],
+   "merkleHash": "9549c08db10fac7748666a7e96d648e0d7a442d7e4c189768663857d4ab83716",
+   "merkleNodeCount": 25
+  },
+  ".db/bson/collections/metadata/shards/31.dat": {
+   "id": "959c56c7-9aa9-46f5-b76d-8a298369cc6e",
+   "version": 6,
+   "leafCount": 12,
+   "leavesSha256": "8b93f9b85394835f71edcfed69681cb154a049156cefe766c2de26254a5f4f62",
+   "leaves": [
+    [
+     "02a44f22-b2c8-475a-8b8d-dcf775fefdea",
+     "76956cec8ba26d8bb3ca26b41b994ed9bf1e3d8aaa42294e8c64cd0c2b0b654c",
+     29
+    ],
+    [
+     "8a6af375-a93a-4ea4-b870-2ebff4ce5a4f",
+     "4cf20da36cc2114124db812faae44fcd34d30122990ce060adedd524055c4775",
+     29
+    ],
+    [
+     "66c3e406-ff36-4683-ae35-b863c0401b30",
+     "ec4b27685d94b4e6ea71b4794bba37371d8850686130946e57fa759d54bddf85",
+     29
+    ],
+    [
+     "446feb6e-1c2b-4d05-a778-b6f2496af745",
+     "25048cabd29da938f35d62c08d408e2b3bfd4a26fee21b3306765c3032f7c6ef",
+     29
+    ],
+    [
+     "7087c922-f6d8-4db9-99b6-08b62d3e3ffa",
+     "f72a2e580acbd96caf19e5766e321fccd57604c7b38cff58e8e9e88385cf69a6",
+     29
+    ],
+    [
+     "9454aa80-eb7e-47d9-bf48-bf8c538d41fe",
+     "9b22d56f1c51b977fff6383b61b1a6eea42eee44444cc06d8e7f3780c1fd1a8b",
+     29
+    ],
+    [
+     "cdbc2bd2-1245-44c9-a113-f005f9753997",
+     "6d2910976cbba46bc3bfbde45b7acb484d2a49944c60c25f1b37d2505d9eeaa1",
+     28
+    ],
+    [
+     "d823452c-f06c-4f15-a4e4-dc7ad736b540",
+     "224193914d9d27a297f8e6c3d472806a87b5ec826ce7322e32970223fc7c48fe",
+     29
+    ],
+    [
+     "dbaee141-a44a-4d88-bc08-0e01e626450b",
+     "65482e7d53d68f58aff39e417c573b82ebd5b1b70eb8951ccdf4d6cb725ed497",
+     29
+    ],
+    [
+     "f7cb7a66-d5c5-4dbe-be3b-98ef3a75afa3",
+     "9dc6f6cc9f403553c70897c59dd8931454112c827a694512cbef7da59c4064cd",
+     29
+    ],
+    [
+     "f9b6db88-8bde-4bfc-a30e-fc66124a5056",
+     "f6b9762dc78cd0ae8d17bf5d1776709fc0beee4a4a27d5e94236c94a92377c9d",
+     28
+    ],
+    [
+     "fb2166b5-a349-43aa-91bc-31d6888bc5fc",
+     "a1c4989bfe4932110f0cdb3e1040196c83ac27001b7e16748839646feaafef34",
+     29
+    ]
+   ],
+   "merkleHash": "d0a2e3500a545eba707537acfb980c99c51617ae228c1519690f85dfe0dba0a8",
+   "merkleNodeCount": 23
+  },
+  ".db/bson/collections/metadata/shards/32.dat": {
+   "id": "f08b4b26-a667-48c8-b9cb-fb667843ed41",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "59090b564f976e7925c0dc0b4074925a5ea442e474d074072a981c6b5c3e7121",
+   "leaves": [
+    [
+     "3b4ec878-5e10-4843-ab8a-4577130d9668",
+     "fd6e010dacfa890ae4afed30e8728d836697a96591b7be885d3a5fa54b461ace",
+     28
+    ],
+    [
+     "71436e07-41bf-45b6-a207-5bc244f52fb8",
+     "93a141f9fbe4f51a98e47ec6956824cd44c5616808792ab15b9c04b455da786e",
+     28
+    ],
+    [
+     "c59c00d1-a536-4e63-a4a4-a7716bffa5e7",
+     "bc9d354dae6edeb749c1cb4c483766cd2bff913ec47252d50bcf05dfcb1c56a1",
+     29
+    ],
+    [
+     "d5296bfe-bf4c-446a-a4b1-0386b143d4b2",
+     "44fe758c83a0aa2c02098d0f9b1f3d4db4adce32097e2bbd7736e28c11bc5b47",
+     29
+    ],
+    [
+     "d7977b8e-d12e-41a4-b1c9-f9fef633aaa0",
+     "c0e313a2014e1d8f13a227a1295d2b2c8546d445e9b693ce90ca1eb471d75cb2",
+     29
+    ],
+    [
+     "e66bf566-fd05-48e4-a157-68496e8f0863",
+     "7a449672cfcfa3843078844434b81cf92590a75ca3756f294b825bda78b7f303",
+     29
+    ]
+   ],
+   "merkleHash": "3ff0746deaa790623fd0989a07edeb6f15c4a9f4c378618995b994ce4c1b34b6",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/33.dat": {
+   "id": "7025f333-b491-4193-863b-bf3241b647a2",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "82fab33426f3fd6de04e1a09b670fceaba0840e244de53eba52a4b8366fca4f0",
+   "leaves": [
+    [
+     "1a77107e-360d-4286-99ef-3f5ce8f12673",
+     "367f6bdab1e67726e5db2ce604e9e251580de38a0aec5eaacd7271cdb91ed71b",
+     29
+    ],
+    [
+     "2e292942-ef9d-4b32-8fed-d5db051bc6df",
+     "28925ee7c62a91fdd1424ff86de5fc325d1f1edae44e130d61e0162364c6c101",
+     29
+    ],
+    [
+     "4e8dad9e-5e28-4827-b366-ce8a06aaf3b6",
+     "aafb8a2307ce6d4f11c4f8e8d41f880f6602e1c4bc3d21ec779fbcce573b4421",
+     29
+    ],
+    [
+     "11df98f8-9042-4a48-88f2-1afe0b9708ba",
+     "4f6796655ea7239acf2e422cce159797200542c57fab35cf88754291b6963aba",
+     29
+    ],
+    [
+     "47cf1369-03b9-4771-8bcb-3cb480be10d0",
+     "ef6fafc1734696f648e97c1cfa49a3432a00e384529fb9bd2773c944bbd9cdb0",
+     29
+    ],
+    [
+     "183cdde0-d7c6-41f8-a159-39be19c40a26",
+     "bdbeda4af0c07b3b046b2810df073fa55033ffc0d019244a3a1d101e6b1bab2e",
+     29
+    ],
+    [
+     "e13dec57-73da-44fe-b9f9-ea7845c39f8d",
+     "54b8b7321b7962920c15488622820d82d3eb668d3a9bc8d755019be43d8e5f1f",
+     29
+    ]
+   ],
+   "merkleHash": "5ad81eb1d5e413f20397c0e193f9334614948263d38c005149205c52d233fed3",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/34.dat": {
+   "id": "86665993-0f16-4a64-8ce3-55ba5c025685",
+   "version": 6,
+   "leafCount": 12,
+   "leavesSha256": "a7f026f0c8b4e0a1f782e2fc2def9eab67e52aa9c273194552a1383c05af17ef",
+   "leaves": [
+    [
+     "1a6c5864-4fdc-4b7c-9a4c-e810e11017b8",
+     "8c31876e7c0a28d01d76bbfda66b5193b977ffe84a22f67f09609666591d53d8",
+     29
+    ],
+    [
+     "2bacd96c-5a0a-43c2-adc1-2139486e8366",
+     "767a7044d705452b83e68d12a4a9cb1f098c6ecd8b909b925ec982b6913e979d",
+     29
+    ],
+    [
+     "15ada2e8-d6ed-4d9c-8ec2-932c38317405",
+     "ecadbd7e5d9f70207b4888c67c5d240064e3ffe00577923f5127efc417baa267",
+     29
+    ],
+    [
+     "61c16a13-6b33-41e7-9a3f-bc5240260120",
+     "f1d3f481cb9a7ce4022a77576dbf5255a6bf7e4f1e3b8f697d91ef5797f1dbc7",
+     29
+    ],
+    [
+     "61f70ea0-8380-43f1-9974-338f52068d20",
+     "db8b3ca33abe89893a48f0460d59d4fb87eabcf13ed502cb99b63bfd7e2012d3",
+     29
+    ],
+    [
+     "2978d5cc-3bd1-4178-b171-b1cf6800ee1d",
+     "7b45cf79a09bc117c566675800683448f486bc8d73318d3a3279ab1e327311bc",
+     29
+    ],
+    [
+     "a119e4e7-5dec-48bd-9f22-72e7b9a4b90b",
+     "7f6b6a6a6f4cd631aabd5e1ce28fd9db2a15b17c3af91ddb8f64189990b0abb0",
+     29
+    ],
+    [
+     "b2abc372-d3da-43bd-ba30-ce60611610a8",
+     "32e3e86cfce1732614d427d362b9c4cc5f9d552a8a78e19476db35e6ad87b269",
+     29
+    ],
+    [
+     "bf189eeb-6972-44ae-9b53-67ddbbb6f799",
+     "714b3fdfc004c1bcd6df4773f67f88f2f5a0a0270c546ce0fda43bc21e56db5e",
+     29
+    ],
+    [
+     "c61fd44f-d8f5-4cdd-acfe-df99aac20cba",
+     "e0310adcc1851ef4cc5a7a80f1bbae1023bb8c9fe49a67f03074044a63be6f3c",
+     29
+    ],
+    [
+     "dcc6a1c2-e299-4b22-8958-42a9e7e4435b",
+     "30c575a72ebbb50405bee83e881eac1bebd55e9f11106a086084bffb62954818",
+     29
+    ],
+    [
+     "de95229e-60d8-4f1f-ac47-1a7d518a4246",
+     "13df463667a88800839f0a127fc2f5d9309e2f3f77717fc328d45cb3eba580db",
+     28
+    ]
+   ],
+   "merkleHash": "f87a8a72eb9e18bf1fd123aae502715389ea4342e481fe2d4aa158bb7e00f78a",
+   "merkleNodeCount": 23
+  },
+  ".db/bson/collections/metadata/shards/35.dat": {
+   "id": "d2e6d302-a872-4caf-bf03-e1e7ee497b70",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "3e82b6c0f420f941ffe991be8322df171ed1ab0b34ff0f475a226d8e17cf83d6",
+   "leaves": [
+    [
+     "10d83685-1654-42c8-88c4-f093421020d1",
+     "5ae5ae1a49c5e9c9a0bbc7cbf8b58599490bb039e9ebbe235c02c754437f5bea",
+     29
+    ],
+    [
+     "58a9915a-fb84-4c51-83a1-feb374f86ade",
+     "3220ef95ab85d0d37bfe1f2bca29d63ed2f371e8a2ba62848ee63425a449de4f",
+     29
+    ],
+    [
+     "80f357ba-183f-4f86-8ebe-e898bf754f85",
+     "bfdee7243d79f7aff39b5c3c6edac26435472a9e875f1425dfa0c6c67a8d6ae1",
+     29
+    ],
+    [
+     "86a9e96e-eb8e-44f4-8fdc-8327225d02e0",
+     "f3eeea57946d6fba263ce265a8e1bb119d1699c4b6a4228865bae7b696a4f0f0",
+     29
+    ],
+    [
+     "98fc71c5-8a2a-4aa4-adae-8e91a258fbef",
+     "8e84ad5904e02033b8643ae39263cfca1604586dde3d71a85de21d23e7b54d7e",
+     29
+    ],
+    [
+     "aed9e3e4-701c-4c07-b740-5e5632de93f8",
+     "41d278eb1a2abbe4e62a6b56eab028b46e3afb871a7c9d762885f8438aa46545",
+     29
+    ],
+    [
+     "b83241bc-5414-4805-a3b0-772d403715a8",
+     "856a7d0799a0ed5b9ad55d47d6041a9b5789a901b3929e606307dd887621f2f3",
+     29
+    ],
+    [
+     "ce3931fa-fc51-49cf-990f-e45677f6cdab",
+     "344a20e22d9b4ed5f45b32169a84c8978f2c5b51b3fe3c44bd1337c779aecd5a",
+     29
+    ],
+    [
+     "efb138d2-e19f-4136-b991-12fa4e87d94d",
+     "733bf143de0b3ceeb58c58fb29a582872a844d912be93168cb3cfecd6b35b8fd",
+     29
+    ],
+    [
+     "f16f0344-aece-4e9b-ba70-37bfbff4ad8a",
+     "b41a2ee16979f3231654fc9e2db588e34379c635bb7fce9beb9faf0bdcde120a",
+     29
+    ]
+   ],
+   "merkleHash": "48389eb9eaed70c594ba835a1f7a357065555e143e0e52d28902af5a6daa1a7e",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/36.dat": {
+   "id": "b332053c-ed9c-4d30-9bc8-698ade02e8a0",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "75ed18443b20d0fa33db58337ec1229aabb06e0786a8dc001794de5ebe4fbfb1",
+   "leaves": [
+    [
+     "2b001e0a-c257-44c8-9b39-e4b06fc8dc5d",
+     "71b91f116963b5e667a4d7e51d9a479892c896893a004956f0e031c16de1f583",
+     28
+    ],
+    [
+     "8cfd2dca-f6f6-466c-b5da-befeca91db3c",
+     "fb8a512c0d1824c5342cf8050d8c4df174524f587c30164624979b3d86ea361a",
+     29
+    ],
+    [
+     "20763db9-cd78-49ae-b3fe-46dd19d8f0c1",
+     "b0cb2d4556401b919881c5010d6ab0d7beba720c0135bd3ddd34646dc75dee1c",
+     29
+    ],
+    [
+     "22617f03-f9d6-45f8-8a2e-5a5f679986d5",
+     "de3953ebb97a942322b439206e3bc76e0d768fd419ecf5479eada050bd43f5c1",
+     29
+    ],
+    [
+     "cedc6fd0-9682-4891-9adc-6078f64df952",
+     "1e227782d76c27d08d03d95ee11bc4ac6d26b8bcae428dacb4010282a7ffb20c",
+     29
+    ],
+    [
+     "e8a7ac07-4bf0-4afc-ae19-5a39a25be7f7",
+     "6e8c7916977e73a8004771f2bb259255c903e6c9bf4431d5ab7754114d93be63",
+     29
+    ]
+   ],
+   "merkleHash": "2eaa17e747afa94844233d8dc7a144662e574f754a8a8aa4587078b78c506d29",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/37.dat": {
+   "id": "b8fbb0f3-4a96-4055-aa36-44cc48aefa65",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "ce10e2e233cb48e8381354a1502e7f74b562ae24e3c3bddcb16ac8ecfa8bbc58",
+   "leaves": [
+    [
+     "5df5f7f8-43f5-4dbc-b849-52cb0049b40d",
+     "d52c2928bde36300cb6993bc670ca81e151086c5c504cac0fdb75451b3f5a00c",
+     28
+    ],
+    [
+     "29e99aa6-08ef-4e1d-83f3-eea937f49249",
+     "e35430b830ca249cbe57ed107d26d720ec468b010276ef797f8f2bb92c8dd0b8",
+     28
+    ],
+    [
+     "36b3c113-ed93-4032-973d-75ec26812c80",
+     "3c4e8822c8bc209a23a788d63f4625b4a0af17c79bdfae37468e53dfe85ae3c4",
+     28
+    ],
+    [
+     "89cf2b1b-0ac5-458f-aa4d-aa5cfc4021de",
+     "6e6cd3d0cf2324522e3ec8f4baac1e9d6b1de27036ebfc122075fc0d2f781697",
+     29
+    ],
+    [
+     "820e5852-64d2-449c-b740-5eaa46923c80",
+     "d657c3d1e089295d340c1fd95d070c5a45d46f3aa1650b26ad2957fd123eb5e9",
+     28
+    ],
+    [
+     "96113cac-c7b3-46b3-bb9f-b22620a2fb1f",
+     "9761f422a3d916e8013b7261af688784c2fff71c93d513c90ad2cb12ef9bf327",
+     29
+    ],
+    [
+     "cfe9b37e-5e58-48c8-a5bf-1b4fa721ed26",
+     "e0c9bf4856306b587e878b68d48aca7ac438fcaa264eb80544006358d8bc3070",
+     29
+    ],
+    [
+     "f4f41f9d-036e-4aed-9495-47fcee191cf3",
+     "7718e9dc60fd3bd39c7cc2693b834a8bc1add05fec996761ac162e4494b0f4ea",
+     29
+    ],
+    [
+     "f60bf5e2-03bc-4116-85cd-f61ea71df65e",
+     "2bf54badc53ffd674b5d046d2800670c0fe1c89b7b0f4512fe19b58be8cfa9f8",
+     29
+    ]
+   ],
+   "merkleHash": "d461b354e1bcee2b479c5e781cbc687611b8c05a649111a75932fefd5ea0dec5",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/38.dat": {
+   "id": "ca067501-c039-4de3-a620-dfe257e5b538",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "8ff74b10336f97922b4b0a0d9cc67289950250bc68c70a9146f1caef9c382a0b",
+   "leaves": [
+    [
+     "0d98fcc4-eb10-4de2-810b-f726107a17d4",
+     "377c80216b504d2da61070ee90a6d4e9fccba7ed102e90a299067ff06d9178f7",
+     28
+    ],
+    [
+     "2fcb5751-2c4f-4a8c-b8b5-a35395477b1e",
+     "b51225fa586c023d77412c6b41a0e1c0cb70adca6b7c95c0ae0ae3733d595c10",
+     28
+    ],
+    [
+     "5d5920de-a8d6-4f5e-8b42-c84ed2078808",
+     "d692bc01a3d8b1f60aeb4c55dfab60ccf48150e46b111edea4448490e7e39a36",
+     29
+    ],
+    [
+     "9c6ab572-5c10-4955-b407-2a41753fe962",
+     "29209fd2280a0715abfea2606ea9e2108db3681188837fd65da853687db9e6fd",
+     28
+    ],
+    [
+     "27ad5763-6d4b-412c-8877-466c86813a28",
+     "d849730ed3f3af99aee524ae160fc37d38e55e879048b8cc810cb4ba8cf6df82",
+     28
+    ],
+    [
+     "44a10219-42ba-4092-93e1-f79fe43340a3",
+     "55c352992da9a18d8280fba913d6dac69aa1139918eebf8ae5ff81ced95cac21",
+     29
+    ],
+    [
+     "548e0a65-712d-4ba7-8273-9db60f297b48",
+     "8b18a3cb38867ffd449f0418e8abc089252d8a75b5b4f496f81f3d0a078819a1",
+     29
+    ],
+    [
+     "949c28c4-d6d2-405c-92f5-af5b44c0fe16",
+     "fb92848d79cd4e72801079c70f8c811bd2cbcb9262cb6a1090a39516df3034c8",
+     29
+    ],
+    [
+     "9891d4a8-77f2-4753-99fc-797cffc2a35a",
+     "236838dc97dd25ea0bc8648e2e63998e3690cce920fc5228b1149ea8a4740b6e",
+     29
+    ],
+    [
+     "fe5946f5-d3d3-444b-8be1-c45aca129526",
+     "744578815d22e3a845dded2bb9900200a497eacdc675d972e6922d7d652ea987",
+     29
+    ]
+   ],
+   "merkleHash": "5d95eb8316baf1064a7333b9a98b4a53ada8eb73d52c4ffb74d5adc8e67eb412",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/39.dat": {
+   "id": "82470418-31e9-437f-bf4b-4b53c13835f1",
+   "version": 6,
+   "leafCount": 4,
+   "leavesSha256": "7a2dbf3cae00ac24197f4c46db7240cddddbc192857446f153ee2912a2775e1c",
+   "leaves": [
+    [
+     "587a30a7-8db7-4d37-a3fc-e4c8754dbd10",
+     "370f06cbb10d220014656482173f9448fb22c77d723999f8b8bcc9b9c680b40b",
+     29
+    ],
+    [
+     "803bacfd-8c4e-488b-873b-7544c8b020b3",
+     "977c97fb48afd6f6d6d0234cb445e6c8d631d4e3d9fbc0dfa87b359e22dca597",
+     28
+    ],
+    [
+     "7070a999-b076-4f0e-857a-23ce7f7e19ef",
+     "49cc8002daac701d1ef0d55bf0d710a0ef589b43f3c8dd795fb772fe5fc52e40",
+     28
+    ],
+    [
+     "dc0ae560-c4bc-4a31-be2c-f5f2163b21dc",
+     "2e063383292948cff150a4ed53d66795ea9d71f44cf87002d26333cb186c714d",
+     28
+    ]
+   ],
+   "merkleHash": "27ffe5cdcda7be509d9cae974cf30fb1d808e3fadb5641d8d377d4f73d7233c4",
+   "merkleNodeCount": 7
+  },
+  ".db/bson/collections/metadata/shards/4.dat": {
+   "id": "15cccc63-a628-45c3-9dfb-fcd8c00f6a4b",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "66411cf0b6cc7ff041011178195a12b2e535a6897d5ddb388a770e6d9d822830",
+   "leaves": [
+    [
+     "2c31e984-b4d1-401c-8cc5-0eb8fc2d5d55",
+     "7a2160b4cbddd3ac352d83386c1480f92080757bfb39590dda57e5b5f7a41fd0",
+     29
+    ],
+    [
+     "6ad76aa1-b2dd-4198-ad63-331d0b4fd87c",
+     "3465b37bd77c3676a580228dc7bd3364b74627045ddbf46e909b559bc53c56ec",
+     29
+    ],
+    [
+     "19eac450-7c34-4f85-8669-e532666fb864",
+     "bb7f3f7a48980a151da046b51943d767773cb5003ffdcc2074fdc4670e5e80ea",
+     29
+    ],
+    [
+     "59e00d16-bb33-49a2-b854-bdcfc042b625",
+     "58c062b15d0496168372d3bfc904b70a558f0fc87c9e70b6fcf425cbb5eba3a1",
+     29
+    ],
+    [
+     "204b0250-2a0a-4dc4-bf53-ab1f8d8f285a",
+     "e5c85c5465f653dbf043e687430efee4d08bf78ca9c997258e2422da635403b4",
+     29
+    ],
+    [
+     "970cc243-cea7-45f1-bd08-14c132fd0ce4",
+     "f276181c3e114fd2104f7166c83fb3fd3d16ceb16ebab8aa3f05cae4b8a52ce2",
+     29
+    ],
+    [
+     "989a8cf2-1554-420d-b899-42d16a9799a6",
+     "92853a38d5de9eb62afb6bcaab7f1c0a0d297aa96315b6c4bf3ba5e30c1c9888",
+     29
+    ],
+    [
+     "40923881-74e3-409d-a190-c5e4600f4c62",
+     "f439a457d42673b50846f84387474c37d1e142afd866497751112e27b1a916e1",
+     29
+    ],
+    [
+     "bec53806-b3af-4ae5-9f35-2e07b4208ba9",
+     "8c67ba2ad29f4478db2bdefcfe58e5bcc6f0a0741832a8269e07a370953b2a51",
+     29
+    ],
+    [
+     "d5371f8d-e519-4aa1-9bde-59a98f96fa94",
+     "c4a5b9ac3768649871d5d6d6057fd15a3ac29449e623de48a2916de16f2e7056",
+     29
+    ]
+   ],
+   "merkleHash": "a8019d9cca8b1b779037dfec181029ca9d02456f739d6fa0caa9c037add22ad3",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/40.dat": {
+   "id": "57607596-6d5d-4aaa-ae07-d2b26dca18cb",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "6dfc382ef3cfe6c2007ad177cf1d69f18b56f910f78abd187205b4e4d5d3c472",
+   "leaves": [
+    [
+     "1ea61337-2946-4de8-b6c6-4c4a034e3a71",
+     "15081b87444716bacf43bf1a24e471a19462dee433c2add1a89156c256e58583",
+     28
+    ],
+    [
+     "5d0d07ff-8f9d-4673-8bef-9d4d5b7e8862",
+     "b1203f1ca72e322caa3aef54e6fc314575982366b5339637474525a7e5ef7f1e",
+     29
+    ],
+    [
+     "0388d046-0763-4dae-80f8-18bf4e26d725",
+     "8ad2b4e2ee528648b35f13983adae9864e3b2a49e00f598fa065496e7ab9eec5",
+     29
+    ],
+    [
+     "25635a13-5587-4470-944c-7bea31130f94",
+     "d84f3b820c375fe19d622bd9e8b1e4220bfe7c25f7bc146914fdfa797c71ec5e",
+     28
+    ],
+    [
+     "15221915-5df1-4c9f-91a6-dbb239bd44e4",
+     "2702a1d2f019030fe94a71c3071db82109bc6f4060fa7f53a2724ba9a54353e4",
+     29
+    ],
+    [
+     "bd4c034f-017a-4b2a-bd4a-5ca316660235",
+     "14c4d9cd691c0031c74836a8fbb0844957f53c0025d5b77b1a39e9474249b8b7",
+     29
+    ],
+    [
+     "d135bf99-5724-4b61-a26e-8f016a54e8bd",
+     "8b391a20dfe9cedeba584effd034d902d0980abd86f99b179ce084f99ccb405a",
+     29
+    ],
+    [
+     "d2717bbf-28e1-4198-8ad5-3f7b53e9535e",
+     "cfeda6409e1d3d4bcd79f3466f6080a3b69c339800df8969df484568d283aff6",
+     29
+    ],
+    [
+     "f25ceadb-d775-4deb-b074-c5f85fb73dae",
+     "79d0d147b34971d23c181afb5719d447ca95b5b68fc61ac7ebff456527ee686b",
+     28
+    ],
+    [
+     "fdac525d-b183-4836-b9dd-42c9259ae3de",
+     "ac0d22465c28478f9832fc70f0b7ad905ea1071d5ade1b926b1dbd99997209c2",
+     29
+    ]
+   ],
+   "merkleHash": "b5609c5c8814be70bf3c04757d88e42b698daeeaa7801bfdce9c81b7e1d01b09",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/41.dat": {
+   "id": "e9f011ba-a91c-4581-bb4c-0649ac71b8a6",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "488def72e3a57faa356da2806a22fd9b4049ba1a6f52056a7026f2e8864392ab",
+   "leaves": [
+    [
+     "5a2dbb7b-fbc3-41fa-bdc1-10000bd740b8",
+     "7a2b68eeb268fd6c161570b5fbed03a18c9e2046355fdd1388ce761eae8e15e4",
+     28
+    ],
+    [
+     "71a50734-1e59-474c-aa5f-0b1b96e9196d",
+     "d35538b03974ea653e6e26fc9ae48468de8a57f67e59a982250487ceb1650a52",
+     29
+    ],
+    [
+     "97b4c683-67cf-407f-bc05-7a0b47cba14c",
+     "232302fdf850fbf280dd3d8d1edd657fc6c1ea0540b806c22648f9f5c8aaa2e6",
+     29
+    ],
+    [
+     "218b5c52-7648-4cea-90af-ecd24d612a1a",
+     "b3af503169e551a1e4f7284c163a6f786ff8a747e3d918c165231fffa7c8b0b6",
+     29
+    ],
+    [
+     "370faa70-668b-4057-8f19-ee24f758ccfb",
+     "9eb773a179cefafb4db390bc1a7a12fdcd1a48e97f7132ea0443dab54b99e64e",
+     29
+    ],
+    [
+     "41048234-c873-444f-be88-4c73754b4a47",
+     "d895518f34d65db06996778b54802bc6bfe92ff019aca0e606c574fe0ba5433d",
+     29
+    ],
+    [
+     "69473823-cbc7-463c-abb6-fc71ef7bf3e4",
+     "8b90fd2bc2f74bbae9933db5f284c1486029a251411189aea0642d87f4be6805",
+     29
+    ],
+    [
+     "b442f83a-d1f4-48ba-8c48-838d3cf829ce",
+     "bcdadfc75cba3ba479b83efe5f4ce041ca6e0cb16d5ebec037be6cf127b12b8c",
+     29
+    ],
+    [
+     "ca352a9b-f35f-427a-9594-62a1e84fd9c4",
+     "4a35c51877a8a47b82c1f77863c7e5471d9b5f778450bee451e05925198fce59",
+     29
+    ],
+    [
+     "f6c2332c-1a96-4b16-9103-d4b66dd429ba",
+     "eb328d4a0d82e45d656db1f84247500f3590bd6ba3815697dc15e36e99236907",
+     29
+    ]
+   ],
+   "merkleHash": "d2fe625200bd80c4ed7f6fc7afa97f836dbcc67b4777c4a6c14a06f462270ed7",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/42.dat": {
+   "id": "33cc4e6e-40c0-49f8-a5e1-81a83a340eae",
+   "version": 6,
+   "leafCount": 13,
+   "leavesSha256": "532da933c8b99d185e12d74f96e714198e62070bce0f7717d808d691b4906258",
+   "leaves": [
+    [
+     "2b532e93-43ec-4bff-8108-136770ac6d7f",
+     "4da618b093e37baa2b338bc373231f37defeb9c9e9073fa800cde5cd18f95177",
+     29
+    ],
+    [
+     "84a4c707-7313-43e0-9d0d-e426c744b414",
+     "9bbc3577b2da375348981235cf767b7029c73022e3e654ed72154140badd9e0b",
+     29
+    ],
+    [
+     "416a0340-4fec-48ad-9796-92a6d9c74cac",
+     "7a4f75ae8ef407ff90842b767a02ac5226c4113cf6dc6afcc0a8aed7f3c6cb01",
+     29
+    ],
+    [
+     "416afb47-4d61-4c8d-86a1-b5716de7b626",
+     "72b76eb66403a86202a47452e0fd9013e17afb99f168b436a9c40c88f66c2c79",
+     29
+    ],
+    [
+     "96606f26-8f54-4269-b846-874cf409e072",
+     "2fca9aa4fe10832788b0994599c0c0e34c3a05982ca2b696544c0b3fd0291c1b",
+     29
+    ],
+    [
+     "adde6ed8-e796-4c12-bd41-49fa11cc894e",
+     "ce8c42f8435bf150f0d2385d31f11ba60fe18762b086a748ba826260da5502fd",
+     29
+    ],
+    [
+     "becd8e43-34b0-46d7-83ec-82e9981abaf3",
+     "1edbbbecfa4ded9f9f9c4ddd98a2f91abf5d25acd596ee639d39812b7995b82c",
+     29
+    ],
+    [
+     "c8cb7c69-4946-42ee-9054-c96c1a25352f",
+     "382fb600519f1f454894f982fe942c1c5bac5c15a2101df77f5ba41325c5a1bb",
+     29
+    ],
+    [
+     "c9f65380-0df3-4e5a-b175-e3b947ac5e73",
+     "79e3ec7ed22f15fb39b64003a1bd4155906979813b68a81903ae1219b5bf8e38",
+     29
+    ],
+    [
+     "c37173bb-9117-4c23-a38f-508bef52e2ac",
+     "109955c3dd7cb7dea5d2b380bae886f8fb25057a7e2d5a9a0aac493278b43abd",
+     29
+    ],
+    [
+     "d63ff7ca-a4e5-4258-9c0e-1a215467532f",
+     "9528cb5f67894f1ced402a9f8496588e4d7a9175807f3a2cdb1aad04be3f12f4",
+     29
+    ],
+    [
+     "f455b890-203c-45ce-95a4-d132c19b98ac",
+     "4babd00467c26291c20f9103395f4874f926b97c58283bcb3c86f82b1acbfa39",
+     29
+    ],
+    [
+     "f29775c7-f932-47a4-9a37-0fc6a5338cf5",
+     "e24fa373d65807c4046e5b8ba84321db6150867790067bdaf6f5ab6bcccf242a",
+     29
+    ]
+   ],
+   "merkleHash": "fe00c8d4066b799937776a455fd9850039b0c68f0ce1bd264c0e6d75b179011a",
+   "merkleNodeCount": 25
+  },
+  ".db/bson/collections/metadata/shards/43.dat": {
+   "id": "3747a430-ff20-4fcb-9dae-50e7688c5b10",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "fc367d2b9ca0b9e921abe0b73c05613cf48039aa0e757e218e9714ebc0005623",
+   "leaves": [
+    [
+     "3ba92987-d65d-4c09-a198-471177a0ffda",
+     "fa6241130c6959ec9fc0152b067f25fc8b5604f4d97fc14340639f6404d06c1b",
+     29
+    ],
+    [
+     "8adff25d-f03f-4006-9f45-3f19aad90262",
+     "f389de66e8df61372b4a7430cf6c05fc55b58dcff960f3178610ff95dbd33f1f",
+     29
+    ],
+    [
+     "9bf091a2-6e38-4c13-821c-718097e3ff9a",
+     "7b84a8b7f0256ff7462e32cd4e110226790c04ad09a1f0548999f78dbd921dea",
+     29
+    ],
+    [
+     "9d343486-113b-4d81-8835-64a550b525bd",
+     "7349ee8b1ce72d8a4e2b27249cdec25453546339b821266758159ad196ca3a48",
+     28
+    ],
+    [
+     "63d03a99-245f-4b44-8eb6-d21098941ec6",
+     "032c10a70c548b043c55d10b65ef37bb6b2ac8d067dcc26f757331f5f0947898",
+     29
+    ],
+    [
+     "abcadd7c-0ae8-43bb-badc-b73e6871d794",
+     "462ed120665445d8a4aa0518a14dd645d29ef48a253ddc0e91d5d70ba0860fb9",
+     28
+    ],
+    [
+     "c3f0a7b5-65c7-4078-9c9b-fe4cd388c272",
+     "aca4cfd380132c11029d92a452e001888051f4050eb58b5690702484d8e8e418",
+     29
+    ],
+    [
+     "e987b007-1b1a-4af9-af6a-cfeb237eab1d",
+     "13ae2d64293106643c35135692487756f49ff57b7a60ba2b0be07e73d59b2cf5",
+     29
+    ],
+    [
+     "f742f32a-7d30-4f27-8db7-5435d8658e1a",
+     "c66650df78acfab41ebe5559c48b430ab273f6d7981eedd8e7199c333bdeab4f",
+     29
+    ]
+   ],
+   "merkleHash": "f6f13e6446b377d90156f6c2c3a30868d3159d0aada410bd5b74715439a3f8b4",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/44.dat": {
+   "id": "da7e28c7-ad79-412f-86ab-f60fcb5185be",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "382ccb7cd61753bff9db809ae0e2ffdf98f3b7297fe2f41d7dcadac168585c63",
+   "leaves": [
+    [
+     "84d8a0e4-0188-42b6-8816-4860666ea16c",
+     "890e264b91edd5ee44d1265728b1ebb33b75031e5078b59b9c32b4ab216f813e",
+     29
+    ],
+    [
+     "349ab0d8-a656-4dcc-8a73-5518f956168e",
+     "325068ef74e9ae7c832fa0f9cda5337fc40aabd79d977bd7ef740c678a624ab7",
+     29
+    ],
+    [
+     "7411e292-5478-480a-9ef2-6225dc1bb6ea",
+     "f9ef8d5feeb739b1a357b4711eb40c5b98d9db00f6f5783e62eb81c01657bcc8",
+     29
+    ],
+    [
+     "a6f39ab5-4288-4b55-8b4b-2ee82da6d83d",
+     "713c4fafaf7586731461f6532e4413cb9fc74f06ce0c8c53598c9b861994622f",
+     28
+    ],
+    [
+     "d43b9be9-2041-414c-9eea-a9c85577bba8",
+     "3ddeba5f97b9eb82d97701a4853274c1e5b32a87f6344b7ef4ee9549efeb9f5e",
+     29
+    ],
+    [
+     "f531c9b3-4291-4e52-889a-01e3fb638b22",
+     "71b7643cde09549ffb45f4a9311dfa6fd0fcdad19211d51a5ad8b7c50770d54e",
+     29
+    ]
+   ],
+   "merkleHash": "2a65dac65bb9e115e87a757de37ee4f3f50cf3e068f775210cbcbe299d7581c0",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/45.dat": {
+   "id": "db46c600-5b1c-4929-9362-c17a826f9d1c",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "a189ddb43a96e32c30b58bab58b477a3b534eb797c3ca7e713a664aea829260e",
+   "leaves": [
+    [
+     "4d365ba1-934f-4f6c-aa84-96b6e25ac8ee",
+     "af5ba121b41956854a23374db13132e7e1fc7f522e720229469650857ea35dfc",
+     29
+    ],
+    [
+     "4f895859-eb6e-446b-a851-d24c8be2b337",
+     "a300075913bb2da7bfb07ce1fb826e23a9b4c935cb1990087e4ff29af6a869a7",
+     29
+    ],
+    [
+     "217cffef-bbbf-4a76-8a60-725f0b0a4450",
+     "e186a0fdf84e2656d5d67997fce98965f7d4bc679a208a681568f2fc955f9d3a",
+     29
+    ],
+    [
+     "1371698f-42f8-489b-8665-c7ca9bea2b77",
+     "7ac56e2e8ed541179196a35b3c777598caec30a24029e1a821376becd6191673",
+     29
+    ],
+    [
+     "ac949c8f-908c-4190-a6a7-c3928d040c03",
+     "82322f91b4d3c55e07e3c13fb1cf4ba86352f9d39005f2cfb020bea8822a9c88",
+     29
+    ],
+    [
+     "b7cb8c71-43de-433b-a05f-e9eca4f0cfaf",
+     "523ae0d58d4ac2ea0044b2f80991449c1fa7205a8a152521735b77a7ed92ec8c",
+     29
+    ],
+    [
+     "b67c23cc-1e7d-478f-af88-bfe4a1f33db1",
+     "1fd4765353bcb17e2124c3370998c54fe6bbb6730d4050cd77896859bac804e7",
+     28
+    ],
+    [
+     "d2a3612f-0075-4608-93ae-7be604ab615a",
+     "48e7af80368f85f2ccfbaa39b5a7d05fa33eabaa5a26645b2c11d5f98adad8f8",
+     29
+    ]
+   ],
+   "merkleHash": "e13640789e378746a5f5e3abc4d70482285108a5225d4b09d15d7b07528dc20f",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/46.dat": {
+   "id": "612ecdee-7b49-486d-8c04-1af8e943b6a7",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "3f8591b7554a45345119ac4fb7001abd3c56c09dd3530334ff2a2d9b9dfbb857",
+   "leaves": [
+    [
+     "0d228017-3ffc-46dd-b5b9-d8f15bffbfeb",
+     "f7cc24864562e5bcac024a925e2117542b2f386d45dfe87f3a6986414dbc8b6b",
+     29
+    ],
+    [
+     "4b0f6669-eb13-4320-86ca-1819182f8d7a",
+     "841877cab587a8b2965576384d9d713fb9dada3d9c8a5991d5e209d9e5ec1342",
+     29
+    ],
+    [
+     "04dc5363-0c63-4c48-a72c-9ea188945f00",
+     "e14c15dcd1b592f57af40707175f0f36c0106466590a57a982187b4367ac29da",
+     28
+    ],
+    [
+     "28d608ba-7151-49a8-a4f2-be9b617e79eb",
+     "c16db0ba7f1dd81f52b5c9cf96cf49afc30f90e33a0c6a1be54c223e572772e0",
+     28
+    ],
+    [
+     "57a8ba10-8b9f-4df3-bc13-223b5a5b318f",
+     "711a788d2d7f7ed3b490fd0b20938613b9e64ac7336c5ab7f392b0b8085615f8",
+     29
+    ],
+    [
+     "bc558a83-0d4f-4c0f-a9c7-6adb605a87cc",
+     "909f0bec7aa826f47395f1b954cb44d4bacde804452c5b6708c826dd3e6a147f",
+     29
+    ],
+    [
+     "cc69f17c-9804-4003-bb0b-5963ac6a6978",
+     "fda997e8d282700fcad0654d82dea7ee9af97039f3647efdc2d72241c4558029",
+     29
+    ],
+    [
+     "de947d94-d7bd-4eb7-af08-8485d023aa29",
+     "50176dbd4167e92d213342c23c5c9815fcea6265d38491cd3ed6b9c5693052c3",
+     28
+    ]
+   ],
+   "merkleHash": "838d7c3ef15c0af74ef868dcbaaf774f9eb0554a95980f163d8af63f9b44ee70",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/47.dat": {
+   "id": "d761493f-6ee0-4f1e-adab-fa32987f27df",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "b75c8ed64150240e7a5d5d6b61903c53649bd86daf1f9dcbaae17945e9cdaf39",
+   "leaves": [
+    [
+     "3e9c1cef-f22e-4745-b8ff-91bb39d9eec1",
+     "ef7d5d450c6628e241063098501cd2df4cc4c129150a11e537cd490c4c7fb4a1",
+     29
+    ],
+    [
+     "7fff51e5-1dc0-413b-9ca9-df9c1ec44c25",
+     "50e0b049156beccd927ed6d425bada621a5b5e582b1c686ea192730f8a5ae45d",
+     29
+    ],
+    [
+     "63f8d1de-edcf-405b-aa69-597f23a33c11",
+     "877096258d1bfd4bc4ca33f54b9166e84a67dc5c13cb69e59b0999a5c8b6dc9e",
+     29
+    ],
+    [
+     "1623d31b-9078-4249-9df0-11bec46a4363",
+     "4293a037aaf48a8d41cde8eb04203f5401a1405c92226059cdcef580a08f4d29",
+     29
+    ],
+    [
+     "265610b9-0993-4f76-ac35-5a2ca920192a",
+     "d061d30165c07f8b3c11991ff65598e99d8c5892bbe14a4be9c72acc54d09438",
+     29
+    ],
+    [
+     "a047aa15-1a5b-4cc9-b089-29a0ec8eb04e",
+     "8abf35cb2fbeec395748c8ee9dd729e86b93e15ffb9cd666f666f78e3b43795a",
+     29
+    ],
+    [
+     "e74d3250-db57-45ef-921d-2e3c42a2e907",
+     "964173909d4ac9cdac8feaebe8d3320ae77627988eb2782ba5f54b6253904db6",
+     29
+    ],
+    [
+     "ea1e20cb-eb44-4c5d-8faf-36144643cb8f",
+     "939710cf97a4a005b015472ae5a2ba22af60e70b397472493241f3389829d917",
+     29
+    ]
+   ],
+   "merkleHash": "f35f2b70d5451e6ed6d6c16bb98ffaaa10f753579e8af245ce6ec99f591b520c",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/48.dat": {
+   "id": "ebb4a79f-e991-4934-a164-15f032804e0e",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "bf774d00984e751484ad8b1d72996a2c2b001dcd794bc184a935354642c2fd8b",
+   "leaves": [
+    [
+     "7b70779d-68e1-4a9f-892d-5edf11ef1f7c",
+     "d9e83f0703326d748d7f5c55a418945478d3bd3bb1841bbe789330bab8ab7cf6",
+     28
+    ],
+    [
+     "8b10b0a7-5dae-43b7-b246-1edcd8a7ed09",
+     "b582bafd4678da8fb24c0ec7b0b407dc743540a0658b4269aea0b6477377eb88",
+     29
+    ],
+    [
+     "638c467a-30db-489e-a2fc-242acb1276a1",
+     "3af3e2d19313e727fcf19573d4fd69cca07750d7aa84db93d32972dc8144e2d6",
+     28
+    ],
+    [
+     "5522e702-215c-4653-a3cd-4bbb4371c65e",
+     "c7068ae5bdc9bca200151b449ab3b80c6abaa45f63453acc73064e03018a58e3",
+     28
+    ],
+    [
+     "07167eb2-a597-4bb6-94c1-7ceb8ca0db25",
+     "9589a17dc6d272c8b82d96b33d07390a1bc7538a92ee8cb66790a29c2c433c28",
+     28
+    ],
+    [
+     "02482441-0500-4267-a7b9-8903e02f2141",
+     "68510ee232a4720e1bc0deed2cbc603f1a14cac7a66c83aaef0d7fa71f017b66",
+     29
+    ],
+    [
+     "c7a27782-283f-4985-ac22-e4739e275fbd",
+     "aea1c25c3c15dca7df681ad60dcd66fd61c5120a54e91ad037d5fd89f5c0bb81",
+     29
+    ],
+    [
+     "deec0357-d961-4ceb-b1a9-4a972207da36",
+     "7d52fb388a7c0d030b0065925dc887e670cfb5fe66b6dbe05d6e1c75f0084eb1",
+     29
+    ],
+    [
+     "e3777d83-580a-4184-917c-424542f32589",
+     "d6c566a3d9416b8d978021dc4f14926725c723e1fd0ea03856caf00ae7ec43c1",
+     28
+    ]
+   ],
+   "merkleHash": "dcc253c2952d8f8e94c7af34ec7e31643d946e1dac550b0714dda669cbefec55",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/49.dat": {
+   "id": "bef7c391-829e-4ad1-8ff4-d2d8f426410f",
+   "version": 6,
+   "leafCount": 3,
+   "leavesSha256": "4bb3998c730776df610933a5e444be803434037d514b9b523441de307d165dbb",
+   "leaves": [
+    [
+     "008a6d53-f39f-4333-a73b-780403b99ecc",
+     "a1b329ea7aa7bf8d3674abb292ce04c93d2d81a7f018c8472b12f2cc2ee5584c",
+     29
+    ],
+    [
+     "175cb6e0-6482-4550-8ebc-d3c1120cd262",
+     "c7d7221f085769f61d7c4b3c3bed65ba1690e787acdc02ce7bb51ed10c45720b",
+     29
+    ],
+    [
+     "694af64d-615b-41f9-8ae4-4bfe28b39716",
+     "f789f347c9da6d261bb06be4a2a364bca64de4eed9ed5f67c81fd4aaa09858d2",
+     29
+    ]
+   ],
+   "merkleHash": "d6154530f147f35879cf87309799bcc9078cf879bcc7c5891873cea00c18d615",
+   "merkleNodeCount": 5
+  },
+  ".db/bson/collections/metadata/shards/5.dat": {
+   "id": "bcd32cb6-fba7-40f3-a573-69855c20d711",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "d7faadc879c5183d1ddf062010dc7c64f13388dd9e1a209c607120d8120ce7ff",
+   "leaves": [
+    [
+     "34d643bf-9175-44ae-a485-f20f3078d2ca",
+     "0906b58233040cd5c90a23be86fa43986d06328126a31b331f4b39321de3fe8f",
+     29
+    ],
+    [
+     "053e1029-305b-4b5f-b5bf-92138e612072",
+     "915d90cb51057820d64b29373db498b166845fb359b68ef47de660c57a3861a2",
+     29
+    ],
+    [
+     "77cc247c-ee50-4c4b-aea6-3c354b87ca2c",
+     "224696ddda6bed96a253921987fb9f4b73097deef666bcdb1a6a258a0ffed5da",
+     28
+    ],
+    [
+     "83fb46fa-de24-4ac7-ac17-cb44e93c98de",
+     "e0543eae94720bcb862c1e52f59044dce4fa06627f73508dc49a8ad9f4a3e7dd",
+     29
+    ],
+    [
+     "60503e99-8e6e-4b3d-a925-68076b6db0f7",
+     "f88da7d8b0c4e3f89cf059d9856e3b2addef9302511213c069d7e2f66afc1ede",
+     29
+    ],
+    [
+     "64887e5a-9faf-4f36-9087-17b00bbee1f5",
+     "6cf6e59d50bd3d103519036447aae57b5449a59a01b3db0dd4ce57d19b4c55e3",
+     29
+    ],
+    [
+     "ace3a536-9879-4509-a751-12a279ea3d4f",
+     "ce62aa2a2bcd2d48810b3413e6f9221f40088b17142d507e2a76d5f789a23c7b",
+     28
+    ],
+    [
+     "b8904fac-3ef7-48b9-81c3-95ec4029715b",
+     "359e069d93f92c0a67e7d212f1a67bdfdc165deab22ad8899be7a30604e8bf7b",
+     29
+    ],
+    [
+     "cfabbb2e-e206-44c0-b1de-5f87cb6b5928",
+     "5538907b16a56acb44539e15c3b4c93be28934eac16003877ba501d154239171",
+     29
+    ],
+    [
+     "f0386fff-1523-4f21-9aaf-b6f05f197adc",
+     "48edd5f1123f2f52b33a685153fdbf9e94e8435b7feb9b823ea85ed074f71dba",
+     29
+    ]
+   ],
+   "merkleHash": "9632d2c94695b7afeaae3e3982cb672c721a24992ca4a7645808c5313e73a23c",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/50.dat": {
+   "id": "0f9a0c93-3392-4ff7-afa6-d59aa06d3f01",
+   "version": 6,
+   "leafCount": 15,
+   "leavesSha256": "8c41c6f62778eab1c39483c7c87c500a2e04ff734aff9280b1389d96e67cad02",
+   "leaves": [
+    [
+     "4c53fe8c-e8e1-4a9c-855e-b0ae56cf166d",
+     "7a5b42d0ea264865633d32389092970a163a16055640c6a32ba3bed410a4fc9f",
+     29
+    ],
+    [
+     "7ebfdde1-649d-4bd6-8076-b2dbc569b97c",
+     "756632ce7d32e666aefe3d0c06a297ea4fb31163c2a506a44cc54bc17624ad2e",
+     29
+    ],
+    [
+     "9cbccec1-1ece-4a1d-92c2-aa3d06a1d00f",
+     "cc92a10a1cab3349e537628dea8fb217616641955934f0fd03d7d136fbcb05bf",
+     28
+    ],
+    [
+     "9edccd41-e9b0-4cb2-8d4a-ca9f026e24f1",
+     "4e03fc6f5357f2ca4e97fab508462693b171ad4a3eaf693370f000bef98591d1",
+     29
+    ],
+    [
+     "099fb6ef-451c-4917-af9d-e3f49088f3f3",
+     "9e6c165c833410d56684bae782327f31537748a928c4c838467551dd36eea5d3",
+     28
+    ],
+    [
+     "538cc972-9612-4ba5-8434-b933a8295f60",
+     "168824238512a1bda0f759b5bae80434f84092bb6b6b0702a6411b4256efb6d1",
+     29
+    ],
+    [
+     "794f1066-738e-4676-a273-b82b8f3963e8",
+     "e3c1e9b8148e3b457a44e8c28facbd21efd85c40be39771fe23245a696eeafa6",
+     29
+    ],
+    [
+     "1033ad99-fcd6-4618-b272-bc8b562b514f",
+     "067e0cc586d85c2cabddf98c5419fdb416725588b0bf14012e3ddb898fbaa521",
+     29
+    ],
+    [
+     "065456a3-9cc3-4c9a-b00d-bbd45aceca60",
+     "6650c35beec7d5fec2e684ff5a842f3343d0d9d3514fdace1ac1fe5bf516da51",
+     29
+    ],
+    [
+     "ad46959f-87e9-44fd-8005-1480b9bb1276",
+     "e9f44f6b95f8da1050d373767f494f704f639eae1492613be2e1b9d6ed09e939",
+     29
+    ],
+    [
+     "b905ea01-b8c1-401a-a648-25a8e91f52c0",
+     "37ca1adaf8dee00a88e3ced7d1841cd6f8d1b025a24759a6f99b38fd04a1717a",
+     28
+    ],
+    [
+     "c337578a-8ddb-4cbc-81bd-86033f8bda51",
+     "747e2cb0f09eefabec1460120055043be3fb1a583cc5b0d3be0b8d35474bb8f3",
+     28
+    ],
+    [
+     "d13e83c0-568a-41d3-8d0d-fd7690edd54a",
+     "6b5b33f756a0bbdb66147a60b42342b5c3e68217efeda28b91e2f7f25d0598cb",
+     29
+    ],
+    [
+     "e64c0659-c5a8-4b37-ba6f-e3b2bd7bc3f1",
+     "ff486d0b1072caac24a7e8cb24042d01eeeea231c3cfd5425f397a7203e6b3fb",
+     28
+    ],
+    [
+     "f1dcaed9-46db-4419-a972-95cab5c5e802",
+     "30c688eea0086d2afa91a095ce991561705d0d7d9c346cc8d631458b9501b961",
+     29
+    ]
+   ],
+   "merkleHash": "e2f44547946f1b3f1d75a655adf04e22cd683c58998e55d63245344c08065037",
+   "merkleNodeCount": 29
+  },
+  ".db/bson/collections/metadata/shards/51.dat": {
+   "id": "3007f933-67a1-48ff-9ad5-64c958f89e92",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "fd3449d58198fd760fc1ea17fd91cda895fa66da8a1b97d5118e45db9888ed83",
+   "leaves": [
+    [
+     "3f8b2e56-3030-44e3-96f5-a51b9b681e66",
+     "9658266aa2af587c92d09ce5afe78b943dd9c7d0318db8d3dda5a1777c3b797a",
+     29
+    ],
+    [
+     "44a5893d-39df-4ba6-8f4b-7cdabf03b0e2",
+     "1277241ab1794828166131e798960e754ab325a87eb42ff4d5c7505323d63e9f",
+     29
+    ],
+    [
+     "55b7c1ab-b428-47c3-bdb8-adfe82747583",
+     "1865d0f65891ff0ccbd2faf1bc32f8fa320116fee738e4538e99b1cf871259c5",
+     28
+    ],
+    [
+     "764c3e7c-0d78-42ac-9901-2d9114e03304",
+     "204ab0f97831e55b9f60a1c889a4acccf5dbd0b531c6103db9f2631ba85e9dab",
+     28
+    ],
+    [
+     "08650d2a-2a8d-4013-b248-a6bc587627a7",
+     "7f7eadb872101219f0b0eec3a53f9de8105686efdaebbcd1f8d01857c9dd45f1",
+     28
+    ],
+    [
+     "55469a21-bb2f-4a25-9bd7-9eae5f63210e",
+     "dda51199460f0223b5745a06880158135bfee70304c0f348864c09218688c440",
+     28
+    ]
+   ],
+   "merkleHash": "b695d10e2afb8990020af2bb817b6067d5069b72d5401393f0e3e1034896e150",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/52.dat": {
+   "id": "f0430e24-f917-40a4-a059-89e930e7f733",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "b1e195a5cf6bfe44af116a6b07c2686f3c5fedbe1b2f68763239b04e61fe90c1",
+   "leaves": [
+    [
+     "4c84b536-2c45-410e-9f5b-df159d8a9973",
+     "c0667ef765c8c1485771641236b0fd65fe1a596adf3ec4397bf0fb2d5ce0a464",
+     29
+    ],
+    [
+     "5c751fbf-ffea-47dd-ae10-7d114ba8e055",
+     "8c0cca3495c51aa8347d2b906738e01fc3357349d599e0b8ffc26992b0127b16",
+     29
+    ],
+    [
+     "5f8af440-c1c1-4e3a-98f0-fa6701b03581",
+     "cef38739a2b29d30220ab51d9ded845bc3a6cf373da2d8dc5dbf734899f5162c",
+     28
+    ],
+    [
+     "8e65df0d-9cb2-4a96-826e-988994f343bf",
+     "184ba4ec921ee93b919d80ad13c8156201676cddeec3d83f837d1b707a3503d1",
+     29
+    ],
+    [
+     "567bd4cb-6453-408e-b988-a614d6f5b098",
+     "89dcc845ef329466b07d285a1f4c5e1fef0d273cdb5132ccc6fde03f12164df4",
+     29
+    ],
+    [
+     "2942a61f-c32a-42c4-87b2-a3931b866535",
+     "ba62a0e8f1226b6454388410aff69829fc7d22fadc0f5a4230c0acb680a9fcf2",
+     29
+    ],
+    [
+     "b0a4b509-04b6-4a11-bf67-d90a4ab5b1bf",
+     "da4e150cca573db9ad77b8915eaac1f559df008c60dd6d3b6ccac5037e7ade91",
+     29
+    ],
+    [
+     "f1d26faf-8f43-4c6d-b81d-6f4b4dbfe0ec",
+     "d11800f573e303784061fd2399c31f277d6da71cd67ed3945f5a27cea3ce8be2",
+     28
+    ]
+   ],
+   "merkleHash": "9a3b9137cdb515eeccb6dea335c3d136262c4f27fe3e8ad7e89a92186e7fdafc",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/53.dat": {
+   "id": "8b06be57-a4ff-499a-b18a-75e2229c1aa8",
+   "version": 6,
+   "leafCount": 13,
+   "leavesSha256": "ffabe1d895854bceaf7328cd232acb8fc655a26f1fa789f373ab33f157937a2a",
+   "leaves": [
+    [
+     "0c0a0853-d8e9-4f9b-b578-25fed391d0ba",
+     "b3f9a6f145970d5e45aaafa66c75177389b04de17c8e335d34045ca0c8c1f392",
+     29
+    ],
+    [
+     "0ceccb65-8189-46f4-bb2d-ea72ba184aec",
+     "cc159ec691a613bcfd8a73fb3a0bce688199823bef2005066669a9bd6a7b2a0d",
+     29
+    ],
+    [
+     "9abc11c6-5c3d-4d85-999f-57b9c7394dfb",
+     "13847010cd02fbcf716cbf3d9cd4e659db932376b9857aa110a04a20f5636d21",
+     29
+    ],
+    [
+     "9fcebe52-6d4d-48ee-bc72-b52b6720d31f",
+     "13218e25b492debb899f916ce9707b6370cec9da57b4d4975fb2404935818ad3",
+     29
+    ],
+    [
+     "225f9374-811e-49e2-a310-67310bbd126a",
+     "01de11e9e2adb2a637432275b0560f42e633b6a2cc81d32070e1e72b52fecceb",
+     28
+    ],
+    [
+     "236ce56f-2bd5-43ba-99a7-879030d6ceba",
+     "5bcaeb0524a4fc255e58c58a76152f01b99672d6bbc20e92f954ceca03b4fc8a",
+     29
+    ],
+    [
+     "329edcfa-fe2c-4e06-9a58-59095c9822d6",
+     "11968ca9c4f4296cdf6dcff5cb04df13510ef84d3d3e16eb574b6feac6d5c254",
+     29
+    ],
+    [
+     "629a2f49-e94b-406c-8118-184fd2f6c602",
+     "9af76056881c5bfc5e7aa56d210023a7afa1cba920a55641292ba1f9431c7e09",
+     29
+    ],
+    [
+     "aca91563-a84f-4b4d-8ce2-d13a27e4bd2c",
+     "232837ff2a2874ff4c5be77bea32ab565daf7dad074c794e606faa7808c49b74",
+     29
+    ],
+    [
+     "da4fba4b-cc2a-4206-8b06-08e0a8497661",
+     "9909df0120295bf63e68c077ab08a215e1c42fde6dd516a61aac7395d52fe519",
+     29
+    ],
+    [
+     "f9aeeb49-7067-408e-84e1-eebba9209b2e",
+     "4f752e3e309a9bd2f57747ac51d57d7846fd54e8bd302db498942318326beb65",
+     28
+    ],
+    [
+     "f90b6a65-fa36-45c1-a253-70711cca9053",
+     "4e66dfb4c3c18c50d68444a535ad586c6b0b7209c0f3d7e83a3ca165e1c49f5b",
+     29
+    ],
+    [
+     "f7403b3c-dd80-48b3-8c8d-84e78ff3e6bc",
+     "ff36f76a42a6f2b7935bda9fc2124ed824167a51f81190ec1d0fc0cefa6f36bf",
+     29
+    ]
+   ],
+   "merkleHash": "f5105833aac947b46bd8ef87f18df342a195447146a9e504dbf4d27ce26897a2",
+   "merkleNodeCount": 25
+  },
+  ".db/bson/collections/metadata/shards/54.dat": {
+   "id": "ff1b90e3-1c3f-4d42-a67a-1faf42598cdc",
+   "version": 6,
+   "leafCount": 11,
+   "leavesSha256": "908d6d826c984e5fe30cabd16bf941ca6f9822bb6de85c3b3d96f1859be74ad5",
+   "leaves": [
+    [
+     "1ac649d4-09d0-4338-a50e-fcde59fe4004",
+     "22292c3c29c5fd7a710be0755fe2533e03f16105ad77d8ccefbae5c06b82cac7",
+     29
+    ],
+    [
+     "5ac1ee19-f09a-4612-94a0-4a9e6cd31e83",
+     "26d0105193c6f225f1e737b4124c6f8ff16362ed41a3e057a24cdde02959de20",
+     28
+    ],
+    [
+     "80e46b03-cd70-482e-9266-9a4098caa673",
+     "2b59eb4e976c1703e327a2693a79a451eb2c9b6e1eb12fe34213c30cd3feda45",
+     29
+    ],
+    [
+     "160dec6a-923c-42c2-9947-768bb4cf7e56",
+     "71c35187d54e0aaf99cfb2ec8a6884cff88c38f7f9b0dfbf8f4e77466753e964",
+     29
+    ],
+    [
+     "955df6ca-304d-438a-bd29-f23ae6d7c687",
+     "d4171e7643aa1d565843159a58f11fc878635b820bc9d4c13faaf6ae2217ea99",
+     29
+    ],
+    [
+     "61033301-a277-494c-aa7c-c5c9284f9176",
+     "fde0f6233317045739397b35d3f311bf35e32136a8c6b59e26f702be43b0ab57",
+     28
+    ],
+    [
+     "ad26171b-edd6-441e-a837-70e52938facd",
+     "de95304b2bbde1083c4835ac0a592c00af7c07f603e119fc9ae77a42f371b86d",
+     29
+    ],
+    [
+     "c84782e2-75c5-4b39-bb40-fceaf37ef727",
+     "dc13829ac41b94b78216c3b49025c971ce4ba4152fe8115123648a11fa2c6c8e",
+     29
+    ],
+    [
+     "caced444-a1b0-4430-a018-96e31efe75f4",
+     "85364ae172202f86c3a9e92f3a52144832b1796d9511ece9c5bce3f70717304a",
+     29
+    ],
+    [
+     "f76f7f46-3f82-4df1-8588-b2dcda9e40c4",
+     "d3679937f0984436f14e712197adc70c074ea2908bde34cd3ac07b0fca79589e",
+     28
+    ],
+    [
+     "f73939f4-70a3-4154-b3eb-50dff66d4957",
+     "acd4bd402a0a5c9f989434331e988b7be4bf4e593d222d53d2cb9b1371e71725",
+     29
+    ]
+   ],
+   "merkleHash": "5c61e522aa31942042fb642ac994e05dfa7b9376814a2e0738d2a592e6b16133",
+   "merkleNodeCount": 21
+  },
+  ".db/bson/collections/metadata/shards/55.dat": {
+   "id": "f51afcea-ae20-45e1-96ac-62b640fb52ca",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "3131af1c8a3f6f0e70f66369673e5861e2afcd4d2548cab1c555a2fe26d7bff2",
+   "leaves": [
+    [
+     "5b844934-1216-49c5-8c7c-435da2415b22",
+     "fc572ea01c52409a1569884daa0234b992e6831d43b78698499fdbc0c691f46d",
+     29
+    ],
+    [
+     "7d425a0d-9e1a-48c6-8532-78b5c584c417",
+     "17f390cdeb93a6b7a421aa7aab9460a51598e1ab37ddbeb4142c34874c7b11bb",
+     29
+    ],
+    [
+     "198e4474-1fb9-46f5-b189-48235f7b5bcd",
+     "32412ca78f6043d62668e5dba050085c0c4a34ed47e3e0dc758c931665bdb205",
+     29
+    ],
+    [
+     "555d1efd-dd82-42b0-a2ce-afc047edc37f",
+     "123710722c218d498b807107089010e81079808ef46d06137aab5c01fbe9a293",
+     29
+    ],
+    [
+     "5180ba11-4151-4caf-90b3-6fcbfd2ffb40",
+     "338bf29cd69d1ce1b967f4445b7bc0bc3b43974cc5d92b59f4654c78e471974e",
+     29
+    ],
+    [
+     "6135e5b7-4f3b-45e1-83ae-4947a4d4aa8c",
+     "dc36fc6a0c06edd7a410a0789a13692268f9efa899ae404bf137c8c81b3aee54",
+     28
+    ],
+    [
+     "77575aa7-0036-4805-80e3-14ec0f525a91",
+     "f608898bb30fa24b0b47d2c1464fe433699818f56b86e7c7bfd57cb686619cdb",
+     29
+    ],
+    [
+     "c6d4d697-385b-498a-bf06-7643ef5eeecc",
+     "12a6e2993ff9e0be5d5b4a69ff9d016c56328a3a489bf7cb82e2a672061638c4",
+     29
+    ],
+    [
+     "cc685f71-4e7d-4ccd-9369-07dd90a5110c",
+     "1838767c590632e4c0c5e063b1c2493c582a6b71a41ed570b31dbea2e8431eee",
+     29
+    ],
+    [
+     "db96c980-331d-40e4-aa5b-71782b72fa9d",
+     "d7f98d9f6e98dc77280295b2eace151402dfd64054d72f82ed5f13236db4bbd5",
+     29
+    ]
+   ],
+   "merkleHash": "3d11727524f7dcd4a3f537f20807be2f383d3d778d28a14ce31a0d81e6889c79",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/56.dat": {
+   "id": "8569c36f-447f-470e-bc18-fd64b2678710",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "7d8aa24c8e5707e832ca68e1cc477a615875680978a21f26ce0bda2b53c766f4",
+   "leaves": [
+    [
+     "2f3a8fdf-88bc-4397-9b7a-68ec2cad0763",
+     "7aaf8fe37a65a59734cfb9564259d21314f396055e9248287755273cd9f09c3c",
+     29
+    ],
+    [
+     "5c882056-97f2-4978-bcaf-097d85f0b7a4",
+     "b93a7337bd177bd50bb0dae01da5be0be5e3ae931393297ff0951c29ec89fd4d",
+     28
+    ],
+    [
+     "32fd77e7-4ebc-4ad2-b7ad-ea02882f395b",
+     "e4ca281ac7eda471897de6d156b6daed4e477327d9060e1650be0920462456e6",
+     29
+    ],
+    [
+     "44efaf6c-a7fd-43ec-82cf-ae9c27030891",
+     "c4f80b623ff0d4035d4a23f450be642908c953eb8a224b0f327d287d3b8f3e05",
+     29
+    ],
+    [
+     "80879a1c-8774-43ab-8a97-edc5232c1d68",
+     "f77ee7337d213b8b715d1f1e1cbbe04d04f14f2436804507ea3d3b7486a86794",
+     28
+    ],
+    [
+     "5483440f-85fa-4a39-a81e-7e408ebac1f5",
+     "eece8be2559d106ed137ec6d5d5603d825222a00bbb39bc9e92f5adbfe88970d",
+     29
+    ],
+    [
+     "e8fd9336-41c3-4438-aea5-fa93ecc5d2f5",
+     "8ffea3262f50dc0dd6331854436a2382c2413bc117e3128d19e5793e0c8f0351",
+     29
+    ],
+    [
+     "f78c1e5d-fc31-4af2-ade1-709f6d7ee26c",
+     "c3a407d97bc263514ad463836586974e2afd7eb99273fb84048700226814e9cd",
+     28
+    ]
+   ],
+   "merkleHash": "6be5140d143a7d7c043ac65772bd282566f5547748f301acf4ac2a2be84d5813",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/57.dat": {
+   "id": "0cc4b326-6f31-4be5-bb4c-849d6721dc17",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "489f1227fbb64d56ee88d3d0d467fcbbe15d171d5fc99c4eea9d5cb2cea57e8c",
+   "leaves": [
+    [
+     "8d09d46d-4264-4b0f-a7b8-be0af6069609",
+     "6ede927ef4afdd8781dec1fbf6c2550d788a83f9e414271c9c22d33a57f8da6d",
+     28
+    ],
+    [
+     "8e583822-52e6-42c7-945c-41197c9f6ac4",
+     "77381c084a5510834b9b14b98a755be3dc4d58f90092dde33c63c5e4a43e9c12",
+     28
+    ],
+    [
+     "66ca8e4d-a048-44be-bcb5-aaf392742e05",
+     "1f40f36ec396611474cead637ac8cedfbaea371bd9589f296934b7cab93aa8fc",
+     29
+    ],
+    [
+     "745bbdc0-82ec-42b8-a346-3c59d6e33f2c",
+     "22d59dfbc097668b7561f7ba99db9348b10b55e9bee1fd95da804003b274427e",
+     29
+    ],
+    [
+     "00773db9-228c-4795-a451-504897e21f35",
+     "556949c0fc5cf4ca1ea70873a68cb35c8b95566c2a1b61f9213317f6ecfa66ea",
+     29
+    ],
+    [
+     "5510d493-1b33-4fe7-8a22-d3ea7af7cfa0",
+     "9189bbedec7b3994b76eeedfea6d8578a70b1293a8601ba0aef24c921f563674",
+     29
+    ],
+    [
+     "b79a66fe-f4ec-4eff-9395-7c51f9659212",
+     "82a2f30d14295c7b720ba6d2c6eaa2026bb36b5cb31715c3637bf96b50ef8f4e",
+     29
+    ],
+    [
+     "dea2b322-8ab0-4355-8785-d776adf73992",
+     "052bb9ef562f6c74895583baab22e01dcc2cb65b296bb9f5ce962992d942be64",
+     29
+    ],
+    [
+     "ed3af9ec-d48b-44d0-9c9a-7b50d9ea2d67",
+     "87583e691c6d0c2236fbef860db5c0a0cd1ea3a038dfc4b7ab11bfa437cd0dc2",
+     29
+    ]
+   ],
+   "merkleHash": "ebaa9b1191424ca278664060738357d95705a66d653a1ad90b3d4a6cade7b047",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/58.dat": {
+   "id": "54ccb970-a94d-420c-a6ef-290cf6c0103d",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "ef5f718e4a1c902d7ee1d8de4a3789badd062692fbf775abe07b427651cf7393",
+   "leaves": [
+    [
+     "3c8bce51-cca1-4ed7-822a-19b5425c02f0",
+     "84ecaf6ccb5f3beafc273362a8e679868e2d8f1f8629bb52c4de334cfaedb8be",
+     29
+    ],
+    [
+     "6cb38c87-db63-4778-b932-acc3fbcb57e4",
+     "2f3617141e977ffb8e3c5f7a9185c085331ee003cb3d8ff857e3d8de7b364f46",
+     29
+    ],
+    [
+     "680be145-1eb2-4b53-a312-3f23c358fff7",
+     "7f93ccd02bedd5b4bc22f91e97df2399c534ffd0096225087a6cb687ebbe6685",
+     29
+    ],
+    [
+     "6538cddf-23cc-4779-ad1e-ae167241ee13",
+     "6c29f0ade6c545f53749f559b3803498eb96c7deb713be403b17bec582fa8eeb",
+     29
+    ],
+    [
+     "26399dc5-00c3-4fd9-bd74-76bd09e09d06",
+     "9f92bd28c032ff9a3d93095f99f1c1c8f52648ed7b87d3307490593f723472eb",
+     29
+    ],
+    [
+     "beba5afd-87a1-4775-8531-f5d989cfdd5c",
+     "f40180f4d8ccfab1029e114fb501c63f5134614e4b27309ed09233b100efa18d",
+     29
+    ]
+   ],
+   "merkleHash": "103ab55de4402c18e1416f723d2c16f65e2ab24c3252b45aa721d0a56ae301db",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/59.dat": {
+   "id": "c3372cc9-ac12-4c44-9a8c-70721f7380db",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "bbd406187031afdb1dac1fdf83b41aa8a9d5e111992dd28f092f87b99d36c863",
+   "leaves": [
+    [
+     "8a6c1f42-f3fc-4d0e-bee7-83282762ecbe",
+     "182aaed352941d4f864081e1571fb24c968d2531a741b3a67bca7a58ac2bd7bf",
+     29
+    ],
+    [
+     "09a5fd2d-a559-40a9-90be-e150590c5874",
+     "1bf5dd456296fb0108e3c0cbf7a65695a620e3b35a370140e524ba1d0dc6d9b5",
+     28
+    ],
+    [
+     "9db049a5-45eb-45f9-a553-898e18490c4e",
+     "da4b5ec51ae9188bef334dc841833c43355a8fd933f6e335a8b5199922397ef4",
+     29
+    ],
+    [
+     "049eb274-2c85-4293-a0fb-78ac760d9ef1",
+     "fe33b0eb50d240be346a438da5b21833593f77439c4e89891acf975dfc031b04",
+     29
+    ],
+    [
+     "496d6479-356a-4e2c-90f5-3d9f67415113",
+     "b23ed3d3b62ab91945b38a85ce1bc6c0172f169ac1a9557e0853a80c02fe3575",
+     28
+    ],
+    [
+     "525a7cc7-2e27-4bb1-86e5-f61be9eb52e0",
+     "0ae7caf84b896592ef58e1b55b3db2ebb88f2b5f24b373ef4dd872f74140537e",
+     29
+    ],
+    [
+     "b5178291-6f05-49e7-930d-ef264cf0ed94",
+     "de047f321402e0b247c93512a802ab07801a98599e41a16e812ddf421488d949",
+     28
+    ],
+    [
+     "c1a5ed1f-b9b9-43b4-8a8c-7a6ab21154a6",
+     "603c4c103569e1abe3f9e739a31400479027068b84bfec319a4e2abe64d5802c",
+     29
+    ],
+    [
+     "c80c3953-d16c-49ad-8551-6f09c1a1e83f",
+     "43f16dc917c59377ae0a0f1866811200f86c40db28aa11b29941abc5338568cd",
+     29
+    ],
+    [
+     "dbdc6d15-f1a2-4513-9733-5f042ecf9cb7",
+     "6f5ac79c1db00ea6ba9a33af654cf8c450f562abe25dda33f7cb59818e5bc599",
+     29
+    ]
+   ],
+   "merkleHash": "e96b0d270f8ff2f94323f6cd5ed82778ff9edc3025840542dc8e5e09c33e82ae",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/6.dat": {
+   "id": "16057cae-103c-41c5-a6bd-c3d147c06c92",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "f03782d826c9a0adaab83449a82352e4913d657cd1039504816d7902acf41508",
+   "leaves": [
+    [
+     "7bf19592-eade-441e-8752-1a7adfef7f4c",
+     "39e8105db00b90272f176b01cccf7b7cec45d4d72cb00a92271eaa4898a3a336",
+     29
+    ],
+    [
+     "7ecfbb62-966c-43b1-8259-1fdbfd7e2d0e",
+     "7d481626371bc8907d97a71b1c3964a54ba6c0fa8bb683e9afa3de07a411d2a7",
+     29
+    ],
+    [
+     "8cff51d9-5284-4bd0-bc0e-ceb7972f035d",
+     "d00e302ee396100c581471965a3e09ca2c1e07ef1394e00dffc4631e754d2399",
+     29
+    ],
+    [
+     "44cca474-1fb2-4b02-8cf8-13df4fcebbc6",
+     "42ac671be2eade870307d465399fd8bc51d33e879a5cfa73bca5f0a4f1db777f",
+     28
+    ],
+    [
+     "7168ac59-19ae-4970-ada0-3495c818b5f7",
+     "0827a2190e4a24c4ea5bf7d45989d07901da6020cc45d8935a2c98a92aebf88f",
+     28
+    ],
+    [
+     "07511f89-8a1b-4cd1-8c31-2ec75b809592",
+     "c0cbd99884de72c99eb2859e2ed771aeb38186e2e9c6843112d53f3bbcee0e98",
+     29
+    ],
+    [
+     "d849e679-bc08-4502-afc1-0bc8ad4b5a71",
+     "33376bbf4e53db829c5675cb0fc993cc0742e7fd35c3c56d3d5fd14dc39c089a",
+     29
+    ],
+    [
+     "dc726fa4-76b7-4317-a087-8014ef651913",
+     "c5f9f460ee3877461ebdba80f98daba7ed1161a0220c3721a94b26c31ac76360",
+     28
+    ],
+    [
+     "edaa6768-8a18-4240-96c7-36c99feaed70",
+     "aad1e653aea32557dcf6ee27f3fc4f53089beb338376c8a5b6503b9c37bcd04b",
+     29
+    ]
+   ],
+   "merkleHash": "f46ace7efb0daf9035c36b0c1bb215e03a6d5c1e58bbe34a385f8b84fdbcfa6e",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/60.dat": {
+   "id": "4f174ea9-ea48-4dad-ba83-ab9592baa4e1",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "d7b2ff43179600bb5ac5e52c2d3b219dba9d109c55e8931d084c8ed61eb64685",
+   "leaves": [
+    [
+     "7f5e29ee-6206-47c3-baa9-8161089d4be8",
+     "8097d3069661fb5b54329963b334b7e65714bbdba40386c21a5d72053ac1ca62",
+     29
+    ],
+    [
+     "74c3d803-3058-4569-8fb4-89f231aae85b",
+     "481eed56fd202f1a623ba42abe5ae0bafbb3b0404d37ee1a6494e31d592af781",
+     28
+    ],
+    [
+     "56424a07-5cab-46d6-9c10-d984309416ac",
+     "929552c158a345d20e0b699b29d73524b6173af258c0b1c4891fa167183bf3d5",
+     29
+    ],
+    [
+     "d9bbbbab-1cc5-4458-98f9-0683cde3a76e",
+     "4842589a4e0f946399ab036096b53aead5e473bf6f727289175fb7f177f84bbc",
+     29
+    ],
+    [
+     "db599cfa-078f-4e73-a4f4-1f3e852a9b75",
+     "b3fbd852031e3f95bb8e58afab29ab5f9ab778703aade69d4ab99b8543589b33",
+     29
+    ],
+    [
+     "f0bce5db-2551-4025-8c79-2cbe1099c08a",
+     "cfe95b14ec3df9e856a5da0918b414ad0b4473c549869ca9d0960602f4ced50c",
+     29
+    ],
+    [
+     "f0df09c4-94b9-4650-bb3e-0ec7068f9d7d",
+     "94e1806d39646793ce427995570d797dd8cb906159f3ff1c4ac0351483a2233a",
+     29
+    ]
+   ],
+   "merkleHash": "558efade6e096944a414e2149a5321de9ccadb3b51aaa3cbf9d809efc8d149f8",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/61.dat": {
+   "id": "3171e283-0fe4-4378-8f1a-e364a209ed67",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "baa90defef0751443bbb0f2201db92bca8d157968d378a3b238c28bb95f6307f",
+   "leaves": [
+    [
+     "34d08089-8143-4c3e-9788-bbb4e8ee01ca",
+     "e888a6e3c28894613997435ce2e0fa0d8dce3e2f4289fbca853d4b73573a7bee",
+     28
+    ],
+    [
+     "048b3e58-9c2a-4b00-a59a-4481bf8ba272",
+     "453d00af5d4348688fec563ee0fe98f3df0c6bffcb6cf15f50de71409f3d48d2",
+     29
+    ],
+    [
+     "87a9456b-0229-47c2-ae4a-6d0a606b4742",
+     "4fcb10200b897fb31197800d4e627502bd6ddcc540d507f2165d6cb0d58cfffa",
+     28
+    ],
+    [
+     "93861c14-3952-4e2f-8998-1bfb3da92546",
+     "627efbed713ed13a2c968bc5582131cd4211220654911b253006a6cd70e78f9f",
+     28
+    ],
+    [
+     "b51cf00a-dda0-4892-9a21-74676d8e2daa",
+     "9e610099161784b130c5b173985088ae02a80ebe1b893bde103daa815d3be27c",
+     28
+    ],
+    [
+     "c54bfd6e-448c-4987-936c-12ed1cccb9e2",
+     "129a4fc5922e7796b01ef1075ce0a739eb7363f884c344980d201462f0e9dbbf",
+     28
+    ],
+    [
+     "c667d70f-a57c-452d-9d5f-2c5e834a7273",
+     "a51f5cd945ea34e95be85f5778e5046d5384ac91e4b5811db14ac06031b17f66",
+     29
+    ],
+    [
+     "cfbf17cb-58af-4516-abad-1115baa94f64",
+     "1e25bdbb0f2beb71b6004d300f4b1bce7562dd2339892c6814200ce208bb1a31",
+     29
+    ],
+    [
+     "f5d00c1d-7585-4932-93bb-de71ace27998",
+     "5b64080fe873e132d9ff0719b4dd04d8e79913fcb950da4cbea4d8c4dfe4e94d",
+     29
+    ],
+    [
+     "fa67ef01-f585-48b2-90ff-a706b2d51a84",
+     "60dfff4edf310f3c01c3d9076ae0c728913b0eee8789388f6d428a1210a31df1",
+     29
+    ]
+   ],
+   "merkleHash": "00f8f388587b32e88206cc70f8b61a8827096168244a3ab1a9c67890b11eb67c",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/62.dat": {
+   "id": "957e5fd7-2249-430b-b7ab-c9f3d6757d9e",
+   "version": 6,
+   "leafCount": 2,
+   "leavesSha256": "f465f7a1752f5cf4eda8ed23ead93b06657e0428a16454b79418eab9d807f3a8",
+   "leaves": [
+    [
+     "b14e1c5c-4937-4424-b8e1-380de56a556b",
+     "58b70bf47cd88d557d1c6bf3e91803eca5c81252223d44ce2d205538814392c3",
+     29
+    ],
+    [
+     "bf173396-c1ed-4e59-8585-c496314ef27b",
+     "c5a397a13e1f3ad144e093e1c84c2a7a04cd7662da9942231ac916c9eb46c3e6",
+     29
+    ]
+   ],
+   "merkleHash": "2ffde6455aafee20851270e536950da1d244aefea7a0693838980c79dea68838",
+   "merkleNodeCount": 3
+  },
+  ".db/bson/collections/metadata/shards/63.dat": {
+   "id": "229ae0df-14e8-4248-9bd4-53c880d2f437",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "bbcbc5a0159cd956d52d64b196eb55dba1f57b3843631c949227ff3053f7a8a2",
+   "leaves": [
+    [
+     "04ef907d-49a8-48b0-82b5-bcfbac5fd9d5",
+     "5c23f3cd50cfa49819eea3cbe3db537a2ba8a52bef62f76617c932dcedd05480",
+     28
+    ],
+    [
+     "7e517894-802e-4806-9d12-fac51657f8ba",
+     "dc9a19dcfe8084b2f75dbe8d8ab0db1ff08459db7753bb314e92f85d254418f3",
+     29
+    ],
+    [
+     "44d3ef8e-6b07-4102-b15d-cb3d15d18489",
+     "ebf34a275c5c0ea536a3e4719a3fc3daf6ffc1506d98e6672eacc479ac02f418",
+     28
+    ],
+    [
+     "76f1f992-e6ed-49da-8ed5-a78b9f2b1f7f",
+     "688ef5bf03616c47f7ac3f569641407ea7933486ca4cc39540d9a12b772a1fac",
+     28
+    ],
+    [
+     "2705c727-b931-42a7-ba95-f0e515a27e16",
+     "b6aa3d0033e1377a05d9a729818b12a642e563e8f1486b66f111dfd0c93f389d",
+     29
+    ],
+    [
+     "94803c24-27a6-4d96-9974-33ffc9161b82",
+     "19f72a7d5f87e661c7606746510a9a119f0bb9873000b2a6ba31fe4d07760e74",
+     29
+    ],
+    [
+     "a004cc0e-34d2-4f1b-afc5-13988f1ff8dc",
+     "e004e579b484336d9a3450d8c723b66c46ff36103f3f5def7e28d8bc86943e05",
+     29
+    ],
+    [
+     "a9732db3-84dd-45db-8545-5f8aaca8a96e",
+     "75f19766d93c66f4a283f4b2c76af23532821368e255c1e0ee2246bf8235e290",
+     28
+    ],
+    [
+     "f46e8d69-860c-4345-8825-fe9b772b0b65",
+     "de4fae251702ba0061514753c6a2580c9d319a7b24b28071e63cbe80f1ce0098",
+     29
+    ]
+   ],
+   "merkleHash": "50d09cf5be0c3e8f98249d514d5bec1b3b1822a075719803879044df6e968feb",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/64.dat": {
+   "id": "5b304394-b07e-4f09-a981-a1dd9439f3ea",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "fbad3326f0fd186fe7828fad434ee7928b4ef0e89a33b5a83de84a0ac04684d2",
+   "leaves": [
+    [
+     "4a7703aa-0eaa-4a52-9c77-fde9a0250d00",
+     "9359838ac798904f5d3ddc60ff0926aa3b1df8b49b34577bc2d625592f912954",
+     29
+    ],
+    [
+     "9dc1562d-eff7-42b8-96e6-b3095f79b9da",
+     "1134bf81cd108fed6c4416b0abf30fccf18c1b385bafd4af77936f49998de825",
+     29
+    ],
+    [
+     "98aec5d0-084f-4f4d-aa8e-e47e07e3cd9f",
+     "90381b74438bb7ab79e689a680266e9b20a2be2a5cc6ca9afc152b8af22750a4",
+     28
+    ],
+    [
+     "121d58ee-2172-4c2a-b5e1-42e69e37799c",
+     "2f435b96adccaeb121cfc0dd9f916132d02f18883c126d3840042b8589cfce4d",
+     28
+    ],
+    [
+     "a3779a94-651c-4d11-aadf-392afe66ff88",
+     "65535376fa85a6a6713057292ac73aba83e26a66738924711b88b71b0ba324ee",
+     28
+    ],
+    [
+     "aff4aa8e-b7a2-4ff2-986a-b25470061d2c",
+     "8fcd484eaaf1ff1eb9d3877bad79e0a890635b17d8ac3e54b19dd3e88ea6c819",
+     29
+    ],
+    [
+     "c562cf27-3626-4dc5-b858-1e53f8a7f901",
+     "99d67590f67f858c635a9151df063db3141a453eb342447f0b762c71e53198a8",
+     29
+    ],
+    [
+     "f01c5ade-5d29-4c17-8c08-8295bc0b07f7",
+     "c586b7badc31f7e293910c72ef508d4d0ef63d92f9b8fac5f45e682ef351d44f",
+     29
+    ]
+   ],
+   "merkleHash": "a9d528a812e88b8768848d6f6dc1b2358e962e1db279079fcd301c2b051dacc1",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/65.dat": {
+   "id": "1199e8cb-ecb1-4b93-bbca-fcdeaa0a047a",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "85bd32888fa2900705bc626243c67ecdeff1e79abb689dbbdcb750a7f3e8277a",
+   "leaves": [
+    [
+     "2b86123a-6944-4caf-b184-9f54d7297b7e",
+     "06c007d38f9ec388ee01c6c67b9c0213c41b24e4fea5ed83a4cffc3b02b69bcf",
+     28
+    ],
+    [
+     "3f7689bb-af06-4d9e-8d26-58a6f2e826bd",
+     "352c0e6b03c544a6c030084e39b5ecd47257deee998ac3081f49ba6b4d64af6a",
+     29
+    ],
+    [
+     "34811c05-3f05-405a-9843-470a64db2300",
+     "945a1d5f7eb06d56341acbca70872c66d0f6f4af61255b127aa828f085c54ae6",
+     29
+    ],
+    [
+     "a8e3c234-0291-4655-a731-918a4eb6c0a5",
+     "4b8204db2199888b7aa541b5ddb8eb630acb651176ea0859b32a9d2cc629f973",
+     29
+    ],
+    [
+     "b9276335-ef81-4873-b9ec-05edc1548cb4",
+     "c1c7968cc47e461eb898ab069cdc19f1a7196a911f6efdefff782e97219d9a8f",
+     29
+    ],
+    [
+     "c39dc8de-937b-4e37-ac57-28fbddaa5ba5",
+     "4d63ea64e2b30ab89dcfd2edd68de26e32191945b31b66354f56872af7b38da0",
+     29
+    ],
+    [
+     "d09f134c-cfd3-47fd-b90f-0b412762dc9f",
+     "81c5f5ae450bf638efda5e8ba6f5e37ff3a7bfa001bcd0c18cc1dea3760f1c7f",
+     28
+    ],
+    [
+     "d8168702-bdb0-4425-8709-4d23ac333ab2",
+     "a18c96c301ca3b60e4ad1a362f0ffb15090862939d06f9a4c7d5e849e7f6ab61",
+     28
+    ],
+    [
+     "dd699b7b-e4e3-429b-929d-64e52ff27f98",
+     "1eb50070b418ccb34fa3756f2aa743703551c73f6d6401b610c58ff4f928a1f0",
+     29
+    ],
+    [
+     "ecde2aca-f61e-4602-b393-7811cadcdcd4",
+     "2b6d675a2ff6c9b1fe98d5ebd51481bd59771dda95254fd0d637959de28fd9b0",
+     29
+    ]
+   ],
+   "merkleHash": "3bc0d5c8892e862b754680961813445d45a74d5bc9a1bc558a04301019776ef6",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/66.dat": {
+   "id": "73019010-c8fc-4a99-adf0-a5f1b99858ec",
+   "version": 6,
+   "leafCount": 11,
+   "leavesSha256": "fa4109f4589a832c9d20ac3c1ccd4830770cbe1897c021c1def6e8b923b4a17e",
+   "leaves": [
+    [
+     "0ecc6360-089c-41d6-a6b0-f745bf1a6bfc",
+     "411e3ba6cffb2813d17a3a9a6a8a4b13c748c31a50dd830d61172f2fc42c9c03",
+     29
+    ],
+    [
+     "2c084249-81d8-40b8-ba2d-9a215cb0c391",
+     "6d2e12ecbcf9cf025270ab83b45d8bca538b8bca85eda1abb4bd83ceca08ef6a",
+     29
+    ],
+    [
+     "02d8f8c7-ed94-4d32-85f2-d0ca0fea1553",
+     "856bd9d46190951cb3f578536a359c03c9328bc1327400ee1e6c756747556ba9",
+     29
+    ],
+    [
+     "8f6e6d50-cbb6-4193-ac08-36c02efda6e6",
+     "147e861795ce5fa3bff2e4c7ab70fcc28bff6933fab325ccf4c8a1716cc7b457",
+     29
+    ],
+    [
+     "16d5f42a-9558-4029-b5b2-5efc46fc6172",
+     "76284773a16515f77a79905c372516caefb91c6e6132eb5826e4837c7d9fcd17",
+     29
+    ],
+    [
+     "57ad597f-28e8-455a-9c8e-3ab0b2f77197",
+     "6c73b57b060d40a67196624831a24962f1437f07e16c07613741aa6ec589492a",
+     28
+    ],
+    [
+     "0556dcb7-8693-4f51-8e15-14527a075a24",
+     "1ab5d66bd7e07d4964c20dad75ebf82f865769d48f0cf84e5f53d0b4f0297a03",
+     29
+    ],
+    [
+     "934e2455-0c74-424f-9a78-410da1012821",
+     "8a437bd1221fab0c8e246e1b68aaf43fb8e197cf756f58151e73e24413e5d916",
+     29
+    ],
+    [
+     "59750a3e-1edf-4cdd-9836-395785a814e1",
+     "df3c07fb1a61fb93e1977a95f9e1cad229b715d4ef465915da8991aee9e52434",
+     29
+    ],
+    [
+     "b648dc6b-bbec-463a-b6e4-04bc50726787",
+     "54fc5357ff46d1d8aec75c598871947035af60439d94e520e3d3cdbda1c3002a",
+     29
+    ],
+    [
+     "c3f227a1-e032-4582-9795-aff35670c793",
+     "47962c83f6787515a8e2c83bfe3a22455e38d9a959a588b39469d61c6d01750c",
+     29
+    ]
+   ],
+   "merkleHash": "8e4a13e8659d06b5c45aaf8a2cc4b3ecf65e9f577318f6f00d91d9f8081eb7ca",
+   "merkleNodeCount": 21
+  },
+  ".db/bson/collections/metadata/shards/67.dat": {
+   "id": "efd60a8b-59d4-48bc-bb26-6e37376a535f",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "5752d4ae1badbc228b9b8b92fdfcda1e19c1610fc5eb4aa1ecf11d55d8a5ea0e",
+   "leaves": [
+    [
+     "1df895c3-246e-4f8a-8c81-06d0e272b1ad",
+     "0a882a30a4cfe7e94b42cb1df06831f8bd839d582f45757e738c34b48a2cbe7e",
+     29
+    ],
+    [
+     "2c5ccaed-fbc3-41fd-9870-b9fb9da1312e",
+     "e5c19395f18445494195aa429ed3b319ef8476d59e83d516ca73fa7311a96c2f",
+     28
+    ],
+    [
+     "868d684a-d23c-4887-84cc-73e28e0aba76",
+     "847d48749d62c0e53c5a10239ebdb1886a3c1f02513c0cd1e65564a16458ade3",
+     29
+    ],
+    [
+     "7556f0aa-1129-4527-80d5-f75d3071e183",
+     "e119640cd6164b0711576d693e15aa7c2df1046b5a5c1e0cfa356e4da756e571",
+     29
+    ],
+    [
+     "a57e87dd-1eaa-49d6-b03f-baa2cca89977",
+     "c9722c275fdf5afb671dacc73b19bfc2198524caa308a9747dd81d7965b7b616",
+     29
+    ],
+    [
+     "b54b4877-a88c-4710-bf04-4e82925be0fb",
+     "92670ed7cd8b80b33eb5c27383001b563be7eabec42491e7d0b3fb54b63bfda8",
+     29
+    ],
+    [
+     "c32be66f-ff54-4dee-bcd2-76494ec5193b",
+     "7aec978a6eac354448a15c2eed585e95b65c704667dd925bd62261791e4465ba",
+     29
+    ],
+    [
+     "ed286378-bc43-4b2d-bcb4-0e265605df3b",
+     "d4612dd320418452e401644f54317beba3217dc18d9135d27830df63e9d78230",
+     28
+    ],
+    [
+     "ef896a70-cab5-4c91-ba81-91d40318a0c5",
+     "aea99dd2d27c898de80ba3211a5b254406e1889b53bf36d473fe03e8c21dc1ba",
+     29
+    ]
+   ],
+   "merkleHash": "a44b4b5195c8b38610b7f38900dd4ec03d0cf93cb0af691a969c03ba6ed8a21e",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/68.dat": {
+   "id": "408f3e69-33c8-46ba-bf3b-33d626350da1",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "5362423dd4a9e468f976a22a0849ca653494106e8a8a2ed1d92d9c66949b2677",
+   "leaves": [
+    [
+     "0da7d23d-afd3-4bf8-bae1-13b4565f7dee",
+     "9ff6d1b57501bc5df4c800fc050c15d49da0743ca80fe18f34c33bac21c27355",
+     29
+    ],
+    [
+     "11da9050-c23d-4c61-8ee3-177cddbb526d",
+     "8ee4436ddfff420f90afd9f89d12d6586dac36e2ae10458fc7fad86e66345ead",
+     29
+    ],
+    [
+     "48dd8cfe-2901-4023-bb21-08e428fea5ff",
+     "5d8fb324de8f50fb484e968b1387a47eb6591759f5d3fb9ce2e4a31196a2636d",
+     29
+    ],
+    [
+     "7735ddb3-10a2-4915-a620-8cbc5e20cd11",
+     "8fc71d20039d8b9c41447eadd0e95a994c3a975223a75d96272e15188aaa5324",
+     29
+    ],
+    [
+     "19831e1e-ae6a-4cc8-891c-2bd2a54bb074",
+     "171e13e240e9f06226cdcdba6e6f4b7eb79d2f502ca7577e283c67b87cb54ede",
+     29
+    ],
+    [
+     "67374ba3-92e2-485a-b444-ff2fbf6dd941",
+     "9fae6bf6591ae8de7b7e4dbf5567039fcd5c1c5810dd101b0c4eeaf00653f2eb",
+     29
+    ],
+    [
+     "64059435-b9b6-4e37-8c32-d3a04a322d83",
+     "d611843c87994f501efc30c945eb048dfa2f5492b25552ab201b2cf0a13169d1",
+     29
+    ],
+    [
+     "b0cc9048-7af4-4edd-9c42-305dce11eabc",
+     "8f23fa6c8afc88f0511ae5a3a90c20411ccb06cf9c1d1935f8fd7049775a7226",
+     29
+    ],
+    [
+     "b508c06b-c2b6-4053-97dd-f50c155b02dd",
+     "b0272a99177e47acf9a7142ecc46b85ed7220ced81f9a22a162929ffe054e9be",
+     29
+    ]
+   ],
+   "merkleHash": "4c4d02ba75857ff6d23ce425cb6913afc6aad814dbdd55a2104c9ef7f5971792",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/69.dat": {
+   "id": "3a07ea31-3ce4-44b8-ba79-9aabaebfd6d5",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "61454f1576f1853f9a1085dbb3fb09b9321b4a1c44b5ec57a330e01f74b12a0d",
+   "leaves": [
+    [
+     "2b0da367-c84b-45ce-ad91-6951dec36b2c",
+     "9482ea989b198fbb0adc56e643782cd98c399e2589e29a4c87871611e1780059",
+     29
+    ],
+    [
+     "2f298d47-e5a0-4f33-8ba8-8b11d01a68e7",
+     "0f49e5756b3106bdc407ad056262511b592e3df6c3c4e24e7b856ccacaa932d3",
+     29
+    ],
+    [
+     "3c12429d-c77e-42ee-b655-da0c1efc85e3",
+     "8f4da42b50b9eef3d49142405bfc3a188d3838d30d49a60ec1a37d0c9afb371c",
+     29
+    ],
+    [
+     "7ba0bc7b-4fed-4e38-9d8b-8d1dc598f396",
+     "76b355d23f44c756b295396e2003da66538052214ca9a19af2617cce30f369e2",
+     29
+    ],
+    [
+     "403e1ee0-3d14-44a6-8e70-59a7d49823f4",
+     "9152d6c60922d551bb6c57e3c37a392f9fd23534f68aff6ea7b6fb853e1e577b",
+     29
+    ],
+    [
+     "c813c8ac-41c6-42bf-ae90-df103aac896a",
+     "98003228201387cc0402417584eaa79abe9ec22321a4734bf82bba2f14b05826",
+     29
+    ],
+    [
+     "d3e21524-9d40-402d-aa13-ca9463cf8864",
+     "8f0724b0584ed7dcabd5122e3e2c182fcbd19f9038fd20905e4fb1e58fb7d967",
+     29
+    ],
+    [
+     "e67a89ed-21d5-40b4-9813-8626b6cea838",
+     "9f7fb6d3f62de8789c3e29e77780862a73b9de6a09cdb58957f2a3a9cade6deb",
+     29
+    ]
+   ],
+   "merkleHash": "3e5b61b13e7aebde956d115d6042242c26a3ee1340d5b57a891243912099e891",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/7.dat": {
+   "id": "ad90eaac-d1dd-4f3c-b1d8-444a42ac3b71",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "35133ad7f55c5f188e5dce30aaaf26d144dc73fb8ddef6e61feb202eb5475001",
+   "leaves": [
+    [
+     "2a354da0-8cfa-4a19-a8f0-87b2f02cc15a",
+     "1a94132d3cb97b53fa015c33e95c9f643944f80a58e721d10414302b4a942c5b",
+     29
+    ],
+    [
+     "2bebc954-d558-482d-8fc2-c8bef3c61c0c",
+     "2493e698bc785fbeae961ec32e0c729753eb52469ed4233d908aa14c39b7e601",
+     29
+    ],
+    [
+     "9d734dbd-1ae2-4bdf-908f-ef42f6ac575f",
+     "69c04761893509996846466097b589f5726f75ee4a2bfa76162bba7be2469fd6",
+     28
+    ],
+    [
+     "7528e75a-8357-4d69-9265-2e631841640d",
+     "72ab4c4f3105f916e4e13d87fe6e8dbedda491734375de99133f3fdc1c8a8e19",
+     28
+    ],
+    [
+     "11394dce-8557-4e83-9705-24d16fbac899",
+     "e8bd00fb3a96e275ba9d8bfb0624ed00801ddbbbd3e1814b55231f82b817d62c",
+     28
+    ],
+    [
+     "13952a15-6827-4207-a543-7a6b61924232",
+     "d8b7af5b06639aa3fef8ce4dd04a86c7750727757f3d9decbfaeb3e6d210f5cd",
+     29
+    ],
+    [
+     "bc496e64-15e9-44bc-abec-464f98f57b8d",
+     "2432cf0bbb127dd0773e447f8c7f1f2650f8bf7a10b974ad647689f6bc2edba3",
+     28
+    ],
+    [
+     "bd00e528-07e1-44f9-91fb-5efd19f9e2c9",
+     "73a7a8ee992763211e66fef3c8f52b9cceb072c38e836fdeed1249f8d3b308b1",
+     29
+    ]
+   ],
+   "merkleHash": "816085e76a0d5d80cca5887f93d6654fb55b5bb02581afe34ec02d5cc138da6f",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/70.dat": {
+   "id": "7b4f6865-26a5-4316-98ba-41e528594ec0",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "3a92869828fe5e6db35a072f2dacf6faba0878e2f97a60aba0e4b4a7870406a0",
+   "leaves": [
+    [
+     "00bc1fe0-f989-4b31-8920-08aa1b8de669",
+     "4182273f01de7a9e5275b29a657d43bb1ab8e77ed51406283799d8d0a01ec6f2",
+     29
+    ],
+    [
+     "2bd512a2-6453-4108-ae75-cbca6add76f1",
+     "131fd67df13da6c65cce3c46e9294fe0a2d3cf32d00c24892f5af107e4fc4635",
+     29
+    ],
+    [
+     "4a68cd54-6132-4625-a2d7-98d62c4dac66",
+     "d2cc98955f1e990f6166e2fa27800fecbea869a323bd52bbb992b1b75bb6a1a8",
+     29
+    ],
+    [
+     "007c0ee0-533c-4920-bef6-e7d9f95c5ddc",
+     "668d46e3aaaa3001954aa9ef90d35a7eeb9c26becd7f36a5cb03bbadbc53e71c",
+     29
+    ],
+    [
+     "14d57cae-8afd-46dc-bcdd-71227209f653",
+     "7b2ccafe72d085db5d03c4c1fa4cb8aed2170aad62d7730015935540aab46b55",
+     29
+    ],
+    [
+     "e8693f73-c767-4409-9ae7-063c4c60f814",
+     "44be7b7a2d5f0deb342cb0d0550ca44b1b72b91c405869879457fe98c8268932",
+     29
+    ],
+    [
+     "f6eb0c65-0988-4036-b598-26ba16dd05ed",
+     "51f3090e78c90294c42b218d12324110c87b5fdeaa6fcfe73b0a936c350acd87",
+     29
+    ]
+   ],
+   "merkleHash": "f89850a793941606149742d9797300a977cdfabc1210e7a2d7fbc2b0ff904480",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/71.dat": {
+   "id": "fde1d531-1559-472f-9df9-878b7acec068",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "213682d66f51a89c423022e6e588781e3239dd40ed9b62aa73549efad68a170f",
+   "leaves": [
+    [
+     "7cb74aa5-b22f-49e6-954b-e51e1551f88a",
+     "9df9fc30bc819fbd6157402132cdfe39ac7221e051d28baeef899455264e186f",
+     29
+    ],
+    [
+     "90ec7b47-e680-4de3-8847-764bed0f9dc7",
+     "8d06478690f2b5979ff889b61ea7a939b4a1db3df90090d6b4e0b2f93f1c80a6",
+     29
+    ],
+    [
+     "265a42db-24c2-4ddb-9dc3-459a4b816619",
+     "c892fd0ade92ce6f5590bb1f753fe8388f5a25a19b6e74e86c0370e00d2d61d3",
+     29
+    ],
+    [
+     "cedb3a6a-c821-4cf4-a2c4-16d8d22ff24b",
+     "f24b24813f9ca2a5154db8d989411d2147b252d648cc5bff386911f725ab005c",
+     29
+    ],
+    [
+     "d3e5a219-b512-4ce5-9fd3-b7bb2f00170b",
+     "19b1bd9bc45980917e7815baab4594a477fb578d156ce170dec2da66810ba3c6",
+     29
+    ],
+    [
+     "e2c15632-997a-4aaf-a4b9-78d0f86ecf48",
+     "1cee8f535d601ed02bd0df81bc6845d09a133302291f2292f1e478c00e95b83f",
+     29
+    ],
+    [
+     "e5fe2fc8-c7cf-45b8-ad2e-1c95c046e807",
+     "762e5138d5f15c15810c7782cb311b2939fbaf2f74ac12d06dc972c82859a28d",
+     28
+    ],
+    [
+     "ea5ca35f-5bd1-4d7b-b473-009ec727f88e",
+     "0584b3a56c386704a5b64ac724916f9f8a5320cd79c75a29a0678666665d449a",
+     29
+    ]
+   ],
+   "merkleHash": "3d631fb8141792fd88bd41c62ebdd49a9a3c229e89a5e5e403e316a8700498ac",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/72.dat": {
+   "id": "8ae26531-41a2-43b3-bee9-92e969512493",
+   "version": 6,
+   "leafCount": 13,
+   "leavesSha256": "a8a8f4f372f9e86f1bb4be5546c47b2a38cb92b3636e30dbcfbfe040561b3b9a",
+   "leaves": [
+    [
+     "4b88d9d4-8bc3-4cba-81e7-5eae17325217",
+     "e7d0a007cdae3798947751ba75198f25fa4635283d1ef7de84a4bfd3de9e3e98",
+     29
+    ],
+    [
+     "9c8fbd5a-006e-4995-b42d-eaf2451abd34",
+     "bf0d20568c06316a96e204d69531b2b7c198d88cbece88fc8bd0f5288f6e646e",
+     29
+    ],
+    [
+     "015b67db-5f42-42ec-9df0-1a6883b73899",
+     "dc0ae5f92a3b28e5a22b3cbdb46582363b978ed8186ae74b46a781fbba043cb5",
+     29
+    ],
+    [
+     "607afbcf-30a2-4e13-a6b5-e9a58e69cb6d",
+     "8e610e2503da5f5e7c56415c75f182b844a1e285492df263622763902a656157",
+     29
+    ],
+    [
+     "a5a19825-c76c-4929-a44e-846d2c885f49",
+     "c681c4859d5d664a08095bc3fb59711dac005c676487472705e8925ed6fbeb59",
+     29
+    ],
+    [
+     "c977a98f-d384-4995-9c84-105060e27a0b",
+     "333323fb76e65782f3a2e07be0c8d84aa5438cfcf67fbcceb4f02094876a4d7a",
+     29
+    ],
+    [
+     "dc30d5b1-078c-4289-aa05-caf6ceb9d23d",
+     "59e386be6de38250b34e6d0f28b4a2f468a8adfbef2a79beb4335faeabea32c6",
+     29
+    ],
+    [
+     "de21bf3a-81a0-43d2-9088-e3d60df33e9a",
+     "d0a830379f8a35c9104f21a88fc23b39f3cd17390c316f2cb5bddb28fc286147",
+     29
+    ],
+    [
+     "dfc78e4b-3559-41ab-8822-5136de6cbb12",
+     "51826add2bdbc933952248ef28536c9a77bb26a1e1aa43ab5de52c56b5c6b62d",
+     29
+    ],
+    [
+     "e631c4b7-d081-4c56-840e-30383a671436",
+     "e658fdc9e87e8e546b5f73d77e4b1fd00970a252804bad6804998970bd660935",
+     28
+    ],
+    [
+     "ed78c5fd-0a45-4509-a316-ffb5d871cfb8",
+     "93fdc793a4d1f434a73063af0fccb97dd305f3ea853cc7581b127f3511d3b24a",
+     29
+    ],
+    [
+     "f0ddc1d2-aa7f-488b-85fc-fa1878566bad",
+     "43a9be50e98208d3916baff881cc50e7284f8e82783efa39eef9c5c005ae6a9f",
+     28
+    ],
+    [
+     "f51a30ec-fc7e-44cb-9776-713d71d1cc92",
+     "d6ac3e462e088c74e2f7e45271889386eff25c8402008cc6aa6b0f4f0882675d",
+     29
+    ]
+   ],
+   "merkleHash": "cc01dac3bd4d0102c3a287317a985d19a5afb6fe6424a45204001f7141d2a7e6",
+   "merkleNodeCount": 25
+  },
+  ".db/bson/collections/metadata/shards/73.dat": {
+   "id": "db72a9a3-7825-4823-8f75-75ad2351d186",
+   "version": 6,
+   "leafCount": 12,
+   "leavesSha256": "a8b60bca09218277a0c735cf11a650dc51d73b08decc8ea99fb6b67d5acf468f",
+   "leaves": [
+    [
+     "2b1598a6-c4c2-4258-80fe-880b394d5c64",
+     "8fdaad5be63f3b0e02b71b91333f0f7988158f8c1613d72c0ab375d653534a04",
+     29
+    ],
+    [
+     "7c06142f-f82d-4982-adc9-cb379584ec02",
+     "67782eec13ffaf4072bbdd6f6106616f909dada5394e8bafb5aff1cffb6bc053",
+     29
+    ],
+    [
+     "8bc7915e-dd12-4247-949d-5f3139804c4c",
+     "933d325571f0c4e71bd732c5028b952124960c4ac05ae1182c29d701edf6bcc7",
+     29
+    ],
+    [
+     "16c801c5-af4d-40ed-b93a-e6309625ae88",
+     "b2cf8f0fb1addbfcb46767bf32fc12d589851143cde51817107092396a7e59f0",
+     29
+    ],
+    [
+     "84e4ec86-30b8-4497-b931-30378073dc3e",
+     "7938070336974e43a2d9f222638330882d078a932f16b61d7bf4911b190e0f1b",
+     29
+    ],
+    [
+     "75208bb9-893d-4442-852b-44a7d1620284",
+     "bf293d0a463cdfab4e7ff5f1e359aed247b87da650421fb274ca4f259ee07221",
+     28
+    ],
+    [
+     "515680a0-77fc-4dfb-a94a-9fddccadf75c",
+     "2b86dcb6b2fa5a26f33bf3589452728d485640a1cddc6797b6ead71394682c71",
+     29
+    ],
+    [
+     "a87fbbd7-898c-4314-a2e3-7bdf0b6b325b",
+     "5ffec7a60421f1ebb94b21cb7d66dd98f4ddc0fb2ab24acfe49aca4c474f24bd",
+     29
+    ],
+    [
+     "abf5cd84-ccce-41ed-9d77-f7292a18014a",
+     "32fe8853a2baae48add15ad670f2bef12c92f989dad0b3d5289b48c65dd63a1e",
+     29
+    ],
+    [
+     "b521ba20-fe35-4983-a889-710a1ca24415",
+     "17f58a9d05fb5eb524597f4f9cd257d6a16726380d1c036751762dd7c38b1acb",
+     29
+    ],
+    [
+     "d49e6046-98a2-4a90-b145-08244e0ef8e4",
+     "f6db19ff11fd43127afe424b16a8c9e3a82f9b3495b7171836192e0cacfe5615",
+     28
+    ],
+    [
+     "e4358395-6855-4a0a-9794-025efe3febc0",
+     "7c03763520653fca15410ab477a559565b4ec315cb52c03c59696d498b96af3a",
+     29
+    ]
+   ],
+   "merkleHash": "15bd0d9793fa306117334e6c17750893525a28921a351969653be66a7651c194",
+   "merkleNodeCount": 23
+  },
+  ".db/bson/collections/metadata/shards/74.dat": {
+   "id": "95a55f0f-444d-4c48-aacb-b03ca9ed1b42",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "d7548358b19f45dbd41963a5e4ee4dd11dbc280b1ce4cc783d8b725b065a9390",
+   "leaves": [
+    [
+     "2f59ac86-69ec-4f46-88bc-0b47501fc56a",
+     "804e25242b92ac67896ed36e8b5dcda256e6a70b4a65b99b7d20e1be075cab74",
+     28
+    ],
+    [
+     "5cdd96fb-4e7c-4bc8-a4fd-d177a715d887",
+     "c3f9a2a8a272c03bc8ec1de597778e3228292f22323f7781b7d8e7b217540b05",
+     29
+    ],
+    [
+     "22bb0cd0-39ac-4718-9837-6c8515a3357c",
+     "d7993718566b81121ff842240c2cec8f727d1a46d1676bfa1594205a89f85e97",
+     29
+    ],
+    [
+     "42db86cc-19dd-45bf-bbf9-2f54d7649f11",
+     "d33eb910b19dff259a2cd8ec2be2cffe9e71b6bdd0f6a5eda76f845f85603e3a",
+     29
+    ],
+    [
+     "7219f2d3-e0ea-4519-ba2e-0db5e7001239",
+     "7b798dcbf58e9dcb59d4cea7695eae682849b99292518073b2eecab7b93e9460",
+     28
+    ],
+    [
+     "8369b44d-2c7c-470e-b2c3-8884b4679831",
+     "c6e0579281256fd0cbb04ff3ba97bd1dd6f54901bacefa3f6a02b3f29a15dec7",
+     29
+    ],
+    [
+     "c4d1eabe-b414-4407-93fa-79fc60d65eaa",
+     "548c3ef211859a9827b40e0c8907cf93368390996156a27e1b12224c9ec92ee9",
+     29
+    ],
+    [
+     "d7091c7d-cb4a-40c9-b7ca-cf7fc7c0d737",
+     "9ffac9b9ae3af9d0385a2666beb314886f76dda346c7f271087222f7d197c2ef",
+     29
+    ],
+    [
+     "f660e53a-3114-45e6-91a9-f5f26386d42e",
+     "51744fd67afc67376d994df799c92e77aca4c988e860aa56f0955838a13157a0",
+     28
+    ]
+   ],
+   "merkleHash": "2ff2eacde5b4a209cb512d03c5e34a17af7640bd2ac75ab05c3812ab2e3aed8a",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/75.dat": {
+   "id": "c6d8e2f6-7ae7-425f-bd1c-aceab4879811",
+   "version": 6,
+   "leafCount": 11,
+   "leavesSha256": "e75c2046c8d406e1d98cb64292f816fbd6776b5f92ee09d155b60d18e05c46f5",
+   "leaves": [
+    [
+     "0ad09df6-2061-41ca-8b3f-9403cb1abd97",
+     "47cff48dda6a8969ab7605865ed6a1c87ed50f41596e08de91fd56a72e6b94d9",
+     29
+    ],
+    [
+     "5e0ea862-b4ff-481e-99ad-9eb176101c9d",
+     "ae5a20a991832f97feea9602ed4a1e9de510f8521add10f6811f9a96257c309a",
+     29
+    ],
+    [
+     "9c5241b5-4c4f-458a-aaa6-3ec5e9d80dfa",
+     "364cb382db4c67ea6e5d13eb8fa343970f9acd46a9ec6deaf06b514a1e4e88bd",
+     29
+    ],
+    [
+     "12f24196-604d-4b36-aa85-7093e9c421db",
+     "3aabef4b0e42f886bab0a9be5390f82225f78a2e09c630613295bdba84f9d942",
+     28
+    ],
+    [
+     "443e08e1-3eab-4ad4-9264-b8e96eea364a",
+     "f7421fe86e64a34f4594d84c90099fdd531e44b2225a7e4b57fa9c60b540a14f",
+     29
+    ],
+    [
+     "808eb055-42d0-4b1a-978a-5a0f8b94f285",
+     "57b85a9d46207cbb5adaaea084fa403f6052b454cb61457c7f4d5870fe85b4c2",
+     28
+    ],
+    [
+     "82667393-d670-48cd-8b8e-b190faaba5e3",
+     "e5b49922c18449ae99348e24ccb275ea0f32ed9ad72245ff384fcf9a3a985138",
+     29
+    ],
+    [
+     "a1d6dd9e-81cb-4f3b-99ec-a170feed5c55",
+     "95c0fb6dc36eb34ac89bf15e05aa1c4795ae491d0437d966c2bdc3041463d5b9",
+     29
+    ],
+    [
+     "b2aeaf59-e9bd-4b31-befc-f7f8799f46e4",
+     "5b868a60369d298d2c59d308ac1012aacc1338d853d2f0966a6a82dcbe178f25",
+     28
+    ],
+    [
+     "c62b416b-77e9-49fa-a1b6-f6112fd13682",
+     "53fcfb7d0d0ae73207b417d48069f4752ab7d3983896be9aad7902e5039e6fdc",
+     28
+    ],
+    [
+     "d87ac1e0-2199-41cb-9171-3dcfd9b1e079",
+     "9eb200fd42cfa7260249cc6c441241b72e77cdcd0fe94b33e3f1e654d28954a2",
+     29
+    ]
+   ],
+   "merkleHash": "474cc513f9008681cc58059a7bbfb1fd64e8557413a08514a1c65c3113639481",
+   "merkleNodeCount": 21
+  },
+  ".db/bson/collections/metadata/shards/76.dat": {
+   "id": "61bca3fd-4bad-4d70-87cd-cddfdccce850",
+   "version": 6,
+   "leafCount": 5,
+   "leavesSha256": "099c7570170207c6cdc03355ca78441d9e58fb05a56b6a5d3cbfa2d6a62cf8e7",
+   "leaves": [
+    [
+     "7ab39f02-fdf3-41de-8de3-7cdf6b6d62f1",
+     "bd68f316bdb271818d94757e2062f990380b547ab041f5031f2f4f034e5cbadb",
+     29
+    ],
+    [
+     "26b0da8f-f17a-452e-b54a-9e2d139e2bf5",
+     "06768749657028778321040b3ce926763ffae1e4a37512a20aa27ac5ac8a277f",
+     29
+    ],
+    [
+     "778f6266-08f3-4c99-a9f8-acea9b166a95",
+     "1008d8b1f9ebb0171edbc57f55ebc4bdc3bf9f28a5f1a206dfee11153dda3489",
+     29
+    ],
+    [
+     "b651dba3-2e23-4b06-af89-69fefd57f580",
+     "3ab89a1ff2bc4c0afab15c01120a867644632733ce8d1116128bfd59e316199a",
+     29
+    ],
+    [
+     "e7136d22-9151-45ab-a8ca-de0fd2b8fc73",
+     "1a695b4ed042f0647edd4d3b04e6322d792f320ca0ec54698b4ec9003852df4e",
+     29
+    ]
+   ],
+   "merkleHash": "50efcb0c54ac4f0094b6d19c83297e593c1d8028435f125cc33836b5c6d02a2a",
+   "merkleNodeCount": 9
+  },
+  ".db/bson/collections/metadata/shards/77.dat": {
+   "id": "f291b4b1-8c51-47cf-a118-d515455e38e0",
+   "version": 6,
+   "leafCount": 13,
+   "leavesSha256": "ae4491cb0b407e19fd8b9b01a6aa4d03e53286ad98aafe5ce60fadc04522889a",
+   "leaves": [
+    [
+     "00f35f9a-5074-4908-868e-cadfd9fb0fee",
+     "e2246c6fe109fed63b286625b1fc68f1df61c93100403d85eb6e00cb606ee868",
+     29
+    ],
+    [
+     "5a789fd2-b57c-45ae-9341-466a7fd62aae",
+     "f79d65e51e737d3d99ec3398938a631f32aba68b3c1661e40e58cc3310643a49",
+     29
+    ],
+    [
+     "08c4d424-5021-4dc3-b182-0cb0e5078405",
+     "971868ebad3429d84ae8d91f7a31f84de64db9ad6e419966693bf2b91a757dc9",
+     29
+    ],
+    [
+     "31edd962-4a7b-460b-9862-028cb7e69319",
+     "61469a9f966f304e3be67b09dd1adec337dcdd1b2ff463a8b96ecad3a7427947",
+     29
+    ],
+    [
+     "72d4d2ba-a348-4419-bc91-9a9666cd71f2",
+     "8d27e0125e360065d9a1906280b6bf3e33bc394d3b56aefc7afbe2ad8ae1f716",
+     29
+    ],
+    [
+     "0694e9a6-38f8-451f-a34d-9a55038bd15e",
+     "5edef9eaaeeff1b647cd67faa30bd86a13e4f4f2854ad5fb2e4c07139ce863ac",
+     29
+    ],
+    [
+     "63136e83-3357-488a-806f-3c0c7b995dd4",
+     "fa7dd653d1dd818e8986b92aedcb9cc017135e2399fa1dcf758213864c0d047b",
+     28
+    ],
+    [
+     "1783281c-37fb-4bf9-b497-a007dc7a1fe7",
+     "70e3dae43999bcd04bbd3c4058d8b028f59a43401b917d08131980ec230d1bc8",
+     29
+    ],
+    [
+     "1793409f-c3f5-4e5c-94b4-db3059cf836a",
+     "647d25e5667cafc6d094b8968053ff68b2175db8e77324690b954d8e3feac3b3",
+     29
+    ],
+    [
+     "a4a5a504-5687-46c8-b5f8-258e326df383",
+     "f2abcc24c1032752056dcc15707816bb28dec35df0a810d1fcafca2c1d73e96b",
+     29
+    ],
+    [
+     "f644b818-c49a-4224-907d-bd4a04607c82",
+     "eb26d59deeae3774c13f797c76eff7efd16acd168068f462ac62ee66df9ee59d",
+     29
+    ],
+    [
+     "f0952c95-dda6-43b6-858a-3af0b323f133",
+     "9dd306b491eb777b7eb17da2684009ecb8a315eeb62772049c8eebf967ce9d8e",
+     29
+    ],
+    [
+     "f4340f9d-05a0-4333-ab3e-c5f117070a3d",
+     "cb9b1c37f14ad6656a751550587eb1b16c9f4a77181aab69d2866046317f216c",
+     29
+    ]
+   ],
+   "merkleHash": "ca9c24bf21a474acb558bbecef0db1fece418ec9eb2d9ec786b9a4fb0023d40e",
+   "merkleNodeCount": 25
+  },
+  ".db/bson/collections/metadata/shards/78.dat": {
+   "id": "7c86cb29-c6ee-40dc-9d08-a8dc5c5a0dc7",
+   "version": 6,
+   "leafCount": 15,
+   "leavesSha256": "c2f6235ed15a89770b1946bdbaef04d0f614c1b8ad7b5e24f7eb87abb0dcc1f2",
+   "leaves": [
+    [
+     "7c6c857b-d252-400e-89e9-5e6fec625729",
+     "d8d8ca1bbee0ed9660c844e110516d8f8ef8d42bb2b0fa1d7cb56f21bd33c299",
+     29
+    ],
+    [
+     "7d067e2c-f7d7-43bb-a0a6-45365ebd89fb",
+     "56095c0c6a7836ac36ed90d5bcbddf3a1ff1d72b78ca6994ecc90b93893e340e",
+     28
+    ],
+    [
+     "9b61892a-e188-4eb1-81f3-d58085d068a2",
+     "3a449be2d279f6b6ef2ff1c5a301d00474a622003579d2f6bcc871bb2417f00d",
+     28
+    ],
+    [
+     "16c92c4c-25e2-4c7c-9360-29bd1ab509ae",
+     "26898c6cfbee5f87f2b9a5db995ddd813afce19425f7b530bc6aa6d74047db42",
+     29
+    ],
+    [
+     "39dd5ee4-93ec-42fc-9375-a58b1b21cd08",
+     "ced96b6346df580641b95a014d2e2b27c8d9a4cb5ccfd4ecfbc56ae75ab076db",
+     29
+    ],
+    [
+     "76c8045d-219e-4e32-840c-2b2048fa25c3",
+     "dc94f67bde967de452cf9d9bfb8443622e293b611dc7c18f69851a25badb6753",
+     28
+    ],
+    [
+     "229ed8fe-69ec-4f7c-9ff8-931b1de2b112",
+     "ea8c0b92a6b0a99dae48c725462e628e0cd6e681db17efc581e9826bd41d3969",
+     29
+    ],
+    [
+     "3474c3ab-4112-41a3-9bbd-a50215d782b9",
+     "30106582f84a25acc2b04d72ef3053afb68e37b6e6e20fc94b43eaf352dbe123",
+     29
+    ],
+    [
+     "81948a84-aea1-4050-a26a-ce7b11c42425",
+     "2f54b5de4bc987c32f8fe3df0f66d6e3300ca5c586befe325e328e725bd39c0d",
+     29
+    ],
+    [
+     "98969092-5daf-46ff-9c09-3680ce69cd3d",
+     "a7e574d382d4d1be24a098a6f3164337a49de5c0a390e4635d4a0b89da7c2018",
+     29
+    ],
+    [
+     "b0af6357-abf5-413c-9572-83caf193c8a2",
+     "341ae643783222ea8badb1654f05f44b9c1b5ffa40276378b20b3c680c526b39",
+     29
+    ],
+    [
+     "b6772094-8d51-464c-9881-c686603badc5",
+     "43b63d842c9ce7e3a03d5d2b85ba2e156d4e256217a0c5fe968e3510f0a25636",
+     28
+    ],
+    [
+     "c4695cdb-7eaa-4451-b579-d88140382271",
+     "a98340f12e0cb5a2769046da77dd8629e54614df7ef563c83457495f74a1592a",
+     29
+    ],
+    [
+     "ded5d099-28be-4d90-aeda-8f972345f827",
+     "f2845bf2148aa195a205d3c79401f050530119c6ed80d5f0b7f4538d6a4ead1c",
+     28
+    ],
+    [
+     "f9aa6a6d-71de-4638-b825-30e58f921bb3",
+     "bd5f3d30f645f11dc3f3a40e44cc0167517691118dff7b2e57adf04a81f0e1c9",
+     28
+    ]
+   ],
+   "merkleHash": "d2752bc6cf182a43a01d0ac2c3389ce32fd0382dd3a5dafc170d99d2b3cc1d6b",
+   "merkleNodeCount": 29
+  },
+  ".db/bson/collections/metadata/shards/79.dat": {
+   "id": "39ba1bde-83f4-40f9-b443-daa2d943982a",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "ce2b1bfbb815d42688a72f64bfbd7068a8dadedf0c19b860c8c3ff492a28b7f6",
+   "leaves": [
+    [
+     "5d7dd279-9f9f-4ca0-b2fb-12bf31dd4de6",
+     "c2cb4d72b5231d9607b17f8592db90da2d4198041bc46ffaa9949448fa458ad0",
+     29
+    ],
+    [
+     "25e91141-1bda-4a7f-8360-c2aaaf960a9b",
+     "3faed5f13cecd2668089ffd24950a851c49ae300bc53718f2f398b29e3e67aff",
+     29
+    ],
+    [
+     "58bb1dce-06db-4e9d-aaf7-9a2a96261b15",
+     "9dc49a25068edbc487b349b9ff860ec69197b879e32d4587197197df7022d8be",
+     29
+    ],
+    [
+     "0366e537-c9bd-4f30-9ecd-14d9ec562c8a",
+     "6e9ea8c888c3db19f5e0552704b91752f227b0565f28825491eb312404fd1c0e",
+     29
+    ],
+    [
+     "506b2c4d-7530-4f07-93ef-679e7f6c597d",
+     "5a465e46f8cbcfb36cb8f369c140f64123e32886d77ab7e12dda7d1b352e2746",
+     29
+    ],
+    [
+     "71255f36-600d-4b80-b5b9-01474aa53f3b",
+     "8d79eb8b8791cfc9f3a5170830336fd1c9156140c7ddb4c680edce555eb4e869",
+     29
+    ],
+    [
+     "853955eb-3faf-4831-8130-c3901d086a44",
+     "f55894106fcf667775ed0ca947697c4a8fa32fff747c346cedacbcd8da922914",
+     29
+    ],
+    [
+     "d9016c3d-0ea2-4955-8570-114ef054629f",
+     "fc8795e708c73056798f285db864830aae60e04d3ed45a8e8efe2e6b5daacd06",
+     29
+    ]
+   ],
+   "merkleHash": "69ea6c548eaaf6cc89079d8a6db90904d45dacbc099a45fa07939a617a456b9e",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/8.dat": {
+   "id": "36c14227-05f9-46ba-810a-6912907b47de",
+   "version": 6,
+   "leafCount": 10,
+   "leavesSha256": "4760dc386cc52e265cc7e2cc757bd0aac3bd2921761e4c291dbc31ad4fa0c4ee",
+   "leaves": [
+    [
+     "2d514081-f73a-4402-8c2d-7f269953b7bb",
+     "993b78583247b2f300e98d92ccd7bff69f15fea40cfc9a5dd7091cf75128a218",
+     29
+    ],
+    [
+     "3c7ec9f9-3639-4101-8d51-2fcbfd7fffc0",
+     "1db4906e50b2ec9f13e6ca89d2ee27bae98e21b10847bd5b75cf21a652be57ac",
+     28
+    ],
+    [
+     "6ad521b3-1aac-40d1-b530-6ffdfa043b1f",
+     "bd6ae2122d7a30f959dd66587f388d812768fb049f9de5cfaf4a57a50598531a",
+     29
+    ],
+    [
+     "680a8c4e-6f82-47f0-a596-9ff66ffae3cc",
+     "5ba204b23d4bf69e8dfa631dfa71fb4de59406ecb9104c8747b11a2d5ed6afac",
+     28
+    ],
+    [
+     "55743fb4-1441-460c-8acb-8e16d3782bf5",
+     "8eef338c93f6f223e98674ab4ebecd2be871cbdc6f4b9ce55404dfbb4cb18a00",
+     28
+    ],
+    [
+     "b6874357-faa5-48c2-a922-05e47e45b9f2",
+     "bb753b6a29dee5cf406f434ddcefbbb3bc6d72bcdc14a75ae9e6d4d6c0af22d8",
+     29
+    ],
+    [
+     "eabe85ce-6cd6-459c-b9d9-305a3f22e918",
+     "a9a2804029ca726be405551fedbc1af6a501176f007aaf08a5f235de30170488",
+     29
+    ],
+    [
+     "ebbebe4f-408e-4284-99ef-dd3b593afec1",
+     "ce6b0e0e10d4fa70587ce421c33d9e9a603b537798feb6ecdfd94f2e18c1af29",
+     29
+    ],
+    [
+     "f9b6cb88-d103-47e0-92be-cb71ee561a8b",
+     "e018d0a1d093d051eff52c505c201594b5d383398ba373b2347a02e305aeb438",
+     29
+    ],
+    [
+     "fadaf6e9-fc12-44c3-8aaf-1785ce190afb",
+     "376a9596c4079c10f20f246f1617118e7e1ff661c0d97f3eb05f2fd41452ffa1",
+     29
+    ]
+   ],
+   "merkleHash": "c6311ab24a0d4cc31effb40a16f4df789579c2cda48862d8619cc34176927d3e",
+   "merkleNodeCount": 19
+  },
+  ".db/bson/collections/metadata/shards/80.dat": {
+   "id": "f7ce744e-4491-4ef0-bd11-dae4b93e30df",
+   "version": 6,
+   "leafCount": 11,
+   "leavesSha256": "24e85cd997e9f95769bef69affc5926f4ec0ada2ed371b532237f0ac41f3089f",
+   "leaves": [
+    [
+     "0e1779f8-3804-4406-ab5b-c8d3da1141fc",
+     "8113a43f2e6aad9228e6ee8d7e86619485a9ea958868295d76e04ca69eedc1d9",
+     28
+    ],
+    [
+     "1d95c6e9-48a7-4717-8f59-e78c6a828e4e",
+     "58901e14831e963a7bbc3c28c11150996a08d9348b06c487f050c2e33381b817",
+     29
+    ],
+    [
+     "54e34a0f-a3a3-4bf1-b93a-1c47ef12e9ac",
+     "266d6f84fb69136f6a262e48e78d0ebcfe023788609527bdc9550051072ee9b9",
+     28
+    ],
+    [
+     "205f58f2-6c22-4781-85eb-d5db87de34d0",
+     "0f30cf007661b480e8b555476cfcade30222fde70ea1cfd80b74e23ef2f910fa",
+     28
+    ],
+    [
+     "368bee52-acdf-491c-b2ac-2664df97428d",
+     "532c8a235ccae4ba803b05b5962bd692dbc290fbe9d21e14f4304c78e3283337",
+     28
+    ],
+    [
+     "809c2cc1-0df6-4b38-af67-538e5ba42137",
+     "8bba12601fb5ad5d648babf89392ae26771f9bdf477eeeea5314d2ab601678c4",
+     29
+    ],
+    [
+     "65562fa8-506c-4a08-91a1-ac71df5e7fc4",
+     "e444a1f190802f2318ee9066724f9726355f7aabbdf2b451ff420a0599c7455f",
+     29
+    ],
+    [
+     "a5ae0359-6841-4bcf-b2dd-8b6f4e616b18",
+     "7ea3be286043b81c23019e998206789576734ff843715739ca0d9bff02c2806a",
+     29
+    ],
+    [
+     "ac1123a2-eb0f-40e5-a1fc-e4d82cf4c8ad",
+     "efabbbf47f2c2307c0553d7084f011dc63604ec8f6d6049137b436e54c46296d",
+     29
+    ],
+    [
+     "b988c868-bded-4039-beed-914939b17585",
+     "0e7425889d4413332d2858664f1c242753ffec6f239d6a4f856cb0e81be40132",
+     29
+    ],
+    [
+     "cc7307ab-c6e4-4b59-8ca3-b501672ac14f",
+     "ac98caf4cc38c7dd573a9f1d025aa19e86fab6e3c24177e16fe90fcb455b2b13",
+     28
+    ]
+   ],
+   "merkleHash": "e6a482438c7f0555f646097e72a63caf75486a970d75c3adefd5582028893efc",
+   "merkleNodeCount": 21
+  },
+  ".db/bson/collections/metadata/shards/81.dat": {
+   "id": "48222003-eaba-4557-bfd9-232a5d75cab9",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "70854c6a5ed39c545665fcb20b8401fed85060f831a24a835dc58fa57431d393",
+   "leaves": [
+    [
+     "0fc57028-c2e6-429b-8d63-1deced5eb2ce",
+     "02285572dd56817aef1190a606a77f3da3aa5c48dbc0a94e54c3349d1818b31e",
+     29
+    ],
+    [
+     "5b4f3a6f-b665-414e-a8f6-3db71a018c0a",
+     "6097663b7ad1862fa1f041089ac6bfd5187301a7c9612488ed95b3c9ba130355",
+     29
+    ],
+    [
+     "5f4be403-2c96-4cf6-8e0e-f1e6c3bdc895",
+     "0632761ee5862fc844f8fc0a7e44a54fd7b01562a4a9afcf992321ac3f81b524",
+     28
+    ],
+    [
+     "7adb51c4-203b-4882-a1a2-0ed4d25971ff",
+     "780d7cdefaf414a24bdb2b97ab6cf6bb1f5300fa06fb5165817d1f52fc331967",
+     28
+    ],
+    [
+     "3895a2a3-beb3-4952-afec-7536a1c71c10",
+     "95ca749cf679d7f16b5d0bec90e64801792d5ebeee82dee5f3b99e470169ae24",
+     29
+    ],
+    [
+     "26325d9b-b03b-4985-8715-f5357fb7eda0",
+     "0e89f7926556ab8e954af23185166e29abe7de35d13fdb49faac8c38661cb5ef",
+     29
+    ],
+    [
+     "bc84520d-7e7d-4b8b-a28c-8455270f2c70",
+     "0155aa7f05787bee55fd732e41085d033fd955631727bdfc34c26a879a20965c",
+     28
+    ],
+    [
+     "c45cefd6-52d9-4c1b-a26d-503fc847bd0f",
+     "5109c4007b6814987795125866fd772657b015d905cbbd50fdf81ac79c200b4a",
+     29
+    ],
+    [
+     "fd025e2d-8384-4275-9479-35065f77dda9",
+     "d7bbd3db8c724e186ccd18ef9e4ca557b849e22fd41003ccd30fcc5914eefff5",
+     28
+    ]
+   ],
+   "merkleHash": "25d91a8874fe650f1551f040192ba5598a728fbbd5cda75134cff363027b8101",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/82.dat": {
+   "id": "f7ef0545-219b-4bf0-92e6-62a79c1f24de",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "8dd5db64963f08c99ce0ce318fdbbdfd4ad64db7d8cfad66ffcacc328175693d",
+   "leaves": [
+    [
+     "0f60b906-de2c-4ac5-8f91-45c205a5672a",
+     "71f0b7b4190a8f7722196fa420a8a2a39bf636917cd823b0157b7903118b1154",
+     29
+    ],
+    [
+     "7f96eca8-d083-4790-8400-ca5668063c2b",
+     "a7ed3b6dcc5858366f91b531b7454bee75de3070817335ca3c0d9fc410bab18f",
+     28
+    ],
+    [
+     "11c25e16-9693-4d52-b96f-9b590c90c885",
+     "2b2478ff2c1cf56abf9f31ee97400c8e668d013bb02e7f39c2dae98f6caa486e",
+     29
+    ],
+    [
+     "4022bf05-9ad9-479a-bfec-9c2177b825dc",
+     "aa8ef0c5f1a0ae29d24429d2d9737087207e72ea076f94abf0169fcdf997cce9",
+     29
+    ],
+    [
+     "7920751d-61eb-40bf-949f-262e399f14f6",
+     "d927fa066d356bd74d64c1a20a2bb3de90c77b1e0cfedd055c44969defaa1139",
+     28
+    ],
+    [
+     "a1471210-8cea-4859-8e15-1682391e9efa",
+     "30ea81d7579ee6c4db97419aa8657cd2c6eb43ff4c4863abd825d17f33143eb7",
+     29
+    ],
+    [
+     "aa074150-a9f3-4b3d-9207-cee6d13ae8a3",
+     "c78aa23f388df2207ef747cf7df4687bc9e597fcf04535f72d81d494c6e8bd80",
+     29
+    ],
+    [
+     "c4e6e506-7bf0-4ffe-84c1-b4e5cb189ef6",
+     "0325645092c4a3d11d9a9ca4b41dd01b618301d63c64d9e366bdf91c16aed897",
+     28
+    ]
+   ],
+   "merkleHash": "ea32b64414665ed862c0f087bfb68d7578448bc00c7a4f7a2611d577ab4ea985",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/83.dat": {
+   "id": "379979c6-c8e6-401c-ba22-24693785b120",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "fe255d142a983fff7112310bd66d07e3d2e86e800a16489348e4220a329f2861",
+   "leaves": [
+    [
+     "3d65e520-241d-4385-a8a7-7bcbeee0c13d",
+     "f80f0c476a939463f2ff73e0c7edceffc2ad3243081b1558033d493fbb818b0f",
+     29
+    ],
+    [
+     "24c4a02c-ad44-466d-b71c-7da082a90d68",
+     "56650dc70eb4c7c00ed80134b9e3ae676bb788f3445b06a1cc94b493fe7f3cdc",
+     29
+    ],
+    [
+     "769830dc-043d-458e-ac0b-a2a4c31634e1",
+     "bdc6a2d266f5937abb877ed1602c77bb4542eb9e1d39723d045b4536aa1622ed",
+     29
+    ],
+    [
+     "68567069-0217-4ec2-9f58-08e37694727e",
+     "b552238794de52723893bd3b44f4379d252bcb619a4cc700f604484f40687f57",
+     29
+    ],
+    [
+     "a162f33f-2b6e-4c6a-93b5-aee35d08d851",
+     "5c27e8d09e83cc32bb9563d22e513a3f88fb6022981f05a5eed2ca23afd93cc6",
+     28
+    ],
+    [
+     "b0803c2d-f075-480a-ab40-3d19388acc58",
+     "ff4c8f617fb42f6027194a23ec39aeb0d161d31ec530b40d17997fe9a6868543",
+     28
+    ]
+   ],
+   "merkleHash": "3c22c9571ac82074c514e60cc61b7d52e268c1269884cb883850febca79d1bc5",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/84.dat": {
+   "id": "f8258712-231c-47e3-9d73-558cefc6a40e",
+   "version": 6,
+   "leafCount": 5,
+   "leavesSha256": "b6b376a98138bb4df64831c087f6449ed6d6f099e1b7698e150b7c7c2bba584b",
+   "leaves": [
+    [
+     "5c0b184f-035c-400e-b1cd-501bec051b13",
+     "0dd18b1bb1e3c75cc7abf766c7aa68191c8e77039d2876f0853ba09c67d90c49",
+     29
+    ],
+    [
+     "9f628533-e498-4c30-8185-bf65e35261ab",
+     "0ff4da0aa67764031400c854cd8d0d7aa06c3f758e2a5fa6e52fe99220156b64",
+     29
+    ],
+    [
+     "66c6ea2e-0f66-486c-8e47-852c7eaae548",
+     "ca596d404a082704d8fa6e722ae3a25d08042f792fe5d994dd9cbcd2e9ae2791",
+     28
+    ],
+    [
+     "905fbed9-e120-4d26-8a8d-cfffcd795ff9",
+     "6e7993b2bfa3aaa51b80beeb13e36fe3c56058b8626de65a6aed78c035b25617",
+     29
+    ],
+    [
+     "a1be77db-5937-4623-9e84-5362179d2eec",
+     "bca6994411709c5ce46237b0414ed7c0e3e6d8e0129bd91b2814398164b7ce6b",
+     29
+    ]
+   ],
+   "merkleHash": "1ffe5a7025aa849cc1f776f61c0675554eccc1a9f4ba14507dfdeef83b45ae21",
+   "merkleNodeCount": 9
+  },
+  ".db/bson/collections/metadata/shards/85.dat": {
+   "id": "02388cc4-d7df-460e-9c89-5453a4365b1b",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "7a8067659304c9e43122dd5693919fd0464026d04226668b26d1cdaaf070a2bd",
+   "leaves": [
+    [
+     "3da27f9c-3e47-4a0f-93a2-bba1c7ad41db",
+     "b6bff73acaf7763779d1e86169fbcd48a943f9a05f7116afe9e913760d312d1d",
+     29
+    ],
+    [
+     "27c6fd3e-3f5f-4aab-b260-750f3d6dc261",
+     "ecba890cc17ed3dc81997d134f0dc6bf93a4082e4af3509fa84d96337c3e176a",
+     29
+    ],
+    [
+     "65c34883-f05e-4688-8ee2-db72034bb8dd",
+     "3255fd74eb79d1ba868c06754f107c874fdc4c580cbff047f99c66b7d1549bc2",
+     29
+    ],
+    [
+     "278a03d9-f49e-44d4-b120-5ec6c35ef747",
+     "90a6b56e03169d97a47fee06176a038e7c277ba725ffe7f0d2ae471d67750155",
+     28
+    ],
+    [
+     "851ca1c4-8dce-499a-a5f3-797dec862c0a",
+     "298e63b4ddf201248014a4b79a41f551cd38f301fd009cdb24ff914fae458214",
+     29
+    ],
+    [
+     "713869df-a2c2-4f9b-b161-98e80ea3cb1d",
+     "12065e1bc39b2501618faf6380714122747639d78870dfacaac8f29d7c12f0ae",
+     28
+    ],
+    [
+     "9565738e-fc3e-4684-bb7b-535df3e18fb0",
+     "11540e013418f34ec84fb18d684100a5643c288e87b5339f6d09ddd4781ac362",
+     29
+    ],
+    [
+     "fd554695-c628-49c4-9dae-184dc49180bd",
+     "68ffdc56de79e1da4af29beaaa65210d3bab14322f5bf1cced015e3c1e042a74",
+     29
+    ]
+   ],
+   "merkleHash": "73df2b248fb66545cf964766ac7b9e14c0c20733402d8c4f897b0e9605bc59b3",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/86.dat": {
+   "id": "1f341927-aec4-46db-9dfb-9f4b79efb7e3",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "b81f60c345e074d946f884e2da75d7047b7c3fe0ad4c0d7ad6f321959c9033c4",
+   "leaves": [
+    [
+     "7b93ae83-5e62-42ca-9270-1a96b959f0e1",
+     "9489df67b0bbc274dd7dd2b6f55a65fdc05fc06b811ae61e47652a0b9aa004db",
+     29
+    ],
+    [
+     "70bc26dd-29c9-437e-b7b1-62c593c20f14",
+     "a383a7d292610b3534b2fea6fe66768e78770c11c04b08725e3ee08b66ae4b25",
+     29
+    ],
+    [
+     "293bc1d4-b73e-4c64-aa6f-036d455f76ea",
+     "41dde880a7c527fd6c98b234c7a2a47bfd0a81feae987b03b5fae706f98c0977",
+     28
+    ],
+    [
+     "a33d63c3-e743-41cb-af24-8c50d2f68480",
+     "02a8cac7022260282f377cb306b32c85256c03beb7f5807b2b8735d1839e9165",
+     28
+    ],
+    [
+     "af2e355a-26f6-4cde-ab0e-7f1ab3f013ac",
+     "e3814358c9f898c74256fba937bab4a18ad5f4ed93941cdc981e5ae1ccce0324",
+     28
+    ],
+    [
+     "c2ac1f50-2416-4fc2-bb9b-1b43dd6e3b46",
+     "f2eb7a4920964927ac1d224eaba52072f507579acbcb5869686d292f515a732b",
+     29
+    ]
+   ],
+   "merkleHash": "a9274c1d1a6f7df9b4fb0f04d4e095853c4bdfda3a52b9e52a22354fb354e14f",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/87.dat": {
+   "id": "01c00400-1d5e-4b2b-b9f6-553e1aeb195e",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "5e8e6dae97a7c3436ec92a3eef419e4eba7ae1adb8e52964e78313e77eba4b1d",
+   "leaves": [
+    [
+     "3ce4d529-613c-4c25-b60a-2d8860c1b415",
+     "84b65bc5e3e2b65795b4319ca58373ef8fd70c459057c74c99682f1c7b6cb8f6",
+     29
+    ],
+    [
+     "4bd20e82-f667-4209-b66c-7c6ee9dbf8e5",
+     "06958266ed86ed095fb3911e9e54d13e816bc68bc3a4c45fd3c861b66d46d3a7",
+     28
+    ],
+    [
+     "6a6564e9-5c2a-4302-aaeb-2a3c896738c3",
+     "acf2b5309df88fa9f637561e6d0294924ffaac76d11bc6c6e44732ff3ec6ac71",
+     29
+    ],
+    [
+     "9de5bf8a-7151-49af-85ff-27f2344acedb",
+     "cdeb3a896fcec70fbe142c4fef0272eab0135150e1626b9b2620a2b7fe3f3808",
+     29
+    ],
+    [
+     "9fce4055-906b-4f0d-ab65-e13b80c3d03e",
+     "f28db51686de5584612fe3f5a02d42dec1bb65a88ae4ce38e2a5284d98badc3c",
+     29
+    ],
+    [
+     "404d867c-9a36-4b94-b3be-0e170bd91c4a",
+     "f89ccead1f01e016dc9b7792c2142a9051bcd68b0f86e1334a6aaf159e39a268",
+     29
+    ],
+    [
+     "ace7b316-3ccf-4a0f-a7e3-933876e88fd9",
+     "ac0de74a5c41da66ed95d8ae07a8a7fa170532246ab0545dbfd4e7379846ea7a",
+     28
+    ],
+    [
+     "cd207030-0951-472c-8e02-eac20a0c7961",
+     "364bfc840f6504cba258b0422649603dbe962a19a13a70b56ece479a09eb5a38",
+     28
+    ],
+    [
+     "f1420c2c-b5ec-4406-81d2-a26f1544b9c0",
+     "d2e43096f92b245e7d4736e6ff39fd062fa289909cc04980972d8ffcfcc2024f",
+     29
+    ]
+   ],
+   "merkleHash": "51cdd6d6481c2af4c3bb5cca787739ca89d6f855604006e0df1189078ab00391",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/88.dat": {
+   "id": "3eccea68-7e30-4eb2-8b12-9396b07e9458",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "5aabdd378a8fa20adc2c37b836090181534f5e20ae05dd97b32d52f9e280e42b",
+   "leaves": [
+    [
+     "322c9b68-40fb-471f-87d4-b92f3533db93",
+     "a22287d094f1b0d0ca81df57da652f1ba3d72630aaaaf79ce3fb02ffbad39039",
+     29
+    ],
+    [
+     "8947d41c-906f-4f4f-bb99-d075c6084473",
+     "1a862db77421cdcd264e86803621d27531ddb8426e6d2c4255f1db48169019f6",
+     29
+    ],
+    [
+     "ab7bf375-55e8-4abc-9ecd-1fa981c7a69d",
+     "af1805751d20e741433715c93f0f5bf337d7b0dbeb8aea87b5bc4c051c3d91fd",
+     29
+    ],
+    [
+     "d0fe23c5-41f0-493d-8c7b-5c57b9c36235",
+     "39ea4aa2a7f63c2c77ad018fa073c378778054253901f8a9ac2ec5aa19f3e8fd",
+     29
+    ],
+    [
+     "e6eb4963-2db9-40f6-a47d-fa68c61d64da",
+     "e173185224b51b8e46d69c13229834014552d7fb58f8cebf635fe25d73227ece",
+     29
+    ],
+    [
+     "ed883a7a-7dff-423f-9104-f8c7ffb74785",
+     "264ed676fe15599d3ca9d792056009b16a04b3587d5b693def74d179cfa0b302",
+     29
+    ],
+    [
+     "eec2f2ec-77e1-4afa-adb0-85922438850d",
+     "13e18d730e2884299d698768bb8064a9d8448489ed9e14ac8c479a1b15644d6d",
+     29
+    ]
+   ],
+   "merkleHash": "80aba07be2de881b6c3428885314a275a7b02590d4a7fa17d086cb2cd24fc6fc",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/89.dat": {
+   "id": "3cd54ba5-a358-446f-8df3-9fd2a8bae8fd",
+   "version": 6,
+   "leafCount": 4,
+   "leavesSha256": "d0faf1983a8cb5bc8f20993e4b806b575253dd6de4a2f1262487082cc108e947",
+   "leaves": [
+    [
+     "00d2f9d7-0a92-4a74-8596-1242caa6f345",
+     "5cd76f7ca070b92bd349ec8463a48e3b3c2b0a4e02dd4b8863ca327e92ae7fd9",
+     28
+    ],
+    [
+     "38e1e701-4b3c-4be1-a474-4d4ce300ac3d",
+     "005e373df94ace2624c8b850400a0211ba1adda75efd90e30dddb32dfd6e4022",
+     28
+    ],
+    [
+     "98509da2-4ec5-4d5a-a1ae-025ac50ad367",
+     "f3c70b2b2ba413ba87008d197412e09364c5a0ab1044344452de9590da2bd302",
+     29
+    ],
+    [
+     "b1069c18-1ca6-4bb3-8eed-5faf4ab580be",
+     "5693eae258df4c7e2921b564080ddd8ff751c9d2e132f914de1e0f859ac16169",
+     29
+    ]
+   ],
+   "merkleHash": "e5b7fb7cf27455871a1e3bc60bb7744d80dd76bb6783684ecf3ef17726ce13fd",
+   "merkleNodeCount": 7
+  },
+  ".db/bson/collections/metadata/shards/9.dat": {
+   "id": "c0de2521-18dd-451b-b1c8-2fc8d5c53dfc",
+   "version": 6,
+   "leafCount": 5,
+   "leavesSha256": "8b8a53683bf3e721f4db41e4dd8a3058af62a36d6655aa3de950c2246a8f3a52",
+   "leaves": [
+    [
+     "15a6e6b2-30e7-48dd-b7ba-7e442d7bd655",
+     "c5f82534977b8e3cfc357372ef3ae120cd0527a89e53b6a9a6cf8ed9af2efee7",
+     28
+    ],
+    [
+     "90f031e5-c023-4573-a7da-f55c2583f1c6",
+     "85e249a4d706fdf085288639055c4729e398f8d7a3e83e56677d23e4e3146eb8",
+     28
+    ],
+    [
+     "803bc3fe-fe9d-4930-bb32-6d45e90b3d63",
+     "79fee6e57f43d1eb85b1e40447d0fbf244cf1ed557216b2088ad52716db987bb",
+     29
+    ],
+    [
+     "75961ead-1953-4f28-abc8-8f1d3abe07fe",
+     "c96a88c85cf85a3ce6baecb8cc5b37515a3511aa2fcdba67b0afa8aefbca0e44",
+     29
+    ],
+    [
+     "ce606330-74a7-4056-ae72-6c5d9e361797",
+     "da3d69abbdb6f4ecc44a9a7cf14903a53d817d0b01dcc58776868cd92e29e5ce",
+     28
+    ]
+   ],
+   "merkleHash": "cc123c299bc012cb27fc27a2d7942a3ee6fa900d1f4aca3169f3f5b525d91c8e",
+   "merkleNodeCount": 9
+  },
+  ".db/bson/collections/metadata/shards/90.dat": {
+   "id": "03861e30-e852-4589-96cf-87cd760ff662",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "aa2bafbb51f61f1d85b9725374ee8ac4107dadf75eeb87a9bf6fed5e49638035",
+   "leaves": [
+    [
+     "6b810612-ac97-4894-9429-c433a315aa85",
+     "e17a2b5e299b82ddd32f3b2f59797e0116efac14d6cddc5e53ddb1cbc3923a74",
+     28
+    ],
+    [
+     "42f67ba3-4aba-42f0-93ae-2b94a0063119",
+     "58bf4cb45c8b8c23698d441dd2ebf3cd13f7cdc82300538931984275638db477",
+     29
+    ],
+    [
+     "c4c7c00f-9b5c-406a-8dd2-83a9e4ad5b53",
+     "551fb345234e7606ba541e8325213d991c25a769648f1e2597e6529dbf3c5b95",
+     29
+    ],
+    [
+     "d60d9859-c3bf-46f5-8c7b-461d90f85be6",
+     "6fcae8fc12f7969ab2928a154c4003665a0f3eb75b93ac191293e1c06052823c",
+     29
+    ],
+    [
+     "e31a84ec-1abe-4ad7-8d97-0e42f9cd9e52",
+     "1bcf4ee389b76e8f569fac53ff0ad9932e686bc3135d9218633451f19c5ed9b2",
+     28
+    ],
+    [
+     "fd852416-1976-4b2c-b39e-6dd0a6a93d60",
+     "5a596af6dd01d1ee4916160f424ad52e2cf5c4ffc39ef9f3a1bc70cfb5b3f34a",
+     29
+    ]
+   ],
+   "merkleHash": "3936d6d370e476bebb01ae8876b0b4c086dc650e395fc6d03c613d01778e4f8c",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/91.dat": {
+   "id": "7bee01ee-5e11-4f86-a8f9-cbf9f4685fff",
+   "version": 6,
+   "leafCount": 12,
+   "leavesSha256": "f4a2d751a83e376a35d44eea4ffcd81f2bf42ceb5500b1c8a3656b79138583e9",
+   "leaves": [
+    [
+     "6f104099-840c-4206-8b8c-40038d16c495",
+     "2931b6c1548c9c1a18f91bebd4be46c75f771bea8fe6d608f22ad20722fdc908",
+     29
+    ],
+    [
+     "7c509ecb-fd78-4e7d-9b2a-4907222d63b3",
+     "c9385fac2b7c677bdf4cf23c1ca6a77a24e49fd7e45654eca9470872775d42c3",
+     28
+    ],
+    [
+     "8fd33cba-8eaf-4fb4-abfc-dc79a067b215",
+     "c2f16f2ed070b5b03cdf8441651ebc45f00d5f15dee1411857892518d7077892",
+     28
+    ],
+    [
+     "20c1db06-ada5-4337-9dae-433743f676a3",
+     "3f729b3acca94966c2a079ea2bd840be96b90d222c5ccc9d60c850134f1014f9",
+     28
+    ],
+    [
+     "103589a8-5774-4869-bc74-7d7de85cdedc",
+     "afbb6124875a2c702b6c29e9f907397e9039717da36621dac84a060c268d2e7d",
+     29
+    ],
+    [
+     "175999c9-d18c-4b35-80b6-10929c6c4845",
+     "78f07cb105b6ed4208e37f1df5c8f13e86a59b6e1a5a1080b54ff406b230bb6e",
+     28
+    ],
+    [
+     "84649705-6ea1-4a10-830f-76420e74f9a4",
+     "b65cf9a616d04d686d402394f49d4e325ba5872401de7d7ab9de99c792163e56",
+     29
+    ],
+    [
+     "a64a827d-726a-476a-8e0e-a8a44120f017",
+     "22cc20b9fc044d2513e01c7a0d295c79b8fe840df67e22edf4d6219abb6c7364",
+     29
+    ],
+    [
+     "bc355385-12df-4c3d-a456-355b6008415a",
+     "0f81669bfbfad3e228677f339fda9b94edce7bad5cb1a0d6628cf05e511e059f",
+     29
+    ],
+    [
+     "d6ec8811-ac6b-4acd-96ff-bccacc21247a",
+     "0fa5f7a1a021177a3680214dadce6697a288e498c6d95c0bccb93256483ee58e",
+     29
+    ],
+    [
+     "eae0bf3f-e453-438c-bf96-169a396c5b6c",
+     "8f13fe3a6ddf1185a5315a7e5f72d227ff57b121eb98715207b4ea36fa623088",
+     29
+    ],
+    [
+     "f864799d-c952-4028-9c4a-0859a84cb0cf",
+     "8819c70d15e0b11dfc2296033d03c101cd0a190c85eff330cfa26f3281fc92df",
+     29
+    ]
+   ],
+   "merkleHash": "b194a9cd67ea2977b043948eaf873a6b5bb494148309d77332e62bbe93f98689",
+   "merkleNodeCount": 23
+  },
+  ".db/bson/collections/metadata/shards/92.dat": {
+   "id": "6e8f4a61-089e-4911-83ce-30a8379e42ff",
+   "version": 6,
+   "leafCount": 4,
+   "leavesSha256": "7aa6e5a8b32cda19589f8e39a195f2ba54520449f0b1954f52e333b9dc6487fc",
+   "leaves": [
+    [
+     "1b362d37-793d-4ae4-ba8d-e27661d2540a",
+     "e7f420c7144469b19559d0df9c6cca191f54e79cb545478086d78daa91e328a5",
+     29
+    ],
+    [
+     "24640d29-e800-4c85-bb22-270598e1e529",
+     "19426602694dd26cd8c340e2a538eaf8acc63204ac30ac15734e36ec7e0d4512",
+     29
+    ],
+    [
+     "a75cedce-c4f7-4458-9e62-f98b63042939",
+     "cef8bb391f7464c776bef70da671cddda3f9769036a655dca8557e1733737f8d",
+     29
+    ],
+    [
+     "bcf4e488-a45f-494e-b1b5-a36b15ba40d7",
+     "38a85cf53e27a878da661007912294fbca23b32baa958756566daafdc3549e55",
+     29
+    ]
+   ],
+   "merkleHash": "ec9862498a14b8face91b68ef87b7ae819f9af9f867d87812f53dfdece1c00dd",
+   "merkleNodeCount": 7
+  },
+  ".db/bson/collections/metadata/shards/93.dat": {
+   "id": "c1b2b1a5-cb56-42ec-8964-a269035e7af3",
+   "version": 6,
+   "leafCount": 4,
+   "leavesSha256": "a72da222123add6342eee429b7defa49be54df6a9c76a7dd9048b24b7cfa08f6",
+   "leaves": [
+    [
+     "28c1d604-44d4-48e5-8f62-9248d02492d0",
+     "40cb32743e7698f5f85c83127e3d28439c77699d8942d1b96a9ab39ae7efd5c3",
+     29
+    ],
+    [
+     "917adbf2-dbd0-4b79-9471-fd09ea030022",
+     "2fe39afe60dc3128a648fcce2a0c644d29e5f81e7d06d1dfad312d3bb396e481",
+     29
+    ],
+    [
+     "b1722bbd-058f-4cb1-b0b3-4ab4adc32e32",
+     "9a5ab44d2a929bae7db8b73a7574cb6c7dda2a4ebf9aa6b3912a7c5848d19855",
+     29
+    ],
+    [
+     "c94df85d-f56d-4aed-8436-32c7c3a00d30",
+     "159c29d858d16864ec780afa5c147d34a6642ed79103e0de788ddfdef3ce1828",
+     29
+    ]
+   ],
+   "merkleHash": "306210b52f9fc9b7261cae1e7eb95589900ac3184edf47983c469fe67f9c25e0",
+   "merkleNodeCount": 7
+  },
+  ".db/bson/collections/metadata/shards/94.dat": {
+   "id": "387d71e5-7352-46ec-aec2-2665fe9102b7",
+   "version": 6,
+   "leafCount": 9,
+   "leavesSha256": "00d090e8f9eca7cd4a2407ea96bc27e5ccc5cdbb2aefc5b6666ab359aea318ea",
+   "leaves": [
+    [
+     "0d61a50e-e115-4ae1-8427-67b76780441b",
+     "cfac3025d8508c40c965ae3ebbc08d2ee59a14a446eed32183018a8cdcbe2b6a",
+     29
+    ],
+    [
+     "5b35c438-01dd-453e-ba71-0a6eee0bc5e5",
+     "85464b6221b05d79983dfa4a74d56cf162c17f559cee3cd74fb7fb2ea765366a",
+     29
+    ],
+    [
+     "6baf5060-f83f-4387-bf8a-65a26828a85f",
+     "3937f0dffa74597e1c8c7a03e17efc9211c7053b14b809179049785d712d0cff",
+     29
+    ],
+    [
+     "06c2d3fa-b804-4401-a54c-246022c36bfe",
+     "067db7567679c6417d8c1d7439e93a5fd2e286a718c69887a2651be78e91ed79",
+     29
+    ],
+    [
+     "8b2a8b76-60a6-4592-b662-75af5eb8ebd0",
+     "90cb70b761112863f1c4002bd74ce7d6a906b3a62eb6590bb0a75fa714b4dd79",
+     29
+    ],
+    [
+     "68cbe645-15eb-4fff-9097-f5952734f3ae",
+     "6f6fc6b537ffb0373f6c560039bf6d63c5d917f7aee6134f1b0a1fd8666e766b",
+     29
+    ],
+    [
+     "69fc4df8-26d2-4e5c-8a5e-51eda7a06b2a",
+     "64158a7f6a8fc42608007b3dc1731851c5feed5138b8051cb690fd084236cef1",
+     29
+    ],
+    [
+     "539b41ce-3e35-4246-a246-cddc41dd7ffb",
+     "e7c22ba0bfb6f05c031ebd32de8ebbe4ce91b3a5c5d4a472aa10e3a1df55cbba",
+     28
+    ],
+    [
+     "773fb3e0-6534-4ea5-a605-08f0099ad6d4",
+     "0114b96cdf9ef4f716f23d9928929aef1bd21174e4a012741d3774a23ee9fb33",
+     29
+    ]
+   ],
+   "merkleHash": "fb673955a2ebb7ab1ed5774cba749f0d71f29984c516c300768396913537d265",
+   "merkleNodeCount": 17
+  },
+  ".db/bson/collections/metadata/shards/95.dat": {
+   "id": "6677d1a7-514e-42dc-8b77-2c0fd4ab80e9",
+   "version": 6,
+   "leafCount": 7,
+   "leavesSha256": "b9a413e5688d92aa8b6a5a7d741fb1081f60bf39eb3ae0b85635792b8ab46aeb",
+   "leaves": [
+    [
+     "6e6ef26c-87aa-4a70-b831-136ed41e75c6",
+     "517a22f578ca3d87b097e2c677586fcd7ea7f23aa7edc450525cb5198c1a154d",
+     29
+    ],
+    [
+     "164b0e5d-ff79-4a6f-9c9c-82070c24f124",
+     "7a1f15f3c7354a3c8ac76f1ccf419e9f0435a36830ddfbfd77b755b10570a6c6",
+     29
+    ],
+    [
+     "781edce8-ba18-44e4-b0ec-bee88cfa66f0",
+     "6168d6f39bdebf6cb285dfdf6d9256e006a01a97165e60ed62c748f4c55e3d48",
+     29
+    ],
+    [
+     "7462ab08-b852-4f8a-8e50-d23c6be8135a",
+     "ac7a7dc7661bd0177d4df67b9e43afe183f0702e8eb70b3cdcc5321267553736",
+     28
+    ],
+    [
+     "b2deabd9-fe47-414a-a2c2-cc3ef394559e",
+     "118a00705290ce5abd437757c77da60476897ee23d818a3b9ed2e6c35b2c9d50",
+     28
+    ],
+    [
+     "d2a80f74-d6ca-429b-be3e-15478033d9be",
+     "3c7022c9d1b9d9ca76c6888b1b7a293b90210c4a59b80ef6d1da20a0ae246890",
+     29
+    ],
+    [
+     "d97891f2-ea43-424f-ace6-cf3e2b377bb1",
+     "71bf936d7978d7a9bc821f2ba1a24027c5d908e23ef9c8e07fa7746f7aa5cfe4",
+     29
+    ]
+   ],
+   "merkleHash": "3053f15112287f543f6d1d357b3ccedd710caa1bf4cf8f387042eabd834f3636",
+   "merkleNodeCount": 13
+  },
+  ".db/bson/collections/metadata/shards/96.dat": {
+   "id": "aff78597-8c6d-46c1-82eb-9619293609fa",
+   "version": 6,
+   "leafCount": 12,
+   "leavesSha256": "96202e37d8fdf33556a9abe8f0bdf532a00f9d6b3705b317bad18f60fc69bd9b",
+   "leaves": [
+    [
+     "1e245525-ec34-4d83-864e-e27eb3a7b911",
+     "0733ea8c023a653b8b8db3ab63d6183addf73009c3f9c9f4a89bd6bcab6ffdd1",
+     29
+    ],
+    [
+     "3a728f9a-49f1-4f93-bb2a-b57015e1c66b",
+     "eb105ab6fd6d53d15a074b0ec4a24ec511cb67d07781993adb0994d71bef5a29",
+     29
+    ],
+    [
+     "3d2438ae-e237-4200-9736-e121ff24da99",
+     "5ba7ee119d27960dcf7a89f3183fa4e6770760ad5c51e9cb2caf29705339a8be",
+     29
+    ],
+    [
+     "09ff19fa-94d0-43fa-8a75-4f8c1a058d2a",
+     "74fcc558af331546a2df8fa5030691528172606c043bfa27dbadc9119611fb41",
+     29
+    ],
+    [
+     "62f7fda7-37e0-45bc-8402-4842674bca47",
+     "4e37041f6a1a44fe7428fb00bbf5ddae696b3219e6d72d0bd1f4e2e580aca883",
+     29
+    ],
+    [
+     "3659c0c3-d0cf-471d-bcf0-ced0b144100c",
+     "fff2676105a8963ddc5f0ce1e89ef360016b5bdd2d2e078837c0c69738403435",
+     29
+    ],
+    [
+     "4183b60d-d411-4ca5-bd9c-8627bd26621c",
+     "b990ea2887ee8932a1ad9f2173ffe520946117a6a60ce8296f243b80a5ae2327",
+     29
+    ],
+    [
+     "5867bb2b-6e47-41a2-a2cb-c89f49c5d56c",
+     "0360fdcbc4e559741e98807b00090dacfec61a79858210dbaf28a9ec558bdae8",
+     29
+    ],
+    [
+     "9735518f-428c-49d1-a24a-c67f8ee41303",
+     "b3b4f3f8223866e1cead1bf133610f59bda90555d714d17c41245bade14a1a68",
+     29
+    ],
+    [
+     "67001919-0654-428c-b526-e743b58c1f4d",
+     "90aa07ca8cc8f0ab79f0a00de83009c3fe95c842e42f6371911f4862a087d4e5",
+     29
+    ],
+    [
+     "abfa8ffe-9cd6-4b9b-ab58-e5ec80611328",
+     "07a9496780c533cd1a08acb649cfee70f33c3b1425bb8ebf24c37fc6550145b2",
+     29
+    ],
+    [
+     "b856549c-fed8-4d55-a80c-35e06503aa44",
+     "5b0baca62ecee8950ca15334db00575c355c7d99f106fbc37e163b0cd5abe96e",
+     29
+    ]
+   ],
+   "merkleHash": "6f043cff6b791115f04c1b7e11005393a986a9368472af2cd2f5974e25fb3d4c",
+   "merkleNodeCount": 23
+  },
+  ".db/bson/collections/metadata/shards/97.dat": {
+   "id": "d82d695d-c9cb-44be-8f06-f1792c93a096",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "75c6d4e1a13da87a7f6f63d00d63e07afcc4c1ad7c29dc86d8bfbee8a9369d21",
+   "leaves": [
+    [
+     "8eb5bd8e-eaf3-43dd-a286-dec6fd68577d",
+     "5881b00d18a771ffd440d0f869b4513dc69b195f9f54dc9c7b21c2f9021bdf27",
+     29
+    ],
+    [
+     "37f14707-3162-4f19-bbe8-f75a98e87665",
+     "e736827587d3a2a98feedeba7e189fcd9d6aadecb9a62ad0e83d6c6b363f3196",
+     28
+    ],
+    [
+     "3217cab2-9fe9-4498-a52d-50e7868f555b",
+     "af724c9aef9b6f9525a4fcff36c87a99053fb2fae29c9a35af12c7623da806c3",
+     29
+    ],
+    [
+     "3261b901-2393-4a4e-a82c-ed02b82f9a92",
+     "6d3bc190879ec267f312c6ce92579f4964d624520ac674c7110709318c475e9d",
+     29
+    ],
+    [
+     "a77303b1-7ccd-491e-93dc-28175e6d7f7c",
+     "f09bec5b4a5d78e31370d3a724e0729725b0a1a130fa49425a87ae526b19d497",
+     29
+    ],
+    [
+     "fb9332a7-63c3-4179-8347-e849daea5164",
+     "8424f29bff6e01660f0c83f129ac2d76b7ce89eecfbe9ce872072797f4ff40df",
+     29
+    ]
+   ],
+   "merkleHash": "99604c3597c7c69ddd013797bac869e9e0245482b059e112610d6518c218a7a4",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/collections/metadata/shards/98.dat": {
+   "id": "cc56cf05-cf44-4be8-bd52-16eac7be0041",
+   "version": 6,
+   "leafCount": 8,
+   "leavesSha256": "0b01235da2a587660823c3ca562dbe677a084033da81ec8e65733a508c9f7452",
+   "leaves": [
+    [
+     "3e10248e-72ab-4062-833c-d2f1de725625",
+     "49fd135c3726167f5ca7a71a1f9f08df64c046cd09f23d3d0ac779c583fd7cab",
+     29
+    ],
+    [
+     "5d25c699-8319-4565-be97-a2f788404580",
+     "9beb9c051228f61e9d7739fc105e8cb3c96bd24450f5a8a1757416a02bae8e60",
+     29
+    ],
+    [
+     "748ef86a-22da-4d1c-b910-6f919992dab0",
+     "f8b1b2416f050513720d60a3b8cfce62e4cb7ee88626d9ec8e8812e43840e6cd",
+     28
+    ],
+    [
+     "354566e6-8b2f-4f67-b53e-649c7a22edc9",
+     "91b73aa481663fbe9ebbed3dcf7a6d9fdd002dc39af85c521e84346be820529b",
+     29
+    ],
+    [
+     "cc9d44d9-b9fe-4c7a-b7d2-5e0060e7fd27",
+     "fc69a652197d1daa38122557f4ce1a134ac60de7b0dfd3be09f4e1fc52327248",
+     29
+    ],
+    [
+     "de1d94db-6670-4ec8-a12d-32e410d5f2ab",
+     "f985acaa009ad936220ea0fa406002033594f5df0beda2db3965337865fc6070",
+     29
+    ],
+    [
+     "e7db32a0-f7a1-48f6-a2a2-2e35bf2dc501",
+     "e906eb204ca60ab904a82026ecefb200b71f618deb46c0b5d156cff14f5af566",
+     29
+    ],
+    [
+     "e99c06da-3fdc-46fe-bada-64685f623906",
+     "0de8e4a8e1f9bedb4f84131ce64e66dd3e207e07ecb11f9589fe23d139f5d945",
+     29
+    ]
+   ],
+   "merkleHash": "7854bdd8f25d73ddc25b749a0542b737bda5f645c27a11ef8a2627c678f5ec8c",
+   "merkleNodeCount": 15
+  },
+  ".db/bson/collections/metadata/shards/99.dat": {
+   "id": "52d718ac-5627-4543-b463-a309a7944e8b",
+   "version": 6,
+   "leafCount": 6,
+   "leavesSha256": "24b2e2212954a0bbc2117792e044b56414ccce37c1c4bd75a2d915184df40775",
+   "leaves": [
+    [
+     "1d13d099-0f8b-4f77-ae73-5274d264df12",
+     "e2738a6b12656bdac0a924f627d1788cadedc2c0b6ae20e905f4fba9484023f0",
+     29
+    ],
+    [
+     "36b3cb93-0be7-4ebf-9f7d-57a1480cc074",
+     "7b8714a4e388c324313a3b7dc7f4c936873a2e876306dacf01b038eb53b235bc",
+     29
+    ],
+    [
+     "71b24f8e-89d4-42b9-bd3f-b2e8130bc65a",
+     "a6fe287a06e93b400de2c46cc1ff064d1f8c5fd88c4080c70c780a9271f2748a",
+     29
+    ],
+    [
+     "1817bebb-673f-40e7-a2db-599908f0d984",
+     "23d6def2f7f0268c5bd27ccbe361ee4692c376325fa9a0271fd85185f4111322",
+     29
+    ],
+    [
+     "3798e5ca-45a9-4e30-a37d-d3c999a8a063",
+     "7338d3e875dce8039d3684055e335b72c5fe876e41a7a406735039eaf2e5c3f6",
+     29
+    ],
+    [
+     "82293a69-2678-4608-9d5d-4d3964211c11",
+     "49ad6adf0feb9e723746d1535b0f0afc00e3314d0b5ad3d3a69f4b7360b8553c",
+     29
+    ]
+   ],
+   "merkleHash": "18783513e809d8f3ae0f0c778bae6304999df717d9d2d02af0828adc1c334e1c",
+   "merkleNodeCount": 11
+  },
+  ".db/bson/db.dat": {
+   "id": "bdfd9fc3-45ab-45aa-b0d1-d35c5857da68",
+   "version": 6,
+   "leafCount": 1,
+   "leavesSha256": "fa4b946cb281f0f7ff6515ec69aba855185ed93ae0c5a6132d16aa97d1e158d5",
+   "leaves": [
+    [
+     "metadata",
+     "c557fc0ecd2906e7707e793d1477e0565cadadd115098b6dc9dee61446adbaee",
+     199
+    ]
+   ],
+   "merkleHash": "c557fc0ecd2906e7707e793d1477e0565cadadd115098b6dc9dee61446adbaee",
+   "merkleNodeCount": 1
+  }
+ },
+ "walks": {
+  "hash_asc": {
+   "count": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "rootHash": "c557fc0ecd2906e7707e793d1477e0565cadadd115098b6dc9dee61446adbaee"
+}

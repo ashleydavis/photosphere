@@ -1,4 +1,5 @@
 import type { IAsset } from "./asset";
+import type { IJobTag } from "task-queue";
 
 //
 // Input data for the sync-database background task.
@@ -8,6 +9,13 @@ export interface ISyncDatabaseData {
     // Absolute path to the local replica database.
     //
     databasePath: string;
+
+    //
+    // Names the job this task belongs to, so the sync shows up in the interface's job list. It
+    // carries no cancel source: a sync is queued by the host under a source the interface never
+    // learns, and syncing is switched off from Settings rather than stopped from the job list.
+    //
+    job?: IJobTag;
 }
 
 //
@@ -32,11 +40,54 @@ export interface ISyncChange {
 }
 
 //
+// Task message sent when a sync returns early without running, so the UI can report why a
+// requested sync produced no sync-started / sync-completed pair. Without this a skipped sync is
+// silent on the frontend and indistinguishable from a sync that never started.
+//
+export interface ISyncSkippedEvent {
+    //
+    // Event type discriminator.
+    //
+    type: "sync-skipped";
+
+    //
+    // The path of the local database whose sync was skipped.
+    //
+    databasePath: string;
+
+    //
+    // Human-readable explanation of why the sync was skipped.
+    //
+    reason: string;
+}
+
+//
+// Task message sent when a sync has finished running, so the UI can report the outcome.
+//
+export interface ISyncCompletedEvent {
+    //
+    // Event type discriminator.
+    //
+    type: "sync-completed";
+
+    //
+    // The path of the local database that was synced.
+    //
+    databasePath: string;
+
+    //
+    // False when the sync ran but both sides already held identical content, so nothing was
+    // transferred. True when records or files moved in either direction.
+    //
+    synced: boolean;
+}
+
+//
 // Task message sent during a sync to carry a batch of incremental changes to the UI.
 //
-export interface ISyncBatchMessage {
+export interface ISyncBatchEvent {
     //
-    // Message type discriminator.
+    // Event type discriminator.
     //
     type: "sync-batch";
 

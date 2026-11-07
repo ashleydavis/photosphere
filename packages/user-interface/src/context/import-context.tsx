@@ -5,6 +5,34 @@ import { usePlatform } from "./platform-context";
 import type { IImportSession, IPlatformContext } from "./platform-context";
 import { useAssetDatabase } from "./asset-database-source";
 import { useUuidGenerator } from "./uuid-generator-context";
+import { log } from "utils";
+import type { IImportRecord, IImportRecordEntry } from "api/src/lib/import-record";
+
+//
+// Turns one recorded import into the list item the Import page shows, so a photo imported last week
+// looks exactly like one imported a moment ago.
+//
+function entryToImportItem(entry: IImportRecordEntry): IImportItem {
+    return {
+        assetId: entry.assetId,
+        logicalPath: entry.logicalPath,
+        status: entry.outcome === "imported" ? "success" : entry.outcome === "skipped" ? "skipped" : "failure",
+        micro: entry.micro,
+    };
+}
+
+//
+// Reads what a database has imported. Returns an empty record rather than throwing when there is
+// nothing to read: a database that has imported nothing is not an error.
+//
+async function loadImportRecord(queue: TaskQueue, databasePath: string): Promise<IImportRecord> {
+    const taskId = queue.addTask("get-import-record", { databasePath });
+    const result = await queue.awaitTask(taskId);
+    if (!result || result.status !== "succeeded") {
+        return { entries: [], truncated: false };
+    }
+    return result.outputs as IImportRecord;
+}
 
 //
 // Dependencies required by the standalone import-orchestration helpers below.
@@ -12,7 +40,8 @@ import { useUuidGenerator } from "./uuid-generator-context";
 // with a mocked platform and queue backend.
 //
 export interface IImportOrchestrationDeps {
-    // Platform context, used for the open-folder and open-files pickers.
+    // Platform context, used for the open-folder and open-files pickers and for how many child tasks
+    // one import may run at once on this platform.
     platform: Pick<IPlatformContext, "pickFolder" | "pickFiles">;
 
     // Path of the currently open database; when undefined all helpers return undefined.
@@ -39,6 +68,11 @@ export function startImportWithPaths(deps: IImportOrchestrationDeps, paths: stri
         storageDescriptor: { databasePath: deps.databasePath },
         sessionId,
         dryRun: false,
+        job: {
+            id: sessionId,
+            name: "Importing photos",
+            cancelSource: sessionId,
+        },
     }, sessionId);
     return { importAssetsTaskId, sessionId };
 }
@@ -119,8 +153,12 @@ export interface IImportContext {
     // Current import lifecycle status.
     status: ImportStatus;
 
-    // Ordered list of all items seen in the current import session, in arrival order.
+    // Everything this database has taken in, newest first: what is happening now, then what the
+    // database recorded before the app opened. Manual and automatic imports are in the same list.
     importItems: IImportItem[];
+
+    // True when older imports than these were dropped for being past the cap.
+    recordTruncated: boolean;
 
     // Imports the given directories and sets status to 'running'.
     // When paths are supplied they are used directly; when omitted a directory picker is shown.
@@ -131,6 +169,10 @@ export interface IImportContext {
     // When paths are supplied they are used directly; when omitted a file picker is shown.
     // Returns false if no database is open or the user cancelled the picker.
     startImportFiles: (paths?: string[]) => Promise<boolean>;
+
+    // True while a file or folder picker is open, so the UI can disable the import buttons and a
+    // second picker is never requested while one is still pending.
+    isPicking: boolean;
 
     // Cancels the running import.
     cancelImport: () => Promise<void>;
@@ -165,6 +207,13 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     // Ordered list of all items seen in the current import session.
     const [importItems, setImportItems] = useState<IImportItem[]>([]);
 
+    // What this database imported before the app was opened, newest first, read from its own record.
+    const [recordedItems, setRecordedItems] = useState<IImportItem[]>([]);
+
+    // True when the record is full and older imports than these were dropped, so the interface can
+    // say that what it is showing is not the whole history.
+    const [recordTruncated, setRecordTruncated] = useState<boolean>(false);
+
     // Session info recorded when an import starts.
     const sessionRef = useRef<IImportSession | null>(null);
 
@@ -173,6 +222,14 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
 
     // Stable ref to the current status so event handlers can read it without stale closures.
     const statusRef = useRef<ImportStatus>('idle');
+
+    // True while a file or folder picker is open. Drives the disabled state of the import buttons.
+    const [isPicking, setIsPicking] = useState<boolean>(false);
+
+    // Synchronous mirror of isPicking. A state update is not visible until the next render, so two
+    // activations landing in the same tick would both still see isPicking false; the ref closes that
+    // gap and makes the guard reliable no matter how fast the second one arrives.
+    const isPickingRef = useRef<boolean>(false);
 
     //
     // Keeps statusRef in sync with state.
@@ -299,11 +356,41 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     }
 
     //
+    // Starts an import that shows a picker when no paths were supplied, refusing to start a second
+    // one while a picker is still open. Two overlapping picker requests are not something any
+    // platform handles well (on iOS the earlier pickFiles call is dropped and its promise never
+    // settles, hanging the first import), so the second request is simply declined here.
+    // Calls that supply paths do not open a picker, so they are never blocked.
+    //
+    async function beginPickedImportSession(paths: string[] | undefined, sessionPromiseFactory: () => Promise<IImportSession | undefined>): Promise<boolean> {
+        const opensPicker = !paths || paths.length === 0;
+        if (!opensPicker) {
+            return beginImportSession(sessionPromiseFactory());
+        }
+
+        if (isPickingRef.current) {
+            return false;
+        }
+
+        isPickingRef.current = true;
+        setIsPicking(true);
+
+        try {
+            return await beginImportSession(sessionPromiseFactory());
+        }
+        finally {
+            // Always released, so a picker that fails cannot leave the import buttons stuck disabled.
+            isPickingRef.current = false;
+            setIsPicking(false);
+        }
+    }
+
+    //
     // Opens a directory picker (or uses the given paths) and starts an import.
     // Returns false if no database is open or the user cancelled the picker.
     //
     const startImportDirectories = useCallback(async (paths?: string[]): Promise<boolean> => {
-        return beginImportSession(importDirectories({ platform, databasePath, uuidGenerator }, paths));
+        return beginPickedImportSession(paths, () => importDirectories({ platform, databasePath, uuidGenerator }, paths));
     }, [platform, databasePath, uuidGenerator]);
 
     //
@@ -311,7 +398,7 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
     // Returns false if no database is open or the user cancelled the picker.
     //
     const startImportFiles = useCallback(async (paths?: string[]): Promise<boolean> => {
-        return beginImportSession(importFiles({ platform, databasePath, uuidGenerator }, paths));
+        return beginPickedImportSession(paths, () => importFiles({ platform, databasePath, uuidGenerator }, paths));
     }, [platform, databasePath, uuidGenerator]);
 
     //
@@ -348,11 +435,51 @@ export function ImportContextProvider({ children }: IImportContextProviderProps)
         clearImport();
     }, [databasePath, clearImport]);
 
+    //
+    // Loads what this database has imported before, so opening it shows its history rather than only
+    // what has happened while the app has been running.
+    //
+    // Manual and automatic imports come back in the same list, newest first. It is capped, and
+    // `recordTruncated` says whether anything older was dropped, so the interface can say that what
+    // it is showing is not everything.
+    //
+    useEffect(() => {
+        if (!databasePath) {
+            setRecordedItems([]);
+            setRecordTruncated(false);
+            return;
+        }
+
+        let cancelled = false;
+        const queue = new TaskQueue(uuidGenerator, `import-record-${databasePath}`);
+
+        loadImportRecord(queue, databasePath)
+            .then(record => {
+                if (cancelled) {
+                    return;
+                }
+                setRecordedItems(record.entries.map(entryToImportItem));
+                setRecordTruncated(record.truncated);
+            })
+            .catch(error => {
+                // A missing or unreadable record is not worth an error in the user's face: it is a
+                // note about what happened, not the photos. The page simply shows nothing.
+                log.exception(`Failed to read what "${databasePath}" has imported`, error as Error);
+            })
+            .finally(() => queue.shutdown());
+
+        return () => {
+            cancelled = true;
+        };
+    }, [databasePath]);
+
     const contextValue: IImportContext = {
         status,
-        importItems,
+        importItems: importItems.concat(recordedItems),
+        recordTruncated,
         startImportDirectories,
         startImportFiles,
+        isPicking,
         cancelImport,
         clearImport,
     };

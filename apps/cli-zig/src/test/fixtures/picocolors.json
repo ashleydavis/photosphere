@@ -1,0 +1,922 @@
+{
+    "styleCases": [
+        {
+            "style": "reset",
+            "input": "text",
+            "output": "\u001b[0mtext\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "",
+            "output": "\u001b[0m\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[0ma\u001b[39mb\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "\u001b[39m",
+            "output": "\u001b[0m\u001b[39m\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[0mstart \u001b[22m middle \u001b[22m end\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[0mxx\u001b[39myy\u001b[39mzz\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[0m\u001b[32minner\u001b[39m\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[0mouter \u001b[31minner\u001b[39m outer\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[0mouter \u001b[1minner\u001b[22m outer\u001b[0m"
+        },
+        {
+            "style": "reset",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[0mouter \u001b[2minner\u001b[22m outer\u001b[0m"
+        },
+        {
+            "style": "bold",
+            "input": "text",
+            "output": "\u001b[1mtext\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "",
+            "output": "\u001b[1m\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[1ma\u001b[39mb\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "\u001b[39m",
+            "output": "\u001b[1m\u001b[39m\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[1mstart \u001b[22m\u001b[1m middle \u001b[22m\u001b[1m end\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[1mxx\u001b[39myy\u001b[39mzz\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[1m\u001b[32minner\u001b[39m\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[1mouter \u001b[31minner\u001b[39m outer\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[1mouter \u001b[1minner\u001b[22m\u001b[1m outer\u001b[22m"
+        },
+        {
+            "style": "bold",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[1mouter \u001b[2minner\u001b[22m\u001b[1m outer\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "text",
+            "output": "\u001b[2mtext\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "",
+            "output": "\u001b[2m\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[2ma\u001b[39mb\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "\u001b[39m",
+            "output": "\u001b[2m\u001b[39m\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[2mstart \u001b[22m\u001b[2m middle \u001b[22m\u001b[2m end\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[2mxx\u001b[39myy\u001b[39mzz\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[2m\u001b[32minner\u001b[39m\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[2mouter \u001b[31minner\u001b[39m outer\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[2mouter \u001b[1minner\u001b[22m\u001b[2m outer\u001b[22m"
+        },
+        {
+            "style": "dim",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[2mouter \u001b[2minner\u001b[22m\u001b[2m outer\u001b[22m"
+        },
+        {
+            "style": "italic",
+            "input": "text",
+            "output": "\u001b[3mtext\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "",
+            "output": "\u001b[3m\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[3ma\u001b[39mb\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "\u001b[39m",
+            "output": "\u001b[3m\u001b[39m\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[3mstart \u001b[22m middle \u001b[22m end\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[3mxx\u001b[39myy\u001b[39mzz\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[3m\u001b[32minner\u001b[39m\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[3mouter \u001b[31minner\u001b[39m outer\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[3mouter \u001b[1minner\u001b[22m outer\u001b[23m"
+        },
+        {
+            "style": "italic",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[3mouter \u001b[2minner\u001b[22m outer\u001b[23m"
+        },
+        {
+            "style": "underline",
+            "input": "text",
+            "output": "\u001b[4mtext\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "",
+            "output": "\u001b[4m\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[4ma\u001b[39mb\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "\u001b[39m",
+            "output": "\u001b[4m\u001b[39m\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[4mstart \u001b[22m middle \u001b[22m end\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[4mxx\u001b[39myy\u001b[39mzz\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[4m\u001b[32minner\u001b[39m\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[4mouter \u001b[31minner\u001b[39m outer\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[4mouter \u001b[1minner\u001b[22m outer\u001b[24m"
+        },
+        {
+            "style": "underline",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[4mouter \u001b[2minner\u001b[22m outer\u001b[24m"
+        },
+        {
+            "style": "inverse",
+            "input": "text",
+            "output": "\u001b[7mtext\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "",
+            "output": "\u001b[7m\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[7ma\u001b[39mb\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "\u001b[39m",
+            "output": "\u001b[7m\u001b[39m\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[7mstart \u001b[22m middle \u001b[22m end\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[7mxx\u001b[39myy\u001b[39mzz\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[7m\u001b[32minner\u001b[39m\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[7mouter \u001b[31minner\u001b[39m outer\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[7mouter \u001b[1minner\u001b[22m outer\u001b[27m"
+        },
+        {
+            "style": "inverse",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[7mouter \u001b[2minner\u001b[22m outer\u001b[27m"
+        },
+        {
+            "style": "hidden",
+            "input": "text",
+            "output": "\u001b[8mtext\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "",
+            "output": "\u001b[8m\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[8ma\u001b[39mb\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "\u001b[39m",
+            "output": "\u001b[8m\u001b[39m\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[8mstart \u001b[22m middle \u001b[22m end\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[8mxx\u001b[39myy\u001b[39mzz\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[8m\u001b[32minner\u001b[39m\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[8mouter \u001b[31minner\u001b[39m outer\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[8mouter \u001b[1minner\u001b[22m outer\u001b[28m"
+        },
+        {
+            "style": "hidden",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[8mouter \u001b[2minner\u001b[22m outer\u001b[28m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "text",
+            "output": "\u001b[9mtext\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "",
+            "output": "\u001b[9m\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[9ma\u001b[39mb\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "\u001b[39m",
+            "output": "\u001b[9m\u001b[39m\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[9mstart \u001b[22m middle \u001b[22m end\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[9mxx\u001b[39myy\u001b[39mzz\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[9m\u001b[32minner\u001b[39m\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[9mouter \u001b[31minner\u001b[39m outer\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[9mouter \u001b[1minner\u001b[22m outer\u001b[29m"
+        },
+        {
+            "style": "strikethrough",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[9mouter \u001b[2minner\u001b[22m outer\u001b[29m"
+        },
+        {
+            "style": "red",
+            "input": "text",
+            "output": "\u001b[31mtext\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "",
+            "output": "\u001b[31m\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[31ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "\u001b[39m",
+            "output": "\u001b[31m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[31mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[31mxx\u001b[39myy\u001b[31mzz\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[31m\u001b[32minner\u001b[31m\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[31mouter \u001b[31minner\u001b[31m outer\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[31mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "red",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[31mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "text",
+            "output": "\u001b[32mtext\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "",
+            "output": "\u001b[32m\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[32ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "\u001b[39m",
+            "output": "\u001b[32m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[32mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[32mxx\u001b[39myy\u001b[32mzz\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[32m\u001b[32minner\u001b[32m\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[32mouter \u001b[31minner\u001b[32m outer\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[32mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "green",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[32mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "text",
+            "output": "\u001b[33mtext\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "",
+            "output": "\u001b[33m\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[33ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "\u001b[39m",
+            "output": "\u001b[33m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[33mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[33mxx\u001b[39myy\u001b[33mzz\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[33m\u001b[32minner\u001b[33m\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[33mouter \u001b[31minner\u001b[33m outer\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[33mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "yellow",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[33mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "text",
+            "output": "\u001b[34mtext\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "",
+            "output": "\u001b[34m\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[34ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "\u001b[39m",
+            "output": "\u001b[34m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[34mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[34mxx\u001b[39myy\u001b[34mzz\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[34m\u001b[32minner\u001b[34m\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[34mouter \u001b[31minner\u001b[34m outer\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[34mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "blue",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[34mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "text",
+            "output": "\u001b[35mtext\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "",
+            "output": "\u001b[35m\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[35ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "\u001b[39m",
+            "output": "\u001b[35m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[35mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[35mxx\u001b[39myy\u001b[35mzz\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[35m\u001b[32minner\u001b[35m\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[35mouter \u001b[31minner\u001b[35m outer\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[35mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "magenta",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[35mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "text",
+            "output": "\u001b[36mtext\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "",
+            "output": "\u001b[36m\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[36ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "\u001b[39m",
+            "output": "\u001b[36m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[36mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[36mxx\u001b[39myy\u001b[36mzz\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[36m\u001b[32minner\u001b[36m\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[36mouter \u001b[31minner\u001b[36m outer\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[36mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "cyan",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[36mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "text",
+            "output": "\u001b[37mtext\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "",
+            "output": "\u001b[37m\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[37ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "\u001b[39m",
+            "output": "\u001b[37m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[37mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[37mxx\u001b[39myy\u001b[37mzz\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[37m\u001b[32minner\u001b[37m\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[37mouter \u001b[31minner\u001b[37m outer\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[37mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "white",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[37mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "text",
+            "output": "\u001b[90mtext\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "",
+            "output": "\u001b[90m\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "a\u001b[39mb",
+            "output": "\u001b[90ma\u001b[39mb\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "\u001b[39m",
+            "output": "\u001b[90m\u001b[39m\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "start \u001b[22m middle \u001b[22m end",
+            "output": "\u001b[90mstart \u001b[22m middle \u001b[22m end\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "xx\u001b[39myy\u001b[39mzz",
+            "output": "\u001b[90mxx\u001b[39myy\u001b[90mzz\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "\u001b[32minner\u001b[39m",
+            "output": "\u001b[90m\u001b[32minner\u001b[90m\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "outer \u001b[31minner\u001b[39m outer",
+            "output": "\u001b[90mouter \u001b[31minner\u001b[90m outer\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "outer \u001b[1minner\u001b[22m outer",
+            "output": "\u001b[90mouter \u001b[1minner\u001b[22m outer\u001b[39m"
+        },
+        {
+            "style": "gray",
+            "input": "outer \u001b[2minner\u001b[22m outer",
+            "output": "\u001b[90mouter \u001b[2minner\u001b[22m outer\u001b[39m"
+        }
+    ],
+    "detectionCases": [
+        {
+            "env": {},
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "NO_COLOR": "1"
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "NO_COLOR": ""
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "FORCE_COLOR": "1"
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": true
+        },
+        {
+            "env": {
+                "FORCE_COLOR": ""
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "FORCE_COLOR": "0"
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": true
+        },
+        {
+            "env": {
+                "CI": "true"
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": true
+        },
+        {
+            "env": {
+                "CI": ""
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "TERM": "dumb",
+                "FORCE_COLOR": "1"
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": true
+        },
+        {
+            "env": {
+                "NO_COLOR": "1",
+                "FORCE_COLOR": "1"
+            },
+            "argv": [],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {},
+            "argv": [
+                "--color"
+            ],
+            "stdoutIsTTY": false,
+            "isColorSupported": true
+        },
+        {
+            "env": {},
+            "argv": [
+                "--no-color"
+            ],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "FORCE_COLOR": "1"
+            },
+            "argv": [
+                "--no-color"
+            ],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        },
+        {
+            "env": {
+                "NO_COLOR": "1"
+            },
+            "argv": [
+                "--color"
+            ],
+            "stdoutIsTTY": false,
+            "isColorSupported": false
+        }
+    ]
+}

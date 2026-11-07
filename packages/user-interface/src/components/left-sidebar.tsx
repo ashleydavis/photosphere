@@ -7,13 +7,15 @@ import { useTheme } from '@mui/joy/styles/ThemeProvider';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import ListItemDecorator from '@mui/joy/ListItemDecorator/ListItemDecorator';
-import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete } from '@mui/icons-material';
+import { PhotoLibrary, Folder, FolderOpen, Map, Search, Settings, CreateNewFolder, LibraryAdd, FileUpload, ManageSearch, Key, Delete, DeveloperMode, Storage } from '@mui/icons-material';
 import { CollapsibleSection } from './collapsible-section';
 import ListItemContent from '@mui/joy/ListItemContent/ListItemContent';
 import ListItemButton from '@mui/joy/ListItemButton/ListItemButton';
 import IconButton from '@mui/joy/IconButton/IconButton';
+import CircularProgress from '@mui/joy/CircularProgress';
 import Divider from '@mui/joy/Divider/Divider';
 import { useSearch } from '../context/search-context';
+import { useDeveloper } from '../context/developer-context';
 import { findTemporaryNavPage } from '../lib/nav-pages';
 
 //
@@ -65,30 +67,28 @@ export interface ILeftSidebarProps {
     // Opens the add database modal.
     //
     onAddDatabase: () => void;
-
-    //
-    // Opens the open database modal.
-    //
-    onOpenDatabase: () => void;
 }
 
 
 //
 // Renders the left sidebar for the app.
 //
-export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase, onOpenDatabase }: ILeftSidebarProps) {
+export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, onNewDatabase, onAddDatabase }: ILeftSidebarProps) {
     const { setOpenSearch } = useSearch();
-    const { openDatabase, databasePath } = useAssetDatabase();
+    const { developerMode } = useDeveloper();
+    const { openDatabase, databasePath, isOpening } = useAssetDatabase();
     const platform = usePlatform();
     const theme = useTheme();
     const location = useLocation();
     const navigate = useNavigate();
     // The current location, used to show a temporary sidebar entry for pages
     // that have no permanent sidebar link.
-    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets"]);
+    const temporaryNavPage = findTemporaryNavPage(location.pathname, ["/gallery", "/map", "/import", "/databases", "/secrets", "/about"]);
     const TemporaryNavPageIcon = temporaryNavPage?.icon;
     // Recently opened databases (top 5).
     const [recentDatabases, setRecentDatabases] = useState<IDatabaseEntry[]>([]);
+    // The path of the recent database the user tapped, so the spinner shows on that one alone.
+    const [openingPath, setOpeningPath] = useState<string | undefined>(undefined);
 
     function loadRecentDatabases(): void {
         platform.getRecentDatabases()
@@ -102,8 +102,15 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
     }, [platform]);
 
     return (
+        //
+        // Fills its container (the drawer) rather than forcing a full viewport height, and scrolls
+        // when the content is taller than that. With a fixed 100vh height the sidebar overflows any
+        // container shorter than the viewport, and with no scrolling the items pinned to its bottom
+        // (About, Manage Databases, Manage Secrets) fall off the bottom edge and cannot be reached
+        // once enough recent databases are listed.
+        //
         <div
-            className="flex flex-col h-screen"
+            className="flex flex-col h-full overflow-y-auto"
             style={{
                 color: theme.palette.text.primary,
             }}
@@ -125,6 +132,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
             <div className="flex flex-col" style={{ paddingLeft: "15px" }}>
                 <List>
                     <ListItem
+                        data-id="sidebar-new-database"
                         onClick={() => {
                             setSidebarOpen(false);
                             onNewDatabase();
@@ -149,9 +157,11 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     </ListItem>
 
                     <ListItem
+                        data-id="sidebar-open-database"
                         onClick={() => {
                             setSidebarOpen(false);
-                            onOpenDatabase();
+                            platform.runAction("open-database")
+                                .catch(err => log.exception('Failed to open the Open Database dialog:', err as Error));
                         }}
                         >
                         <ListItemButton>
@@ -163,6 +173,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     {databasePath && (
                         <NavLink
                             to="/import"
+                            data-id="sidebar-import"
                             onClick={() => setSidebarOpen(false)}
                             >
                             {({ isActive }) => (
@@ -220,6 +231,23 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                         )}
                     </NavLink>
 
+                    {databasePath && (
+                        <NavLink
+                            to="/database-summary"
+                            data-id="sidebar-database-summary"
+                            onClick={() => setSidebarOpen(false)}
+                            >
+                            {({ isActive }) => (
+                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                    <ListItemButton>
+                                        <ListItemDecorator><Storage /></ListItemDecorator>
+                                        <ListItemContent>Database Info</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            )}
+                        </NavLink>
+                    )}
+
                     {temporaryNavPage && TemporaryNavPageIcon && (
                         <NavLink
                             to={temporaryNavPage.path}
@@ -264,9 +292,17 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                     }
                                     >
                                     <ListItemButton
+                                        data-id={`open-recent-database-button-${dbIndex}`}
+                                        // Every entry goes dead while an open is under way, so a
+                                        // second open cannot be started on top of the first.
+                                        disabled={isOpening}
+                                        // The sidebar is closed once the open has resolved rather
+                                        // than on the tap. Closing it first hides the only thing
+                                        // saying anything is happening, and an open takes seconds.
                                         onClick={async () => {
-                                            setSidebarOpen(false);
+                                            setOpeningPath(dbEntry.path);
                                             await openDatabase(dbEntry.path);
+                                            setSidebarOpen(false);
                                         }}
                                         >
                                         <ListItemDecorator>
@@ -275,9 +311,12 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                                                 : <Folder />
                                             }
                                         </ListItemDecorator>
-                                        <ListItemContent title={dbEntry.path}>
+                                        <ListItemContent data-id={`recent-database-name-${dbIndex}`} title={dbEntry.path}>
                                             {dbEntry.name || dbEntry.path.split(/[\\/]/).filter(Boolean).pop() || dbEntry.path}
                                         </ListItemContent>
+                                        {isOpening && openingPath === dbEntry.path && (
+                                            <CircularProgress data-id={`open-recent-database-spinner-${dbIndex}`} size="sm" />
+                                        )}
                                     </ListItemButton>
                                 </ListItem>
                             ))}
@@ -289,10 +328,26 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
             <div className="flex-grow" />
 
             <div className="flex flex-col">
+                <List sx={{ pl: "15px" }}>
+                    <NavLink
+                        to="/about"
+                        onClick={() => setSidebarOpen(false)}
+                        >
+                        {({ isActive }) => (
+                            <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                <ListItemButton>
+                                    <ListItemDecorator><i className="fa-solid fa-circle-info" /></ListItemDecorator>
+                                    <ListItemContent>About</ListItemContent>
+                                </ListItemButton>
+                            </ListItem>
+                        )}
+                    </NavLink>
+                </List>
                 <Divider />
                 <List sx={{ pl: "15px" }}>
                     <NavLink
                         to="/databases"
+                        data-id="sidebar-manage-databases"
                         onClick={() => setSidebarOpen(false)}
                         >
                         {({ isActive }) => (
@@ -320,6 +375,7 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                     </NavLink>
 
                     <ListItem
+                        data-id="sidebar-configuration"
                         onClick={() => {
                             setSidebarOpen(false);
                             onOpenConfiguration();
@@ -330,6 +386,23 @@ export function LeftSidebar({ sidebarOpen, setSidebarOpen, onOpenConfiguration, 
                             <ListItemContent>Configuration</ListItemContent>
                         </ListItemButton>
                     </ListItem>
+
+                    {developerMode && (
+                        <NavLink
+                            to="/developer"
+                            data-id="sidebar-developer"
+                            onClick={() => setSidebarOpen(false)}
+                            >
+                            {({ isActive }) => (
+                                <ListItem sx={isActive ? activeNavItemSx : undefined}>
+                                    <ListItemButton>
+                                        <ListItemDecorator><DeveloperMode /></ListItemDecorator>
+                                        <ListItemContent>Developer</ListItemContent>
+                                    </ListItemButton>
+                                </ListItem>
+                            )}
+                        </NavLink>
+                    )}
                 </List>
             </div>
 

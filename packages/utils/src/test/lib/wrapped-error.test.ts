@@ -1,10 +1,10 @@
 import { WrappedError, formatErrorChain } from "../../lib/wrapped-error";
 
 describe("WrappedError", () => {
-    test("should set message", () => {
+    test("the message carries the context and the cause, because somewhere the message is all that survives", () => {
         const cause = new Error("original");
         const error = new WrappedError("context", { cause });
-        expect(error.message).toBe("context");
+        expect(error.message).toBe("context: original");
     });
 
     test("should set cause on the standard cause property", () => {
@@ -70,5 +70,20 @@ describe("formatErrorChain", () => {
         const error: any = { message: "no stack here", cause: undefined };
         const result = formatErrorChain(error);
         expect(result).toContain("no stack here");
+    });
+
+    test("should prepend the message when the stack omits it (JavaScriptCore stacks)", () => {
+        // JavaScriptCore (iOS) stacks contain only frames, with no leading "Error: message" line.
+        const error: any = { message: "duplicate name", stack: "wte@app.js:1:2\nonClick@app.js:3:4", cause: undefined };
+        const result = formatErrorChain(error);
+        expect(result).toContain("duplicate name");
+        expect(result).toContain("wte@app.js:1:2");
+    });
+
+    test("should not duplicate the message when the stack already contains it (V8 stacks)", () => {
+        // V8 (Android/desktop) stacks already start with the "Error: message" line.
+        const error: any = { message: "already here", stack: "Error: already here\n    at foo (app.js:1:2)", cause: undefined };
+        const result = formatErrorChain(error);
+        expect(result).toBe(error.stack);
     });
 });

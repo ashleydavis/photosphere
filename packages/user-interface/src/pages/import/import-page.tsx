@@ -5,10 +5,13 @@ import { usePlatform, type IToolsStatus } from "../../context/platform-context";
 import { log } from "utils";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
+import Chip from "@mui/joy/Chip";
 import CircularProgress from "@mui/joy/CircularProgress";
 import Typography from "@mui/joy/Typography";
 import { FileUpload, CheckCircle, Cancel, HourglassEmpty, RemoveCircle } from "@mui/icons-material";
+import { useIsMobile } from "../../lib/use-is-mobile";
 import type { IImportItem } from "../../context/import-context";
+import { ImportProgress } from "../../components/import-progress";
 
 //
 // Shown when no database is loaded.
@@ -161,7 +164,7 @@ function ImportItemRow({ item }: { item: IImportItem }) {
                 }
             </Box>
 
-            <Typography level="body-sm" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Typography data-id="import-item-path" level="body-sm" sx={{ flexGrow: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {item.logicalPath}
             </Typography>
         </Box>
@@ -175,7 +178,10 @@ function ImportItemRow({ item }: { item: IImportItem }) {
 export function ImportPage() {
     const { databasePath } = useAssetDatabase();
     const platform = usePlatform();
-    const { status, importItems, startImportDirectories, startImportFiles, cancelImport, clearImport } = useImport();
+    const { status, importItems, recordTruncated, startImportDirectories, startImportFiles, isPicking, cancelImport, clearImport } = useImport();
+
+    // Drives the phone layout: stacked full-width import buttons, chips for the summary.
+    const isMobile = useIsMobile();
 
     // Tool check state: undefined = checking, null = check not run yet (but we auto-run on mount)
     const [toolsStatus, setToolsStatus] = useState<IToolsStatus | null>(null);
@@ -197,14 +203,18 @@ export function ImportPage() {
     }, [importItems.length]);
 
     //
-    // Run tool check on mount (when a database is loaded).
+    // Run tool check on mount (when a database is loaded), and again whenever the page returns to
+    // idle. Status lives in the context above this page and survives navigation, so after one import
+    // it is 'completed' or 'cancelled' rather than 'idle'. Depending on databasePath alone meant a
+    // revisit ran the effect once, failed the guard, and left toolsStatus undefined, which switches
+    // allowDragAndDrop off and makes every subsequent drop vanish without a word.
     //
     useEffect(() => {
         if (databasePath && status === 'idle') {
             runToolCheck();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [databasePath]);
+    }, [databasePath, status]);
 
     //
     // Runs the tool check and updates toolsStatus.
@@ -275,6 +285,10 @@ export function ImportPage() {
         return <NoDatabaseLoaded />;
     }
 
+    // Drag-and-drop import is only offered on platforms that support it (desktop) and once the media
+    // tools are available. Mobile/web hide the drop zone and offer the native photo picker instead.
+    const allowDragAndDrop = platform.platformKind === "desktop" && (toolsStatus?.allAvailable ?? false);
+
     const successCount = importItems.filter(item => item.status === 'success').length;
     const skippedCount = importItems.filter(item => item.status === 'skipped').length;
     const failedCount = importItems.filter(item => item.status === 'failure').length;
@@ -282,6 +296,11 @@ export function ImportPage() {
 
     return (
         <Box className="flex flex-col" sx={{ height: "calc(100vh - 60px)" }}>
+
+            {/* What automatic import is doing, when it is doing anything. */}
+            <Box sx={{ px: 2, pt: 2, flexShrink: 0 }}>
+                <ImportProgress />
+            </Box>
 
             {/* Header bar */}
             <Box
@@ -293,6 +312,7 @@ export function ImportPage() {
                         <CircularProgress size="sm" />
                         <Typography level="title-md" sx={{ flexGrow: 1 }}>Importing…</Typography>
                         <Button
+                            data-id="import-cancel-button"
                             variant="soft"
                             color="danger"
                             size="sm"
@@ -324,9 +344,9 @@ export function ImportPage() {
                     <Box
                         data-id="import-drop-zone"
                         className="flex flex-col items-center justify-center flex-grow"
-                        onDragOver={toolsStatus?.allAvailable ? handleDragOver : undefined}
-                        onDragLeave={toolsStatus?.allAvailable ? handleDragLeave : undefined}
-                        onDrop={toolsStatus?.allAvailable ? handleDrop : undefined}
+                        onDragOver={allowDragAndDrop ? handleDragOver : undefined}
+                        onDragLeave={allowDragAndDrop ? handleDragLeave : undefined}
+                        onDrop={allowDragAndDrop ? handleDrop : undefined}
                         sx={{
                             border: isDragOver ? "2px dashed" : "2px dashed transparent",
                             borderColor: isDragOver ? "primary.outlinedBorder" : "transparent",
@@ -344,31 +364,67 @@ export function ImportPage() {
                         )}
 
                         {!isCheckingTools && toolsStatus !== null && toolsStatus.allAvailable && (
-                            <Box sx={{ textAlign: "center" }}>
-                                <FileUpload sx={{ fontSize: 64, color: "text.secondary", mb: 2 }} />
-                                <Typography level="h4" sx={{ mb: 1 }}>Import photos</Typography>
+                            // On a phone the import buttons stack and run the full width of the
+                            // screen: a row of two "lg" buttons is what clipped this page's actions
+                            // at the edges before, and a single obvious target beats two small ones.
+                            <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
+                                <Box
+                                    sx={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        width: isMobile ? 96 : 80,
+                                        height: isMobile ? 96 : 80,
+                                        borderRadius: "50%",
+                                        backgroundColor: "background.level2",
+                                        mb: 2,
+                                    }}
+                                    >
+                                    <FileUpload sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
+                                </Box>
+                                <Typography level={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
                                 <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
-                                    Drop files or directories here, or use the buttons below.
+                                    {allowDragAndDrop
+                                        ? "Drop files or directories here, or use the buttons below."
+                                        : "Choose photos and videos from your device."}
                                 </Typography>
-                                <Box className="flex flex-row gap-3 justify-center">
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: isMobile ? "column" : "row",
+                                        gap: 1.5,
+                                        justifyContent: "center",
+                                        width: "100%",
+                                        maxWidth: isMobile ? 420 : undefined,
+                                        mx: "auto",
+                                    }}
+                                    >
                                     <Button
-                                        variant="soft"
-                                        color="neutral"
+                                        data-id="import-files-button"
+                                        variant={isMobile ? "solid" : "soft"}
+                                        color={isMobile ? "primary" : "neutral"}
                                         size="lg"
                                         startDecorator={<FileUpload />}
                                         onClick={handleImportFiles}
+                                        disabled={isPicking}
+                                        sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
                                     >
-                                        Import files
+                                        {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
                                     </Button>
-                                    <Button
-                                        variant="soft"
-                                        color="neutral"
-                                        size="lg"
-                                        startDecorator={<FileUpload />}
-                                        onClick={handleImportDirectories}
-                                    >
-                                        Import directory
-                                    </Button>
+                                    {platform.platformKind === "desktop" && (
+                                        <Button
+                                            data-id="import-directory-button"
+                                            variant="soft"
+                                            color="neutral"
+                                            size="lg"
+                                            startDecorator={<FileUpload />}
+                                            onClick={handleImportDirectories}
+                                            disabled={isPicking}
+                                            sx={{ minHeight: isMobile ? 52 : undefined }}
+                                        >
+                                            Import directory
+                                        </Button>
+                                    )}
                                 </Box>
                             </Box>
                         )}
@@ -379,21 +435,39 @@ export function ImportPage() {
                     </Box>
                 )}
 
-                {/* Running/completed/cancelled state: show summary + item list */}
-                {(status === 'running' || status === 'completed' || status === 'cancelled') && (
+                {/* The list shows while an import is happening or has just finished, and also when
+                    nothing is happening but this database has imported something before. That last
+                    case is the point of the record: opening a database should answer "what came in?"
+                    without the user having to import something first. */}
+                {(status === 'running' || status === 'completed' || status === 'cancelled' || importItems.length > 0) && (
                     <Box className="flex flex-col flex-grow overflow-hidden">
 
-                        {/* Summary (only when done) */}
+                        {/* Summary (only when done). Chips in a wrapping row, so the outcome reads at
+                            a glance on a phone instead of as four stacked lines of small text. */}
                         {(status === 'completed' || status === 'cancelled') && (
                             <Box
-                                className="px-4 py-3"
-                                sx={{ borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}
+                                sx={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: 1,
+                                    px: 2,
+                                    py: 1.5,
+                                    borderBottom: "1px solid",
+                                    borderColor: "divider",
+                                    flexShrink: 0,
+                                }}
                             >
-                                <Typography level="body-sm">Added: {successCount}</Typography>
-                                <Typography level="body-sm">Skipped: {skippedCount}</Typography>
-                                <Typography level="body-sm">Failed: {failedCount}</Typography>
+                                <Chip variant="soft" color="success" size="lg">{`${successCount} added`}</Chip>
+                                <Chip variant="soft" color="neutral" size="lg">{`${skippedCount} skipped`}</Chip>
+                                <Chip
+                                    variant="soft"
+                                    color={failedCount > 0 ? "danger" : "neutral"}
+                                    size="lg"
+                                    >
+                                    {`${failedCount} failed`}
+                                </Chip>
                                 {pendingCount > 0 && (
-                                    <Typography level="body-sm">Still pending: {pendingCount}</Typography>
+                                    <Chip variant="soft" color="warning" size="lg">{`${pendingCount} pending`}</Chip>
                                 )}
                             </Box>
                         )}
@@ -403,18 +477,44 @@ export function ImportPage() {
                             ref={listRef}
                             className="flex-grow overflow-y-auto"
                         >
-                            {importItems.map(item => (
-                                <ImportItemRow key={item.assetId} item={item} />
+                            {importItems.map((item, index) => (
+                                <ImportItemRow key={`${item.assetId}-${index}`} item={item} />
                             ))}
+
+                            {/* Said out loud when the record is full, because a list that silently
+                                stops is read as the whole history. */}
+                            {recordTruncated && (
+                                <Typography
+                                    level="body-xs"
+                                    data-id="import-record-truncated"
+                                    sx={{ color: 'text.tertiary', textAlign: 'center', py: 1.5 }}
+                                >
+                                    Imports older than these are not remembered.
+                                </Typography>
+                            )}
                         </Box>
 
-                        {/* Clear button */}
+                        {/* Clear button. Full width at the bottom of a phone screen, under the thumb. */}
                         {(status === 'completed' || status === 'cancelled') && (
                             <Box
-                                className="flex flex-row justify-end px-4 py-3"
-                                sx={{ borderTop: "1px solid", borderColor: "divider", flexShrink: 0 }}
+                                sx={{
+                                    display: "flex",
+                                    justifyContent: isMobile ? "stretch" : "flex-end",
+                                    px: 2,
+                                    py: 1.5,
+                                    borderTop: "1px solid",
+                                    borderColor: "divider",
+                                    flexShrink: 0,
+                                }}
                             >
-                                <Button variant="soft" color="neutral" onClick={clearImport}>
+                                <Button
+                                    data-id="import-clear-button"
+                                    variant="soft"
+                                    color="neutral"
+                                    size={isMobile ? "lg" : "md"}
+                                    onClick={clearImport}
+                                    sx={{ width: isMobile ? "100%" : undefined, minHeight: isMobile ? 48 : undefined }}
+                                    >
                                     Clear
                                 </Button>
                             </Box>
