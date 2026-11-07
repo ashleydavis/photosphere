@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+# Builds the MacOS app in Release and packs it as a .dmg and a .zip. See package-macos.md.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/apple-common.sh"
+
+apple_require_macos
+apple_require_xcode
+apple_require_tool hdiutil ditto jq
+ARCH="$(apple_host_arch)"
+OUTPUT_DIR="$APPLE_APP_DIR/out/macos"
+BUILD_DIR="$APPLE_APP_DIR/native/macos/zig-out/package"
+VERSION="$(apple_package_version)"
+APP=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --arch)
+            ARCH="$2"
+            shift 2
+            ;;
+        --output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --binary)
+            APP="$2"
+            shift 2
+            ;;
+        --version)
+            VERSION="$2"
+            shift 2
+            ;;
+        *)
+            apple_fail "unknown argument '$1'. Options: --binary, --arch, --output-dir, --version."
+            ;;
+    esac
+done
+
+BASE_NAME="photosphere-$VERSION-macos-$ARCH"
+mkdir -p "$OUTPUT_DIR" "$BUILD_DIR"
+
+# The app --binary names is packaged as it is, so the release workflow packages the build its app-build job made and smoke tested
+# rather than compiling the app a second time. Without it the release build is made here.
+if [ -z "$APP" ]; then
+    bash "$SCRIPT_DIR/build-macos.sh" --arch "$ARCH" --configuration Release --minify --native-dir "$BUILD_DIR/native" --build-dir "$BUILD_DIR/xcode"
+    APP="$BUILD_DIR/xcode/Build/Products/Release/Photosphere.app"
+fi
+[ -d "$APP" ] || apple_fail "$APP is not a directory, so there is no app to package."
+
+# The disk image holds the app and a link to /Applications. The staging directory is reused between runs and brought into
+# line with the new build.
+mkdir -p "$BUILD_DIR/dmg-staging/Photosphere.app"
+rsync -a --delete "$APP/" "$BUILD_DIR/dmg-staging/Photosphere.app/"
+ln -sfn /Applications "$BUILD_DIR/dmg-staging/Applications"
+hdiutil create -volname "Photosphere" -srcfolder "$BUILD_DIR/dmg-staging" -ov -format UDZO "$OUTPUT_DIR/$BASE_NAME.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUTPUT_DIR/$BASE_NAME.zip"
+
+echo "Packed $OUTPUT_DIR/$BASE_NAME.dmg and $OUTPUT_DIR/$BASE_NAME.zip"

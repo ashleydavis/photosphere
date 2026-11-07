@@ -1,0 +1,214 @@
+const std = @import("std");
+const utils = @import("utils-zig");
+const errors = utils.errors;
+const wrapped_error = utils.wrapped_error;
+const WrappedError = wrapped_error.WrappedError;
+
+//
+// Throws a plain error with the given message.
+//
+fn throwOriginal(message: []const u8) errors.ThrownError!void {
+    return errors.throwError("{s}", .{message});
+}
+
+//
+// Wraps the most recent error in a WrappedError with the given message.
+//
+fn throwWrapped(message: []const u8) errors.ThrownError!void {
+    return WrappedError.throw("{s}", .{message});
+}
+
+//
+// Throws `root`, wraps it in `middle`, then wraps that in `outer`.
+//
+fn throwThreeLevels() errors.ThrownError!void {
+    throwOriginal("root") catch {
+        WrappedError.throw("middle", .{}) catch {
+            return WrappedError.throw("outer", .{});
+        };
+    };
+}
+
+//
+// Throws `root cause` wrapped in `outer`.
+//
+fn throwTwoLevels() errors.ThrownError!void {
+    throwOriginal("root cause") catch {
+        return WrappedError.throw("outer", .{});
+    };
+}
+
+test "the message carries the context and the cause, because somewhere the message is all that survives" {
+    throwOriginal("original") catch {};
+    const result: errors.ThrownError!void = WrappedError.throw("context", .{});
+    try std.testing.expectError(error.Thrown, result);
+    try std.testing.expectEqualStrings("context: original", errors.lastErrorMessage());
+}
+
+test "should set cause on the standard cause property" {
+    throwOriginal("original") catch {};
+    throwWrapped("context") catch {};
+    try std.testing.expectEqualStrings("original", errors.lastErrorCauseMessage());
+}
+
+test "should be an instance of Error" {
+    throwOriginal("original") catch {};
+    throwWrapped("context") catch |err| {
+        try std.testing.expectEqual(error.Thrown, err);
+    };
+}
+
+test "should be an instance of WrappedError" {
+    throwOriginal("original") catch {};
+    throwWrapped("context") catch |err| {
+        try std.testing.expect(WrappedError.isInstance(err));
+    };
+    throwOriginal("plain") catch |err| {
+        try std.testing.expect(!WrappedError.isInstance(err));
+    };
+}
+
+test "should format a single error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    throwOriginal("something went wrong") catch |err| {
+        const result = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expect(std.mem.indexOf(u8, result, "something went wrong") != null);
+    };
+}
+
+test "should include cause in output" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    throwTwoLevels() catch |err| {
+        const result = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expect(std.mem.indexOf(u8, result, "outer") != null);
+        try std.testing.expect(std.mem.indexOf(u8, result, "root cause") != null);
+        try std.testing.expect(std.mem.indexOf(u8, result, "Caused by:") != null);
+    };
+}
+
+test "should traverse multiple levels of cause chain" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    throwThreeLevels() catch |err| {
+        const result = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expectEqualStrings("Error: outer: middle: root\nCaused by:\nError: middle: root\nCaused by:\nError: root", result);
+        try std.testing.expectEqual(@as(usize, 2), std.mem.count(u8, result, "Caused by:"));
+    };
+}
+
+test "should not append Caused by: after the last error" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    throwTwoLevels() catch |err| {
+        const result = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expect(!std.mem.endsWith(u8, std.mem.trimEnd(u8, result, " \n"), "Caused by:"));
+    };
+}
+
+test "should use stack when available" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // Zig errors have no stack: the first line of the JavaScript stack is used.
+    throwOriginal("with stack") catch |err| {
+        const result = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expectEqualStrings("Error: with stack", result);
+    };
+}
+
+//
+// Throws an error without a stack with the given message.
+//
+fn throwStackless(message: []const u8) errors.ThrownError!void {
+    return errors.throwStacklessError("{s}", .{message});
+}
+
+test "should fall back to message when stack is absent" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // Runtime Zig errors have no recorded message: the error name is used.
+    const result = try wrapped_error.formatErrorChain(arena.allocator(), error.FileNotFound);
+    try std.testing.expectEqualStrings("Error: FileNotFound", result);
+
+    // An error thrown without a stack shows its message alone.
+    throwStackless("no stack here") catch |err| {
+        const stacklessResult = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expectEqualStrings("no stack here", stacklessResult);
+    };
+}
+
+test "writeErrorChain writes the chain to a writer" {
+    var buffer: [256]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&buffer);
+    throwTwoLevels() catch |err| {
+        try wrapped_error.writeErrorChain(&fixed_writer, err);
+    };
+    try std.testing.expectEqualStrings("Error: outer: root cause\nCaused by:\nError: root cause", fixed_writer.buffered());
+}
+
+test "should not duplicate the message when the stack already contains it (V8 stacks)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    throwOriginal("already here") catch |err| {
+        const result = try wrapped_error.formatErrorChain(arena.allocator(), err);
+        try std.testing.expectEqualStrings("Error: already here", result);
+    };
+}
+
+//
+// Throws a FatalError, wraps it in `middle`, then wraps that in `outer`.
+//
+fn throwFatalTwiceWrapped() errors.ThrownError!void {
+    errors.throwFatalError("not related", .{}) catch {
+        WrappedError.throw("middle", .{}) catch {
+            return WrappedError.throw("outer", .{});
+        };
+    };
+}
+
+test "writeErrorChain shows each cause under the name its stack shows" {
+    // A FatalError cause shows "FatalError", as the first line of its JavaScript stack does, and a WrappedError
+    // shows "Error", because the class does not set a name of its own.
+    var buffer: [256]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&buffer);
+    throwFatalTwiceWrapped() catch |err| {
+        try wrapped_error.writeErrorChain(&fixed_writer, err);
+    };
+    try std.testing.expectEqualStrings("Error: outer: middle: not related\nCaused by:\nError: middle: not related\nCaused by:\nFatalError: not related", fixed_writer.buffered());
+}
+
+//
+// Throws a FatalError.
+//
+fn throwFatal(message: []const u8) errors.FatalErrorSet!void {
+    return errors.throwFatalError("{s}", .{message});
+}
+
+test "writeErrorChain shows the error under the name its stack shows" {
+    // A FatalError shows "FatalError" and an error class with a name of its own shows that name, as the first line
+    // of their JavaScript stacks do.
+    var fatalBuffer: [256]u8 = undefined;
+    var fatalWriter = std.Io.Writer.fixed(&fatalBuffer);
+    throwFatal("not related") catch |err| {
+        try wrapped_error.writeErrorChain(&fatalWriter, err);
+    };
+    try std.testing.expectEqualStrings("FatalError: not related", fatalWriter.buffered());
+
+    var namedBuffer: [256]u8 = undefined;
+    var namedWriter = std.Io.Writer.fixed(&namedBuffer);
+    errors.recordError("UnsupportedVersionError", "No deserializer found for version {d}", .{7});
+    try wrapped_error.writeErrorChain(&namedWriter, error.Thrown);
+    try std.testing.expectEqualStrings("UnsupportedVersionError: No deserializer found for version 7", namedWriter.buffered());
+}
+
+test "formatErrorChain returns a slice the caller can free on its own" {
+    // std.testing.allocator fails the test when the freed slice is not the whole allocation.
+    throwTwoLevels() catch |err| {
+        const result = try wrapped_error.formatErrorChain(std.testing.allocator, err);
+        defer std.testing.allocator.free(result);
+        try std.testing.expect(std.mem.indexOf(u8, result, "root cause") != null);
+    };
+}

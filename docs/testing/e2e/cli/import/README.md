@@ -1,5 +1,7 @@
 # CLI Import Tests
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Manual test scripts for importing files via the `psi` CLI.
 
 ## Tests
@@ -11,3 +13,4 @@ Manual test scripts for importing files via the `psi` CLI.
 - [add-multiple-files.md](add-multiple-files.md) - Add multiple files in a single command
 - [add-duplicate-content.md](add-duplicate-content.md) - Two files with identical content dedupe to one asset
 - [no-overwrite-existing-database.md](no-overwrite-existing-database.md) - `init` refuses to overwrite an existing database
+- [check-new-files.md](check-new-files.md) - `check` reports files not yet added and changes nothing

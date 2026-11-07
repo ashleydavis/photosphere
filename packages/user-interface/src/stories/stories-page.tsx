@@ -1,10 +1,12 @@
 import React, { Component, ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
+import { CssVarsProvider, useColorScheme } from "@mui/joy/styles/CssVarsProvider";
 import { log } from "utils";
 import { nextStoryIndex } from "../lib/story-navigation";
+import { usePlatform } from "../context/platform-context";
 import { stories } from "./index";
 import type { IStory, StoryCategory } from "./types";
+import { resolveInitialTheme, themeOverrideFromEnv, type ThemeMode } from "../lib/env-theme";
 
 //
 // Order in which categories are rendered as headers in the list.
@@ -23,6 +25,14 @@ export function StoriesPage(): JSX.Element {
     const [searchParams] = useSearchParams();
 
     //
+    // The stories page is mounted outside the app's provider stack with its own
+    // CssVarsProvider, so it resolves its own initial color mode: the
+    // PHOTOSPHERE_THEME build-time override when set (used by the screenshot
+    // passes), otherwise the system default.
+    //
+    const initialTheme = resolveInitialTheme(themeOverrideFromEnv(), "system");
+
+    //
     // Cycle mode is enabled by the smoke test via ?cycle=1. It renders a
     // dedicated component that walks the entire story registry instead of
     // the normal two-pane layout.
@@ -32,25 +42,47 @@ export function StoriesPage(): JSX.Element {
         const parsedDuration = durationParam ? parseInt(durationParam, 10) : NaN;
         const durationMs = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 1000;
         return (
-            <CssVarsProvider>
+            <CssVarsProvider defaultMode={initialTheme}>
                 <StoriesCycle stories={stories} durationMs={durationMs} />
             </CssVarsProvider>
         );
     }
 
     return (
-        <CssVarsProvider>
+        <CssVarsProvider defaultMode={initialTheme}>
             <StoriesBrowser />
         </CssVarsProvider>
     );
 }
 
 //
-// The interactive two-pane browser shown when cycle mode is not enabled.
+// The interactive browser shown when cycle mode is not enabled. The story list
+// lives in an overlay drawer and the navigation controls float over the
+// rendered story, so the layout is identical on every platform.
 //
 function StoriesBrowser(): JSX.Element {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchText, setSearchText] = useState<string>("");
+
+    //
+    // Platform abstraction, used here to toggle the developer tools without the
+    // shared UI knowing which inspector (native dev tools or an in-page console)
+    // the current platform uses.
+    //
+    const platform = usePlatform();
+
+    //
+    // Current color mode and setter, used by the light/dark toggle button. setMode
+    // writes localStorage only (never the config file), so toggling here does not
+    // change the app's saved theme.
+    //
+    const { mode, setMode } = useColorScheme();
+
+    //
+    // Whether the overlay sidebar drawer is open. The drawer is the only way to
+    // reach the story list, on every platform.
+    //
+    const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
 
     const selectedId = searchParams.get("id") || undefined;
     const selectedStory = selectedId
@@ -126,29 +158,67 @@ function StoriesBrowser(): JSX.Element {
         setSearchParams({ id: orderedStories[nextIndex].id });
     }
 
-    const selectedIndex = selectedId
-        ? orderedStories.findIndex(story => story.id === selectedId)
-        : -1;
+    //
+    // Divider colour reused across the sidebar and toolbar borders.
+    //
+    const borderColor = "var(--joy-palette-divider, #ddd)";
+
+    //
+    // The sidebar is an overlay drawer that slides in from the left over the
+    // content and is dismissed by the backdrop or by picking a story.
+    //
+    const asideStyle: React.CSSProperties = {
+        width: "280px",
+        maxWidth: "85vw",
+        borderColor,
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        zIndex: 30,
+        background: "var(--joy-palette-background-body)",
+        transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform 0.2s ease",
+        boxShadow: drawerOpen ? "0 0 20px rgba(0, 0, 0, 0.3)" : "none",
+    };
 
     return (
-        <div className="flex h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+        <div data-id="stories-page" className="flex h-screen w-screen relative" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+            {drawerOpen
+                && <div
+                    className="absolute inset-0 z-20"
+                    style={{ background: "rgba(0, 0, 0, 0.4)" }}
+                    onClick={() => setDrawerOpen(false)}
+                    data-testid="stories-drawer-backdrop"
+                    />
+            }
+
             <aside
                 className="flex flex-col border-r"
-                style={{ width: "280px", borderColor: "var(--joy-palette-divider, #ddd)" }}
+                style={asideStyle}
                 >
-                <div className="p-3 flex flex-col gap-2 border-b" style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}>
+                <div className="p-3 flex flex-col gap-2 border-b" style={{ borderColor }}>
                     <input
                         type="text"
                         value={searchText}
                         onChange={event => setSearchText(event.target.value)}
                         placeholder="Filter stories"
                         className="px-2 py-1 rounded border w-full"
-                        style={{ borderColor: "var(--joy-palette-divider, #ddd)", background: "transparent", color: "inherit" }}
+                        style={{ borderColor, background: "transparent", color: "inherit" }}
                         data-testid="stories-search-input"
                         />
-                    <Link to="/" className="text-sm underline" data-testid="stories-back-link">
+                    <Link to="/" className="text-sm underline" data-id="stories-back-link" data-testid="stories-back-link">
                         Back to app
                     </Link>
+                    <button
+                        type="button"
+                        onClick={() => setSearchParams({ cycle: "1" })}
+                        className="text-sm px-2 py-1 rounded border w-full"
+                        style={{ borderColor, background: "transparent", color: "inherit" }}
+                        data-testid="stories-play-button"
+                        >
+                        ▶ Play on automatic
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-auto p-2">
@@ -167,7 +237,10 @@ function StoriesBrowser(): JSX.Element {
                                             <li key={story.id}>
                                                 <button
                                                     type="button"
-                                                    onClick={() => selectStory(story)}
+                                                    onClick={() => {
+                                                        selectStory(story);
+                                                        setDrawerOpen(false);
+                                                    }}
                                                     className="text-left px-2 py-1 w-full rounded"
                                                     style={{
                                                         background: isActive ? "var(--joy-palette-primary-softBg, #e3f2fd)" : "transparent",
@@ -187,48 +260,76 @@ function StoriesBrowser(): JSX.Element {
                 </div>
             </aside>
 
-            <main className="flex-1 flex flex-col overflow-hidden">
-                <div
-                    className="flex items-center gap-2 p-2 border-b"
-                    style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
+            <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+                <button
+                    type="button"
+                    onClick={() => setDrawerOpen(true)}
+                    className="absolute top-2 left-2 z-10 px-2 py-1 text-sm rounded border"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-menu-button"
+                    aria-label="Open stories list"
                     >
-                    <button
-                        type="button"
-                        onClick={() => navigateStories(-1)}
-                        className="px-2 py-1 rounded border"
-                        style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
-                        data-testid="stories-prev-button"
-                        >
-                        ◀ Prev
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => navigateStories(1)}
-                        className="px-2 py-1 rounded border"
-                        style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
-                        data-testid="stories-next-button"
-                        >
-                        Next ▶
-                    </button>
-                    {selectedStory && selectedIndex !== -1
-                        && <span className="text-sm opacity-70" data-testid="stories-position">
-                            {`${selectedIndex + 1} / ${orderedStories.length} — ${selectedStory.name}`}
-                        </span>
-                    }
-                </div>
+                    ☰
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMode(mode === "dark" ? "light" : "dark")}
+                    className="absolute top-2 right-16 z-10 px-2 py-1 text-sm rounded border"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-theme-button"
+                    aria-label="Toggle light or dark theme"
+                    >
+                    {mode === "dark" ? "☀" : "🌙"}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => platform.toggleDevTools()}
+                    className="absolute top-2 right-5 z-10 px-2 py-1 text-sm rounded border"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-devtools-button"
+                    aria-label="Toggle developer tools"
+                    >
+                    {"</>"}
+                </button>
                 <div className="flex-1 overflow-auto">
                     {!selectedId
-                        && <div className="p-6 opacity-70">Select a story</div>
+                        && <div className="h-full w-full flex items-center justify-center p-6" data-testid="stories-empty-help">
+                            <div className="max-w-md text-center opacity-70 flex flex-col gap-3">
+                                <div className="text-lg font-semibold">Story browser</div>
+                                <div>Each story renders one page, dialog, or component on its own so it can be built and checked in isolation.</div>
+                                <div>Open the <span className="font-semibold">☰</span> menu at the top-left to pick a story, or step through them with the <span className="font-semibold">◀</span> and <span className="font-semibold">▶</span> buttons in the bottom corners.</div>
+                            </div>
+                        </div>
                     }
                     {selectedId && !selectedStory
                         && <div className="p-6 opacity-70" data-testid="stories-unknown-story">{`Unknown story: ${selectedId}`}</div>
                     }
                     {selectedStory
-                        && <div key={selectedStory.id} className="h-full w-full p-6" data-testid={`stories-render-${selectedStory.id}`}>
+                        && <div key={selectedStory.id} className="h-full w-full p-2" data-testid={`stories-render-${selectedStory.id}`}>
                             {selectedStory.render()}
                         </div>
                     }
                 </div>
+                <button
+                    type="button"
+                    onClick={() => navigateStories(-1)}
+                    className="absolute bottom-5 left-5 z-10 w-14 h-14 rounded-full border flex items-center justify-center text-2xl"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-prev-button"
+                    aria-label="Previous story"
+                    >
+                    ◀
+                </button>
+                <button
+                    type="button"
+                    onClick={() => navigateStories(1)}
+                    className="absolute bottom-5 right-5 z-10 w-14 h-14 rounded-full border flex items-center justify-center text-2xl"
+                    style={{ borderColor, background: "var(--joy-palette-background-surface, rgba(255, 255, 255, 0.9))", boxShadow: "0 1px 6px rgba(0, 0, 0, 0.25)" }}
+                    data-testid="stories-next-button"
+                    aria-label="Next story"
+                    >
+                    ▶
+                </button>
             </main>
         </div>
     );
@@ -253,15 +354,59 @@ interface IStoriesCycleProps {
 // Renders each story in sequence, dwelling on each for `durationMs`,
 // emitting log lines that the cycle smoke test reads to detect crashes.
 //
+//
+// One step of the cycle: a story shown in a particular color mode.
+//
+interface ICycleStep {
+    // Color mode to apply while this story is shown.
+    theme: ThemeMode;
+
+    // The story to render.
+    story: IStory;
+}
+
 function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps): JSX.Element {
+    //
+    // Steps to walk: every story in each theme. When PHOTOSPHERE_THEME forces a
+    // single theme (the screenshot passes) only that theme is walked; otherwise
+    // "Play on automatic" shows every story in light and then dark.
+    //
+    const steps: ICycleStep[] = useMemo(() => {
+        //
+        // Show every story in light and then dark, back to back, so each one can
+        // be compared across both themes as the cycle plays.
+        //
+        const themes: ThemeMode[] = ["light", "dark"];
+        return cycleStories.flatMap(story => themes.map(theme => ({ theme, story })));
+    }, [cycleStories]);
+
     const [index, setIndex] = useState<number>(0);
     const [results, setResults] = useState<{ pass: number; fail: number }>({ pass: 0, fail: 0 });
+
+    //
+    // Applies the current step's theme via MUI Joy's setMode (writes localStorage
+    // only, never the config file). Kept in its own effect and idempotent, so it
+    // is safe even if setMode's identity changes between renders.
+    //
+    const { setMode } = useColorScheme();
+    useEffect(() => {
+        if (index < steps.length) {
+            setMode(steps[index].theme);
+        }
+    }, [index, steps, setMode]);
+
+    //
+    // Lets the interactive "Play on automatic" mode exit back to the story
+    // browser by clearing the cycle query param. The smoke test drives the
+    // cycle purely by URL and log events, so it never uses this control.
+    //
+    const [, setSearchParams] = useSearchParams();
 
     //
     // Emit the start banner once on first mount.
     //
     useEffect(() => {
-        log.event(`STORIES CYCLE START: ${cycleStories.length} stories, ${durationMs}ms each`);
+        log.event(`STORIES CYCLE START: ${steps.length} stories, ${durationMs}ms each`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -274,11 +419,11 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
     // story has a clean slate.
     //
     useEffect(() => {
-        if (index >= cycleStories.length) {
+        if (index >= steps.length) {
             return;
         }
 
-        const current = cycleStories[index];
+        const current = steps[index].story;
         let asyncError: Error | undefined = undefined;
         let advanced = false;
 
@@ -327,7 +472,7 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
 
         const settleMs = Math.min(200, durationMs);
         const readyTimer = setTimeout(() => {
-            log.event(`STORIES CYCLE READY: ${current.category}|${current.id}`);
+            log.event(`STORIES CYCLE READY: ${steps[index].theme}|${current.category}|${current.id}`);
         }, settleMs);
 
         const dwellTimer = setTimeout(advance, durationMs);
@@ -339,32 +484,59 @@ function StoriesCycle({ stories: cycleStories, durationMs }: IStoriesCycleProps)
             clearTimeout(readyTimer);
             clearTimeout(dwellTimer);
         };
-    }, [index, cycleStories, durationMs]);
+    }, [index, steps, durationMs]);
 
     //
-    // Emit the completion banner once we have walked past the last story.
+    // Emit the completion banner once we have walked past the last step.
     //
     useEffect(() => {
-        if (index >= cycleStories.length) {
+        if (index >= steps.length) {
             log.event(`STORIES CYCLE COMPLETE: ${results.pass} passed, ${results.fail} failed`);
         }
-    }, [index, cycleStories.length, results]);
+    }, [index, steps.length, results]);
 
-    if (index >= cycleStories.length) {
+    if (index >= steps.length) {
         return (
-            <div className="p-6">
+            <div className="p-6 h-screen w-screen" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
                 <h2>Cycle complete</h2>
                 <p>{`${results.pass} passed, ${results.fail} failed`}</p>
+                <button
+                    type="button"
+                    onClick={() => setSearchParams({})}
+                    className="mt-3 text-sm px-3 py-1 rounded border"
+                    style={{ borderColor: "var(--joy-palette-divider, #ddd)" }}
+                    data-testid="stories-cycle-back-button"
+                    >
+                    Back to browser
+                </button>
             </div>
         );
     }
 
-    const current = cycleStories[index];
+    const current = steps[index].story;
+    //
+    // Lay the cycle out as a column so the story fills exactly the space the toolbar leaves. Without
+    // this the story sits in an unconstrained block below the toolbar, so a full-height story (the
+    // map and gallery pages) renders taller than the viewport and its bottom is pushed off screen,
+    // which looks like a layout bug in the page when it is really an artifact of the harness.
+    //
     return (
-        <div className="h-screen w-screen">
-            <div className="p-2 text-xs opacity-70">{`Cycle: ${index + 1}/${cycleStories.length} — ${current.id}`}</div>
-            <div className="p-6">
-                <StoryErrorBoundary storyId={current.id}>
+        <div className="h-screen w-screen flex flex-col" style={{ background: "var(--joy-palette-background-body)", color: "var(--joy-palette-text-primary)" }}>
+            <div className="p-2 text-xs flex items-center gap-3 flex-shrink-0">
+                <button
+                    type="button"
+                    onClick={() => setSearchParams({})}
+                    className="w-7 h-7 rounded border flex items-center justify-center"
+                    style={{ borderColor: "var(--joy-palette-divider, #ddd)", background: "var(--joy-palette-background-surface)", color: "var(--joy-palette-text-primary)" }}
+                    data-testid="stories-cycle-stop-button"
+                    aria-label="Cancel playback"
+                    >
+                    ✕
+                </button>
+                <span style={{ opacity: 0.7 }}>{`${index + 1}/${steps.length} — ${steps[index].theme} — ${current.id}`}</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto p-2">
+                <StoryErrorBoundary key={index} storyId={current.id}>
                     {current.render()}
                 </StoryErrorBoundary>
             </div>

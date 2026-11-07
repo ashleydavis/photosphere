@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# Mobile-only test, because the desktop suite has no prefetch test.
+# Exercises the prefetch-database handler registered in mobile-worker-entry.ts: replicates a
+# database partially (a partial replica copies only the merkle trees, not thumbnails), opens the
+# partial replica so load-assets fire-and-forget queues a prefetch-database task, and asserts the
+# prefetch copied the missing thumbnails into the local replica on device. Without the handler the
+# partial database silently never prefetches and its gallery stays blank.
+#
+# The source database is opened exactly once here (the auto-open when its entry is added). Opening it
+# a second time would cancel its task source, after which the replicate task queued against that same
+# source is dropped and never runs.
+
+TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$TEST_DIR/../lib/common.sh"
+
+print_test_header 64 "prefetch-database"
+
+trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
+
+# Wipe everything the app has stored on the device (its storage sandbox, the WebView's
+# localStorage and the keychain) so this test starts from a known state. Done before launch,
+# with the app stopped, so nothing can write state back underneath it.
+"${PLATFORM}_reset_app_state" || exit 1
+
+start_app "$TMP_DIR"
+wait_for_ready "$APP_PORT"
+
+# Create a source database with one real asset (so it has a thumbnail to prefetch)
+# and copy it into the app sandbox. Clear any partial replica from a previous run so the destination
+# starts empty.
+"${PLATFORM}_reset_path" "dest-partial"
+create_database "$TMP_DIR/source-db" "$REPO_DIR/test/multiple-files/test-1.jpeg"
+"${PLATFORM}_seed_database" "$TMP_DIR/source-db" "source-db"
+
+# Register the source database, then replicate it partially. The partial replica copies only the
+# merkle trees and README (no thumb/ directory), and records origin = the source path.
+send_command "$APP_PORT" navigate '{"page":"databases"}' || exit 1
+wait_for_log "$TMP_DIR" "Databases page loaded"
+
+send_command "$APP_PORT" click '{"dataId":"page-actions-menu"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"add-database-button"}' || exit 1
+wait_for_log "$TMP_DIR" "Add database dialog opened"
+
+send_command "$APP_PORT" type '{"dataId":"database-name-input","text":"Source DB"}' || exit 1
+# A user on a phone types the short name, which the app resolves into its own storage. A desktop user types the full path.
+case "$PLATFORM" in
+    android|ios)
+        send_command "$APP_PORT" type '{"dataId":"database-path-input","text":"source-db"}' || exit 1
+        ;;
+    *)
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "source-db")" '{dataId: "database-path-input", text: $text}')" || exit 1
+        ;;
+esac
+send_command "$APP_PORT" click '{"dataId":"add-database-confirm"}' || exit 1
+wait_for_log "$TMP_DIR" "Database entry added"
+
+# Adding the entry also opens that database, which re-renders the card list. That open runs after
+# "Database entry added" is logged, so it is waited for here, before anything else is logged that a
+# log wait could anchor on after it. It has to settle before the menu is opened: otherwise it lands
+# mid-test and tears the menu down before the action can be clicked, and the click falls through to
+# the card and merely re-opens the database. The open leaves the databases page on screen and emits
+# its own "Databases page loaded" render after "Database opened", so that render is waited for too.
+wait_for_log "$TMP_DIR" "Database opened"
+wait_for_log "$TMP_DIR" "Databases page loaded"
+wait_for_value "$APP_PORT" database-photo-count "photos"
+
+send_command "$APP_PORT" click '{"dataId":"entity-actions-menu"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"replicate-database-button"}' || exit 1
+wait_for_log "$TMP_DIR" "Replicate database dialog opened"
+
+case "$PLATFORM" in
+    android|ios)
+        send_command "$APP_PORT" type '{"dataId":"replicate-dest-path-input","text":"dest-partial"}' || exit 1
+        ;;
+    *)
+        send_command "$APP_PORT" type "$(jq -cn --arg text "$("${PLATFORM}_app_path" "dest-partial")" '{dataId: "replicate-dest-path-input", text: $text}')" || exit 1
+        ;;
+esac
+send_command "$APP_PORT" click '{"dataId":"replicate-mode-partial"}' || exit 1
+send_command "$APP_PORT" click '{"dataId":"replicate-start-button"}' || exit 1
+wait_for_log "$TMP_DIR" "Replication completed for"
+send_command "$APP_PORT" click '{"dataId":"replicate-close-button"}' || exit 1
+
+# Open the partial replica from the database list, where the replication registered it after the source. load-assets sees the
+# partial flag and fire-and-forget queues a prefetch-database task, which copies the missing thumbnails from origin (the source
+# database) into the local replica.
+click_sidebar_item "$APP_PORT" open-database || exit 1
+wait_for_log "$TMP_DIR" "Open database dialog opened"
+wait_for_value "$APP_PORT" "database-list-item-1" "dest-partial"
+send_command "$APP_PORT" click '{"dataId":"database-list-item-1"}' || exit 1
+wait_for_log "$TMP_DIR" "Load assets task completed"
+
+# The prefetch is proven by its effect on device storage: the partial replica's thumb directory,
+# absent after a partial replicate, becomes non-empty once prefetch-database has run. If the handler
+# were unregistered the directory would stay absent and this wait would time out.
+if ! "${PLATFORM}_wait_for_file" "dest-partial/thumb"; then
+    log_error "Partial database did not prefetch: dest-partial/thumb never appeared on device"
+    exit 1
+fi
+log_success "Partial database prefetched thumbnails into the local replica"
+
+# Thumbnail fetches require the not-yet-built mobile asset-serving layer; ignore only those errors.
+check_no_errors "$TMP_DIR" 'Failed to load asset: thumb:|Network Error' || exit 1
+
+log_success "Test 64 passed: prefetch-database"

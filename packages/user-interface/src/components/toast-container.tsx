@@ -29,6 +29,7 @@ function ToastItem({ toast }: { toast: IToast }) {
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
                     {toast.action && (
                         <Button
+                            data-id="toast-action"
                             size="sm"
                             variant="soft"
                             color={toast.color}
@@ -59,9 +60,10 @@ function ToastItem({ toast }: { toast: IToast }) {
             }
         >
             <div>
-                <div>{toast.message}</div>
+                <div data-id="toast-message">{toast.message}</div>
                 {toast.link && (
                     <a
+                        data-id="toast-link"
                         href={toast.link.url}
                         target="_blank"
                         rel="noopener noreferrer"

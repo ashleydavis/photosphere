@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -15,6 +13,7 @@ import ListItem from '@mui/joy/ListItem';
 import ListItemButton from '@mui/joy/ListItemButton';
 import { usePlatform } from '../context/platform-context';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 export interface IS3BrowserModalProps {
     // Whether the modal is visible.
@@ -26,7 +25,7 @@ export interface IS3BrowserModalProps {
     // Called when the modal should close without a selection.
     onClose: () => void;
 
-    // Called with the selected S3 path string (format: "s3:bucket:/prefix").
+    // Called with the selected S3 path string (format: "s3:bucket/prefix").
     onSelect: (path: string) => void;
 }
 
@@ -109,7 +108,11 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
     // Builds and returns the selected S3 path string.
     //
     function handleSelectLocation(): void {
-        const selectedPath = `s3:${bucket}:/${prefix}`;
+        // The bucket and the key within it are separated by a slash, not a colon. A "bucket:" segment
+        // is not a valid S3 path: the storage layer takes everything before the first slash as the
+        // bucket name, so the colon ended up in the bucket name and the server rejected the request
+        // as InvalidBucketName. Every location chosen here used to be recorded in that unusable form.
+        const selectedPath = `s3:${bucket}/${prefix}`;
         onSelect(selectedPath);
     }
 
@@ -136,55 +139,63 @@ export function S3BrowserModal({ open, s3Key, onClose, onSelect }: IS3BrowserMod
     }
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)} sx={{ minWidth: 520, maxWidth: 740, overflowY: 'auto' }}>
-                <DialogTitle>Browse S3</DialogTitle>
-                <DialogContent>
-                    <FormControl sx={{ mb: 2 }}>
-                        <FormLabel>Bucket</FormLabel>
-                        <Input
-                            value={bucket}
-                            onChange={event => handleBucketChange(event.target.value)}
-                            placeholder="my-bucket-name"
-                        />
-                    </FormControl>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={520}
+            maxWidth={740}
+            onKeyDown={createDialogKeyHandler(handleSelectLocation, !bucket)}
+            >
+            <DialogTitle>Browse S3</DialogTitle>
+            <DialogContent>
+                <FormControl sx={{ mb: 2 }}>
+                    <FormLabel>Bucket</FormLabel>
+                    <Input
+                        data-id="s3-browser-bucket-input"
+                        value={bucket}
+                        onChange={event => handleBucketChange(event.target.value)}
+                        placeholder="my-bucket-name"
+                    />
+                </FormControl>
 
-                    {bucket && renderBreadcrumbs()}
+                {bucket && renderBreadcrumbs()}
 
-                    {listError && (
-                        <Typography level="body-sm" color="danger" sx={{ mb: 1 }}>
-                            {listError}
-                        </Typography>
-                    )}
+                {listError && (
+                    <Typography data-id="s3-browser-error" level="body-sm" color="danger" sx={{ mb: 1 }}>
+                        {listError}
+                    </Typography>
+                )}
 
-                    {entries.length > 0 && (
-                        <List size="sm" sx={{ maxHeight: 300, overflowY: 'auto' }}>
-                            {entries.map(dirName => (
-                                <ListItem key={dirName}>
-                                    <ListItemButton onClick={() => handleNavigate(dirName)}>
-                                        {dirName}/
-                                    </ListItemButton>
-                                </ListItem>
-                            ))}
-                        </List>
-                    )}
+                {entries.length > 0 && (
+                    <List size="sm" sx={{ maxHeight: 300, overflowY: 'auto' }}>
+                        {entries.map((dirName, entryIndex) => (
+                            <ListItem key={dirName}>
+                                <ListItemButton
+                                    data-id={`s3-browser-dir-${entryIndex}`}
+                                    onClick={() => handleNavigate(dirName)}
+                                    >
+                                    {dirName}/
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                    </List>
+                )}
 
-                    {bucket && entries.length === 0 && !listError && (
-                        <Typography level="body-sm" sx={{ mt: 1 }}>
-                            No sub-directories found here.
-                        </Typography>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button
-                        disabled={!bucket}
-                        onClick={handleSelectLocation}
-                    >
-                        Select this location
-                    </Button>
-                </DialogActions>
-            </ModalDialog>
-        </Modal>
+                {bucket && entries.length === 0 && !listError && (
+                    <Typography level="body-sm" sx={{ mt: 1 }}>
+                        No sub-directories found here.
+                    </Typography>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button data-id="s3-browser-cancel" variant="plain" onClick={onClose}>Cancel</Button>
+                <Button
+                    disabled={!bucket}
+                    onClick={handleSelectLocation}
+                >
+                    Select this location
+                </Button>
+            </DialogActions>
+        </ResponsiveDialog>
     );
 }

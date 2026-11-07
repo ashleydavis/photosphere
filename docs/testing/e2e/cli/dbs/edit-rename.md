@@ -1,52 +1,46 @@
 # CLI Manual Test: `dbs edit` (Rename)
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `dbs edit --new-name` renames a database entry.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
+From the repo root, build the CLI, put it on the PATH, point the CLI at an empty config directory and seed a database entry:
 
 ```bash
-cd apps/cli/
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-dbs-edit-rename
+mkdir -p /tmp/psi-cli-dbs-edit-rename/config
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-dbs-edit-rename/config
+cat > /tmp/psi-cli-dbs-edit-rename/config/databases.toml <<'TOML'
+[[databases]]
+name = "edit-db"
+description = ""
+path = "/tmp/psi-cli-dbs-edit-rename/db"
+TOML
 ```
 
-## Steps
+Expected: no output.
 
-### 1. Point the CLI at an empty config directory
+## Test
 
-```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-```
-
----
-
-### 2. Seed a database entry
+### 1. Rename it
 
 ```bash
-cat > /tmp/psi-test/config/databases.json <<'EOF'
-[{"name":"edit-db","description":"","path":"/tmp/psi-test/edit-db"}]
-EOF
-```
-
----
-
-### 3. Rename it
-
-```bash
-bun run start -- dbs edit --name edit-db --yes --new-name renamed-db
+psi dbs edit --name edit-db --yes --new-name renamed-db
 ```
 
 Expected:
 - The command exits successfully.
 
----
+## Check
 
-### 4. Confirm the new name is listed
+### 2. Confirm the new name is listed
 
 ```bash
-bun run start -- dbs list
+psi dbs list
 ```
 
 Expected:

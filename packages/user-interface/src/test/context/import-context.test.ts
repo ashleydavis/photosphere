@@ -97,6 +97,11 @@ describe("importDirectories", () => {
                 storageDescriptor: { databasePath: "/db" },
                 sessionId: "session-id",
                 dryRun: false,
+                job: {
+                    id: "session-id",
+                    name: "Importing photos",
+                    cancelSource: "session-id",
+                },
             },
             "session-id",
         );
@@ -137,6 +142,11 @@ describe("importDirectories", () => {
                 storageDescriptor: { databasePath: "/db" },
                 sessionId: "session-id",
                 dryRun: false,
+                job: {
+                    id: "session-id",
+                    name: "Importing photos",
+                    cancelSource: "session-id",
+                },
             },
             "session-id",
         );
@@ -194,6 +204,11 @@ describe("importFiles", () => {
                 storageDescriptor: { databasePath: "/db" },
                 sessionId: "session-id",
                 dryRun: false,
+                job: {
+                    id: "session-id",
+                    name: "Importing photos",
+                    cancelSource: "session-id",
+                },
             },
             "session-id",
         );
@@ -247,6 +262,11 @@ describe("importFiles", () => {
                 storageDescriptor: { databasePath: "/db" },
                 sessionId: "session-id",
                 dryRun: false,
+                job: {
+                    id: "session-id",
+                    name: "Importing photos",
+                    cancelSource: "session-id",
+                },
             },
             "session-id",
         );

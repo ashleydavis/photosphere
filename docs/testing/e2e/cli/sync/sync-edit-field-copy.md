@@ -1,58 +1,37 @@
 # CLI Manual Test: Sync After Editing a Field (Copy Side)
 
-Test that a field edit made via `bdb-cli` on the **copy** database is reflected
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
+Test that a field edit made via `psi debug set-field` on the **copy** database is reflected
 in the original after `sync`.
 
-## Prerequisites
+`psi debug set-field` changes one field of a record directly, and `psi debug record` shows a record.
 
-Navigate to the CLI source directory:
+## Prep
 
-```bash
-cd apps/cli/
-```
-
-The `bdb-cli` binary is the BSON database CLI used by the smoke tests to mutate
-records directly. The smoke-test runner uses a `get_bdb_command` helper for
-this — pick whichever invocation matches your local checkout.
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then edit a field on a known record in the **copy**:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-edit-field-copy
+mkdir -p /tmp/psi-cli-sync-sync-edit-field-copy
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-edit-field-copy/original
+psi replicate --db /tmp/psi-cli-sync-sync-edit-field-copy/original --dest /tmp/psi-cli-sync-sync-edit-field-copy/copy --yes --force
+psi debug set-field 89171cd9-a652-4047-b869-1154bf2c95a1 description "Edited on copy" --db /tmp/psi-cli-sync-sync-edit-field-copy/copy --yes
 ```
 
 Expected:
 - Replication completes successfully.
+- The edit prints `Successfully updated field`.
 
----
+## Test
 
-### 3. Edit a field on a known record in the **copy**
-
-```bash
-<bdb-cli> edit /tmp/psi-test/copy/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 description string "Edited on copy"
-```
-
-Expected:
-- Output includes `Successfully updated field`.
-
----
-
-### 4. Confirm root hashes now differ
+### 1. Confirm root hashes now differ
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/copy
 ```
 
 Expected:
@@ -60,23 +39,25 @@ Expected:
 
 ---
 
-### 5. Sync
+### 2. Sync
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-edit-field-copy/original --dest /tmp/psi-cli-sync-sync-edit-field-copy/copy --yes
 ```
 
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 6. Confirm the field is now also present on the original
+### 3. Confirm the field is now also present on the original
 
 ```bash
-<bdb-cli> record /tmp/psi-test/original/.db/bson metadata 89171cd9-a652-4047-b869-1154bf2c95a1 --all
+psi debug record 89171cd9-a652-4047-b869-1154bf2c95a1 --db /tmp/psi-cli-sync-sync-edit-field-copy/original --all --yes
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/original
+psi root-hash --db /tmp/psi-cli-sync-sync-edit-field-copy/copy
 ```
 
 Expected:
-- Output contains `Edited on copy`.
+- The record output contains `Edited on copy`.
 - The root hashes for original and copy now match again.

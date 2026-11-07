@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { log } from 'utils';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
+import { ResponsiveDialog } from './responsive-dialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -64,13 +63,31 @@ function tryParse(valueJson: string): IParsedSecretValue | undefined {
 }
 
 //
+// Props for the labelled read-only field row.
+//
+interface IFieldProps {
+    // The field label shown above the value.
+    label: string;
+
+    // The revealed value shown in the field.
+    value: string;
+
+    // Whether to render the value as pre-formatted multiline text (used for PEM blocks).
+    multiline?: boolean;
+
+    // Optional data-id on the value box so smoke tests can read the revealed value back.
+    dataId?: string;
+}
+
+//
 // Labelled read-only field row.
 //
-function Field({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
+function Field({ label, value, multiline, dataId }: IFieldProps) {
     return (
         <Box sx={{ mb: 1.5 }}>
             <Typography level="body-sm" sx={{ fontWeight: 'lg', mb: 0.5 }}>{label}</Typography>
             <Box
+                data-id={dataId}
                 component={multiline ? 'pre' : 'div'}
                 sx={{
                     fontFamily: 'monospace',
@@ -109,6 +126,16 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         }
     }, [open]);
 
+    // Log that the value is revealed only once React has committed the revealed fields to the DOM.
+    // Logging it straight after setRevealed (the same tick, before the commit) made the line arrive
+    // while the fields were still empty, so a smoke test that waits for it and immediately reads a field
+    // could read the pre-render value and conclude the secret had been lost.
+    useEffect(() => {
+        if (revealed) {
+            log.info('Secret revealed');
+        }
+    }, [revealed]);
+
     //
     // Fetches and reveals the secret value.
     //
@@ -118,7 +145,6 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         setSecretValue(value);
         setRevealed(true);
         setLoading(false);
-        log.info('Secret revealed');
     }
 
     //
@@ -132,17 +158,17 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
         if (secret.type === 's3-credentials') {
             return (
                 <>
-                    <Field label="Endpoint" value={parsed?.endpoint ?? ''} />
-                    <Field label="Region" value={parsed?.region ?? ''} />
-                    <Field label="Access Key ID" value={parsed?.accessKeyId ?? ''} />
-                    <Field label="Secret Access Key" value={parsed?.secretAccessKey ?? ''} />
+                    <Field label="Endpoint" value={parsed?.endpoint ?? ''} dataId="revealed-secret-endpoint" />
+                    <Field label="Region" value={parsed?.region ?? ''} dataId="revealed-secret-region" />
+                    <Field label="Access Key ID" value={parsed?.accessKeyId ?? ''} dataId="revealed-secret-access-key-id" />
+                    <Field label="Secret Access Key" value={parsed?.secretAccessKey ?? ''} dataId="revealed-secret-secret-access-key" />
                 </>
             );
         }
         if (secret.type === 'encryption-key') {
-            return <Field label="Private Key PEM" value={parsed?.privateKeyPem ?? secretValue} multiline />;
+            return <Field label="Private Key PEM" value={parsed?.privateKeyPem ?? secretValue} multiline dataId="revealed-secret-private-key-pem" />;
         }
-        return <Field label="API Key" value={parsed?.apiKey ?? secretValue} />;
+        return <Field label="API Key" value={parsed?.apiKey ?? secretValue} dataId="revealed-secret-api-key" />;
     }
 
     //
@@ -158,19 +184,24 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
     }
 
     return (
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog onKeyDown={createDialogKeyHandler(handleConfirm, loading)} sx={{ minWidth: 480, maxWidth: 680 }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={480}
+            maxWidth={680}
+            onKeyDown={createDialogKeyHandler(handleConfirm, loading)}
+            >
                 <DialogTitle>View Secret</DialogTitle>
                 <DialogContent>
-                    <Typography level="body-md" sx={{ mb: 1 }}>
+                    <Typography data-id="view-secret-name" level="body-md" sx={{ mb: 1 }}>
                         <strong>Name:</strong> {secret.name}
                     </Typography>
-                    <Typography level="body-md" sx={{ mb: 2 }}>
+                    <Typography data-id="view-secret-type" level="body-md" sx={{ mb: 2 }}>
                         <strong>Type:</strong> {secret.type}
                     </Typography>
                     {!revealed
                         ? (
-                            <Typography sx={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+                            <Typography data-id="hidden-secret-value" sx={{ fontFamily: 'monospace', letterSpacing: '0.1em' }}>
                                 ••••••••••
                             </Typography>
                         )
@@ -178,7 +209,7 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
                     }
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Close</Button>
+                    <Button data-id="view-secret-close-button" variant="plain" onClick={onClose}>Close</Button>
                     {!revealed && (
                         <Button
                             data-id="reveal-secret-button"
@@ -190,7 +221,6 @@ export function ViewSecretDialog({ open, secret, onClose, getSecretValue }: IVie
                         </Button>
                     )}
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
     );
 }

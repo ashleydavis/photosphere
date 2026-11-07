@@ -1,0 +1,809 @@
+const std = @import("std");
+const vault_zig = @import("vault-zig");
+const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
+const builtin = @import("builtin");
+const PlaintextVault = vault_zig.plaintext_vault.PlaintextVault;
+const ISecret = vault_zig.vault.ISecret;
+
+//
+// A unique temporary directory for one test, so that tests are fully isolated from one another
+// and from the real ~/.config/photosphere/vault.
+//
+const TempDir = struct {
+    // The directory created by std.testing.tmpDir.
+    tmp_dir: std.testing.TmpDir,
+
+    // The path of the directory relative to the working directory.
+    path: []const u8,
+
+    //
+    // Removes the temporary directory and all its contents after a test.
+    //
+    fn remove(self: *TempDir) void {
+        self.tmp_dir.cleanup();
+    }
+};
+
+//
+// Creates a unique temporary directory for a test.
+//
+fn makeTempDir(allocator: std.mem.Allocator) !TempDir {
+    const tmp_dir = std.testing.tmpDir(.{ .iterate = true });
+    const path = try std.fs.path.join(allocator, &.{ ".zig-cache", "tmp", &tmp_dir.sub_path });
+    return .{ .tmp_dir = tmp_dir, .path = path };
+}
+
+//
+// Returns the Unix permission bits of a file or directory.
+//
+fn permissionBits(io: std.Io, path: []const u8) !u32 {
+    const stat = try std.Io.Dir.cwd().statFile(io, path, .{});
+    return @intCast(@intFromEnum(stat.permissions) & 0o777);
+}
+
+//
+// Orders secrets by name.
+//
+fn secretNameLessThan(context: void, left: ISecret, right: ISecret) bool {
+    _ = context;
+    return std.mem.order(u8, left.name, right.name) == .lt;
+}
+
+test "returns undefined for a secret that does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    const result = try vault.get(allocator, std.testing.io, "nonexistent");
+    try std.testing.expect(result == null);
+}
+
+test "returns the secret after it has been set" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    const secret: ISecret = .{ .name = "my-key", .type = "api-key", .value = "abc123" };
+    try vault.set(allocator, io, secret);
+    const result = (try vault.get(allocator, io, "my-key")).?;
+    try std.testing.expectEqualStrings(secret.name, result.name);
+    try std.testing.expectEqualStrings(secret.type, result.type);
+    try std.testing.expectEqualStrings(secret.value, result.value);
+}
+
+test "returns the latest value when a secret is overwritten" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "token", .type = "api-key", .value = "old-value" });
+    try vault.set(allocator, io, .{ .name = "token", .type = "api-key", .value = "new-value" });
+    const result = (try vault.get(allocator, io, "token")).?;
+    try std.testing.expectEqualStrings("new-value", result.value);
+}
+
+test "creates the vault directory if it does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+
+    const nestedDir = try std.fs.path.join(allocator, &.{ temp_dir.path, "nested", "vault" });
+    var nestedVault = PlaintextVault.init(nestedDir);
+    try nestedVault.set(allocator, io, .{ .name = "key", .type = "password", .value = "secret" });
+    const result = (try nestedVault.get(allocator, io, "key")).?;
+    try std.testing.expectEqualStrings("secret", result.value);
+}
+
+test "stores the name, type, and value of the secret" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "db-pass", .type = "password", .value = "hunter2" });
+    const result = (try vault.get(allocator, io, "db-pass")).?;
+    try std.testing.expectEqualStrings("db-pass", result.name);
+    try std.testing.expectEqualStrings("password", result.type);
+    try std.testing.expectEqualStrings("hunter2", result.value);
+}
+
+test "supports arbitrary type strings" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "cred", .type = "s3-credentials", .value = "{\"accessKeyId\":\"AKIA...\",\"secretAccessKey\":\"xyz\"}" });
+    const result = (try vault.get(allocator, io, "cred")).?;
+    try std.testing.expectEqualStrings("s3-credentials", result.type);
+}
+
+test "supports a key pair secret with both private and public key in the value" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    const keyPairValue = "{\"privateKey\":\"-----BEGIN PRIVATE KEY-----\",\"publicKey\":\"-----BEGIN PUBLIC KEY-----\"}";
+    try vault.set(allocator, io, .{ .name = "my-keypair", .type = "key-pair", .value = keyPairValue });
+    const result = (try vault.get(allocator, io, "my-keypair")).?;
+    try std.testing.expectEqualStrings("key-pair", result.type);
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, allocator, result.value, .{});
+    try std.testing.expectEqualStrings("-----BEGIN PRIVATE KEY-----", parsed.object.get("privateKey").?.string);
+    try std.testing.expectEqualStrings("-----BEGIN PUBLIC KEY-----", parsed.object.get("publicKey").?.string);
+}
+
+test "returns undefined when the vault file exists but holds no such name" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "present", .type = "password", .value = "here" });
+    const result = try vault.get(allocator, io, "absent");
+    try std.testing.expect(result == null);
+}
+
+test "creates the vault file when it does not exist yet" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "first", .type = "password", .value = "one" });
+    const stats = try temp_dir.tmp_dir.dir.statFile(io, "vault.json", .{});
+    try std.testing.expectEqual(std.Io.File.Kind.file, stats.kind);
+}
+
+test "preserves the secrets already held in the vault file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "first", .type = "password", .value = "one" });
+    try vault.set(allocator, io, .{ .name = "second", .type = "api-key", .value = "two" });
+    try vault.set(allocator, io, .{ .name = "third", .type = "password", .value = "three" });
+    try std.testing.expectEqualStrings("one", (try vault.get(allocator, io, "first")).?.value);
+    try std.testing.expectEqualStrings("two", (try vault.get(allocator, io, "second")).?.value);
+    try std.testing.expectEqualStrings("three", (try vault.get(allocator, io, "third")).?.value);
+}
+
+test "returns an empty array when the vault is empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    const secrets = try vault.list(allocator, std.testing.io);
+    try std.testing.expectEqual(@as(usize, 0), secrets.len);
+}
+
+test "returns an empty array when the vault file does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+
+    var emptyVault = PlaintextVault.init(try std.fs.path.join(allocator, &.{ temp_dir.path, "does-not-exist" }));
+    const secrets = try emptyVault.list(allocator, std.testing.io);
+    try std.testing.expectEqual(@as(usize, 0), secrets.len);
+}
+
+test "returns all stored secrets" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "alpha", .type = "password", .value = "aaa" });
+    try vault.set(allocator, io, .{ .name = "beta", .type = "api-key", .value = "bbb" });
+    const secrets = try vault.list(allocator, io);
+    std.mem.sort(ISecret, secrets, {}, secretNameLessThan);
+    try std.testing.expectEqual(@as(usize, 2), secrets.len);
+    try std.testing.expectEqualStrings("alpha", secrets[0].name);
+    try std.testing.expectEqualStrings("beta", secrets[1].name);
+}
+
+test "does not include deleted secrets" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "keep", .type = "password", .value = "keep-value" });
+    try vault.set(allocator, io, .{ .name = "remove", .type = "password", .value = "remove-value" });
+    try vault.delete(allocator, io, "remove");
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+    try std.testing.expectEqualStrings("keep", secrets[0].name);
+}
+
+test "ignores a stray file sitting alongside the vault file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "real", .type = "api-key", .value = "val" });
+
+    // Write a stray file that should be ignored.
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "noise.txt", .data = "ignore me" });
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+}
+
+test "returns secrets in the order a JavaScript object keeps its keys (array index names first)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "zeta", .type = "password", .value = "z" });
+    try vault.set(allocator, io, .{ .name = "10", .type = "password", .value = "ten" });
+    try vault.set(allocator, io, .{ .name = "alpha", .type = "password", .value = "a" });
+    try vault.set(allocator, io, .{ .name = "2", .type = "password", .value = "two" });
+    try vault.set(allocator, io, .{ .name = "01", .type = "password", .value = "not an index" });
+    const secrets = try vault.list(allocator, io);
+    const expected = [_][]const u8{ "2", "10", "zeta", "alpha", "01" };
+    try std.testing.expectEqual(expected.len, secrets.len);
+    for (expected, secrets) |expected_name, secret| {
+        try std.testing.expectEqualStrings(expected_name, secret.name);
+    }
+}
+
+//
+// Writes a vault file that is not valid JSON, so the vault has to
+// fail loudly rather than reporting an empty vault and then
+// overwriting whatever was really in there.
+//
+fn writeMalformedVaultFile(io: std.Io, temp_dir: *TempDir) !void {
+    try temp_dir.tmp_dir.dir.writeFile(io, .{
+        .sub_path = "vault.json",
+        .data = "{ this is not json",
+    });
+}
+
+test "a malformed vault file: makes get throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try writeMalformedVaultFile(io, &temp_dir);
+    try std.testing.expect(std.meta.isError(vault.get(allocator, io, "anything")));
+}
+
+test "a malformed vault file: makes list throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try writeMalformedVaultFile(io, &temp_dir);
+    try std.testing.expect(std.meta.isError(vault.list(allocator, io)));
+}
+
+test "removes a secret so that get returns undefined afterwards" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "gone", .type = "password", .value = "byebye" });
+    try vault.delete(allocator, io, "gone");
+    const result = try vault.get(allocator, io, "gone");
+    try std.testing.expect(result == null);
+}
+
+test "does nothing when the secret does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.delete(allocator, io, "no-such-secret");
+}
+
+test "handles names containing spaces" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "my secret", .type = "password", .value = "spaced" });
+    const result = (try vault.get(allocator, io, "my secret")).?;
+    try std.testing.expectEqualStrings("spaced", result.value);
+}
+
+test "handles names containing slashes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "org/repo/token", .type = "api-key", .value = "tok" });
+    const result = (try vault.get(allocator, io, "org/repo/token")).?;
+    try std.testing.expectEqualStrings("tok", result.value);
+}
+
+test "handles names containing unicode characters" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "clé-secrète", .type = "password", .value = "motdepasse" });
+    const result = (try vault.get(allocator, io, "clé-secrète")).?;
+    try std.testing.expectEqualStrings("motdepasse", result.value);
+}
+
+test "handles multiple specially named secrets without collision" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "a/b", .type = "password", .value = "slash" });
+    try vault.set(allocator, io, .{ .name = "a%2Fb", .type = "password", .value = "percent" });
+    const slash = (try vault.get(allocator, io, "a/b")).?;
+    const percent = (try vault.get(allocator, io, "a%2Fb")).?;
+    try std.testing.expectEqualStrings("slash", slash.value);
+    try std.testing.expectEqualStrings("percent", percent.value);
+}
+
+test "vault file is created with owner-only permissions (0o600)" {
+    if (@import("builtin").os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "perm-test", .type = "password", .value = "s3cr3t" });
+    const filePath = try std.fs.path.join(allocator, &.{ temp_dir.path, "vault.json" });
+    try std.testing.expectEqual(@as(u32, 0o600), try permissionBits(io, filePath));
+}
+
+test "vault directory is created with owner-only permissions (0o700)" {
+    if (@import("builtin").os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+
+    const newVaultDir = try std.fs.path.join(allocator, &.{ temp_dir.path, "new-vault" });
+    var newVault = PlaintextVault.init(newVaultDir);
+    try newVault.set(allocator, io, .{ .name = "key", .type = "password", .value = "val" });
+    try std.testing.expectEqual(@as(u32, 0o700), try permissionBits(io, newVaultDir));
+}
+
+test "getVaultFilePath is vault.json inside the vault directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expected = try std.fs.path.join(allocator, &.{ "some", "dir", "vault.json" });
+    const vaultDir = try std.fs.path.join(allocator, &.{ "some", "dir" });
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, vaultDir));
+}
+
+test "readVaultFile returns an empty set when the file does not exist yet" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+
+    const contents = try vault_zig.plaintext_vault.readVaultFile(allocator, std.testing.io, temp_dir.path);
+    try std.testing.expectEqual(@as(usize, 0), contents.count());
+}
+
+//
+// A change for updateVaultFile that stores one secret value under a name.
+//
+const PutSecretMutator = struct {
+    // The name to store the secret under.
+    name: []const u8,
+
+    //
+    // Stores a secret under the name.
+    //
+    pub fn run(self: PutSecretMutator, allocator: std.mem.Allocator, contents: *vault_zig.plaintext_vault.IVaultFile) !void {
+        var object: std.json.ObjectMap = .empty;
+        try object.put(allocator, "name", .{ .string = self.name });
+        try object.put(allocator, "type", .{ .string = "password" });
+        try object.put(allocator, "value", .{ .string = "put" });
+        try contents.put(allocator, self.name, .{ .object = object });
+    }
+};
+
+test "updateVaultFile applies the change on top of the secrets already in the file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "existing", .type = "password", .value = "kept" });
+    try vault_zig.plaintext_vault.updateVaultFile(allocator, io, temp_dir.path, PutSecretMutator{ .name = "added" });
+
+    try std.testing.expectEqualStrings("kept", (try vault.get(allocator, io, "existing")).?.value);
+    try std.testing.expectEqualStrings("put", (try vault.get(allocator, io, "added")).?.value);
+}
+
+test "DEFAULT_VAULT_DIR is ~/.config/photosphere/vault" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const process_env = @import("node-utils-zig").process_env;
+
+    var environ_map = std.process.Environ.Map.init(allocator);
+    try environ_map.put("HOME", "/home/tester");
+    try environ_map.put("USERPROFILE", "/home/tester");
+    process_env.setEnvironMap(&environ_map);
+    defer process_env.setEnvironMap(null);
+
+    // Node's path.join normalizes the result, and on Windows that turns every `/` into `\`, so the home directory's
+    // own separators change too (std.fs.path.join would leave them alone).
+    const expected = if (builtin.os.tag == .windows) "\\home\\tester\\.config\\photosphere\\vault" else "/home/tester/.config/photosphere/vault";
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.DEFAULT_VAULT_DIR(allocator));
+}
+
+test "vault() exposes the PlaintextVault through the IVault interface" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var plaintext_vault = PlaintextVault.init(temp_dir.path);
+    const vault = plaintext_vault.vault();
+
+    try vault.set(allocator, io, .{ .name = "via-interface", .type = "plain", .value = "v" });
+    const result = (try vault.get(allocator, io, "via-interface")).?;
+    try std.testing.expectEqualStrings("v", result.value);
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+}
+
+//
+// Loads the secrets that are in the golden vault file in ts-vault/.
+//
+fn loadFixtureSecrets(allocator: std.mem.Allocator, io: std.Io) ![]ISecret {
+    const json = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/secrets.json", allocator, .unlimited);
+    return std.json.parseFromSliceLeaky([]ISecret, allocator, json, .{});
+}
+
+test "interop: Zig reads the golden vault file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const secrets = try loadFixtureSecrets(allocator, io);
+    var vault = PlaintextVault.init("vault-zig/src/test/fixtures/ts-vault");
+
+    for (secrets) |expected| {
+        const result = (try vault.get(allocator, io, expected.name)).?;
+        try std.testing.expectEqualStrings(expected.name, result.name);
+        try std.testing.expectEqualStrings(expected.type, result.type);
+        try std.testing.expectEqualStrings(expected.value, result.value);
+    }
+
+    // list returns the secrets in the order of the keys in the file.
+    const listed = try vault.list(allocator, io);
+    try std.testing.expectEqual(secrets.len, listed.len);
+    const raw = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
+    var previous_position: usize = 0;
+    for (listed) |secret| {
+        const quoted_name = try std.json.Stringify.valueAlloc(allocator, secret.name, .{});
+        const key = try std.fmt.allocPrint(allocator, "\n  {s}: {{", .{quoted_name});
+        const position = std.mem.indexOf(u8, raw, key).?;
+        try std.testing.expect(position >= previous_position);
+        previous_position = position;
+    }
+}
+
+test "interop: Zig writes a vault file byte-identical to the golden vault file" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const secrets = try loadFixtureSecrets(allocator, io);
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    for (secrets) |secret| {
+        try vault.set(allocator, io, secret);
+    }
+
+    const expected = try std.Io.Dir.cwd().readFileAlloc(io, "vault-zig/src/test/fixtures/ts-vault/vault.json", allocator, .unlimited);
+    const actual = try temp_dir.tmp_dir.dir.readFileAlloc(io, "vault.json", allocator, .unlimited);
+    try std.testing.expectEqualStrings(expected, actual);
+
+    // Only the vault file is left behind: no temp file and no update lock.
+    var iterator = temp_dir.tmp_dir.dir.iterate();
+    var file_count: usize = 0;
+    while (try iterator.next(io)) |entry| {
+        _ = entry;
+        file_count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 1), file_count);
+}
+
+test "vault() reaches delete and checkPrereqs through the IVault interface" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var plaintext_vault = PlaintextVault.init(temp_dir.path);
+    const vault = plaintext_vault.vault();
+
+    // The plaintext vault needs no tools.
+    const prereqs = try vault.checkPrereqs(allocator, io);
+    try std.testing.expect(prereqs.ok);
+    try std.testing.expect(prereqs.message == null);
+
+    try vault.set(allocator, io, .{ .name = "gone", .type = "plain", .value = "v" });
+    try vault.delete(allocator, io, "gone");
+    try std.testing.expect((try vault.get(allocator, io, "gone")) == null);
+}
+
+test "a vault file holding JSON that is not an object makes get throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "[1, 2]" });
+    try std.testing.expectError(error.Thrown, vault.get(allocator, io, "anything"));
+    try std.testing.expectEqualStrings("The vault file does not hold a JSON object", utils.errors.lastErrorMessage());
+}
+
+test "getVaultFilePath joins and normalizes the path as path.join does" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expected = try vault_zig.plaintext_vault.getVaultFilePath(allocator, "vaults");
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, "./vaults/other/../"));
+}
+
+test "DEFAULT_VAULT_DIR is under the home directory os.homedir gives, the passwd entry's when HOME is unset" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var environ_map = std.process.Environ.Map.init(allocator);
+    node_utils.process_env.setEnvironMap(&environ_map);
+    defer node_utils.process_env.setEnvironMap(null);
+
+    const expected = try node_utils.path.join(allocator, &.{ node_utils.fs.osHomedir(), ".config", "photosphere", "vault" });
+    try std.testing.expect(node_utils.fs.osHomedir().len > 0 or builtin.os.tag == .windows);
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.DEFAULT_VAULT_DIR(allocator));
+}
+
+//
+// A vault file whose entry is not a secret: get throws, naming the entry it could not read.
+//
+test "a vault file entry that is not a secret makes get throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "{\"broken\": 42}" });
+    try std.testing.expectError(error.Thrown, vault.get(allocator, io, "broken"));
+}
+
+test "a vault file entry that is not a secret makes list throw" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try temp_dir.tmp_dir.dir.writeFile(io, .{ .sub_path = "vault.json", .data = "{\"broken\": {\"name\": \"broken\"}}" });
+    try std.testing.expectError(error.Thrown, vault.list(allocator, io));
+}
+
+//
+// readVaultFile gives an empty set for a vault that has no file yet, and reads one that is there.
+//
+test "readVaultFile reads the secrets of a vault file that is there" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "one", .type = "t", .value = "v" });
+    try vault.set(allocator, io, .{ .name = "two", .type = "t", .value = "v" });
+
+    const contents = try vault_zig.plaintext_vault.readVaultFile(allocator, io, temp_dir.path);
+    try std.testing.expectEqual(@as(usize, 2), contents.count());
+    try std.testing.expect(contents.get("one") != null);
+    try std.testing.expect(contents.get("two") != null);
+}
+
+//
+// readVaultFile reports an error that is not the file being missing, rather than an empty vault, so a vault file
+// that cannot be read is not silently treated as a fresh one and then overwritten.
+//
+test "readVaultFile reports an error other than the file being missing" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+
+    // A directory where the vault file goes cannot be read as one.
+    try temp_dir.tmp_dir.dir.createDir(io, "vault.json", .default_dir);
+    try std.testing.expect(std.meta.isError(vault_zig.plaintext_vault.readVaultFile(allocator, io, temp_dir.path)));
+}
+
+//
+// set writes the three fields of the secret under its name, in that order, so the file is what JSON.stringify
+// of the object the caller passed would be.
+//
+test "writes the name, type and value in that order under the name as the key" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "k", .type = "api-key", .value = "v" });
+    const raw = try temp_dir.tmp_dir.dir.readFileAlloc(io, "vault.json", allocator, .unlimited);
+    try std.testing.expectEqualStrings(
+        \\{
+        \\  "k": {
+        \\    "name": "k",
+        \\    "type": "api-key",
+        \\    "value": "v"
+        \\  }
+        \\}
+    , raw);
+}
+
+//
+// delete removes one secret and leaves the file readable, with the others still in it.
+//
+test "leaves the other secrets in place" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+
+    try vault.set(allocator, io, .{ .name = "keep", .type = "t", .value = "v" });
+    try vault.set(allocator, io, .{ .name = "gone", .type = "t", .value = "v" });
+    try vault.delete(allocator, io, "gone");
+
+    const secrets = try vault.list(allocator, io);
+    try std.testing.expectEqual(@as(usize, 1), secrets.len);
+    try std.testing.expectEqualStrings("keep", secrets[0].name);
+}
+
+//
+// getVaultFilePath joins the vault directory and the file name, normalising as path.join does.
+//
+test "getVaultFilePath puts vault.json inside the vault directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    // The path is joined with node-utils' path.join, which normalises every
+    // separator of the segments it is given to a `\` on Windows, so the expectation is built the same way. A `/`
+    // written into the format string here would survive the join and match nothing but a POSIX build.
+    const expected = try node_utils.path.join(allocator, &.{ try std.fs.path.join(allocator, &.{ "home", "vaults", "photosphere" }), "vault.json" });
+    try std.testing.expectEqualStrings(expected, try vault_zig.plaintext_vault.getVaultFilePath(allocator, "home/vaults/photosphere"));
+}
+
+test "a vault file that is not JSON throws a sentence that says the vault file could not be read" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var temp_dir = try makeTempDir(allocator);
+    defer temp_dir.remove();
+    var vault = PlaintextVault.init(temp_dir.path);
+    try writeMalformedVaultFile(io, &temp_dir);
+    try std.testing.expectError(error.Thrown, vault.list(allocator, io));
+    try std.testing.expectEqualStrings("The vault file could not be read (SyntaxError)", utils.errors.lastErrorMessage());
+}

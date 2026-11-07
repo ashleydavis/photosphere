@@ -1,34 +1,36 @@
 # CLI Manual Test: Empty Plaintext Vault Shows "No secrets"
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `secrets list` reports an empty vault.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Point the CLI at empty config and vault directories
+From the repo root, build the CLI, put it on the PATH and point the CLI at empty config and vault directories:
 
 ```bash
-rm -rf /tmp/psi-test
-mkdir -p /tmp/psi-test/config /tmp/psi-test/vault
-export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-test/config
-export PHOTOSPHERE_VAULT_DIR=/tmp/psi-test/vault
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-vault-plaintext-list-empty
+mkdir -p /tmp/psi-cli-vault-plaintext-list-empty/config /tmp/psi-cli-vault-plaintext-list-empty/vault
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-cli-vault-plaintext-list-empty/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-cli-vault-plaintext-list-empty/vault
 export PHOTOSPHERE_VAULT_TYPE=plaintext
 ```
 
----
+Expected: no output.
 
-### 2. List secrets
+## Test
+
+### 1. List secrets
 
 ```bash
-bun run start -- secrets list
+psi secrets list
 ```
 
 Expected:
 - Output includes `No secrets`.
+
+## Check
+
+The list output in step 1 is the check.

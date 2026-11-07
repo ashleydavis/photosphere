@@ -1,53 +1,73 @@
 # Desktop Manual Test: Download Multiple Assets
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that multiple selected assets can be downloaded to a local folder from the right sidebar in the Photosphere desktop app.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open two terminals at the repo root, one for the desktop app and one for the CLI.
 
-```bash
-bun run dev
-```
-
-CLI commands are run from `apps/cli/`:
+In either terminal, clean up any previous run of this test and create the download folder:
 
 ```bash
-cd apps/cli/
+rm -rf /tmp/psi-desktop-download-multiple-assets
+mkdir -p /tmp/psi-desktop-download-multiple-assets/downloads
 ```
 
-## Steps
+The folder picker in step 5 can only select a folder that already exists, so the `downloads` folder must be created up front.
 
-### 1. Clean up any previous test run and create the download folder
+Run this in both terminals. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
 
 ```bash
-rm -rf /tmp/psi-desktop-test
-mkdir -p /tmp/psi-desktop-test/downloads
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-download-multiple-assets/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-download-multiple-assets/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-download-multiple-assets/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-download-multiple-assets/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-download-multiple-assets/data
 ```
 
-The folder picker in step 6 can only select a folder that already exists, so the `downloads` folder must be created up front.
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-download-multiple-assets/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
 
----
+In the app's terminal, start the desktop app from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
 
-### 2. Create a new database
+```bash
+bun run linux
+```
+
+In the CLI terminal, build the CLI and put it on the PATH:
+
+```bash
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+```
+
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
+
+### 1. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **New database** from the File menu or the left side menu.
-3. Enter `source` as the database name.
-4. Choose the following as the database directory:
+2. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+3. Enter `source` (`database-name-input`) as the database name.
+4. Choose the following as the database directory (`database-path-input`):
    ```
-   /tmp/psi-desktop-test/source
+   /tmp/psi-desktop-download-multiple-assets/source
    ```
-5. Click **Create**.
+5. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
 ---
 
-### 3. Import multiple files
+### 2. Import multiple files
 
-1. Navigate to the **Import** page.
-2. Click **Import photos**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import files** (`import-files-button`).
 3. Select two or more files from the `test/multiple-files/` directory in the repo root (for example `test-1.jpeg` and `test-2.png`).
 4. Wait for the imports to complete.
 
@@ -57,9 +77,9 @@ Expected:
 
 ---
 
-### 4. Select multiple assets
+### 3. Select multiple assets
 
-1. Hover over the first thumbnail and click the circle that appears in the top-left corner to select it.
+1. Hover over the first thumbnail and click the circle (`gallery-item-checkbox`) that appears in the top-left corner to select it.
 2. Repeat for the second thumbnail.
 
 Expected:
@@ -67,23 +87,23 @@ Expected:
 
 ---
 
-### 5. Open the right sidebar
+### 4. Open the right sidebar
 
-1. Click the **three-dot menu** button (top right of the navbar) to open the right sidebar.
+1. Click the **three-dot menu** button (`right-sidebar-button`) (top right of the navbar) to open the right sidebar.
 
 Expected:
 - The right sidebar opens and shows a **Selection** section with the selected asset count.
 
 ---
 
-### 6. Download the selected assets
+### 5. Download the selected assets
 
-1. In the **Selection** section, click **Download N assets** (where N matches the number selected).
-2. In the folder picker, navigate to the `downloads` folder created in step 1:
+1. In the **Selection** section, click **Download N assets** (`download-selected-button`) (where N matches the number selected).
+2. In the folder picker, navigate to the `downloads` folder created in Prep:
    - Press **Ctrl+L** to open the path entry field (plain typing triggers search within the current folder instead).
    - Type the parent path and press Enter:
      ```
-     /tmp/psi-desktop-test/
+     /tmp/psi-desktop-download-multiple-assets/
      ```
    - Single-click the `downloads` folder to select it (do not double-click, which navigates into it).
 3. Click **Open** to confirm the choice.
@@ -92,12 +112,12 @@ Expected:
 - A success toast appears with the message `Downloaded N assets`.
 - No error notifications are shown.
 
----
+## Check
 
-### 7. Verify the files exist on disk
+### 6. Verify the files exist on disk
 
 ```bash
-ls -la /tmp/psi-desktop-test/downloads
+ls -la /tmp/psi-desktop-download-multiple-assets/downloads
 ```
 
 Expected:
@@ -106,11 +126,19 @@ Expected:
 
 ---
 
-### 8. Verify the file content
+### 7. Verify the file content
 
 ```bash
-file /tmp/psi-desktop-test/downloads/*
+file /tmp/psi-desktop-download-multiple-assets/downloads/*
 ```
 
 Expected:
 - Each file is identified as the correct image or video type.
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Create the database by typing its path into `database-path-input` with the `type` command rather than browsing for it.
+- **Import files** opens a file picker: queue `pick-answer` with `{"paths": ["<absolute path of the file>"]}` before clicking `import-files-button`.
+- Step 3 selects by hovering, which the control connection cannot do: select each thumbnail with `long-press` on it instead.
+- Step 5's folder picker: queue `pick-answer` with the `downloads` folder's path before clicking `download-selected-button`, in place of the Ctrl+L typing.

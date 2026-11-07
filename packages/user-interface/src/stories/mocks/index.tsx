@@ -1,6 +1,6 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import { CssVarsProvider } from "@mui/joy/styles/CssVarsProvider";
 import Button from "@mui/joy/Button";
+import { useSearchParams } from "react-router-dom";
 import { RandomUuidGenerator, type IUuidGenerator } from "utils";
 import { getQueueBackend } from "task-queue";
 import { UuidGeneratorProvider } from "../../context/uuid-generator-context";
@@ -9,13 +9,14 @@ import {
     type IPlatformContext,
     type Unsubscribe,
     type IDatabaseEntry,
-    type ISharedSecretEntry,
     type IToolsStatus,
 } from "../../context/platform-context";
 import { AppContextProvider } from "../../context/app-context";
+import { DeveloperContextProvider } from "../../context/developer-context";
 import { ApiContextProvider, axiosApi, type IApi } from "../../context/api-context";
 import { ToastContextProvider } from "../../context/toast-context";
-import { ConfigContextProvider, createConfig } from "../../context/config-context";
+import { ConfigStoreContextProvider, createConfig } from "../../context/config-store-context";
+import { StateStoreContextProvider } from "../../context/state-store-context";
 import {
     AssetDatabaseContext,
     AssetDatabaseProvider,
@@ -26,11 +27,14 @@ import { GallerySourceContext } from "../../context/gallery-source";
 import type { IGalleryItem } from "../../lib/gallery-item";
 import { Observable } from "../../lib/subscription";
 import { ImportContext, ImportContextProvider, type IImportContext, type IImportItem } from "../../context/import-context";
+import { JobsContext, JobsContextProvider, type IJobsContext } from "../../context/jobs-context";
 import { GalleryContextProvider, useGallery } from "../../context/gallery-context";
 import { DeleteConfirmationContextProvider } from "../../context/delete-confirmation-context";
 import { SearchContextProvider } from "../../context/search-context";
 import { GalleryLayoutContextProvider } from "../../context/gallery-layout-context";
-import type { IAsset } from "api";
+import { SyncContextProvider } from "../../context/sync-context";
+import { useAssetServer } from "../../lib/use-asset-server";
+import type { IAsset, ISaveAssetItem } from "api";
 
 //
 // A no-op synchronous callback. Use for event handler props in stories
@@ -69,7 +73,15 @@ export interface IStoryModalLauncherProps {
 // the modal and restores the browser.
 //
 export function StoryModalLauncher({ label, children }: IStoryModalLauncherProps) {
-    const [open, setOpen] = useState<boolean>(false);
+    //
+    // In cycle mode (the automated stories smoke test drives the page with
+    // ?cycle=1) the modal opens immediately so the cycle actually mounts,
+    // renders, and screenshots the real modal content rather than just the
+    // trigger button. In the interactive browser (no cycle param) it stays
+    // closed until the button is pressed so it does not cover the story list.
+    //
+    const [searchParams] = useSearchParams();
+    const [open, setOpen] = useState<boolean>(searchParams.get("cycle") === "1");
 
     //
     // Dismisses the modal, but only when the backdrop itself is clicked (not when
@@ -172,10 +184,10 @@ export function mockPlatform(): IPlatformContext {
         notifyDatabaseOpened: async () => {},
         notifyDatabaseClosed: async () => {},
         onThemeChanged: () => noUnsubscribe,
-        onMenuAction: () => noUnsubscribe,
-        onNavigate: () => noUnsubscribe,
+        onPlatformEvent: () => noUnsubscribe,
         notifyDatabaseEdited: () => {},
         copyToClipboard: async () => {},
+        backgroundImportDescription: "Runs whenever Photosphere is open, importing new photos as they appear.",
         onSyncStarted: () => noUnsubscribe,
         onSyncCompleted: () => noUnsubscribe,
         onShowNotification: () => noUnsubscribe,
@@ -183,8 +195,8 @@ export function mockPlatform(): IPlatformContext {
         onUpdateAvailable: () => noUnsubscribe,
         openFolder: async () => {},
         getPathForFile: () => undefined,
+        platformKind: "desktop",
         checkTools: async () => emptyToolsStatus,
-        checkDatabaseExists: async () => true,
         onTaskMessage: () => noUnsubscribe,
         onTaskComplete: () => noUnsubscribe,
         cancelTasks: async () => {},
@@ -195,25 +207,26 @@ export function mockPlatform(): IPlatformContext {
         removeDatabaseEntry: async () => {},
         findDatabase: async () => undefined,
         pickFolder: async () => undefined,
-        pickFile: async () => undefined,
         pickFiles: async () => undefined,
+        saveDownloadedFiles: async (items: ISaveAssetItem[]) => ({ outcome: "saved" as const, savedCount: items.length, failedCount: 0, savedFolder: "mock-download-folder" }),
         listSecrets: async () => [],
-        addSecret: async (entry: ISharedSecretEntry) => entry,
-        updateSecret: async () => {},
+        setSecret: async () => {},
         deleteSecret: async () => {},
         getSecretValue: async () => undefined,
         getRecentDatabases: async () => [],
+        getLastDatabase: async () => undefined,
         removeRecentDatabaseName: async () => {},
         listS3Dirs: async () => [],
-        startShareReceive: async () => {},
-        waitShareReceive: async () => null,
-        cancelShareReceive: async () => {},
-        waitForReceiver: async () => null,
-        sendToReceiver: async () => true,
-        cancelShareSend: async () => {},
         importSharePayload: async () => {},
         markUpdateAsShown: async () => {},
         markNewsAsShown: async () => {},
+        toggleDevTools: () => {},
+        setSyncAllowed: () => {},
+        // Stories register action handlers on mount, so registering succeeds and does nothing.
+        registerAction: () => noUnsubscribe,
+        runAction: () => {
+            throw new Error("The stories browser runs no Ziggy actions.");
+        },
     };
 }
 
@@ -322,7 +335,9 @@ export function mockAssetDatabase(assets?: IGalleryItem[]): IAssetDatabase {
 
     return {
         isLoading: false,
+        loadsFinished: 0,
         isSyncing: false,
+        isOpening: false,
         isWorking: false,
         isReadOnly: false,
         getAssets: () => assetMap,
@@ -366,8 +381,10 @@ export function mockImportContext(overrides?: Partial<IImportContext>): IImportC
     const base: IImportContext = {
         status: 'idle',
         importItems: [],
+        recordTruncated: false,
         startImportDirectories: async () => false,
         startImportFiles: async () => false,
+        isPicking: false,
         cancelImport: noOpAsync,
         clearImport: noOp,
     };
@@ -429,6 +446,14 @@ export interface IMockProvidersProps {
     // letting a story render the import page in a specific state.
     //
     importContext?: IImportContext;
+
+    //
+    // Optional override for the jobs context. When provided, the real
+    // JobsContextProvider is bypassed and this value is supplied directly, so a
+    // story can show the navbar indicator and the sidebar list with jobs in it.
+    // The mock platform reports no tasks, so the real provider is always empty.
+    //
+    jobsContext?: IJobsContext;
 }
 
 //
@@ -442,7 +467,7 @@ export interface IMockProvidersProps {
 //
 //
 // Builds an in-memory IConfig backed by a plain object, so components that
-// consume useConfig() get a working implementation in stories.
+// consume useConfigStore() get a working implementation in stories.
 //
 function createInMemoryConfig() {
     const configStore: { [key: string]: unknown } = {};
@@ -459,6 +484,7 @@ export function MockProviders({
     api,
     assetDatabase,
     importContext,
+    jobsContext,
 }: IMockProvidersProps) {
     const platformValue = platform || mockPlatform();
     const apiValue = api || mockApi();
@@ -466,10 +492,11 @@ export function MockProviders({
     const databaseValue = assetDatabase || mockAssetDatabase();
 
     //
-    // In-memory config so any story that consumes useConfig() gets a real
+    // In-memory config so any story that consumes useConfigStore() gets a real
     // implementation instead of crashing on missing context.
     //
     const config = createInMemoryConfig();
+    const state = createInMemoryConfig();
 
     //
     // When a story supplies an import context, provide it directly so the
@@ -491,14 +518,38 @@ export function MockProviders({
         );
     }
 
+    //
+    // When a story supplies a jobs context, provide it directly so the navbar
+    // indicator and the sidebar list can be shown with jobs running; otherwise
+    // use the real provider, which stays empty because the mock platform
+    // reports no task messages.
+    //
+    function withJobsContext(content: ReactNode): JSX.Element {
+        if (jobsContext) {
+            return (
+                <JobsContext.Provider value={jobsContext}>
+                    {content}
+                </JobsContext.Provider>
+            );
+        }
+        return (
+            <JobsContextProvider>
+                {content}
+            </JobsContextProvider>
+        );
+    }
+
+
     return (
-        <CssVarsProvider>
+        <>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={apiValue}>
-                    <ConfigContextProvider value={config}>
+                    <ConfigStoreContextProvider value={config}>
+                    <StateStoreContextProvider value={state}>
                         <AppContextProvider>
                             <ToastContextProvider>
+                                {withJobsContext(
                                 <AssetDatabaseContext.Provider value={databaseValue}>
                                     <GallerySourceContext.Provider value={databaseValue}>
                                         {withImportContext(
@@ -506,7 +557,11 @@ export function MockProviders({
                                                 <DeleteConfirmationContextProvider>
                                                     <SearchContextProvider>
                                                         <GalleryLayoutContextProvider>
-                                                            {children}
+                                                            <DeveloperContextProvider>
+                                                                <SyncContextProvider>
+                                                                    {children}
+                                                                </SyncContextProvider>
+                                                            </DeveloperContextProvider>
                                                         </GalleryLayoutContextProvider>
                                                     </SearchContextProvider>
                                                 </DeleteConfirmationContextProvider>
@@ -514,25 +569,30 @@ export function MockProviders({
                                         )}
                                     </GallerySourceContext.Provider>
                                 </AssetDatabaseContext.Provider>
+                                )}
                             </ToastContextProvider>
                         </AppContextProvider>
-                    </ConfigContextProvider>
+                    </StateStoreContextProvider>
+                    </ConfigStoreContextProvider>
                     </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
-        </CssVarsProvider>
+        </>
     );
 }
 
 //
-// Candidate paths for the repo's 50-assets test database, relative to the
-// working directory of the process hosting the REST API. The first covers
-// `bun run dev` and `bun run dev:web` (the server runs from apps/<app>), the
-// second covers app processes launched from the repo root (smoke tests).
+// Candidate paths for the repo's 50-assets test database. The first two are
+// relative to the working directory of the process hosting the REST API: the
+// first covers `bun run dev` and `bun run dev:web` (the server runs from
+// apps/<app>), the second covers app processes launched from the repo root.
+// The third is a simple name, which the app resolves into its own database
+// folder, where the story player seeds the fixture on a phone.
 //
 const testDatabaseCandidates = [
     "../../test/dbs/50-assets",
     "test/dbs/50-assets",
+    "50-assets",
 ];
 
 //
@@ -540,16 +600,6 @@ const testDatabaseCandidates = [
 // candidate database path the REST API can actually reach.
 //
 const probeAssetId = "63e9c637-9164-6376-13e9-ef3200000000";
-
-//
-// Resolves the REST API base url for stories. The Electron shell passes
-// restApiUrl as a query parameter (same as the real app); the dev web
-// frontend talks to the fixed dev-server url.
-//
-function storyRestApiUrl(): string {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get("restApiUrl") || "http://localhost:3001";
-}
 
 //
 // Props for OpenTestDatabase.
@@ -571,6 +621,14 @@ function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
     const { openDatabase } = useAssetDatabase();
     const [probeFailed, setProbeFailed] = useState<boolean>(false);
 
+    // The url of the asset server, reported by the asset-server task once it has bound its port.
+    const restApiUrl = useAssetServer();
+
+    //
+    // Re-runs whenever the asset server reports a new url. The hook returns a placeholder url until
+    // the asset-server task has bound its port, so a probe that only ran on mount would always run
+    // against the placeholder, fail, and never try again once the real url arrived.
+    //
     useEffect(() => {
         let disposed = false;
 
@@ -579,13 +637,17 @@ function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
         // asset from, then opens it the same way the app opens any database.
         //
         async function locateAndOpenDatabase(): Promise<void> {
-            const restApiUrl = storyRestApiUrl();
+            if (!restApiUrl) {
+                // The asset server has not reported its port yet; this effect re-runs when it does.
+                return;
+            }
             for (const candidatePath of testDatabaseCandidates) {
                 const probeUrl = `${restApiUrl}/asset?id=${encodeURIComponent(probeAssetId)}&type=thumb&db=${encodeURIComponent(candidatePath)}`;
                 try {
                     const response = await fetch(probeUrl);
                     if (response.ok) {
                         if (!disposed) {
+                            setProbeFailed(false);
                             await openDatabase(candidatePath);
                         }
                         return;
@@ -606,7 +668,7 @@ function OpenTestDatabase({ children }: IOpenTestDatabaseProps) {
         return () => {
             disposed = true;
         };
-    }, []);
+    }, [restApiUrl]);
 
     if (probeFailed) {
         return (
@@ -645,23 +707,37 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
     const [platformValue] = useState<IPlatformContext>(() => mockPlatform());
     const [uuidGeneratorValue] = useState<IUuidGenerator>(() => new RandomUuidGenerator());
     const [config] = useState(() => createInMemoryConfig());
+    const [state] = useState(() => createInMemoryConfig());
+
+    // The url of the asset server, reported by the asset-server task once it has bound its port.
+    const restApiUrl = useAssetServer();
+
+    if (!restApiUrl) {
+        return <div className="p-4">Starting the asset server…</div>;
+    }
 
     return (
-        <CssVarsProvider>
+        <>
             <UuidGeneratorProvider value={uuidGeneratorValue}>
                 <PlatformContextProvider value={platformValue}>
                     <ApiContextProvider value={axiosApi}>
-                    <ConfigContextProvider value={config}>
+                    <ConfigStoreContextProvider value={config}>
+                    <StateStoreContextProvider value={state}>
                         <AppContextProvider>
                             <ToastContextProvider>
-                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={storyRestApiUrl()}>
+                                <JobsContextProvider>
+                                <AssetDatabaseProvider queueBackend={getQueueBackend()} restApiUrl={restApiUrl}>
                                     <ImportContextProvider>
                                         <GalleryContextProvider>
                                             <DeleteConfirmationContextProvider>
                                                 <SearchContextProvider>
                                                     <GalleryLayoutContextProvider>
                                                         <OpenTestDatabase>
-                                                            {children}
+                                                            <DeveloperContextProvider>
+                                                                <SyncContextProvider>
+                                                                    {children}
+                                                                </SyncContextProvider>
+                                                            </DeveloperContextProvider>
                                                         </OpenTestDatabase>
                                                     </GalleryLayoutContextProvider>
                                                 </SearchContextProvider>
@@ -669,12 +745,14 @@ export function RealDatabaseProviders({ children }: IRealDatabaseProvidersProps)
                                         </GalleryContextProvider>
                                     </ImportContextProvider>
                                 </AssetDatabaseProvider>
+                                </JobsContextProvider>
                             </ToastContextProvider>
                         </AppContextProvider>
-                    </ConfigContextProvider>
+                    </StateStoreContextProvider>
+                    </ConfigStoreContextProvider>
                     </ApiContextProvider>
                 </PlatformContextProvider>
             </UuidGeneratorProvider>
-        </CssVarsProvider>
+        </>
     );
 }

@@ -1,0 +1,15 @@
+.{
+    .name = .photosphere,
+    .version = "1.0.0",
+    .fingerprint = 0x65908dac07b847ab,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        // Ziggy, at a version tag of its repository. Every other place that takes Ziggy (package.json, apps/photosphere-frontend/package.json,
+        // the Xcode projects under apps/photosphere/native and apps/photosphere/native/android/app/build.gradle) names the same version.
+        .ziggy = .{
+            .url = "git+https://github.com/ashleydavis/ziggy.git?ref=v0.0.23#7f7d023f9c75a14a0224619a1407a1f321d24fa3",
+            .hash = "ziggy-0.0.0-Yh04rtu6JACgTv15nD3SJnML5H6T7wbSVJ1QrYPP-F-l",
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon" },
+}

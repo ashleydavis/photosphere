@@ -1,52 +1,41 @@
 # CLI Manual Test: Import Directory With Duplicate Content (Dedupe)
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that two files with identical content are imported as a single asset.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run and create a new database:
 
 ```bash
-rm -rf /tmp/psi-test
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-add-duplicate-content
+psi init --db /tmp/psi-cli-import-add-duplicate-content/source --yes
 ```
 
----
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-add-duplicate-content/source`.
 
-### 2. Create a new database
+## Test
 
-```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-```
-
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
-
----
-
-### 3. Add a directory containing two identical images
+### 1. Add a directory containing two identical images
 
 The repo ships a `test/duplicate-images/` directory with `a.png` and `b.png` (same content, different file names).
 
 ```bash
-bun run start -- add ../../test/duplicate-images/ --db /tmp/psi-test/source --yes
+psi add test/duplicate-images/ --db /tmp/psi-cli-import-add-duplicate-content/source --yes
 ```
 
 Expected:
 - Output shows both files processed.
 
----
+## Check
 
-### 4. Check the database summary
+### 2. Check the database summary
 
 ```bash
-bun run start -- summary --db /tmp/psi-test/source
+psi summary --db /tmp/psi-cli-import-add-duplicate-content/source
 ```
 
 Expected:
@@ -54,10 +43,10 @@ Expected:
 
 ---
 
-### 5. Verify the database
+### 3. Verify the database
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-add-duplicate-content/source
 ```
 
 Expected:

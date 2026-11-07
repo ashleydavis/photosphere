@@ -1,0 +1,11 @@
+// The SDK levels, the NDK and the library versions of Photosphere's Android project, applied by the root build.gradle.
+// scripts/android/install-android-sdk.sh installs the SDK packages these name, and apps/photosphere/scripts/android-common.sh reads
+// ndkVersion and minSdkVersion from here, so change them together.
+ext {
+    minSdkVersion = 24
+    compileSdkVersion = 35
+    targetSdkVersion = 35
+    ndkVersion = "25.1.8937393"
+    androidxSecurityCryptoVersion = '1.0.0'
+    junitVersion = '4.13.2'
+}

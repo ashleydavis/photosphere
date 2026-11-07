@@ -3,12 +3,12 @@
 // Creates databases in the correct Photosphere format matching test/dbs/v5/
 //
 
-import { createMediaFileDatabase, createDatabase } from 'api';
+import { createMediaFileDatabase, createDatabase } from 'node-api';
 import { createStorage } from 'storage';
 import { RandomUuidGenerator, TimestampProvider } from 'utils';
-import { computeAssetHash } from 'api';
+import { computeAssetHash } from 'node-api';
 import { addItem, createTree } from 'merkle-tree';
-import { loadMerkleTree, saveMerkleTree } from 'api';
+import { loadMerkleTree, saveMerkleTree } from 'node-api';
 import fs from 'fs';
 import path from 'path';
 
@@ -124,6 +124,9 @@ async function createCollectionDatabase(
             for (const record of records) {
                 await database.metadataCollection.insertOne(record);
             }
+
+            // Inserted records are held in memory until a commit writes them out.
+            await database.bsonDatabase.commit();
         }
     }
     

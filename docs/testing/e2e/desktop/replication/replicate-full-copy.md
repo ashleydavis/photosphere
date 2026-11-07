@@ -1,49 +1,70 @@
 # Desktop Manual Test: Replicate Full Copy
 
-Test that a database can be created, populated, verified, and fully replicated to a new directory using the Photosphere desktop app.
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-## Prerequisites
+Test that a database can be created, populated, verified and fully replicated to a new directory using the Photosphere desktop app.
 
-Start the desktop app from source (run from the repo root):
+## Prep
 
-```bash
-bun run dev
-```
+Open two terminals at the repo root, one for the desktop app and one for the CLI.
 
-CLI commands are run from `apps/cli/`:
+In either terminal, clean up any previous run of this test:
 
 ```bash
-cd apps/cli/
+rm -rf /tmp/psi-desktop-replicate-full-copy
 ```
 
-## Steps
-
-### 1. Clean up any previous test run
+Run this in both terminals. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
 
 ```bash
-rm -rf /tmp/psi-desktop-test
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-replicate-full-copy/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-replicate-full-copy/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-replicate-full-copy/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-replicate-full-copy/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-replicate-full-copy/data
 ```
 
----
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-replicate-full-copy/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
 
-### 2. Create a new database
+In the app's terminal, start the desktop app from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
+
+```bash
+bun run linux
+```
+
+In the CLI terminal, build the CLI and put it on the PATH:
+
+```bash
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+```
+
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
+
+### 1. Create a new database
 
 1. Open the Photosphere desktop app.
-2. Click **New database** from the File menu or the left side menu.
-3. Choose the following as the database directory:
+2. Click **New database** (`sidebar-toggle-button`, then `sidebar-new-database`) from the File menu or the left side menu.
+3. Enter `source` (`database-name-input`) as the database name.
+4. Choose the following as the database directory (`database-path-input`):
    ```
-   /tmp/psi-desktop-test/source
+   /tmp/psi-desktop-replicate-full-copy/source
    ```
-4. Click **Create**.
+5. Click **Create** (`create-database-confirm`).
 
 Expected: The app opens the new empty database with no assets shown.
 
 ---
 
-### 3. Import a file
+### 2. Import a file
 
-1. Navigate to the **Import** page.
-2. Click **Import photos**.
+1. Navigate to the **Import** (`navbar-import-button`) page.
+2. Click **Import files** (`import-files-button`).
 3. Select `test/test.jpg` from the repo root.
 4. Wait for the import to complete.
 
@@ -53,10 +74,10 @@ Expected:
 
 ---
 
-### 4. List files in the source database
+### 3. List files in the source database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-test/source
+psi list --db /tmp/psi-desktop-replicate-full-copy/source
 ```
 
 Expected:
@@ -64,10 +85,10 @@ Expected:
 
 ---
 
-### 5. Check that the source database is ok
+### 4. Check that the source database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-test/source
+psi verify --db /tmp/psi-desktop-replicate-full-copy/source
 ```
 
 Expected:
@@ -76,27 +97,27 @@ Expected:
 
 ---
 
-### 6. Replicate a full copy to a new directory
+### 5. Replicate a full copy to a new directory
 
-1. Navigate to the **Manage Databases** page.
-2. Click the **Replicate database** button on the source database entry.
-3. When prompted for the destination, enter:
+1. Navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page.
+2. Click the **Replicate database** button (`replicate-database-button`, the `source` row) on the source database entry.
+3. When prompted for the destination (`replicate-dest-path-input`), enter:
    ```
-   /tmp/psi-desktop-test/replica
+   /tmp/psi-desktop-replicate-full-copy/replica
    ```
-4. When prompted for replication mode, select **Full**.
-5. Click **Start replication** and wait for replication to complete.
+4. When prompted for replication mode, select **Full** (`replicate-mode-full`).
+5. Click **Start replication** (`replicate-start-button`) and wait for replication to complete.
 
 Expected:
 - A progress indicator is shown during replication.
 - A success notification confirms replication completed.
 
----
+## Check
 
-### 7. List files in the replica database
+### 6. List files in the replica database
 
 ```bash
-bun run start -- list --db /tmp/psi-desktop-test/replica
+psi list --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
@@ -104,10 +125,10 @@ Expected:
 
 ---
 
-### 8. Check that the replica database is ok
+### 7. Check that the replica database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-desktop-test/replica
+psi verify --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
@@ -116,14 +137,20 @@ Expected:
 
 ---
 
-### 9. Check the origin of the replica
+### 8. Check the origin of the replica
 
 ```bash
-bun run start -- origin --db /tmp/psi-desktop-test/replica
+psi origin --db /tmp/psi-desktop-replicate-full-copy/replica
 ```
 
 Expected:
 - The origin is shown as:
   ```
-  /tmp/psi-desktop-test/source
+  /tmp/psi-desktop-replicate-full-copy/source
   ```
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.
+- Create the database by typing its path into `database-path-input` with the `type` command rather than browsing for it.
+- **Import files** opens a file picker: queue `pick-answer` with `{"paths": ["<absolute path of the file>"]}` before clicking `import-files-button`.

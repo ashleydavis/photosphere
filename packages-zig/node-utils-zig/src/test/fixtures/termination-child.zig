@@ -1,0 +1,127 @@
+const std = @import("std");
+const ILog = @import("utils-zig").log.ILog;
+const node_utils = @import("node-utils-zig");
+const utils = @import("utils-zig");
+const termination = node_utils.termination;
+
+//
+// A process for the termination tests: it registers a termination callback, says "ready" and waits for the
+// signal the test sends it. The callback writes "callback <exit code>" to stdout. The first argument says
+// how the callback behaves: "succeed" always succeeds, "fail-once" throws on its first call only and
+// "fail-always" always throws. "fail-always-logged" always throws too and writes the exceptions the log is given to
+// stdout. "uncaught" and "uncaught-fail" (whose callback always throws) write the exceptions the log is given to stdout
+// and end at once in an uncaught exception, "Boom". "exit-verbose" writes verbose log messages to stdout and calls exit with 7 straight away instead of waiting
+// for a signal. "exit-fail" writes the exceptions to stdout and calls exit with 7 with a callback that always throws.
+// "uncaught-uninitialized" ends at once in an uncaught exception before registering anything. "register-twice" registers
+// the callback twice (initializing the handlers once).
+//
+
+//
+// The Io the verbose and exception log messages are written to stdout with.
+//
+var stdoutIo: std.Io = undefined;
+
+//
+// The functions of the log termination is given, with verbose replaced by writeVerbose ("exit-verbose" only) or exception replaced by
+// writeException ("fail-always-logged" only).
+//
+var verboseVtable: utils.log.ILog.VTable = undefined;
+
+//
+// Writes a verbose log message to stdout on a line of its own.
+//
+fn writeVerbose(ptr: *anyopaque, message: []const u8) void {
+    _ = ptr;
+    std.Io.File.stdout().writeStreamingAll(stdoutIo, message) catch |err| {
+        std.debug.panic("Writing the verbose message failed: {s}", .{@errorName(err)});
+    };
+    std.Io.File.stdout().writeStreamingAll(stdoutIo, "\n") catch |err| {
+        std.debug.panic("Writing the verbose message failed: {s}", .{@errorName(err)});
+    };
+}
+
+//
+// Writes an exception the log is given to stdout on a line of its own: "exception <message> <error message>".
+//
+fn writeException(ptr: *anyopaque, message: []const u8, err: anyerror) void {
+    _ = ptr;
+    var buffer: [1024]u8 = undefined;
+    const line = std.fmt.bufPrint(&buffer, "exception {s} {s}\n", .{ message, utils.errors.errorMessage(err) }) catch |formatErr| {
+        std.debug.panic("Formatting the exception failed: {s}", .{@errorName(formatErr)});
+    };
+    std.Io.File.stdout().writeStreamingAll(stdoutIo, line) catch |writeErr| {
+        std.debug.panic("Writing the exception failed: {s}", .{@errorName(writeErr)});
+    };
+}
+
+//
+// How the termination callback behaves (the first argument of the process).
+//
+var callbackMode: []const u8 = "succeed";
+
+//
+// Number of times the termination callback has been called.
+//
+var callbackCalls: usize = 0;
+
+//
+// The termination callback: reports its exit code on stdout and throws as the mode says.
+//
+fn reportExitCode(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror!void {
+    _ = context;
+    callbackCalls += 1;
+    var buffer: [32]u8 = undefined;
+    const line = try std.fmt.bufPrint(&buffer, "callback {d}\n", .{exitCode});
+    try std.Io.File.stdout().writeStreamingAll(io, line);
+    const failsAlways = std.mem.eql(u8, callbackMode, "fail-always") or std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
+    if (failsAlways or (std.mem.eql(u8, callbackMode, "fail-once") and callbackCalls == 1)) {
+        return utils.errors.throwError("Callback failed", .{});
+    }
+}
+
+//
+// Registers the callback, reports that it is ready and waits to be terminated. The log termination is given writes verbose messages
+// ("exit-verbose") or exceptions (the modes that log them) to stdout, and is otherwise the console log.
+//
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const arguments = try init.minimal.args.toSlice(init.arena.allocator());
+    if (arguments.len != 2) {
+        return error.ExpectedOneArgument;
+    }
+    callbackMode = arguments[1];
+    stdoutIo = io;
+    const base = utils.log.ConsoleLog.init();
+    verboseVtable = base.vtable.*;
+    const logsExceptions = std.mem.eql(u8, callbackMode, "fail-always-logged") or std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail") or std.mem.eql(u8, callbackMode, "exit-fail");
+    if (std.mem.eql(u8, callbackMode, "exit-verbose")) {
+        verboseVtable.verbose = writeVerbose;
+    }
+    if (logsExceptions) {
+        verboseVtable.exception = writeException;
+    }
+    const log: utils.log.ILog = .{
+        .ptr = base.ptr,
+        .vtable = &verboseVtable,
+    };
+    if (std.mem.eql(u8, callbackMode, "uncaught-uninitialized")) {
+        termination.shutdownOnUncaughtException(io, log, utils.errors.throwError("Boom", .{}));
+    }
+    try termination.registerTerminationCallback(io, .{ .context = null, .function = reportExitCode });
+    if (std.mem.eql(u8, callbackMode, "register-twice")) {
+        try termination.registerTerminationCallback(io, .{
+            .context = null,
+            .function = reportExitCode,
+        });
+    }
+    if (std.mem.eql(u8, callbackMode, "exit-verbose") or std.mem.eql(u8, callbackMode, "exit-fail")) {
+        termination.exit(io, log, 7);
+    }
+    if (std.mem.eql(u8, callbackMode, "uncaught") or std.mem.eql(u8, callbackMode, "uncaught-fail")) {
+        termination.shutdownOnUncaughtException(io, log, utils.errors.throwError("Boom", .{}));
+    }
+    try std.Io.File.stdout().writeStreamingAll(io, "ready\n");
+    while (true) {
+        try io.sleep(.fromSeconds(3600), .awake);
+    }
+}

@@ -1,0 +1,453 @@
+{
+    "wrapCases": [
+        {
+            "input": "hello world foo bar",
+            "columns": 1,
+            "output": "h\ne\nl\nl\no\n \nw\no\nr\nl\nd\n \nf\no\no\n \nb\na\nr"
+        },
+        {
+            "input": "hello world foo bar",
+            "columns": 5,
+            "output": "hello\n \nworld\n foo \nbar"
+        },
+        {
+            "input": "hello world foo bar",
+            "columns": 10,
+            "output": "hello \nworld foo \nbar"
+        },
+        {
+            "input": "hello world foo bar",
+            "columns": 20,
+            "output": "hello world foo bar"
+        },
+        {
+            "input": "hello world foo bar",
+            "columns": 80,
+            "output": "hello world foo bar"
+        },
+        {
+            "input": "aaaaaaaaaaaaaaaaaaaaaa",
+            "columns": 1,
+            "output": "a\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na\na"
+        },
+        {
+            "input": "aaaaaaaaaaaaaaaaaaaaaa",
+            "columns": 5,
+            "output": "aaaaa\naaaaa\naaaaa\naaaaa\naa"
+        },
+        {
+            "input": "aaaaaaaaaaaaaaaaaaaaaa",
+            "columns": 10,
+            "output": "aaaaaaaaaa\naaaaaaaaaa\naa"
+        },
+        {
+            "input": "aaaaaaaaaaaaaaaaaaaaaa",
+            "columns": 20,
+            "output": "aaaaaaaaaaaaaaaaaaaa\naa"
+        },
+        {
+            "input": "aaaaaaaaaaaaaaaaaaaaaa",
+            "columns": 80,
+            "output": "aaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+            "input": "\u001b[36mcyan text that wraps around\u001b[39m",
+            "columns": 1,
+            "output": "\u001b[36mc\u001b[39m\n\u001b[36my\u001b[39m\n\u001b[36ma\u001b[39m\n\u001b[36mn\u001b[39m\n\u001b[36m \u001b[39m\n\u001b[36mt\u001b[39m\n\u001b[36me\u001b[39m\n\u001b[36mx\u001b[39m\n\u001b[36mt\u001b[39m\n\u001b[36m \u001b[39m\n\u001b[36mt\u001b[39m\n\u001b[36mh\u001b[39m\n\u001b[36ma\u001b[39m\n\u001b[36mt\u001b[39m\n\u001b[36m \u001b[39m\n\u001b[36mw\u001b[39m\n\u001b[36mr\u001b[39m\n\u001b[36ma\u001b[39m\n\u001b[36mp\u001b[39m\n\u001b[36ms\u001b[39m\n\u001b[36m \u001b[39m\n\u001b[36ma\u001b[39m\n\u001b[36mr\u001b[39m\n\u001b[36mo\u001b[39m\n\u001b[36mu\u001b[39m\n\u001b[36mn\u001b[39m\n\u001b[36md\u001b[39m"
+        },
+        {
+            "input": "\u001b[36mcyan text that wraps around\u001b[39m",
+            "columns": 5,
+            "output": "\u001b[36mcyan \u001b[39m\n\u001b[36mtext \u001b[39m\n\u001b[36mthat \u001b[39m\n\u001b[36mwraps\u001b[39m\n\u001b[36m arou\u001b[39m\n\u001b[36mnd\u001b[39m"
+        },
+        {
+            "input": "\u001b[36mcyan text that wraps around\u001b[39m",
+            "columns": 10,
+            "output": "\u001b[36mcyan text \u001b[39m\n\u001b[36mthat wraps\u001b[39m\n\u001b[36m around\u001b[39m"
+        },
+        {
+            "input": "\u001b[36mcyan text that wraps around\u001b[39m",
+            "columns": 20,
+            "output": "\u001b[36mcyan text that wraps\u001b[39m\n\u001b[36m around\u001b[39m"
+        },
+        {
+            "input": "\u001b[36mcyan text that wraps around\u001b[39m",
+            "columns": 80,
+            "output": "\u001b[36mcyan text that wraps around\u001b[39m"
+        },
+        {
+            "input": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words here",
+            "columns": 1,
+            "output": "\u001b[1mb\u001b[22m\n\u001b[1mo\u001b[22m\n\u001b[1ml\u001b[22m\n\u001b[1md\u001b[22m\n \na\nn\nd\n \n\u001b[2md\u001b[22m\n\u001b[2mi\u001b[22m\n\u001b[2mm\u001b[22m\n \nw\no\nr\nd\ns\n \nh\ne\nr\ne"
+        },
+        {
+            "input": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words here",
+            "columns": 5,
+            "output": "\u001b[1mbold\u001b[22m \nand \n\u001b[2mdim\u001b[22m \nwords\n here"
+        },
+        {
+            "input": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words here",
+            "columns": 10,
+            "output": "\u001b[1mbold\u001b[22m and \n\u001b[2mdim\u001b[22m words \nhere"
+        },
+        {
+            "input": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words here",
+            "columns": 20,
+            "output": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words \nhere"
+        },
+        {
+            "input": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words here",
+            "columns": 80,
+            "output": "\u001b[1mbold\u001b[22m and \u001b[2mdim\u001b[22m words here"
+        },
+        {
+            "input": "line one\nline two is longer than the columns",
+            "columns": 1,
+            "output": "l\ni\nn\ne\n \no\nn\ne\nl\ni\nn\ne\n \nt\nw\no\n \ni\ns\n \nl\no\nn\ng\ne\nr\n \nt\nh\na\nn\n \nt\nh\ne\n \nc\no\nl\nu\nm\nn\ns"
+        },
+        {
+            "input": "line one\nline two is longer than the columns",
+            "columns": 5,
+            "output": "line \none\nline \ntwo \nis lo\nnger \nthan \nthe \ncolum\nns"
+        },
+        {
+            "input": "line one\nline two is longer than the columns",
+            "columns": 10,
+            "output": "line one\nline two \nis longer \nthan the \ncolumns"
+        },
+        {
+            "input": "line one\nline two is longer than the columns",
+            "columns": 20,
+            "output": "line one\nline two is longer \nthan the columns"
+        },
+        {
+            "input": "line one\nline two is longer than the columns",
+            "columns": 80,
+            "output": "line one\nline two is longer than the columns"
+        },
+        {
+            "input": "a  b   c    ",
+            "columns": 1,
+            "output": "a\n \n \nb\n \n \n \nc\n \n \n \n "
+        },
+        {
+            "input": "a  b   c    ",
+            "columns": 5,
+            "output": "a  b \n  c  \n  "
+        },
+        {
+            "input": "a  b   c    ",
+            "columns": 10,
+            "output": "a  b   c  \n  "
+        },
+        {
+            "input": "a  b   c    ",
+            "columns": 20,
+            "output": "a  b   c    "
+        },
+        {
+            "input": "a  b   c    ",
+            "columns": 80,
+            "output": "a  b   c    "
+        },
+        {
+            "input": "  leading spaces here",
+            "columns": 1,
+            "output": " \n \nl\ne\na\nd\ni\nn\ng\n \ns\np\na\nc\ne\ns\n \nh\ne\nr\ne"
+        },
+        {
+            "input": "  leading spaces here",
+            "columns": 5,
+            "output": "  lea\nding \nspace\ns \nhere"
+        },
+        {
+            "input": "  leading spaces here",
+            "columns": 10,
+            "output": "  leading \nspaces \nhere"
+        },
+        {
+            "input": "  leading spaces here",
+            "columns": 20,
+            "output": "  leading spaces \nhere"
+        },
+        {
+            "input": "  leading spaces here",
+            "columns": 80,
+            "output": "  leading spaces here"
+        },
+        {
+            "input": "中文字符测试中文字符测试",
+            "columns": 1,
+            "output": "\n中\n文\n字\n符\n测\n试\n中\n文\n字\n符\n测\n试"
+        },
+        {
+            "input": "中文字符测试中文字符测试",
+            "columns": 5,
+            "output": "中文\n字符\n测试\n中文\n字符\n测试"
+        },
+        {
+            "input": "中文字符测试中文字符测试",
+            "columns": 10,
+            "output": "中文字符测\n试中文字符\n测试"
+        },
+        {
+            "input": "中文字符测试中文字符测试",
+            "columns": 20,
+            "output": "中文字符测试中文字符\n测试"
+        },
+        {
+            "input": "中文字符测试中文字符测试",
+            "columns": 80,
+            "output": "中文字符测试中文字符测试"
+        },
+        {
+            "input": "📁 Use current directory with emoji 📂 folders",
+            "columns": 1,
+            "output": "\n📁\n \nU\ns\ne\n \nc\nu\nr\nr\ne\nn\nt\n \nd\ni\nr\ne\nc\nt\no\nr\ny\n \nw\ni\nt\nh\n \ne\nm\no\nj\ni\n \n\n📂\n \nf\no\nl\nd\ne\nr\ns"
+        },
+        {
+            "input": "📁 Use current directory with emoji 📂 folders",
+            "columns": 5,
+            "output": "📁 \nUse \ncurre\nnt \ndirec\ntory \nwith \nemoji\n 📂 \nfolde\nrs"
+        },
+        {
+            "input": "📁 Use current directory with emoji 📂 folders",
+            "columns": 10,
+            "output": "📁 Use \ncurrent \ndirectory \nwith emoji\n 📂 \nfolders"
+        },
+        {
+            "input": "📁 Use current directory with emoji 📂 folders",
+            "columns": 20,
+            "output": "📁 Use current \ndirectory with emoji\n 📂 folders"
+        },
+        {
+            "input": "📁 Use current directory with emoji 📂 folders",
+            "columns": 80,
+            "output": "📁 Use current directory with emoji 📂 folders"
+        },
+        {
+            "input": "word \u001b[32mgreenwordthatislong\u001b[39m end",
+            "columns": 1,
+            "output": "w\no\nr\nd\n \n\u001b[32mg\u001b[39m\n\u001b[32mr\u001b[39m\n\u001b[32me\u001b[39m\n\u001b[32me\u001b[39m\n\u001b[32mn\u001b[39m\n\u001b[32mw\u001b[39m\n\u001b[32mo\u001b[39m\n\u001b[32mr\u001b[39m\n\u001b[32md\u001b[39m\n\u001b[32mt\u001b[39m\n\u001b[32mh\u001b[39m\n\u001b[32ma\u001b[39m\n\u001b[32mt\u001b[39m\n\u001b[32mi\u001b[39m\n\u001b[32ms\u001b[39m\n\u001b[32ml\u001b[39m\n\u001b[32mo\u001b[39m\n\u001b[32mn\u001b[39m\n\u001b[32mg\u001b[39m\n \ne\nn\nd"
+        },
+        {
+            "input": "word \u001b[32mgreenwordthatislong\u001b[39m end",
+            "columns": 5,
+            "output": "word \n\u001b[32mgreen\u001b[39m\n\u001b[32mwordt\u001b[39m\n\u001b[32mhatis\u001b[39m\n\u001b[32mlong\u001b[39m \nend"
+        },
+        {
+            "input": "word \u001b[32mgreenwordthatislong\u001b[39m end",
+            "columns": 10,
+            "output": "word \n\u001b[32mgreenwordt\u001b[39m\n\u001b[32mhatislong\u001b[39m \nend"
+        },
+        {
+            "input": "word \u001b[32mgreenwordthatislong\u001b[39m end",
+            "columns": 20,
+            "output": "word \n\u001b[32mgreenwordthatislong\u001b[39m \nend"
+        },
+        {
+            "input": "word \u001b[32mgreenwordthatislong\u001b[39m end",
+            "columns": 80,
+            "output": "word \u001b[32mgreenwordthatislong\u001b[39m end"
+        },
+        {
+            "input": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to proceed with replication?\n   This will cause the destination database to be updated to match the source database.",
+            "columns": 1,
+            "output": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m\n \n \nD\no\n \ny\no\nu\n \nw\na\nn\nt\n \nt\no\n \np\nr\no\nc\ne\ne\nd\n \nw\ni\nt\nh\n \nr\ne\np\nl\ni\nc\na\nt\ni\no\nn\n?\n \n \n \nT\nh\ni\ns\n \nw\ni\nl\nl\n \nc\na\nu\ns\ne\n \nt\nh\ne\n \nd\ne\ns\nt\ni\nn\na\nt\ni\no\nn\n \nd\na\nt\na\nb\na\ns\ne\n \nt\no\n \nb\ne\n \nu\np\nd\na\nt\ne\nd\n \nt\no\n \nm\na\nt\nc\nh\n \nt\nh\ne\n \ns\no\nu\nr\nc\ne\n \nd\na\nt\na\nb\na\ns\ne\n."
+        },
+        {
+            "input": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to proceed with replication?\n   This will cause the destination database to be updated to match the source database.",
+            "columns": 5,
+            "output": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do\n you \nwant \nto pr\noceed\n with\n repl\nicati\non?\n   \nThis \nwill \ncause\n the \ndesti\nnatio\nn dat\nabase\n to \nbe up\ndated\n to \nmatch\n the \nsourc\ne \ndatab\nase."
+        },
+        {
+            "input": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to proceed with replication?\n   This will cause the destination database to be updated to match the source database.",
+            "columns": 10,
+            "output": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you \nwant to \nproceed \nwith repli\ncation?\n   This \nwill cause\n the desti\nnation \ndatabase \nto be \nupdated to\n match the\n source \ndatabase."
+        },
+        {
+            "input": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to proceed with replication?\n   This will cause the destination database to be updated to match the source database.",
+            "columns": 20,
+            "output": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to \nproceed with \nreplication?\n   This will cause \nthe destination \ndatabase to be \nupdated to match the\n source database."
+        },
+        {
+            "input": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to proceed with replication?\n   This will cause the destination database to be updated to match the source database.",
+            "columns": 80,
+            "output": "\u001b[90m \u001b[39m\n\u001b[36m*\u001b[39m  Do you want to proceed with replication?\n   This will cause the destination database to be updated to match the source \ndatabase."
+        },
+        {
+            "input": "crlf\r\nline",
+            "columns": 1,
+            "output": "c\nr\nl\nf\nl\ni\nn\ne"
+        },
+        {
+            "input": "crlf\r\nline",
+            "columns": 5,
+            "output": "crlf\nline"
+        },
+        {
+            "input": "crlf\r\nline",
+            "columns": 10,
+            "output": "crlf\nline"
+        },
+        {
+            "input": "crlf\r\nline",
+            "columns": 20,
+            "output": "crlf\nline"
+        },
+        {
+            "input": "crlf\r\nline",
+            "columns": 80,
+            "output": "crlf\nline"
+        },
+        {
+            "input": "",
+            "columns": 1,
+            "output": ""
+        },
+        {
+            "input": "",
+            "columns": 5,
+            "output": ""
+        },
+        {
+            "input": "",
+            "columns": 10,
+            "output": ""
+        },
+        {
+            "input": "",
+            "columns": 20,
+            "output": ""
+        },
+        {
+            "input": "",
+            "columns": 80,
+            "output": ""
+        },
+        {
+            "input": " ",
+            "columns": 1,
+            "output": " "
+        },
+        {
+            "input": " ",
+            "columns": 5,
+            "output": " "
+        },
+        {
+            "input": " ",
+            "columns": 10,
+            "output": " "
+        },
+        {
+            "input": " ",
+            "columns": 20,
+            "output": " "
+        },
+        {
+            "input": " ",
+            "columns": 80,
+            "output": " "
+        },
+        {
+            "input": "exactlyten exactlyten",
+            "columns": 1,
+            "output": "e\nx\na\nc\nt\nl\ny\nt\ne\nn\n \ne\nx\na\nc\nt\nl\ny\nt\ne\nn"
+        },
+        {
+            "input": "exactlyten exactlyten",
+            "columns": 5,
+            "output": "exact\nlyten\n \nexact\nlyten"
+        },
+        {
+            "input": "exactlyten exactlyten",
+            "columns": 10,
+            "output": "exactlyten\n \nexactlyten"
+        },
+        {
+            "input": "exactlyten exactlyten",
+            "columns": 20,
+            "output": "exactlyten \nexactlyten"
+        },
+        {
+            "input": "exactlyten exactlyten",
+            "columns": 80,
+            "output": "exactlyten exactlyten"
+        }
+    ],
+    "widthCases": [
+        {
+            "input": "",
+            "width": 0
+        },
+        {
+            "input": "abc",
+            "width": 3
+        },
+        {
+            "input": "\u001b[31mred\u001b[39m",
+            "width": 3
+        },
+        {
+            "input": "中文",
+            "width": 4
+        },
+        {
+            "input": "📁 x",
+            "width": 4
+        },
+        {
+            "input": "⚠️ warn",
+            "width": 7
+        },
+        {
+            "input": "✓",
+            "width": 1
+        },
+        {
+            "input": "●",
+            "width": 1
+        },
+        {
+            "input": "▪",
+            "width": 2
+        },
+        {
+            "input": "é",
+            "width": 1
+        },
+        {
+            "input": "á",
+            "width": 1
+        },
+        {
+            "input": "🇺🇸",
+            "width": 2
+        },
+        {
+            "input": "👍🏽",
+            "width": 2
+        },
+        {
+            "input": "👨‍👩‍👧",
+            "width": 2
+        },
+        {
+            "input": "\t",
+            "width": 0
+        },
+        {
+            "input": "\u001b]8;;http://x\u0007link\u001b]8;;\u0007",
+            "width": 4
+        },
+        {
+            "input": "…",
+            "width": 1
+        },
+        {
+            "input": "█",
+            "width": 1
+        }
+    ]
+}

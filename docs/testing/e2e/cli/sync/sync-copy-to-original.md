@@ -1,65 +1,46 @@
 # CLI Manual Test: Sync Copy to Original
 
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
 Test that `sync` is bidirectional: a file added on the copy side flows back to
 the original through the same `sync` command.
 
-## Prerequisites
+## Prep
 
-Navigate to the CLI source directory:
-
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH, clean up any previous test run, create the original database from the v6 fixture, replicate it to a copy, then add a new file to the **copy**:
 
 ```bash
-rm -rf /tmp/psi-test
-```
-
----
-
-### 2. Create the original database from the v6 fixture and replicate to a copy
-
-```bash
-cp -r ../../test/dbs/v6 /tmp/psi-test/original
-bun run start -- replicate --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes --force
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-sync-sync-copy-to-original
+mkdir -p /tmp/psi-cli-sync-sync-copy-to-original
+cp -r test/dbs/v6 /tmp/psi-cli-sync-sync-copy-to-original/original
+psi replicate --db /tmp/psi-cli-sync-sync-copy-to-original/original --dest /tmp/psi-cli-sync-sync-copy-to-original/copy --yes --force
+psi add test/test.png --db /tmp/psi-cli-sync-sync-copy-to-original/copy --yes
 ```
 
 Expected:
 - Replication completes successfully.
+- The `add` shows `Files added: 1`.
 
----
+## Test
 
-### 3. Add a new file to the **copy** database
-
-```bash
-bun run start -- add ../../test/test.png --db /tmp/psi-test/copy --yes
-```
-
-Expected:
-- Output shows `Files added: 1`.
-
----
-
-### 4. Sync the two databases
+### 1. Sync the two databases
 
 ```bash
-bun run start -- sync --db /tmp/psi-test/original --dest /tmp/psi-test/copy --yes
+psi sync --db /tmp/psi-cli-sync-sync-copy-to-original/original --dest /tmp/psi-cli-sync-sync-copy-to-original/copy --yes
 ```
 
 Expected:
 - Output includes `Sync completed successfully`.
 
----
+## Check
 
-### 5. Confirm the root hashes match
+### 2. Confirm the root hashes match
 
 ```bash
-bun run start -- root-hash --db /tmp/psi-test/original
-bun run start -- root-hash --db /tmp/psi-test/copy
+psi root-hash --db /tmp/psi-cli-sync-sync-copy-to-original/original
+psi root-hash --db /tmp/psi-cli-sync-sync-copy-to-original/copy
 ```
 
 Expected:

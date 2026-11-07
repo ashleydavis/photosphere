@@ -6,8 +6,7 @@ import DialogContent from '@mui/joy/DialogContent';
 import DialogTitle from '@mui/joy/DialogTitle';
 import FormControl from '@mui/joy/FormControl';
 import FormLabel from '@mui/joy/FormLabel';
-import Modal from '@mui/joy/Modal';
-import ModalDialog from '@mui/joy/ModalDialog';
+import { ResponsiveDialog } from './responsive-dialog';
 import Option from '@mui/joy/Option';
 import Select from '@mui/joy/Select';
 import type { ISharedSecretEntry } from '../context/platform-context';
@@ -112,11 +111,16 @@ export function ConfigureSecretsModal({
     //
     const [quickCreateType, setQuickCreateType] = useState<string | undefined>(undefined);
 
+    //
+    // Keyed on `open` alone: a caller may build initialValue afresh on every render, and a quick-created secret refreshes the
+    // secret lists, which re-renders the caller, so resetting on initialValue would throw away the secret just picked.
+    //
     useEffect(() => {
         if (open) {
             setWorking(initialValue);
         }
-    }, [open, initialValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     //
     // Handles the user picking a newly created secret. Auto-selects it for the matching field.
@@ -136,7 +140,9 @@ export function ConfigureSecretsModal({
     }
 
     //
-    // Renders one secret selector row with a dropdown and a "+ New" button.
+    // Renders one secret selector row with a dropdown and a "+ New" button. dataIdPrefix names that
+    // row's controls, because all three rows come from this one function and would otherwise share a
+    // single set of ids.
     //
     function renderSecretSelector(
         label: string,
@@ -144,6 +150,7 @@ export function ConfigureSecretsModal({
         selectedName: string | undefined,
         onSelectionChange: (name: string | undefined) => void,
         secretType: string,
+        dataIdPrefix: string,
     ): React.ReactNode {
         return (
             <FormControl sx={{ mb: 1 }}>
@@ -154,13 +161,15 @@ export function ConfigureSecretsModal({
                         value={selectedName ?? ''}
                         onChange={(_event, selected) => onSelectionChange((selected as string) || undefined)}
                         placeholder="None"
+                        slotProps={{ button: { 'data-id': `${dataIdPrefix}-select` } }}
                     >
-                        <Option value="">None</Option>
+                        <Option data-id={`${dataIdPrefix}-option-none`} value="">None</Option>
                         {options.map(secret => (
-                            <Option key={secret.name} value={secret.name}>{secret.name}</Option>
+                            <Option data-id={`${dataIdPrefix}-option-${secret.name}`} key={secret.name} value={secret.name}>{secret.name}</Option>
                         ))}
                     </Select>
                     <Button
+                        data-id={`${dataIdPrefix}-new-button`}
                         variant="outlined"
                         size="sm"
                         onClick={() => setQuickCreateType(secretType)}
@@ -174,8 +183,14 @@ export function ConfigureSecretsModal({
 
     return (
         <>
-        <Modal open={open} onClose={onClose}>
-            <ModalDialog data-id="configure-secrets-modal" onKeyDown={createDialogKeyHandler(() => onSave(working), false)} sx={{ minWidth: 480, maxWidth: 640, overflowY: 'auto', overflowX: 'hidden' }}>
+        <ResponsiveDialog
+            open={open}
+            onClose={onClose}
+            minWidth={480}
+            maxWidth={640}
+            dataId="configure-secrets-modal"
+            onKeyDown={createDialogKeyHandler(() => onSave(working), false)}
+            >
                 <DialogTitle>Configure Secrets</DialogTitle>
                 <DialogContent>
                     {fields.includes('s3') && renderSecretSelector(
@@ -184,6 +199,7 @@ export function ConfigureSecretsModal({
                         working.s3Key,
                         next => setWorking(prev => ({ ...prev, s3Key: next })),
                         's3-credentials',
+                        'configure-secrets-s3',
                     )}
 
                     {fields.includes('encryption') && renderSecretSelector(
@@ -192,6 +208,7 @@ export function ConfigureSecretsModal({
                         working.encryptionKey,
                         next => setWorking(prev => ({ ...prev, encryptionKey: next })),
                         'encryption-key',
+                        'configure-secrets-encryption',
                     )}
 
                     {fields.includes('geocoding') && renderSecretSelector(
@@ -200,14 +217,14 @@ export function ConfigureSecretsModal({
                         working.geocodingKey,
                         next => setWorking(prev => ({ ...prev, geocodingKey: next })),
                         'api-key',
+                        'configure-secrets-geocoding',
                     )}
                 </DialogContent>
                 <DialogActions>
-                    <Button variant="plain" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => onSave(working)}>Save</Button>
+                    <Button data-id="configure-secrets-cancel" variant="plain" onClick={onClose}>Cancel</Button>
+                    <Button data-id="configure-secrets-save" onClick={() => onSave(working)}>Save</Button>
                 </DialogActions>
-            </ModalDialog>
-        </Modal>
+        </ResponsiveDialog>
         {quickCreateType !== undefined && (
             <CreateSecretDialog
                 open={true}

@@ -1,58 +1,74 @@
 # Desktop Manual Test: View Database Details Page
 
-Test that the database details dialog shows the name, path, and configured
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
+
+Test that the database details dialog shows the name, path and configured
 secrets for a database entry.
 
-## Prerequisites
+## Prep
 
-Start the desktop app from source (run from the repo root):
+Open two terminals at the repo root, one for the desktop app and one for the CLI.
 
-```bash
-bun run dev
-```
-
-CLI commands are run from `apps/cli/`:
+In either terminal, clean up any previous run of this test:
 
 ```bash
-cd apps/cli/
+rm -rf /tmp/psi-desktop-view-database-details
 ```
 
-## Steps
-
-### 1. Clean up any previous test run
+Run this in both terminals. It keeps the test's settings, secrets, cache, logs and the app's own data (its web view data and its one-copy-at-a-time lock) in the test's folder, away from other tests and from a normal install:
 
 ```bash
-rm -rf /tmp/psi-desktop-test
+export PHOTOSPHERE_CONFIG_DIR=/tmp/psi-desktop-view-database-details/config
+export PHOTOSPHERE_VAULT_DIR=/tmp/psi-desktop-view-database-details/vault
+export PHOTOSPHERE_VAULT_TYPE=plaintext
+export PHOTOSPHERE_CACHE_DIR=/tmp/psi-desktop-view-database-details/cache
+export PHOTOSPHERE_LOG_DIR=/tmp/psi-desktop-view-database-details/logs
+export XDG_DATA_HOME=/tmp/psi-desktop-view-database-details/data
 ```
 
----
+`XDG_DATA_HOME` moves the app's data on Linux. On Windows use `export LOCALAPPDATA=/tmp/psi-desktop-view-database-details/data` in its place. On macOS the app's data cannot be moved this way, so quit any other copy of Photosphere before starting the test.
 
-### 2. Pre-create a database with the CLI
+In the app's terminal, start the desktop app from the repo root. Use the script for the platform you are on: `bun run linux`, `bun run macos` or `bun run windows`. It keeps running for the whole test:
 
 ```bash
-bun run start -- init --db /tmp/psi-desktop-test/db --yes
+bun run linux
 ```
 
----
+In the CLI terminal, build the CLI, put it on the PATH and pre-create a database:
 
-### 3. Add a database entry in the desktop app
+```bash
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+psi init --db /tmp/psi-desktop-view-database-details/db --yes
+```
 
-1. Navigate to the **Manage Databases** page in the desktop app.
-2. Click **Add database**.
-3. Enter the name `My Test DB` and the path `/tmp/psi-desktop-test/db`.
-4. Click **Add**.
+Expected:
+- The cleanup prints nothing.
+- The desktop app window opens.
+
+## Test
+
+### 1. Add a database entry in the desktop app
+
+1. Navigate to the **Manage Databases** (`sidebar-toggle-button`, then `sidebar-manage-databases`) page in the desktop app.
+2. Click **Add database** (`add-database-button`).
+3. Enter the name `My Test DB` (`database-name-input`) and the path `/tmp/psi-desktop-view-database-details/db` (`database-path-input`).
+4. Click **Add** (`add-database-confirm`).
 
 Expected:
 - The new entry appears on the Databases page.
 
----
+## Check
 
-### 4. View the database details
+### 2. View the database details
 
-1. From the row for `My Test DB`, click the **View** button.
+1. From the row for `My Test DB`, click the **View** button (`view-database-button`, the `My Test DB` row).
 
 Expected output contains all of:
 - The database name `My Test DB`.
-- The database path `/tmp/psi-desktop-test/db`.
-- An asset count (0 for a freshly-created database).
+- The database path `/tmp/psi-desktop-view-database-details/db`.
 - The configured secret ids (or "none" / equivalent if no secrets were attached).
+
+## Agent notes
+
+- How to drive the app: [Driving the apps as an agent](../../agent-driving.md). Click and type by the `data-id` given in brackets in each step.

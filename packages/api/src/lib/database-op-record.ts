@@ -21,11 +21,6 @@ export interface IDatabaseOpRecord {
     sequence: number;
 
     //
-    // The client where the operation originated.
-    //
-    clientId: string;
-
-    //
     // The name of the database collection to which the operation is applied.
     //
     collectionName: string;

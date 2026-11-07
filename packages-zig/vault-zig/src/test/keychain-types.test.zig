@@ -1,0 +1,161 @@
+const std = @import("std");
+const builtin = @import("builtin");
+const vault_zig = @import("vault-zig");
+const utils = @import("utils-zig");
+const keychain_types = vault_zig.keychain_types;
+const IStandIns = @import("stand-ins.zig").IStandIns;
+const errors = utils.errors;
+
+test "KEYCHAIN_PREFIX is psi-" {
+    try std.testing.expectEqualStrings("psi-", keychain_types.KEYCHAIN_PREFIX);
+}
+
+test "toKeychainName prepends the psi- prefix" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectEqualStrings("psi-my:key", try keychain_types.toKeychainName(arena.allocator(), "my:key"));
+}
+
+test "fromKeychainName strips the psi- prefix" {
+    try std.testing.expectEqualStrings("my:key", keychain_types.fromKeychainName("psi-my:key"));
+    try std.testing.expectEqualStrings("", keychain_types.fromKeychainName("ps"));
+}
+
+test "runCommand resolves with trimmed stdout" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const stdout = try keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "echo '  hello world  '" });
+    try std.testing.expectEqualStrings("hello world", stdout);
+}
+
+test "runCommand rejects with the exit code and trimmed stderr" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "echo oops >&2; exit 3" });
+    try std.testing.expectError(error.Thrown, result);
+    try std.testing.expectEqualStrings("Command \"sh -c echo oops >&2; exit 3\" exited with code 3. stderr: oops", errors.lastErrorMessage());
+}
+
+test "runCommand rejects when the program does not exist" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-no-such-program"});
+    try std.testing.expectError(error.Thrown, result);
+    try std.testing.expectEqualStrings("spawn photosphere-no-such-program ENOENT", errors.lastErrorMessage());
+}
+
+test "spawn pipes stdin to the child process" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const result = try keychain_types.spawn(arena.allocator(), std.testing.io, &.{"cat"}, "line one\nline two");
+    try std.testing.expectEqual(@as(?u8, 0), result.code);
+    try std.testing.expectEqualStrings("line one\nline two", result.stdout);
+    try std.testing.expectEqualStrings("", result.stderr);
+}
+
+test "spawn fails when the child exits without reading its input" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // More than a pipe buffer holds, so the write is still going when the child exits.
+    const input = try allocator.alloc(u8, 4 * 1024 * 1024);
+    @memset(input, 'x');
+    const args: []const []const u8 = if (builtin.os.tag == .windows) &.{ "cmd", "/c", "exit 0" } else &.{ "sh", "-c", "exit 0" };
+    try std.testing.expectError(error.BrokenPipe, keychain_types.spawn(allocator, std.testing.io, args, input));
+}
+
+//
+// Runs spawn, for the test below to run it as a task that can be cancelled.
+//
+fn spawnTask(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8) anyerror!keychain_types.ISpawnResult {
+    return keychain_types.spawn(allocator, io, args, null);
+}
+
+//
+// A task that is cancelled while spawn waits for the output of a child that is still running stops waiting and fails
+// with the cancellation, and does not return the output it has read so far. The child tells the test it is running by
+// creating a file, so the cancellation comes while spawn is waiting, not before it has started the child.
+//
+test "spawn stops waiting for the child's output when its task is cancelled" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var tmpDir = std.testing.tmpDir(.{});
+    defer tmpDir.cleanup();
+    const currentPath = try std.process.currentPathAlloc(io, allocator);
+    const readyPath = try std.fs.path.join(allocator, &.{ currentPath, ".zig-cache", "tmp", &tmpDir.sub_path, "ready" });
+    const args: []const []const u8 = &.{ "sh", "-c", try std.fmt.allocPrint(allocator, "echo started; touch '{s}'; while :; do :; done", .{readyPath}) };
+
+    var future = try io.concurrent(spawnTask, .{ allocator, io, args });
+    var waitedMilliseconds: i64 = 0;
+    while (true) {
+        tmpDir.dir.access(io, "ready", .{}) catch |err| {
+            try std.testing.expectEqual(error.FileNotFound, err);
+            try std.testing.expect(waitedMilliseconds < 30_000);
+            try io.sleep(.fromMilliseconds(10), .awake);
+            waitedMilliseconds += 10;
+            continue;
+        };
+        break;
+    }
+    try std.testing.expectError(error.Canceled, future.cancel(io));
+}
+
+//
+// A fake spawn function that always succeeds with a fixed stdout.
+//
+fn fixedSpawn(allocator: std.mem.Allocator, io: std.Io, args: []const []const u8, stdinData: ?[]const u8) anyerror!keychain_types.ISpawnResult {
+    _ = allocator;
+    _ = io;
+    _ = args;
+    _ = stdinData;
+    return .{ .code = 0, .stdout = "fake\n", .stderr = "" };
+}
+
+test "setSpawnFunction replaces and restores the spawn function" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    keychain_types.setSpawnFunction(fixedSpawn);
+    defer keychain_types.setSpawnFunction(null);
+    try std.testing.expectEqualStrings("fake", try keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"anything"}));
+    keychain_types.setSpawnFunction(null);
+    try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-no-such-program"}));
+}
+
+test "runCommand trims stdout and stderr as String.prototype.trim does, Unicode spaces included" {
+    if (builtin.os.tag == .windows) {
+        return;
+    }
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    // U+00A0 and U+3000 around the text.
+    const stdout = try keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "printf '\\302\\240hello\\343\\200\\200'" });
+    try std.testing.expectEqualStrings("hello", stdout);
+    try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{ "sh", "-c", "printf '\\302\\240oops\\302\\240' >&2; exit 3" }));
+    try std.testing.expectEqualStrings("Command \"sh -c printf '\\302\\240oops\\302\\240' >&2; exit 3\" exited with code 3. stderr: oops", errors.lastErrorMessage());
+}
+
+test "runCommand runs the program PATH finds and rejects a program PATH does not find" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var standIns = try IStandIns.setUp(arena.allocator(), std.testing.io);
+    defer standIns.tearDown();
+    try std.testing.expectEqualStrings("fake", try keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-stand-in-output"}));
+    try std.testing.expectError(error.Thrown, keychain_types.runCommand(arena.allocator(), std.testing.io, &.{"photosphere-no-such-program"}));
+    try std.testing.expectEqualStrings("spawn photosphere-no-such-program ENOENT", errors.lastErrorMessage());
+}

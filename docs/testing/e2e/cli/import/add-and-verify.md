@@ -1,51 +1,49 @@
 # CLI Manual Test: Add and Verify
 
-Test that a database can be created, a file imported, and the database verified using the CLI source.
+**Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-## Prerequisites
+Test that a database can be created, a file imported, and the database verified using the CLI.
 
-Navigate to the CLI source directory:
+## Prep
 
-```bash
-cd apps/cli/
-```
-
-## Steps
-
-### 1. Clean up any previous test run
+From the repo root, build the CLI, put it on the PATH and clean up any previous test run:
 
 ```bash
-rm -rf /tmp/psi-test
+zig build
+export PATH="$PWD/zig-out/bin:$PATH"
+rm -rf /tmp/psi-cli-import-add-and-verify
 ```
+
+Expected: no output.
+
+## Test
+
+### 1. Create a new database
+
+```bash
+psi init --db /tmp/psi-cli-import-add-and-verify/source --yes
+```
+
+Expected: Output confirms a new media file database was created in `/tmp/psi-cli-import-add-and-verify/source`.
 
 ---
 
-### 2. Create a new database
+### 2. Import a file
 
 ```bash
-bun run start -- init --db /tmp/psi-test/source --yes
-```
-
-Expected: Output confirms a new media file database was created in `/tmp/psi-test/source`.
-
----
-
-### 3. Import a file
-
-```bash
-bun run start -- add ../../test/test.jpg --db /tmp/psi-test/source
+psi add test/test.jpg --db /tmp/psi-cli-import-add-and-verify/source
 ```
 
 Expected:
 - The file is reported as added.
 - No errors are shown.
 
----
+## Check
 
-### 4. List files in the database
+### 3. List files in the database
 
 ```bash
-bun run start -- list --db /tmp/psi-test/source
+psi list --db /tmp/psi-cli-import-add-and-verify/source
 ```
 
 Expected:
@@ -53,10 +51,10 @@ Expected:
 
 ---
 
-### 5. Check that the database is ok
+### 4. Check that the database is ok
 
 ```bash
-bun run start -- verify --db /tmp/psi-test/source
+psi verify --db /tmp/psi-cli-import-add-and-verify/source
 ```
 
 Expected:

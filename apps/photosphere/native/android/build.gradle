@@ -1,0 +1,21 @@
+// The root build file. The SDK levels, the NDK and the library versions come from variables.gradle beside it.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // The Android Gradle Plugin. It needs Gradle 8.7 (see the wrapper) and JDK 17.
+        classpath 'com.android.tools.build:gradle:8.6.0'
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { log } from 'utils';
-import Modal from '@mui/joy/Modal';
 import ModalClose from '@mui/joy/ModalClose';
-import ModalDialog from '@mui/joy/ModalDialog';
 import DialogTitle from '@mui/joy/DialogTitle';
 import DialogContent from '@mui/joy/DialogContent';
 import DialogActions from '@mui/joy/DialogActions';
@@ -12,6 +10,7 @@ import Box from '@mui/joy/Box';
 import { type IDatabaseEntry, type ISharedSecretEntry } from '../context/platform-context';
 import { ViewSecretDialog } from './view-secret-dialog';
 import { createDialogKeyHandler } from '../lib/dialog-keys';
+import { ResponsiveDialog } from './responsive-dialog';
 
 //
 // Props for ViewDatabaseDialog.
@@ -36,9 +35,9 @@ export interface IViewDatabaseDialogProps {
 //
 // A labelled read-only row rendered inside the dialog content.
 //
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, dataId }: { label: string; value: string; dataId: string }) {
     return (
-        <Typography level="body-md" sx={{ mb: 1 }}>
+        <Typography data-id={dataId} level="body-md" sx={{ mb: 1 }}>
             <strong>{label}:</strong> {value}
         </Typography>
     );
@@ -64,7 +63,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
                 {found !== undefined
                     ? (
                         <>
-                            <Typography level="body-md" sx={{ flexGrow: 1 }}>{found.name}</Typography>
+                            <Typography data-id={`linked-secret-name-${found.name}`} level="body-md" sx={{ flexGrow: 1 }}>{found.name}</Typography>
                             <Button
                                 data-id={buttonDataId}
                                 variant="outlined"
@@ -76,7 +75,7 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
                         </>
                     )
                     : (
-                        <Typography level="body-md" color="neutral">None</Typography>
+                        <Typography data-id={`${buttonDataId}-none`} level="body-md" color="neutral">None</Typography>
                     )
                 }
             </Box>
@@ -85,27 +84,31 @@ export function ViewDatabaseDialog({ open, entry, allSecrets, onClose, getSecret
 
     return (
         <>
-            <Modal open={open} onClose={onClose}>
-                <ModalDialog onKeyDown={createDialogKeyHandler(onClose, false)} sx={{ minWidth: 480, maxWidth: 680 }}>
-                    <ModalClose />
-                    <DialogTitle>View Database</DialogTitle>
-                    <DialogContent>
-                        <InfoRow label="Name" value={entry.name} />
-                        <InfoRow label="Description" value={entry.description} />
-                        <InfoRow label="Path" value={entry.path} />
-                        <InfoRow label="Origin" value={entry.origin ?? ''} />
+            <ResponsiveDialog
+                open={open}
+                onClose={onClose}
+                minWidth={480}
+                maxWidth={680}
+                onKeyDown={createDialogKeyHandler(onClose, false)}
+                >
+                <ModalClose />
+                <DialogTitle>View Database</DialogTitle>
+                <DialogContent>
+                    <InfoRow label="Name" value={entry.name} dataId="view-database-name" />
+                    <InfoRow label="Description" value={entry.description} dataId="view-database-description" />
+                    <InfoRow label="Path" value={entry.path} dataId="view-database-path" />
+                    <InfoRow label="Origin" value={entry.origin ?? ''} dataId="view-database-origin" />
 
-                        <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Linked Secrets</Typography>
+                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Linked Secrets</Typography>
 
-                        {renderLinkedSecret('S3 Credentials', entry.s3Key, 'view-secret-s3-button')}
-                        {renderLinkedSecret('Encryption Key', entry.encryptionKey, 'view-secret-encryption-button')}
-                        {renderLinkedSecret('Geocoding API Key', entry.geocodingKey, 'view-secret-geocoding-button')}
-                    </DialogContent>
-                    <DialogActions>
-                        <Button variant="plain" onClick={onClose}>Close</Button>
-                    </DialogActions>
-                </ModalDialog>
-            </Modal>
+                    {renderLinkedSecret('S3 Credentials', entry.s3Key, 'view-secret-s3-button')}
+                    {renderLinkedSecret('Encryption Key', entry.encryptionKey, 'view-secret-encryption-button')}
+                    {renderLinkedSecret('Geocoding API Key', entry.geocodingKey, 'view-secret-geocoding-button')}
+                </DialogContent>
+                <DialogActions>
+                    <Button data-id="view-database-close-button" variant="plain" onClick={onClose}>Close</Button>
+                </DialogActions>
+            </ResponsiveDialog>
 
             {viewingSecret !== undefined && (
                 <ViewSecretDialog
