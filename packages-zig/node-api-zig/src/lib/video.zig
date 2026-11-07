@@ -84,7 +84,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
         .height = assetInfo.dimensions.height,
     };
     const thumbnailStartedAt = dateNow(io);
-    var thumbnailPath = try resizeImage(allocator, io, log, toolRunner, screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, 90);
+    var thumbnailPath = try resizeImage(allocator, io, log, toolRunner, screenshotPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, 90, null);
 
     const metadataDocument: ?BsonDocument = if (assetInfo.metadata) |metadata| (if (metadata == .document) metadata.document else null) else null;
     const imageTransformation = try getVideoTransformation(allocator, metadataDocument);
@@ -104,7 +104,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY, null);
     const microMs = dateNow(io) - microStartedAt;
 
     var photoDate: ?[]const u8 = if (assetInfo.createdAt) |createdAt| try toISOString(allocator, createdAt, "Invalid time value") else null;

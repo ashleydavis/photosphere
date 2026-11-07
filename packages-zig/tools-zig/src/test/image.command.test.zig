@@ -151,9 +151,42 @@ test "resize and transform write their numbers as a template string writes a num
     else
         "../test/test.png -rotate 1e+21 out/temp_transform_output_fixed.jpg";
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, "out", uuids.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg", .transformation = null }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(resizeArguments, try fakeTools.argumentsOf("magick"));
 
     try std.testing.expectError(error.Thrown, image.transform(allocator, io, log, fakeTools.runner(), .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(transformArguments, try fakeTools.argumentsOf("magick"));
+}
+
+test "resize puts a flip and a turn before the resize, in the same command" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    // A magick that writes no image, so the validation after each command fails.
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "",
+        },
+    });
+    var uuids: FixedUuidGenerator = .{};
+    var image = Image.init("../test/test.png");
+
+    // `-flop` then `-rotate`, as transform writes them, between the input and `-resize`, so the picture is turned before it is made smaller.
+    const transformedArguments = if (builtin.os.tag == .windows)
+        "../test/test.png -flop -rotate 270 -resize 45x50 -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
+    else
+        "../test/test.png -flop -rotate 270 -resize 45x50 -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 45, .height = 50, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = true, .rotate = 270, .changeOrientation = true } }, "out", uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(transformedArguments, try fakeTools.argumentsOf("magick"));
+
+    // A transformation that asks for nothing (no flip, a turn of 0) adds nothing to the command.
+    const plainArguments = if (builtin.os.tag == .windows)
+        "../test/test.png -resize 45x50 -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
+    else
+        "../test/test.png -resize 45x50 -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 45, .height = 50, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = false, .rotate = 0 } }, "out", uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(plainArguments, try fakeTools.argumentsOf("magick"));
 }
