@@ -174,8 +174,8 @@ test "extractScreenshot writes the time the way JavaScript writes a number" {
     var video = Video.init("../test/multiple-files/test.mp4");
     _ = try video.extractScreenshot(allocator, io, log, fakeTools.runner(), "out.jpg", 1e-7);
 
-    // Both paths are passed as arguments of their own (`ffmpeg -i <file> ... -y <output>`), unquoted.
-    try std.testing.expectEqualStrings("-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg", try fakeTools.argumentsOf("ffmpeg"));
+    // Both paths are passed as arguments of their own (`ffmpeg -ss <time> -i <file> ... -y <output>`), unquoted.
+    try std.testing.expectEqualStrings("-ss 1e-7 -i ../test/multiple-files/test.mp4 -vframes 1 -q:v 2 -y out.jpg", try fakeTools.argumentsOf("ffmpeg"));
 }
 
 test "verifyFfprobe and verifyFfmpeg report the built-in tool failing with no install advice" {

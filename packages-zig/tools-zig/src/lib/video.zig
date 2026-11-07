@@ -216,7 +216,7 @@ pub const Video = struct {
         try utils.js_number.writeNumber(&qualityText.writer, jsRound((100 - quality) / 10));
 
         // -y forces the overwrite of the output.
-        _ = runTool(allocator, io, log, tools, "ffmpeg", &.{ "-i", self.filePath, "-ss", timeText.written(), "-vframes", "1", "-q:v", qualityText.written(), "-y", outputPath }) catch |err| {
+        _ = runTool(allocator, io, log, tools, "ffmpeg", &.{ "-ss", timeText.written(), "-i", self.filePath, "-vframes", "1", "-q:v", qualityText.written(), "-y", outputPath }) catch |err| {
             return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;
