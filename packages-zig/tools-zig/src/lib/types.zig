@@ -57,5 +57,9 @@ pub const ResizeOptions = struct {
 
     // Keep the aspect ratio (true when not given).
     maintainAspectRatio: ?bool = null,
+
+    // Let a JPEG be decoded at a reduced size, no smaller than the width and height, before it is resized (false when not
+    // given). Needs both a width and a height.
+    reducedJpegDecode: bool = false,
 };
 

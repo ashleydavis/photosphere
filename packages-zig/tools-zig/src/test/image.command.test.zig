@@ -157,3 +157,54 @@ test "resize and transform write their numbers as a template string writes a num
     try std.testing.expectError(error.Thrown, image.transform(allocator, io, log, fakeTools.runner(), .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(transformArguments, try fakeTools.argumentsOf("magick"));
 }
+
+test "resize with a reduced JPEG decode hints it at half as big again as the target, before the input" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    // A magick that writes no image, so the validation after each command fails.
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "",
+        },
+    });
+    var uuids: FixedUuidGenerator = .{};
+    var image = Image.init("../test/test.jpg");
+
+    // 1333x1000 is hinted as 2000x1500: 1333 * 1.5 is 1999.5, rounded up, and 1000 * 1.5 is 1500. The define comes before
+    // the input, as ImageMagick reads it when it decodes the input.
+    const hintedArguments = if (builtin.os.tag == .windows)
+        "-define jpeg:size=2000x1500 ../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
+    else
+        "-define jpeg:size=2000x1500 ../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true }, "out", uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(hintedArguments, try fakeTools.argumentsOf("magick"));
+
+    // Without it there is no hint.
+    const plainArguments = if (builtin.os.tag == .windows)
+        "../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
+    else
+        "../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false }, "out", uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(plainArguments, try fakeTools.argumentsOf("magick"));
+}
+
+test "resize refuses a reduced JPEG decode without both a width and a height" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "",
+        },
+    });
+    var uuids: FixedUuidGenerator = .{};
+    var image = Image.init("../test/test.jpg");
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, fakeTools.runner(), .{ .width = 0, .height = 45, .quality = null, .format = null, .ext = "jpg", .reducedJpegDecode = true }, "out", uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings("A reduced JPEG decode needs both a width and a height, given 0x45", utils.errors.lastErrorMessage());
+}
