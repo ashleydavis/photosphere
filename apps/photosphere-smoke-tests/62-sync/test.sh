@@ -22,6 +22,9 @@ trap 'stop_app "$APP_PORT" "$TMP_DIR"' EXIT
 # with the app stopped, so nothing can write state back underneath it.
 "${PLATFORM}_reset_app_state" || exit 1
 
+# This test waits for a sync with "Only sync over Wi-Fi" on, so the device must be on Wi-Fi.
+require_wifi_for_sync
+
 # Syncing is off on a fresh install, so it is switched on before launch, where the app reads it.
 "${PLATFORM}_seed_sync_config" "true" "true" || exit 1
 

@@ -440,8 +440,22 @@ jobs:
           # the guest plays video: scenario 21-import-video opens a video, and the emulator vanished during it ("device
           # 'emulator-5554' not found"), failing every scenario after it.
           emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
-          # One line: the action runs each line of `script:` as its own shell, so only a single line's exit status reaches the job.
-          script: bun run test:ziggy:and
+          # The action runs each line of `script:` as its own `sh -c`, in order, with ANDROID_SERIAL naming the emulator, and a line that
+          # exits non-zero fails the step without running the lines after it. So every line is one whole command: an if block or a loop
+          # spread over several lines would be split apart.
+          #
+          # The scenarios that wait for a sync (24-sync-settings, 42-s3-sync-prefetch, 62-sync and others) have "Only sync over Wi-Fi" on,
+          # and the app's sync gate refuses a sync while the WebView reports the connection as cellular, which it takes from the device's
+          # default network. The emulator has a virtual cellular radio beside its virtual Wi-Fi, and in one run its default network stayed
+          # cellular throughout, so those three timed out. Mobile data is switched off and Wi-Fi on, and the run does not start until
+          # the default network reads as Wi-Fi, which fails the step naming what it read instead. This is the CI-only emulator the action
+          # started for this job, not a pool emulator. The scenarios reach the host at 10.0.2.2, the emulator's alias for the host
+          # loopback, which the Wi-Fi network routes to as the cellular one does.
+          script: |
+            "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell svc data disable
+            "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell svc wifi enable
+            bash scripts/android/require-wifi-default-network.sh "$ANDROID_SERIAL" 120
+            bun run test:ziggy:and
 
       # A failed scenario keeps its directory, which holds the app's log, the device's log and the core's own log. Without this upload
       # a failure that did not happen again left nothing to diagnose it from once the runner had gone.

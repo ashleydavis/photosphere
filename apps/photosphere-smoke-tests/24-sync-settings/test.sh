@@ -49,6 +49,9 @@ wait_for_config() {
     exit 1
 }
 
+# "Only sync over Wi-Fi" is on by default and the gate is asserted to open below, so the device must be on Wi-Fi.
+require_wifi_for_sync
+
 start_app "$TMP_DIR"
 wait_for_ready "$APP_PORT"
 
