@@ -427,9 +427,24 @@ const IThirdPartyLibraries = struct {
 // when its build-complete file is missing, so a new checkout needs no separate step and a build that was killed part way through
 // is finished, and costs one file check when it is there. That build installs build-complete after everything else.
 //
+// Several builds of this checkout run at once (the Zig unit tests beside the CLI smoke tests, and every lane of test:everything), and
+// on a new checkout each found build-complete missing and ran that build into the same zig-out. Zig installs a file by writing it
+// under a random name in lib and renaming it, so one build listed the other's half-written file and failed to link it ("unrecognized
+// file extension ... lib/c68e5500b58f7c7a"). The check, the build and the listing are therefore done holding an exclusive lock on
+// zig-out/<arch>-<os>-<abi>/build.lock: the operating system's file lock, which works across processes on Linux, macOS and Windows
+// and is released when the file is closed, or when the process dies. Whoever waited for it then finds build-complete and only lists,
+// and nothing writes lib once build-complete is there. The listing still takes only the target's static libraries, because a build
+// that was killed part way through leaves its half-written files in lib for good.
+//
 fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !IThirdPartyLibraries {
     const directory = b.fmt("third-party/{s}/zig-out/{s}-{s}-{s}", .{ name, @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
     const io = b.graph.io;
+    try b.build_root.handle.createDirPath(io, directory);
+    const lock_file = try b.build_root.handle.createFile(io, b.fmt("{s}/build.lock", .{directory}), .{
+        .truncate = false,
+        .lock = .exclusive,
+    });
+    defer lock_file.close(io);
     b.build_root.handle.access(io, b.fmt("{s}/build-complete", .{directory}), .{}) catch |err| switch (err) {
         error.FileNotFound => {
             try buildThirdPartyLibraries(b, target, name);
@@ -443,7 +458,7 @@ fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name
     var archives: std.ArrayList(std.Build.LazyPath) = .empty;
     var iterator = library_directory.iterate();
     while (try iterator.next(io)) |entry| {
-        if (entry.kind != .file) {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, target.result.staticLibSuffix())) {
             continue;
         }
         try archives.append(b.allocator, b.path(b.fmt("{s}/lib/{s}", .{ directory, entry.name })));
