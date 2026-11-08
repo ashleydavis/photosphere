@@ -28,15 +28,15 @@ fn expectProbeError(log: ILog, allocator: std.mem.Allocator, probeJson: []const 
     try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
 }
 
-test "ffprobe output with a null stream, a missing format and an r_frame_rate that is not a string throws TypeErrors" {
+test "ffprobe output with a null stream, a missing or null format and an r_frame_rate that is not a string throws, naming the video" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\"},null]}", "Failed to get video info: TypeError: null is not an object (evaluating 's.codec_type')");
-    try expectProbeError(log, allocator, "{\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'format.tags')");
-    try expectProbeError(log, allocator, "{\"format\":null,\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: TypeError: null is not an object (evaluating 'format.tags')");
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":30}]}", "Failed to get video info: TypeError: videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
+    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\"},null]}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 lists a stream that is null");
+    try expectProbeError(log, allocator, "{\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 has no format section");
+    try expectProbeError(log, allocator, "{\"format\":null,\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 has a format section that is null");
+    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":30}]}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 has a video stream whose r_frame_rate is not a string");
 }
 
 test "ffprobe output is read with new Date, Number, parseFloat and parseInt of any value and the spread of the tags" {
@@ -66,20 +66,19 @@ test "ffprobe output is read with new Date, Number, parseFloat and parseInt of a
     try std.testing.expectEqual(@as(?f64, 1), booleanDate.createdAt);
 }
 
-test "ffprobe output that is not an object, and a streams value that is not an array, throw TypeErrors" {
+test "ffprobe output that is not an object, and a streams value that is missing, null or not an array, throw, naming the video" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    // `probeData.format` of null throws; of any other value that is not an object it is undefined, and it is
-    // `probeData.streams.find` of that undefined that throws.
-    try expectProbeError(log, allocator, "null", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.format')");
-    try expectProbeError(log, allocator, "5", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "[]", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "{}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":null}", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":\"x\"}", "Failed to get video info: TypeError: probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)");
+    // The streams are checked before the format, so an empty object is reported for its missing streams.
+    try expectProbeError(log, allocator, "null", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 is not a JSON object");
+    try expectProbeError(log, allocator, "5", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 is not a JSON object");
+    try expectProbeError(log, allocator, "[]", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 is not a JSON object");
+    try expectProbeError(log, allocator, "{}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 has no streams list");
+    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":null}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 has a streams list that is null");
+    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":\"x\"}", "Failed to get video info: Error: ffprobe output for ../test/multiple-files/test.mp4 has a streams value that is not a list");
 }
 
 test "ffprobe values of every JSON type are read" {

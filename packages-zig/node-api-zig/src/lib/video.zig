@@ -117,7 +117,7 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
         if (pathExists(io, jsonFilePath)) {
             const jsonFileData = try std.Io.Dir.cwd().readFileAlloc(io, jsonFilePath, allocator, .unlimited);
             const photoData = try jsonParse(allocator, jsonFileData);
-            const timestamp = try photoTakenTimestamp(photoData);
+            const timestamp = try photoTakenTimestamp(jsonFilePath, photoData);
             if (isValueTruthy(timestamp)) {
                 const timestampText = try jsString(allocator, timestamp);
                 const seconds = parseInt(timestampText, null);
@@ -165,13 +165,13 @@ pub fn getVideoDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
 }
 
 //
-// The photoTakenTime timestamp of the value parsed from the JSON file. Reading a property of null or
-// undefined throws a TypeError.
+// The photoTakenTime timestamp of the value parsed from the JSON file, which throws when the file holds null. The
+// path of the JSON file is only for the error message.
 //
-fn photoTakenTimestamp(photoData: BsonValue) !BsonValue {
+fn photoTakenTimestamp(jsonFilePath: []const u8, photoData: BsonValue) !BsonValue {
     switch (photoData) {
         .null, .undefined => {
-            return errors.throwError("null is not an object (evaluating 'photoData.photoTakenTime')", .{});
+            return errors.throwError("The JSON file {s} beside the video holds null instead of an object", .{jsonFilePath});
         },
         .document => |document| {
             const photoTakenTime = document.get("photoTakenTime") orelse {
