@@ -1,6 +1,6 @@
 # The Photosphere App for iOS, built once and then tested, packaged and released. prepare-tag resolves the release tag, and each
 # third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and caches it, all side by
-# side. Then app-build builds the app for the simulator over those libraries and saves it in the cache under a key of its own for
+# side. Then app-build builds the app for the simulator over those libraries and hands it to the later jobs as an artifact of
 # this run. The later jobs restore that instead of building: app-smoke-tests runs the simulator build and package packages the
 # app for a device over the restored Zig build cache. zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript, which
 # their own jobs build. create-release, once every other job has passed, publishes the package.
@@ -274,16 +274,16 @@ jobs:
         run: bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
 
       - name: Save the Photosphere App build
-        uses: actions/cache/save@v4
+        uses: ./.github/actions/handoff-upload
         with:
-          path: |
+          name: app-ios
+          paths: |
             out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
             .zig-cache
             third-party/aws/zig-out
             third-party/zlib-ng/zig-out
             third-party/imagemagick/zig-out
             third-party/ffmpeg/zig-out
-          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on an iOS simulator, on the simulator build app-build made, which
@@ -350,17 +350,9 @@ jobs:
 
       # The CLI that makes the scenarios' fixtures is built for the runner's macOS. app-build saved its libraries with the app.
       - name: Restore the Photosphere App build
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/handoff-download
         with:
-          path: |
-            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
-            .zig-cache
-            third-party/aws/zig-out
-            third-party/zlib-ng/zig-out
-            third-party/imagemagick/zig-out
-            third-party/ffmpeg/zig-out
-          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
-          fail-on-cache-miss: true
+          name: app-ios
 
       - name: Run the Photosphere App iOS smoke tests
         timeout-minutes: 75
@@ -537,18 +529,11 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
       # The build app-build saved, with its Zig build cache and libraries, laid over the test build's own cache, so Zig reuses any
-      # compile step the two builds have in common. The paths are the ones app-build saved, which a restore has to name exactly.
+      # compile step the two builds have in common. The handoff unpacks it at the paths app-build packed.
       - name: Restore the app build's Zig build cache
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/handoff-download
         with:
-          path: |
-            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
-            .zig-cache
-            third-party/aws/zig-out
-            third-party/zlib-ng/zig-out
-            third-party/imagemagick/zig-out
-            third-party/ffmpeg/zig-out
-          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
+          name: app-ios
 
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
@@ -622,17 +607,9 @@ jobs:
         run: bun run --filter=ziggy setup:ios
 
       - name: Restore the Photosphere App build
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/handoff-download
         with:
-          path: |
-            out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app
-            .zig-cache
-            third-party/aws/zig-out
-            third-party/zlib-ng/zig-out
-            third-party/imagemagick/zig-out
-            third-party/ffmpeg/zig-out
-          key: photosphere-app-ios-${{ github.sha }}-${{ github.run_id }}
-          fail-on-cache-miss: true
+          name: app-ios
 
       - name: Set config
         shell: bash
@@ -651,13 +628,13 @@ jobs:
         run: bun run --filter=ziggy package:ios -- --version "$VERSION" --output-dir "$PWD/out/package"
 
       - name: Save the Photosphere App package
-        uses: actions/cache/save@v4
+        uses: ./.github/actions/handoff-upload
         with:
-          path: out/package/*.ipa
-          key: photosphere-package-ios-${{ github.sha }}-${{ github.run_id }}
+          name: package-ios
+          paths: out/package/*.ipa
 
-  # Publishes the package the package job made, restored from the cache under its key, once every other job has passed. A restore
-  # matches only a save of the same paths, so it restores the whole save.
+  # Publishes the package the package job made, taken from its handoff, once every other job has passed. The handoff
+  # restores everything the package job packed.
   create-release:
     timeout-minutes: 20
     needs: [prepare-tag, app-build, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
@@ -671,11 +648,9 @@ jobs:
           fetch-depth: 0
 
       - name: Restore the Photosphere App package
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/handoff-download
         with:
-          path: out/package/*.ipa
-          key: photosphere-package-ios-${{ github.sha }}-${{ github.run_id }}
-          fail-on-cache-miss: true
+          name: package-ios
 
       - name: Put the Photosphere App packages where the release steps read them
         shell: bash
