@@ -7,28 +7,27 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 - `third-party/imagemagick` and `third-party/ffmpeg` build static libraries that are linked into both the CLI and the app.
   - ImageMagick is built with libjpeg, libpng and libwebp, and no HEIF delegate.
   - FFmpeg is configured as LGPL, with every decoder and demuxer, the file protocol, only the mjpeg encoder and a short list of filters.
-- `packages-zig/media-tools-zig` runs the tools in the program's own process:
-  - `image-magick.zig` calls `MagickImageCommand` and `IdentifyImageCommand`, collects ImageMagick's messages from the exception and sets a security policy at start.
-  - `ffmpeg.zig` calls the patched `ffmpeg_run` and `ffprobe_run`, which keep their state per run. FFmpeg's log goes through a per-run message queue to the calling thread's log.
-- `MediaTools` is started once on the main thread:
-  - CLI: `apps/cli-zig/index.zig`, in `main`.
-  - App: `packages-zig/photosphere-core/src/lib/main-state.zig`, in `MainState.create`.
-- A task on any thread runs the tools by calling them directly once `MediaTools` has started them; nothing is made per task or per thread.
-- Callers in `packages-zig/tools-zig` pass the tool and an argument list to `runChecked` or `runLogged` in `packages-zig/media-tools-zig/src/lib/tool-run.zig`, which call `ImageMagick.runMagick`, `Ffmpeg.runFfmpeg` or `Ffmpeg.runFfprobe` directly.
+- `packages-zig/media-tools-zig` calls the libraries' C interfaces in the program's own process, through functions that take typed arguments:
+  - `image-magick.zig` calls MagickCore: `readImageInfo`, `readExif`, `resizeImage`, `transformImage`, `dominantColor` and `writeRgbImage`. Each call has an `ExceptionInfo` of its own, which its warnings and errors are read from.
+  - `ffmpeg.zig` calls libavformat, libavcodec and libswscale: `probeFile`, `extractFrame`, `readPictureSize` and `decodePicture`. FFmpeg's log reaches the call it belongs to through the `opaque` field of the call's own contexts, which point at a message queue of the call's own.
+- Nothing is set up or stopped. Each function can be called first, on any thread:
+  - ImageMagick is started by `MagickCoreGenesis`, its own once-only step, which every function calls first, and the first call applies the security policy, read back from ImageMagick to tell whether it is applied.
+  - FFmpeg needs no start; each function sets FFmpeg's log callback, the same one every time, before it makes a context.
+- Callers in `packages-zig/tools-zig` call these functions directly; no command line is built or parsed.
 
 ### What uses the tools
 
 - Images (`tools-zig/src/lib/image.zig`):
-  - `identify` for width and height, and a second `identify` for EXIF.
+  - `readImageInfo` for width and height, and `readExif` for EXIF.
   - Resize to display, then thumbnail, then micro, each made from the one before (`node-api-zig/src/lib/image.zig`, `getImageDetails`).
   - Dominant colour from a 1x1 resize (`media-file-database.zig`, `extractDominantColorFromThumbnail`).
   - Rotate and flip from the EXIF orientation (`transform`).
 - Videos (`tools-zig/src/lib/video.zig`):
-  - `ffprobe` JSON for size, duration, frame rate, bitrate, codecs and creation time.
-  - `ffmpeg` for one screenshot at half the duration, capped at 300 seconds, which is then resized for the thumbnail.
+  - `probeFile` for size, duration, frame rate, bitrate, codecs and creation time.
+  - `extractFrame` for one screenshot at half the duration, capped at 300 seconds, which is then resized for the thumbnail.
 - HEIC (`tools-zig/src/lib/heic.zig`):
-  - `ffprobe` for the size, since ImageMagick cannot read HEIC.
-  - `ffmpeg` decodes it to a JPEG, which ImageMagick then works on.
+  - `readPictureSize` for the size, since ImageMagick cannot read HEIC.
+  - `decodePicture` decodes it to a JPEG, which ImageMagick then works on.
 - Tool checks: `tools`, `version` and `bug` in the CLI, `ensureMediaProcessingTools` before `init`, `info` and `upgrade`, and the app's `check-tools` message.
 
 ## Inefficiencies
@@ -51,10 +50,3 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 - **ImageMagick security policy.** It denies a list of coders and allows every other one. Allowing only the formats the import accepts would be tighter.
 - **FFmpeg attack surface.** FFmpeg is built with every decoder and demuxer, which is a large attack surface for files received over LAN share.
 - **LGPL compliance.** `THIRD-PARTY-NOTICES.md` says how static linking meets the LGPL "is not yet decided".
-
-## Fix
-
-Items the human has said must be fixed.
-
-- No one-time setup of ImageMagick and FFmpeg. Each should be a library function that can be called anywhere, at any time, with no setup. What stands in the way today, from the code's own comments: ImageMagick's `MagickWandGenesis`/`MagickWandTerminus`, its security policy and its warning and error handlers are process-wide, and so is FFmpeg's log callback (`av_log_set_callback`). `MediaTools.init` sets all of these.
-- No shell-style command strings, formatted or parsed, anywhere. Replace them with proper library functions for images and videos (for example `resizeImage`, `createThumbnail`) that take typed arguments. That means calling ImageMagick's and FFmpeg's C APIs (MagickWand or MagickCore, and libavformat, libavcodec, libavfilter and libswscale) directly, instead of driving the `magick`, `ffmpeg` and `ffprobe` command-line programs in-process.

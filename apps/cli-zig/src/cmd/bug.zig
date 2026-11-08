@@ -179,7 +179,7 @@ pub fn bugReportCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, opt
 
     // Get system information
     const systemInfo = try getSystemInfo(allocator, io);
-    const toolVersions = try getToolVersions(allocator, io, log);
+    const toolVersions = try getToolVersions(allocator);
 
     // Get latest log file and header
     const latestLogFile = getLatestLogFile(allocator, io);
@@ -345,24 +345,24 @@ pub fn getSystemInfo(allocator: std.mem.Allocator, io: std.Io) !ISystemInfo {
 // Gets the versions of the ImageMagick and FFmpeg built into the program ("Not available"
 // for a tool that cannot be run).
 //
-pub fn getToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog) !IToolVersions {
+pub fn getToolVersions(allocator: std.mem.Allocator) !IToolVersions {
     var versions: IToolVersions = .{
         .imagemagick = "Not available",
         .ffmpeg = "Not available",
         .ffprobe = "Not available",
     };
 
-    const imageMagickStatus = try Image.verifyImageMagick(allocator, io, log);
+    const imageMagickStatus = try Image.verifyImageMagick(allocator);
     if (imageMagickStatus.available and imageMagickStatus.version != null) {
         versions.imagemagick = try std.fmt.allocPrint(allocator, "ImageMagick v{s}", .{imageMagickStatus.version.?});
     }
 
-    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log);
+    const ffmpegStatus = Video.verifyFfmpeg();
     if (ffmpegStatus.available and ffmpegStatus.version != null) {
         versions.ffmpeg = try std.fmt.allocPrint(allocator, "ffmpeg v{s}", .{ffmpegStatus.version.?});
     }
 
-    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log);
+    const ffprobeStatus = Video.verifyFfprobe();
     if (ffprobeStatus.available and ffprobeStatus.version != null) {
         versions.ffprobe = try std.fmt.allocPrint(allocator, "ffprobe v{s}", .{ffprobeStatus.version.?});
     }

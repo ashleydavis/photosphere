@@ -58,9 +58,6 @@ const TestEnvironment = struct {
     // directory of their own.
     psiEnviron: *std.process.Environ.Map,
 
-    // The ImageMagick and FFmpeg built into the program, started for the test, which the code under test runs.
-    mediaTools: media_tools.MediaTools,
-
     //
     // Sets up the environment and empties the vault.
     //
@@ -72,7 +69,6 @@ const TestEnvironment = struct {
         self.psiEnviron = try helpers.cliEnvironment(allocator, self.psiRoot);
         try self.psiEnviron.put("PHOTOSPHERE_VAULT_DIR", vaultDir);
         self.environ_map = std.process.Environ.Map.init(allocator);
-        self.mediaTools = try media_tools.MediaTools.init();
 
         // The PATH of the process running the tests is kept.
         const parent = try std.testing.environ.createMap(allocator);
@@ -90,7 +86,6 @@ const TestEnvironment = struct {
     fn deinit(self: *TestEnvironment) void {
         node_utils.process_env.setEnvironMap(null);
         std.Io.Dir.cwd().deleteTree(std.testing.io, self.psiRoot) catch {};
-        self.mediaTools.deinit();
         self.arena.deinit();
     }
 
@@ -164,9 +159,9 @@ const TestEnvironment = struct {
 // Fails the test when the ImageMagick or FFmpeg built into the program does not run. loadDatabase and createDatabase
 // need them, and a test that cannot run must fail rather than pass as skipped.
 //
-fn requireMediaTools(environment: *TestEnvironment, log: ILog) !void {
+fn requireMediaTools(environment: *TestEnvironment) !void {
     const allocator = environment.arena.allocator();
-    const status = try tools.verifyTools(allocator, std.testing.io, log);
+    const status = try tools.verifyTools(allocator);
     if (!status.allAvailable) {
         std.debug.print("The built-in media tools did not run. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
         return error.RequiredToolsMissing;
@@ -350,12 +345,11 @@ test "getAvailableKeys lists only encryption keys" {
 }
 
 test "selectEncryptionKey returns the selected key" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
     const allocator = environment.arena.allocator();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     try environment.storeSecret("alpha", "encryption-key", try readFile(allocator, private_key_path));
     try environment.storeSecret("beta", "encryption-key", try readFile(allocator, other_private_key_path));
 
@@ -375,12 +369,11 @@ test "selectEncryptionKey returns the selected key" {
 }
 
 test "promptForEncryption returns nothing when encryption is declined" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
     const allocator = environment.arena.allocator();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
 
     // Declining the question `psi init` asks creates the database without a key.
     const result = try environment.runPsi(&.{.{ .waitFor = "Would you like to encrypt your database?", .keys = "n" }}, &.{ "init", "--db", try environment.databasePath() });
@@ -390,12 +383,11 @@ test "promptForEncryption returns nothing when encryption is declined" {
 }
 
 test "promptForEncryption selects an existing key" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
     const allocator = environment.arena.allocator();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     const privateKeyPem = try readFile(allocator, private_key_path);
     try environment.storeSecret("existing-key", "encryption-key", privateKeyPem);
 
@@ -420,11 +412,10 @@ test "returns undefined in non-interactive mode" {
 }
 
 test "returns undefined when user selects cancel" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
 
     // A command given a key the vault does not hold offers to add it (the third choice is cancel), and carries on without
     // one, which it cannot do for a key it was told to use.
@@ -435,12 +426,11 @@ test "returns undefined when user selects cancel" {
 }
 
 test "stores PEM in vault and returns key pair when user pastes PEM" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
     const allocator = environment.arena.allocator();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     const privateKeyPem = try readFile(allocator, private_key_path);
     try environment.createEncryptedDatabaseWithoutItsKey();
 
@@ -458,12 +448,11 @@ test "stores PEM in vault and returns key pair when user pastes PEM" {
 }
 
 test "reads PEM from file and stores in vault when user imports from file" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
     const allocator = environment.arena.allocator();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     const privateKeyPem = try readFile(allocator, private_key_path);
     try environment.createEncryptedDatabaseWithoutItsKey();
 
@@ -477,11 +466,10 @@ test "reads PEM from file and stores in vault when user imports from file" {
 }
 
 test "generates key pair, stores in vault, and returns it when user selects generate" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
 
     // `psi init --key` with a key the vault does not hold offers to generate one (the first choice).
     const result = try environment.runPsi(&.{.{ .waitFor = key_not_found_prompt, .keys = "\r" }}, &.{ "init", "--db", try environment.databasePath(), "--key", "my-key" });
@@ -528,11 +516,10 @@ test "resolveKeyPems resolves comma-separated names and skips missing keys" {
 }
 
 test "calls promptToAddKey when key is missing and canGenerate is false" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
 
     // A command on an existing database does not offer to generate a key (canGenerate is false), and with the third
     // choice, cancel, no key is resolved.
@@ -543,11 +530,10 @@ test "calls promptToAddKey when key is missing and canGenerate is false" {
 }
 
 test "calls promptToGenerateOrAddKey when key is missing and canGenerate is true" {
-    const log = utils.mute_log.MuteLog.init();
     var environment: TestEnvironment = undefined;
     try environment.init();
     defer environment.deinit();
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
 
     // `psi init` creates the database, so it offers to generate the key (canGenerate is true), and one key is resolved.
     const result = try environment.runPsi(&.{.{ .waitFor = key_not_found_prompt, .keys = "\r" }}, &.{ "init", "--db", try environment.databasePath(), "--key", "missing-key" });
@@ -836,7 +822,7 @@ test "loadDatabase loads a database by path or registered name" {
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     const root = try helpers.makeTempDir(allocator, "load-database");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const dbDir = try std.fs.path.join(allocator, &.{ root, "db" });
@@ -937,7 +923,7 @@ test "createDatabase creates an empty database with the given identity" {
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     const root = try helpers.makeTempDir(allocator, "create-database");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, root) catch {};
     const dbDir = try std.fs.path.join(allocator, &.{ root, "db" });
@@ -965,7 +951,7 @@ test "createDatabase writes the public key marker of an encrypted database" {
     defer environment.deinit();
     const allocator = environment.arena.allocator();
 
-    try requireMediaTools(&environment, log);
+    try requireMediaTools(&environment);
     const privateKeyPem = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, private_key_path, allocator, .unlimited);
     const publicKeyPem = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, public_key_path, allocator, .unlimited);
     const vault = try vault_zig.get_vault.getVault(vault_zig.get_vault.getDefaultVaultType());

@@ -19,7 +19,7 @@ ImageMagick is built with the following delegate libraries, also built from sour
 
 ## FFmpeg
 
-- Component: FFmpeg (libavutil, libavcodec, libavformat, libavfilter, libswscale, libswresample) and the `ffmpeg` and `ffprobe` command line programs, built from source into the app and the CLI as a static library and called in process.
+- Component: FFmpeg (libavutil, libavcodec, libavformat, libavfilter, libswscale, libswresample), built from source into the app and the CLI as a static library and called in process through its C interface. The static library also holds FFmpeg's `ffmpeg` and `ffprobe` command line programs, which nothing calls, so they are not linked into the app or the CLI.
 - Licence: configured without `--enable-gpl` and `--enable-nonfree`, so the **GNU Lesser General Public License, version 2.1 or later (LGPL-2.1+)**. This is what the built FFmpeg reports through `avutil_license()`: "LGPL version 2.1 or later", the `FFMPEG_LICENSE` its configure writes into `third-party/ffmpeg/config/<target>/config.h`. The licence text is at <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>. Linking it statically into the one app binary and into the CLI has consequences under the LGPL (each must let a user relink it with a modified FFmpeg); how they meet them is not yet decided.
 - Copyright: © the FFmpeg project and contributors. <https://ffmpeg.org/>
 

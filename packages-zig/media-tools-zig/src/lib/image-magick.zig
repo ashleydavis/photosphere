@@ -1,243 +1,643 @@
 const std = @import("std");
-const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
-// The C interface of ImageMagick, for a program that needs more of it than runMagick.
+const ILog = utils.log.ILog;
+// The C interface of ImageMagick (MagickCore, through MagickWand.h), for code and tests that need more of it than the functions here.
 pub const c = @import("magick");
 
-const ToolOutput = @import("tool-run.zig").ToolOutput;
-const ThreadAllocator = @import("ziggy").utils.thread_allocator.ThreadAllocator;
-
 //
-// ImageMagick, built into the program and run in its process: the same thing the `magick` program does with its command line, which
-// is to hand the arguments to the command they name (MagickImageCommand, or IdentifyImageCommand for `identify`), without starting a
-// program.
+// ImageMagick, built into the program and called through MagickCore, its C library: each function here reads, changes or writes an
+// image with typed arguments, on whichever thread calls it, with no setup and no teardown.
 //
-// The text a command prints is collected without touching the process's standard output, which other threads share and which a
-// redirect would take from them:
+// No setup, no global and no lock of the program's own:
 //
-//   * `identify` hands what it prints back as text.
-//   * `-version` writes the version to a file it is given.
-//   * A command that ends in `info:` or `histogram:info:` writes what it prints to the file named after the colon, so the file name
-//     of a temporary file is put there.
-//
-// Everything else a command prints goes to the process's standard output as it would from `magick`.
-//
-// ImageMagick's warnings and errors are never printed to the process's standard error. They are handed back the way the standard
-// error of a `magick` program was:
-//
-//   * A command that fails hands back its messages as its output, which runChecked puts in the error it fails with.
-//   * The warnings of a command that works go to the log as the tool's standard error (`log.tool`), where runLogged puts the
-//     standard error of a program that worked.
+//   * ImageMagick's state for the whole process is started by MagickCoreGenesis, which every function here calls first.
+//     MagickCoreGenesis is ImageMagick's own once-only step: it takes a mutex ImageMagick initialises statically (a pthread mutex
+//     made with PTHREAD_MUTEX_INITIALIZER, or an interlocked flag on Windows, in MagickCore/mutex.h), and returns at once when the
+//     state is already started. Nothing stops ImageMagick: the process's end frees what it holds.
+//   * Each call gives ImageMagick an ExceptionInfo of its own and reads the warnings and errors back out of it. ImageMagick's warning
+//     and error handlers, which are the process's, are left as they are: MagickCore only calls them through CatchException, which
+//     nothing here calls.
+//   * The security policy is ImageMagick's own state too, and is applied by the same first step (see applySecurityPolicy).
 //
 
 //
-// ImageMagick started for the whole program. ImageMagick keeps one set of state for the whole program, which MagickWandGenesis starts
-// and MagickWandTerminus ends for every thread at once, so the program's main thread holds one of these, started before any thread
-// runs a command and stopped after the last has ended. The program's code keeps no variable for it.
+// The security policy. The library is built with zero configuration, so it reads no policy.xml and applies no policy of its own.
+// The policy denies:
 //
-pub const Started = struct {
-    // ImageMagick's warning handler before start set its own, put back by stop.
-    previous_warning_handler: c.WarningHandler,
-
-    // ImageMagick's error handler before start set its own, put back by stop.
-    previous_error_handler: c.ErrorHandler,
-
-    //
-    // Starts ImageMagick.
-    //
-    // A command leaves its messages in the exception it is given, and runMagick hands them back. The `magick` command also hands the
-    // warnings it meets to ImageMagick's warning handler as it goes, and clears them (CLICatchException in MagickWand/wandcli.c), and a
-    // few parts of the library do the same with errors they carry on from. Those handlers are set for the whole of ImageMagick and
-    // are given no pointer of the caller's, so they cannot tell which call a message belongs to. In place of the handlers that print to
-    // the standard error, this sets ones that send a warning to the log as the tool's standard error and an error to the log's errors:
-    // the log of the thread that runs the command, since each thread has a log of its own.
-    //
-    // The library is built with zero configuration, so it reads no policy.xml and applies no security policy of its own. This sets
-    // one, and fails with ImageMagick's error when it cannot be set. The policy denies:
-    //
-    //   * The coders that reach outside the file being read or run a script: the URL coders (HTTP, HTTPS, FTP), MSL, MVG, MSVG, TEXT
-    //     and TXT (which read a text description as an image), EPHEMERAL (which deletes the file it reads), and the display coders
-    //     SHOW, WIN and X. Every other coder stays allowed, because the import reads whatever image type the user has.
-    //   * Every delegate, since none is meant to run a program.
-    //   * Indirect reads, `@file`, which read a list of other paths from a file.
-    //
-    pub fn start() !Started {
-        c.MagickWandGenesis();
-        const exception = c.AcquireExceptionInfo();
-        defer _ = c.DestroyExceptionInfo(exception);
-        if (c.SetMagickSecurityPolicy(
-            \\<policymap>
-            \\  <policy domain="coder" rights="none" pattern="{URL,HTTP,HTTPS,FTP,MSL,MVG,MSVG,TEXT,TXT,EPHEMERAL,SHOW,WIN,X}"/>
-            \\  <policy domain="delegate" rights="none" pattern="*"/>
-            \\  <policy domain="path" rights="none" pattern="@*"/>
-            \\</policymap>
-        , exception) != c.MagickTrue) {
-            const reason: []const u8 = if (exception.*.reason != null) std.mem.span(exception.*.reason) else "no reason given";
-            const description: []const u8 = if (exception.*.description != null) std.mem.span(exception.*.description) else "";
-            c.MagickWandTerminus();
-            return utils.errors.throwError("The ImageMagick security policy could not be set: {s} {s}", .{ reason, description });
-        }
-        return .{
-            .previous_warning_handler = c.SetWarningHandler(logWarning),
-            .previous_error_handler = c.SetErrorHandler(logError),
-        };
-    }
-
-    //
-    // Stops ImageMagick and frees what it holds, once no thread runs a command.
-    //
-    pub fn stop(self: *Started) void {
-        _ = c.SetWarningHandler(self.previous_warning_handler);
-        _ = c.SetErrorHandler(self.previous_error_handler);
-        c.MagickWandTerminus();
-    }
-};
+//   * The coders that reach outside the file being read or run a script: the URL coders (HTTP, HTTPS, FTP), MSL, MVG, MSVG, TEXT and
+//     TXT (which read a text description as an image), EPHEMERAL (which deletes the file it reads), and the display coders SHOW, WIN
+//     and X. Every other coder stays allowed, because the import reads whatever image type the user has.
+//   * Every delegate, since none is meant to run a program.
+//   * Indirect reads, `@file`, which read a list of other paths from a file.
+//
+const security_policy =
+    \\<policymap>
+    \\  <policy domain="coder" rights="none" pattern="{URL,HTTP,HTTPS,FTP,MSL,MVG,MSVG,TEXT,TXT,EPHEMERAL,SHOW,WIN,X}"/>
+    \\  <policy domain="delegate" rights="none" pattern="*"/>
+    \\  <policy domain="path" rights="none" pattern="@*"/>
+    \\</policymap>
+;
 
 //
-// Running ImageMagick's commands, on any thread once ImageMagick has been started (see `Started`). ImageMagick runs commands from several
-// threads at once, each with the Io and allocator of the thread that runs it.
+// The version of ImageMagick built into the program, as `magick -version` names it ("7.1.2-33").
 //
-pub const ImageMagick = struct {
-    //
-    // Runs `magick` with the arguments and returns the exit code (0 when the command worked, 1 when it failed) and what it printed.
-    // A command that fails hands back ImageMagick's messages instead of what it printed.
-    //
-    pub fn runMagick(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !ToolOutput {
-        if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
-            return try readVersion(io, allocator);
-        }
-
-        // The unified `magick` command takes its first argument as an input file, so it cannot run `identify`; `identify` is its own
-        // command.
-        const is_identify = arguments.len > 0 and std.mem.eql(u8, arguments[0], "identify");
-        var command_arguments: std.ArrayList([]const u8) = .empty;
-        if (!is_identify) {
-            try command_arguments.append(allocator, "magick");
-        }
-        try command_arguments.appendSlice(allocator, arguments);
-
-        // The text of a command that ends in `info:` goes to a file.
-        var text_path_buffer: [c.MagickPathExtent]u8 = undefined;
-        var text_path: ?[:0]const u8 = null;
-        const last_argument = command_arguments.items[command_arguments.items.len - 1];
-        if (std.mem.endsWith(u8, last_argument, "info:")) {
-            text_path = try acquireTemporaryPath(&text_path_buffer);
-            command_arguments.items[command_arguments.items.len - 1] = try std.fmt.allocPrint(allocator, "{s}{s}", .{ last_argument, text_path.? });
-        }
-        defer if (text_path) |path| {
-            _ = c.RelinquishUniqueFileResource(path.ptr);
-        };
-
-        const argv = try allocator.alloc([*c]u8, command_arguments.items.len + 1);
-        for (command_arguments.items, 0..) |argument, index| {
-            argv[index] = (try allocator.dupeZ(u8, argument)).ptr;
-        }
-        argv[command_arguments.items.len] = null;
-
-        const image_info = c.AcquireImageInfo();
-        defer _ = c.DestroyImageInfo(image_info);
-        const exception = c.AcquireExceptionInfo();
-        defer _ = c.DestroyExceptionInfo(exception);
-        // The command is called as MagickCommandGenesis (MagickWand/magick-cli.c), which `magick` runs, calls it for a single run,
-        // without MagickCommandGenesis itself: it hands the messages the command left in the exception to ImageMagick's handlers
-        // (CatchException), which clears them, and so they could not be handed back. Its other work is left out too: the options it
-        // reads (-bench, -concurrent, -debug, -distribute-cache, -duration, -regard-warnings) are not ones the program passes, and
-        // setting the process's locale and ImageMagick's client name changes state the whole program shares.
-        var metadata: [*c]u8 = null;
-        defer if (metadata != null) {
-            _ = c.DestroyString(metadata);
-        };
-        // ImageMagick's handlers are called with no way to pass a log, so for the length of the command they print to this thread's
-        // console, and its lines go to the log given (see RunConsole). The forward that was set is put back after.
-        var run_console: RunConsole = .{
-            .log = log,
-        };
-        const previous_forward = utils.console.currentForward();
-        utils.console.setForward(.{
-            .context = &run_console,
-            .function = RunConsole.forwardLine,
-        });
-        defer utils.console.setForward(previous_forward);
-        const command: c.MagickCommand = if (is_identify) &c.IdentifyImageCommand else &c.MagickImageCommand;
-        var succeeded = command.?(image_info, @intCast(command_arguments.items.len), argv.ptr, &metadata, exception) == c.MagickTrue;
-        // As MagickCommandGenesis does without -regard-warnings: an error worse than ErrorException fails the command.
-        if (exception.*.severity > c.ErrorException) {
-            succeeded = false;
-        }
-        const client = if (is_identify) "identify" else "magick";
-        const messages = try exceptionMessages(allocator, client, exception);
-        if (!succeeded) {
-            return .{
-                .exit_code = 1,
-                .output = messages,
-            };
-        }
-        if (messages.len > 0) {
-            log.tool("magick", .{
-                .stdout = null,
-                .stderr = messages,
-            });
-        }
-
-        // Only `identify` hands its text back. The text any other command hands back is a summary of the image ("columns,rows,format")
-        // that `magick` does not print.
-        var output: std.ArrayList(u8) = .empty;
-        if (is_identify and metadata != null) {
-            try output.appendSlice(allocator, std.mem.span(metadata));
-        }
-        if (text_path) |path| {
-            const text = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited) catch |err| {
-                return utils.errors.throwError("The text the magick command wrote to {s} could not be read: {s}", .{ path, @errorName(err) });
-            };
-            try output.appendSlice(allocator, text);
-        }
-        return .{
-            .exit_code = 0,
-            .output = output.items,
-        };
-    }
-
-    //
-    // What `magick -version` prints, which ImageMagick writes to a file it is given.
-    //
-    fn readVersion(io: std.Io, allocator: std.mem.Allocator) !ToolOutput {
-        var path_buffer: [c.MagickPathExtent]u8 = undefined;
-        const path = try acquireTemporaryPath(&path_buffer);
-        defer _ = c.RelinquishUniqueFileResource(path.ptr);
-        const file = c.fopen(path.ptr, "wb") orelse {
-            return utils.errors.throwError("The file {s} for the version of ImageMagick could not be opened.", .{path});
-        };
-        c.ListMagickVersion(file);
-        if (c.fclose(file) != 0) {
-            return utils.errors.throwError("The file {s} for the version of ImageMagick could not be closed.", .{path});
-        }
-        const text = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited) catch |err| {
-            return utils.errors.throwError("The version of ImageMagick could not be read from {s}: {s}", .{ path, @errorName(err) });
-        };
-        return .{
-            .exit_code = 0,
-            .output = text,
-        };
-    }
-};
-
-//
-// Makes an empty file in the directory ImageMagick keeps its temporary files in, and returns its path in the buffer.
-//
-fn acquireTemporaryPath(buffer: *[c.MagickPathExtent]u8) ![:0]const u8 {
-    buffer[0] = 0;
-    if (c.AcquireUniqueFilename(buffer) != c.MagickTrue) {
-        return utils.errors.throwError("ImageMagick could not make a temporary file.", .{});
-    }
-    const length = std.mem.indexOfScalar(u8, buffer, 0).?;
-    return buffer[0..length :0];
+pub fn version() []const u8 {
+    return c.MagickLibVersionText ++ c.MagickLibAddendum;
 }
 
 //
-// ImageMagick's messages in the exception, each on a line of its own written as ImageMagick's own handlers print one (MagickCore/
-// exception.c): the client's name, the reason and, in brackets, the description. Empty when there are none.
+// The quantum depth and HDRI of the ImageMagick built into the program ("Q16-HDRI"), as `magick -version` names them.
 //
-fn exceptionMessages(allocator: std.mem.Allocator, client: []const u8, exception: [*c]c.ExceptionInfo) ![]const u8 {
+pub fn quantum() []const u8 {
+    return c.MagickQuantumDepth ++ c.MagickHDRISupport;
+}
+
+//
+// The delegate libraries ImageMagick is built with ("jpeg png webp zlib"), as `magick -version` lists them.
+//
+pub fn delegates() ![]const u8 {
+    try startImageMagick();
+    return std.mem.span(c.GetMagickDelegates());
+}
+
+//
+// Checks that ImageMagick starts, with its security policy, starting it when it is not started yet. Nothing needs to call it before
+// using ImageMagick; it is for reporting whether the ImageMagick built into the program works.
+//
+pub fn check() !void {
+    try startImageMagick();
+}
+
+//
+// Starts ImageMagick for the process when it is not started yet, and applies the security policy when it is not applied yet. Every
+// function here calls it first, so whichever is called first, on whichever thread, starts ImageMagick.
+//
+fn startImageMagick() !void {
+    c.MagickCoreGenesis(null, c.MagickFalse);
+    try applySecurityPolicy();
+}
+
+//
+// Applies the security policy unless ImageMagick already has it.
+//
+// The policy is read back from ImageMagick rather than remembered in the program: it is in place when MVG, which it denies and which
+// ImageMagick allows with no policy, may not be read. ImageMagick loads a policy into its policy list in one step under its own
+// policy semaphore (SetMagickSecurityPolicy), and reads the list under the same semaphore (IsRightsAuthorized), so a thread sees
+// either none of the policy or all of it. Two threads that both find it missing both apply it, and the list then holds its rules
+// twice, which denies exactly what it denied once; after that every call finds it in place.
+//
+fn applySecurityPolicy() !void {
+    if (c.IsRightsAuthorized(c.CoderPolicyDomain, c.ReadPolicyRights, "MVG") == c.MagickFalse) {
+        return;
+    }
+    const exception = c.AcquireExceptionInfo();
+    defer _ = c.DestroyExceptionInfo(exception);
+    if (c.SetMagickSecurityPolicy(security_policy, exception) != c.MagickTrue) {
+        const reason: []const u8 = if (exception.*.reason != null) std.mem.span(exception.*.reason) else "no reason given";
+        const description: []const u8 = if (exception.*.description != null) std.mem.span(exception.*.description) else "";
+        return utils.errors.throwError("The ImageMagick security policy could not be set: {s} {s}", .{ reason, description });
+    }
+}
+
+//
+// The size and format of an image.
+//
+pub const IImageInfo = struct {
+    // The width, in pixels.
+    width: usize,
+
+    // The height, in pixels.
+    height: usize,
+
+    // ImageMagick's name of the format the file holds ("JPEG", "PNG", "WEBP").
+    format: []const u8,
+};
+
+//
+// Reads the size and format of the first frame of the image at the path, without decoding its pixels (ImageMagick's ping, which
+// `identify` uses). The path is given to ImageMagick as a file name, so a prefix such as `png:` names the format.
+//
+pub fn readImageInfo(allocator: std.mem.Allocator, log: ILog, path: []const u8) !IImageInfo {
+    log.verbose(try std.fmt.allocPrint(allocator, "ImageMagick: reading the size of {s}", .{path}));
+    var call = try Call.start(allocator, log, "read the size of", path);
+    defer call.end();
+    const image = try call.read(path, .ping);
+    defer _ = c.DestroyImageList(image);
+    try call.finish();
+    return .{
+        .width = image.*.columns,
+        .height = image.*.rows,
+        .format = try allocator.dupe(u8, std.mem.sliceTo(&@as(*c.Image, image).magick, 0)),
+    };
+}
+
+//
+// Reads the EXIF tags of the first frame of the image at the path, without decoding its pixels: each tag's name (without ImageMagick's
+// `exif:` prefix, so "Make" or "DateTimeOriginal") and its value as ImageMagick writes it. An image with no EXIF has none.
+//
+pub fn readExif(allocator: std.mem.Allocator, log: ILog, path: []const u8) !std.StringArrayHashMapUnmanaged([]const u8) {
+    log.verbose(try std.fmt.allocPrint(allocator, "ImageMagick: reading the EXIF of {s}", .{path}));
+    var call = try Call.start(allocator, log, "read the EXIF of", path);
+    defer call.end();
+    const image = try call.read(path, .ping);
+    defer _ = c.DestroyImageList(image);
+    // ImageMagick makes the exif: properties from the image's EXIF profile when one of them is asked for.
+    _ = c.GetImageProperty(image, "exif:*", call.exception);
+    var tags: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
+    c.ResetImagePropertyIterator(image);
+    while (c.GetNextImageProperty(image)) |name_pointer| {
+        const name = std.mem.span(name_pointer);
+        if (name.len <= "exif:".len or !std.ascii.eqlIgnoreCase(name[0.."exif:".len], "exif:")) {
+            continue;
+        }
+        const value = c.GetImageProperty(image, name_pointer, call.exception) orelse continue;
+        try tags.put(allocator, try allocator.dupe(u8, name["exif:".len..]), try allocator.dupe(u8, std.mem.span(value)));
+    }
+    try call.finish();
+    return tags;
+}
+
+//
+// A size to resize an image to.
+//
+pub const IResizeOptions = struct {
+    // The image to read; only its first frame is resized.
+    input_path: []const u8,
+
+    // The file to write, which is made or replaced.
+    output_path: []const u8,
+
+    // The width to resize to, or null to take it from the height, keeping the aspect ratio. One of width and height is given.
+    width: ?usize,
+
+    // The height to resize to, or null to take it from the width, keeping the aspect ratio.
+    height: ?usize,
+
+    // When both width and height are given: true makes the image exactly that size, false fits it inside them keeping its aspect
+    // ratio.
+    exact: bool,
+
+    // The quality to write at, from 0 to 100, or null for the format's default (for a JPEG, the quality of the JPEG read).
+    quality: ?u8,
+
+    // ImageMagick's name of the format to write ("JPEG", "PNG", "WEBP").
+    format: []const u8,
+};
+
+//
+// The width and height an image of the given size is resized to: what ImageMagick's `-resize` makes of the geometry the options
+// name ("WxH", "WxH!", "Wx" or "xH"), as ParseMetaGeometry in MagickCore/geometry.c works it out.
+//
+pub fn resizeSize(columns: usize, rows: usize, width: ?usize, height: ?usize, exact: bool) !IImageSize {
+    if (width == null and height == null) {
+        return utils.errors.throwError("A resize needs a width or a height.", .{});
+    }
+    const target_width = width orelse columns;
+    const target_height = height orelse rows;
+    if (exact or (target_width == columns and target_height == rows)) {
+        return .{
+            .width = target_width,
+            .height = target_height,
+        };
+    }
+    var scale: f64 = 1.0;
+    if (columns != 0 and rows != 0) {
+        if (width != null and height != null) {
+            scale = @as(f64, @floatFromInt(target_width)) / @as(f64, @floatFromInt(columns));
+            const height_scale = @as(f64, @floatFromInt(target_height)) / @as(f64, @floatFromInt(rows));
+            if (scale > height_scale) {
+                scale = height_scale;
+            }
+        }
+        else if (width != null) {
+            scale = @as(f64, @floatFromInt(target_width)) / @as(f64, @floatFromInt(columns));
+        }
+        else {
+            scale = @as(f64, @floatFromInt(target_height)) / @as(f64, @floatFromInt(rows));
+        }
+    }
+    return .{
+        .width = @intFromFloat(@max(@floor(scale * @as(f64, @floatFromInt(columns)) + 0.5), 1.0)),
+        .height = @intFromFloat(@max(@floor(scale * @as(f64, @floatFromInt(rows)) + 0.5), 1.0)),
+    };
+}
+
+//
+// A width and a height, in pixels.
+//
+pub const IImageSize = struct {
+    // The width.
+    width: usize,
+
+    // The height.
+    height: usize,
+};
+
+//
+// Resizes the first frame of the image as the options say, removes every profile and comment from it (the EXIF, the XMP and the
+// colour profile, which is what `-strip` does), and writes it to the output path in the format the options name.
+//
+// The profiles are dropped because a resize otherwise carries the original's profiles into it, and a photo from a modern phone brings
+// an XMP block of tens of kilobytes: the forty pixel thumbnail stored inside every asset record was coming out at fifty kilobytes of
+// somebody else's metadata, which the database then wrote into both of its sort index pages and rewrote whole on every commit. The
+// original is stored untouched and keeps everything, including the colour profile a derivative loses.
+//
+pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IResizeOptions) !void {
+    log.verbose(try std.fmt.allocPrint(allocator, "ImageMagick: resizing {s} to {?d}x{?d} ({s}) as {s} at quality {?d}, into {s}", .{
+        options.input_path,
+        options.width,
+        options.height,
+        if (options.exact) "exactly" else "keeping the aspect ratio",
+        options.format,
+        options.quality,
+        options.output_path,
+    }));
+    var call = try Call.start(allocator, log, "resize", options.input_path);
+    defer call.end();
+    const image = try call.read(options.input_path, .first_frame);
+    defer _ = c.DestroyImageList(image);
+    const size = try resizeSize(image.*.columns, image.*.rows, options.width, options.height, options.exact);
+    const resized = c.ResizeImage(image, size.width, size.height, image.*.filter, call.exception) orelse {
+        return call.fail();
+    };
+    defer _ = c.DestroyImageList(resized);
+    if (c.StripImage(resized, call.exception) != c.MagickTrue) {
+        return call.fail();
+    }
+    try call.write(io, resized, options.output_path, options.format, options.quality);
+    try call.finish();
+}
+
+//
+// A turn and a mirroring of an image, each applied when it is set, in the order of the fields.
+//
+pub const ITurn = struct {
+    // Mirror the image left to right (ImageMagick's flop).
+    flop: bool = false,
+
+    // Mirror the image top to bottom (ImageMagick's flip).
+    flip: bool = false,
+
+    // Mirror the image in its diagonal from the top left to the bottom right (ImageMagick's transpose).
+    transpose: bool = false,
+
+    // Mirror the image in its diagonal from the top right to the bottom left (ImageMagick's transverse).
+    transverse: bool = false,
+
+    // Turn the image clockwise by this many degrees; 0 leaves it.
+    rotate_degrees: f64 = 0,
+
+    //
+    // Whether the turn changes the image at all.
+    //
+    pub fn isNone(self: ITurn) bool {
+        return !self.flop and !self.flip and !self.transpose and !self.transverse and self.rotate_degrees == 0;
+    }
+};
+
+//
+// Options for transformImage.
+//
+pub const ITransformOptions = struct {
+    // The image to read; only its first frame is turned.
+    input_path: []const u8,
+
+    // The file to write, which is made or replaced.
+    output_path: []const u8,
+
+    // The turn to apply.
+    turn: ITurn,
+
+    // ImageMagick's name of the format to write ("JPEG").
+    format: []const u8,
+};
+
+//
+// Turns and mirrors the first frame of the image as the options say and writes it to the output path in the format they name, at
+// the format's default quality (for a JPEG read, the quality it was written at), keeping its profiles.
+//
+pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: ITransformOptions) !void {
+    log.verbose(try std.fmt.allocPrint(allocator, "ImageMagick: turning {s} (flop {}, flip {}, transpose {}, transverse {}, rotate {d} degrees) as {s}, into {s}", .{
+        options.input_path,
+        options.turn.flop,
+        options.turn.flip,
+        options.turn.transpose,
+        options.turn.transverse,
+        options.turn.rotate_degrees,
+        options.format,
+        options.output_path,
+    }));
+    var call = try Call.start(allocator, log, "turn", options.input_path);
+    defer call.end();
+    const image = try call.read(options.input_path, .first_frame);
+    const turned = try call.applyTurn(image, options.turn);
+    defer _ = c.DestroyImageList(turned);
+    try call.write(io, turned, options.output_path, options.format, null);
+    try call.finish();
+}
+
+//
+// The mean colour of the first frame of the image at the path: the image resized to one pixel (`-resize 1x1!`), and each of that
+// pixel's red, green and blue as a whole number from 0 to 255, rounded down (`%[fx:int(mean.r*255)]`).
+//
+pub fn dominantColor(allocator: std.mem.Allocator, log: ILog, path: []const u8) ![3]u8 {
+    log.verbose(try std.fmt.allocPrint(allocator, "ImageMagick: reading the mean colour of {s}", .{path}));
+    var call = try Call.start(allocator, log, "read the mean colour of", path);
+    defer call.end();
+    const image = try call.read(path, .first_frame);
+    defer _ = c.DestroyImageList(image);
+    const pixel_image = c.ResizeImage(image, 1, 1, image.*.filter, call.exception) orelse {
+        return call.fail();
+    };
+    defer _ = c.DestroyImageList(pixel_image);
+    var pixel: c.PixelInfo = undefined;
+    if (c.GetOneVirtualPixelInfo(pixel_image, c.UndefinedVirtualPixelMethod, 0, 0, &pixel, call.exception) != c.MagickTrue) {
+        return call.fail();
+    }
+    try call.finish();
+    const quantum_range: f64 = c.QuantumRange;
+    return .{
+        try colorComponent(pixel.red / quantum_range),
+        try colorComponent(pixel.green / quantum_range),
+        try colorComponent(pixel.blue / quantum_range),
+    };
+}
+
+//
+// A colour component from 0 to 1 as a whole number from 0 to 255, rounded down. Fails for a component outside 0 to 1, which a
+// high dynamic range image can hold.
+//
+pub fn colorComponent(component: f64) !u8 {
+    const scaled = @floor(component * 255);
+    if (std.math.isNan(scaled) or scaled < 0 or scaled > 255) {
+        return utils.errors.throwError("The colour component {d} is outside 0 to 1.", .{component});
+    }
+    return @intFromFloat(scaled);
+}
+
+//
+// Pixels of eight bit red, green and blue, one byte each, a row after another with no gap.
+//
+pub const IRgbPixels = struct {
+    // The width, in pixels.
+    width: usize,
+
+    // The height, in pixels.
+    height: usize,
+
+    // The bytes, width * height * 3 of them.
+    bytes: []const u8,
+};
+
+//
+// Options for writeRgbImage.
+//
+pub const IWriteRgbOptions = struct {
+    // What the pixels are of, for messages ("the frame at 3.9 seconds of video.mp4").
+    source: []const u8,
+
+    // The file to write, which is made or replaced.
+    output_path: []const u8,
+
+    // The turn to apply before writing.
+    turn: ITurn,
+
+    // ImageMagick's name of the format to write ("JPEG").
+    format: []const u8,
+
+    // The quality to write at, from 0 to 100.
+    quality: u8,
+};
+
+//
+// Makes an image of the pixels, turns it as the options say and writes it to the output path in their format and quality.
+//
+pub fn writeRgbImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, pixels: IRgbPixels, options: IWriteRgbOptions) !void {
+    if (pixels.bytes.len != pixels.width * pixels.height * 3) {
+        return utils.errors.throwError("{d} bytes are not the {d}x{d} pixels of {s}.", .{ pixels.bytes.len, pixels.width, pixels.height, options.source });
+    }
+    log.verbose(try std.fmt.allocPrint(allocator, "ImageMagick: writing {s}, {d}x{d}, as {s} at quality {d}, into {s}", .{
+        options.source,
+        pixels.width,
+        pixels.height,
+        options.format,
+        options.quality,
+        options.output_path,
+    }));
+    var call = try Call.start(allocator, log, "write", options.source);
+    defer call.end();
+    const image = c.ConstituteImage(pixels.width, pixels.height, "RGB", c.CharPixel, pixels.bytes.ptr, call.exception) orelse {
+        return call.fail();
+    };
+    const turned = try call.applyTurn(image, options.turn);
+    defer _ = c.DestroyImageList(turned);
+    try call.write(io, turned, options.output_path, options.format, options.quality);
+    try call.finish();
+}
+
+//
+// How much of a file a read decodes.
+//
+const IReadMode = enum {
+    // The size, format and profiles of the first frame, without its pixels.
+    ping,
+
+    // The first frame, with its pixels.
+    first_frame,
+};
+
+//
+// One call into ImageMagick: the ExceptionInfo ImageMagick leaves the call's warnings and errors in, and what the call is, for its
+// messages.
+//
+const Call = struct {
+    // The allocator the call's messages are made with.
+    allocator: std.mem.Allocator,
+
+    // The log the call's warnings go to.
+    log: ILog,
+
+    // What the call does ("resize"), for messages.
+    operation: []const u8,
+
+    // The file the call reads, for messages.
+    subject: []const u8,
+
+    // The call's own ExceptionInfo.
+    exception: [*c]c.ExceptionInfo,
+
+    //
+    // Starts ImageMagick when it is not started, and a call.
+    //
+    fn start(allocator: std.mem.Allocator, log: ILog, operation: []const u8, subject: []const u8) !Call {
+        try startImageMagick();
+        return .{
+            .allocator = allocator,
+            .log = log,
+            .operation = operation,
+            .subject = subject,
+            .exception = c.AcquireExceptionInfo(),
+        };
+    }
+
+    //
+    // Frees the call's ExceptionInfo.
+    //
+    fn end(self: *Call) void {
+        _ = c.DestroyExceptionInfo(self.exception);
+    }
+
+    //
+    // Reads the file at the path, or fails with ImageMagick's messages. ImageMagick reads the path as a file name, so a `png:` prefix
+    // names the format and a trailing `[...]` picks frames, as on the command line.
+    //
+    fn read(self: *Call, path: []const u8, mode: IReadMode) ![*c]c.Image {
+        const image_info = c.AcquireImageInfo();
+        defer _ = c.DestroyImageInfo(image_info);
+        if (!setText(&@as(*c.ImageInfo, image_info).filename, path)) {
+            return utils.errors.throwError("ImageMagick could not {s} {s}: the path is longer than the {d} bytes ImageMagick takes.", .{ self.operation, path, image_info.*.filename.len - 1 });
+        }
+        image_info.*.scene = 0;
+        image_info.*.number_scenes = 1;
+        const image = switch (mode) {
+            .ping => c.PingImage(image_info, self.exception),
+            .first_frame => c.ReadImage(image_info, self.exception),
+        };
+        if (image == null) {
+            return self.fail();
+        }
+        if (self.failed()) {
+            _ = c.DestroyImageList(image);
+            return self.fail();
+        }
+        return image;
+    }
+
+    //
+    // Applies the turn to the image and returns the turned image, freeing the image given, which is freed when the turn fails too.
+    //
+    fn applyTurn(self: *Call, image: [*c]c.Image, turn: ITurn) ![*c]c.Image {
+        var current = image;
+        errdefer _ = c.DestroyImageList(current);
+        if (turn.flop) {
+            current = try self.replace(current, c.FlopImage(current, self.exception));
+        }
+        if (turn.flip) {
+            current = try self.replace(current, c.FlipImage(current, self.exception));
+        }
+        if (turn.transpose) {
+            current = try self.replace(current, c.TransposeImage(current, self.exception));
+        }
+        if (turn.transverse) {
+            current = try self.replace(current, c.TransverseImage(current, self.exception));
+        }
+        if (turn.rotate_degrees != 0) {
+            current = try self.replace(current, c.RotateImage(current, turn.rotate_degrees, self.exception));
+        }
+        return current;
+    }
+
+    //
+    // Frees the image an operation was given and returns the image the operation made, or fails when it made none.
+    //
+    fn replace(self: *Call, image: [*c]c.Image, made: [*c]c.Image) ![*c]c.Image {
+        if (made == null) {
+            return self.fail();
+        }
+        _ = c.DestroyImageList(image);
+        return made;
+    }
+
+    //
+    // Encodes the image in the format, at the quality when one is given, and writes it to the path. The image is encoded in memory and
+    // the bytes written by the program, so ImageMagick reads nothing into the path: it may hold any character.
+    //
+    fn write(self: *Call, io: std.Io, image: [*c]c.Image, path: []const u8, format: []const u8, quality: ?u8) !void {
+        const image_info = c.AcquireImageInfo();
+        defer _ = c.DestroyImageInfo(image_info);
+        // ImageToBlob encodes the image in the format the image names when the ImageInfo names none.
+        if (!setText(&@as(*c.Image, image).magick, format)) {
+            return utils.errors.throwError("ImageMagick has no format named {s}.", .{format});
+        }
+        if (quality) |value| {
+            if (value > 100) {
+                return utils.errors.throwError("Quality must be between 0 and 100", .{});
+            }
+            image_info.*.quality = value;
+            // The JPEG and WebP coders read the quality of the image, which the `magick` program sets from its `-quality`.
+            image.*.quality = value;
+        }
+        var length: usize = 0;
+        const blob = c.ImageToBlob(image_info, image, &length, self.exception);
+        defer if (blob != null) {
+            _ = c.RelinquishMagickMemory(blob);
+        };
+        if (blob == null or self.failed()) {
+            return self.fail();
+        }
+        const bytes: [*]const u8 = @ptrCast(blob.?);
+        std.Io.Dir.cwd().writeFile(io, .{
+            .sub_path = path,
+            .data = bytes[0..length],
+        }) catch |err| {
+            return utils.errors.throwError("ImageMagick could not {s} {s}: writing {s} failed: {s}", .{ self.operation, self.subject, path, @errorName(err) });
+        };
+    }
+
+    //
+    // Whether ImageMagick has reported an error, rather than only warnings.
+    //
+    fn failed(self: *Call) bool {
+        return self.exception.*.severity >= c.ErrorException;
+    }
+
+    //
+    // Fails the call with ImageMagick's messages.
+    //
+    fn fail(self: *Call) error{ Thrown, OutOfMemory } {
+        const messages = exceptionMessages(self.allocator, self.exception) catch return error.OutOfMemory;
+        return utils.errors.throwError("ImageMagick could not {s} {s}: {s}", .{
+            self.operation,
+            self.subject,
+            if (messages.len > 0) messages else "it gave no reason.",
+        });
+    }
+
+    //
+    // Ends a call that worked: fails it if ImageMagick reported an error after all, and otherwise sends its warnings to the log as
+    // ImageMagick's output.
+    //
+    fn finish(self: *Call) !void {
+        if (self.failed()) {
+            return self.fail();
+        }
+        const messages = try exceptionMessages(self.allocator, self.exception);
+        if (messages.len > 0) {
+            self.log.tool("magick", .{
+                .stdout = null,
+                .stderr = try std.fmt.allocPrint(self.allocator, "{s} {s}: {s}", .{ self.operation, self.subject, messages }),
+            });
+        }
+    }
+};
+
+//
+// Puts the text in a field of ImageMagick's that holds a C string, ending it with a zero. False when the text does not fit.
+//
+fn setText(field: []u8, text: []const u8) bool {
+    if (text.len >= field.len) {
+        return false;
+    }
+    @memcpy(field[0..text.len], text);
+    field[text.len] = 0;
+    return true;
+}
+
+//
+// ImageMagick's messages in the exception, each on a line of its own as ImageMagick's own handlers print one (MagickCore/
+// exception.c): the reason and, in brackets, the description. Empty when there are none.
+//
+fn exceptionMessages(allocator: std.mem.Allocator, exception: [*c]c.ExceptionInfo) ![]const u8 {
     var messages: std.ArrayList(u8) = .empty;
     const list: ?*c.LinkedListInfo = @ptrCast(exception.*.exceptions);
     if (list == null) {
@@ -246,83 +646,14 @@ fn exceptionMessages(allocator: std.mem.Allocator, client: []const u8, exception
     c.ResetLinkedListIterator(list);
     while (c.GetNextValueInLinkedList(list)) |value| {
         const entry: *const c.ExceptionInfo = @ptrCast(@alignCast(value));
-        try appendMessage(allocator, &messages, client, entry.reason, entry.description);
+        if (entry.reason == null) {
+            continue;
+        }
+        try messages.appendSlice(allocator, std.mem.span(entry.reason));
+        if (entry.description != null) {
+            try messages.print(allocator, " ({s})", .{std.mem.span(entry.description)});
+        }
+        try messages.appendSlice(allocator, ".\n");
     }
     return messages.items;
-}
-
-//
-// Adds one message, as ImageMagick's own handlers print it, to the messages. A message with no reason is left out, as those handlers
-// leave it out.
-//
-fn appendMessage(allocator: std.mem.Allocator, messages: *std.ArrayList(u8), client: []const u8, reason: [*c]const u8, description: [*c]const u8) !void {
-    if (reason == null) {
-        return;
-    }
-    try messages.print(allocator, "{s}: {s}", .{ client, std.mem.span(reason) });
-    if (description != null) {
-        try messages.print(allocator, " ({s})", .{std.mem.span(description)});
-    }
-    try messages.appendSlice(allocator, ".\n");
-}
-
-//
-// Where the console lines of a thread running a command go while it runs: ImageMagick's handlers print a warning to stdout and an error
-// to stderr (see logWarning and logError), and this sends a warning to the log given as the standard error of `magick` and an error
-// to its errors.
-//
-const RunConsole = struct {
-    // The log of the run.
-    log: utils.log.ILog,
-
-    //
-    // Sends one console line of the run to the log.
-    //
-    fn forwardLine(context: ?*anyopaque, stream: utils.console.Stream, line: []const u8) void {
-        const self: *const RunConsole = @ptrCast(@alignCast(context.?));
-        switch (stream) {
-            .stdout => self.log.tool("magick", .{
-                .stdout = null,
-                .stderr = line,
-            }),
-            .stderr => self.log.@"error"(line),
-        }
-    }
-};
-
-//
-// ImageMagick's warning handler while the program runs it: prints the warning to the calling thread's stdout, which a run sends to its
-// log as the standard error of `magick` (see RunConsole). ImageMagick calls it with no way to pass a log.
-//
-fn logWarning(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
-    _ = severity;
-    // This runs on whichever thread ImageMagick reports from, so the message is made with an allocator made for the call.
-    var thread_allocator: ThreadAllocator = .init;
-    defer thread_allocator.deinit();
-    const allocator = thread_allocator.allocator();
-    var message: std.ArrayList(u8) = .empty;
-    defer message.deinit(allocator);
-    appendMessage(allocator, &message, "magick", reason, description) catch @panic("out of memory logging a warning of ImageMagick");
-    if (message.items.len > 0) {
-        utils.console.log(message.items);
-    }
-}
-
-//
-// ImageMagick's error handler while the program runs it: prints the error to the calling thread's stderr, which a run sends to its
-// log's errors (see RunConsole). ImageMagick calls it with no way to pass a log, and hands an error to it only where it reports the
-// error and carries on.
-//
-fn logError(severity: c.ExceptionType, reason: [*c]const u8, description: [*c]const u8) callconv(.c) void {
-    _ = severity;
-    // This runs on whichever thread ImageMagick reports from, so the message is made with an allocator made for the call.
-    var thread_allocator: ThreadAllocator = .init;
-    defer thread_allocator.deinit();
-    const allocator = thread_allocator.allocator();
-    var message: std.ArrayList(u8) = .empty;
-    defer message.deinit(allocator);
-    appendMessage(allocator, &message, "magick", reason, description) catch @panic("out of memory logging an error of ImageMagick");
-    if (message.items.len > 0) {
-        utils.console.@"error"(message.items[0 .. message.items.len - 1]);
-    }
 }

@@ -195,7 +195,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     const sessionTempDir = context.sessionTempDir;
     const sessionId = context.sessionId;
 
-    try ensureMediaProcessingTools(allocator, io, log);
+    try ensureMediaProcessingTools(allocator);
 
     var pathInputs: std.ArrayList([]const u8) = .empty;
     var dbInputs: std.ArrayList([]const u8) = .empty;

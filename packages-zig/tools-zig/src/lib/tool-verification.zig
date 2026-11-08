@@ -1,5 +1,4 @@
 const std = @import("std");
-const ILog = @import("utils-zig").log.ILog;
 const Image = @import("image.zig").Image;
 const Video = @import("video.zig").Video;
 const ImageMagickStatus = @import("image.zig").ImageMagickStatus;
@@ -42,11 +41,11 @@ pub const ToolsStatus = struct {
 //
 // Check the availability of all required tools
 //
-pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io, log: ILog) !ToolsStatus {
+pub fn verifyTools(allocator: std.mem.Allocator) !ToolsStatus {
     // Serialize tool verification to avoid race conditions
-    const magickStatus = try Image.verifyImageMagick(allocator, io, log);
-    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log);
-    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log);
+    const magickStatus = try Image.verifyImageMagick(allocator);
+    const ffprobeStatus = Video.verifyFfprobe();
+    const ffmpegStatus = Video.verifyFfmpeg();
     return toolsStatus(allocator, magickStatus, ffprobeStatus, ffmpegStatus);
 }
 

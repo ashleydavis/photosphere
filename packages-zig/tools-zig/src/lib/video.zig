@@ -1,22 +1,21 @@
 const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
-const version_match = @import("version-match.zig");
-const tool_run = @import("media-tools-zig").tool_run;
+const ffmpeg = @import("media-tools-zig").ffmpeg;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
-const BsonValue = serialization_zig.bson.BsonValue;
 const BsonDocument = serialization_zig.bson.BsonDocument;
-const jsonParse = serialization_zig.json_parse.jsonParse;
 const js_date = serialization_zig.js_date;
 const pathExists = node_utils.fs.pathExists;
 const errors = utils.errors;
-const parseFloat = utils.js_number.parseFloat;
-const parseInt = utils.js_number.parseInt;
-const stringToNumber = utils.js_number.stringToNumber;
 const types = @import("types.zig");
 const AssetInfo = types.AssetInfo;
 const Dimensions = types.Dimensions;
+
+//
+// The JPEG quality of a frame taken from a video, which the thumbnail is then made from.
+//
+const screenshot_quality = 90;
 
 //
 // The result of Video.verifyFfprobe and Video.verifyFfmpeg.
@@ -33,7 +32,7 @@ pub const VideoToolStatus = struct {
 };
 
 //
-// Wraps ffprobe and ffmpeg.
+// Wraps FFmpeg's reading of videos.
 //
 pub const Video = struct {
     // The file the video is read from.
@@ -50,49 +49,28 @@ pub const Video = struct {
     }
 
     //
-    // Verify that ffprobe is available. It runs `ffprobe -version` on every call.
+    // The status of the FFmpeg that probes videos, which is built into the program and needs nothing to start: available, with its
+    // version.
     //
-    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, log: ILog) !VideoToolStatus {
-        const result = tool_run.runChecked(allocator, io, log, .ffprobe, &.{"-version"}) catch |err| {
-            return toolFailed(allocator, "ffprobe", err);
-        };
-        return toolRan("ffprobe", result);
-    }
-
-    //
-    // Verify that ffmpeg is available. It runs `ffmpeg -version` on every call.
-    //
-    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, log: ILog) !VideoToolStatus {
-        const result = tool_run.runChecked(allocator, io, log, .ffmpeg, &.{"-version"}) catch |err| {
-            return toolFailed(allocator, "ffmpeg", err);
-        };
-        return toolRan("ffmpeg", result);
-    }
-
-    //
-    // The status of the tool (`ffprobe` or `ffmpeg`) when its `-version` failed with the error: not available, with the error.
-    //
-    pub fn toolFailed(allocator: std.mem.Allocator, tool: []const u8, err: anyerror) !VideoToolStatus {
-        return .{
-            .available = false,
-            .@"error" = try std.fmt.allocPrint(allocator, "The {s} built into the program did not run: {s}", .{ tool, try utils.errors.errorToString(allocator, err) }),
-        };
-    }
-
-    //
-    // The status of the tool (`ffprobe` or `ffmpeg`) when its `-version` printed the output: available, with the version read after
-    // "<tool> version ", or "unknown" when that is not there.
-    //
-    pub fn toolRan(comptime tool: []const u8, versionOutput: []const u8) VideoToolStatus {
-        const versionMatch = version_match.matchAfter(versionOutput, tool ++ " version ", version_match.isNonWhitespaceCharacter);
+    pub fn verifyFfprobe() VideoToolStatus {
         return .{
             .available = true,
-            .version = versionMatch orelse "unknown",
+            .version = ffmpeg.version(),
         };
     }
 
     //
-    // Reads the information about the video with ffprobe.
+    // The status of the FFmpeg that decodes videos, the same library as verifyFfprobe's: available, with its version.
+    //
+    pub fn verifyFfmpeg() VideoToolStatus {
+        return .{
+            .available = true,
+            .version = ffmpeg.version(),
+        };
+    }
+
+    //
+    // Reads the information about the video with FFmpeg.
     //
     fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog) !AssetInfo {
         if (self._info) |info| {
@@ -103,20 +81,19 @@ pub const Video = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        // Run ffprobe to get video information in JSON format
-        const probeJson = tool_run.runChecked(allocator, io, log, .ffprobe, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", self.filePath }) catch |err| {
+        const probe = ffmpeg.probeFile(allocator, io, log, self.filePath) catch |err| {
             return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
-        self._info = try readProbe(allocator, self.filePath, probeJson);
+        self._info = try readProbe(allocator, self.filePath, probe);
         return self._info.?;
     }
 
     //
-    // Reads the information about the video at filePath from ffprobe's JSON report of it (`-show_format -show_streams`). Fails with
-    // "Failed to get video info: " and the reason when the report does not describe a video.
+    // Reads the information about the video at filePath from what FFmpeg read of it. Fails with "Failed to get video info: " and
+    // the reason when the file has no video stream.
     //
-    pub fn readProbe(allocator: std.mem.Allocator, filePath: []const u8, probeJson: []const u8) !AssetInfo {
-        return readProbeInner(allocator, filePath, probeJson) catch |err| {
+    pub fn readProbe(allocator: std.mem.Allocator, filePath: []const u8, probe: ffmpeg.IProbe) !AssetInfo {
+        return readProbeInner(allocator, filePath, probe) catch |err| {
             return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
     }
@@ -124,69 +101,38 @@ pub const Video = struct {
     //
     // The body of the try block of readProbe.
     //
-    fn readProbeInner(allocator: std.mem.Allocator, filePath: []const u8, probeJson: []const u8) !AssetInfo {
-        const probeData = switch (try jsonParse(allocator, probeJson)) {
-            .document => |document| document,
-
-            // `probeData.format` of null throws; any other value that is not an object has no format and no streams.
-            .null => return typeError("null is not an object (evaluating 'probeData.format')"),
-            else => return typeError("undefined is not an object (evaluating 'probeData.streams.find')"),
-        };
-        const format = probeData.get("format") orelse BsonValue.undefined;
-        const streams = switch (probeData.get("streams") orelse BsonValue.undefined) {
-            .array => |items| items,
-            .undefined => return typeError("undefined is not an object (evaluating 'probeData.streams.find')"),
-            .null => return typeError("null is not an object (evaluating 'probeData.streams.find')"),
-            else => return typeError("probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)"),
-        };
-        const videoStream = try findStream(streams, "video");
-        const audioStream = try findStream(streams, "audio");
+    fn readProbeInner(allocator: std.mem.Allocator, filePath: []const u8, probe: ffmpeg.IProbe) !AssetInfo {
+        const videoStream = findStream(probe.streams, .video);
+        const audioStream = findStream(probe.streams, .audio);
         const stream = videoStream orelse {
             return errors.throwError("No video stream found in file", .{});
         };
 
-        // Parse creation time if available
+        // The container's tags, then the codecs and the pixel format.
         var createdAt: ?f64 = null;
-        const tags = switch (format) {
-            .undefined => return typeError("undefined is not an object (evaluating 'format.tags')"),
-            .null => return typeError("null is not an object (evaluating 'format.tags')"),
-            else => property(format, "tags"),
-        };
-        const creationTime = property(tags, "creation_time");
-        if (isTruthy(creationTime)) {
-            createdAt = try newDate(allocator, creationTime);
-        }
-
-        // Parse framerate
-        var fps: ?f64 = null;
-        const frameRate = property(.{ .document = stream }, "r_frame_rate");
-        if (isTruthy(frameRate)) {
-            if (frameRate != .string) {
-                return typeError("videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
-            }
-            var parts = std.mem.splitScalar(u8, frameRate.string, '/');
-            const num = stringToNumber(parts.next() orelse "");
-            const den = if (parts.next()) |text| stringToNumber(text) else std.math.nan(f64);
-            fps = num / den;
-        }
-
         var metadata: BsonDocument = .{};
-        try spreadInto(allocator, &metadata, tags);
-        try metadata.put(allocator, "videoCodec", property(.{ .document = stream }, "codec_name"));
-        try metadata.put(allocator, "audioCodec", if (audioStream) |audio| property(.{ .document = audio }, "codec_name") else .undefined);
-        try metadata.put(allocator, "pixelFormat", property(.{ .document = stream }, "pix_fmt"));
+        for (probe.tags) |tag| {
+            try metadata.put(allocator, tag.key, .{ .string = tag.value });
+            if (std.mem.eql(u8, tag.key, "creation_time") and tag.value.len > 0) {
+                createdAt = js_date.parseDate(tag.value);
+            }
+        }
+        try metadata.put(allocator, "videoCodec", .{ .string = stream.codec_name });
+        try metadata.put(allocator, "audioCodec", if (audioStream) |audio| .{ .string = audio.codec_name } else .undefined);
+        try metadata.put(allocator, "pixelFormat", .{ .string = stream.pixel_format });
 
         return .{
             .filePath = filePath,
 
             .dimensions = .{
-                .width = numberProperty(stream, "width"),
-                .height = numberProperty(stream, "height"),
+                .width = @floatFromInt(stream.width),
+                .height = @floatFromInt(stream.height),
             },
 
-            .duration = parseFloat(try jsString(allocator, property(format, "duration"))),
-            .fps = fps,
-            .bitrate = parseInt(try jsString(allocator, property(format, "bit_rate")), null),
+            // A duration, bitrate or frame rate FFmpeg cannot tell is NaN, as it was when it was read from ffprobe's report.
+            .duration = probe.duration_seconds orelse std.math.nan(f64),
+            .fps = @as(f64, @floatFromInt(stream.frame_rate.numerator)) / @as(f64, @floatFromInt(stream.frame_rate.denominator)),
+            .bitrate = if (probe.bit_rate) |bitRate| @floatFromInt(bitRate) else std.math.nan(f64),
             .hasAudio = audioStream != null,
 
             .createdAt = createdAt,
@@ -211,202 +157,33 @@ pub const Video = struct {
     }
 
     //
-    // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are used (no
-    // scaling, quality 85), which is how getVideoDetails calls it.
+    // Writes a JPEG of the frame of the video at a time, turned upright as the video says, to the output path, and returns the path.
     //
     pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        _ = tool_run.runChecked(allocator, io, log, .ffmpeg, try screenshotArguments(allocator, self.filePath, outputPath, timeInSeconds)) catch |err| {
+        ffmpeg.extractFrame(allocator, io, log, .{
+            .input_path = self.filePath,
+            .output_path = outputPath,
+            .time_seconds = timeInSeconds,
+            .quality = screenshot_quality,
+        }) catch |err| {
             return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
         return outputPath;
     }
-
-    //
-    // The arguments of the ffmpeg that extractScreenshot runs: one frame of the video at filePath, at the time, written to outputPath at
-    // quality 85. The quality is written the way JavaScript writes a number. The time is written in decimal notation, never with an
-    // exponent, because ffmpeg's time parser (av_parse_time) reads no exponent: the "1e-7" JavaScript writes for a tenth of a
-    // microsecond made ffmpeg fail.
-    //
-    pub fn screenshotArguments(allocator: std.mem.Allocator, filePath: []const u8, outputPath: []const u8, timeInSeconds: f64) ![]const []const u8 {
-        const quality: f64 = 85;
-
-        var timeText: std.Io.Writer.Allocating = .init(allocator);
-        try timeText.writer.print("{d}", .{timeInSeconds});
-
-        // The quality ffmpeg takes.
-        var qualityText: std.Io.Writer.Allocating = .init(allocator);
-        try utils.js_number.writeNumber(&qualityText.writer, jsRound((100 - quality) / 10));
-
-        // -y forces the overwrite of the output.
-        const arguments = [_][]const u8{ "-i", filePath, "-ss", timeText.written(), "-vframes", "1", "-q:v", qualityText.written(), "-y", outputPath };
-        return try allocator.dupe([]const u8, &arguments);
-    }
 };
 
 //
-// The first stream of the given codec type, which throws a TypeError at a null stream it reaches.
+// The first stream of the kind, or null when there is none.
 //
-fn findStream(streams: []const BsonValue, codecType: []const u8) !?BsonDocument {
+fn findStream(streams: []const ffmpeg.IProbeStream, kind: ffmpeg.IStreamKind) ?ffmpeg.IProbeStream {
     for (streams) |stream| {
-        switch (stream) {
-            .document => |document| {
-                const streamType = document.get("codec_type") orelse continue;
-                if (streamType == .string and std.mem.eql(u8, streamType.string, codecType)) {
-                    return document;
-                }
-            },
-            .null => return typeError("null is not an object (evaluating 's.codec_type')"),
-            else => {},
+        if (stream.kind == kind) {
+            return stream;
         }
     }
     return null;
-}
-
-//
-// A property of a JavaScript value (`value?.name`), undefined when there is none.
-//
-fn property(value: BsonValue, name: []const u8) BsonValue {
-    return switch (value) {
-        .document => |document| document.get(name) orelse .undefined,
-        else => .undefined,
-    };
-}
-
-//
-// A number property of a stream, taken as it is, NaN when it is not a number.
-//
-fn numberProperty(document: BsonDocument, name: []const u8) f64 {
-    return switch (document.get(name) orelse BsonValue.undefined) {
-        .number, .double => |number| number,
-        .int32 => |number| @floatFromInt(number),
-        else => std.math.nan(f64),
-    };
-}
-
-//
-// `String(value)` for a parsed JSON value, the text `parseFloat` and `parseInt` read: an array is its elements
-// joined with commas (null elements as nothing), and an object is "[object Object]".
-//
-fn jsString(allocator: std.mem.Allocator, value: BsonValue) ![]const u8 {
-    var output: std.Io.Writer.Allocating = .init(allocator);
-    try writeJsString(&output.writer, value);
-    return output.written();
-}
-
-//
-// Writes `String(value)` for a parsed JSON value.
-//
-fn writeJsString(writer: *std.Io.Writer, value: BsonValue) std.Io.Writer.Error!void {
-    switch (value) {
-        .string => |text| try writer.writeAll(text),
-        .number, .double => |number| try utils.js_number.writeNumber(writer, number),
-        .int32 => |number| try writer.print("{d}", .{number}),
-        .boolean => |boolean| try writer.writeAll(if (boolean) "true" else "false"),
-        .null => try writer.writeAll("null"),
-        .undefined => try writer.writeAll("undefined"),
-        .array => |elements| {
-            for (elements, 0..) |element, elementIndex| {
-                if (elementIndex > 0) {
-                    try writer.writeAll(",");
-                }
-                if (element != .null and element != .undefined) {
-                    try writeJsString(writer, element);
-                }
-            }
-        },
-        else => try writer.writeAll("[object Object]"),
-    }
-}
-
-//
-// The time value of `new Date(value)` for a parsed JSON value: a string is parsed, a number or boolean is the
-// time itself (TimeClip: NaN beyond 8.64e15, fractions dropped), and an array or object is parsed from its String().
-//
-fn newDate(allocator: std.mem.Allocator, value: BsonValue) !f64 {
-    const time: f64 = switch (value) {
-        .string => |text| return js_date.parseDate(text),
-        .number, .double => |number| number,
-        .int32 => |number| @floatFromInt(number),
-        .boolean => |boolean| if (boolean) 1 else 0,
-        .null => 0,
-        else => return js_date.parseDate(try jsString(allocator, value)),
-    };
-    if (std.math.isNan(time) or @abs(time) > @as(f64, @floatFromInt(js_date.MAX_TIME_VALUE))) {
-        return std.math.nan(f64);
-    }
-    return @trunc(time) + 0;
-}
-
-//
-// Copies the own enumerable properties of a parsed JSON value into the document, as `{ ...value }` does: the
-// fields of an object, the characters of a string and the elements of an array, under their index. Other values have
-// none.
-//
-fn spreadInto(allocator: std.mem.Allocator, document: *BsonDocument, value: BsonValue) !void {
-    switch (value) {
-        .document => |source| {
-            for (source.fields.items) |field| {
-                try document.put(allocator, field.key, field.value);
-            }
-        },
-        .string => |text| {
-            // A string spreads its UTF-16 code units; a character outside the BMP gives its two surrogates, which
-            // are written as U+FFFD each, as a lone surrogate is when the string is encoded as UTF-8.
-            var index: usize = 0;
-            var characterIndex: usize = 0;
-            while (index < text.len) {
-                const width = std.unicode.utf8ByteSequenceLength(text[index]) catch 1;
-                const end = @min(index + width, text.len);
-                if (width == 4) {
-                    try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{characterIndex}), .{ .string = "\u{FFFD}" });
-                    characterIndex += 1;
-                    try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{characterIndex}), .{ .string = "\u{FFFD}" });
-                }
-                else {
-                    try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{characterIndex}), .{ .string = text[index..end] });
-                }
-                characterIndex += 1;
-                index = end;
-            }
-        },
-        .array => |elements| {
-            for (elements, 0..) |element, elementIndex| {
-                try document.put(allocator, try std.fmt.allocPrint(allocator, "{d}", .{elementIndex}), element);
-            }
-        },
-        else => {},
-    }
-}
-
-//
-// JavaScript truthiness of a value.
-//
-fn isTruthy(value: BsonValue) bool {
-    return switch (value) {
-        .number, .double => |number| number != 0 and !std.math.isNan(number),
-        .int32 => |number| number != 0,
-        .string => |text| text.len > 0,
-        .undefined, .null => false,
-        .boolean => |boolean| boolean,
-        else => true,
-    };
-}
-
-//
-// Throws a TypeError with the message.
-//
-fn typeError(message: []const u8) errors.ThrownError {
-    errors.recordError("TypeError", "{s}", .{message});
-    return error.Thrown;
-}
-
-//
-// JavaScript's `Math.round`: rounds half up.
-//
-fn jsRound(value: f64) f64 {
-    return @floor(value + 0.5);
 }

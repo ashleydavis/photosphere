@@ -101,12 +101,26 @@ fn expectCoordinates(expected: ?utils.reverse_geocode.ILocation, actual: ?utils.
 // "<w> <h> <format> <quality>", and whether it still holds any EXIF.
 //
 fn describeImage(log: ILog, allocator: std.mem.Allocator, filePath: []const u8) ![]const u8 {
-    const result = try media_tools.ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%w %h %m %Q exif:[%[EXIF:*]]", filePath });
-    if (result.exit_code != 0) {
-        std.debug.print("identify failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
+    const magick = media_tools.image_magick.c;
+    try media_tools.image_magick.check();
+    const image_info = magick.AcquireImageInfo();
+    defer _ = magick.DestroyImageInfo(image_info);
+    _ = magick.CopyMagickString(&@as(*magick.ImageInfo, image_info).filename, (try allocator.dupeZ(u8, filePath)).ptr, image_info.*.filename.len);
+    const exception = magick.AcquireExceptionInfo();
+    defer _ = magick.DestroyExceptionInfo(exception);
+    const pinged = magick.PingImage(image_info, exception) orelse {
+        std.debug.print("ImageMagick could not read {s}\n", .{filePath});
         return error.TestUnexpectedResult;
+    };
+    defer _ = magick.DestroyImageList(pinged);
+    var text: std.ArrayList(u8) = .empty;
+    try text.print(allocator, "{d} {d} {s} {d} exif:[", .{ pinged.*.columns, pinged.*.rows, std.mem.sliceTo(&@as(*magick.Image, pinged).magick, 0), pinged.*.quality });
+    const exif = try media_tools.image_magick.readExif(allocator, log, filePath);
+    for (exif.keys(), exif.values()) |key, value| {
+        try text.print(allocator, "exif:{s}={s}\n", .{ key, value });
     }
-    return std.mem.trimEnd(u8, result.output, "\r\n");
+    try text.appendSlice(allocator, "]");
+    return text.items;
 }
 
 //

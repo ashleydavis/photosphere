@@ -8,7 +8,6 @@ const task_queue_zig = ziggy.task_queue;
 const MockWorkerPool = task_queue_zig.mock_worker_pool.MockWorkerPool;
 const temp_dirs = @import("temp-dirs.zig");
 const lan_share_network = @import("lan-share-network-zig");
-const media_tools = @import("media-tools-zig");
 
 //
 // The environment of one test: an isolated config dir, vault and temp dir in a directory of its own, an environment that points at
@@ -54,9 +53,6 @@ pub const TestEnvironment = struct {
     // The worker pool installed as the test thread's queue backend.
     pool: *MockWorkerPool,
 
-    // ImageMagick and FFmpeg, started for the environment and stopped after the pool's tasks have ended.
-    media_tools: media_tools.MediaTools,
-
     // How many setupEnvironment calls share the environment and have not freed it yet (a test and a fixture it uses each set one
     // up).
     uses: u32,
@@ -78,7 +74,6 @@ pub const TestEnvironment = struct {
             return;
         }
         self.pool.deinit(std.testing.io, allocator, test_timers.timers(), log);
-        self.media_tools.deinit();
         task_queue_zig.queue_backend.setQueueBackend(null);
         node_utils.process_env.setEnvironMap(null);
         self.map.deinit();
@@ -137,11 +132,6 @@ pub fn setupEnvironmentWith(io: std.Io, allocator: std.mem.Allocator) !*TestEnvi
     _ = map.orderedRemove("AWS_ENDPOINT_URL");
     node_utils.process_env.setEnvironMap(map);
 
-    // ImageMagick and FFmpeg, started for the whole program as the app and the CLI start them, so the tasks of the pool and the code
-    // the test calls run the real tools. A test that sets up an environment starts no tools of its own: they are started once.
-    var media = try media_tools.MediaTools.init();
-    errdefer media.deinit();
-
     // The test's thread registers the media source builders for itself, and each task on its own thread.
     try node_api.task_handlers.registerMediaSourceBuilders();
     const pool = try MockWorkerPool.init(allocator, 4, .{
@@ -154,7 +144,6 @@ pub fn setupEnvironmentWith(io: std.Io, allocator: std.mem.Allocator) !*TestEnvi
         .dir = dir,
         .map = map,
         .pool = pool,
-        .media_tools = media,
         .uses = 1,
     };
     current = environment;

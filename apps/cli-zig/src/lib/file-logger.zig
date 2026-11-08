@@ -239,8 +239,8 @@ pub const FileLogger = struct {
         try writer.writeAll("\n");
         try writer.writeAll("--- Tool Versions ---\n");
         try writer.print("{s}\n", .{try self.getImageMagickVersion(log)});
-        try writer.print("{s}\n", .{try self.getFFmpegVersion(log)});
-        try writer.print("{s}\n", .{try self.getFFprobeVersion(log)});
+        try writer.print("{s}\n", .{try self.getFFmpegVersion()});
+        try writer.print("{s}\n", .{try self.getFFprobeVersion()});
         try writer.writeAll("\n");
     }
 
@@ -275,14 +275,16 @@ pub const FileLogger = struct {
     }
 
     //
-    // Gets the ImageMagick line of the header.
+    // Gets the ImageMagick line of the header. When ImageMagick does not start, the line says it is not found and the reason goes to
+    // the log's errors.
     //
     fn getImageMagickVersion(self: *FileLogger, log: ILog) ![]const u8 {
-        const result = try Image.verifyImageMagick(self.allocator, self.io, log);
+        const result = try Image.verifyImageMagick(self.allocator);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "ImageMagick: {s}", .{result.version orelse "undefined"});
         }
         else {
+            log.@"error"(result.@"error" orelse "The ImageMagick built into the program did not start.");
             return "ImageMagick: not found";
         }
     }
@@ -290,8 +292,8 @@ pub const FileLogger = struct {
     //
     // Gets the FFmpeg line of the header.
     //
-    fn getFFmpegVersion(self: *FileLogger, log: ILog) ![]const u8 {
-        const result = try Video.verifyFfmpeg(self.allocator, self.io, log);
+    fn getFFmpegVersion(self: *FileLogger) ![]const u8 {
+        const result = Video.verifyFfmpeg();
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFmpeg: {s}", .{result.version orelse "undefined"});
         }
@@ -303,8 +305,8 @@ pub const FileLogger = struct {
     //
     // Gets the FFprobe line of the header.
     //
-    fn getFFprobeVersion(self: *FileLogger, log: ILog) ![]const u8 {
-        const result = try Video.verifyFfprobe(self.allocator, self.io, log);
+    fn getFFprobeVersion(self: *FileLogger) ![]const u8 {
+        const result = Video.verifyFfprobe();
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFprobe: {s}", .{result.version orelse "undefined"});
         }

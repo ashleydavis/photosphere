@@ -49,7 +49,7 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void
     }
 
     // Get tool versions
-    const toolsStatus = try verifyTools(allocator, io, log);
+    const toolsStatus = try verifyTools(allocator);
     const imageMagickName = "ImageMagick (magick)";
 
     // Display dependency versions

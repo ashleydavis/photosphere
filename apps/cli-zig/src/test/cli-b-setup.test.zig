@@ -82,9 +82,6 @@ const ILogEnvironment = struct {
     // The memory log the logger passes every line on to in place of the console, kept here to read and free.
     memory_log: *utils.memory_log.MemoryLog,
 
-    // The ImageMagick and FFmpeg built into the program, started for the test, whose versions the logger's headers give.
-    mediaTools: media_tools.MediaTools,
-
     //
     // Creates the environment and its logger.
     //
@@ -105,7 +102,6 @@ const ILogEnvironment = struct {
             .debug = false,
             .tools = false,
         });
-        self.mediaTools = try media_tools.MediaTools.init();
         self.logger = try FileLogger.create(allocator, io, log, self.memory_log.log, "verify --db x");
     }
 
@@ -117,7 +113,6 @@ const ILogEnvironment = struct {
         stopCapture();
         node_utils.process_env.setEnvironMap(null);
         std.Io.Dir.cwd().deleteTree(io, self.tmp_dir) catch {};
-        self.mediaTools.deinit();
         self.memory_log.deinit();
         self.arena.deinit();
     }
