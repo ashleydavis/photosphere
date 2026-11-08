@@ -472,7 +472,11 @@ jobs:
         # The suites run the psi cli-build built, put in place above, rather than building another.
         # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh): Git Bash rewrites a POSIX
         # path only where it is an argument, not where a test writes it into a file or hands it to Bun.
-        run: PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../zig-out/bin/psi.exe")" ./smoke-tests-zig.sh
+        run: |
+          # MinIO is fetched once for the whole job before any scenario starts, so a network problem fails here, with its cause, instead
+          # of failing every S3 scenario separately. The scenarios then find it in the cache.
+          (cd ../.. && bun run s3-emulator fetch)
+          PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../zig-out/bin/psi.exe")" ./smoke-tests-zig.sh
       - name: Test the Zig version command
         working-directory: ./apps/cli-zig
         shell: bash
@@ -593,6 +597,9 @@ jobs:
         run: |
           # cli-build saved psi under a name with no extension, and Windows runs only a file named .exe.
           cp out/photosphere-cli-zig-windows-x64 out/psi.exe
+          # MinIO is fetched once for the whole job before any scenario starts, so a network problem fails here, with its cause, instead
+          # of failing every S3 scenario separately. The scenarios then find it in the cache.
+          bun run s3-emulator fetch
           PHOTOSPHERE_SMOKE_BUILD="$(cygpath -m "$PWD/out/app")" PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/out/psi.exe")" bun run test:ziggy
 
       # A failed scenario keeps its directory, which holds the app's log, its output and the core's own log. Without this upload a

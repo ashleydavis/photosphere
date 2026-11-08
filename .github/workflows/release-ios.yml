@@ -358,7 +358,11 @@ jobs:
         timeout-minutes: 75
         env:
           PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
-        run: bun run test:ziggy:ios
+        run: |
+          # MinIO is fetched once for the whole job before any scenario starts, so a network problem fails here, with its cause, instead
+          # of failing every S3 scenario separately. The scenarios then find it in the cache.
+          bun run s3-emulator fetch
+          bun run test:ziggy:ios
 
       # Scenarios 30 (the app never became ready, its log ending at "Main window created") and 58 (syncing was never held back for
       # the prefetch, which logged nothing) failed here with nothing kept to say why. A failed scenario keeps its directory, which

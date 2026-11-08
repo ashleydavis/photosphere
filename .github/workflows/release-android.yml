@@ -451,10 +451,14 @@ jobs:
           # the default network reads as Wi-Fi, which fails the step naming what it read instead. This is the CI-only emulator the action
           # started for this job, not a pool emulator. The scenarios reach the host at 10.0.2.2, the emulator's alias for the host
           # loopback, which the Wi-Fi network routes to as the cellular one does.
+          #
+          # MinIO is fetched once for the whole job before any scenario starts, so a network problem fails here, with its cause, instead
+          # of failing every S3 scenario separately. The scenarios then find it in the cache.
           script: |
             "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell svc data disable
             "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell svc wifi enable
             bash scripts/android/require-wifi-default-network.sh "$ANDROID_SERIAL" 120
+            bun run s3-emulator fetch
             bun run test:ziggy:and
 
       # A failed scenario keeps its directory, which holds the app's log, the device's log and the core's own log. Without this upload

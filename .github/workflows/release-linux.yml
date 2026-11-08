@@ -436,7 +436,11 @@ jobs:
         working-directory: ./apps/cli-zig
         shell: bash
         # The suites run the psi cli-build built, put in place above, rather than building another.
-        run: PHOTOSPHERE_SMOKE_PSI="$PWD/../../zig-out/bin/psi" ./smoke-tests-zig.sh
+        run: |
+          # MinIO is fetched once for the whole job before any scenario starts, so a network problem fails here, with its cause, instead
+          # of failing every S3 scenario separately. The scenarios then find it in the cache.
+          (cd ../.. && bun run s3-emulator fetch)
+          PHOTOSPHERE_SMOKE_PSI="$PWD/../../zig-out/bin/psi" ./smoke-tests-zig.sh
       - name: Test the Zig version command
         working-directory: ./apps/cli-zig
         shell: bash
@@ -547,6 +551,9 @@ jobs:
         run: |
           # cli-smoke-tests runs this same restored psi only after giving it the executable bit (exit 126 without it), so this does too.
           chmod +x out/photosphere-cli-zig-linux-x64
+          # MinIO is fetched once for the whole job before any scenario starts, so a network problem fails here, with its cause, instead
+          # of failing every S3 scenario separately. The scenarios then find it in the cache.
+          bun run s3-emulator fetch
           PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/photosphere-cli-zig-linux-x64" bun run test:ziggy
 
       # A failed scenario keeps its directory, which holds the app's log, its output and the core's own log. Without this upload a
