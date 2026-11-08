@@ -1198,14 +1198,50 @@ android_report_adb_readings() {
 }
 
 #
+# Streams a tar archive made on the device by `run-as tar` into a file on this machine, and fails loudly when the stream was cut short.
+# A cut-short stream looks like a whole one: when the device went offline part way through, `adb exec-out` returned 0. So adb's own
+# messages are left on stderr, the device has to still be online once the stream ends, and the archive must not be empty. The host's
+# adb server and the device's adbd are read either side of the stream, and a failure prints both readings, so a drop says which end
+# restarted. The second reading is taken after the device's state is checked, because it waits for a device that dropped to come back.
+# Usage: android_stream_device_tar <tarball> <what_is_copied> <tar_args>...
+#
+android_stream_device_tar() {
+    local tarball="$1"
+    local what_is_copied="$2"
+    shift 2
+    local reading_before
+    reading_before="$(android_adb_process_reading)"
+    local copy_status=0
+    photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar "$@" > "$tarball" || copy_status=$?
+    local device_state
+    device_state="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" get-state 2>&1 {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
+    local reading_after
+    reading_after="$(android_adb_process_reading)"
+    if [ "$copy_status" -ne 0 ]; then
+        echo "Could not read $what_is_copied off the device (adb exec-out exited $copy_status, adb get-state after it: ${device_state:-no answer})." >&2
+        android_report_adb_readings "$reading_before" "$reading_after"
+        return 1
+    fi
+    if [ "$device_state" != "device" ]; then
+        echo "Device $ANDROID_SERIAL_CLAIMED went offline while $what_is_copied was being copied off it (adb get-state: ${device_state:-no answer}), so the copy was cut short. The partial copy is in $tarball." >&2
+        android_report_adb_readings "$reading_before" "$reading_after"
+        return 1
+    fi
+    if [ ! -s "$tarball" ]; then
+        echo "$what_is_copied came back empty from the device." >&2
+        android_report_adb_readings "$reading_before" "$reading_after"
+        return 1
+    fi
+}
+
+#
 # Copies a directory of the dbs directory of the app's files directory onto this machine. A whole tree rather than one file, because a database is a
 # directory: a scenario that checks what the app wrote reads it with the CLI, and the CLI needs the whole `.db` folder. It goes through
 # `tar` on the device and adb's stdout, because `adb pull` cannot reach private storage at all.
 #
 # A copy cut short looks like a whole one: when the device went offline part way through, `adb exec-out` and `tar xf` both returned 0,
-# and what was unpacked lacked the `.db` folder, so the scenario failed later saying the database held no photo. So adb's own messages
-# are left on stderr, and the device has to still be online once the stream ends, or the copy counts as cut short. The host's adb server
-# and the device's adbd are read either side of the stream, and a failed copy prints both readings, so a drop says which end restarted.
+# and what was unpacked lacked the `.db` folder, so the scenario failed later saying the database held no photo. The stream goes through
+# android_stream_device_tar, which fails loudly when it was cut short.
 # Usage: android_save_sandbox_dir <dir_under_dbs> <local_dir>
 #
 android_save_sandbox_dir() {
@@ -1219,29 +1255,7 @@ android_save_sandbox_dir() {
     fi
     mkdir -p "$local_dir" || return 1
     local tarball="$local_dir/sandbox-dir.tar"
-    local reading_before
-    reading_before="$(android_adb_process_reading)"
-    local copy_status=0
-    photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" > "$tarball" || copy_status=$?
-    local device_state
-    device_state="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" get-state 2>&1 {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
-    local reading_after
-    reading_after="$(android_adb_process_reading)"
-    if [ "$copy_status" -ne 0 ]; then
-        echo "Could not read $ANDROID_DATABASES_DIR_RELATIVE/$device_dir off the device (adb exec-out exited $copy_status, adb get-state after it: ${device_state:-no answer})." >&2
-        android_report_adb_readings "$reading_before" "$reading_after"
-        return 1
-    fi
-    if [ "$device_state" != "device" ]; then
-        echo "Device $ANDROID_SERIAL_CLAIMED went offline while $ANDROID_DATABASES_DIR_RELATIVE/$device_dir was being copied off it (adb get-state: ${device_state:-no answer}), so the copy was cut short. The partial copy is in $tarball." >&2
-        android_report_adb_readings "$reading_before" "$reading_after"
-        return 1
-    fi
-    if [ ! -s "$tarball" ]; then
-        echo "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir came back empty from the device." >&2
-        android_report_adb_readings "$reading_before" "$reading_after"
-        return 1
-    fi
+    android_stream_device_tar "$tarball" "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir" c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" || return 1
     if ! tar xf "$tarball" -C "$local_dir"; then
         echo "Could not unpack $ANDROID_DATABASES_DIR_RELATIVE/$device_dir after copying it off the device." >&2
         return 1
@@ -1590,22 +1604,26 @@ android_app_process_alive() {
 
 #
 # Copies a database in the dbs directory of the app's files directory to a directory on the host, so the host's CLI can read what the app wrote. The
-# directory is streamed out of the app's private storage as an archive, because adb cannot pull from it. The destination must not
-# exist. Usage: android_fetch_database <relative_path_under_dbs> <host_dest>
+# directory is streamed out of the app's private storage as an archive, because adb cannot pull from it, through
+# android_stream_device_tar, which fails loudly when the stream was cut short. A copy without the database's `.db` folder fails here,
+# naming what it holds. The destination must not exist. Usage: android_fetch_database <relative_path_under_dbs> <host_dest>
 #
 android_fetch_database() {
     local rel_path="$1"
     local host_dest="$2"
     photosphere_android_claim_device || return 1
     mkdir -p "$host_dest" || return 1
-    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar -cf - -C "$ANDROID_DATABASES_DIR_RELATIVE/$rel_path" . | tar -xf - -C "$host_dest"; then
-        echo "Could not copy $ANDROID_DATABASES_DIR_RELATIVE/$rel_path out of the app's storage" >&2
+    local tarball="$host_dest.tar"
+    android_stream_device_tar "$tarball" "$ANDROID_DATABASES_DIR_RELATIVE/$rel_path" -cf - -C "$ANDROID_DATABASES_DIR_RELATIVE/$rel_path" . || return 1
+    if ! tar -xf "$tarball" -C "$host_dest"; then
+        echo "Could not unpack $ANDROID_DATABASES_DIR_RELATIVE/$rel_path after copying it out of the app's storage. The copy is in $tarball." >&2
         return 1
     fi
-    if [ -z "$(ls -A "$host_dest")" ]; then
-        echo "$ANDROID_DATABASES_DIR_RELATIVE/$rel_path held nothing, so nothing was copied out of the app's storage" >&2
+    if [ ! -d "$host_dest/.db" ]; then
+        echo "The copy of $ANDROID_DATABASES_DIR_RELATIVE/$rel_path taken off device $ANDROID_SERIAL_CLAIMED has no .db folder, so it is not a whole database. It holds: $(ls -A "$host_dest" 2>&1 | tr '\n' ' ')" >&2
         return 1
     fi
+    rm -f "$tarball"
 }
 
 #
