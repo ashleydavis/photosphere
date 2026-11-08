@@ -11,17 +11,23 @@ The Photosphere App (on the desktop and on phones) and the Zig CLI (`psi`) call 
 
 ## Image types the built-in ImageMagick cannot read
 
-ImageMagick is configured with only the JPEG, PNG, WebP and zlib delegates (`third-party/imagemagick/generate-config.sh`); every other delegate is turned off. It reads what its own coders read, such as GIF, BMP, ICO, TGA and PSD, but it cannot read HEIC, HEIF, AVIF, TIFF, JPEG 2000, JPEG XL, OpenEXR, DjVu, FlashPix, WMF, XWD or DNG, each of which needs a delegate it does not have. HEIC and HEIF are handled without ImageMagick: FFmpeg (built with its `xstack` filter, which joins a phone's tiled HEIC) gives their size and decodes them into a JPEG that ImageMagick makes the smaller pictures from, and their EXIF is read from the file by `packages-zig/node-api-zig/src/lib/heic-exif.zig`. Importing a file of any of the other types fails with ImageMagick's error in the Zig CLI and in the App. An installed ImageMagick could read them through its own delegates, but neither program uses an installed ImageMagick.
+ImageMagick is configured with only the JPEG, PNG, WebP and zlib delegates (`third-party/imagemagick/generate-config.sh`); every other delegate is turned off. The security policy (below) lets it read only JPEG, PNG, WebP, GIF and BMP. It cannot read HEIC, HEIF, AVIF, TIFF, JPEG 2000, JPEG XL, OpenEXR, DjVu, FlashPix, WMF, XWD or DNG, each of which needs a delegate it does not have, and the policy refuses the types its own coders could read, such as ICO, TGA, PSD and the portable anymaps. HEIC and HEIF are handled without ImageMagick: FFmpeg (built with its `xstack` filter, which joins a phone's tiled HEIC) gives their size and decodes them into a JPEG that ImageMagick makes the smaller pictures from, and their EXIF is read from the file by `packages-zig/node-api-zig/src/lib/heic-exif.zig`. Importing a file of any of the other types fails with ImageMagick's error in the Zig CLI and in the App. An installed ImageMagick could read them through its own delegates, but neither program uses an installed ImageMagick.
 
 ## Security policy
 
-The built-in ImageMagick is built with zero configuration, so it reads no `policy.xml`. Instead `ImageMagick.init` (`packages-zig/media-tools-zig/src/lib/image-magick.zig`) sets a policy with `SetMagickSecurityPolicy` straight after `MagickWandGenesis`. It denies:
+The built-in ImageMagick is built with zero configuration, so it reads no `policy.xml`. Instead `Started.start` (`packages-zig/media-tools-zig/src/lib/image-magick.zig`) sets a policy with `SetMagickSecurityPolicy` straight after `MagickWandGenesis`. ImageMagick takes the last rule that matches, so the policy denies every coder first and then allows only the ones the program uses:
 
-- The coders that reach outside the file being read or run a script: `URL`, `HTTP`, `HTTPS`, `FTP`, `MSL`, `MVG`, `MSVG`, `TEXT`, `TXT`, `EPHEMERAL`, `SHOW`, `WIN` and `X`. Every other coder stays allowed, because the import reads whatever image type the user has. An allow-list would refuse types it accepts.
+- Read: `JPEG` (also named `JPG` and `JPE`), `PNG`, `WEBP`, `GIF` and `BMP`. These are the pictures the import makes smaller pictures of. HEIC reaches ImageMagick as the JPEG FFmpeg decodes it into, and a video's thumbnail as the JPEG frame FFmpeg writes.
+- Write: `JPEG` and `JPG` (the name a `.jpg` path is written with), the only type the program writes, and `INFO`, the text a command ending in `info:` prints.
+
+Every other coder is refused with ImageMagick's `NotAuthorized` error naming it. ImageMagick picks the coder from the file's first bytes, so an SVG, PostScript or MVG file given a `.jpg` name is refused as well. The policy also denies:
+
 - Every delegate, since none is meant to run.
 - Indirect reads, the paths starting with `@` that name a file holding a list of files to read.
 
-If the policy cannot be set, `init` stops ImageMagick and returns an error carrying ImageMagick's reason, so `MediaTools.init` fails and the program does not run without it.
+The tests in `packages-zig/media-tools-zig/src/test/image-magick.test.zig` read each allowed type from a fixture under `test/` and check that the rest are refused.
+
+If the policy cannot be set, `start` stops ImageMagick and returns an error carrying ImageMagick's reason, so `MediaTools.init` fails and the program does not run without it.
 
 ## A timed-out ffmpeg
 
