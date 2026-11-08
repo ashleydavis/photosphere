@@ -6,8 +6,6 @@ const IFileStat = file_scanner.IFileStat;
 const IHashedData = merkle_tree_zig.merkle_tree.IHashedData;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const utils = @import("utils-zig");
-const node_utils = @import("node-utils-zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const api = @import("api-zig");
 const hash_cache = @import("hash-cache.zig");
 const validation = @import("validation.zig");
@@ -157,7 +155,6 @@ pub fn validateAndHash(
     allocator: std.mem.Allocator,
     io: std.Io,
     log: ILog,
-    toolRunner: InProcessRunner,
     filePath: []const u8, // Actual file path (always a valid file, already extracted if from zip)
     fileStat: IFileStat,
     contentType: []const u8,
@@ -165,7 +162,7 @@ pub fn validateAndHash(
 ) !?IHashedData {
     // filePath is always a valid file (already extracted if from zip)
     // Validate the file
-    const isValid = validateFile(allocator, io, log, toolRunner, filePath, contentType, fileStat) catch |err| {
+    const isValid = validateFile(allocator, io, log, filePath, contentType, fileStat) catch |err| {
         // Use logicalPath for display (always set)
         log.exception(try std.fmt.allocPrint(allocator, "File \"{s}\" has failed its validation with error: {s}", .{ logicalPath, errors.errorMessage(err) }), err);
         return null;

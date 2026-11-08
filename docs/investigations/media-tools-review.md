@@ -13,8 +13,8 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 - `MediaTools` is started once on the main thread:
   - CLI: `apps/cli-zig/index.zig`, in `main`.
   - App: `packages-zig/photosphere-core/src/lib/main-state.zig`, in `MainState.create`.
-- Each task makes a `ThreadTools` (`packages-zig/node-api-zig/src/lib/task-handlers.zig`, `withTools`).
-- Callers in `packages-zig/tools-zig` pass the tool and an argument list to `runTool` or `runToolLogged` in `packages-zig/node-utils-zig/src/lib/in-process-tools.zig`, which call the runner directly.
+- A task on any thread runs the tools by calling them directly once `MediaTools` has started them; nothing is made per task or per thread.
+- Callers in `packages-zig/tools-zig` pass the tool and an argument list to `runChecked` or `runLogged` in `packages-zig/media-tools-zig/src/lib/tool-run.zig`, which call `ImageMagick.runMagick`, `Ffmpeg.runFfmpeg` or `Ffmpeg.runFfprobe` directly.
 
 ### What uses the tools
 
@@ -44,40 +44,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 - **Out-of-date comment.** "Serialize tool verification to avoid race conditions" in `tools-zig/src/lib/tool-verification.zig`.
 - **JavaScript error text.** `video.zig` raises errors such as `"undefined is not an object (evaluating 'probeData.format')"`. These are copied from the TypeScript port and mean nothing to a Zig reader.
 
-## `ThreadTools`
-
-- `ThreadTools` (`media-tools-zig/src/lib/media-tools.zig`) is an empty struct. `init()` returns `.{}` and `runner()` returns an `InProcessRunner` whose `run` ignores `context`.
-- The interface needs a context pointer, because `FakeToolRunner` (`tools-zig/src/test/fake-tool-runner.zig`) uses it to record arguments. `taskEntries` takes a `Tools` type with `init()` and `runner()`, and the tests pass `NoTools` (`node-api-zig/src/test/test-environment.zig`).
-- `ThreadTools` does not need any of that:
-  - It has no state, so making one per thread achieves nothing.
-  - The comment saying it "must not move while the runner is used" does not apply, because nothing reads the pointer.
-  - The comments make an empty struct sound as if it guarded thread safety. The shared state that matters is in the C libraries (ImageMagick's setup and handlers, FFmpeg's log callback), and `MediaTools.init` starts it once.
-- A simpler shape:
-  - Replace `ThreadTools` with one constant `InProcessRunner` with `context = null`.
-  - Have `taskEntries` take that runner value instead of a `Tools` type.
-  - Have `MediaTools` keep only the start and stop of the libraries, without its `tools` field.
-  - Callers to update: `task-handlers.zig`, `photosphere-core/src/index.zig`, `photosphere-core/src/lib/tools.zig`, `apps/cli-zig/src/lib/worker-pool.zig`, and the tests that call `ThreadTools.init()`.
-
-## Removing `ThreadTools` and `InProcessRunner`
-
-### Why they exist
-
-- `media-tools-zig` is the only package that links libc and the ImageMagick and FFmpeg libraries. `tools-zig` and `node-api-zig` link neither and do not depend on `media-tools-zig` (see the package table in `build.zig`).
-- `InProcessRunner` is the indirection that lets those two packages run the tools without linking them. The program hands a runner in from the top, and `taskEntries` takes a `Tools` type so the CLI and app pass `ThreadTools` while the `node-api-zig` tests pass `NoTools`.
-- `node-utils-zig` runs the tools through `runTool`, which hands the runner the tool and an argument list.
-
-### Proposal
-
-- `tools-zig` depends on `media-tools-zig` and calls `ImageMagick.runMagick` and `Ffmpeg.runFfmpeg` / `runFfprobe` directly, with an argument list.
-- Delete `InProcessRunner`, `ThreadTools`, `NoTools`, `in-process-tools.zig` (`runTool`, `runToolLogged`), the `Tools` parameter of `taskEntries` and the `tools`/`toolRunner` parameter threaded through every caller (39 files mention `InProcessRunner`).
-- `MediaTools` keeps only the start and stop of the libraries.
-
-### Costs
-
-- `tools-zig` and `node-api-zig` link libc, ImageMagick and FFmpeg, so their test binaries get larger and slower to build.
-- The tests that use `FakeToolRunner` (`image.command.test.zig`, `video.probe.test.zig`, `tool-verification.test.zig`) assert the argument list joined with spaces. They are replaced by tests that run the real tools on fixture files.
-- The `node-api-zig` test environment, which runs tasks with no tools, runs them with the real tools. `MediaTools` has to be started in that environment.
-
 ## Trade-offs worth deciding
 
 - **Colour profiles.** `-strip` in the resize drops colour profiles along with XMP. Display P3 iPhone photos will get thumbnails with shifted colours.
@@ -89,6 +55,5 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 Items the human has said must be fixed.
 
-- Reconsider `ThreadTools` and `InProcessRunner` and try to remove them.
 - No one-time setup of ImageMagick and FFmpeg. Each should be a library function that can be called anywhere, at any time, with no setup. What stands in the way today, from the code's own comments: ImageMagick's `MagickWandGenesis`/`MagickWandTerminus`, its security policy and its warning and error handlers are process-wide, and so is FFmpeg's log callback (`av_log_set_callback`). `MediaTools.init` sets all of these.
 - No shell-style command strings, formatted or parsed, anywhere. Replace them with proper library functions for images and videos (for example `resizeImage`, `createThumbnail`) that take typed arguments. That means calling ImageMagick's and FFmpeg's C APIs (MagickWand or MagickCore, and libavformat, libavcodec, libavfilter and libswscale) directly, instead of driving the `magick`, `ffmpeg` and `ffprobe` command-line programs in-process.

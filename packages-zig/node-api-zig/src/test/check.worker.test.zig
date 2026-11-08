@@ -7,7 +7,6 @@ const task_queue_zig = @import("ziggy").task_queue;
 const serialization_zig = @import("serialization-zig");
 const storage_zig = @import("storage-zig");
 const node_api = @import("node-api-zig");
-const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
@@ -17,8 +16,6 @@ const ICheckFileData = check_worker.ICheckFileData;
 const ICheckFileResult = check_worker.ICheckFileResult;
 const HashCache = node_api.hash_cache.HashCache;
 const TaskContext = task_queue_zig.task_context.TaskContext;
-const MediaTools = media_tools.MediaTools;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const BsonDocument = serialization_zig.bson.BsonDocument;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
@@ -80,12 +77,6 @@ const CheckTest = struct {
     // The task context.
     context: TaskContext,
 
-    // The tools built into the program, whose runner the handler is given.
-    mediaTools: MediaTools,
-
-    // The runner the handler is given: the runner of mediaTools, or null for a test of a task run with
-    // none.
-    toolRunner: ?InProcessRunner,
 
     //
     // Copies the test photo into a directory of the test's own and creates the database.
@@ -110,8 +101,6 @@ const CheckTest = struct {
             .context = null,
             .function = ignoreMessage,
         }, 10);
-        self.mediaTools = try MediaTools.init();
-        self.toolRunner = self.mediaTools.runner();
     }
 
     //
@@ -119,7 +108,6 @@ const CheckTest = struct {
     //
     fn deinit(self: *CheckTest, log: ILog) void {
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
-        self.mediaTools.deinit();
         self.arena.deinit();
         self.test_env.deinit(log);
     }
@@ -191,7 +179,7 @@ const CheckTest = struct {
         });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
         const taskContext = self.context.taskContext();
-        const output = try checkFileHandler(allocator, std.testing.io, test_timers.timers(), log, taskData, taskContext, self.toolRunner);
+        const output = try checkFileHandler(allocator, std.testing.io, test_timers.timers(), log, taskData, taskContext);
         return std.json.parseFromValueLeaky(ICheckFileResult, allocator, output, .{});
     }
 
@@ -256,16 +244,4 @@ test "returns an empty result without opening storage when the file cannot be ha
     try std.testing.expect(result.hashedFile == null);
     try std.testing.expectEqual(@as(u64, 0), result.matchingRecordsCount);
     try std.testing.expectEqual(false, result.hashFromCache);
-}
-
-test "fails when the task was run with no runner" {
-    const log = utils.mute_log.MuteLog.init();
-    var context: CheckTest = undefined;
-    try context.init(log);
-    defer context.deinit(log);
-    context.toolRunner = null;
-
-    try std.testing.expectError(error.Thrown, context.run(log, context.makeData()));
-
-    try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", utils.errors.lastErrorMessage());
 }

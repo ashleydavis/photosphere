@@ -22,7 +22,7 @@ const TaskQueue = ziggy.task_queue.task_queue.TaskQueue;
 //
 // The task types of the pool: every task handler of node-api, wrapped by the adapter the app's core uses.
 //
-const task_entries = node_api.task_handlers.taskEntries(test_environment.NoTools, test_environment.registerMediaSources);
+const task_entries = node_api.task_handlers.taskEntries(test_environment.registerMediaSources);
 
 //
 // Runs check-database-exists for a database path on a pool whose workers have the given data directory, and returns whether the

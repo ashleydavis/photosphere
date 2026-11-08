@@ -146,7 +146,7 @@ pub fn addCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: 
         }
     }
 
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const databaseDir = loaded.databaseDir;
     const googleApiKey = try resolveGeocodingApiKey(allocator, io, loaded.geocodingKeyName);
 

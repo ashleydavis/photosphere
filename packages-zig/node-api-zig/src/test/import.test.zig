@@ -13,11 +13,9 @@ const test_environment = @import("test-environment.zig");
 const test_files = @import("test-files.zig");
 const fixture_dirs = @import("fixture-dirs.zig");
 const console_capture = @import("console-capture.zig");
-const production_queue_backend = @import("production-queue-backend.zig");
 const media_file_database = node_api.media_file_database;
 const addPaths = node_api.import.addPaths;
 const IAddSummary = media_file_database.IAddSummary;
-const ProductionQueueBackend = production_queue_backend.ProductionQueueBackend;
 
 //
 // What the progress callback of an import saw.
@@ -54,11 +52,6 @@ test "addPaths imports a file into a new database, then finds it already there" 
     // A new, empty database and a folder holding one photo.
     const root = try temp_dirs.makeTempDir(allocator, io, "add-paths");
     defer temp_dirs.removeTempDir(io, root);
-
-    // The import runs ImageMagick, which only the queue backend the App runs on can give its tasks.
-    var queue: ProductionQueueBackend = undefined;
-    try queue.start(allocator);
-    defer queue.stop(log, allocator);
 
     const databaseDir = try std.fs.path.join(allocator, &.{ root, "db" });
     const created = try @import("storage-zig").storage_factory.createStorage(allocator, io, "", databaseDir, null, null);
@@ -144,11 +137,6 @@ test "addPaths counts a photo whose content the database already holds as alread
     const fixture = try createImportFixture(allocator, io, log, "add-paths-skipped");
     defer temp_dirs.removeTempDir(io, fixture.root);
 
-    // The import runs ImageMagick, which only the queue backend the App runs on can give its tasks.
-    var queue: ProductionQueueBackend = undefined;
-    try queue.start(allocator);
-    defer queue.stop(log, allocator);
-
     try copyTestFile(allocator, io, "test.jpg", fixture.photosDir, "first.jpg");
     const otherDir = try std.fmt.allocPrint(allocator, "{s}/other", .{fixture.root});
     try copyTestFile(allocator, io, "test.jpg", otherDir, "same-content.jpg");
@@ -181,11 +169,6 @@ test "addPaths counts the files the scanner ignores" {
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, log, "add-paths-ignored");
     defer temp_dirs.removeTempDir(io, fixture.root);
-
-    // The import runs ImageMagick, which only the queue backend the App runs on can give its tasks.
-    var queue: ProductionQueueBackend = undefined;
-    try queue.start(allocator);
-    defer queue.stop(log, allocator);
 
     try copyTestFile(allocator, io, "test.jpg", fixture.photosDir, "photo.jpg");
     try test_files.writeFile(io, try std.fmt.allocPrint(allocator, "{s}/notes.txt", .{fixture.photosDir}), "not media");
@@ -237,11 +220,6 @@ test "addPaths queues the Google API key, the options and the encryption key it 
     const fixture = try createImportFixture(allocator, io, log, "add-paths-options");
     defer temp_dirs.removeTempDir(io, fixture.root);
 
-    // The import runs ImageMagick, which only the queue backend the App runs on can give its tasks.
-    var queue: ProductionQueueBackend = undefined;
-    try queue.start(allocator);
-    defer queue.stop(log, allocator);
-
     // A png has no coordinates, so the key is never used to look up a place.
     try copyTestFile(allocator, io, "test.png", fixture.photosDir, "photo.png");
 
@@ -278,11 +256,6 @@ test "the termination callback addPaths registers shuts the queue down without f
     defer node_utils.termination.clearTerminationCallbacks();
     const fixture = try createImportFixture(allocator, io, log, "add-paths-termination");
     defer temp_dirs.removeTempDir(io, fixture.root);
-
-    // The import runs ImageMagick, which only the queue backend the App runs on can give its tasks.
-    var queue: ProductionQueueBackend = undefined;
-    try queue.start(allocator);
-    defer queue.stop(log, allocator);
 
     try copyTestFile(allocator, io, "test.jpg", fixture.photosDir, "photo.jpg");
 

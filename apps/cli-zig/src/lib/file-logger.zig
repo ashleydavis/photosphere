@@ -12,7 +12,6 @@ const IToolOutput = utils.log.IToolOutput;
 const Date = utils.timestamp_provider.Date;
 const Image = tools.Image;
 const Video = tools.Video;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const ensureDirSync = node_utils.fs.ensureDirSync;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
 
@@ -119,9 +118,6 @@ pub const FileLogger = struct {
     // Io used for file access.
     io: std.Io,
 
-    // Runs the ImageMagick and FFmpeg built into the program, whose versions the headers give.
-    toolRunner: InProcessRunner,
-
     // Path of the log file.
     logFile: []const u8,
 
@@ -149,11 +145,10 @@ pub const FileLogger = struct {
     //
     // Creates the logger and registers its termination callback.
     //
-    fn init(self: *FileLogger, allocator: std.mem.Allocator, io: std.Io, toolRunner: InProcessRunner, consoleLogger: ILog, command: []const u8, logFile: []const u8, errorLogFile: []const u8, startTime: Date) !void {
+    fn init(self: *FileLogger, allocator: std.mem.Allocator, io: std.Io, consoleLogger: ILog, command: []const u8, logFile: []const u8, errorLogFile: []const u8, startTime: Date) !void {
         self.* = .{
             .allocator = allocator,
             .io = io,
-            .toolRunner = toolRunner,
             .logFile = logFile,
             .errorLogFile = errorLogFile,
             .startTime = startTime,
@@ -180,9 +175,8 @@ pub const FileLogger = struct {
 
     //
     // Creates the log files under <tmp>/photosphere/logs, writes their headers and returns the logger.
-    // toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions the headers give.
     //
-    pub fn create(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, consoleLogger: ILog, command: []const u8) !*FileLogger {
+    pub fn create(allocator: std.mem.Allocator, io: std.Io, log: ILog, consoleLogger: ILog, command: []const u8) !*FileLogger {
         const startTime = Date{ .epochMilliseconds = std.Io.Clock.real.now(io).toMilliseconds() };
 
         // Create logs directory in Photosphere temp.
@@ -210,7 +204,7 @@ pub const FileLogger = struct {
 
         // Create the logger instance
         const logger = try allocator.create(FileLogger);
-        try logger.init(allocator, io, toolRunner, consoleLogger, command, logFile, errorLogFile, startTime);
+        try logger.init(allocator, io, consoleLogger, command, logFile, errorLogFile, startTime);
 
         // Write initial log headers for both files
         try logger.writeLogHeader(log);
@@ -284,7 +278,7 @@ pub const FileLogger = struct {
     // Gets the ImageMagick line of the header.
     //
     fn getImageMagickVersion(self: *FileLogger, log: ILog) ![]const u8 {
-        const result = try Image.verifyImageMagick(self.allocator, self.io, log, self.toolRunner);
+        const result = try Image.verifyImageMagick(self.allocator, self.io, log);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "ImageMagick: {s}", .{result.version orelse "undefined"});
         }
@@ -297,7 +291,7 @@ pub const FileLogger = struct {
     // Gets the FFmpeg line of the header.
     //
     fn getFFmpegVersion(self: *FileLogger, log: ILog) ![]const u8 {
-        const result = try Video.verifyFfmpeg(self.allocator, self.io, log, self.toolRunner);
+        const result = try Video.verifyFfmpeg(self.allocator, self.io, log);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFmpeg: {s}", .{result.version orelse "undefined"});
         }
@@ -310,7 +304,7 @@ pub const FileLogger = struct {
     // Gets the FFprobe line of the header.
     //
     fn getFFprobeVersion(self: *FileLogger, log: ILog) ![]const u8 {
-        const result = try Video.verifyFfprobe(self.allocator, self.io, log, self.toolRunner);
+        const result = try Video.verifyFfprobe(self.allocator, self.io, log);
         if (result.available) {
             return std.fmt.allocPrint(self.allocator, "FFprobe: {s}", .{result.version orelse "undefined"});
         }

@@ -230,14 +230,13 @@ fn slowHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: ut
 }
 
 //
-// Runs `magick -version` through the tools built into the program, made on the task's thread, and returns what it printed.
+// Runs `magick -version` with the ImageMagick built into the program, on the task's thread, and returns what it printed.
 //
 fn magickVersionHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, _: types.ITaskContext) anyerror!std.json.Value {
     _ = timers;
     _ = data;
-    var tools = media_tools.ThreadTools.init();
-    const result = try node_utils.in_process_tools.runTool(allocator, io, log, tools.runner(), "magick", &.{"-version"});
-    return .{ .string = result.stdout };
+    const result = try media_tools.tool_run.runChecked(allocator, io, log, .magick, &.{"-version"});
+    return .{ .string = result };
 }
 
 //
@@ -260,7 +259,7 @@ test "runs a task on a worker and reports its outputs" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 2, 10000, .{ .sessionId = "session", .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 2, 10000, .{ .sessionId = "session", .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     const backend = pool.queueBackend();
     var collector = Collector.init(arena.allocator());
@@ -305,7 +304,7 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(pool_allocator, 1, 10000, .{ .tasks = &test_tasks });
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
     try addTask(pool, memory.log, pool_allocator, "echo", .{ .string = "x" }, "source", null);
@@ -324,7 +323,7 @@ test "generates a task ID when none is given" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -342,7 +341,7 @@ test "reports a failed task with the error name and message" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -379,7 +378,7 @@ test "a failed task's error is logged when verbose logging is on" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(pool_allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -398,7 +397,7 @@ test "forwards task messages to the message callbacks" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -426,7 +425,7 @@ test "creates workers lazily up to maxWorkers" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 2, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 2, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -471,7 +470,7 @@ test "times out a task, reports it failed and replaces the worker" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 50, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(pool_allocator, 1, 50, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -501,7 +500,7 @@ test "a worker abandoned at its timeout can still send once the pool is gone, an
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 50, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(pool_allocator, 1, 50, .{ .tasks = &test_tasks });
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
     try addTask(pool, log, pool_allocator, "slow", .null, "source", "slow-task");
@@ -539,7 +538,7 @@ test "the timeout message writes the timeout as a template string writes a numbe
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 1e-7, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(pool_allocator, 1, 1e-7, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -559,7 +558,7 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(pool_allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(pool_allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -592,7 +591,7 @@ test "shutdown terminates the workers" {
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 2, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 2, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -610,7 +609,7 @@ test "a task on a worker runs the tools built into the program, made on its own 
     var timer_list = TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });

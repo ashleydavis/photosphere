@@ -111,11 +111,11 @@ test "configureLog gives the file logger unless file logging is disabled" {
     cli.process_argv.setArgv(&.{"psi"});
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const consoleLog = try cli.log_setup.configureLog(allocator, io, console_log, mediaTools.runner(), .{ .disableFileLogging = true });
+    const consoleLog = try cli.log_setup.configureLog(allocator, io, console_log, .{ .disableFileLogging = true });
     const details = try consoleLog.getLogDetails(allocator, io);
     try std.testing.expect(details.logFilePath == null);
 
-    const log = try cli.log_setup.configureLog(allocator, io, console_log, mediaTools.runner(), .{ .verbose = true });
+    const log = try cli.log_setup.configureLog(allocator, io, console_log, .{ .verbose = true });
     log.info("to both");
     try std.testing.expect(log.verboseEnabled());
     const logFilePath = log.logFilePath().?;

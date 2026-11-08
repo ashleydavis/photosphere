@@ -5,7 +5,6 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const node_api = @import("node-api-zig");
-const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
@@ -16,8 +15,6 @@ const IHashFileResult = hash_file_worker.IHashFileResult;
 const HashCache = node_api.hash_cache.HashCache;
 const forgetSharedHashCaches = node_api.hash_cache.forgetSharedHashCaches;
 const TaskContext = task_queue_zig.task_context.TaskContext;
-const MediaTools = media_tools.MediaTools;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const TestUuidGenerator = node_utils.test_uuid_generator.TestUuidGenerator;
 const TestTimestampProvider = node_utils.test_timestamp_provider.TestTimestampProvider;
 const errors = utils.errors;
@@ -78,12 +75,6 @@ const HandlerTest = struct {
     // The task context.
     context: TaskContext,
 
-    // The tools built into the program, whose runner the handler is given.
-    mediaTools: MediaTools,
-
-    // The runner the handler is given: the runner of mediaTools, or null for a test of a task run with
-    // none.
-    toolRunner: ?InProcessRunner,
 
     //
     // Copies the test photo into a directory of the test's own.
@@ -106,8 +97,6 @@ const HandlerTest = struct {
             .context = &self.messages,
             .function = MessageCounter.send,
         }, 10);
-        self.mediaTools = try MediaTools.init();
-        self.toolRunner = self.mediaTools.runner();
     }
 
     //
@@ -116,7 +105,6 @@ const HandlerTest = struct {
     fn deinit(self: *HandlerTest, log: ILog) void {
         forgetSharedHashCaches();
         temp_dirs.removeTempDir(std.testing.io, self.tempDir);
-        self.mediaTools.deinit();
         self.arena.deinit();
         self.test_env.deinit(log);
     }
@@ -167,7 +155,7 @@ const HandlerTest = struct {
         const text = try std.json.Stringify.valueAlloc(allocator, data, .{ .emit_null_optional_fields = false });
         const taskData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, text, .{});
         const taskContext = self.context.taskContext();
-        const output = try hashFileHandler(allocator, std.testing.io, test_timers.timers(), log, taskData, taskContext, self.toolRunner);
+        const output = try hashFileHandler(allocator, std.testing.io, test_timers.timers(), log, taskData, taskContext);
         return std.json.parseFromValueLeaky(IHashFileResult, allocator, output, .{});
     }
 
@@ -317,16 +305,4 @@ test "does not send any messages" {
     _ = try context.run(log, data);
 
     try std.testing.expectEqual(@as(usize, 0), context.messages.count);
-}
-
-test "fails when the task was run with no runner" {
-    const log = utils.mute_log.MuteLog.init();
-    var context: HandlerTest = undefined;
-    try context.init();
-    defer context.deinit(log);
-    context.toolRunner = null;
-
-    try std.testing.expectError(error.Thrown, context.run(log, context.makeData()));
-
-    try std.testing.expectEqualStrings("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", errors.lastErrorMessage());
 }

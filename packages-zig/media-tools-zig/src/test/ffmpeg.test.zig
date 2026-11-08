@@ -430,7 +430,7 @@ const IThreadOutcome = struct {
 const thread_count = 6;
 
 //
-// What one thread of the several-threads test does: with a runner and a log of its own, made on its own thread, it probes the video,
+// What one thread of the several-threads test does: with a log of its own, made on its own thread, it probes the video,
 // has ffmpeg write a frame scaled to a size only this thread asks for, reads the frame's size with ImageMagick, and runs an ffmpeg
 // that fails on a file named after the thread, whose error must reach this thread's log and no other's.
 //
@@ -445,8 +445,6 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
     const allocator = arena.allocator();
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
-    var tools = media_tools.ThreadTools.init();
-    const runner = tools.runner();
     // The environment is each thread's own (process_env is Ziggy's, which keeps it per thread), so this thread takes the inherited
     // one for itself. Without it the thread had none, the OS temp directory came out as "undefined\temp" on Windows, and ffprobe
     // could not write its report there.
@@ -456,7 +454,7 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
     const height = 12 * (index + 1);
     var round: usize = 0;
     while (round < 3) : (round += 1) {
-        const probed = runner.run(runner.context, threaded.io(), log, allocator, "ffprobe", &.{ "-v", "quiet", "-print_format", "json", "-show_streams", test_video }) catch {
+        const probed = media_tools.Ffmpeg.runFfprobe(threaded.io(), log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_streams", test_video }) catch {
             outcome.failure = "ffprobe failed to run";
             return;
         };
@@ -466,7 +464,7 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
             // own allocator is gone; it is never freed.
             // That run was quiet, and on Windows it exited 1 having logged nothing, so the same probe is run once more at the error
             // level to say why.
-            const again = runner.run(runner.context, threaded.io(), log, allocator, "ffprobe", &.{ "-v", "error", "-print_format", "json", "-show_streams", test_video }) catch {
+            const again = media_tools.Ffmpeg.runFfprobe(threaded.io(), log, allocator, &.{ "-v", "error", "-print_format", "json", "-show_streams", test_video }) catch {
                 outcome.failure = "ffprobe's report is not JSON, and running it again at the error level failed to run";
                 return;
             };
@@ -481,16 +479,16 @@ fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, ou
         }
         const picture_path = std.fmt.allocPrint(allocator, "{s}/frame-{d}-{d}.jpg", .{ directory, index, round }) catch @panic("out of memory");
         const scale = std.fmt.allocPrint(allocator, "scale={d}:{d}", .{ width, height }) catch @panic("out of memory");
-        const written = runner.run(runner.context, threaded.io(), log, allocator, "ffmpeg", &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-vf", scale, "-q:v", "5", "-y", picture_path }) catch {
+        const written = media_tools.Ffmpeg.runFfmpeg(threaded.io(), log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-vf", scale, "-q:v", "5", "-y", picture_path }) catch {
             outcome.failure = "ffmpeg failed to run";
             return;
         };
-        const size = runner.run(runner.context, threaded.io(), log, allocator, "magick", &.{ picture_path, "-format", "%w %h", "info:" }) catch {
+        const size = media_tools.ImageMagick.runMagick(threaded.io(), log, allocator, &.{ picture_path, "-format", "%w %h", "info:" }) catch {
             outcome.failure = "magick failed to run";
             return;
         };
         const missing_path = std.fmt.allocPrint(allocator, "{s}/missing-{d}.mp4", .{ directory, index }) catch @panic("out of memory");
-        const failed = runner.run(runner.context, threaded.io(), log, allocator, "ffmpeg", &.{ "-i", missing_path, "-vframes", "1", "-y", picture_path }) catch {
+        const failed = media_tools.Ffmpeg.runFfmpeg(threaded.io(), log, allocator, &.{ "-i", missing_path, "-vframes", "1", "-y", picture_path }) catch {
             outcome.failure = "the failing ffmpeg failed to run";
             return;
         };
@@ -611,7 +609,7 @@ comptime {
 }
 
 // ffprobe that stops at an option it does not know never opens its report, which is a failed command with nothing printed rather
-// than an error of the runner's.
+// than an error of runFfprobe's own.
 test "ffprobe that fails before it writes its report gives a non-zero exit code and no output" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

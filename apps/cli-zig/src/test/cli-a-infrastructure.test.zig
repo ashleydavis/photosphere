@@ -398,7 +398,7 @@ test "a completion callback that fails is logged and the task still finishes" {
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
     var collector = PoolCollector{};
@@ -437,7 +437,7 @@ test "a task message callback that fails is logged and the other callbacks still
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
     var collector = PoolCollector{};
@@ -530,7 +530,7 @@ test "unsubscribing stops a callback of every kind from being called" {
 
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
     var collector = PoolCollector{};
@@ -578,7 +578,7 @@ test "a queued interactive task is dispatched before a queued background one" {
     // One worker, so the two tasks queued behind the running one wait for it.
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
     var collector = PoolCollector{};
@@ -611,7 +611,7 @@ test "a pool that can never create a worker leaves the task pending" {
     // one, so the task waits for a worker that never comes.
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, std.math.nan(f64), 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, std.math.nan(f64), 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
     var collector = PoolCollector{};
@@ -634,7 +634,7 @@ test "shutdown discards the result of a task that is still running" {
     blocking_queues.reset();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     var timer_list = TimerList.init();
     var collector = PoolCollector{};
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = PoolCollector.onComplete });

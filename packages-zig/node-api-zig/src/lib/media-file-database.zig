@@ -30,15 +30,14 @@ const BsonValue = bson.BsonValue;
 const IFileStat = @import("file-scanner.zig").IFileStat;
 const tools = @import("tools-zig");
 const Image = tools.Image;
-const InProcessRunner = @import("node-utils-zig").in_process_tools.InProcessRunner;
 const ILocation = utils.reverse_geocode.ILocation;
 
 //
 // Extract dominant color from thumbnail buffer using ImageMagick
 //
-pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8) !?[3]f64 {
+pub fn extractDominantColorFromThumbnail(allocator: std.mem.Allocator, io: std.Io, log: ILog, inputPath: []const u8) !?[3]f64 {
     var image = Image.init(inputPath);
-    return try image.getDominantColor(allocator, io, log, toolRunner);
+    return try image.getDominantColor(allocator, io, log);
 }
 
 //

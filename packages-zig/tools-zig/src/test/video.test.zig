@@ -12,8 +12,8 @@ test "verifyFfprobe and verifyFfmpeg find the ffprobe and ffmpeg built into the 
     const io = std.testing.io;
     var mediaTools = try MediaTools.init();
     defer mediaTools.deinit();
-    const ffprobeStatus = try tools.Video.verifyFfprobe(allocator, io, log, mediaTools.runner());
-    const ffmpegStatus = try tools.Video.verifyFfmpeg(allocator, io, log, mediaTools.runner());
+    const ffprobeStatus = try tools.Video.verifyFfprobe(allocator, io, log);
+    const ffmpegStatus = try tools.Video.verifyFfmpeg(allocator, io, log);
     try std.testing.expect(ffprobeStatus.available);
     try std.testing.expect(ffprobeStatus.version != null);
     try std.testing.expect(ffprobeStatus.@"error" == null);

@@ -387,7 +387,7 @@ fn stringArray(allocator: std.mem.Allocator, strings: []const []const u8) ![]Bso
 // The task data and output are JSON values holding IUploadAssetData and IUploadAssetResult; undefined is
 // JSON null.
 //
-pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
+pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     if (context.isCancelled(io, allocator)) {
         return .null;
     }
@@ -415,11 +415,6 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, l
     const googleApiKey = data.googleApiKey;
     const dryRun = data.dryRun orelse false;
 
-    // ImageMagick and FFmpeg are built into the program and run in its process through `tools`, made on the task's thread. A task run with
-    // no runner fails here rather than starting an installed program.
-    const toolRunner = tools orelse {
-        return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
-    };
     const uuidGenerator = context.uuidGenerator;
 
     const assetId = data.assetId;
@@ -450,10 +445,10 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, l
     // filePath is always a valid file (already extracted if from zip)
     //TODO: We should be able to get this information from the validation phase instead of getting it again here.
     if (std.mem.startsWith(u8, contentType, "video")) {
-        assetDetails = try getVideoDetails(allocator, io, log, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
+        assetDetails = try getVideoDetails(allocator, io, log, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
     else if (std.mem.startsWith(u8, contentType, "image")) {
-        assetDetails = try getImageDetails(allocator, io, log, toolRunner, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
+        assetDetails = try getImageDetails(allocator, io, log, filePath, assetTempDir, contentType, uuidGenerator, data.logicalPath);
     }
 
     const assetPath = try storage_zig.storage_factory.pathJoin(allocator, &.{ "asset", assetId });
@@ -466,7 +461,7 @@ pub fn uploadAssetHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, l
         }
     }
 
-    const uploaded = uploadAndDescribe(allocator, io, log, data, context, toolRunner, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
+    const uploaded = uploadAndDescribe(allocator, io, log, data, context, assetDetails, storage, expectedHashBuffer, assetPath, thumbPath, displayPath, dryRun, googleApiKey, &uploadMs, &geocodeMs, &dominantColorMs) catch |err| {
         log.exception(try std.fmt.allocPrint(allocator, "Error importing file {s} ({s})", .{ filePath, assetId }), err);
         var failedMessage: std.json.ObjectMap = .empty;
         try failedMessage.put(allocator, "type", .{ .string = "import-failed" });
@@ -538,7 +533,6 @@ fn uploadAndDescribe(
     log: utils.log.ILog,
     data: IUploadAssetData,
     context: ITaskContext,
-    toolRunner: node_utils.in_process_tools.InProcessRunner,
     assetDetails: ?IAssetDetails,
     storage: IStorage,
     expectedHashBuffer: []const u8,
@@ -771,7 +765,7 @@ fn uploadAndDescribe(
 
     const dominantColorStartedAt = dateNow(io);
     const color: ?[3]f64 = if (assetDetails) |details|
-        try extractDominantColorFromThumbnail(allocator, io, log, toolRunner, details.thumbnailPath)
+        try extractDominantColorFromThumbnail(allocator, io, log, details.thumbnailPath)
     else
         null;
     dominantColorMs.* = dateNow(io) - dominantColorStartedAt;

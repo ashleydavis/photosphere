@@ -2,9 +2,7 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
-const runTool = node_utils.in_process_tools.runTool;
-const runToolLogged = node_utils.in_process_tools.runToolLogged;
+const tool_run = @import("media-tools-zig").tool_run;
 const pathExists = node_utils.fs.pathExists;
 const errors = utils.errors;
 const types = @import("types.zig");
@@ -97,14 +95,14 @@ fn sizeOf(value: std.json.Value, what: []const u8) !Dimensions {
 // Reads the size of a HEIC with ffprobe. The rest of what AssetInfo holds is not known for a still picture, and the date is read from
 // the file's EXIF, not here.
 //
-pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, filePath: []const u8) !AssetInfo {
+pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8) !AssetInfo {
     if (!pathExists(io, filePath)) {
         return errors.throwError("File not found: {s}", .{filePath});
     }
-    const result = try runTool(allocator, io, log, tools, "ffprobe", &.{ "-v", "error", "-print_format", "json", "-show_streams", "-show_stream_groups", filePath });
+    const result = try tool_run.runChecked(allocator, io, log, .ffprobe, &.{ "-v", "error", "-print_format", "json", "-show_streams", "-show_stream_groups", filePath });
     return .{
         .filePath = filePath,
-        .dimensions = try dimensionsFromProbe(allocator, result.stdout),
+        .dimensions = try dimensionsFromProbe(allocator, result),
         .duration = null,
         .fps = null,
         .bitrate = null,
@@ -117,14 +115,14 @@ pub fn getHeicInfo(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: I
 // says. The JPEG is made at FFmpeg's best quality (-q:v 2), because the pictures the app keeps are made from it, and it has no EXIF.
 // JPEG because it is the one picture encoder the bundled FFmpeg is built with.
 //
-pub fn decodeHeic(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, filePath: []const u8, outputPath: []const u8) !void {
+pub fn decodeHeic(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, outputPath: []const u8) !void {
     if (!pathExists(io, filePath)) {
         return errors.throwError("File not found: {s}", .{filePath});
     }
     if (pathExists(io, outputPath)) {
         return errors.throwError("Output file already exists: {s}", .{outputPath});
     }
-    _ = runToolLogged(allocator, io, log, tools, "ffmpeg", &.{ "-v", "error", "-i", filePath, "-frames:v", "1", "-q:v", "2", outputPath }, null) catch |err| {
+    _ = tool_run.runLogged(allocator, io, log, .ffmpeg, &.{ "-v", "error", "-i", filePath, "-frames:v", "1", "-q:v", "2", outputPath }, null) catch |err| {
         return errors.throwError("Failed to decode the HEIC {s}: {s}", .{ filePath, try utils.errors.errorToString(allocator, err) });
     };
     if (!pathExists(io, outputPath)) {

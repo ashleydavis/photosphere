@@ -1,9 +1,9 @@
 const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
-const node_utils = @import("node-utils-zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const Image = @import("image.zig").Image;
 const Video = @import("video.zig").Video;
+const ImageMagickStatus = @import("image.zig").ImageMagickStatus;
+const VideoToolStatus = @import("video.zig").VideoToolStatus;
 
 //
 // The availability of one tool.
@@ -42,12 +42,18 @@ pub const ToolsStatus = struct {
 //
 // Check the availability of all required tools
 //
-pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !ToolsStatus {
+pub fn verifyTools(allocator: std.mem.Allocator, io: std.Io, log: ILog) !ToolsStatus {
     // Serialize tool verification to avoid race conditions
-    const magickStatus = try Image.verifyImageMagick(allocator, io, log, tools);
-    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log, tools);
-    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log, tools);
+    const magickStatus = try Image.verifyImageMagick(allocator, io, log);
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log);
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log);
+    return toolsStatus(allocator, magickStatus, ffprobeStatus, ffmpegStatus);
+}
 
+//
+// The availability of all the tools from the status of each.
+//
+pub fn toolsStatus(allocator: std.mem.Allocator, magickStatus: ImageMagickStatus, ffprobeStatus: VideoToolStatus, ffmpegStatus: VideoToolStatus) !ToolsStatus {
     var missingTools: std.ArrayList([]const u8) = .empty;
 
     if (!magickStatus.available) {

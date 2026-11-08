@@ -14,7 +14,7 @@ const FileLogger = file_logger.FileLogger;
 const Fixture = struct {
     // The directory the test owns.
     tmp: std.testing.TmpDir,
-    // The ImageMagick and FFmpeg built into the program, which the logger is given the runner of.
+    // The ImageMagick and FFmpeg built into the program, started for the test, whose versions the logger gives.
     tools: media_tools.MediaTools,
     // The absolute path of the directory to log in, a folder of the one the test owns.
     logs_dir: []u8,
@@ -54,7 +54,7 @@ const Fixture = struct {
     // Makes a logger that logs in the directory and runs the tools built into the program.
     //
     fn createLogger(self: *Fixture, log: ILog) !*FileLogger {
-        return FileLogger.init(std.testing.allocator, std.testing.io, log, self.tools.runner(), self.logs_dir, "9.8.7");
+        return FileLogger.init(std.testing.allocator, std.testing.io, log, self.logs_dir, "9.8.7");
     }
 };
 
@@ -129,10 +129,9 @@ test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built
     defer fixture.stop();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const runner = fixture.tools.runner();
-    const magick = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "magick", &.{"-version"});
-    const ffmpeg = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "ffmpeg", &.{"-version"});
-    const ffprobe = try runner.run(runner.context, std.testing.io, log, arena.allocator(), "ffprobe", &.{"-version"});
+    const magick = try media_tools.ImageMagick.runMagick(std.testing.io, log, arena.allocator(), &.{"-version"});
+    const ffmpeg = try media_tools.Ffmpeg.runFfmpeg(std.testing.io, log, arena.allocator(), &.{"-version"});
+    const ffprobe = try media_tools.Ffmpeg.runFfprobe(std.testing.io, log, arena.allocator(), &.{"-version"});
     const expected = try std.fmt.allocPrint(arena.allocator(), "\n--- Tool Versions ---\nImageMagick: {s}\nFFmpeg: {s}\nFFprobe: {s}\n", .{
         try wordAfter(magick.output, "Version: ImageMagick "),
         try wordAfter(ffmpeg.output, "ffmpeg version "),

@@ -58,8 +58,7 @@ const TestEnvironment = struct {
     // directory of their own.
     psiEnviron: *std.process.Environ.Map,
 
-    // The ImageMagick and FFmpeg built into the program, which the code under test runs. The environment does not move
-    // once made, so their runner stays valid.
+    // The ImageMagick and FFmpeg built into the program, started for the test, which the code under test runs.
     mediaTools: media_tools.MediaTools,
 
     //
@@ -167,7 +166,7 @@ const TestEnvironment = struct {
 //
 fn requireMediaTools(environment: *TestEnvironment, log: ILog) !void {
     const allocator = environment.arena.allocator();
-    const status = try tools.verifyTools(allocator, std.testing.io, log, environment.mediaTools.runner());
+    const status = try tools.verifyTools(allocator, std.testing.io, log);
     if (!status.allAvailable) {
         std.debug.print("The built-in media tools did not run. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
         return error.RequiredToolsMissing;
@@ -651,7 +650,7 @@ test "initContext creates the session, the worker pool and the cleanup callback"
     defer task_queue.queue_backend.setQueueBackend(null);
     cli.process_argv.setArgv(&.{ "psi", "verify" });
 
-    const context = try init_cmd.initContext(allocator, io, memory.log, &environment.mediaTools, .{ .workers = "3", .timeout = "5000", .verbose = true });
+    const context = try init_cmd.initContext(allocator, io, memory.log, .{ .workers = "3", .timeout = "5000", .verbose = true });
     try std.testing.expectEqual(@as(usize, 36), context.sessionId.len);
     const expectedDir = try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", context.sessionId });
     try std.testing.expectEqualStrings(expectedDir, context.sessionTempDir);
@@ -690,7 +689,7 @@ test "initContext uses the given session ID and keeps the temporary files on fai
     defer node_utils.termination.clearTerminationCallbacks();
     defer task_queue.queue_backend.setQueueBackend(null);
 
-    const context = try init_cmd.initContext(allocator, io, memory.log, &environment.mediaTools, .{ .sessionId = "my-session" });
+    const context = try init_cmd.initContext(allocator, io, memory.log, .{ .sessionId = "my-session" });
     try std.testing.expectEqualStrings("my-session", context.sessionId);
     const expectedDir = try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "my-session" });
     try std.testing.expectEqualStrings(expectedDir, context.sessionTempDir);
@@ -721,7 +720,7 @@ test "initContext joins the session temporary directory as path.join does" {
     defer utils.console.setCapture(null, null);
 
     // path.join normalizes the ".." of a session ID given with --session-id.
-    const context = try init_cmd.initContext(allocator, io, log, &environment.mediaTools, .{ .sessionId = "other/../my-session" });
+    const context = try init_cmd.initContext(allocator, io, log, .{ .sessionId = "other/../my-session" });
     try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tmpDir, "photosphere", "my-session" }), context.sessionTempDir);
     try node_utils.termination.invokeTerminationCallbacks(io, log, 0);
 }
@@ -850,12 +849,12 @@ test "loadDatabase loads a database by path or registered name" {
     var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
     var timestampProvider = utils.timestamp_provider.TimestampProvider{};
     var options: init_cmd.IBaseCommandOptions = .{ .yes = true };
-    const byPath = try init_cmd.loadDatabase(allocator, std.testing.io, log, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", environment.mediaTools.runner(), false);
+    const byPath = try init_cmd.loadDatabase(allocator, std.testing.io, log, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", false);
     try std.testing.expectEqualStrings(dbDir, byPath.databaseDir);
     try std.testing.expectEqualStrings("session", byPath.sessionId);
     try std.testing.expect(try byPath.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));
 
-    const byName = try init_cmd.loadDatabase(allocator, std.testing.io, log, "myphotos", &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", environment.mediaTools.runner(), false);
+    const byName = try init_cmd.loadDatabase(allocator, std.testing.io, log, "myphotos", &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", false);
     try std.testing.expectEqualStrings(dbDir, byName.databaseDir);
 }
 
@@ -946,7 +945,7 @@ test "createDatabase creates an empty database with the given identity" {
     var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
     var timestampProvider = utils.timestamp_provider.TimestampProvider{};
     var options: init_cmd.ICreateCommandOptions = .{ .base = .{ .yes = true }, .databaseId = " 3f2504e0-4f89-11d3-9a0c-0305e82c3301 " };
-    const created = try init_cmd.createDatabase(allocator, std.testing.io, log, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", environment.mediaTools.runner());
+    const created = try init_cmd.createDatabase(allocator, std.testing.io, log, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session");
     try std.testing.expectEqualStrings(dbDir, created.databaseDir);
     try std.testing.expectEqualStrings("session", created.sessionId);
     try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));
@@ -954,7 +953,7 @@ test "createDatabase creates an empty database with the given identity" {
     try std.testing.expect(!try created.assetStorage.fileExists(allocator, std.testing.io, ".db/encryption.pub"));
 
     var loadOptions: init_cmd.IBaseCommandOptions = .{ .yes = true };
-    const loaded = try init_cmd.loadDatabase(allocator, std.testing.io, log, dbDir, &loadOptions, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", environment.mediaTools.runner(), false);
+    const loaded = try init_cmd.loadDatabase(allocator, std.testing.io, log, dbDir, &loadOptions, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", false);
     const tree = (try merkle_tree_zig.merkle_tree.loadTree(allocator, std.testing.io, log, ".db/files.dat", loaded.assetStorage, "FTRE")).?;
     try std.testing.expectEqualStrings("3f2504e0-4f89-11d3-9a0c-0305e82c3301", tree.id);
 }
@@ -978,7 +977,7 @@ test "createDatabase writes the public key marker of an encrypted database" {
     var uuidGenerator = utils.random_uuid_generator.RandomUuidGenerator{};
     var timestampProvider = utils.timestamp_provider.TimestampProvider{};
     var options: init_cmd.ICreateCommandOptions = .{ .base = .{ .yes = true, .key = "create-key" } };
-    const created = try init_cmd.createDatabase(allocator, std.testing.io, log, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session", environment.mediaTools.runner());
+    const created = try init_cmd.createDatabase(allocator, std.testing.io, log, dbDir, &options, uuidGenerator.uuidGenerator(), timestampProvider.timestampProvider(), "session");
     const marker = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, try std.fs.path.join(allocator, &.{ dbDir, ".db", "encryption.pub" }), allocator, .unlimited);
     try std.testing.expectEqualStrings(publicKeyPem, marker);
     try std.testing.expect(try created.assetStorage.fileExists(allocator, std.testing.io, ".db/files.dat"));

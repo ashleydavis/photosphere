@@ -50,8 +50,7 @@ const IToolsTestEnvironment = struct {
     // The server the tools are called through.
     server: *McpServer,
 
-    // The ImageMagick and FFmpeg built into the program, which the tools run. The environment does not move once made,
-    // so their runner stays valid.
+    // The ImageMagick and FFmpeg built into the program, started for the test, which the tools run.
     mediaTools: media_tools.MediaTools,
 
     //
@@ -62,7 +61,7 @@ const IToolsTestEnvironment = struct {
         self.arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         const allocator = self.arena.allocator();
         self.mediaTools = try media_tools.MediaTools.init();
-        const status = try tools.verifyTools(allocator, io, log, self.mediaTools.runner());
+        const status = try tools.verifyTools(allocator, io, log);
         if (!status.allAvailable) {
             std.debug.print("The built-in media tools did not run. Missing: {s}\n", .{try std.mem.join(allocator, ", ", status.missingTools)});
             return error.RequiredToolsMissing;
@@ -93,12 +92,11 @@ const IToolsTestEnvironment = struct {
         utils.console.setCapture(&self.stdout_capture.writer, &self.stdout_capture.writer);
         self.log = console_log;
 
-        const context = try init_cmd.initContext(allocator, io, self.log, &self.mediaTools, .{ .yes = true, .workers = "2" });
+        const context = try init_cmd.initContext(allocator, io, self.log, .{ .yes = true, .workers = "2" });
         self.toolContext = try allocator.create(IMcpToolContext);
         self.toolContext.* = .{
             .uuidGenerator = context.uuidGenerator,
             .timestampProvider = context.timestampProvider,
-            .toolRunner = context.toolRunner,
             .log = self.log,
             .sessionId = context.sessionId,
             .options = .{ .yes = true },

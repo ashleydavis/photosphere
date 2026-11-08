@@ -2,8 +2,7 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
-const runTool = node_utils.in_process_tools.runTool;
+const tool_run = @import("media-tools-zig").tool_run;
 const utils = @import("utils-zig");
 const serialization_zig = @import("serialization-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
@@ -51,35 +50,41 @@ pub const Video = struct {
     }
 
     //
-    // Verify that ffprobe is available. It runs `ffprobe -version` through the runner on every call.
+    // Verify that ffprobe is available. It runs `ffprobe -version` on every call.
     //
-    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !VideoToolStatus {
-        const result = runTool(allocator, io, log, tools, "ffprobe", &.{"-version"}) catch |err| {
-            return .{
-                .available = false,
-                .@"error" = try std.fmt.allocPrint(allocator, "The ffprobe built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
-            };
+    pub fn verifyFfprobe(allocator: std.mem.Allocator, io: std.Io, log: ILog) !VideoToolStatus {
+        const result = tool_run.runChecked(allocator, io, log, .ffprobe, &.{"-version"}) catch |err| {
+            return toolFailed(allocator, "ffprobe", err);
         };
+        return toolRan("ffprobe", result);
+    }
 
-        const versionMatch = version_match.matchAfter(result.stdout, "ffprobe version ", version_match.isNonWhitespaceCharacter);
+    //
+    // Verify that ffmpeg is available. It runs `ffmpeg -version` on every call.
+    //
+    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, log: ILog) !VideoToolStatus {
+        const result = tool_run.runChecked(allocator, io, log, .ffmpeg, &.{"-version"}) catch |err| {
+            return toolFailed(allocator, "ffmpeg", err);
+        };
+        return toolRan("ffmpeg", result);
+    }
+
+    //
+    // The status of the tool (`ffprobe` or `ffmpeg`) when its `-version` failed with the error: not available, with the error.
+    //
+    pub fn toolFailed(allocator: std.mem.Allocator, tool: []const u8, err: anyerror) !VideoToolStatus {
         return .{
-            .available = true,
-            .version = versionMatch orelse "unknown",
+            .available = false,
+            .@"error" = try std.fmt.allocPrint(allocator, "The {s} built into the program did not run: {s}", .{ tool, try utils.errors.errorToString(allocator, err) }),
         };
     }
 
     //
-    // Verify that ffmpeg is available. It runs `ffmpeg -version` through the runner on every call.
+    // The status of the tool (`ffprobe` or `ffmpeg`) when its `-version` printed the output: available, with the version read after
+    // "<tool> version ", or "unknown" when that is not there.
     //
-    pub fn verifyFfmpeg(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !VideoToolStatus {
-        const result = runTool(allocator, io, log, tools, "ffmpeg", &.{"-version"}) catch |err| {
-            return .{
-                .available = false,
-                .@"error" = try std.fmt.allocPrint(allocator, "The ffmpeg built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
-            };
-        };
-
-        const versionMatch = version_match.matchAfter(result.stdout, "ffmpeg version ", version_match.isNonWhitespaceCharacter);
+    pub fn toolRan(comptime tool: []const u8, versionOutput: []const u8) VideoToolStatus {
+        const versionMatch = version_match.matchAfter(versionOutput, tool ++ " version ", version_match.isNonWhitespaceCharacter);
         return .{
             .available = true,
             .version = versionMatch orelse "unknown",
@@ -89,7 +94,7 @@ pub const Video = struct {
     //
     // Reads the information about the video with ffprobe.
     //
-    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
+    fn getVideoInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog) !AssetInfo {
         if (self._info) |info| {
             return info;
         }
@@ -98,21 +103,29 @@ pub const Video = struct {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        self._info = self.getVideoInfoInner(allocator, io, log, tools) catch |err| {
+        // Run ffprobe to get video information in JSON format
+        const probeJson = tool_run.runChecked(allocator, io, log, .ffprobe, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", self.filePath }) catch |err| {
             return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
+        self._info = try readProbe(allocator, self.filePath, probeJson);
         return self._info.?;
     }
 
     //
-    // The body of the try block of getVideoInfo.
+    // Reads the information about the video at filePath from ffprobe's JSON report of it (`-show_format -show_streams`). Fails with
+    // "Failed to get video info: " and the reason when the report does not describe a video.
     //
-    fn getVideoInfoInner(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
+    pub fn readProbe(allocator: std.mem.Allocator, filePath: []const u8, probeJson: []const u8) !AssetInfo {
+        return readProbeInner(allocator, filePath, probeJson) catch |err| {
+            return errors.throwError("Failed to get video info: {s}", .{try utils.errors.errorToString(allocator, err)});
+        };
+    }
 
-        // Run ffprobe to get video information in JSON format
-        const result = try runTool(allocator, io, log, tools, "ffprobe", &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", self.filePath });
-
-        const probeData = switch (try jsonParse(allocator, result.stdout)) {
+    //
+    // The body of the try block of readProbe.
+    //
+    fn readProbeInner(allocator: std.mem.Allocator, filePath: []const u8, probeJson: []const u8) !AssetInfo {
+        const probeData = switch (try jsonParse(allocator, probeJson)) {
             .document => |document| document,
 
             // `probeData.format` of null throws; any other value that is not an object has no format and no streams.
@@ -164,7 +177,7 @@ pub const Video = struct {
         try metadata.put(allocator, "pixelFormat", property(.{ .document = stream }, "pix_fmt"));
 
         return .{
-            .filePath = self.filePath,
+            .filePath = filePath,
 
             .dimensions = .{
                 .width = numberProperty(stream, "width"),
@@ -185,15 +198,15 @@ pub const Video = struct {
     //
     // Gets the information about the video.
     //
-    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
-        return self.getVideoInfo(allocator, io, log, tools);
+    pub fn getInfo(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog) !AssetInfo {
+        return self.getVideoInfo(allocator, io, log);
     }
 
     //
     // Gets the width and height of the video.
     //
-    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !Dimensions {
-        const info = try self.getVideoInfo(allocator, io, log, tools);
+    pub fn getDimensions(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog) !Dimensions {
+        const info = try self.getVideoInfo(allocator, io, log);
         return info.dimensions;
     }
 
@@ -201,25 +214,36 @@ pub const Video = struct {
     // Extract a screenshot/thumbnail from the video at a specific time. Only the default options are used (no
     // scaling, quality 85), which is how getVideoDetails calls it.
     //
-    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
+    pub fn extractScreenshot(self: *Video, allocator: std.mem.Allocator, io: std.Io, log: ILog, outputPath: []const u8, timeInSeconds: f64) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
+        _ = tool_run.runChecked(allocator, io, log, .ffmpeg, try screenshotArguments(allocator, self.filePath, outputPath, timeInSeconds)) catch |err| {
+            return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
+        };
+        return outputPath;
+    }
+
+    //
+    // The arguments of the ffmpeg that extractScreenshot runs: one frame of the video at filePath, at the time, written to outputPath at
+    // quality 85. The quality is written the way JavaScript writes a number. The time is written in decimal notation, never with an
+    // exponent, because ffmpeg's time parser (av_parse_time) reads no exponent: the "1e-7" JavaScript writes for a tenth of a
+    // microsecond made ffmpeg fail.
+    //
+    pub fn screenshotArguments(allocator: std.mem.Allocator, filePath: []const u8, outputPath: []const u8, timeInSeconds: f64) ![]const []const u8 {
         const quality: f64 = 85;
 
         var timeText: std.Io.Writer.Allocating = .init(allocator);
-        try utils.js_number.writeNumber(&timeText.writer, timeInSeconds);
+        try timeText.writer.print("{d}", .{timeInSeconds});
 
         // The quality ffmpeg takes.
         var qualityText: std.Io.Writer.Allocating = .init(allocator);
         try utils.js_number.writeNumber(&qualityText.writer, jsRound((100 - quality) / 10));
 
         // -y forces the overwrite of the output.
-        _ = runTool(allocator, io, log, tools, "ffmpeg", &.{ "-ss", timeText.written(), "-i", self.filePath, "-vframes", "1", "-q:v", qualityText.written(), "-y", outputPath }) catch |err| {
-            return errors.throwError("Failed to extract screenshot: {s}", .{try utils.errors.errorToString(allocator, err)});
-        };
-        return outputPath;
+        const arguments = [_][]const u8{ "-ss", timeText.written(), "-i", filePath, "-vframes", "1", "-q:v", qualityText.written(), "-y", outputPath };
+        return try allocator.dupe([]const u8, &arguments);
     }
 };
 

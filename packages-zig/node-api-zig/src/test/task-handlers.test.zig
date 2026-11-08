@@ -9,8 +9,8 @@ test "the handler list has the verify-file and replicate-database handlers" {
 
 test "the handler list has the handlers psi add runs" {
     try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "import-assets") == node_api.import_assets_worker.importAssetsHandler);
-    try std.testing.expect(node_api.task_handlers.getToolHandler("hash-file") == node_api.hash_file_worker.hashFileHandler);
-    try std.testing.expect(node_api.task_handlers.getToolHandler("upload-asset") == node_api.upload_asset_worker.uploadAssetHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "hash-file") == node_api.hash_file_worker.hashFileHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "upload-asset") == node_api.upload_asset_worker.uploadAssetHandler);
     try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "cleanup-sources") == node_api.cleanup_sources_worker.cleanupSourcesHandler);
 }
 
@@ -20,7 +20,7 @@ test "the handler list has the handlers psi consolidate runs" {
 }
 
 test "the handler list has the handler psi check runs" {
-    try std.testing.expect(node_api.task_handlers.getToolHandler("check-file") == node_api.check_worker.checkFileHandler);
+    try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "check-file") == node_api.check_worker.checkFileHandler);
 }
 
 test "the handler list has the check-database-exists handler" {
@@ -80,7 +80,7 @@ test "the handler list has a handler for every task type of the application" {
     };
 
     for (taskTypes) |taskType| {
-        try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, taskType) != null or node_api.task_handlers.getToolHandler(taskType) != null);
+        try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, taskType) != null);
     }
     try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "test-job") == node_api.test_job_worker.testJobHandler);
     try std.testing.expect(task_queue_zig.worker.getHandler(&node_api.task_handlers.handlers, "receive-share") == node_api.lan_share_worker.receiveShareHandler);

@@ -174,7 +174,7 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, conte
     try intro(io, try pc.blue(allocator, "Upgrading media file database..."), .{});
 
     const nonInteractive = options.base.yes orelse false;
-    try ensureMediaProcessingTools(allocator, io, log, context.toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log);
 
     var databaseDir: []const u8 = undefined;
     if (options.base.db) |db| {

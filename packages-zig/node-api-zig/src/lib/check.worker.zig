@@ -5,7 +5,6 @@
 const std = @import("std");
 const Timers = @import("ziggy").timers.Timers;
 const utils = @import("utils-zig");
-const node_utils = @import("node-utils-zig");
 const api = @import("api-zig");
 const task_queue_zig = @import("ziggy").task_queue;
 const hash = @import("hash.zig");
@@ -91,7 +90,7 @@ fn resultToJson(allocator: std.mem.Allocator, result: ICheckFileResult) !std.jso
 // Note: Hash cache is loaded read-only in workers. Saving is handled in the main thread.
 // (Zig: the task data and output are JSON values holding ICheckFileData and ICheckFileResult.)
 //
-pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext, tools: ?node_utils.in_process_tools.InProcessRunner) anyerror!std.json.Value {
+pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log: utils.log.ILog, taskData: std.json.Value, context: ITaskContext) anyerror!std.json.Value {
     const data = try std.json.parseFromValueLeaky(ICheckFileData, allocator, taskData, .{
         .ignore_unknown_fields = true,
     });
@@ -102,12 +101,6 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log
     const hashCacheDir = data.hashCacheDir;
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
-
-    // ImageMagick and FFmpeg are built into the program and run in its process through `tools`, made on the task's thread. A task run with
-    // no runner fails here rather than starting an installed program.
-    const toolRunner = tools orelse {
-        return utils.errors.throwError("ImageMagick and FFmpeg are built into the program, and this task was run with no runner for them", .{});
-    };
 
     // Load hash cache (read-only)
     var localHashCache = try HashCache.init(hashCacheDir, true); // readonly = true
@@ -122,7 +115,7 @@ pub fn checkFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, log
     if (hashedFile == null) {
         // Not in cache - compute hash
         // filePath is always a valid file (already extracted if from zip)
-        hashedFile = try validateAndHash(allocator, io, log, toolRunner, filePath, fileStat, contentType, data.logicalPath);
+        hashedFile = try validateAndHash(allocator, io, log, filePath, fileStat, contentType, data.logicalPath);
         if (hashedFile == null) {
             return resultToJson(allocator, .{
                 .hashedFile = null,
