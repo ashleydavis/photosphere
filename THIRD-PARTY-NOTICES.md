@@ -16,6 +16,9 @@ ImageMagick is built with the following delegate libraries, also built from sour
 - **libpng** — PNG Reference Library License (zlib/libpng style). <http://www.libpng.org/pub/png/src/libpng-LICENSE.txt>
 - **libwebp** — BSD 3-clause licence, with a patent grant. <https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING>
 - **zlib-ng** — zlib licence. <https://github.com/zlib-ng/zlib-ng>
+- **Little CMS 2 (lcms2)**: MIT licence, © Marti Maria Saguer. <https://github.com/mm2/Little-CMS>
+
+The app and the CLI also embed the sRGB ICC profile ImageMagick ships in its source (`third-party/imagemagick/vendor/imagemagick/config/sRGB.icm`, "sRGB IEC61966-2.1"), which the smaller copies of a picture are converted into. Its copyright tag reads: "Created by Graeme W. Gill. Released into the public domain. No Warranty, Use at your own risk."
 
 ## FFmpeg
 

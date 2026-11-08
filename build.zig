@@ -338,6 +338,13 @@ fn addPackageModules(
             // IOKit, whose power assertion macos-native-calls.zig takes to hold the computer awake, which a static library does not record.
             module.linkFramework("IOKit", .{});
         }
+        if (std.mem.eql(u8, package.name, "tools-zig")) {
+            // The sRGB ICC profile ImageMagick ships (the same bytes it builds in as its own sRGB profile), which Image.resize converts
+            // a picture into before it strips the picture's profiles. Embedded so the program reads it from no path on the machine.
+            module.addAnonymousImport("srgb-icc-profile", .{
+                .root_source_file = b.path("third-party/imagemagick/vendor/imagemagick/config/sRGB.icm"),
+            });
+        }
         if (std.mem.eql(u8, package.name, "serialization-zig")) {
             // zlib-ng, which gzip compression and decompression bind to, and which ImageMagick and FFmpeg are built over: the program
             // has one copy of it.

@@ -114,10 +114,10 @@ case "$ZIG_TARGET" in
         ;;
 esac
 
-# configure finds libpng, libwebp and zlib only through pkg-config, and without one it leaves their delegates off and says nothing,
+# configure finds libpng, libwebp, lcms2 and zlib only through pkg-config, and without one it leaves their delegates off and says nothing,
 # which builds an ImageMagick that cannot read a PNG. Git Bash has no pkg-config, so it is checked for here.
 if ! command -v pkg-config >/dev/null 2>&1; then
-    echo "ERROR: pkg-config is not on the PATH. configure finds libpng, libwebp and zlib through it, and would turn their delegates off without it." >&2
+    echo "ERROR: pkg-config is not on the PATH. configure finds libpng, libwebp, lcms2 and zlib through it, and would turn their delegates off without it." >&2
     exit 1
 fi
 
@@ -129,7 +129,7 @@ printf '#!/bin/sh\nexec "%s" ar "$@"\n' "$ZIG" > "$WORK_DIR/bin/ar"
 printf '#!/bin/sh\nexec "%s" ranlib "$@"\n' "$ZIG" > "$WORK_DIR/bin/ranlib"
 chmod +x "$WORK_DIR/bin/cc" "$WORK_DIR/bin/ar" "$WORK_DIR/bin/ranlib"
 
-# configure asks pkg-config about zlib, libpng and libwebp, which the Zig build makes and which are not installed anywhere yet,
+# configure asks pkg-config about zlib, libpng, libwebp and lcms2, which the Zig build makes and which are not installed anywhere yet,
 # so pkg-config is pointed at a directory of its own holding a description of each, with the versions of the vendored source.
 # Nothing installed on the machine can be found instead.
 write_pkg_config_file() {
@@ -138,6 +138,7 @@ write_pkg_config_file() {
 write_pkg_config_file zlib 1.3.1
 write_pkg_config_file libpng "$(sed -n 1p "$SCRIPT_DIR/vendor/libpng/VENDORED_VERSION")"
 write_pkg_config_file libwebp "$(sed -n 1p "$SCRIPT_DIR/vendor/libwebp/VENDORED_VERSION")"
+write_pkg_config_file lcms2 "$(sed -n 1p "$SCRIPT_DIR/vendor/lcms2/VENDORED_VERSION")"
 
 # The JPEG delegate check wants the library's headers, including a jconfig.h, which libjpeg's own configure makes from
 # jconfig.cfg and which the build (build.zig) makes the same way.
@@ -149,7 +150,7 @@ sed -e 's/^#undef HAVE_PROTOTYPES/#define HAVE_PROTOTYPES/' \
     -e 's/^#undef HAVE_STDLIB_H/#define HAVE_STDLIB_H/' \
     "$LIBJPEG_DIR/jconfig.cfg" > "$WORK_DIR/jpeg-include/jconfig.h"
 
-# The delegates are JPEG, PNG, WebP and zlib. Everything else ImageMagick can use is off, so
+# The delegates are JPEG, PNG, WebP, zlib and LCMS (colour management). Everything else ImageMagick can use is off, so
 # nothing on the machine running this script changes the result. The libraries themselves are built by build.zig and are
 # not there yet, so the checks that look for them are answered here: PKG_CHECK_MODULES takes the variables as set (it
 # would otherwise ask pkg-config), and the one link check for libjpeg is answered through configure's cache variable.
@@ -164,11 +165,11 @@ CC="$WORK_DIR/bin/cc" AR="$WORK_DIR/bin/ar" RANLIB="$WORK_DIR/bin/ranlib" \
     --disable-shared --enable-static --disable-openmp --disable-opencl \
     --without-magick-plus-plus --without-perl --disable-docs --disable-installed \
     --with-quantum-depth=16 --enable-hdri --without-x --enable-zero-configuration \
-    --with-jpeg --with-png --with-zlib --with-webp \
+    --with-jpeg --with-png --with-zlib --with-webp --with-lcms \
     --without-tiff --without-heic --without-freetype \
     --without-fontconfig --without-xml --without-bzlib --without-lzma \
     --without-fftw --without-dps --without-djvu --without-openexr \
-    --without-jbig --without-jp2 --without-lcms --without-openjp2 \
+    --without-jbig --without-jp2 --without-openjp2 \
     --without-pango --without-raqm --without-raw --without-wmf \
     --without-jxl --without-lqr --without-flif --without-fpx \
     --without-gslib --without-gvc --without-rsvg --without-zstd \
@@ -186,7 +187,7 @@ CC="$WORK_DIR/bin/cc" AR="$WORK_DIR/bin/ar" RANLIB="$WORK_DIR/bin/ranlib" \
 }
 
 # A delegate configure could not find is left off without an error, so each one the build links is checked for in the result.
-for delegate in JPEG PNG WEBP ZLIB; do
+for delegate in JPEG PNG WEBP ZLIB LCMS; do
     if ! grep -q "^#define MAGICKCORE_${delegate}_DELEGATE 1$" MagickCore/magick-baseconfig.h; then
         echo "ERROR: configure left the $delegate delegate off. See $WORK_DIR/build/configure.log" >&2
         exit 1
