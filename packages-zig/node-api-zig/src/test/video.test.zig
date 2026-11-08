@@ -194,7 +194,7 @@ test "reads what it can of the JSON file beside a video, as dayjs.unix(parseInt(
     }
 }
 
-test "a JSON file beside a video that holds null fails the video, naming the JSON file" {
+test "a JSON file beside a video that holds null fails the video, as reading a property of null does" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -213,8 +213,7 @@ test "a JSON file beside a video that holds null fails the video, naming the JSO
     try test_files.writeFile(io, try std.mem.concat(allocator, u8, &.{ videoPath, ".json" }), "null");
 
     try std.testing.expectError(error.Thrown, getVideoDetails(allocator, io, log, runner, videoPath, tempDir, "video/mp4", generator.uuidGenerator(), "video.mp4"));
-    const expectedMessage = try std.fmt.allocPrint(allocator, "The JSON file {s}.json beside the video holds null instead of an object", .{videoPath});
-    try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("null is not an object (evaluating 'photoData.photoTakenTime')", utils.errors.lastErrorMessage());
 }
 
 test "getVideoDetails refuses a content type that is not a video" {

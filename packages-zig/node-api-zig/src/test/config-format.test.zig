@@ -276,9 +276,9 @@ test "yamlToConfigFile: a malformed source is dropped and the rest are kept" {
     }, config.autoImport.settings.sources);
 }
 
-// A null source throws, so a file with an empty list entry stops here with a message naming it instead of that
-// entry being dropped.
-test "yamlToConfigFile: a null source throws, naming the null entry" {
+// Reading `type` off a null source throws, so a file with an empty list entry stops here with that message
+// instead of that entry being dropped.
+test "yamlToConfigFile: a null source throws the error reading it throws" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -287,7 +287,7 @@ test "yamlToConfigFile: a null source throws, naming the null entry" {
     );
 
     try std.testing.expectError(error.Thrown, config_format.yamlToConfigFile(allocator, document));
-    try std.testing.expectEqualStrings("The auto_import sources list in the config file has an entry that is null", errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("Cannot read properties of null (reading 'type')", errors.lastErrorMessage());
 }
 
 test "yamlToConfigFile: a pause of zero falls back to the default" {

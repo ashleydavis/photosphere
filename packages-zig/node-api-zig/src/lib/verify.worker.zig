@@ -305,7 +305,8 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, lo
         var hashOperation: ComputeAssetHashOperation = .{ .allocator = allocator, .storage = storage, .fileName = fileName, .fileInfo = fileInfo };
         const freshHash = try retry(io, log, &hashOperation, 3, 1_000, 2, LARGE_FILE_TIMEOUT, null);
         const contentHash = node.contentHash orelse {
-            return errors.throwError("The database's record of {s} has no content hash to compare the file with", .{fileName});
+            errors.recordError("TypeError", "The \"buf2\" argument must be of type Buffer or Uint8Array. Received undefined", .{});
+            return error.Thrown;
         };
         if (!std.mem.eql(u8, freshHash.hash, contentHash)) {
             // The file content has actually been modified.
@@ -317,7 +318,8 @@ pub fn verifyFileHandler(allocator: std.mem.Allocator, io: std.Io, _: Timers, lo
             }
             if (timestampChanged) {
                 const lastModified = node.lastModified orelse {
-                    return errors.throwError("The database's record of {s} has no last modified time to report the file's change against", .{fileName});
+                    errors.recordError("TypeError", "undefined is not an object (evaluating 'node.lastModified.toLocaleString')", .{});
+                    return error.Thrown;
                 };
                 const oldTime = try toLocaleString(allocator, lastModified);
                 const newTime = try toLocaleString(allocator, fileInfo.lastModified);
