@@ -405,7 +405,7 @@ jobs:
       - name: Install media processing tools (macOS)
         uses: ./.github/actions/retry-install
         with:
-          run: bash scripts/brew-install-media-tools.sh ffmpeg tree
+          run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
       - name: Show the disk space the Zig builds use (each package that builds the AWS SDK for C has its own zig-pkg and .zig-cache)
         if: always()
@@ -461,19 +461,13 @@ jobs:
           if [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then
               cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/cli-smoke-logs/"
           fi
-          # upload-artifact refuses a file name holding a character NTFS forbids (" : < > | * ? and a few more), and a smoke test
-          # may name its files with them on purpose (CLI smoke test 139 does), which failed the upload of the directory itself and
-          # kept nothing. A tar archive carries every name exactly as it was. Extract it with: tar -xzf cli-smoke-logs.tar.gz
-          mkdir -p "$RUNNER_TEMP/cli-smoke-logs-archive"
-          cd "$RUNNER_TEMP"
-          tar -czf cli-smoke-logs-archive/cli-smoke-logs.tar.gz cli-smoke-logs
 
       - name: Upload the logs of failed CLI smoke tests
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: cli-smoke-logs-macos-arm64
-          path: ${{ runner.temp }}/cli-smoke-logs-archive
+          path: ${{ runner.temp }}/cli-smoke-logs
           retention-days: 5
 
   app-smoke-tests:
@@ -531,7 +525,7 @@ jobs:
       - name: Install media processing tools (macOS)
         uses: ./.github/actions/retry-install
         with:
-          run: bash scripts/brew-install-media-tools.sh ffmpeg tree
+          run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       - name: Restore the Photosphere App build
@@ -585,19 +579,13 @@ jobs:
               cp -R "$HOME/Library/Logs/DiagnosticReports/." "$RUNNER_TEMP/app-smoke-logs/crash-reports/"
           fi
           ls -R "$RUNNER_TEMP/app-smoke-logs/crash-reports"
-          # upload-artifact refuses a file name holding a character NTFS forbids (" : < > | * ? and a few more), and a smoke test
-          # may name its files with them on purpose (CLI smoke test 139 does), which failed the upload of the directory itself and
-          # kept nothing. A tar archive carries every name exactly as it was. Extract it with: tar -xzf app-smoke-logs.tar.gz
-          mkdir -p "$RUNNER_TEMP/app-smoke-logs-archive"
-          cd "$RUNNER_TEMP"
-          tar -czf app-smoke-logs-archive/app-smoke-logs.tar.gz app-smoke-logs
 
       - name: Upload the logs of failed scenarios and any crash reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: app-smoke-logs-macos-arm64
-          path: ${{ runner.temp }}/app-smoke-logs-archive
+          path: ${{ runner.temp }}/app-smoke-logs
           retention-days: 5
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
@@ -712,7 +700,7 @@ jobs:
       - name: Install media processing tools (macOS)
         uses: ./.github/actions/retry-install
         with:
-          run: bash scripts/brew-install-media-tools.sh ffmpeg tree
+          run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
       # The libraries for the runner, which the tests build for, restored from the cache.
