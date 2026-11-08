@@ -377,9 +377,12 @@ fn addPackageModules(
                 module.addObjectFile(archive);
             }
             // The system libraries those libraries link, which a prebuilt archive does not record: urlmon, which ImageMagick reads URLs
-            // with on Windows, and oldnames, which maps the POSIX names FFmpeg calls to Microsoft's C library.
+            // with on Windows, bcrypt, which FFmpeg's av_random_bytes draws random bytes from on Windows, and oldnames, which maps the
+            // POSIX names FFmpeg calls to Microsoft's C library. bcrypt is named here even though encryption-zig links it too, because
+            // a program that imports media-tools-zig without encryption-zig, such as its own-process tests, otherwise fails to link.
             if (target.result.os.tag == .windows) {
                 module.linkSystemLibrary("urlmon", .{});
+                module.linkSystemLibrary("bcrypt", .{});
                 if (target.result.abi == .msvc) {
                     module.linkSystemLibrary("oldnames", .{});
                 }
