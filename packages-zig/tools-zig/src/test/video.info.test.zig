@@ -347,3 +347,193 @@ test "getInfo and extractScreenshot work on a video whose name holds $, a backti
     try std.testing.expectEqual(@as(f64, 1280), screenshot.dimensions.width);
     try std.testing.expectEqual(@as(f64, 720), screenshot.dimensions.height);
 }
+
+//
+// A video of one of the containers and codecs the bundled FFmpeg is built to read (third-party/ffmpeg/generate-config.sh), made
+// with the ffmpeg on the path, which can write all of them.
+//
+const IContainerCase = struct {
+    // The name of the file, whose extension picks the container the ffmpeg on the path writes.
+    fileName: []const u8,
+
+    // The arguments that choose the video encoder, and the audio encoder when the video has audio.
+    encoderArguments: []const []const u8,
+
+    // Whether the video has an audio stream.
+    hasAudio: bool,
+
+    // The video codec ffprobe names.
+    videoCodec: []const u8,
+
+    // The audio codec ffprobe names, when the video has audio.
+    audioCodec: ?[]const u8,
+};
+
+//
+// A video of every container the bundled FFmpeg's demuxers read, between them holding every video codec its decoders decode,
+// each with audio where the container takes a codec the ffmpeg on the path encodes without an extra library. There is no audio
+// decoder in the bundled FFmpeg, so the audio shows that ffprobe still reports it and that a screenshot ignores it.
+//
+const CONTAINER_CASES = [_]IContainerCase{
+    .{
+        .fileName = "h264.mov",
+        .encoderArguments = &.{ "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac" },
+        .hasAudio = true,
+        .videoCodec = "h264",
+        .audioCodec = "aac",
+    },
+    .{
+        .fileName = "hevc.mp4",
+        .encoderArguments = &.{ "-c:v", "libx265", "-x265-params", "log-level=error", "-tag:v", "hvc1", "-pix_fmt", "yuv420p", "-c:a", "aac" },
+        .hasAudio = true,
+        .videoCodec = "hevc",
+        .audioCodec = "aac",
+    },
+    .{
+        .fileName = "mpeg4.mp4",
+        .encoderArguments = &.{ "-c:v", "mpeg4", "-c:a", "aac" },
+        .hasAudio = true,
+        .videoCodec = "mpeg4",
+        .audioCodec = "aac",
+    },
+    .{
+        .fileName = "h263.3gp",
+        .encoderArguments = &.{ "-c:v", "h263", "-c:a", "aac" },
+        .hasAudio = true,
+        .videoCodec = "h263",
+        .audioCodec = "aac",
+    },
+    .{
+        .fileName = "prores.mov",
+        .encoderArguments = &.{ "-c:v", "prores_ks", "-an" },
+        .hasAudio = false,
+        .videoCodec = "prores",
+        .audioCodec = null,
+    },
+    .{
+        .fileName = "vp9.mkv",
+        .encoderArguments = &.{ "-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p", "-c:a", "aac" },
+        .hasAudio = true,
+        .videoCodec = "vp9",
+        .audioCodec = "aac",
+    },
+    .{
+        .fileName = "vp8.webm",
+        .encoderArguments = &.{ "-c:v", "libvpx", "-pix_fmt", "yuv420p", "-an" },
+        .hasAudio = false,
+        .videoCodec = "vp8",
+        .audioCodec = null,
+    },
+    .{
+        .fileName = "mjpeg.avi",
+        .encoderArguments = &.{ "-c:v", "mjpeg", "-pix_fmt", "yuvj420p", "-c:a", "mp2" },
+        .hasAudio = true,
+        .videoCodec = "mjpeg",
+        .audioCodec = "mp2",
+    },
+    .{
+        .fileName = "mpeg1.mpg",
+        .encoderArguments = &.{ "-c:v", "mpeg1video", "-c:a", "mp2" },
+        .hasAudio = true,
+        .videoCodec = "mpeg1video",
+        .audioCodec = "mp2",
+    },
+    .{
+        .fileName = "mpeg2.vob",
+        .encoderArguments = &.{ "-c:v", "mpeg2video", "-c:a", "mp2" },
+        .hasAudio = true,
+        .videoCodec = "mpeg2video",
+        .audioCodec = "mp2",
+    },
+};
+
+test "getInfo and extractScreenshot read a video of every container and codec the bundled FFmpeg is built for" {
+    // The goal is to show that the demuxers, decoders and parsers the bundled FFmpeg is built with are enough for each container and
+    // codec it is meant to read. The method is to make a short 128x96 video of each with the ffmpeg on the path, read it with
+    // getInfo and take a screenshot of it with extractScreenshot, the two things the import does with a video.
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireFfmpeg(log, allocator, runner);
+    const dir = try makeTempDir(allocator, "containers");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
+
+    for (CONTAINER_CASES) |case| {
+        errdefer std.debug.print("The video that failed: {s}\nThe last error: {s}\n", .{ case.fileName, utils.errors.lastErrorMessage() });
+        const videoPath = try std.fs.path.join(allocator, &.{ dir, case.fileName });
+
+        // Half a second at 25 frames a second, a rate MPEG-1 allows, and 128x96, a size H.263 allows.
+        var argv: std.ArrayList([]const u8) = .empty;
+        try argv.appendSlice(allocator, &.{ "ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=128x96:r=25:d=0.5" });
+        if (case.hasAudio) {
+            try argv.appendSlice(allocator, &.{ "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5" });
+        }
+        try argv.appendSlice(allocator, case.encoderArguments);
+        try argv.appendSlice(allocator, &.{ "-y", videoPath });
+        _ = try runTool(allocator, argv.items);
+
+        var video = Video.init(videoPath);
+        const info = try video.getInfo(allocator, std.testing.io, log, runner);
+        try std.testing.expectEqual(@as(f64, 128), info.dimensions.width);
+        try std.testing.expectEqual(@as(f64, 96), info.dimensions.height);
+        try std.testing.expectEqual(@as(?bool, case.hasAudio), info.hasAudio);
+        const metadata = info.metadata.?.document;
+        try std.testing.expectEqualStrings(case.videoCodec, metadata.get("videoCodec").?.string);
+        if (case.audioCodec) |audioCodec| {
+            try std.testing.expectEqualStrings(audioCodec, metadata.get("audioCodec").?.string);
+        }
+        else {
+            try std.testing.expect(metadata.get("audioCodec").? == .undefined);
+        }
+
+        const screenshotPath = try std.fs.path.join(allocator, &.{ dir, try std.fmt.allocPrint(allocator, "{s}.jpg", .{case.fileName}) });
+        _ = try video.extractScreenshot(allocator, std.testing.io, log, runner, screenshotPath, 0);
+        const screenshot = try readFile(allocator, screenshotPath);
+        try std.testing.expect(std.mem.startsWith(u8, screenshot, &.{ 0xFF, 0xD8, 0xFF }));
+        try std.testing.expectEqualStrings("128,96", try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "stream=width,height", "-of", "csv=p=0", screenshotPath }));
+    }
+}
+
+test "getFileInfo refuses a video in a container the bundled FFmpeg is built without" {
+    // The goal is to show that a file the import takes as a video, in a container that is not one the bundled FFmpeg is built to
+    // read, is refused rather than read. The method is to write an Autodesk FLIC animation (.fli, which the import's content types
+    // name video/x-fli), check that the ffmpeg on the path, which has every demuxer, reads it as a video, and check that getFileInfo
+    // fails because the bundled ffprobe finds nothing that reads it.
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    const environment = try inherited_environment.inherit(std.testing.allocator);
+    defer inherited_environment.restore(std.testing.allocator, environment);
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireFfmpeg(log, allocator, runner);
+    const dir = try makeTempDir(allocator, "refused-container");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
+
+    // A FLIC file written byte by byte from the format's description (the layout FFmpeg's libavformat/flic.c reads): the 128 byte
+    // header, little endian, holding the file's size (144), the FLC magic number 0xAF12, one frame, a width of 32, a height of 16 and
+    // a depth of 8, then one empty frame chunk of 16 bytes with the frame magic number 0xF1FA.
+    const header = [_]u8{ 0x90, 0x00, 0x00, 0x00, 0x12, 0xAF, 0x01, 0x00, 0x20, 0x00, 0x10, 0x00, 0x08, 0x00, 0x03, 0x00 } ++ [_]u8{0} ** 112;
+    const frame = [_]u8{ 0x10, 0x00, 0x00, 0x00, 0xFA, 0xF1 } ++ [_]u8{0} ** 10;
+    const videoPath = try std.fs.path.join(allocator, &.{ dir, "animation.fli" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = videoPath,
+        .data = &(header ++ frame),
+    });
+
+    // An FFmpeg built with the FLIC demuxer reads it as a 32x16 video.
+    try std.testing.expectEqualStrings("flic,32,16", try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "stream=codec_name,width,height", "-of", "csv=p=0", videoPath }));
+
+    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, log, runner, videoPath, "video/x-fli"));
+    const message = utils.errors.lastErrorMessage();
+    try std.testing.expect(std.mem.startsWith(u8, message, try std.fmt.allocPrint(allocator, "Failed to get video info for {s}: ", .{videoPath})));
+    try std.testing.expect(std.mem.indexOf(u8, message, "Invalid data found when processing input") != null);
+}
