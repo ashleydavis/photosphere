@@ -2,7 +2,6 @@ const std = @import("std");
 const android_libc = @import("packages-zig/android-libc.zig");
 const apple_sdk = @import("packages-zig/apple-sdk.zig");
 const translate_target = @import("packages-zig/translate-target.zig");
-const ffmpeg_media_target = @import("third-party/ffmpeg/support/media-target.zig");
 const ziggy_build = @import("ziggy");
 
 //
@@ -432,17 +431,39 @@ fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, include_dire
 
 //
 // Translates FFmpeg's headers (ffmpeg_header) to a Zig module. The build in third-party/ffmpeg installs the libraries and no headers,
-// so they are read from its vendored source, with the one public header FFmpeg's configure writes for the target
-// (libavutil/avconfig.h) from its generated files for the target. Translated without optimization, as translateHeader is.
+// so they are read from its vendored source. The one public header FFmpeg's configure writes for the target, libavutil/avconfig.h,
+// is written here from the target rather than read from third-party/ffmpeg/config: the iOS directories there are not checked in,
+// and a job that restores FFmpeg from the cache never makes them, so the iOS package build failed with 'libavutil/avconfig.h' not
+// found. Its two values are the ones configure writes for every target FFmpeg is built for: the byte order, and fast unaligned
+// access, which configure enables on x86_64 and aarch64. Translated without optimization, as translateHeader is.
 //
 fn translateFfmpegHeaders(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.Module {
+    const fast_unaligned: u8 = switch (target.result.cpu.arch) {
+        .x86_64, .aarch64 => 1,
+        else => {
+            std.log.err("FFmpeg's headers are not translated for {s}: its AV_HAVE_FAST_UNALIGNED is not known", .{
+                @tagName(target.result.cpu.arch),
+            });
+            return error.UnsupportedFfmpegTarget;
+        },
+    };
+    const big_endian: u8 = if (target.result.cpu.arch.endian() == .big) 1 else 0;
+    const generated = b.addWriteFiles();
+    _ = generated.add("libavutil/avconfig.h", b.fmt(
+        \\#ifndef AVUTIL_AVCONFIG_H
+        \\#define AVUTIL_AVCONFIG_H
+        \\#define AV_HAVE_BIGENDIAN {d}
+        \\#define AV_HAVE_FAST_UNALIGNED {d}
+        \\#endif /* AVUTIL_AVCONFIG_H */
+        \\
+    , .{ big_endian, fast_unaligned }));
     const translate_c = b.addTranslateC(.{
         .root_source_file = b.addWriteFiles().add("ffmpeg.h", ffmpeg_header),
         .target = translate_target.translateTarget(b, target),
         .optimize = .Debug,
     });
     translate_c.addIncludePath(b.path("third-party/ffmpeg/vendor/ffmpeg"));
-    translate_c.addIncludePath(b.path(b.fmt("third-party/ffmpeg/config/{s}", .{try ffmpeg_media_target.configName(b, target)})));
+    translate_c.addIncludePath(generated.getDirectory());
     try android_libc.addLibcIncludes(b, translate_c, target);
     return translate_c.createModule();
 }
