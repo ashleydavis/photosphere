@@ -1,6 +1,6 @@
 # Workflows
 
-The jobs of the GitHub Actions workflows in `.github/workflows`, what each one needs, and where each one gets its input and puts its output. A release job hands what it built to the later jobs of the same run as a GitHub artifact (see "Handoffs between jobs" below), and the smoke test jobs upload their logs as an artifact when they fail (see "Smoke test logs"). The GitHub cache holds only real caches, which a job can do without: the third-party libraries, the Zig build caches, and the Bun and Zig package caches, which every job keeps and which are left out below.
+The jobs of the GitHub Actions workflows in `.github/workflows`, what each one needs, and where each one gets its input and puts its output. Jobs hand their output to each other through the GitHub Actions cache. The only GitHub artifacts are the logs the smoke test jobs upload when they fail (see below). Every job also keeps the Bun and Zig package caches in the GitHub cache; they are left out below.
 
 A third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) is built by its own build action in `.github/actions/build-<library>`, which caches it under a key made from the platform, the build arguments and the library's source, so the same library is built once whichever workflow asks for it. A job that needs the libraries restores them with the `third-party-libraries` action, which runs the same build actions and gets a cache hit.
 
@@ -68,15 +68,15 @@ release-<platform>.yml
 │   │ needs:  prepare-tag, the 4 library jobs
 │   │ Builds the app.
 │   │ input  ← tag from job outputs; libraries from GitHub cache
-│   │ output → artifact handoff-app-<platform>
+│   │ output → GitHub cache (photosphere-app-<platform>)
 │   └── <platform>                (<platform runner>)
 ├── cli-build  (desktop only)
 │   │ needs:  prepare-tag, the 4 library jobs
 │   │ Builds the CLI.
 │   │ input  ← tag from job outputs; libraries and its Zig build cache
 │   │          from GitHub cache
-│   │ output → artifact handoff-cli-<platform>; its Zig build cache to
-│   │          GitHub cache (zig-build-<sha>)
+│   │ output → GitHub cache (photosphere-cli-<platform>, and its Zig
+│   │          build cache)
 │   └── <platform>                (<platform runner>)
 ├── typescript-compile
 │   │ needs:  none
@@ -90,34 +90,33 @@ release-<platform>.yml
 │   │ needs:  the 4 library jobs; cli-build on desktop, app-build on mobile
 │   │ Runs zig build test.
 │   │ input  ← the runner's libraries; its own Zig build cache; the Zig
-│   │          build cache in handoff-cli-<platform> (desktop) or
-│   │          handoff-app-<platform> (mobile)
+│   │          build cache cli-build or app-build saved, from GitHub cache
 │   │ output → Zig build cache to GitHub cache, for its next run
 │   └── <platform>                (<platform runner>; ubuntu-latest for
 │                                   android, macos-15 for ios)
 ├── cli-smoke-tests  (desktop only)
 │   │ needs:  cli-build
-│   │ input  ← artifact handoff-cli-<platform>
+│   │ input  ← photosphere-cli-<platform> from GitHub cache
 │   │ output → on failure only, the failed tests' directories as a GitHub
 │   │          artifact (see "Smoke test logs" below)
 │   └── <platform>                (<platform runner>)
 ├── app-smoke-tests
-│   │ needs:  app-build; cli-build on desktop
-│   │ input  ← artifact handoff-app-<platform> (and handoff-cli-<platform>
-│   │          on desktop)
+│   │ needs:  app-build
+│   │ input  ← photosphere-app-<platform> from GitHub cache
 │   │ output → on failure only, the failed tests' directories as a GitHub
 │   │          artifact (see "Smoke test logs" below)
 │   └── <platform>                (<platform runner>)
 ├── package
 │   │ needs:  prepare-tag, app-build
 │   │ Packages the app.
-│   │ input  ← tag from job outputs; artifact handoff-app-<platform>
-│   │ output → artifact handoff-package-<platform>
+│   │ input  ← tag from job outputs; photosphere-app-<platform> from
+│   │          GitHub cache
+│   │ output → GitHub cache (photosphere-package-<platform>)
 │   └── <platform>                (<platform runner>)
 └── create-release
     │ needs:  every other job
-    │ input  ← tag from job outputs; artifact handoff-package-<platform>
-    │          (and handoff-cli-<platform> on desktop)
+    │ input  ← tag from job outputs; package (and the CLI on desktop)
+    │          from GitHub cache
     │ output → GitHub Release (the version tag, or <platform>-nightly)
     └── linux                     (ubuntu-latest)
 ```
@@ -181,7 +180,6 @@ flowchart LR
     lib-ff --> cli-build
     cli-build --> cli-smoke-tests["cli-smoke-tests (desktop)"]
     app-build --> app-smoke-tests
-    cli-build --> app-smoke-tests
     lib-aws --> zig-unit-tests
     lib-zlib --> zig-unit-tests
     lib-im --> zig-unit-tests
@@ -204,21 +202,6 @@ flowchart LR
 
 This diagram is drawn for dark mode only: its lines are white and do not show on a light background.
 
-## Handoffs between jobs
-
-A release job's output reaches the later jobs of the same run as a GitHub artifact, through two actions: `.github/actions/handoff-upload` packs the paths it is given into one gzipped tar archive and uploads it as `handoff-<name>`, and `.github/actions/handoff-download` downloads it and unpacks it into the workspace at the same paths. The tar archive is what keeps the executable bits, symbolic links (the frameworks inside a macOS `.app`) and file names exactly as they were, none of which an artifact of loose files keeps. The archive is written and read through standard output and input rather than `tar -f`, because GNU tar on the Windows runners takes the drive letter of a path for a remote host name.
-
-| Artifact | Uploaded by | Holds | Downloaded by |
-|---|---|---|---|
-| `handoff-app-<platform>` | `app-build` | the app build, `.zig-cache` and the four libraries' `zig-out` | `app-smoke-tests`, `package`; `zig-unit-tests` on Android and iOS |
-| `handoff-cli-<platform>` (desktop) | `cli-build` | `out` (the CLI binary), `.zig-cache` and the four libraries' `zig-out` | `cli-smoke-tests`, `app-smoke-tests`, `create-release` |
-| `handoff-package-<platform>` | `package` | the packages in `out/package` | `create-release` |
-
-Every job that downloads a handoff needs the job that uploads it, so the upload has finished first. A path that is missing or a glob that matches nothing fails the upload, and a handoff that is missing fails the download.
-
-The artifacts are kept for 1 day, since only the later jobs of the same run read them. Re-running a failed job of a run more than a day old finds its handoff gone and fails, so re-run the whole workflow instead. Re-running every job uploads each handoff again over the earlier attempt's.
-
-These handoffs used to be saves to the GitHub cache under a key holding the run id, restored with `fail-on-cache-miss`. The repository's caches pass GitHub's 10 GB limit when several pull requests run at once, and GitHub then evicts the least recently used entries, including ones an earlier job of a run still in progress had just saved, so a later job of that run failed its restore. GitHub does not evict an artifact before its retention runs out.
 
 ## Smoke test logs
 
