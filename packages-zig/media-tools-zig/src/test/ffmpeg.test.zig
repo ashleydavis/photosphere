@@ -1,18 +1,20 @@
 const std = @import("std");
-const inherited_environment = @import("inherited-environment.zig");
-const ILog = @import("utils-zig").log.ILog;
 const builtin = @import("builtin");
 const utils = @import("utils-zig");
 const media_tools = @import("media-tools-zig");
-const node_utils = @import("node-utils-zig");
 const ziggy = @import("ziggy");
+const ICapturedLog = @import("captured-log.zig").ICapturedLog;
 
-const MediaTools = media_tools.MediaTools;
-const Ffmpeg = media_tools.Ffmpeg;
-const ImageMagick = media_tools.ImageMagick;
+const ffmpeg = media_tools.ffmpeg;
+const image_magick = media_tools.image_magick;
+const magick = image_magick.c;
 
-// The video the tests read, relative to the directory the tests run in.
+// The video the tests read, relative to the directory the tests run in: 1280x720 H.264 with AAC sound.
 const test_video = "../test/multiple-files/test.mp4";
+
+// The HEIC the tests read: a 2x2 grid of 512 pixel tiles of FFmpeg's testsrc2 pattern, trimmed to 1000x700, made by
+// scripts/make-heic-test-image.ts.
+const test_heic = "../test/heic/tiled.heic";
 
 //
 // The path of a file in a test's temporary directory.
@@ -23,263 +25,216 @@ fn tempFilePath(allocator: std.mem.Allocator, tmp_dir: std.testing.TmpDir, name:
 }
 
 //
-// What ffprobe reports of a video: the width and height of its first video stream and the duration of the file, as text.
+// Runs a program installed on the machine (the system's ffmpeg, which makes the reference pictures), failing the test when it fails.
 //
-const IProbed = struct {
-    width: i64,
-    height: i64,
-    duration: []const u8,
-};
-
-//
-// Probes a video with the arguments the app uses, and reads the report.
-//
-fn probe(log: ILog, allocator: std.mem.Allocator, path: []const u8) !IProbed {
-    const result = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", path });
-    try std.testing.expectEqual(@as(i32, 0), result.exit_code);
-    const report = try std.json.parseFromSliceLeaky(std.json.Value, allocator, result.output, .{});
-    for (report.object.get("streams").?.array.items) |stream| {
-        const codec_type = stream.object.get("codec_type").?.string;
-        if (std.mem.eql(u8, codec_type, "video")) {
-            return .{
-                .width = stream.object.get("width").?.integer,
-                .height = stream.object.get("height").?.integer,
-                .duration = report.object.get("format").?.object.get("duration").?.string,
-            };
-        }
+fn runTool(allocator: std.mem.Allocator, argv: []const []const u8) !void {
+    const result = try std.process.run(allocator, std.testing.io, .{
+        .argv = argv,
+    });
+    if (result.term != .exited or result.term.exited != 0) {
+        std.debug.print("{s} failed:\n{s}\n{s}\n", .{ argv[0], result.stdout, result.stderr });
+        return error.TestUnexpectedResult;
     }
-    return error.NoVideoStream;
 }
 
-test "ffprobe -version and ffmpeg -version give the version in the line the app reads it from" {
-    const log = utils.mute_log.MuteLog.init();
+//
+// Writes, with the system's ffmpeg, a short video whose container says it was made in 1950. FFmpeg's MP4 demuxer warns when it opens
+// it ("Detected creation time before 1970, parsing as unix timestamp."), and reads it all the same.
+//
+fn writeVideoFrom1950(allocator: std.mem.Allocator, path: []const u8) !void {
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=64x32:rate=10", "-frames:v", "5", "-pix_fmt", "yuv420p", "-metadata", "creation_time=1950-01-01T00:00:00Z", "-y", path });
+}
+
+//
+// Writes the first half of the test video to the path: a file cut short.
+//
+fn writeHalfVideo(allocator: std.mem.Allocator, path: []const u8) !void {
+    const whole = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, test_video, allocator, .unlimited);
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = path,
+        .data = whole[0 .. whole.len / 2],
+    });
+}
+
+//
+// How far apart two pictures of the same size are, read with ImageMagick: the root mean squared difference of their pixels, from 0
+// for the same picture to 1.
+//
+fn pictureDistance(allocator: std.mem.Allocator, first: []const u8, second: []const u8) !f64 {
+    try image_magick.check();
+    const exception = magick.AcquireExceptionInfo();
+    defer _ = magick.DestroyExceptionInfo(exception);
+    const first_image = try readWhole(allocator, first, exception);
+    defer _ = magick.DestroyImageList(first_image);
+    const second_image = try readWhole(allocator, second, exception);
+    defer _ = magick.DestroyImageList(second_image);
+    var distance: f64 = undefined;
+    if (magick.GetImageDistortion(first_image, second_image, magick.RootMeanSquaredErrorMetric, &distance, exception) != magick.MagickTrue) {
+        return error.TestUnexpectedResult;
+    }
+    return distance;
+}
+
+//
+// Reads a picture with ImageMagick's C interface, for pictureDistance.
+//
+fn readWhole(allocator: std.mem.Allocator, path: []const u8, exception: [*c]magick.ExceptionInfo) ![*c]magick.Image {
+    const image_info = magick.AcquireImageInfo();
+    defer _ = magick.DestroyImageInfo(image_info);
+    const path_z = try allocator.dupeZ(u8, path);
+    _ = magick.CopyMagickString(&@as(*magick.ImageInfo, image_info).filename, path_z.ptr, image_info.*.filename.len);
+    return magick.ReadImage(image_info, exception) orelse error.TestUnexpectedResult;
+}
+
+test "version gives FFmpeg's version, and FFmpeg is built under the LGPL" {
+    try std.testing.expect(std.ascii.isDigit(ffmpeg.version()[0]));
+    try std.testing.expect(std.mem.indexOf(u8, std.mem.span(ffmpeg.c.avutil_license()), "LGPL version 2.1 or later") != null);
+}
+
+test "probeFile reads the duration, bitrate, tags and streams of a video" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const ffprobe = try Ffmpeg.runFfprobe(std.testing.io, log, arena.allocator(), &.{"-version"});
-    try std.testing.expectEqual(@as(i32, 0), ffprobe.exit_code);
-    try std.testing.expect(std.mem.startsWith(u8, ffprobe.output, "ffprobe version "));
-    try std.testing.expect(std.ascii.isDigit(ffprobe.output["ffprobe version ".len]));
-    const ffmpeg = try Ffmpeg.runFfmpeg(std.testing.io, log, arena.allocator(), &.{"-version"});
-    try std.testing.expect(std.mem.startsWith(u8, ffmpeg.output, "ffmpeg version "));
-    try std.testing.expect(std.mem.indexOf(u8, ffmpeg.output, "license: LGPL version 2.1 or later") != null);
+    const probe = try ffmpeg.probeFile(arena.allocator(), std.testing.io, utils.mute_log.MuteLog.init(), test_video);
+    try std.testing.expectEqual(@as(?f64, 7.874533), probe.duration_seconds);
+    try std.testing.expectEqual(@as(?i64, 2100080), probe.bit_rate);
+    try std.testing.expectEqual(@as(usize, 2), probe.streams.len);
+    const video = probe.streams[0];
+    try std.testing.expectEqual(ffmpeg.IStreamKind.video, video.kind);
+    try std.testing.expectEqualStrings("h264", video.codec_name);
+    try std.testing.expectEqual(@as(i32, 1280), video.width);
+    try std.testing.expectEqual(@as(i32, 720), video.height);
+    try std.testing.expectEqualStrings("yuvj420p", video.pixel_format);
+    try std.testing.expectEqual(@as(i32, 30000), video.frame_rate.numerator);
+    try std.testing.expectEqual(@as(i32, 1001), video.frame_rate.denominator);
+    const audio = probe.streams[1];
+    try std.testing.expectEqual(ffmpeg.IStreamKind.audio, audio.kind);
+    try std.testing.expectEqualStrings("aac", audio.codec_name);
+    try std.testing.expectEqual(@as(i32, 0), audio.width);
+    try std.testing.expectEqualStrings("unknown", audio.pixel_format);
+    try std.testing.expectEqualStrings("major_brand", probe.tags[0].key);
+    try std.testing.expectEqualStrings("isom", probe.tags[0].value);
 }
 
-test "ffprobe reports the streams and the format of a video as JSON" {
-    const log = utils.mute_log.MuteLog.init();
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const probed = try probe(log, arena.allocator(), test_video);
-    try std.testing.expect(probed.width > 0);
-    try std.testing.expect(probed.height > 0);
-    try std.testing.expect(try std.fmt.parseFloat(f64, probed.duration) > 0);
-}
-
-test "ffmpeg writes a JPEG of a frame of a video that ImageMagick reads at the video's size" {
-    const log = utils.mute_log.MuteLog.init();
+test "extractFrame writes a JPEG of the video's size, of the frame the ffmpeg program takes at that time" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const probed = try probe(log, allocator, test_video);
+    const log = utils.mute_log.MuteLog.init();
     const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
-    const result = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-q:v", "2", "-y", picture_path });
-    try std.testing.expectEqual(@as(i32, 0), result.exit_code);
-    const size = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ picture_path, "-format", "%w %h", "info:" });
-    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{d} {d}", .{ probed.width, probed.height }), size.output);
+    try ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+        .input_path = test_video,
+        .output_path = picture_path,
+        .time_seconds = 3.9372665,
+        .quality = 90,
+    });
+    const info = try image_magick.readImageInfo(allocator, log, picture_path);
+    try std.testing.expectEqual(@as(usize, 1280), info.width);
+    try std.testing.expectEqual(@as(usize, 720), info.height);
+    try std.testing.expectEqualStrings("JPEG", info.format);
+
+    // The frame the system's ffmpeg takes at the same time, and one from the start of the video, which looks different.
+    const reference_path = try tempFilePath(allocator, tmp_dir, "reference.png");
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-i", test_video, "-ss", "3.9372665", "-frames:v", "1", "-y", reference_path });
+    const start_path = try tempFilePath(allocator, tmp_dir, "start.png");
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-i", test_video, "-frames:v", "1", "-y", start_path });
+    const same = try pictureDistance(allocator, picture_path, reference_path);
+    const other = try pictureDistance(allocator, picture_path, start_path);
+    errdefer std.debug.print("distance to the same frame {d}, to the first frame {d}\n", .{ same, other });
+    try std.testing.expect(same < 0.03);
+    try std.testing.expect(other > same * 2);
 }
 
-test "ffmpeg scales the frame it writes" {
-    const log = utils.mute_log.MuteLog.init();
+test "extractFrame turns the frame upright as the video's display matrix says" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const picture_path = try tempFilePath(allocator, tmp_dir, "small.jpg");
-    const result = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-vf", "scale=64:48", "-q:v", "5", "-y", picture_path });
-    try std.testing.expectEqual(@as(i32, 0), result.exit_code);
-    const size = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ picture_path, "-format", "%w %h", "info:" });
-    try std.testing.expectEqualStrings("64 48", size.output);
+    const log = utils.mute_log.MuteLog.init();
+
+    // A 64x32 video whose display matrix turns it a quarter, as a phone held upright records one.
+    const plain_path = try tempFilePath(allocator, tmp_dir, "plain.mp4");
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=64x32:rate=10", "-frames:v", "5", "-pix_fmt", "yuv420p", "-y", plain_path });
+    const rotated_path = try tempFilePath(allocator, tmp_dir, "rotated.mp4");
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-display_rotation:v:0", "90", "-i", plain_path, "-c", "copy", "-y", rotated_path });
+
+    const probe = try ffmpeg.probeFile(allocator, std.testing.io, log, rotated_path);
+    try std.testing.expectEqual(@as(i32, 64), probe.streams[0].width);
+
+    const picture_path = try tempFilePath(allocator, tmp_dir, "frame.png.jpg");
+    try ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+        .input_path = rotated_path,
+        .output_path = picture_path,
+        .time_seconds = 0,
+        .quality = 95,
+    });
+    const info = try image_magick.readImageInfo(allocator, log, picture_path);
+    try std.testing.expectEqual(@as(usize, 32), info.width);
+    try std.testing.expectEqual(@as(usize, 64), info.height);
+    const reference_path = try tempFilePath(allocator, tmp_dir, "reference.png");
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-i", rotated_path, "-frames:v", "1", "-y", reference_path });
+    const distance = try pictureDistance(allocator, picture_path, reference_path);
+    errdefer std.debug.print("distance {d}\n", .{distance});
+    try std.testing.expect(distance < 0.05);
 }
 
-test "commands run one after another, the same command and different ones, without the state of one disturbing the next" {
-    const log = utils.mute_log.MuteLog.init();
+test "readPictureSize and decodePicture give the whole picture of a tiled HEIC, its tiles in place and trimmed" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const first = try probe(log, allocator, test_video);
+    const log = utils.mute_log.MuteLog.init();
+    const size = try ffmpeg.readPictureSize(allocator, std.testing.io, log, test_heic);
+    try std.testing.expectEqual(@as(i32, 1000), size.width);
+    try std.testing.expectEqual(@as(i32, 700), size.height);
+
+    const picture_path = try tempFilePath(allocator, tmp_dir, "decoded.jpg");
+    try ffmpeg.decodePicture(allocator, std.testing.io, log, .{
+        .input_path = test_heic,
+        .output_path = picture_path,
+        .quality = 95,
+    });
+    const info = try image_magick.readImageInfo(allocator, log, picture_path);
+    try std.testing.expectEqual(@as(usize, 1000), info.width);
+    try std.testing.expectEqual(@as(usize, 700), info.height);
+
+    // The HEIC is FFmpeg's testsrc2 pattern at 1000x700, so the decoded picture is that pattern, which a tile out of place or a grid
+    // trimmed wrongly would not be.
+    const reference_path = try tempFilePath(allocator, tmp_dir, "reference.png");
+    try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=1000x700:rate=1", "-frames:v", "1", "-y", reference_path });
+    const distance = try pictureDistance(allocator, picture_path, reference_path);
+    errdefer std.debug.print("distance {d}\n", .{distance});
+    try std.testing.expect(distance < 0.05);
+}
+
+test "calls run one after another, the same call and different ones, without the state of one disturbing the next" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    const log = utils.mute_log.MuteLog.init();
     var round: usize = 0;
     while (round < 12) : (round += 1) {
-        const again = try probe(log, allocator, test_video);
-        try std.testing.expectEqual(first.width, again.width);
-        try std.testing.expectEqual(first.height, again.height);
+        const probe = try ffmpeg.probeFile(allocator, std.testing.io, log, test_video);
+        try std.testing.expectEqual(@as(i32, 1280), probe.streams[0].width);
         const picture_path = try tempFilePath(allocator, tmp_dir, try std.fmt.allocPrint(allocator, "frame-{d}.jpg", .{round}));
-        const result = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-q:v", "2", "-y", picture_path });
-        try std.testing.expectEqual(@as(i32, 0), result.exit_code);
-        const size = try ImageMagick.runMagick(std.testing.io, log, allocator, &.{ picture_path, "-format", "%w %h", "info:" });
-        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{d} {d}", .{ first.width, first.height }), size.output);
+        try ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+            .input_path = test_video,
+            .output_path = picture_path,
+            .time_seconds = @floatFromInt(round % 7),
+            .quality = 80,
+        });
+        const info = try image_magick.readImageInfo(allocator, log, picture_path);
+        try std.testing.expectEqual(@as(usize, 1280), info.width);
+        try std.testing.expectEqual(@as(usize, 720), info.height);
     }
 }
 
-test "a command that fails ends with a non-zero exit code and the next command still works" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    var tmp_dir = std.testing.tmpDir(.{});
-    defer tmp_dir.cleanup();
-    // FFmpeg's errors go to the log, which keeps them here so the test prints nothing.
-    var captured = ICapturedLog.init(allocator);
-    const log = captured.ilog();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
-    const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
-    const ffmpeg = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", missing_path, "-vframes", "1", "-y", picture_path });
-    try std.testing.expect(ffmpeg.exit_code != 0);
-    const ffprobe = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", missing_path });
-    try std.testing.expect(ffprobe.exit_code != 0);
-    const probed = try probe(log, allocator, test_video);
-    try std.testing.expect(probed.width > 0);
-}
-
-//
-// A log that keeps the errors and the standard error of the tools it is given, and ignores everything else. It is given to a run,
-// which every message of the run reaches, from whichever of the run's threads logged it.
-//
-const ICapturedLog = struct {
-    // Every error the log was given, each on a line of its own.
-    errors: std.ArrayList(u8),
-
-    // Every tool name and standard error the log was given, one after another.
-    stderr: std.ArrayList(u8),
-
-    // The allocator the text is kept with.
-    allocator: std.mem.Allocator,
-
-    //
-    // Keeps an error.
-    //
-    fn logError(ptr: *anyopaque, message: []const u8) void {
-        const self: *ICapturedLog = @ptrCast(@alignCast(ptr));
-        self.errors.print(self.allocator, "{s}\n", .{message}) catch @panic("out of memory keeping an error");
-    }
-
-    //
-    // Keeps the standard error of a tool.
-    //
-    fn tool(ptr: *anyopaque, tool_name: []const u8, data: utils.log.IToolOutput) void {
-        const self: *ICapturedLog = @ptrCast(@alignCast(ptr));
-        if (data.stderr) |stderr| {
-            self.stderr.print(self.allocator, "{s}: {s}", .{ tool_name, stderr }) catch @panic("out of memory keeping a tool's output");
-        }
-    }
-
-    //
-    // Ignores a message.
-    //
-    fn ignoreMessage(ptr: *anyopaque, message: []const u8) void {
-        _ = ptr;
-        _ = message;
-    }
-
-    //
-    // Ignores an error with its cause.
-    //
-    fn ignoreException(ptr: *anyopaque, message: []const u8, err: anyerror) void {
-        _ = ptr;
-        _ = message;
-        _ = @intFromError(err);
-    }
-
-    //
-    // Verbose logging is off.
-    //
-    fn verboseEnabled(ptr: *anyopaque) bool {
-        _ = ptr;
-        return false;
-    }
-
-    //
-    // The log has no file.
-    //
-    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!utils.log.ILogDetails {
-        _ = ptr;
-        _ = allocator;
-        _ = io;
-        return utils.log.noLogDetails;
-    }
-
-    //
-    // This log writes no file.
-    //
-    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
-        _ = ptr;
-        return null;
-    }
-
-    // The ILog functions of the log.
-    const vtable: utils.log.ILog.VTable = .{
-        .info = ignoreMessage,
-        .verbose = ignoreMessage,
-        .@"error" = logError,
-        .exception = ignoreException,
-        .warn = ignoreMessage,
-        .debug = ignoreMessage,
-        .tool = tool,
-        .event = ignoreMessage,
-        .verboseEnabled = verboseEnabled,
-        .getLogDetails = getLogDetails,
-        .logFilePath = logFilePath,
-    };
-
-    //
-    // Makes the log, which keeps nothing yet.
-    //
-    fn init(allocator: std.mem.Allocator) ICapturedLog {
-        return .{
-            .errors = .empty,
-            .stderr = .empty,
-            .allocator = allocator,
-        };
-    }
-
-    //
-    // The ILog interface of this log, for the runs it is given to.
-    //
-    fn ilog(self: *ICapturedLog) utils.log.ILog {
-        return .{
-            .ptr = self,
-            .vtable = &vtable,
-        };
-    }
-};
-
-test "a failed ffmpeg run sends FFmpeg's errors, naming the file, to the log's errors" {
+test "a call on a file that is not there fails with FFmpeg's error naming the file, and the next call still works" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -287,19 +242,51 @@ test "a failed ffmpeg run sends FFmpeg's errors, naming the file, to the log's e
     defer tmp_dir.cleanup();
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
     const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
-    const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
-    const result = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", missing_path, "-vframes", "1", "-y", picture_path });
-    try std.testing.expect(result.exit_code != 0);
-    try std.testing.expect(std.mem.indexOf(u8, captured.errors.items, "Error opening input: No such file or directory") != null);
-    try std.testing.expect(std.mem.indexOf(u8, captured.errors.items, missing_path) != null);
+    const expected = try std.fmt.allocPrint(allocator, "FFmpeg could not open {s}: No such file or directory.", .{missing_path});
+
+    try std.testing.expectError(error.Thrown, ffmpeg.probeFile(allocator, std.testing.io, log, missing_path));
+    try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+        .input_path = missing_path,
+        .output_path = try tempFilePath(allocator, tmp_dir, "frame.jpg"),
+        .time_seconds = 0,
+        .quality = 90,
+    }));
+    try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, ffmpeg.readPictureSize(allocator, std.testing.io, log, missing_path));
+    try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
+    try std.testing.expectError(error.Thrown, ffmpeg.decodePicture(allocator, std.testing.io, log, .{
+        .input_path = missing_path,
+        .output_path = try tempFilePath(allocator, tmp_dir, "picture.jpg"),
+        .quality = 90,
+    }));
+    try std.testing.expectEqualStrings(expected, utils.errors.lastErrorMessage());
+
+    const probe = try ffmpeg.probeFile(allocator, std.testing.io, log, test_video);
+    try std.testing.expectEqual(@as(i32, 1280), probe.streams[0].width);
 }
 
-test "a failed ffprobe hands back FFmpeg's error in its output, and a probe that works hands back no error" {
+test "a file that is not a video fails with FFmpeg's error, and a time past the end fails loudly" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    const log = utils.mute_log.MuteLog.init();
+    try std.testing.expectError(error.Thrown, ffmpeg.probeFile(allocator, std.testing.io, log, "../test/demo-news.yaml"));
+    try std.testing.expectEqualStrings("FFmpeg could not open ../test/demo-news.yaml: Invalid data found when processing input.", utils.errors.lastErrorMessage());
+
+    try std.testing.expectError(error.Thrown, ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+        .input_path = test_video,
+        .output_path = try tempFilePath(allocator, tmp_dir, "late.jpg"),
+        .time_seconds = 100,
+        .quality = 90,
+    }));
+    try std.testing.expectEqualStrings("../test/multiple-files/test.mp4 has no frame at or after 100 seconds.", utils.errors.lastErrorMessage());
+}
+
+test "the warnings of a call that works go to the log as FFmpeg's output, naming the call and its file, and not to its errors" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -307,47 +294,55 @@ test "a failed ffprobe hands back FFmpeg's error in its output, and a probe that
     defer tmp_dir.cleanup();
     var captured = ICapturedLog.init(allocator);
     const log = captured.ilog();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
-    const failed = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", missing_path });
-    try std.testing.expect(failed.exit_code != 0);
-    const report = try std.json.parseFromSliceLeaky(std.json.Value, allocator, failed.output, .{});
-    const report_error = report.object.get("error") orelse return error.TheReportHasNoError;
-    try std.testing.expectEqualStrings("No such file or directory", report_error.object.get("string").?.string);
-    const worked = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", test_video });
-    try std.testing.expectEqual(@as(i32, 0), worked.exit_code);
-    const worked_report = try std.json.parseFromSliceLeaky(std.json.Value, allocator, worked.output, .{});
-    try std.testing.expect(worked_report.object.get("error") == null);
-    try std.testing.expect(worked_report.object.get("format") != null);
-}
+    const old_path = try tempFilePath(allocator, tmp_dir, "old.mp4");
+    try writeVideoFrom1950(allocator, old_path);
 
-test "the messages of an ffprobe run that worked go to the log as the tool's standard error, and not into its report" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    var captured = ICapturedLog.init(allocator);
-    const log = captured.ilog();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-
-    // At the info level ffprobe describes the file it opened ("Input #0, ...") through FFmpeg's log.
-    const result = try Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "info", "-hide_banner", "-print_format", "json", "-show_format", test_video });
-    // On Windows every in-process ffmpeg and ffprobe run in these tests exited 1 while psi read videos there, and the failure said
-    // only "expected 0, found 1", so what FFmpeg said about it is printed with the failure.
-    if (result.exit_code != 0) {
-        std.debug.print("ffprobe exited with {d}. Its messages:\n{s}\nIts errors:\n{s}\n", .{ result.exit_code, captured.stderr.items, captured.errors.items });
-    }
-    try std.testing.expectEqual(@as(i32, 0), result.exit_code);
-    try std.testing.expect(std.mem.indexOf(u8, captured.stderr.items, "ffprobe: Input #0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.output, "Input #0") == null);
-    const report = try std.json.parseFromSliceLeaky(std.json.Value, allocator, result.output, .{});
-    try std.testing.expect(report.object.get("format") != null);
+    errdefer std.debug.print("The log was given as FFmpeg's output:\n{s}\nand as errors:\n{s}\n", .{ captured.stderr.items, captured.errors.items });
+    // FFmpeg's demuxer warns about the date, and reads the video all the same.
+    const probe = try ffmpeg.probeFile(allocator, std.testing.io, log, old_path);
+    try std.testing.expectEqual(@as(i32, 64), probe.streams[0].width);
+    try std.testing.expect(std.mem.indexOf(u8, captured.stderr.items, try std.fmt.allocPrint(allocator, "ffmpeg: probe {s}: [mov,mp4", .{old_path})) != null);
+    try std.testing.expect(std.mem.indexOf(u8, captured.stderr.items, "Detected creation time before 1970, parsing as unix timestamp.") != null);
     try std.testing.expectEqualStrings("", captured.errors.items);
+
+    // A call with nothing to say says nothing.
+    captured.stderr.clearRetainingCapacity();
+    _ = try ffmpeg.probeFile(allocator, std.testing.io, log, test_video);
+    try std.testing.expectEqualStrings("", captured.stderr.items);
+}
+
+test "a frame of a file cut short is still written, and a frame past the cut fails with FFmpeg's errors in the failure" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    var captured = ICapturedLog.init(allocator);
+    const log = captured.ilog();
+    const half_path = try tempFilePath(allocator, tmp_dir, "half.mp4");
+    try writeHalfVideo(allocator, half_path);
+    const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
+
+    // The frame is before the cut.
+    try ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+        .input_path = half_path,
+        .output_path = picture_path,
+        .time_seconds = 0.5,
+        .quality = 90,
+    });
+    try std.testing.expectEqual(@as(usize, 1280), (try image_magick.readImageInfo(allocator, log, picture_path)).width);
+
+    // The video is read up to the cut, where FFmpeg says the file is cut short and ends it, and has no frame at seven seconds.
+    try std.testing.expectError(error.Thrown, ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+        .input_path = half_path,
+        .output_path = picture_path,
+        .time_seconds = 7,
+        .quality = 90,
+    }));
+    const message = utils.errors.lastErrorMessage();
+    errdefer std.debug.print("The failure: {s}\n", .{message});
+    try std.testing.expect(std.mem.startsWith(u8, message, try std.fmt.allocPrint(allocator, "{s} has no frame at or after 7 seconds.\nFFmpeg said:\n", .{half_path})));
+    try std.testing.expect(std.mem.indexOf(u8, message, "partial file") != null);
 }
 
 //
@@ -363,33 +358,35 @@ const StandardErrorTests = struct {
         defer tmp_dir.cleanup();
         var captured = ICapturedLog.init(allocator);
         const log = captured.ilog();
-        var tools = try MediaTools.init();
-        const environment = try inherited_environment.inherit(std.testing.allocator);
-        defer inherited_environment.restore(std.testing.allocator, environment);
-        defer tools.deinit();
         const missing_path = try tempFilePath(allocator, tmp_dir, "missing.mp4");
         const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
+        const old_path = try tempFilePath(allocator, tmp_dir, "old.mp4");
+        try writeVideoFrom1950(allocator, old_path);
 
         const stderr_path = try tempFilePath(allocator, tmp_dir, "stderr.txt");
         const stderr_file = try std.Io.Dir.cwd().createFile(std.testing.io, stderr_path, .{});
         const saved_stderr = std.c.dup(2);
         try std.testing.expect(saved_stderr >= 0);
         try std.testing.expect(std.c.dup2(stderr_file.handle, 2) == 2);
-        // An error from `ffmpeg`, an error from `ffprobe` and the messages of an `ffprobe` that worked.
-        const failed_ffmpeg = Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", missing_path, "-vframes", "1", "-y", picture_path });
-        const failed_ffprobe = Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "error", "-print_format", "json", "-show_format", missing_path });
-        const worked_ffprobe = Ffmpeg.runFfprobe(std.testing.io, log, allocator, &.{ "-v", "info", "-print_format", "json", "-show_format", test_video });
+        // Two calls that fail and the warnings of a call that works.
+        const failed_frame = ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+            .input_path = missing_path,
+            .output_path = picture_path,
+            .time_seconds = 0,
+            .quality = 90,
+        });
+        const failed_probe = ffmpeg.probeFile(allocator, std.testing.io, log, missing_path);
+        const worked_probe = ffmpeg.probeFile(allocator, std.testing.io, log, old_path);
         const restored = std.c.dup2(saved_stderr, 2);
         _ = std.c.close(saved_stderr);
         stderr_file.close(std.testing.io);
         try std.testing.expect(restored == 2);
 
-        try std.testing.expect((try failed_ffmpeg).exit_code != 0);
-        try std.testing.expect((try failed_ffprobe).exit_code != 0);
-        try std.testing.expectEqual(@as(i32, 0), (try worked_ffprobe).exit_code);
+        try std.testing.expectError(error.Thrown, failed_frame);
+        try std.testing.expectError(error.Thrown, failed_probe);
+        _ = try worked_probe;
         const printed = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, stderr_path, allocator, .unlimited);
         try std.testing.expectEqualStrings("", printed);
-        try std.testing.expect(captured.errors.items.len > 0);
         try std.testing.expect(captured.stderr.items.len > 0);
     }
 };
@@ -400,24 +397,85 @@ comptime {
     }
 }
 
-test "buildArgv puts the program, the leading options and the arguments in order, ending with a null" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const argv = try media_tools.ffmpeg.buildArgv(arena.allocator(), "ffmpeg", &.{ "-nostdin", "-loglevel", "error" }, &.{ "-i", "a b.mp4" });
-    try std.testing.expectEqual(@as(usize, 7), argv.len);
-    try std.testing.expectEqualStrings("ffmpeg", std.mem.span(argv[0]));
-    try std.testing.expectEqualStrings("-nostdin", std.mem.span(argv[1]));
-    try std.testing.expectEqualStrings("error", std.mem.span(argv[3]));
-    try std.testing.expectEqualStrings("-i", std.mem.span(argv[4]));
-    try std.testing.expectEqualStrings("a b.mp4", std.mem.span(argv[5]));
-    try std.testing.expect(argv[6] == null);
+test "rotationDegrees turns FFmpeg's rotation into the angle the ffmpeg program turns by" {
+    try std.testing.expectEqual(@as(f64, 270), ffmpeg.rotationDegrees(90));
+    try std.testing.expectEqual(@as(f64, 90), ffmpeg.rotationDegrees(-90));
+    try std.testing.expectEqual(@as(f64, 180), ffmpeg.rotationDegrees(180));
+    try std.testing.expectEqual(@as(f64, 180), ffmpeg.rotationDegrees(-180));
+    try std.testing.expectEqual(@as(f64, 0), ffmpeg.rotationDegrees(0));
+    try std.testing.expectEqual(@as(f64, 0), ffmpeg.rotationDegrees(-0.4));
+    try std.testing.expectEqual(@as(f64, 315), ffmpeg.rotationDegrees(45));
+    try std.testing.expect(std.math.isNan(ffmpeg.rotationDegrees(std.math.nan(f64))));
+}
+
+test "turnOfRotation turns as the ffmpeg program's transpose, hflip, vflip and rotate filters do" {
+    const identity = [9]i32{ 65536, 0, 0, 0, 65536, 0, 0, 0, 1 << 30 };
+    const mirrored = [9]i32{ -65536, 0, 0, 0, 65536, 0, 0, 0, 1 << 30 };
+    const upside_down_mirrored = [9]i32{ 65536, 0, 0, 0, -65536, 0, 0, 0, 1 << 30 };
+    const quarter_up = [9]i32{ 0, -65536, 0, 65536, 0, 0, 0, 0, 1 << 30 };
+    const quarter_down = [9]i32{ 0, 65536, 0, -65536, 0, 0, 0, 0, 1 << 30 };
+    const half = [9]i32{ -65536, 0, 0, 0, -65536, 0, 0, 0, 1 << 30 };
+
+    try std.testing.expect(ffmpeg.turnOfRotation(identity, 0).isNone());
+    try std.testing.expectEqual(image_magick.ITurn{
+        .flip = true,
+    }, ffmpeg.turnOfRotation(upside_down_mirrored, 0));
+    // A quarter turn: clock, or cclock_flip (a transpose) when the matrix's [3] is positive.
+    try std.testing.expectEqual(image_magick.ITurn{
+        .rotate_degrees = 90,
+    }, ffmpeg.turnOfRotation(quarter_down, 90));
+    try std.testing.expectEqual(image_magick.ITurn{
+        .transpose = true,
+    }, ffmpeg.turnOfRotation(quarter_up, 90));
+    // Three quarters: cclock, or clock_flip (a transverse) when the matrix's [3] is negative.
+    try std.testing.expectEqual(image_magick.ITurn{
+        .rotate_degrees = 270,
+    }, ffmpeg.turnOfRotation(quarter_up, 270));
+    try std.testing.expectEqual(image_magick.ITurn{
+        .transverse = true,
+    }, ffmpeg.turnOfRotation(quarter_down, 270));
+    // A half turn: hflip for a negative [0] and vflip for a negative [4].
+    try std.testing.expectEqual(image_magick.ITurn{
+        .flop = true,
+        .flip = true,
+    }, ffmpeg.turnOfRotation(half, 180));
+    try std.testing.expectEqual(image_magick.ITurn{
+        .flop = true,
+    }, ffmpeg.turnOfRotation(mirrored, 180));
+    // Any other angle is a rotation by it, and no angle at all is no turn.
+    try std.testing.expectEqual(image_magick.ITurn{
+        .rotate_degrees = 45,
+    }, ffmpeg.turnOfRotation(identity, 45));
+    try std.testing.expect(ffmpeg.turnOfRotation(identity, std.math.nan(f64)).isNone());
+}
+
+test "placeTile copies a tile onto the canvas at its offset and leaves out what falls outside" {
+    var canvas = [_]u8{0} ** (4 * 3 * 3);
+    const tile_bytes = [_]u8{ 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4 };
+    const tile: image_magick.IRgbPixels = .{
+        .width = 2,
+        .height = 2,
+        .bytes = &tile_bytes,
+    };
+    try ffmpeg.placeTile(&canvas, 4, 3, tile, 3, 2);
+    // Only the tile's top left pixel lands on the 4x3 canvas, at its bottom right corner.
+    try std.testing.expectEqualSlices(u8, &.{ 1, 1, 1 }, canvas[(2 * 4 + 3) * 3 ..][0..3]);
+    var others: usize = 0;
+    for (canvas) |byte| {
+        others += byte;
+    }
+    try std.testing.expectEqual(@as(usize, 3), others);
+    try ffmpeg.placeTile(&canvas, 4, 3, tile, 0, 0);
+    try std.testing.expectEqualSlices(u8, &.{ 1, 1, 1, 2, 2, 2 }, canvas[0..6]);
+    try std.testing.expectEqualSlices(u8, &.{ 3, 3, 3, 4, 4, 4 }, canvas[4 * 3 ..][0..6]);
+    try std.testing.expectError(error.Thrown, ffmpeg.placeTile(&canvas, 4, 3, tile, -1, 0));
 }
 
 //
 // What one thread of the several-threads test found, which only that thread writes and the test reads once it has ended.
 //
 const IThreadOutcome = struct {
-    // How many rounds the thread's runs all gave the answer of its own arguments.
+    // How many rounds the thread's calls all gave their own answer.
     correct_rounds: usize = 0,
 
     // The first thing that went wrong, or null.
@@ -425,115 +483,98 @@ const IThreadOutcome = struct {
 };
 
 //
-// How many threads the several-threads test runs commands on at once.
+// How many threads the several-threads test calls FFmpeg on at once.
 //
 const thread_count = 6;
 
 //
-// What one thread of the several-threads test does: with a log of its own, made on its own thread, it probes the video,
-// has ffmpeg write a frame scaled to a size only this thread asks for, reads the frame's size with ImageMagick, and runs an ffmpeg
-// that fails on a file named after the thread, whose error must reach this thread's log and no other's.
+// What one thread of the several-threads test does, with an allocator, an Io and a log of its own made on its own thread, and with
+// no setup: probes the video, writes a frame at a time only this thread asks for, reads and decodes the HEIC, and probes
+// a copy of the video from 1950 whose name only this thread uses, whose warning must reach this thread's log and no other's.
 //
-fn runCommandsOfOwn(directory: []const u8, index: usize, expected_width: i64, outcome: *IThreadOutcome) void {
+fn callEveryFunction(directory: []const u8, index: usize, outcome: *IThreadOutcome) void {
     var thread_allocator: ziggy.utils.thread_allocator.ThreadAllocator = .init;
     defer thread_allocator.deinit();
     var threaded: std.Io.Threaded = .init_single_threaded;
     threaded.allocator = thread_allocator.allocator();
     defer threaded.deinit();
-    var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    var captured = ICapturedLog.init(allocator);
-    const log = captured.ilog();
-    // The environment is each thread's own (process_env is Ziggy's, which keeps it per thread), so this thread takes the inherited
-    // one for itself. Without it the thread had none, the OS temp directory came out as "undefined\temp" on Windows, and ffprobe
-    // could not write its report there.
-    const environment = inherited_environment.inherit(thread_allocator.allocator()) catch @panic("out of memory giving a thread its environment");
-    defer inherited_environment.restore(thread_allocator.allocator(), environment);
-    const width = 16 * (index + 1);
-    const height = 12 * (index + 1);
     var round: usize = 0;
     while (round < 3) : (round += 1) {
-        const probed = media_tools.Ffmpeg.runFfprobe(threaded.io(), log, allocator, &.{ "-v", "quiet", "-print_format", "json", "-show_streams", test_video }) catch {
-            outcome.failure = "ffprobe failed to run";
+        var arena = std.heap.ArenaAllocator.init(thread_allocator.allocator());
+        defer arena.deinit();
+        callEveryFunctionOnce(arena.allocator(), threaded.io(), directory, index, round) catch |err| {
+            // Allocated with the page allocator, because the test thread reads it after this thread's own allocator is gone; it is
+            // never freed.
+            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "thread {d}, round {d}: {s}: {s}", .{ index, round, @errorName(err), utils.errors.lastErrorMessage() }) catch @panic("out of memory");
             return;
         };
-        const report = std.json.parseFromSliceLeaky(std.json.Value, allocator, probed.output, .{}) catch {
-            // On Windows a thread failed here, saying only that the report was not JSON, so the failure carries ffprobe's exit code,
-            // its report and what it logged. Allocated with the page allocator, because the test thread reads it after this thread's
-            // own allocator is gone; it is never freed.
-            // That run was quiet, and on Windows it exited 1 having logged nothing, so the same probe is run once more at the error
-            // level to say why.
-            const again = media_tools.Ffmpeg.runFfprobe(threaded.io(), log, allocator, &.{ "-v", "error", "-print_format", "json", "-show_streams", test_video }) catch {
-                outcome.failure = "ffprobe's report is not JSON, and running it again at the error level failed to run";
-                return;
-            };
-            outcome.failure = std.fmt.allocPrint(std.heap.page_allocator, "ffprobe's report is not JSON: exit code {d}, report \"{s}\", errors \"{s}\", messages \"{s}\"; run again at the error level it exited {d}; this thread sees an environment: {}, with TEMP \"{s}\"", .{ probed.exit_code, probed.output, captured.errors.items, captured.stderr.items, again.exit_code, node_utils.process_env.getEnvironMap() != null, node_utils.process_env.getEnv("TEMP") orelse "(unset)" }) catch @panic("out of memory");
-            return;
-        };
-        var probed_width: i64 = 0;
-        for (report.object.get("streams").?.array.items) |stream| {
-            if (std.mem.eql(u8, stream.object.get("codec_type").?.string, "video")) {
-                probed_width = stream.object.get("width").?.integer;
-            }
-        }
-        const picture_path = std.fmt.allocPrint(allocator, "{s}/frame-{d}-{d}.jpg", .{ directory, index, round }) catch @panic("out of memory");
-        const scale = std.fmt.allocPrint(allocator, "scale={d}:{d}", .{ width, height }) catch @panic("out of memory");
-        const written = media_tools.Ffmpeg.runFfmpeg(threaded.io(), log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-vf", scale, "-q:v", "5", "-y", picture_path }) catch {
-            outcome.failure = "ffmpeg failed to run";
-            return;
-        };
-        const size = media_tools.ImageMagick.runMagick(threaded.io(), log, allocator, &.{ picture_path, "-format", "%w %h", "info:" }) catch {
-            outcome.failure = "magick failed to run";
-            return;
-        };
-        const missing_path = std.fmt.allocPrint(allocator, "{s}/missing-{d}.mp4", .{ directory, index }) catch @panic("out of memory");
-        const failed = media_tools.Ffmpeg.runFfmpeg(threaded.io(), log, allocator, &.{ "-i", missing_path, "-vframes", "1", "-y", picture_path }) catch {
-            outcome.failure = "the failing ffmpeg failed to run";
-            return;
-        };
-        const expected_size = std.fmt.allocPrint(allocator, "{d} {d}", .{ width, height }) catch @panic("out of memory");
-        if (probed.exit_code != 0 or probed_width != expected_width) {
-            outcome.failure = "ffprobe gave the wrong width";
-            return;
-        }
-        if (written.exit_code != 0 or !std.mem.eql(u8, size.output, expected_size)) {
-            outcome.failure = "the frame ffmpeg wrote is not the size this thread asked for";
-            return;
-        }
-        if (failed.exit_code == 0 or std.mem.indexOf(u8, captured.errors.items, missing_path) == null) {
-            outcome.failure = "the failing ffmpeg's error did not reach this thread's log";
-            return;
-        }
-        var other: usize = 0;
-        while (other < thread_count) : (other += 1) {
-            const other_missing = std.fmt.allocPrint(allocator, "missing-{d}.mp4", .{other}) catch @panic("out of memory");
-            if (other != index and std.mem.indexOf(u8, captured.errors.items, other_missing) != null) {
-                outcome.failure = "another thread's error reached this thread's log";
-                return;
-            }
-        }
         outcome.correct_rounds += 1;
     }
 }
 
-test "ffmpeg and ffprobe run on several threads at once, each run giving the answer of its own arguments to its own thread's log" {
-    const log = utils.mute_log.MuteLog.init();
+//
+// One round of callEveryFunction.
+//
+fn callEveryFunctionOnce(allocator: std.mem.Allocator, io: std.Io, directory: []const u8, index: usize, round: usize) !void {
+    var captured = ICapturedLog.init(allocator);
+    const log = captured.ilog();
+    const probe = try ffmpeg.probeFile(allocator, io, log, test_video);
+    if (probe.streams[0].width != 1280) {
+        return error.TheProbeIsAnotherThreads;
+    }
+    const picture_path = try std.fmt.allocPrint(allocator, "{s}/frame-{d}-{d}.jpg", .{ directory, index, round });
+    try ffmpeg.extractFrame(allocator, io, log, .{
+        .input_path = test_video,
+        .output_path = picture_path,
+        .time_seconds = @floatFromInt(index),
+        .quality = 80,
+    });
+    const frame = try image_magick.readImageInfo(allocator, log, picture_path);
+    if (frame.width != 1280 or frame.height != 720) {
+        return error.TheFrameIsAnotherThreads;
+    }
+    const size = try ffmpeg.readPictureSize(allocator, io, log, test_heic);
+    if (size.width != 1000 or size.height != 700) {
+        return error.TheHeicSizeIsAnotherThreads;
+    }
+    const decoded_path = try std.fmt.allocPrint(allocator, "{s}/decoded-{d}-{d}.jpg", .{ directory, index, round });
+    try ffmpeg.decodePicture(allocator, io, log, .{
+        .input_path = test_heic,
+        .output_path = decoded_path,
+        .quality = 80,
+    });
+    const decoded = try image_magick.readImageInfo(allocator, log, decoded_path);
+    if (decoded.width != 1000 or decoded.height != 700) {
+        return error.TheDecodedHeicIsAnotherThreads;
+    }
+    const old_path = try std.fmt.allocPrint(allocator, "{s}/old-{d}.mp4", .{ directory, index });
+    captured.stderr.clearRetainingCapacity();
+    _ = try ffmpeg.probeFile(allocator, io, log, old_path);
+    if (std.mem.indexOf(u8, captured.stderr.items, old_path) == null or std.mem.indexOf(u8, captured.stderr.items, "creation time before 1970") == null) {
+        return error.TheWarningDidNotReachThisThreadsLog;
+    }
+    for (0..thread_count) |other| {
+        const other_name = try std.fmt.allocPrint(allocator, "old-{d}.mp4", .{other});
+        if (other != index and std.mem.indexOf(u8, captured.stderr.items, other_name) != null) {
+            return error.AnotherThreadsWarningReachedThisThreadsLog;
+        }
+    }
+}
+
+test "every function works first on a thread of its own with no setup, and on several threads at once, each call giving its own answer to its own thread's log" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const expected = try probe(log, allocator, test_video);
     const directory = try tempFilePath(allocator, tmp_dir, "");
+    for (0..thread_count) |index| {
+        try writeVideoFrom1950(allocator, try std.fmt.allocPrint(allocator, "{s}/old-{d}.mp4", .{ directory, index }));
+    }
     var outcomes: [thread_count]IThreadOutcome = @splat(.{});
     var threads: [thread_count]std.Thread = undefined;
     for (&threads, &outcomes, 0..) |*thread, *outcome, index| {
-        thread.* = try std.Thread.spawn(.{}, runCommandsOfOwn, .{ directory, index, expected.width, outcome });
+        thread.* = try std.Thread.spawn(.{}, callEveryFunction, .{ directory, index, outcome });
     }
     for (threads) |thread| {
         thread.join();
@@ -548,30 +589,27 @@ test "ffmpeg and ffprobe run on several threads at once, each run giving the ans
 }
 
 //
-// A signal handler that does nothing, set before a run so the test can see whether it is still set after.
+// A signal handler that does nothing, set before a call so the test can see whether it is still set after.
 //
 fn markerHandler(signal: std.posix.SIG) callconv(.c) void {
     _ = signal;
 }
 
 //
-// The tests of the signals ffmpeg takes over, which exist where the program has signals to take over (not on Windows).
+// The tests of signal handling, which exist where the program has signals (not on Windows).
 //
 const SignalTests = struct {
-    // Upstream ffmpeg's term_init sets its own handler on SIGINT, SIGTERM and SIGXCPU and ignores SIGPIPE, for the whole process. The
-    // patched one (third-party/ffmpeg/fftools-per-run-state.patch) sets none, so the program's own handling is never replaced.
-    test "ffmpeg leaves the handling of every signal it takes over as it was before the run" {
-        const log = utils.mute_log.MuteLog.init();
+    // The `ffmpeg` program sets its own handler on SIGINT, SIGTERM and SIGXCPU and ignores SIGPIPE, for the whole process, and
+    // ImageMagick sets handlers when it is asked to. The libraries as they are called here set none, so the program's own handling is
+    // never replaced.
+    test "FFmpeg and ImageMagick leave the handling of every signal as it was" {
         var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
         defer arena.deinit();
         const allocator = arena.allocator();
         var tmp_dir = std.testing.tmpDir(.{});
         defer tmp_dir.cleanup();
-        var tools = try MediaTools.init();
-        const environment = try inherited_environment.inherit(std.testing.allocator);
-        defer inherited_environment.restore(std.testing.allocator, environment);
-        defer tools.deinit();
-        const signals = [_]std.posix.SIG{ .INT, .TERM, .XCPU, .PIPE };
+        const log = utils.mute_log.MuteLog.init();
+        const signals = [_]std.posix.SIG{ .INT, .TERM, .XCPU, .PIPE, .HUP, .QUIT };
         var previous: [signals.len]std.posix.Sigaction = undefined;
         const marker: std.posix.Sigaction = .{
             .handler = .{
@@ -588,8 +626,13 @@ const SignalTests = struct {
         };
 
         const picture_path = try tempFilePath(allocator, tmp_dir, "frame.jpg");
-        const result = try Ffmpeg.runFfmpeg(std.testing.io, log, allocator, &.{ "-i", test_video, "-ss", "0", "-vframes", "1", "-q:v", "2", "-y", picture_path });
-        try std.testing.expectEqual(@as(i32, 0), result.exit_code);
+        try ffmpeg.extractFrame(allocator, std.testing.io, log, .{
+            .input_path = test_video,
+            .output_path = picture_path,
+            .time_seconds = 0,
+            .quality = 90,
+        });
+        _ = try image_magick.readImageInfo(allocator, log, picture_path);
 
         for (signals) |signal| {
             var after: std.posix.Sigaction = undefined;
@@ -606,21 +649,4 @@ comptime {
     if (builtin.os.tag != .windows) {
         _ = SignalTests;
     }
-}
-
-// ffprobe that stops at an option it does not know never opens its report, which is a failed command with nothing printed rather
-// than an error of runFfprobe's own.
-test "ffprobe that fails before it writes its report gives a non-zero exit code and no output" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    // FFmpeg's errors go to the log, which keeps them here so the test prints nothing.
-    var captured = ICapturedLog.init(arena.allocator());
-    const log = captured.ilog();
-    var tools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer tools.deinit();
-    const result = try Ffmpeg.runFfprobe(std.testing.io, log, arena.allocator(), &.{ "-no-such-option", test_video });
-    try std.testing.expect(result.exit_code != 0);
-    try std.testing.expectEqualStrings("", result.output);
 }

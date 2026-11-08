@@ -6,16 +6,13 @@ const media_tools = @import("media-tools-zig");
 
 const FileLogger = file_logger.FileLogger;
 
-//
-// What every test of the file logger needs: a directory the test owns to log in, the console output kept in memory (the
-// test program's own standard output is how the build system talks to it, so nothing under test may write there), and the
+// What every test of the file logger needs: a directory the test owns to log in, and the console output kept in memory (the
+// test program's own standard output is how the build system talks to it, so nothing under test may write there).
 // tools built into the program, whose versions the logger writes in its header.
 //
 const Fixture = struct {
     // The directory the test owns.
     tmp: std.testing.TmpDir,
-    // The ImageMagick and FFmpeg built into the program, started for the test, whose versions the logger gives.
-    tools: media_tools.MediaTools,
     // The absolute path of the directory to log in, a folder of the one the test owns.
     logs_dir: []u8,
     // What the code under test wrote to standard output through the console.
@@ -31,7 +28,6 @@ const Fixture = struct {
         self.console_out = std.Io.Writer.Allocating.init(allocator);
         self.console_err = std.Io.Writer.Allocating.init(allocator);
         utils.console.setCapture(&self.console_out.writer, &self.console_err.writer);
-        self.tools = try media_tools.MediaTools.init();
         self.tmp = std.testing.tmpDir(.{});
         const current_path = try std.process.currentPathAlloc(std.testing.io, allocator);
         defer allocator.free(current_path);
@@ -47,7 +43,6 @@ const Fixture = struct {
         self.console_err.deinit();
         std.testing.allocator.free(self.logs_dir);
         self.tmp.cleanup();
-        self.tools.deinit();
     }
 
     //
@@ -113,15 +108,6 @@ test "init makes the logs directory and a log file and an error log file named f
     try std.testing.expect(std.mem.endsWith(u8, error_text, "\nIf this file contains nothing below, it means there were no errors.\n\n--- Error Log Start ---\n"));
 }
 
-//
-// The text of `output` after `prefix` up to the end of its word. Fails the test when `prefix` is not in `output`.
-//
-fn wordAfter(output: []const u8, prefix: []const u8) ![]const u8 {
-    const start = (std.mem.indexOf(u8, output, prefix) orelse return error.TestUnexpectedResult) + prefix.len;
-    const end = std.mem.indexOfAnyPos(u8, output, start, " \r\n") orelse output.len;
-    return output[start..end];
-}
-
 test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built into the program" {
     const log = utils.mute_log.MuteLog.init();
     var fixture: Fixture = undefined;
@@ -129,13 +115,13 @@ test "the header names the versions of the ImageMagick, ffmpeg and ffprobe built
     defer fixture.stop();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const magick = try media_tools.ImageMagick.runMagick(std.testing.io, log, arena.allocator(), &.{"-version"});
-    const ffmpeg = try media_tools.Ffmpeg.runFfmpeg(std.testing.io, log, arena.allocator(), &.{"-version"});
-    const ffprobe = try media_tools.Ffmpeg.runFfprobe(std.testing.io, log, arena.allocator(), &.{"-version"});
+    // The versions of the libraries built into the program: ImageMagick's, and FFmpeg's for both ffmpeg and ffprobe.
+    try std.testing.expect(std.mem.startsWith(u8, media_tools.image_magick.version(), "7."));
+    try std.testing.expect(std.ascii.isDigit(media_tools.ffmpeg.version()[0]));
     const expected = try std.fmt.allocPrint(arena.allocator(), "\n--- Tool Versions ---\nImageMagick: {s}\nFFmpeg: {s}\nFFprobe: {s}\n", .{
-        try wordAfter(magick.output, "Version: ImageMagick "),
-        try wordAfter(ffmpeg.output, "ffmpeg version "),
-        try wordAfter(ffprobe.output, "ffprobe version "),
+        media_tools.image_magick.version(),
+        media_tools.ffmpeg.version(),
+        media_tools.ffmpeg.version(),
     });
     const logger = try fixture.createLogger(log);
     defer logger.deinit();

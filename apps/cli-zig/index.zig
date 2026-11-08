@@ -7,7 +7,6 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const media_tools = @import("media-tools-zig");
 
 pub const picocolors = @import("src/lib/picocolors.zig");
 pub const format = @import("src/lib/format.zig");
@@ -3317,11 +3316,6 @@ pub fn main(init: std.process.Init) !void {
         argv[index] = argument;
     }
     process_argv.setArgv(argv);
-
-    // The ImageMagick and FFmpeg built into the program, started for the whole process before any command runs them and stopped
-    // when it ends.
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
 
     // The log main reports an error to: the console log, until a command configures the log (see commandLog).
     var log = utils.log.ConsoleLog.init();

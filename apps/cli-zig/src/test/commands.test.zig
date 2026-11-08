@@ -1454,21 +1454,19 @@ fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.proces
 }
 
 //
-// The status of the ImageMagick and FFmpeg built into the program, read through a MediaTools of the test's own, which
+// The status of the ImageMagick and FFmpeg built into the program, read in the test, which
 // links the same libraries as psi.
 //
-fn builtInToolsStatus(log: ILog, allocator: std.mem.Allocator) !tools.ToolsStatus {
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
-    return tools.verifyTools(allocator, std.testing.io, log);
+fn builtInToolsStatus(allocator: std.mem.Allocator) !tools.ToolsStatus {
+    return tools.verifyTools(allocator);
 }
 
 //
 // Expects the report of `psi version`: every dependency available, with the version of the tool built into the
 // program.
 //
-fn expectVersionReport(log: ILog, allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, root: []const u8, stdout: []const u8) !void {
-    const toolsStatus = try builtInToolsStatus(log, allocator);
+fn expectVersionReport(allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, root: []const u8, stdout: []const u8) !void {
+    const toolsStatus = try builtInToolsStatus(allocator);
     try std.testing.expect(toolsStatus.allAvailable);
     const tempDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere" });
     const expected = try std.fmt.allocPrint(allocator,
@@ -1504,7 +1502,6 @@ fn expectVersionReport(log: ILog, allocator: std.mem.Allocator, environment: *co
 }
 
 test "version prints the report" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1515,7 +1512,7 @@ test "version prints the report" {
     const result = try runZig(allocator, environment, &.{"version"});
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
     try std.testing.expectEqualStrings("", result.stderr);
-    try expectVersionReport(log, allocator, environment, root, result.stdout);
+    try expectVersionReport(allocator, environment, root, result.stdout);
 
     // The test environment has an empty news feed, so --quiet leaves the report as it is.
     const quiet = try runZig(allocator, environment, &.{ "-q", "version" });
@@ -1525,7 +1522,6 @@ test "version prints the report" {
 }
 
 test "version written to a file is the report" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -1535,7 +1531,7 @@ test "version written to a file is the report" {
 
     const result = try runZigToFile(allocator, environment, &.{"version"}, try std.fs.path.join(allocator, &.{ root, "zig.txt" }));
     try std.testing.expectEqual(@as(u8, 0), result.exitCode);
-    try expectVersionReport(log, allocator, environment, root, result.stdout);
+    try expectVersionReport(allocator, environment, root, result.stdout);
 }
 
 test "--version prints the version" {
@@ -2132,7 +2128,6 @@ fn usePathOfEmptyDirectory(allocator: std.mem.Allocator, environment: *std.proce
 }
 
 test "tools reports every tool available" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -2142,7 +2137,7 @@ test "tools reports every tool available" {
 
     // No tool on the PATH: the tools psi reports are the ones built into it.
     _ = try usePathOfEmptyDirectory(allocator, environment, root);
-    const toolsStatus = try builtInToolsStatus(log, allocator);
+    const toolsStatus = try builtInToolsStatus(allocator);
     try std.testing.expect(toolsStatus.allAvailable);
     const expectedReport = try std.fmt.allocPrint(allocator, tools_report_header ++
         \\✅ ImageMagick (magick): Available (v{s})
@@ -4002,8 +3997,8 @@ fn bugSummary(allocator: std.mem.Allocator, title: []const u8, logFile: []const 
 // The URL bugReportCommand opens for a report on this system, with the versions of the tools built into psi and the
 // details of the bug.
 //
-fn bugUrl(log: ILog, allocator: std.mem.Allocator, title: []const u8, details: []const u8, logHeader: []const u8, logFile: []const u8) ![]const u8 {
-    const toolsStatus = try builtInToolsStatus(log, allocator);
+fn bugUrl(allocator: std.mem.Allocator, title: []const u8, details: []const u8, logHeader: []const u8, logFile: []const u8) ![]const u8 {
+    const toolsStatus = try builtInToolsStatus(allocator);
     try std.testing.expect(toolsStatus.allAvailable);
     const body = try std.fmt.allocPrint(allocator, "{s}\n\n## System Information\n- Photosphere Version: dev\n- Platform: {s} {s}\n- OS Release: {s}\n- Node.js Version: {s}\n\n" ++
         "## Tool Versions\n- ImageMagick: ImageMagick v{s}\n- FFmpeg: ffmpeg v{s}\n- FFprobe: ffprobe v{s}\n\n" ++
@@ -4046,7 +4041,6 @@ const bug_template_details = "## Bug Description\n<!-- Please describe the bug y
 const bug_header = "\n🐛 Photosphere Bug Report\n\n\n";
 
 test "bug --yes reports the bug" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4056,7 +4050,7 @@ test "bug --yes reports the bug" {
 
     // Commander stores --no-browser as the browser option, so it changes nothing.
     const outro = try bugOutro(allocator, try bugSummary(allocator, "Bug Report", "None available"));
-    const url = try bugUrl(log, allocator, "Bug Report", bug_template_details, "No log file available", "No log file available");
+    const url = try bugUrl(allocator, "Bug Report", bug_template_details, "No log file available", "No log file available");
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, outro });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
     try expectOpened(allocator, environment,url);
@@ -4065,7 +4059,6 @@ test "bug --yes reports the bug" {
 }
 
 test "bug --yes includes the header of the newest log file" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4082,7 +4075,7 @@ test "bug --yes includes the header of the newest log file" {
     });
     const expected = try std.mem.concat(allocator, u8, &.{ bug_header, try bugOutro(allocator, report) });
     try expectResult(try runZig(allocator, environment, &.{ "bug", "--yes" }), expected, "", 0);
-    try expectOpened(allocator, environment,try bugUrl(log, allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile));
+    try expectOpened(allocator, environment,try bugUrl(allocator, "Bug Report", bug_template_details, "Header line\n--- Log Start ---", logFile));
 }
 
 test "bug --yes says the report was opened even when no opener can be started" {
@@ -4113,7 +4106,6 @@ fn runZigWithPrompts(allocator: std.mem.Allocator, environment: *const std.proce
 }
 
 test "bug asks for the details of the bug" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -4138,7 +4130,7 @@ test "bug asks for the details of the bug" {
     const outro = try bugOutro(allocator, try bugSummary(allocator, "Crash on add", "None available"));
     const expected = try std.mem.concat(allocator, u8, &.{ prompts, "\n", outro });
     try expectResult(result, expected, "", 0);
-    try expectOpened(allocator, environment,try bugUrl(log, allocator, "Crash on add", details, "No log file available", "No log file available"));
+    try expectOpened(allocator, environment,try bugUrl(allocator, "Crash on add", details, "No log file available", "No log file available"));
 }
 
 test "bug is cancelled" {

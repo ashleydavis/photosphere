@@ -1146,7 +1146,7 @@ pub fn loadDatabase(
     const nonInteractive = options.yes orelse false;
 
     // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, log);
+    try ensureMediaProcessingTools(allocator);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {
@@ -1329,7 +1329,7 @@ pub fn createDatabase(
     log.verbose(try std.fmt.allocPrint(allocator, "Executing command: {s}", .{command}));
 
     // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, log);
+    try ensureMediaProcessingTools(allocator);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {

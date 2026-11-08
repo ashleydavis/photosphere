@@ -396,8 +396,6 @@ test "a completion callback that fails is logged and the task still finishes" {
     startCapture(allocator, &capture);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
@@ -435,8 +433,6 @@ test "a task message callback that fails is logged and the other callbacks still
     startCapture(allocator, &capture);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
@@ -528,8 +524,6 @@ test "unsubscribing stops a callback of every kind from being called" {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
@@ -576,8 +570,6 @@ test "a queued interactive task is dispatched before a queued background one" {
 
     blocking_queues.reset();
     // One worker, so the two tasks queued behind the running one wait for it.
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
@@ -609,8 +601,6 @@ test "a pool that can never create a worker leaves the task pending" {
 
     // A maxWorkers that compares false against the number of workers (NaN) never allows
     // one, so the task waits for a worker that never comes.
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, std.math.nan(f64), 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var timer_list = TimerList.init();
@@ -632,8 +622,6 @@ test "shutdown discards the result of a task that is still running" {
     const allocator = arena.allocator();
 
     blocking_queues.reset();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     var timer_list = TimerList.init();
     var collector = PoolCollector{};

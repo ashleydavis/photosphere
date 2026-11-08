@@ -93,8 +93,7 @@ pub const handlers = [_]IHandlerEntry{
 //
 // Every handler in the form Ziggy's workers take them, for a program that runs the tasks. Each runs on its task's thread, where it first
 // calls registerMediaSources with the task's context, so the media source builders the platform serves are registered on that thread.
-// A handler that runs ImageMagick or FFmpeg calls the tools built into the program directly; the program starts them (see MediaTools)
-// before any task runs.
+// A handler that uses ImageMagick or FFmpeg calls the functions of media-tools-zig, which need nothing started first.
 //
 pub fn taskEntries(comptime registerMediaSources: fn (context: task_queue_zig.types.ITaskContext) anyerror!void) [handlers.len]ziggy.task_runner.TaskHandlerEntry {
     var list: [handlers.len]ziggy.task_runner.TaskHandlerEntry = undefined;

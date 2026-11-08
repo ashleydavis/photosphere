@@ -65,7 +65,7 @@ pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, 
         .command = command,
         .version = config.version,
         // The file log does not exist until this returns, so what finding the header writes goes to the console log.
-        .header_lines = try headerLines(allocator, io, consoleLog),
+        .header_lines = try headerLines(allocator, consoleLog),
         .verbose = options.verbose orelse false,
         .debug = options.debug orelse false,
         .tools = options.tools orelse false,
@@ -91,10 +91,14 @@ fn closeAtExit(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror
 //
 // The CLI's own lines of the log files' header: its build, the versions of the tools built into it and the whole command line.
 //
-fn headerLines(allocator: std.mem.Allocator, io: std.Io, log: ILog) ![]const []const u8 {
-    const imageMagick = try tools.Image.verifyImageMagick(allocator, io, log);
-    const ffmpeg = try tools.Video.verifyFfmpeg(allocator, io, log);
-    const ffprobe = try tools.Video.verifyFfprobe(allocator, io, log);
+fn headerLines(allocator: std.mem.Allocator, log: ILog) ![]const []const u8 {
+    const imageMagick = try tools.Image.verifyImageMagick(allocator);
+    // When ImageMagick does not start, its line says it is not found, and the reason goes to the log's errors.
+    if (!imageMagick.available) {
+        log.@"error"(imageMagick.@"error" orelse "The ImageMagick built into the program did not start.");
+    }
+    const ffmpeg = tools.Video.verifyFfmpeg();
+    const ffprobe = tools.Video.verifyFfprobe();
     return try allocator.dupe([]const u8, &.{
         "--- Photosphere Version ---",
         config.version,

@@ -2,6 +2,7 @@ const std = @import("std");
 const android_libc = @import("packages-zig/android-libc.zig");
 const apple_sdk = @import("packages-zig/apple-sdk.zig");
 const translate_target = @import("packages-zig/translate-target.zig");
+const ffmpeg_media_target = @import("third-party/ffmpeg/support/media-target.zig");
 const ziggy_build = @import("ziggy");
 
 //
@@ -55,7 +56,7 @@ const packages = [_]IPackage{
     },
     .{
         .name = "media-tools-zig",
-        .dependencies = &.{ "utils-zig", "node-utils-zig" },
+        .dependencies = &.{ "utils-zig", "serialization-zig" },
         .link_libc = true,
     },
     .{
@@ -153,6 +154,23 @@ const lan_share_openssl_header =
     \\#include <openssl/pem.h>
     \\#include <openssl/ssl.h>
     \\#include <openssl/x509.h>
+    \\
+;
+
+//
+// The FFmpeg headers media-tools-zig's ffmpeg.zig calls the libraries through, translated to Zig as the "ffmpeg" module of that
+// package.
+//
+const ffmpeg_header =
+    \\#include <libavcodec/avcodec.h>
+    \\#include <libavformat/avformat.h>
+    \\#include <libavutil/display.h>
+    \\#include <libavutil/error.h>
+    \\#include <libavutil/frame.h>
+    \\#include <libavutil/log.h>
+    \\#include <libavutil/mathematics.h>
+    \\#include <libavutil/pixdesc.h>
+    \\#include <libswscale/swscale.h>
     \\
 ;
 
@@ -371,6 +389,7 @@ fn addPackageModules(
                 .target = target,
                 .optimize = optimize,
             }));
+            module.addImport("ffmpeg", try translateFfmpegHeaders(b, target));
         }
         if (std.mem.eql(u8, package.name, "storage-zig")) {
             // The AWS SDK for C's headers translated to Zig, which the S3 client binds to. Its libraries are linked by encryption-zig.
@@ -404,6 +423,23 @@ fn translateHeader(b: *std.Build, target: std.Build.ResolvedTarget, include_dire
         .optimize = .Debug,
     });
     translate_c.addIncludePath(include_directory);
+    try android_libc.addLibcIncludes(b, translate_c, target);
+    return translate_c.createModule();
+}
+
+//
+// Translates FFmpeg's headers (ffmpeg_header) to a Zig module. The build in third-party/ffmpeg installs the libraries and no headers,
+// so they are read from its vendored source, with the one public header FFmpeg's configure writes for the target
+// (libavutil/avconfig.h) from its generated files for the target. Translated without optimization, as translateHeader is.
+//
+fn translateFfmpegHeaders(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.Module {
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = b.addWriteFiles().add("ffmpeg.h", ffmpeg_header),
+        .target = translate_target.translateTarget(b, target),
+        .optimize = .Debug,
+    });
+    translate_c.addIncludePath(b.path("third-party/ffmpeg/vendor/ffmpeg"));
+    translate_c.addIncludePath(b.path(b.fmt("third-party/ffmpeg/config/{s}", .{try ffmpeg_media_target.configName(b, target)})));
     try android_libc.addLibcIncludes(b, translate_c, target);
     return translate_c.createModule();
 }
@@ -596,9 +632,9 @@ fn addUnitTests(
     test_step.dependOn(&run_test.step);
 }
 
-//
 // Whether a test file needs a process of its own: the termination tests send signals to a child they start, and the tests of the
-// keychain vaults must start from the state of a fresh process (a tool check not yet made, for one).
+// keychain vaults and of the first calls of the media libraries must start from the state of a fresh process (a tool check not yet
+// made, or a library not yet started).
 //
 fn isOwnProcessTest(package_name: []const u8, path: []const u8) bool {
     if (std.mem.eql(u8, package_name, "node-utils-zig") and std.mem.eql(u8, path, "termination.test.zig")) {
@@ -609,7 +645,7 @@ fn isOwnProcessTest(package_name: []const u8, path: []const u8) bool {
 
 //
 // Adds the tests that are a program of their own: the termination tests of node-utils-zig, the program of utils-zig that writes
-// to the real stdout (the build checks what it printed) and the own-process tests of vault-zig.
+// to the real stdout (the build checks what it printed) and the own-process tests of vault-zig and media-tools-zig.
 //
 fn addOwnProcessTests(
     b: *std.Build,
@@ -688,6 +724,35 @@ fn addOwnProcessTests(
         const run_own_process_test = b.addRunArtifact(own_process_test);
         run_own_process_test.setCwd(b.path("packages-zig"));
         addStandInsToPath(b, run_own_process_test, target, stand_ins);
+        test_step.dependOn(&run_own_process_test.step);
+    }
+
+    // The own-process tests of media-tools-zig, each a program of its own, which call ImageMagick and FFmpeg in a process that has
+    // not called them before.
+    var media_test_dir = try b.build_root.handle.openDir(b.graph.io, "packages-zig/media-tools-zig/src/test", .{
+        .iterate = true,
+    });
+    defer media_test_dir.close(b.graph.io);
+    var media_walker = try media_test_dir.walk(b.allocator);
+    defer media_walker.deinit();
+    while (try media_walker.next(b.graph.io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, ".own-process.test.zig")) {
+            continue;
+        }
+        const own_process = b.createModule(.{
+            .root_source_file = b.path(b.fmt("packages-zig/media-tools-zig/src/test/{s}", .{entry.path})),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+        for ([_][]const u8{ "media-tools-zig", "utils-zig", "ziggy" }) |module_name| {
+            own_process.addImport(module_name, modules.get(module_name).?);
+        }
+        const own_process_test = b.addTest(.{
+            .root_module = own_process,
+        });
+        const run_own_process_test = b.addRunArtifact(own_process_test);
+        run_own_process_test.setCwd(b.path("packages-zig"));
         test_step.dependOn(&run_own_process_test.step);
     }
 }

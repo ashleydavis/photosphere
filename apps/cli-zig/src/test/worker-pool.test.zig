@@ -230,13 +230,15 @@ fn slowHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: ut
 }
 
 //
-// Runs `magick -version` with the ImageMagick built into the program, on the task's thread, and returns what it printed.
+// Reads the size and format of test/test.png with the ImageMagick built into the program, on the task's thread, and returns them as
+// "<width> <height> <format>".
 //
-fn magickVersionHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, _: types.ITaskContext) anyerror!std.json.Value {
+fn imageSizeHandler(allocator: std.mem.Allocator, io: std.Io, timers: Timers, log: utils.log.ILog, data: std.json.Value, _: types.ITaskContext) anyerror!std.json.Value {
+    _ = io;
     _ = timers;
     _ = data;
-    const result = try media_tools.tool_run.runChecked(allocator, io, log, .magick, &.{"-version"});
-    return .{ .string = result };
+    const info = try media_tools.image_magick.readImageInfo(allocator, log, "../../test/test.png");
+    return .{ .string = try std.fmt.allocPrint(allocator, "{d} {d} {s}", .{ info.width, info.height, info.format }) };
 }
 
 //
@@ -248,7 +250,7 @@ pub const test_tasks = [_]ziggy.task_runner.TaskHandlerEntry{
     .{ .name = "message", .handler = ziggy.task_runner.fromQueueHandler(messagingHandler) },
     .{ .name = "block", .handler = ziggy.task_runner.fromQueueHandler(blockingHandler) },
     .{ .name = "slow", .handler = ziggy.task_runner.fromQueueHandler(slowHandler) },
-    .{ .name = "magick-version", .handler = ziggy.task_runner.fromQueueHandler(magickVersionHandler) },
+    .{ .name = "image-size", .handler = ziggy.task_runner.fromQueueHandler(imageSizeHandler) },
 };
 
 test "runs a task on a worker and reports its outputs" {
@@ -257,8 +259,6 @@ test "runs a task on a worker and reports its outputs" {
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 2, 10000, .{ .sessionId = "session", .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     const backend = pool.queueBackend();
@@ -302,8 +302,6 @@ test "a worker that fails to start is logged and replaced, and its task waits" {
 
     const pool_allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(pool_allocator, 1, 10000, .{ .tasks = &test_tasks });
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -321,8 +319,6 @@ test "generates a task ID when none is given" {
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
@@ -339,8 +335,6 @@ test "reports a failed task with the error name and message" {
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
@@ -376,8 +370,6 @@ test "a failed task's error is logged when verbose logging is on" {
 
     const pool_allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(pool_allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
@@ -395,8 +387,6 @@ test "forwards task messages to the message callbacks" {
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
@@ -423,8 +413,6 @@ test "creates workers lazily up to maxWorkers" {
     var blocking: helpers.BlockingTaskCount = .{};
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 2, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
@@ -468,8 +456,6 @@ test "times out a task, reports it failed and replaces the worker" {
     // with an allocator that is never freed and does not count leaks.
     const pool_allocator = std.heap.smp_allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(pool_allocator, 1, 50, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
@@ -498,8 +484,6 @@ test "a worker abandoned at its timeout can still send once the pool is gone, an
     // with an allocator that is never freed and does not count leaks.
     const pool_allocator = std.heap.smp_allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(pool_allocator, 1, 50, .{ .tasks = &test_tasks });
     var collector = Collector.init(allocator);
     _ = try pool.onTaskComplete(pool_allocator, .{ .context = &collector, .function = Collector.onComplete });
@@ -536,8 +520,6 @@ test "the timeout message writes the timeout as a template string writes a numbe
     // with an allocator that is never freed and does not count leaks.
     const pool_allocator = std.heap.smp_allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(pool_allocator, 1, 1e-7, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
@@ -556,8 +538,6 @@ test "cancelTasks drops pending tasks and signals running tasks" {
     var blocking: helpers.BlockingTaskCount = .{};
     const pool_allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(pool_allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, pool_allocator);
     var collector = Collector.init(allocator);
@@ -589,8 +569,6 @@ test "shutdown terminates the workers" {
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 2, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
@@ -607,19 +585,16 @@ test "a task on a worker runs the tools built into the program, made on its own 
     defer arena.deinit();
     const allocator = std.testing.allocator;
     var timer_list = TimerList.init();
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });
-    try addTask(pool, log, allocator, "magick-version", .null, "source", null);
+    try addTask(pool, log, allocator, "image-size", .null, "source", null);
     try collector.waitForCompleted(log, pool, allocator, timer_list.interface(), 1);
     try std.testing.expectEqualStrings("", collector.lastErrorMessage);
     try std.testing.expectEqual(@as(usize, 0), collector.failed);
 
-    // What the task printed is the version of the ImageMagick built into the program, read here from the library itself.
-    const builtInVersion = (try media_tools.ImageMagick.runMagick(std.testing.io, log, arena.allocator(), &.{"-version"})).output;
-    try std.testing.expect(std.mem.indexOf(u8, builtInVersion, "Version: ImageMagick ") != null);
-    try std.testing.expectEqualStrings(builtInVersion, collector.lastOutput);
+    // What the task gave is the size and format of test/test.png, a 100x90 PNG, which the ImageMagick built into the program read on
+    // the worker's thread.
+    try std.testing.expectEqualStrings("100 90 PNG", collector.lastOutput);
 }

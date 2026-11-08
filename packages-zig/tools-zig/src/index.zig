@@ -9,7 +9,6 @@ pub const heic = @import("lib/heic.zig");
 pub const file_info = @import("lib/file-info.zig");
 pub const getFileInfo = file_info.getFileInfo;
 
-pub const version_match = @import("lib/version-match.zig");
 pub const types = @import("lib/types.zig");
 
 // Export tool management functions

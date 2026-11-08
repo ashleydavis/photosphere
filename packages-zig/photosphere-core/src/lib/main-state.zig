@@ -20,7 +20,6 @@ const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
 const mobile_worker = @import("mobile-worker-zig");
-const media_tools = @import("media-tools-zig");
 const node_utils = @import("node-utils-zig");
 const storage = @import("storage-zig");
 const config = @import("config-zig");
@@ -179,8 +178,6 @@ pub const MainState = struct {
     stopping: bool,
     // The environment read from the process, which this thread reads, or null when the thread already had one. Owned.
     environment: ?*std.process.Environ.Map,
-    // The tools built into the program (ImageMagick and FFmpeg). Owned.
-    media_tools: *media_tools.MediaTools,
 
     //
     // Makes the state and starts the periodic sync, which runs for the life of the app. It runs in onCreate, on the main thread, before
@@ -193,18 +190,12 @@ pub const MainState = struct {
         const process_environment = try environment.adoptProcessEnvironment(allocator);
         errdefer freeEnvironment(allocator, process_environment);
         try logStarting(log, allocator);
-        // ImageMagick and FFmpeg are built into the program and run in its process: started here for the whole program, before any task runs them.
-        const media = try allocator.create(media_tools.MediaTools);
-        errdefer allocator.destroy(media);
-        media.* = try media_tools.MediaTools.init();
-        errdefer media.deinit();
-        try logToolVersions(allocator, io, log);
+        try logToolVersions(allocator, log);
         utils.console.log("Worker pool initialized");
         const state = try allocator.create(MainState);
         errdefer allocator.destroy(state);
         state.* = .{
             .environment = process_environment,
-            .media_tools = media,
             .is_database_open = false,
             .current_database_path = null,
             .sync_allowed = false,
@@ -444,8 +435,6 @@ pub const MainState = struct {
         if (self.single_instance) |*instance| {
             instance.release(io);
         }
-        self.media_tools.deinit();
-        allocator.destroy(self.media_tools);
         freeEnvironment(allocator, self.environment);
         allocator.destroy(self);
     }
@@ -941,10 +930,10 @@ fn logStarting(log: ILog, allocator: std.mem.Allocator) !void {
 //
 // Logs the versions of the tools built into the program (ImageMagick, FFmpeg and FFprobe), each on a line of its own.
 //
-fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
+fn logToolVersions(allocator: std.mem.Allocator, log: ILog) !void {
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
-    for (try toolVersionLines(arena_state.allocator(), io, log)) |line| {
+    for (try toolVersionLines(arena_state.allocator())) |line| {
         log.info(line);
     }
 }
@@ -953,9 +942,9 @@ fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
 // The lines the log gives for the tools the app runs: ImageMagick, FFmpeg and FFprobe, each with its version, or "not
 // found". ImageMagick's check failing is written into its line rather than stopping the app. Allocated with the arena.
 //
-fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, log: ILog) ![]const []const u8 {
+fn toolVersionLines(arena: std.mem.Allocator) ![]const []const u8 {
     const image_magick_line = blk: {
-        const status = tools.Image.verifyImageMagick(arena, io, log) catch {
+        const status = tools.Image.verifyImageMagick(arena) catch {
             break :blk "ImageMagick: error checking version";
         };
         if (!status.available) {
@@ -963,12 +952,12 @@ fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, log: ILog) ![]const []
         }
         break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
     };
-    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, log);
+    const ffmpeg_status = tools.Video.verifyFfmpeg();
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, log);
+    const ffprobe_status = tools.Video.verifyFfprobe();
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

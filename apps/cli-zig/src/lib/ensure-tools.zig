@@ -9,14 +9,14 @@ const Video = tools.Video;
 // Ensures the ImageMagick and FFmpeg built into the program run, for commands that need media processing.
 // They run in the program's process. When one of them does not run, this throws with that tool's error.
 //
-pub fn ensureMediaProcessingTools(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
-    const imageMagickStatus = try Image.verifyImageMagick(allocator, io, log);
+pub fn ensureMediaProcessingTools(allocator: std.mem.Allocator) !void {
+    const imageMagickStatus = try Image.verifyImageMagick(allocator);
     try requireAvailable(imageMagickStatus.available, imageMagickStatus.@"error", "The built-in ImageMagick did not run.");
 
-    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log);
+    const ffprobeStatus = Video.verifyFfprobe();
     try requireAvailable(ffprobeStatus.available, ffprobeStatus.@"error", "The built-in ffprobe did not run.");
 
-    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log);
+    const ffmpegStatus = Video.verifyFfmpeg();
     try requireAvailable(ffmpegStatus.available, ffmpegStatus.@"error", "The built-in ffmpeg did not run.");
 }
 

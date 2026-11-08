@@ -139,7 +139,7 @@ pub const FileLogger = struct {
         defer arena_state.deinit();
         const arena = arena_state.allocator();
         const system_information = try buildSystemInformation(arena, io, app_version);
-        const tool_versions = try buildToolVersions(arena, io, log);
+        const tool_versions = try buildToolVersions(arena, log);
         const header = try std.mem.join(arena, "\n", &.{
             rule_line,
             "Photosphere Desktop Log",
@@ -679,24 +679,26 @@ fn buildSystemInformation(arena: std.mem.Allocator, io: std.Io, app_version: []c
 //
 // The "--- Tool Versions ---" lines of a header: ImageMagick, FFmpeg and FFprobe. Where the version is not known the line
 // says "unknown". A tool that does not run is reported as not found. The checks of FFmpeg and FFprobe fail only when the
-// message cannot be made, which ends the header, so the "error checking version" line exists for ImageMagick only.
+// message cannot be made, which ends the header, so the "error checking version" line exists for ImageMagick only. Why ImageMagick
+// does not run goes to the log's errors.
 //
-fn buildToolVersions(arena: std.mem.Allocator, io: std.Io, log: ILog) ![]const u8 {
+fn buildToolVersions(arena: std.mem.Allocator, log: ILog) ![]const u8 {
     const image_magick_line = blk: {
-        const status = tools.Image.verifyImageMagick(arena, io, log) catch {
+        const status = tools.Image.verifyImageMagick(arena) catch {
             break :blk "ImageMagick: error checking version";
         };
         if (!status.available) {
+            log.@"error"(status.@"error" orelse "The ImageMagick built into the program did not start.");
             break :blk "ImageMagick: not found";
         }
         break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
     };
-    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, log);
+    const ffmpeg_status = tools.Video.verifyFfmpeg();
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, log);
+    const ffprobe_status = tools.Video.verifyFfprobe();
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

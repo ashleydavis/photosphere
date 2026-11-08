@@ -570,12 +570,11 @@ test "the upload date is read once the files are uploaded" {
 fn describeStoredImage(context: *UploadTest, log: ILog, relativePath: []const u8) ![]const u8 {
     const allocator = context.arena.allocator();
     const filePath = try std.fs.path.join(allocator, &.{ context.databaseDir, relativePath });
-    const result = try media_tools.ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%w %h %m", filePath });
-    if (result.exit_code != 0) {
-        std.debug.print("ImageMagick could not read {s}: exit code {d}\n{s}\n", .{ filePath, result.exit_code, result.output });
-        return error.TestUnexpectedResult;
-    }
-    return result.output;
+    const info = media_tools.image_magick.readImageInfo(allocator, log, filePath) catch |err| {
+        std.debug.print("ImageMagick could not read {s}: {s}\n", .{ filePath, utils.errors.lastErrorMessage() });
+        return err;
+    };
+    return std.fmt.allocPrint(allocator, "{d} {d} {s}", .{ info.width, info.height, info.format });
 }
 
 test "makes the thumbnail of a photo and of a video with the tools built into the program" {

@@ -44,8 +44,6 @@ test "the file logger writes the headers, entries and footers" {
     utils.console.setCapture(&stdout_capture.writer, &stderr_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const consoleLog = memory.log;
     const logger = try FileLogger.create(allocator, io, memory.log, consoleLog, "verify --db x");
     defer node_utils.termination.clearTerminationCallbacks();
@@ -121,8 +119,6 @@ test "the error log footer is only written when errors were logged" {
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     // A memory log rather than a mute one, because the logger's verboseEnabled reads it and a mute log has verbose off.
     const memory = try utils.memory_log.MemoryLog.init(allocator, .{
         .verbose = true,
@@ -160,8 +156,6 @@ test "the log files go under the process temporary directory when PHOTOSPHERE_TM
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const consoleLog = utils.mute_log.MuteLog.init();
     const logger = try FileLogger.create(allocator, io, log, consoleLog, "verify");
     defer node_utils.termination.clearTerminationCallbacks();
@@ -192,8 +186,6 @@ test "the log directory is joined as path.join joins it, and a long exception is
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const consoleLog = utils.mute_log.MuteLog.init();
     const logger = try FileLogger.create(allocator, io, log, consoleLog, "verify");
     defer node_utils.termination.clearTerminationCallbacks();
@@ -240,8 +232,6 @@ test "the log header names the versions of the ImageMagick and FFmpeg built into
     utils.console.setCapture(&stdout_capture.writer, &stdout_capture.writer);
     defer utils.console.setCapture(null, null);
 
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     const consoleLog = utils.mute_log.MuteLog.init();
     const logger = try FileLogger.create(allocator, io, log, consoleLog, "verify");
     defer node_utils.termination.clearTerminationCallbacks();
@@ -250,12 +240,12 @@ test "the log header names the versions of the ImageMagick and FFmpeg built into
 
     // The versions are the ones the built-in libraries report, read here from the libraries themselves.
     const imageMagickVersion = try headerLineValue(logContent, "\nImageMagick: ");
-    const magickVersionText = (try media_tools.ImageMagick.runMagick(std.testing.io, log, allocator, &.{"-version"})).output;
-    try std.testing.expect(std.mem.indexOf(u8, magickVersionText, try std.fmt.allocPrint(allocator, "Version: ImageMagick {s} ", .{imageMagickVersion})) != null);
+    try std.testing.expect(std.mem.startsWith(u8, media_tools.image_magick.version(), "7."));
+    try std.testing.expectEqualStrings(media_tools.image_magick.version(), imageMagickVersion);
     const ffmpegVersion = try headerLineValue(logContent, "\nFFmpeg: ");
-    try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffmpeg")).output, try std.fmt.allocPrint(allocator, "ffmpeg version {s}\n", .{ffmpegVersion})));
+    try std.testing.expectEqualStrings(media_tools.ffmpeg.version(), ffmpegVersion);
     const ffprobeVersion = try headerLineValue(logContent, "\nFFprobe: ");
-    try std.testing.expect(std.mem.startsWith(u8, (try media_tools.ffmpeg.versionOutput(allocator, "ffprobe")).output, try std.fmt.allocPrint(allocator, "ffprobe version {s}\n", .{ffprobeVersion})));
+    try std.testing.expectEqualStrings(media_tools.ffmpeg.version(), ffprobeVersion);
 }
 
 test "toFixed2 writes a negative duration as toFixed(2) does" {

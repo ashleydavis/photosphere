@@ -1,12 +1,10 @@
 const std = @import("std");
-const inherited_environment = @import("inherited-environment.zig");
 const builtin = @import("builtin");
 const ILog = @import("utils-zig").log.ILog;
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
 const media_tools = @import("media-tools-zig");
 const Video = tools.Video;
-const MediaTools = media_tools.MediaTools;
 
 //
 // A key of the metadata that Video reports, and its value.
@@ -21,9 +19,9 @@ const IMetadataEntry = struct {
 
 //
 // The metadata that Video reports for test/multiple-files/test.mp4: the container's format tags, in the
-// order ffprobe lists them, then videoCodec, audioCodec and pixelFormat
+// order the container holds them, then videoCodec, audioCodec and pixelFormat
 // (`{ ...format.tags, videoCodec, audioCodec, pixelFormat }`). The values are what the file's headers hold, as
-// ffprobe (the tool Video runs) reads them: an H.264 video stream in yuvj420p and an AAC audio
+// FFmpeg reads them: an H.264 video stream in yuvj420p and an AAC audio
 // stream in an isom MP4 written by Lavf 60.16.100, with a location tag.
 //
 const TEST_MP4_METADATA = [_]IMetadataEntry{
@@ -73,18 +71,6 @@ fn runTool(allocator: std.mem.Allocator, argv: []const []const u8) ![]const u8 {
 }
 
 //
-// Runs the ffmpeg built into the program with the arguments, which do not include the tool's name, failing the test when it
-// fails. It runs the same FFmpeg as Video, so the expected bytes come from the same version of it.
-//
-fn runBuiltInFfmpeg(log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !void {
-    const result = try media_tools.Ffmpeg.runFfmpeg(std.testing.io, log, allocator, arguments);
-    if (result.exit_code != 0) {
-        std.debug.print("ffmpeg failed with exit code {d}\n", .{result.exit_code});
-        return error.TestUnexpectedResult;
-    }
-}
-
-//
 // Reads a file.
 //
 fn readFile(allocator: std.mem.Allocator, filePath: []const u8) ![]const u8 {
@@ -92,25 +78,36 @@ fn readFile(allocator: std.mem.Allocator, filePath: []const u8) ![]const u8 {
 }
 
 //
-// Fails a test that needs ffmpeg, loudly, when the ffmpeg or ffprobe built into the program does not run.
+// How far apart two pictures of the same size are, read with ImageMagick's C interface: the root mean squared difference of their
+// pixels, from 0 for the same picture to 1.
 //
-fn requireFfmpeg(log: ILog, allocator: std.mem.Allocator) !void {
-    if (!(try Video.verifyFfprobe(allocator, std.testing.io, log)).available or !(try Video.verifyFfmpeg(allocator, std.testing.io, log)).available) {
-        std.debug.print("This test needs the ffmpeg and ffprobe built into the program, which did not run.\n", .{});
-        return error.RequiredToolsMissing;
+fn pictureDistance(allocator: std.mem.Allocator, first: []const u8, second: []const u8) !f64 {
+    const magick = media_tools.image_magick.c;
+    try media_tools.image_magick.check();
+    const exception = magick.AcquireExceptionInfo();
+    defer _ = magick.DestroyExceptionInfo(exception);
+    var images: [2][*c]magick.Image = undefined;
+    for (&images, [_][]const u8{ first, second }) |*image, path| {
+        const image_info = magick.AcquireImageInfo();
+        defer _ = magick.DestroyImageInfo(image_info);
+        _ = magick.CopyMagickString(&@as(*magick.ImageInfo, image_info).filename, (try allocator.dupeZ(u8, path)).ptr, image_info.*.filename.len);
+        image.* = magick.ReadImage(image_info, exception) orelse return error.TestUnexpectedResult;
     }
+    defer for (images) |image| {
+        _ = magick.DestroyImageList(image);
+    };
+    var distance: f64 = undefined;
+    if (magick.GetImageDistortion(images[0], images[1], magick.RootMeanSquaredErrorMetric, &distance, exception) != magick.MagickTrue) {
+        return error.TestUnexpectedResult;
+    }
+    return distance;
 }
 
 test "getInfo reads a video" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     var video = Video.init("../test/multiple-files/test.mp4");
     const info = try video.getInfo(allocator, std.testing.io, log);
     try expectTestMp4Info("../test/multiple-files/test.mp4", info);
@@ -121,12 +118,7 @@ test "getInfo fails for a file that is not a video" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     var video = Video.init("../test/demo-news.yaml");
     try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io, log));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info: "));
@@ -136,19 +128,15 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     var random_bytes: [8]u8 = undefined;
     std.testing.io.random(&random_bytes);
     const dir = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/video-test-{x}", .{std.mem.readInt(u64, &random_bytes, .little)});
     try std.Io.Dir.cwd().createDirPath(std.testing.io, dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
     const screenshotPath = try std.fs.path.join(allocator, &.{ dir, "screenshot.jpg" });
-    const referencePath = try std.fs.path.join(allocator, &.{ dir, "reference.jpg" });
+    const referencePath = try std.fs.path.join(allocator, &.{ dir, "reference.png" });
+    const firstFramePath = try std.fs.path.join(allocator, &.{ dir, "first.png" });
 
     var video = Video.init("../test/multiple-files/test.mp4");
     try std.testing.expectEqualStrings(screenshotPath, try video.extractScreenshot(allocator, std.testing.io, log, screenshotPath, 3.9372665));
@@ -158,22 +146,22 @@ test "extractScreenshot writes the frame the ffmpeg command writes" {
     try std.testing.expect(std.mem.startsWith(u8, screenshot, &.{ 0xFF, 0xD8, 0xFF }));
     try std.testing.expectEqualStrings("1280,720", try runTool(allocator, &.{ "ffprobe", "-v", "quiet", "-show_entries", "stream=width,height", "-of", "csv=p=0", screenshotPath }));
 
-    // The same bytes as the command built with the default quality of 85:
-    // `ffmpeg -ss <time> -i "<file>" -vframes 1 -q:v 2 -y "<output>"` (Math.round((100 - 85) / 10) is 2).
-    try runBuiltInFfmpeg(log, allocator, &.{ "-ss", "3.9372665", "-i", "../test/multiple-files/test.mp4", "-vframes", "1", "-q:v", "2", "-y", referencePath });
-    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), screenshot));
+    // The frame the command `ffmpeg -i "<file>" -ss <time> -vframes 1` writes, made by the system's ffmpeg as a PNG, is the same
+    // picture, as near as a JPEG can be; the first frame of the video, which looks different, is further away.
+    _ = try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-i", "../test/multiple-files/test.mp4", "-ss", "3.9372665", "-vframes", "1", "-y", referencePath });
+    _ = try runTool(allocator, &.{ "ffmpeg", "-v", "error", "-i", "../test/multiple-files/test.mp4", "-vframes", "1", "-y", firstFramePath });
+    const same = try pictureDistance(allocator, screenshotPath, referencePath);
+    const first = try pictureDistance(allocator, screenshotPath, firstFramePath);
+    errdefer std.debug.print("distance to the same frame {d}, to the first frame {d}\n", .{ same, first });
+    try std.testing.expect(same < 0.03);
+    try std.testing.expect(first > same * 2);
 }
 
 test "getFileInfo reads images and videos and nothing else" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
 
     // An image goes to the Image: the 100x90 PNG, with no audio, no EXIF date and no video properties.
     const image = (try tools.getFileInfo(allocator, std.testing.io, log, "../test/test.png", "image/png")).?;
@@ -212,12 +200,7 @@ test "getInfo reads the creation time of a silent video" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     const dir = try makeTempDir(allocator, "creation-time");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
 
@@ -243,12 +226,7 @@ test "getInfo fails for a file with no video stream" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     const dir = try makeTempDir(allocator, "audio-only");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
     const audioPath = try std.fs.path.join(allocator, &.{ dir, "audio.m4a" });
@@ -263,10 +241,6 @@ test "getInfo and extractScreenshot fail for a file that does not exist" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
     var video = Video.init("../test/no-such-video.mp4");
     try std.testing.expectError(error.Thrown, video.getInfo(allocator, std.testing.io, log));
@@ -275,16 +249,11 @@ test "getInfo and extractScreenshot fail for a file that does not exist" {
     try std.testing.expectEqualStrings("File not found: ../test/no-such-video.mp4", utils.errors.lastErrorMessage());
 }
 
-test "extractScreenshot fails loudly when ffmpeg cannot write the screenshot" {
+test "extractScreenshot fails loudly when the screenshot cannot be written" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     const dir = try makeTempDir(allocator, "screenshot-fails");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });
     const screenshotPath = try std.fs.path.join(allocator, &.{ dir, "missing", "screenshot.jpg" });
@@ -297,27 +266,18 @@ test "getFileInfo fails loudly for a video it cannot read" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
     try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, std.testing.io, log, "../test/missing.mp4", "video/mp4"));
     try std.testing.expect(std.mem.startsWith(u8, utils.errors.lastErrorMessage(), "Failed to get video info for ../test/missing.mp4: Error: File not found: ../test/missing.mp4"));
 }
 
 test "getInfo and extractScreenshot work on a video whose name holds $, a backtick and a double quote" {
-    // The goal is to show that a path holding a space, `$`, a backtick and `"` reaches ffprobe and ffmpeg unchanged, as the source
+    // The goal is to show that a path holding a space, `$`, a backtick and `"` reaches FFmpeg unchanged, as the source
     // and as the output. The method is to copy test.mp4 under such a name, read it, and take a screenshot to a file with such a name.
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    const environment = try inherited_environment.inherit(std.testing.allocator);
-    defer inherited_environment.restore(std.testing.allocator, environment);
-    defer mediaTools.deinit();
     const allocator = arena.allocator();
-    try requireFfmpeg(log, allocator);
     errdefer std.debug.print("The last error: {s}\n", .{utils.errors.lastErrorMessage()});
     const dir = try makeTempDir(allocator, "special-file-name");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ dir, @errorName(err) });

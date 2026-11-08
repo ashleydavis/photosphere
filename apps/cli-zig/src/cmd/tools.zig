@@ -62,7 +62,7 @@ fn listTools(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
     log.info("");
     log.info(try pc.bold(allocator, "📦 Media Processing Tools Status\n"));
 
-    const toolsStatus = try verifyTools(allocator, io, log);
+    const toolsStatus = try verifyTools(allocator);
 
     // Show status of each tool
     const toolEntries = [_]IToolEntry{
