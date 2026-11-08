@@ -12,10 +12,10 @@ This file lists the bundled components and their licences. It must be kept up to
 
 ImageMagick is built with the following delegate libraries, also built from source into the app and the CLI:
 
-- **libjpeg** (Independent JPEG Group): IJG licence. <https://www.ijg.org/>
-- **libpng**: PNG Reference Library License (zlib/libpng style). <http://www.libpng.org/pub/png/src/libpng-LICENSE.txt>
-- **libwebp**: BSD 3-clause licence, with a patent grant. <https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING>
-- **zlib-ng**: zlib licence. <https://github.com/zlib-ng/zlib-ng>
+- **libjpeg** (Independent JPEG Group) — IJG licence. <https://www.ijg.org/>
+- **libpng** — PNG Reference Library License (zlib/libpng style). <http://www.libpng.org/pub/png/src/libpng-LICENSE.txt>
+- **libwebp** — BSD 3-clause licence, with a patent grant. <https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING>
+- **zlib-ng** — zlib licence. <https://github.com/zlib-ng/zlib-ng>
 
 ## FFmpeg
 
@@ -41,12 +41,6 @@ Where Photosphere is distributed, and what that means for the LGPL:
 - Neither app store. The Android app is not on Google Play, and the iOS app is published only as an unsigned .ipa on GitHub releases, not through Apple's App Store or TestFlight. The App Store's terms of use add restrictions to what a user may do with an app, which the LGPL forbids adding, so distributing a build that contains FFmpeg through the App Store needs this question settled first.
 
 This is an engineering reading of the licence, not legal advice.
-
-## AWS SDK for C, s2n-tls and aws-lc
-
-- Component: the AWS SDK for C (aws-c-common, aws-checksums, aws-c-cal, aws-c-io, aws-c-compression, aws-c-http, aws-c-sdkutils, aws-c-auth, aws-c-s3), s2n-tls and aws-lc, built from source into the app and the CLI as static libraries, for S3 storage, TLS and cryptography. Their source is fetched by the build from the addresses in `third-party/aws/build.zig.zon`.
-- Licence: the AWS SDK for C and s2n-tls are under the Apache License 2.0. aws-lc is under the Apache License 2.0 or the ISC licence, with the parts that come from OpenSSL and BoringSSL under their original licences (the OpenSSL and SSLeay licences and the ISC licence), as its `LICENSE` file sets out. <https://github.com/aws/aws-lc/blob/main/LICENSE>
-- Copyright: © Amazon.com, Inc. or its affiliates, and the authors of OpenSSL and BoringSSL.
 
 ## Old mobile apps (deprecated)
 
