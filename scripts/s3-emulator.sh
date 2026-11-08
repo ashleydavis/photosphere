@@ -13,7 +13,6 @@
 # Usage:
 #   scripts/s3-emulator.sh start <state-dir>   Starts a server, seeds its bucket, writes <state-dir>/env.
 #   scripts/s3-emulator.sh stop  <state-dir>   Stops the server recorded in <state-dir>. Safe if none is running.
-#   scripts/s3-emulator.sh fetch               Downloads the MinIO binary into the cache if it is not there, and prints its path.
 #
 # `start` writes a shell-sourceable <state-dir>/env exporting S3_EMULATOR_PORT, S3_EMULATOR_BUCKET,
 # S3_EMULATOR_ACCESS_KEY and S3_EMULATOR_SECRET_KEY. `stop` never fails, so it is safe in a trap.
@@ -144,15 +143,9 @@ resolve_platform() {
 # anything that tried to run it got ETXTBSY, "Text file busy". That is how a fresh checkout failed
 # four S3 tests on its first run.
 #
-# Every step that can fail checks for it and returns non-zero itself, rather than leaning on `set -e`: `start` runs this inside a command
-# substitution, and bash does not carry `set -e` into one (the bash macOS ships, 3.2, has no inherit_errexit to make it), so a
-# failing mkdir or mktemp used to be ignored and surfaced only as a download failure with no reason given.
-#
 ensure_minio_binary() {
-    local platform binaryExtension binaryPath partialPath downloadUrl
-    if ! platform="$(resolve_platform)"; then
-        return 1
-    fi
+    local platform binaryExtension binaryPath partialPath
+    platform="$(resolve_platform)"
     # Windows decides what it will execute from the file extension, and the published artifact carries
     # none, so the cached copy is named .exe there. Elsewhere the execute bit set below is enough.
     binaryExtension=""
@@ -170,14 +163,7 @@ ensure_minio_binary() {
         return 0
     fi
 
-    if ! mkdir -p "$CACHE_DIR"; then
-        log "Could not create the MinIO cache directory $CACHE_DIR."
-        return 1
-    fi
-
-    # The asset is named for the platform and the release, and carries .exe on Windows, which is exactly the name the cached copy
-    # is given above.
-    downloadUrl="https://github.com/minio/minio/releases/download/$MINIO_VERSION/minio.$platform.$MINIO_VERSION$binaryExtension"
+    mkdir -p "$CACHE_DIR"
 
     # The download is proved to run before it is cached, and tried again when it does not.
     #
@@ -190,64 +176,32 @@ ensure_minio_binary() {
     # S3 test it had in run 31674221187, on a runner where electron's postinstall died with
     # "socket hang up" in the same minute. Running the binary is the only check that catches it,
     # because a truncated file is still a file of the right name with the execute bit set.
-    #
-    # Every failed attempt says why: curl's own message (-S keeps it while -s hides the progress meter), its exit code, the HTTP
-    # status of the final response and the URL. A download that "failed" with no reason given is what Release macOS x64 run
-    # 42435297068 left behind in every one of its 13 S3 tests, and nothing in it could say whether the network, GitHub or this script
-    # was at fault.
     local downloadAttempt=1
-    local curlStatus httpStatus versionOutput retryDelaySeconds
     while [ "$downloadAttempt" -le "$MINIO_DOWNLOAD_ATTEMPTS" ]; do
-        # On a cold cache every S3 test that starts at the same moment downloads at once, so while this one was failing and pausing
-        # another may have put a working binary in place. That copy is taken rather than going back to the network for another.
-        if [ "$downloadAttempt" -gt 1 ] && [ -x "$binaryPath" ] && "$binaryPath" --version >/dev/null 2>&1; then
-            log "Another download put a working MinIO binary in the cache meanwhile, so it is used."
-            echo "$binaryPath"
-            return 0
-        fi
-        if ! partialPath="$(mktemp "$binaryPath.partial.XXXXXX")"; then
-            log "Could not create a temporary file beside $binaryPath for the MinIO download."
-            return 1
-        fi
-        log "Downloading MinIO $MINIO_VERSION for $platform from $downloadUrl (cached at $binaryPath)..."
-        # The status goes to this variable through -w, never to stdout, because stdout of this function is the binary's path.
-        curlStatus=0
-        httpStatus="$(curl -sSL --fail -w '%{http_code}' -o "$partialPath" "$downloadUrl")" || curlStatus=$?
-        if [ "$curlStatus" -eq 0 ]; then
-            if ! chmod +x "$partialPath"; then
-                log "Could not make the MinIO download at $partialPath executable."
-                rm -f "$partialPath"
-                return 1
-            fi
-            if versionOutput="$("$partialPath" --version 2>&1)"; then
+        partialPath="$(mktemp "$binaryPath.partial.XXXXXX")"
+        log "Downloading MinIO $MINIO_VERSION for $platform (cached at $binaryPath)..."
+        # The asset is named for the platform and the release, and carries .exe on Windows, which is
+        # exactly the name the cached copy is given above.
+        if curl -sL --fail -o "$partialPath" \
+            "https://github.com/minio/minio/releases/download/$MINIO_VERSION/minio.$platform.$MINIO_VERSION$binaryExtension"; then
+            chmod +x "$partialPath"
+            if "$partialPath" --version >/dev/null 2>&1; then
                 # A rename onto the final path, which is atomic, so a concurrent downloader either sees
                 # no cached binary at all or sees a complete one. Whichever download lands last wins,
                 # and they are all the same pinned version, so which one wins does not matter.
-                if ! mv "$partialPath" "$binaryPath"; then
-                    log "Could not move the MinIO download from $partialPath to $binaryPath."
-                    rm -f "$partialPath"
-                    return 1
-                fi
+                mv "$partialPath" "$binaryPath"
                 echo "$binaryPath"
                 return 0
             fi
-            log "The MinIO download from $downloadUrl ($(wc -c < "$partialPath" | tr -d ' ') bytes, HTTP $httpStatus) would not run, so it arrived incomplete (attempt $downloadAttempt of $MINIO_DOWNLOAD_ATTEMPTS). Running it said: ${versionOutput:-nothing}"
+            log "The MinIO download would not run, so it arrived incomplete (attempt $downloadAttempt of $MINIO_DOWNLOAD_ATTEMPTS)."
         else
-            log "The MinIO download from $downloadUrl failed: curl exited with code $curlStatus, HTTP status ${httpStatus:-none} (attempt $downloadAttempt of $MINIO_DOWNLOAD_ATTEMPTS). curl's own message is on the line above."
+            log "The MinIO download failed (attempt $downloadAttempt of $MINIO_DOWNLOAD_ATTEMPTS)."
         fi
         rm -f "$partialPath"
-        if [ "$downloadAttempt" -lt "$MINIO_DOWNLOAD_ATTEMPTS" ]; then
-            # The attempts used to follow one another with no pause at all, so a network that was down for a moment was down for all
-            # three of them and the retry could never do what it is for. A growing pause gives a dropped connection or a busy
-            # server time to come back.
-            retryDelaySeconds=$((downloadAttempt * 5))
-            log "Trying the MinIO download again in ${retryDelaySeconds}s."
-            sleep "$retryDelaySeconds"
-        fi
         downloadAttempt=$((downloadAttempt + 1))
     done
 
-    log "Could not download a working MinIO binary for $platform from $downloadUrl after $MINIO_DOWNLOAD_ATTEMPTS attempts."
+    log "Could not download a working MinIO binary for $platform after $MINIO_DOWNLOAD_ATTEMPTS attempts."
     return 1
 }
 
@@ -497,16 +451,9 @@ stop_emulator() {
 main() {
     local command="${1:-}"
     local stateDir="${2:-}"
-    local usage="Usage: $0 <start|stop> <state-dir>, or $0 fetch"
-
-    # fetch takes no state directory: it only makes sure the cached binary is there and runs, and prints its path.
-    if [ "$command" = "fetch" ]; then
-        ensure_minio_binary
-        return
-    fi
 
     if [ -z "$command" ] || [ -z "$stateDir" ]; then
-        echo "$usage" >&2
+        echo "Usage: $0 <start|stop> <state-dir>" >&2
         exit 1
     fi
 
@@ -514,7 +461,7 @@ main() {
         start) start_emulator "$stateDir" ;;
         stop)  stop_emulator "$stateDir" ;;
         *)
-            echo "$usage" >&2
+            echo "Usage: $0 <start|stop> <state-dir>" >&2
             exit 1
             ;;
     esac

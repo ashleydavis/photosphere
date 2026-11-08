@@ -98,12 +98,6 @@ WAIT_POLL_INTERVAL=0.25
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# The control port of the app start_app last started, published by start_app. Empty until then, because a scenario's EXIT trap passes
-# it to stop_app, and that trap also runs when the scenario fails before its app starts (an S3 emulator that will not start, say).
-# Under `set -u` an unset APP_PORT made the trap itself fail with "APP_PORT: unbound variable" before stop_app or the S3 emulator stop
-# that followed it in the same trap could run. stop_app skips only the quit command for an empty port and still cleans up.
-APP_PORT=""
-
 # The file descriptor the next remote control server's stdin pipe is kept open on. Each app instance of a scenario has a server of its
 # own, so each gets a descriptor of its own. Literal numbers, because the bash macOS ships (3.2) has no {name} form for choosing one.
 PHOTOSPHERE_NEXT_SERVER_FD=20
@@ -700,13 +694,8 @@ send_command() {
 stop_app() {
     local port="$1"
     local tmp_dir="$2"
-
-    # An empty port means no app was started (see APP_PORT), so there is nothing to ask to quit. cleanup_apps still runs, and stops
-    # anything the tmp directory recorded, so an app that did start is never left behind by this.
-    if [ -n "$port" ]; then
-        send_command "$port" quit '{}' 2>/dev/null || true
-        photosphere_platform_wait_exit "$tmp_dir" 5 || true
-    fi
+    send_command "$port" quit '{}' 2>/dev/null || true
+    photosphere_platform_wait_exit "$tmp_dir" 5 || true
     cleanup_apps "$tmp_dir"
 }
 
