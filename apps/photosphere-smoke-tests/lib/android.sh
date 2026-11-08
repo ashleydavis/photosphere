@@ -1116,96 +1116,13 @@ android_restore_app_data_file() {
 }
 
 #
-# Prints the pid of the host's adb server, the process listening on the adb server port (ANDROID_ADB_SERVER_PORT, 5037 unless set).
-# Read with ss where it exists (Linux) and lsof otherwise (macOS). When neither can say, it prints why instead of a pid, so a reading
-# that could not be taken is never mistaken for one that was.
-# Usage: android_adb_server_pid
-#
-android_adb_server_pid() {
-    local port="${ANDROID_ADB_SERVER_PORT:-5037}"
-    local listeners pids
-    if command -v ss >/dev/null 2>&1; then
-        if ! listeners="$(ss -Hltnp "sport = :$port" 2>&1)"; then
-            echo "unknown (ss failed: $listeners)"
-            return 0
-        fi
-        if [ -z "$listeners" ]; then
-            echo "none (nothing listening on port $port)"
-            return 0
-        fi
-        pids="$(printf '%s\n' "$listeners" | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u | tr '\n' ' ')"
-        pids="${pids% }"
-        echo "${pids:-unknown (something listens on port $port, and ss shows no pid for it)}"
-        return 0
-    fi
-    if command -v lsof >/dev/null 2>&1; then
-        pids="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u | tr '\n' ' ')"
-        pids="${pids% }"
-        echo "${pids:-none (nothing listening on port $port)}"
-        return 0
-    fi
-    echo "unknown (neither ss nor lsof is installed to read it)"
-}
-
-#
-# Prints one reading of the two adb processes either side of a transfer, as fields separated by "|": the time in seconds since the epoch,
-# the same time in UTC, the host adb server's pid (android_adb_server_pid), the claimed device's adbd pid, and a note on how the adbd pid
-# was read. When the device does not answer, it is waited for (up to 60 seconds) and asked again, so a device that dropped and came
-# back is still read. Run it after the device's state has been checked, because the wait would otherwise hide that it dropped.
-# Usage: android_adb_process_reading
-#
-android_adb_process_reading() {
-    local epoch_seconds utc_time server_pid adbd_pid adbd_note
-    epoch_seconds="$(date -u +%s)"
-    utc_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    server_pid="$(android_adb_server_pid)"
-    adbd_note="read at once"
-    adbd_pid="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" shell pidof adbd 2>/dev/null {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
-    if [ -z "$adbd_pid" ]; then
-        local waited_from="$SECONDS"
-        if timeout --foreground 60 "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" wait-for-device {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- >/dev/null 2>&1; then
-            adbd_pid="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" shell pidof adbd 2>/dev/null {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
-            adbd_note="read after waiting $((SECONDS - waited_from))s for the device to come back"
-        else
-            adbd_note="the device was not back after adb wait-for-device, which failed or ran past 60s"
-        fi
-    fi
-    printf '%s|%s|%s|%s|%s\n' "$epoch_seconds" "$utc_time" "$server_pid" "${adbd_pid:-unreadable}" "$adbd_note"
-}
-
-#
-# Prints, on stderr, two readings taken by android_adb_process_reading either side of a transfer that failed, and says which of the two
-# adb processes was replaced between them: the host's adb server, the device's adbd, both or neither.
-# Usage: android_report_adb_readings <reading_before> <reading_after>
-#
-android_report_adb_readings() {
-    local before_seconds before_time before_server before_adbd before_note
-    local after_seconds after_time after_server after_adbd after_note
-    IFS='|' read -r before_seconds before_time before_server before_adbd before_note <<< "$1"
-    IFS='|' read -r after_seconds after_time after_server after_adbd after_note <<< "$2"
-    echo "adb before the copy, at $before_time: host adb server pid $before_server, device adbd pid $before_adbd ($before_note)." >&2
-    echo "adb after the copy, at $after_time ($((after_seconds - before_seconds))s later): host adb server pid $after_server, device adbd pid $after_adbd ($after_note)." >&2
-    if [ "$before_server" = "$after_server" ]; then
-        echo "The host adb server is the same process before and after the copy." >&2
-    else
-        echo "The host adb server changed during the copy ($before_server before, $after_server after): it restarted or a different adb replaced it." >&2
-    fi
-    if [ "$before_adbd" = "$after_adbd" ]; then
-        echo "The device's adbd is the same process before and after the copy." >&2
-    else
-        echo "The device's adbd changed during the copy ($before_adbd before, $after_adbd after): adbd restarted on the device, or could not be read." >&2
-    fi
-}
-
-#
 # Copies a directory of the dbs directory of the app's files directory onto this machine. A whole tree rather than one file, because a database is a
 # directory: a scenario that checks what the app wrote reads it with the CLI, and the CLI needs the whole `.db` folder. It goes through
 # `tar` on the device and adb's stdout, because `adb pull` cannot reach private storage at all.
 #
 # A copy cut short looks like a whole one: when the device went offline part way through, `adb exec-out` and `tar xf` both returned 0,
 # and what was unpacked lacked the `.db` folder, so the scenario failed later saying the database held no photo. So adb's own messages
-# are left on stderr, and the device has to still be online once the stream ends, or the copy counts as cut short. The host's adb server
-# and the device's adbd are read either side of the stream, and a failed copy prints both readings, so a drop says which end restarted.
+# are left on stderr, and the device has to still be online once the stream ends, or the copy counts as cut short.
 # Usage: android_save_sandbox_dir <dir_under_dbs> <local_dir>
 #
 android_save_sandbox_dir() {
@@ -1219,27 +1136,18 @@ android_save_sandbox_dir() {
     fi
     mkdir -p "$local_dir" || return 1
     local tarball="$local_dir/sandbox-dir.tar"
-    local reading_before
-    reading_before="$(android_adb_process_reading)"
-    local copy_status=0
-    photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" > "$tarball" || copy_status=$?
-    local device_state
-    device_state="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" get-state 2>&1 {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
-    local reading_after
-    reading_after="$(android_adb_process_reading)"
-    if [ "$copy_status" -ne 0 ]; then
-        echo "Could not read $ANDROID_DATABASES_DIR_RELATIVE/$device_dir off the device (adb exec-out exited $copy_status, adb get-state after it: ${device_state:-no answer})." >&2
-        android_report_adb_readings "$reading_before" "$reading_after"
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" > "$tarball"; then
+        echo "Could not read $ANDROID_DATABASES_DIR_RELATIVE/$device_dir off the device." >&2
         return 1
     fi
+    local device_state
+    device_state="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" get-state 2>&1 {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
     if [ "$device_state" != "device" ]; then
         echo "Device $ANDROID_SERIAL_CLAIMED went offline while $ANDROID_DATABASES_DIR_RELATIVE/$device_dir was being copied off it (adb get-state: ${device_state:-no answer}), so the copy was cut short. The partial copy is in $tarball." >&2
-        android_report_adb_readings "$reading_before" "$reading_after"
         return 1
     fi
     if [ ! -s "$tarball" ]; then
         echo "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir came back empty from the device." >&2
-        android_report_adb_readings "$reading_before" "$reading_after"
         return 1
     fi
     if ! tar xf "$tarball" -C "$local_dir"; then

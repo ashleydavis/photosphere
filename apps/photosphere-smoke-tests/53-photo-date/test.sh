@@ -118,10 +118,6 @@ wait_for_log "$TMP_DIR" "2 recognised before opening." 240 || exit 1
 log_info "Both photos are in the database"
 
 # Read what the app actually wrote, with the CLI, from outside the app.
-#
-# The app is stopped first, because automatic import starts a new pass every five seconds and a pass writes to the database, so a copy
-# taken while it runs can catch the database part way through a write. The log the errors are checked in below is kept.
-stop_app "$APP_PORT" "$TMP_DIR"
 "${PLATFORM}_pull_database" "photosphere-default" "$PULLED_DB_DIR" || exit 1
 
 # The photo that carries a capture date is recorded with that date, to the second.

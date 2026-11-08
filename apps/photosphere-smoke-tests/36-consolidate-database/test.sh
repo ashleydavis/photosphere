@@ -97,10 +97,7 @@ log_success "One photo was uploaded and the shared one was recognised"
 
 send_command "$APP_PORT" click '{"dataId":"consolidate-database-close"}' || exit 1
 
-# What the app left behind, copied out to the host to be read. The app is stopped first, so nothing in it is writing to either database
-# while it is copied. The log the errors are checked in below is kept.
-stop_app "$APP_PORT" "$TMP_DIR"
-
+# What the app left behind, copied out to the host to be read.
 FETCHED_REMOTE="$TMP_DIR/fetched-remote"
 FETCHED_LOCAL="$TMP_DIR/fetched-local"
 fetch_app_database "remote-db" "$FETCHED_REMOTE" || exit 1
@@ -138,5 +135,7 @@ fi
 log_success "Ordinary sync works after consolidating"
 
 check_no_errors "$TMP_DIR"
+
+stop_app "$APP_PORT" "$TMP_DIR"
 
 log_success "Test 36 passed: consolidate-database"
