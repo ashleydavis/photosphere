@@ -1,6 +1,6 @@
 # The Photosphere App for Android, built once and then tested, packaged and released. prepare-tag resolves the release tag, and
 # each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and caches it, all side
-# by side. Then app-build builds the app's debug-type APK over those libraries and hands it to the later jobs as an artifact of
+# by side. Then app-build builds the app's debug-type APK over those libraries and saves it in the cache under a key of its own for
 # this run. The later jobs restore that instead of building: app-smoke-tests runs the APK and package packages the release APKs
 # over the restored Zig build cache. zig-unit-tests runs the Zig unit tests on Linux over the Linux libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every
 # other job has passed, publishes the package.
@@ -300,16 +300,16 @@ jobs:
         run: bun run --filter=ziggy build:android -- --minify --output-dir "$PWD/out/app"
 
       - name: Save the Photosphere App build
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: app-android
-          paths: |
+          path: |
             out/app
             .zig-cache
             third-party/aws/zig-out
             third-party/zlib-ng/zig-out
             third-party/imagemagick/zig-out
             third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
 
   app-smoke-tests:
     # The Photosphere App's smoke tests on an Android emulator. The emulator has no host LAN bridge, so PHOTOSPHERE_NO_LAN_BRIDGE
@@ -394,9 +394,17 @@ jobs:
       # The CLI that makes the scenarios' fixtures is built for the runner, and the app for the emulator. app-build saved the
       # libraries for both.
       - name: Restore the Photosphere App build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-android
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       # Allow the hardware-accelerated emulator to use KVM on the runner.
       - name: Enable KVM
@@ -602,11 +610,18 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
       # The build app-build saved, with its Zig build cache and libraries, laid over the test build's own cache, so Zig reuses any
-      # compile step the two builds have in common. The handoff unpacks it at the paths app-build packed.
+      # compile step the two builds have in common. The paths are the ones app-build saved, which a restore has to name exactly.
       - name: Restore the app build's Zig build cache
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-android
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
 
       - name: Start a fresh Zig build cache when the restored one has grown too big
         shell: bash
@@ -682,9 +697,17 @@ jobs:
         uses: ./.github/actions/android-libc
 
       - name: Restore the Photosphere App build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-android
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Set config
         shell: bash
@@ -703,13 +726,13 @@ jobs:
         run: bun run --filter=ziggy package:android -- --binary "$PWD/out/app" --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))" --output-dir "$PWD/out/package"
 
       - name: Save the Photosphere App package
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: package-android
-          paths: out/package
+          path: out/package
+          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
 
-  # Publishes the packages the package job made, taken from its handoff, once every other job has passed. The handoff
-  # restores everything the package job packed.
+  # Publishes the packages the package job made, restored from the cache under its key, once every other job has passed. A restore
+  # matches only a save of the same paths, so it restores the whole save.
   create-release:
     timeout-minutes: 20
     needs: [prepare-tag, app-build, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
@@ -723,9 +746,11 @@ jobs:
           fetch-depth: 0
 
       - name: Restore the Photosphere App package
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: package-android
+          path: out/package
+          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Put the Photosphere App packages where the release steps read them
         shell: bash
