@@ -19,6 +19,12 @@ const Dimensions = types.Dimensions;
 const ResizeOptions = types.ResizeOptions;
 
 //
+// The sRGB ICC profile ImageMagick ships in its source (config/sRGB.icm, "sRGB IEC61966-2.1", released into the public domain by
+// Graeme W. Gill), which resize converts a picture into before stripping its profiles. The build embeds it (build.zig).
+//
+const srgb_icc_profile = @embedFile("srgb-icc-profile");
+
+//
 // The result of Image.verifyImageMagick.
 //
 pub const ImageMagickStatus = struct {
@@ -267,10 +273,15 @@ pub const Image = struct {
         // and rewrote whole on every commit. The original is stored untouched and keeps everything.
         //
         // Stripped rather than picked at, because on the ImageMagick bundled for Android the
-        // surgical forms do not work. The cost is that a derivative loses its colour profile too,
-        // which is why the original is stored untouched and keeps everything.
+        // surgical forms do not work. Stripping drops the colour profile too, and a viewer shows a
+        // picture without one as sRGB, so before the strip the pixels are converted into sRGB with
+        // `-profile` (lcms2 does the conversion, from the profile embedded in the picture). A Display
+        // P3 photo from an iPhone was otherwise shown with its P3 numbers read as sRGB, its colours
+        // dull and shifted. A picture with no profile, or already in sRGB, is left as it is: ImageMagick
+        // only attaches the profile then, and the strip takes it off again.
+        const profilePath = try std.mem.concat(allocator, u8, &.{ baseOutputPath, ".icc" });
         var arguments: std.ArrayList([]const u8) = .empty;
-        try arguments.appendSlice(allocator, &.{ self.filePath, "-resize", geometry, "-strip" });
+        try arguments.appendSlice(allocator, &.{ self.filePath, "-resize", geometry, "-profile", profilePath, "-strip" });
 
         // Add quality if specified
         if (options.quality) |quality| {
@@ -295,7 +306,16 @@ pub const Image = struct {
             .actualOutputPath = outputPath1,
         };
 
-        _ = try runToolLogged(allocator, io, log, tools, "magick", arguments.items, .{ .context = &validation, .function = IResizeValidation.validate });
+        // The profile is written for this one command and removed after it, whether it worked or not.
+        std.Io.Dir.cwd().writeFile(io, .{
+            .sub_path = profilePath,
+            .data = srgb_icc_profile,
+        }) catch |err| {
+            return errors.throwError("Failed to write the sRGB colour profile to {s}: {s}", .{ profilePath, @errorName(err) });
+        };
+        const result = runToolLogged(allocator, io, log, tools, "magick", arguments.items, .{ .context = &validation, .function = IResizeValidation.validate });
+        try std.Io.Dir.cwd().deleteFile(io, profilePath);
+        _ = try result;
 
         return validation.actualOutputPath;
     }

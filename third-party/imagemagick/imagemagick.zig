@@ -6,12 +6,13 @@ const zlib_ng = @import("zlib").zlib_ng;
 const libjpeg = @import("libjpeg.zig");
 const libpng = @import("libpng.zig");
 const libwebp = @import("libwebp.zig");
+const lcms2 = @import("lcms2.zig");
 
 //
 // Builds ImageMagick from the unmodified source in vendor/imagemagick as one static library, the way its configure script and
 // Makefile.am build a static library with modules off (--disable-shared): MagickCore with the coders and filters compiled into it,
-// and MagickWand. The delegates are libjpeg, libpng and zlib, which are the ones the mobile builds had; everything else
-// ImageMagick can use is off.
+// and MagickWand. The delegates are libjpeg, libpng, libwebp, zlib and lcms2 (colour management, so -profile converts pixels between
+// ICC profiles); everything else ImageMagick can use is off.
 //
 // configure writes MagickCore/magick-baseconfig.h and MagickCore/version.h for the target it is run for. They are made by
 // imagemagick/generate-config.sh, which runs ImageMagick's own configure with Zig as the C compiler, and are kept in
@@ -181,6 +182,7 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
     const jpeg = libjpeg.buildLibjpeg(b, library_target);
     const png = libpng.buildLibpng(b, library_target, zlib.include_directory);
     const webp = try libwebp.buildLibwebp(b, library_target);
+    const cms = try lcms2.buildLcms2(b, library_target);
 
     const library = b.addLibrary(.{
         .name = "magick",
@@ -205,10 +207,12 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
     module.addIncludePath(jpeg.include_directory);
     module.addIncludePath(png.include_directory);
     module.addIncludePath(webp.include_directory);
+    module.addIncludePath(cms.include_directory);
     module.addIncludePath(zlib.include_directory);
     module.linkLibrary(jpeg.library);
     module.linkLibrary(png.library);
     module.linkLibrary(webp.library);
+    module.linkLibrary(cms.library);
     module.linkLibrary(zlib.library);
 
     const is_windows = target.result.os.tag == .windows;
@@ -277,7 +281,7 @@ pub fn buildImageMagick(b: *std.Build, target: std.Build.ResolvedTarget, zlib: z
         .library = library,
         .config_directory = b.path(config_path),
         .source_directory = b.path("vendor/imagemagick"),
-        .libraries = &.{ jpeg.library, png.library, webp.library, zlib.library },
+        .libraries = &.{ jpeg.library, png.library, webp.library, cms.library, zlib.library },
     };
 }
 

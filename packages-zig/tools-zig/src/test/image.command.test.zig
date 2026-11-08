@@ -140,19 +140,28 @@ test "resize and transform write their numbers as a template string writes a num
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("../test/test.png");
 
-    // Both paths are passed as arguments of their own (`magick <file> -resize <geometry> -strip <output>`), unquoted. The output path is joined with node-utils' path.join, which normalizes every `/` to a `\`
-    // on Windows.
-    const resizeArguments = if (builtin.os.tag == .windows)
-        "../test/test.png -resize 1e+21x -strip -quality 1e-7 out\\temp_resize_fixed.jpg"
-    else
-        "../test/test.png -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg";
+    // Resize writes the sRGB profile into its temp directory before it runs the command, so that directory has to exist.
+    var randomBytes: [8]u8 = undefined;
+    io.random(&randomBytes);
+    const resizeDir = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/image-command-test-resize-{x}", .{std.mem.readInt(u64, &randomBytes, .little)});
+    try std.Io.Dir.cwd().createDirPath(io, resizeDir);
+    defer std.Io.Dir.cwd().deleteTree(io, resizeDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ resizeDir, @errorName(err) });
+
+    // Every path is passed as an argument of its own (`magick <file> -resize <geometry> -profile <sRGB profile> -strip <output>`),
+    // unquoted. The profile and the output paths are joined with node-utils' path.join, which normalizes every `/` to a `\` on Windows.
+    const separator = if (builtin.os.tag == .windows) "\\" else "/";
+    const resizeDirJoined = try std.mem.replaceOwned(u8, allocator, resizeDir, "/", separator);
+    const resizeArguments = try std.mem.concat(allocator, u8, &.{ "../test/test.png -resize 1e+21x -profile ", resizeDirJoined, separator, "temp_resize_fixed.icc -strip -quality 1e-7 ", resizeDirJoined, separator, "temp_resize_fixed.jpg" });
     const transformArguments = if (builtin.os.tag == .windows)
         "../test/test.png -rotate 1e+21 out\\temp_transform_output_fixed.jpg"
     else
         "../test/test.png -rotate 1e+21 out/temp_transform_output_fixed.jpg";
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, "out", uuids.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg" }, resizeDir, uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(resizeArguments, try fakeTools.argumentsOf("magick"));
+
+    // The profile is removed after the command, which failed.
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, try std.fs.path.join(allocator, &.{ resizeDir, "temp_resize_fixed.icc" }), .{}));
 
     try std.testing.expectError(error.Thrown, image.transform(allocator, io, log, fakeTools.runner(), .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(transformArguments, try fakeTools.argumentsOf("magick"));

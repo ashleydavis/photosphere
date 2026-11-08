@@ -80,7 +80,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 ## Trade-offs worth deciding
 
-- **Colour profiles.** `-strip` in the resize drops colour profiles along with XMP. Display P3 iPhone photos will get thumbnails with shifted colours.
 - **ImageMagick security policy.** It denies a list of coders and allows every other one. Allowing only the formats the import accepts would be tighter.
 - **FFmpeg attack surface.** FFmpeg is built with every decoder and demuxer, which is a large attack surface for files received over LAN share.
 - **LGPL compliance.** `THIRD-PARTY-NOTICES.md` says how static linking meets the LGPL "is not yet decided".

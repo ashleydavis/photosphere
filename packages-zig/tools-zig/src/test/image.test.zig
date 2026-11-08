@@ -84,6 +84,127 @@ fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 }
 
 //
+// The sRGB ICC profile ImageMagick ships, which the build embeds for Image.resize, relative to the directory the tests run in
+// (packages-zig).
+//
+const srgb_profile_path = "../third-party/imagemagick/vendor/imagemagick/config/sRGB.icm";
+
+//
+// A CIE xyY colour, lcms2's cmsCIExyY.
+//
+const ICmsXyY = extern struct {
+    // The chromaticity x.
+    x: f64,
+
+    // The chromaticity y.
+    y: f64,
+
+    // The luminance.
+    Y: f64,
+};
+
+//
+// The chromaticities of the three primaries of an RGB colour space, lcms2's cmsCIExyYTRIPLE.
+//
+const ICmsXyYTriple = extern struct {
+    // The red primary.
+    red: ICmsXyY,
+
+    // The green primary.
+    green: ICmsXyY,
+
+    // The blue primary.
+    blue: ICmsXyY,
+};
+
+//
+// lcms2's cmsBuildParametricToneCurve (lcms2 is the colour management library built into the program with ImageMagick): makes a
+// tone curve of one of its parametric types.
+//
+extern fn cmsBuildParametricToneCurve(context: ?*anyopaque, curveType: i32, parameters: [*]const f64) ?*anyopaque;
+
+//
+// lcms2's cmsCreateRGBProfile: makes an RGB profile from a white point, three primaries and a transfer curve for each channel.
+//
+extern fn cmsCreateRGBProfile(whitePoint: *const ICmsXyY, primaries: *const ICmsXyYTriple, transferFunction: *const [3]*anyopaque) ?*anyopaque;
+
+//
+// lcms2's cmsSaveProfileToMem: writes a profile as ICC bytes, or with no memory gives the number of bytes it needs.
+//
+extern fn cmsSaveProfileToMem(profile: *anyopaque, memory: ?*anyopaque, bytesNeeded: *u32) i32;
+
+//
+// lcms2's cmsCloseProfile: frees a profile.
+//
+extern fn cmsCloseProfile(profile: *anyopaque) i32;
+
+//
+// lcms2's cmsFreeToneCurve: frees a tone curve.
+//
+extern fn cmsFreeToneCurve(curve: *anyopaque) void;
+
+//
+// Makes a Display P3 ICC profile with lcms2, the colour space of the photos an iPhone takes: the DCI-P3 primaries (red 0.680, 0.320;
+// green 0.265, 0.690; blue 0.150, 0.060), the D65 white point (0.3127, 0.3290) and the sRGB transfer curve (lcms2's parametric curve
+// type 4 with sRGB's parameters), which is how Display P3 is defined.
+//
+fn displayP3Profile(allocator: std.mem.Allocator) ![]const u8 {
+    const whitePoint: ICmsXyY = .{
+        .x = 0.3127,
+        .y = 0.3290,
+        .Y = 1.0,
+    };
+    const primaries: ICmsXyYTriple = .{
+        .red = .{
+            .x = 0.680,
+            .y = 0.320,
+            .Y = 1.0,
+        },
+        .green = .{
+            .x = 0.265,
+            .y = 0.690,
+            .Y = 1.0,
+        },
+        .blue = .{
+            .x = 0.150,
+            .y = 0.060,
+            .Y = 1.0,
+        },
+    };
+    const srgbCurveParameters = [_]f64{ 2.4, 1.0 / 1.055, 0.055 / 1.055, 1.0 / 12.92, 0.04045 };
+    const curve = cmsBuildParametricToneCurve(null, 4, &srgbCurveParameters) orelse return error.ToneCurveNotMade;
+    defer cmsFreeToneCurve(curve);
+    const profile = cmsCreateRGBProfile(&whitePoint, &primaries, &.{ curve, curve, curve }) orelse return error.ProfileNotMade;
+    defer _ = cmsCloseProfile(profile);
+    var length: u32 = 0;
+    if (cmsSaveProfileToMem(profile, null, &length) == 0) {
+        return error.ProfileNotSaved;
+    }
+    const bytes = try allocator.alloc(u8, length);
+    if (cmsSaveProfileToMem(profile, bytes.ptr, &length) == 0) {
+        return error.ProfileNotSaved;
+    }
+    return bytes[0..length];
+}
+
+//
+// Reads the mean colour of an image file with ImageMagick, as its red, green and blue numbers from 0 to 255, rounded. The numbers are
+// the ones in the file, whatever colour profile it has.
+//
+fn meanColour(log: ILog, allocator: std.mem.Allocator, runner: InProcessRunner, filePath: []const u8) ![3]f64 {
+    const printed = try runImageMagick(log, allocator, runner, "convert", &.{ filePath, "-format", "%[fx:round(mean.r*255)],%[fx:round(mean.g*255)],%[fx:round(mean.b*255)]", "info:" });
+    var components = std.mem.splitScalar(u8, printed, ',');
+    var colour: [3]f64 = undefined;
+    for (&colour) |*component| {
+        component.* = try std.fmt.parseFloat(f64, components.next() orelse return error.TestUnexpectedResult);
+    }
+    if (components.next() != null) {
+        return error.TestUnexpectedResult;
+    }
+    return colour;
+}
+
+//
 // Fails a test that needs ImageMagick, loudly, when the ImageMagick built into the program does not run.
 //
 fn requireImageMagick(log: ILog, allocator: std.mem.Allocator, runner: InProcessRunner) !void {
@@ -251,14 +372,58 @@ test "resize writes the image the resize command writes" {
     // -strip drops the EXIF of the original.
     try std.testing.expectEqualStrings("", try runImageMagick(log, allocator, runner, "identify", &.{ "-format", "%[EXIF:*]", outputPath }));
 
-    // The same bytes as the command built: `<convert> "<file>" -resize <w>x<h> -strip -quality <q> jpeg:"<output>"`.
+    // The sRGB profile written for the command is removed after it.
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_fixed-id.icc" })));
+
+    // The same bytes as the command built: `<convert> "<file>" -resize <w>x<h> -profile <sRGB profile> -strip -quality <q> jpeg:"<output>"`,
+    // with the sRGB profile ImageMagick ships, which is the one the build embeds.
     const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "../test/test.jpg", "-resize", "1333x1000", "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "../test/test.jpg", "-resize", "1333x1000", "-profile", srgb_profile_path, "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
 
     // A second resize to the same path is refused.
     try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 10, .quality = 95, .format = "jpeg", .ext = "jpg" }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{outputPath}), utils.errors.lastErrorMessage());
+}
+
+test "resize converts a Display P3 picture into sRGB, so its colours survive the strip" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireImageMagick(log, allocator, runner);
+    const tempDir = try makeTempDir(allocator, "resize-display-p3");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
+
+    // A flat picture of the sRGB colour (200, 100, 50), converted into Display P3 and tagged with that profile, as an iPhone writes
+    // its photos: the first -profile tags the new picture as sRGB, the second converts its pixels from sRGB into Display P3.
+    const p3ProfilePath = try std.fs.path.join(allocator, &.{ tempDir, "display-p3.icc" });
+    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
+        .sub_path = p3ProfilePath,
+        .data = try displayP3Profile(allocator),
+    });
+    const sourcePath = try std.fs.path.join(allocator, &.{ tempDir, "display-p3.jpg" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "64x48", "xc:rgb(200,100,50)", "-profile", srgb_profile_path, "-profile", p3ProfilePath, "-quality", "100", sourcePath });
+
+    // The picture holds the colour's Display P3 numbers, which are not its sRGB numbers: read as sRGB, as every viewer reads a
+    // picture with no profile, they are another colour. A resize that only stripped the profile wrote these numbers.
+    const sourceColour = try meanColour(log, allocator, runner, sourcePath);
+    try std.testing.expect(@abs(sourceColour[0] - 200) > 5 or @abs(sourceColour[1] - 100) > 5 or @abs(sourceColour[2] - 50) > 5);
+
+    var generator: FixedUuidGenerator = .{ .id = "display-p3" };
+    var image = Image.init(sourcePath);
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 32, .height = 24, .quality = 90, .format = "jpeg", .ext = "jpg" }, tempDir, generator.uuidGenerator());
+
+    // The resized copy holds the sRGB numbers again, within 2 of each: the conversion into Display P3 and back is exact to within
+    // a rounding of each 8 bit number either way, and JPEG at quality 100 and then 90 moves a flat colour by at most one more.
+    const outputColour = try meanColour(log, allocator, runner, outputPath);
+    errdefer std.debug.print("Display P3 numbers {any}, resized numbers {any}\n", .{ sourceColour, outputColour });
+    try std.testing.expect(@abs(outputColour[0] - 200) <= 2);
+    try std.testing.expect(@abs(outputColour[1] - 100) <= 2);
+    try std.testing.expect(@abs(outputColour[2] - 50) <= 2);
 }
 
 test "transform writes the image the transform command writes" {
@@ -439,13 +604,36 @@ test "resize fails loudly when ImageMagick writes nothing" {
     const tempDir = try makeTempDir(allocator, "resize-nothing");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
-    // An output directory that does not exist: ImageMagick fails and nothing is written.
-    const missingDir = try std.fs.path.join(allocator, &.{ tempDir, "missing" });
+    // A source ImageMagick cannot read: ImageMagick fails and nothing is written. (An output directory that does not exist no longer
+    // reaches ImageMagick: resize writes the sRGB profile there first, and fails on that, which the test below covers.)
     var generator: FixedUuidGenerator = .{ .id = "nothing" };
+    var image = Image.init("../test/demo-news.yaml");
+
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, memory.log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to execute command: ") != null);
+
+    // The sRGB profile written for the command is removed after it failed too.
+    try std.testing.expect(!node_utils.fs.pathExists(std.testing.io, try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_nothing.icc" })));
+}
+
+test "resize fails loudly when the output directory does not exist" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireImageMagick(log, allocator, runner);
+    const tempDir = try makeTempDir(allocator, "resize-missing-directory");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
+    const missingDir = try std.fs.path.join(allocator, &.{ tempDir, "missing" });
+    var generator: FixedUuidGenerator = .{ .id = "missing" };
     var image = Image.init("../test/test.png");
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, memory.log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, missingDir, generator.uuidGenerator()));
-    try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to execute command: ") != null);
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, missingDir, generator.uuidGenerator()));
+    const profilePath = try std.fs.path.join(allocator, &.{ missingDir, "temp_resize_missing.icc" });
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to write the sRGB colour profile to {s}: FileNotFound", .{profilePath}), utils.errors.lastErrorMessage());
 }
 
 test "getDominantColor fails for a file ImageMagick cannot read" {
