@@ -114,13 +114,11 @@ log_success "The cancel stopped the batch part way through"
 send_command "$APP_PORT" click '{"dataId":"navbar-import-button"}' || exit 1
 
 # A cancelled import leaves the page showing its result list, and Clear is what takes it back to the drop zone. Waiting for the button
-# rather than a log line because the page-ready event only fires when the tool check flips to available, which it does not do on a
-# revisit.
+# rather than a log line because the page-ready event only fires when the page is idle, which it is not on a revisit after a cancel.
 wait_for_value "$APP_PORT" "import-clear-button" "Clear"
 send_command "$APP_PORT" click '{"dataId":"import-clear-button"}' || exit 1
 
-# Clear puts the page back to idle, which restarts the media-tool check, and the picker button stays off until that check reports the
-# tools are available. The button is on screen before then, so clicking without this wait lands on a button that silently ignores it.
+# Clear puts the page back to idle, and the page logs that it is ready once the drop zone and its picker buttons are rendered.
 wait_for_log "$TMP_DIR" "Import page ready"
 
 send_command "$APP_PORT" pick-answer "{\"paths\":[\"$IMPORT_TMP_PATH/test-2.png\"]}" || exit 1

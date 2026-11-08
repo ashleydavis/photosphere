@@ -240,17 +240,6 @@ export interface IImportSession {
 }
 
 //
-// Status of a single required external tool (ImageMagick, ffmpeg, ffprobe).
-//
-export interface IToolStatus {
-    // Whether the tool is available on PATH.
-    available: boolean;
-
-    // Version string returned by the tool, if available.
-    version?: string;
-}
-
-//
 // Options for the native folder picker dialog.
 //
 export interface IPickFolderOptions {
@@ -269,26 +258,6 @@ export interface IPickFolderOptions {
     // Whether to show the "New Folder" button.
     //
     createDirectory?: boolean;
-}
-
-//
-// Aggregated availability of all tools required for importing photos and videos.
-//
-export interface IToolsStatus {
-    // Status of the ImageMagick `magick` command.
-    magick: IToolStatus;
-
-    // Status of the `ffprobe` command.
-    ffprobe: IToolStatus;
-
-    // Status of the `ffmpeg` command.
-    ffmpeg: IToolStatus;
-
-    // True when all three tools are available.
-    allAvailable: boolean;
-
-    // Names of any missing tools (e.g. ['ImageMagick', 'ffmpeg']).
-    missingTools: string[];
 }
 
 //
@@ -447,12 +416,6 @@ export interface IPlatformContext {
     // Whether the app is running on a desktop or on a mobile device.
     //
     platformKind: "desktop" | "mobile";
-
-    //
-    // Checks whether ImageMagick and FFmpeg are available on PATH.
-    // On web (no-op platform), returns allAvailable: true.
-    //
-    checkTools: () => Promise<IToolsStatus>;
 
     //
     // Subscribes to task messages (worker progress events).

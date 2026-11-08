@@ -9,7 +9,6 @@ import {
     type IPlatformContext,
     type Unsubscribe,
     type IDatabaseEntry,
-    type IToolsStatus,
 } from "../../context/platform-context";
 import { AppContextProvider } from "../../context/app-context";
 import { DeveloperContextProvider } from "../../context/developer-context";
@@ -169,13 +168,6 @@ function mockUuidGenerator(): IUuidGenerator {
 //
 export function mockPlatform(): IPlatformContext {
     const noUnsubscribe: Unsubscribe = () => {};
-    const emptyToolsStatus: IToolsStatus = {
-        magick: { available: true },
-        ffprobe: { available: true },
-        ffmpeg: { available: true },
-        allAvailable: true,
-        missingTools: [],
-    };
 
     return {
         openDatabase: async () => {},
@@ -196,7 +188,6 @@ export function mockPlatform(): IPlatformContext {
         openFolder: async () => {},
         getPathForFile: () => undefined,
         platformKind: "desktop",
-        checkTools: async () => emptyToolsStatus,
         onTaskMessage: () => noUnsubscribe,
         onTaskComplete: () => noUnsubscribe,
         cancelTasks: async () => {},

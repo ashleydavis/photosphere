@@ -158,7 +158,7 @@ pub const COMMAND_EXAMPLES = [_]ICommandExamples{
         .examples = &.{
             .{
                 .command = "psi tools",
-                .description = "Checks the status of all required media processing tools.",
+                .description = "Shows the media processing tools built into psi and their versions.",
             },
         },
     },

@@ -26,7 +26,6 @@ pub const recents = @import("lib/recents.zig");
 pub const saving_assets = @import("lib/saving-assets.zig");
 pub const share_import = @import("lib/share-import.zig");
 pub const single_instance = @import("lib/single-instance.zig");
-pub const tools = @import("lib/tools.zig");
 pub const update_and_news = @import("lib/update-and-news.zig");
 pub const vault = @import("lib/vault.zig");
 pub const windows_native_calls = @import("lib/windows-native-calls.zig");

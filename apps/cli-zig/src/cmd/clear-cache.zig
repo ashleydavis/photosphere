@@ -31,7 +31,7 @@ pub fn clearCacheCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, co
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const databaseDir = (try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false)).databaseDir;
+    const databaseDir = (try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false)).databaseDir;
 
     const localHashCachePath = try getHashCacheDir(allocator, databaseDir);
 

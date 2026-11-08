@@ -48,7 +48,7 @@ pub fn removeOrphansCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog,
     }
 
     // Load the database
-    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const assetStorage = loaded.assetStorage;
 
     log.info("");
