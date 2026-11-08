@@ -1,7 +1,7 @@
 # The Photosphere App and the Zig CLI for Windows, each built once and then tested, packaged and released. prepare-tag resolves the
 # release tag, and each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and
 # caches it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
-# each hands what it built to the later jobs as an artifact of this run. The later jobs restore that instead of building:
+# each saves what it built in the cache under a key of its own for this run. The later jobs restore that instead of building:
 # app-smoke-tests runs the app build, package packages the app over the restored Zig build cache and cli-smoke-tests runs the CLI.
 # zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every other job has passed, publishes the
 # package and the CLI.
@@ -260,16 +260,17 @@ jobs:
         run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --strip --minify
 
       - name: Save the Photosphere App build
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: app-windows
-          paths: |
+          path: |
             out/app
             .zig-cache
             third-party/aws/zig-out
             third-party/zlib-ng/zig-out
             third-party/imagemagick/zig-out
             third-party/ffmpeg/zig-out
+          key: photosphere-app-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
 
   cli-build:
     # Restores the third-party libraries the library jobs built and builds the Zig CLI for Windows x64 on a runner of that platform. Nothing here
@@ -371,16 +372,17 @@ jobs:
           ls -la out
 
       - name: Save the Zig CLI build
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: cli-windows
-          paths: |
+          path: |
             out
             .zig-cache
             third-party/aws/zig-out
             third-party/zlib-ng/zig-out
             third-party/imagemagick/zig-out
             third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
 
       - name: Save the Zig build cache
         if: always()
@@ -393,7 +395,7 @@ jobs:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
     # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
     # reported as a failure of the other.
-    # The binary is not built here: cli-build builds it and this job takes it from cli-build's handoff, so the Zig CLI
+    # The binary is not built here: cli-build builds it and this job restores it from the cache, so the Zig CLI
     # is compiled once and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
@@ -451,9 +453,18 @@ jobs:
       # run the Zig build of the CLI, which links the libraries cli-build saved with the binary, over the Zig build cache saved
       # with them.
       - name: Restore the Zig CLI build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: cli-windows
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
@@ -574,16 +585,34 @@ jobs:
       # The scenarios' fixtures are made by the CLI, built for the runner, and the app is built for the MSVC ABI. app-build saved
       # the libraries for both.
       - name: Restore the Photosphere App build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-windows
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       # The psi the scenarios run as the other side of a LAN share is the one cli-build built, so the smoke runner does not
-      # build it again. The handoff also brings the Zig build cache and libraries cli-build packed with it.
+      # build it again. The paths are the ones cli-build saves, since the cache only matches a restore that lists the same.
       - name: Restore the Zig CLI build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: cli-windows
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       # The build path is given in the drive-letter form, which both Git Bash and the native Windows programs the smoke runner
       # starts accept.
@@ -837,9 +866,18 @@ jobs:
         run: bun run --filter=ziggy setup
 
       - name: Restore the Photosphere App build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-windows
+          path: |
+            out/app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       - name: Set config
         shell: bash
@@ -860,16 +898,17 @@ jobs:
 
       # The package script leaves the install prefix it packaged from beside the packages, so only the packages are saved.
       - name: Save the Photosphere App package
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: package-windows
-          paths: |
+          path: |
             out/package/*.zip
             out/package/*.msi
+          key: photosphere-package-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
 
-  # Publishes the package the package job made and the CLI cli-build built, taken from their handoffs, once every
-  # other job has passed. Each handoff restores everything its job packed, and the tar archive in it unpacks the same
-  # on this Linux runner as on the Windows runners that made it.
+  # Publishes the package the package job made and the CLI cli-build built, restored from the cache under their keys, once every
+  # other job has passed. A restore matches only a save of the same paths, so each restores the whole save, and
+  # enableCrossOsArchive lets this Linux runner restore what the Windows runners saved.
   create-release:
     timeout-minutes: 20
     needs: [prepare-tag, app-build, cli-build, cli-smoke-tests, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
@@ -883,14 +922,28 @@ jobs:
           fetch-depth: 0
 
       - name: Restore the Photosphere App package
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: package-windows
+          path: |
+            out/package/*.zip
+            out/package/*.msi
+          key: photosphere-package-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       - name: Restore the Zig CLI build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: cli-windows
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-windows-${{ github.sha }}-${{ github.run_id }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
 
       - name: Put the Photosphere App packages and the Zig CLI where the release steps read them
         shell: bash

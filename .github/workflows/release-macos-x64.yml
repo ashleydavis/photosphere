@@ -1,7 +1,7 @@
 # The Photosphere App and the Zig CLI for macOS x64, each built once and then tested, packaged and released. prepare-tag resolves the
 # release tag, and each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and
 # caches it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
-# each hands what it built to the later jobs as an artifact of this run. The later jobs restore that instead of building:
+# each saves what it built in the cache under a key of its own for this run. The later jobs restore that instead of building:
 # app-smoke-tests runs the app build, package packages the app over the restored Zig build cache and cli-smoke-tests runs the CLI.
 # zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every other job has passed, publishes the
 # package and the CLI.
@@ -229,16 +229,16 @@ jobs:
         run: bun run --filter=ziggy build:macos -- --configuration Release --minify --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
 
       - name: Save the Photosphere App build
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: app-macos-x64
-          paths: |
+          path: |
             out/app/xcode/Build/Products/Release/Photosphere.app
             .zig-cache
             third-party/aws/zig-out
             third-party/zlib-ng/zig-out
             third-party/imagemagick/zig-out
             third-party/ffmpeg/zig-out
+          key: photosphere-app-macos-x64-${{ github.sha }}-${{ github.run_id }}
 
   cli-build:
     # Restores the third-party libraries the library jobs built and builds the Zig CLI for macOS x64 on a runner of that platform. Nothing here
@@ -340,16 +340,16 @@ jobs:
           ls -la out
 
       - name: Save the Zig CLI build
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: cli-macos-x64
-          paths: |
+          path: |
             out
             .zig-cache
             third-party/aws/zig-out
             third-party/zlib-ng/zig-out
             third-party/imagemagick/zig-out
             third-party/ffmpeg/zig-out
+          key: photosphere-cli-macos-x64-${{ github.sha }}-${{ github.run_id }}
 
       - name: Save the Zig build cache
         if: always()
@@ -361,7 +361,7 @@ jobs:
   cli-smoke-tests:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs between
     # platforms. The unit tests are in the Zig CI workflow, so a failure in one is not reported as a failure of the other.
-    # The binary is not built here: cli-build builds it and this job takes it from cli-build's handoff, so the Zig CLI is
+    # The binary is not built here: cli-build builds it and this job restores it from the cache, so the Zig CLI is
     # compiled once and both this job and the release use it.
     # Setup takes about 5 minutes and the smoke suites about 15.
     timeout-minutes: 75
@@ -417,9 +417,17 @@ jobs:
       # run the Zig build of the CLI, which links the libraries cli-build saved with the binary, over the Zig build cache saved
       # with them.
       - name: Restore the Zig CLI build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: cli-macos-x64
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-macos-x64-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Put the Zig CLI where the smoke suites look for it
         shell: bash
@@ -529,16 +537,32 @@ jobs:
           verify: magick|convert ffmpeg ffprobe
 
       - name: Restore the Photosphere App build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-macos-x64
+          path: |
+            out/app/xcode/Build/Products/Release/Photosphere.app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-macos-x64-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       # The psi the scenarios run as the other side of a LAN share is the one cli-build built, so the smoke runner does not
-      # build it again. The handoff also brings the Zig build cache and libraries cli-build packed with it.
+      # build it again. The paths are the ones cli-build saves, since the cache only matches a restore that lists the same.
       - name: Restore the Zig CLI build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: cli-macos-x64
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-macos-x64-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Run the Photosphere App smoke tests
         timeout-minutes: 60
@@ -791,9 +815,17 @@ jobs:
           run: bun install
 
       - name: Restore the Photosphere App build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: app-macos-x64
+          path: |
+            out/app/xcode/Build/Products/Release/Photosphere.app
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-app-macos-x64-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Set config
         shell: bash
@@ -812,13 +844,13 @@ jobs:
         run: bun run --filter=ziggy package:macos -- --binary "$PWD/out/app/xcode/Build/Products/Release/Photosphere.app" --version "$VERSION" --output-dir "$PWD/out/package"
 
       - name: Save the Photosphere App package
-        uses: ./.github/actions/handoff-upload
+        uses: actions/cache/save@v4
         with:
-          name: package-macos-x64
-          paths: out/package
+          path: out/package
+          key: photosphere-package-macos-x64-${{ github.sha }}-${{ github.run_id }}
 
-  # Publishes the package the package job made and the CLI cli-build built, taken from their handoffs, once every
-  # other job has passed. Each handoff restores everything its job packed.
+  # Publishes the package the package job made and the CLI cli-build built, restored from the cache under their keys, once every
+  # other job has passed. A restore matches only a save of the same paths, so each restores the whole save.
   create-release:
     timeout-minutes: 20
     needs: [prepare-tag, app-build, cli-build, cli-smoke-tests, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
@@ -832,14 +864,24 @@ jobs:
           fetch-depth: 0
 
       - name: Restore the Photosphere App package
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: package-macos-x64
+          path: out/package
+          key: photosphere-package-macos-x64-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Restore the Zig CLI build
-        uses: ./.github/actions/handoff-download
+        uses: actions/cache/restore@v4
         with:
-          name: cli-macos-x64
+          path: |
+            out
+            .zig-cache
+            third-party/aws/zig-out
+            third-party/zlib-ng/zig-out
+            third-party/imagemagick/zig-out
+            third-party/ffmpeg/zig-out
+          key: photosphere-cli-macos-x64-${{ github.sha }}-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Put the Photosphere App packages and the Zig CLI where the release steps read them
         shell: bash
