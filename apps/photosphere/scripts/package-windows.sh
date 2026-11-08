@@ -62,13 +62,20 @@ if [ ! -d "$app/$WINDOWS_APP_DIR_NAME" ]; then
     exit 1
 fi
 
-windows_zip "$package_dir/$artifact_base.zip" "$app" "$WINDOWS_APP_DIR_NAME"
+# Both packages are made from a copy of the app with the licence files every distributed build carries in a licences folder
+# beside the executable (see scripts/write-licence-files.md), so nothing is written into the app given. The copy goes in a new
+# directory in the install prefix each time.
+stage_dir="$(mktemp -d "$prefix/stage-XXXXXX")"
+cp -R "$app/$WINDOWS_APP_DIR_NAME" "$stage_dir/"
+bash "$WINDOWS_APP_DIR/../../scripts/write-licence-files.sh" "$stage_dir/$WINDOWS_APP_DIR_NAME/licences"
+
+windows_zip "$package_dir/$artifact_base.zip" "$stage_dir" "$WINDOWS_APP_DIR_NAME"
 echo "Created $package_dir/$artifact_base.zip"
 
 # candle compiles the installer's description into an object file in the install prefix, and light links it into the MSI.
 "$WINDOWS_WIX_DIR/candle.exe" -nologo -arch "$arch" \
     "-dVersion=$msi_version" \
-    "-dSourceDir=$app/$WINDOWS_APP_DIR_NAME" \
+    "-dSourceDir=$stage_dir/$WINDOWS_APP_DIR_NAME" \
     "-dIconFile=$WINDOWS_APP_DIR/icons/photosphere.ico" \
     -out "$prefix/package-windows.wixobj" \
     "$WINDOWS_SCRIPTS_DIR/package-windows.wxs"

@@ -3,7 +3,8 @@
     The MSI installer for Photosphere on Windows, compiled by WiX Toolset 3 (candle and light). Built by
     package-windows.sh, which defines:
         Version     the app's version, as major.minor.build
-        SourceDir   the directory holding photosphere.exe, which is the whole app
+        SourceDir   the directory holding photosphere.exe, which is the whole app, and the licences folder of licence files
+                    that scripts/write-licence-files.sh writes beside it
         IconFile    the app's .ico file, shown for the installer in Installed apps and on the Start menu shortcut
     The installer is unsigned and installs for the current user only, into %LOCALAPPDATA%\Programs\Photosphere, so it
     needs no administrator rights. It adds a Start menu shortcut, and Windows Installer adds the entry in Installed apps.
@@ -20,7 +21,9 @@
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="LocalAppDataFolder">
                 <Directory Id="ProgramsFolder" Name="Programs">
-                    <Directory Id="INSTALLFOLDER" Name="Photosphere" />
+                    <Directory Id="INSTALLFOLDER" Name="Photosphere">
+                        <Directory Id="LICENCESFOLDER" Name="licences" />
+                    </Directory>
                 </Directory>
             </Directory>
             <Directory Id="ProgramMenuFolder" />
@@ -40,6 +43,19 @@
             </Component>
         </DirectoryRef>
 
+        <!-- The licence files every distributed build carries: Photosphere's licence, the third-party notices and licences, the LGPL 2.1 FFmpeg is used under, and where the source of this build is. -->
+        <DirectoryRef Id="LICENCESFOLDER">
+            <Component Id="Licences" Guid="7B9D329C-3DEC-40F5-B0F6-743958C3A864" Win64="yes">
+                <File Id="LicenceLicense" Source="$(var.SourceDir)\licences\LICENSE.txt" KeyPath="no" />
+                <File Id="LicenceThirdPartyNotices" Source="$(var.SourceDir)\licences\THIRD-PARTY-NOTICES.md" KeyPath="no" />
+                <File Id="LicenceThirdPartyLicences" Source="$(var.SourceDir)\licences\THIRD-PARTY-LICENCES.txt" KeyPath="no" />
+                <File Id="LicenceLgpl" Source="$(var.SourceDir)\licences\COPYING.LGPLv2.1.txt" KeyPath="no" />
+                <File Id="LicenceSource" Source="$(var.SourceDir)\licences\SOURCE.txt" KeyPath="no" />
+                <RegistryValue Root="HKCU" Key="Software\au.com.codecapers.photosphere" Name="Licences" Type="integer" Value="1" KeyPath="yes" />
+                <RemoveFolder Id="RemoveLicencesFolder" Directory="LICENCESFOLDER" On="uninstall" />
+            </Component>
+        </DirectoryRef>
+
         <DirectoryRef Id="ProgramMenuFolder">
             <Component Id="StartMenuShortcut" Guid="EDE931D7-3BD7-44D0-BB42-88610A3F442B" Win64="yes">
                 <Shortcut Id="PhotosphereShortcut" Name="Photosphere" Target="[INSTALLFOLDER]photosphere.exe" WorkingDirectory="INSTALLFOLDER" Icon="PhotosphereIcon.ico" />
@@ -50,6 +66,7 @@
         <Feature Id="App" Title="Photosphere" Level="1">
             <ComponentRef Id="AppExecutable" />
             <ComponentRef Id="StartMenuShortcut" />
+            <ComponentRef Id="Licences" />
         </Feature>
     </Product>
 </Wix>

@@ -49,9 +49,11 @@ xcodebuild archive \
     MARKETING_VERSION="$VERSION"
 
 # An .ipa is a zip with the app inside a Payload directory. The staging directory is reused between runs and brought into
-# line with the new archive.
+# line with the new archive. The licence files every distributed build carries (see scripts/write-licence-files.md) go in a
+# licences folder inside the app, where an .ipa has room for them. The app is unsigned, so whoever signs it signs them with it.
 mkdir -p "$BUILD_DIR/ipa-staging/Payload/Photosphere.app"
 rsync -a --delete "$OUTPUT_DIR/$BASE_NAME.xcarchive/Products/Applications/Photosphere.app/" "$BUILD_DIR/ipa-staging/Payload/Photosphere.app/"
+bash "$APPLE_REPO_ROOT/scripts/write-licence-files.sh" "$BUILD_DIR/ipa-staging/Payload/Photosphere.app/licences"
 (cd "$BUILD_DIR/ipa-staging" && ditto -c -k --sequesterRsrc --keepParent Payload "$OUTPUT_DIR/$BASE_NAME.ipa")
 
 echo "Archived $OUTPUT_DIR/$BASE_NAME.xcarchive and packed the unsigned $OUTPUT_DIR/$BASE_NAME.ipa"

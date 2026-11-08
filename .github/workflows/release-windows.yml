@@ -902,7 +902,9 @@ jobs:
 
       - name: Create compressed archives
         run: |
-          # The Zig CLI, with the binary named after the platform it is for.
+          # The Zig CLI, with the binary named after the platform it is for, and the licence files every distributed build carries
+          # in a licences folder beside it (see scripts/write-licence-files.md).
+          bash ./scripts/write-licence-files.sh ./artifacts/zig/licences
           cd ./artifacts/zig
           # A name that is missing or misspelled fails the step with this message rather than with cp's,
           # which says nothing about what is wrong.
@@ -911,7 +913,7 @@ jobs:
               exit 1
           fi
           cp photosphere-cli-zig-windows-x64 photosphere-cli-zig-windows-x64.exe
-          zip ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe
+          zip -r ../photosphere-cli-zig-windows-x64.zip photosphere-cli-zig-windows-x64.exe licences
           cd ../..
 
       - name: Generate release notes
@@ -975,4 +977,7 @@ jobs:
             - **Windows**: `.exe` installer or `.zip`
 
             ## Bundled tools and licences
-            ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and FFmpeg (LGPL-2.1+) are built into the desktop and CLI builds, so neither has to be installed on the host system. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).
+            ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and FFmpeg (LGPL-2.1+) are built into the desktop and CLI builds, so neither has to be installed on the host system. FFmpeg is linked statically and is used under the GNU Lesser General Public License, version 2.1 or later, built without `--enable-gpl` and `--enable-nonfree`. Every package and archive on this release holds a `licences` folder with Photosphere's MIT licence, the third-party notices and licence texts, a copy of the LGPL 2.1, and `SOURCE.txt`, which names the commit the build was made from and says how to rebuild it with a modified FFmpeg. Full attribution is in [THIRD-PARTY-NOTICES.md](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/THIRD-PARTY-NOTICES.md).
+
+            ## Source code
+            Every file on this release was built from commit [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/tree/${{ github.sha }}), which this release's tag, `${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || format('{0}-nightly', env.RELEASE_PLATFORM) }}`, points at. That commit is the complete corresponding source, including FFmpeg's source (`third-party/ffmpeg/vendor/ffmpeg`), the options it is configured with (`third-party/ffmpeg/generate-config.sh`) and the scripts that build and package the program. The Source code archives below are that commit.
