@@ -168,13 +168,31 @@ ln -sfn "$ZLIB_TARGET_DIR/lib" "$ZLIB_DIR/lib"
 # The paths in the arguments are relative to the directory configure runs in, because configure writes its arguments into config.h
 # and a path of this machine would end up in a file that is kept in the repository.
 
-# What is built is what the app runs: every decoder, demuxer, parser and bitstream filter (the app reads whatever the user's
-# photos and videos are), the file protocol, and for output only what writing one JPEG still takes (the mjpeg encoder, the image2
-# and mjpeg muxers and the filters a conversion to one picture uses). xstack is one of those filters because a phone's HEIC is a
-# grid of tiles, which the ffmpeg program joins with xstack whenever it opens one, and fails to open the file at all without it.
-# ImageMagick is built without HEIC support, so FFmpeg is what turns a HEIC into a picture the app can work with. No external library but zlib, no hardware acceleration, no
-# network and no devices. The result is licensed LGPL version 2.1 or later: configure says so at its end, and none of its
-# --enable-gpl or --enable-nonfree options is given.
+# What is built is what the app runs and nothing else, because every demuxer, decoder and parser is code that reads files the app
+# was handed, from an import or over LAN share, and a part that is not built cannot be attacked. --disable-everything turns every
+# component off, and the lists below turn back on exactly what the app uses:
+#
+# - Demuxers, for the containers phones and cameras record into: mov (MP4, MOV, M4V, 3GP and 3G2, and HEIC and HEIF stills, which
+#   are the same ISO media format), matroska (MKV and WebM), avi (older cameras' AVI) and mpegps (MPG, MPEG and VOB from older
+#   cameras and camcorders), with mpegvideo, the demuxer of raw MPEG-1 and MPEG-2 video, because mpegps names the codec of a video
+#   stream by asking the raw video demuxers which of them reads its first packets, and finds no codec without it. The import takes
+#   any file whose content type is video/, and one in any other container is refused because no demuxer reads it.
+# - Decoders, for the video in those containers: h264 and hevc (every current phone, and the tiles of a HEIC), vp8 and vp9 (WebM),
+#   mpeg4 and h263 (older phones' MP4 and 3GP), mjpeg (cameras' AVI and MOV), mpeg1video and mpeg2video (MPG and VOB) and prores
+#   (a Pro iPhone's ProRes). There is no audio decoder: ffprobe reports an audio stream and its codec from the container without
+#   one, and the ffmpeg program never decodes the audio of a file it turns into a JPEG. There is no AV1 decoder: FFmpeg's own
+#   decodes only through hardware acceleration, which is not built.
+# - Parsers, which ffprobe and ffmpeg use to find the size and the frames of a stream the container does not describe in full:
+#   h264, hevc, vp8, vp9, mpeg4video, h263, mjpeg and mpegvideo (MPEG-1 and MPEG-2). The bitstream filters the decoders need
+#   (vp9_superframe_split) are turned on by configure itself.
+# - For output only what writing one JPEG takes: the mjpeg encoder, the image2 muxer and the filters a conversion to one picture
+#   uses. xstack is one of those filters because a phone's HEIC is a grid of tiles, which the ffmpeg program joins with xstack
+#   whenever it opens one, and fails to open the file at all without it. ImageMagick is built without HEIC support, so FFmpeg is
+#   what turns a HEIC into a picture the app can work with.
+# - The file protocol, and no other.
+#
+# No external library but zlib, no hardware acceleration, no network and no devices. The result is licensed LGPL version 2.1 or
+# later: configure says so at its end, and none of its --enable-gpl or --enable-nonfree options is given.
 cd "$WORK_DIR/build"
 "$FFMPEG_DIR/configure" \
     --cc=../bin/cc --host-cc=../bin/host-cc --ar=../bin/ar --ranlib=../bin/ranlib --nm=../bin/nm \
@@ -182,11 +200,14 @@ cd "$WORK_DIR/build"
     --extra-cflags=-I../zlib/include --extra-ldflags="-L../zlib/lib $EXTRA_LDFLAGS" \
     --disable-autodetect --enable-zlib \
     --disable-doc --disable-debug --disable-network --disable-avdevice \
-    --disable-x86asm --disable-hwaccels \
-    --disable-encoders --enable-encoder=mjpeg \
-    --disable-muxers --enable-muxer=image2,mjpeg,null \
-    --disable-protocols --enable-protocol=file \
-    --disable-filters --enable-filter=buffer,buffersink,scale,format,null,nullsink,transpose,hflip,vflip,rotate,fps,trim,setpts,crop,xstack \
+    --disable-x86asm --disable-everything \
+    --enable-demuxer=mov,matroska,avi,mpegps,mpegvideo \
+    --enable-decoder=h264,hevc,vp8,vp9,mpeg4,h263,mjpeg,mpeg1video,mpeg2video,prores \
+    --enable-parser=h264,hevc,vp8,vp9,mpeg4video,h263,mjpeg,mpegvideo \
+    --enable-encoder=mjpeg \
+    --enable-muxer=image2 \
+    --enable-protocol=file \
+    --enable-filter=buffer,buffersink,scale,format,null,nullsink,transpose,hflip,vflip,rotate,fps,trim,setpts,crop,xstack \
     > configure.log 2>&1 || {
     echo "ERROR: configure failed. See $WORK_DIR/build/configure.log" >&2
     exit 1
