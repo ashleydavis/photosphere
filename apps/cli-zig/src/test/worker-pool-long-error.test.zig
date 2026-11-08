@@ -48,7 +48,7 @@ test "an error message longer than the collector's buffer is recorded whole" {
     var timer_list = ziggy.timers.TimerList.init();
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    const pool = try WorkerPoolBun.init(allocator, &mediaTools, 1, 10000, .{ .tasks = &test_tasks });
+    const pool = try WorkerPoolBun.init(allocator, 1, 10000, .{ .tasks = &test_tasks });
     defer pool.deinit(std.testing.io, allocator);
     var collector = Collector.init(arena.allocator());
     _ = try pool.onTaskComplete(allocator, .{ .context = &collector, .function = Collector.onComplete });

@@ -1,13 +1,11 @@
 const std = @import("std");
 const utils = @import("utils-zig");
 const node_api = @import("node-api-zig");
-const media_tools = @import("media-tools-zig");
 const temp_dirs = @import("temp-dirs.zig");
 const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const hash = node_api.hash;
 const Sha256 = std.crypto.hash.sha2.Sha256;
-const MediaTools = media_tools.MediaTools;
 
 test "computeHash returns the sha256 of the stream" {
     var reader = std.Io.Reader.fixed("hello world");
@@ -256,16 +254,13 @@ test "validateAndHash hashes a valid image" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    defer mediaTools.deinit();
-    const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
     defer test_env.deinit(log);
     const contents = try test_files.readFile(allocator, io, "../test/test.png");
 
-    const hashed = (try hash.validateAndHash(allocator, io, log, runner, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
+    const hashed = (try hash.validateAndHash(allocator, io, log, "../test/test.png", .{ .length = contents.len, .lastModified = 42 }, "image/png", "test.png")).?;
 
     var expected: [32]u8 = undefined;
     Sha256.hash(contents, &expected, .{});
@@ -278,9 +273,6 @@ test "validateAndHash returns undefined for a file that fails its validation" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    defer mediaTools.deinit();
-    const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
@@ -290,7 +282,7 @@ test "validateAndHash returns undefined for a file that fails its validation" {
     // The validation logs the failure; a passing test must write nothing to stderr, so the log is muted.
     const filePath = try writeTestFile(allocator, io, workingDir, "broken.png", "this is not a png");
 
-    try std.testing.expect(try hash.validateAndHash(allocator, io, log, runner, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
+    try std.testing.expect(try hash.validateAndHash(allocator, io, log, filePath, .{ .length = 17, .lastModified = 42 }, "image/png", "broken.png") == null);
 }
 
 test "computeFileHash passes on a failure to open the file that is not a missing file" {

@@ -1,57 +1,48 @@
 const std = @import("std");
-const ILog = @import("utils-zig").log.ILog;
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
-const fake_tool_runner = @import("fake-tool-runner.zig");
+const media_tools = @import("media-tools-zig");
 const Video = tools.Video;
-const FakeToolRunner = fake_tool_runner.FakeToolRunner;
+const MediaTools = media_tools.MediaTools;
 
 //
-// Reads the information of a video that exists (the checked in test.mp4), with ffprobe printing the given JSON.
+// Reads the information of a video that exists (the checked in test.mp4) from the given ffprobe JSON report, as getInfo reads the
+// report the real ffprobe writes. These tests are of the reading: ffprobe itself never writes most of these reports.
 //
-fn probe(log: ILog, allocator: std.mem.Allocator, probeJson: []const u8) !tools.types.AssetInfo {
-    var fakeTools = FakeToolRunner.init(allocator, &.{
-        .{
-            .name = "ffprobe",
-            .output = probeJson,
-        },
-    });
-    var video = Video.init("../test/multiple-files/test.mp4");
-    return video.getInfo(allocator, std.testing.io, log, fakeTools.runner());
+fn probe(allocator: std.mem.Allocator, probeJson: []const u8) !tools.types.AssetInfo {
+    return Video.readProbe(allocator, "../test/multiple-files/test.mp4", probeJson);
 }
 
 //
-// Expects reading the information with ffprobe printing the given JSON to fail with the message.
+// Expects reading the information from the given ffprobe JSON to fail with the message.
 //
-fn expectProbeError(log: ILog, allocator: std.mem.Allocator, probeJson: []const u8, expectedMessage: []const u8) !void {
-    try std.testing.expectError(error.Thrown, probe(log, allocator, probeJson));
+fn expectProbeError(allocator: std.mem.Allocator, probeJson: []const u8, expectedMessage: []const u8) !void {
+    try std.testing.expectError(error.Thrown, probe(allocator, probeJson));
     try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
 }
 
 test "ffprobe output with a null stream, a missing format and an r_frame_rate that is not a string throws TypeErrors" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\"},null]}", "Failed to get video info: TypeError: null is not an object (evaluating 's.codec_type')");
-    try expectProbeError(log, allocator, "{\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'format.tags')");
-    try expectProbeError(log, allocator, "{\"format\":null,\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: TypeError: null is not an object (evaluating 'format.tags')");
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":30}]}", "Failed to get video info: TypeError: videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
+    try expectProbeError(allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\"},null]}", "Failed to get video info: TypeError: null is not an object (evaluating 's.codec_type')");
+    try expectProbeError(allocator, "{\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'format.tags')");
+    try expectProbeError(allocator, "{\"format\":null,\"streams\":[{\"codec_type\":\"video\"}]}", "Failed to get video info: TypeError: null is not an object (evaluating 'format.tags')");
+    try expectProbeError(allocator, "{\"format\":{},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":30}]}", "Failed to get video info: TypeError: videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
 }
 
 test "ffprobe output is read with new Date, Number, parseFloat and parseInt of any value and the spread of the tags" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const numbers = try probe(log, allocator, "{\"format\":{\"duration\":12.5,\"bit_rate\":1e21,\"tags\":{\"creation_time\":1000.7}},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"0b11/1\"}]}");
+    const numbers = try probe(allocator, "{\"format\":{\"duration\":12.5,\"bit_rate\":1e21,\"tags\":{\"creation_time\":1000.7}},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"0b11/1\"}]}");
     try std.testing.expectEqual(@as(?f64, 1000), numbers.createdAt);
     try std.testing.expectEqual(@as(?f64, 3), numbers.fps);
     try std.testing.expectEqual(@as(?f64, 12.5), numbers.duration);
     try std.testing.expectEqual(@as(?f64, 1), numbers.bitrate);
 
-    const texts = try probe(log, allocator, "{\"format\":{\"duration\":[\"7.5\"],\"tags\":\"ab\"},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"inf/1\"}]}");
+    const texts = try probe(allocator, "{\"format\":{\"duration\":[\"7.5\"],\"tags\":\"ab\"},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"inf/1\"}]}");
     try std.testing.expect(std.math.isNan(texts.fps.?));
     try std.testing.expectEqual(@as(?f64, 7.5), texts.duration);
     const fields = texts.metadata.?.document.fields.items;
@@ -62,28 +53,26 @@ test "ffprobe output is read with new Date, Number, parseFloat and parseInt of a
     try std.testing.expectEqualStrings("b", fields[1].value.string);
     try std.testing.expectEqualStrings("videoCodec", fields[2].key);
 
-    const booleanDate = try probe(log, allocator, "{\"format\":{\"tags\":{\"creation_time\":true}},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const booleanDate = try probe(allocator, "{\"format\":{\"tags\":{\"creation_time\":true}},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expectEqual(@as(?f64, 1), booleanDate.createdAt);
 }
 
 test "ffprobe output that is not an object, and a streams value that is not an array, throw TypeErrors" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     // `probeData.format` of null throws; of any other value that is not an object it is undefined, and it is
     // `probeData.streams.find` of that undefined that throws.
-    try expectProbeError(log, allocator, "null", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.format')");
-    try expectProbeError(log, allocator, "5", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "[]", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "{}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":null}", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.streams.find')");
-    try expectProbeError(log, allocator, "{\"format\":{},\"streams\":\"x\"}", "Failed to get video info: TypeError: probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)");
+    try expectProbeError(allocator, "null", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.format')");
+    try expectProbeError(allocator, "5", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "[]", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "{}", "Failed to get video info: TypeError: undefined is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "{\"format\":{},\"streams\":null}", "Failed to get video info: TypeError: null is not an object (evaluating 'probeData.streams.find')");
+    try expectProbeError(allocator, "{\"format\":{},\"streams\":\"x\"}", "Failed to get video info: TypeError: probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)");
 }
 
 test "ffprobe values of every JSON type are read" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -91,7 +80,7 @@ test "ffprobe values of every JSON type are read" {
     // A stream that is not an object has no codec_type, so the video stream is the one after it. A tag list spreads
     // into the metadata under its index, a null duration and an object bit rate are neither parseFloat nor parseInt
     // of a number, a creation time of 0 is falsy and a frame rate of 0 is too.
-    const values = try probe(log, allocator, "{\"format\":{\"duration\":null,\"bit_rate\":{},\"tags\":[1,2],\"creation_time\":0},\"streams\":[1,{\"codec_type\":\"video\",\"r_frame_rate\":0}]}");
+    const values = try probe(allocator, "{\"format\":{\"duration\":null,\"bit_rate\":{},\"tags\":[1,2],\"creation_time\":0},\"streams\":[1,{\"codec_type\":\"video\",\"r_frame_rate\":0}]}");
     try std.testing.expect(std.math.isNan(values.duration.?));
     try std.testing.expect(std.math.isNan(values.bitrate.?));
     try std.testing.expect(values.createdAt == null);
@@ -113,7 +102,7 @@ test "ffprobe values of every JSON type are read" {
     // A whole number is a number to String() and to parseFloat, a bit rate given as a string is read as one, a frame
     // rate with no denominator is num / NaN, and a creation time past the largest Date (8.64e15 ms) is an Invalid
     // Date, whose time value is NaN.
-    const numbers = try probe(log, allocator, "{\"format\":{\"duration\":12,\"bit_rate\":\"8000\",\"tags\":{\"creation_time\":1e21}},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"30\"}]}");
+    const numbers = try probe(allocator, "{\"format\":{\"duration\":12,\"bit_rate\":\"8000\",\"tags\":{\"creation_time\":1e21}},\"streams\":[{\"codec_type\":\"video\",\"r_frame_rate\":\"30\"}]}");
     try std.testing.expectEqual(@as(?f64, 12), numbers.duration);
     try std.testing.expectEqual(@as(?f64, 8000), numbers.bitrate);
     try std.testing.expect(std.math.isNan(numbers.createdAt.?));
@@ -121,9 +110,9 @@ test "ffprobe values of every JSON type are read" {
 
     // A creation time that is not a string is read from its String(): an array of one element is that element, and
     // an object is "[object Object]", which is not a date.
-    const arrayDate = try probe(log, allocator, "{\"format\":{\"tags\":{\"creation_time\":[\"2024-01-02T03:04:05.000000Z\"]}},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const arrayDate = try probe(allocator, "{\"format\":{\"tags\":{\"creation_time\":[\"2024-01-02T03:04:05.000000Z\"]}},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expectEqual(@as(?f64, 1704164645000), arrayDate.createdAt);
-    const objectDate = try probe(log, allocator, "{\"format\":{\"tags\":{\"creation_time\":{}}},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const objectDate = try probe(allocator, "{\"format\":{\"tags\":{\"creation_time\":{}}},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expect(std.math.isNan(objectDate.createdAt.?));
 }
 
@@ -135,18 +124,17 @@ test "ffprobe values of every JSON type are read" {
 // and Object.entries({ ..."a😀b" }) give the keys "0" to "3".
 //
 test "ffprobe values that are booleans, arrays with a null and strings with characters outside the BMP are read like TypeScript" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const booleanDuration = try probe(log, allocator, "{\"format\":{\"duration\":true},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const booleanDuration = try probe(allocator, "{\"format\":{\"duration\":true},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expect(std.math.isNan(booleanDuration.duration.?));
 
-    const nullFirst = try probe(log, allocator, "{\"format\":{\"duration\":[null,7.5]},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const nullFirst = try probe(allocator, "{\"format\":{\"duration\":[null,7.5]},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expect(std.math.isNan(nullFirst.duration.?));
 
-    const emoji = try probe(log, allocator, "{\"format\":{\"tags\":\"a\u{1F600}b\"},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const emoji = try probe(allocator, "{\"format\":{\"tags\":\"a\u{1F600}b\"},\"streams\":[{\"codec_type\":\"video\"}]}");
     const fields = emoji.metadata.?.document.fields.items;
     try std.testing.expectEqualStrings("0", fields[0].key);
     try std.testing.expectEqualStrings("a", fields[0].value.string);
@@ -159,55 +147,72 @@ test "ffprobe values that are booleans, arrays with a null and strings with char
     try std.testing.expectEqualStrings("videoCodec", fields[4].key);
 }
 
-test "extractScreenshot writes the time the way JavaScript writes a number" {
-    const log = utils.mute_log.MuteLog.init();
+test "extractScreenshot writes the time in decimal notation, never with an exponent" {
+    // Both paths are passed as arguments of their own (`ffmpeg -i <file> ... -y <output>`), unquoted.
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    var fakeTools = FakeToolRunner.init(allocator, &.{
-        .{
-            .name = "ffmpeg",
-            .output = "",
-        },
-    });
-    var video = Video.init("../test/multiple-files/test.mp4");
-    _ = try video.extractScreenshot(allocator, io, log, fakeTools.runner(), "out.jpg", 1e-7);
-
-    // Both paths are passed as arguments of their own (`ffmpeg -i <file> ... -y <output>`), unquoted.
-    try std.testing.expectEqualStrings("-i ../test/multiple-files/test.mp4 -ss 1e-7 -vframes 1 -q:v 2 -y out.jpg", try fakeTools.argumentsOf("ffmpeg"));
+    const arguments = try Video.screenshotArguments(arena.allocator(), "../test/multiple-files/test.mp4", "out.jpg", 1e-7);
+    try std.testing.expectEqualStrings("-i ../test/multiple-files/test.mp4 -ss 0.0000001 -vframes 1 -q:v 2 -y out.jpg", try std.mem.join(arena.allocator(), " ", arguments));
 }
 
-test "verifyFfprobe and verifyFfmpeg report the built-in tool failing with no install advice" {
+test "extractScreenshot at a time JavaScript would write with an exponent gives the real ffmpeg a time it reads" {
+    // The real ffmpeg, given the arguments screenshotArguments makes for a time of 1e-7 seconds, writes the first frame of
+    // test.mp4, which is 1280x720.
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const io = std.testing.io;
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const current_path = try std.process.currentPathAlloc(std.testing.io, allocator);
+    const outputPath = try std.fs.path.join(allocator, &.{ current_path, ".zig-cache", "tmp", &tmp_dir.sub_path, "frame.jpg" });
+    var video = Video.init("../test/multiple-files/test.mp4");
+    try std.testing.expectEqualStrings(outputPath, try video.extractScreenshot(allocator, std.testing.io, log, outputPath, 1e-7));
+    try std.testing.expectEqualStrings("1280 720", try media_tools.tool_run.runChecked(allocator, std.testing.io, log, .magick, &.{ "identify", "-format", "%w %h", outputPath }));
+}
 
-    // A runner whose ffprobe and ffmpeg both fail.
-    var fakeTools = FakeToolRunner.init(allocator, &.{});
+test "toolFailed reports ffprobe and ffmpeg failing with no install advice" {
+    // A real ffprobe and a real ffmpeg that fail, reading a file that does not exist, give the errors the statuses carry.
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const current_path = try std.process.currentPathAlloc(std.testing.io, allocator);
+    const missing = try std.fs.path.join(allocator, &.{ current_path, ".zig-cache", "tmp", &tmp_dir.sub_path, "missing.mp4" });
 
-    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log, fakeTools.runner());
+    try std.testing.expectError(error.Thrown, media_tools.tool_run.runChecked(allocator, std.testing.io, log, .ffprobe, &.{ "-v", "error", missing }));
+    const ffprobeMessage = try allocator.dupe(u8, utils.errors.lastErrorMessage());
+    try std.testing.expect(std.mem.startsWith(u8, ffprobeMessage, try std.fmt.allocPrint(allocator, "Command failed: ffprobe -v error {s}\n", .{missing})));
+    const ffprobeStatus = try Video.toolFailed(allocator, "ffprobe", error.Thrown);
     try std.testing.expect(!ffprobeStatus.available);
     try std.testing.expect(ffprobeStatus.version == null);
-    try std.testing.expectEqualStrings("The ffprobe built into the program did not run: Error: Command failed: ffprobe -version\n", ffprobeStatus.@"error".?);
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "The ffprobe built into the program did not run: Error: {s}", .{ffprobeMessage}), ffprobeStatus.@"error".?);
+    try std.testing.expect(std.mem.indexOf(u8, ffprobeStatus.@"error".?, "install") == null);
 
-    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log, fakeTools.runner());
+    try std.testing.expectError(error.Thrown, media_tools.tool_run.runChecked(allocator, std.testing.io, log, .ffmpeg, &.{ "-i", missing, "-y", missing }));
+    const ffmpegMessage = try allocator.dupe(u8, utils.errors.lastErrorMessage());
+    try std.testing.expect(std.mem.startsWith(u8, ffmpegMessage, try std.fmt.allocPrint(allocator, "Command failed: ffmpeg -i {s} -y {s}\n", .{ missing, missing })));
+    const ffmpegStatus = try Video.toolFailed(allocator, "ffmpeg", error.Thrown);
     try std.testing.expect(!ffmpegStatus.available);
     try std.testing.expect(ffmpegStatus.version == null);
-    try std.testing.expectEqualStrings("The ffmpeg built into the program did not run: Error: Command failed: ffmpeg -version\n", ffmpegStatus.@"error".?);
+    try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "The ffmpeg built into the program did not run: Error: {s}", .{ffmpegMessage}), ffmpegStatus.@"error".?);
+    try std.testing.expect(std.mem.indexOf(u8, ffmpegStatus.@"error".?, "install") == null);
 }
 
 // String() of an array joins its elements with commas, so parseFloat and parseInt read up to the first comma; and a string spreads
 // its UTF-16 code units, so a character outside the BMP gives two entries, each a lone surrogate written as U+FFFD.
 test "ffprobe arrays of several values are read from their joined text and a tag string spreads its code units" {
-    const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    const values = try probe(log, allocator, "{\"format\":{\"duration\":[\"7.5\",\"x\"],\"bit_rate\":[\"12\",\"34\"],\"tags\":\"a\u{1F600}\"},\"streams\":[{\"codec_type\":\"video\"}]}");
+    const values = try probe(allocator, "{\"format\":{\"duration\":[\"7.5\",\"x\"],\"bit_rate\":[\"12\",\"34\"],\"tags\":\"a\u{1F600}\"},\"streams\":[{\"codec_type\":\"video\"}]}");
     try std.testing.expectEqual(@as(?f64, 7.5), values.duration);
     try std.testing.expectEqual(@as(?f64, 12), values.bitrate);
     const fields = values.metadata.?.document.fields.items;

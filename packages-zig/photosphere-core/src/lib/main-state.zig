@@ -193,12 +193,12 @@ pub const MainState = struct {
         const process_environment = try environment.adoptProcessEnvironment(allocator);
         errdefer freeEnvironment(allocator, process_environment);
         try logStarting(log, allocator);
-        // ImageMagick and FFmpeg are built into the program and run in its process, for the tasks (each makes its own runner of them).
+        // ImageMagick and FFmpeg are built into the program and run in its process: started here for the whole program, before any task runs them.
         const media = try allocator.create(media_tools.MediaTools);
         errdefer allocator.destroy(media);
         media.* = try media_tools.MediaTools.init();
         errdefer media.deinit();
-        try logToolVersions(allocator, io, log, media.runner());
+        try logToolVersions(allocator, io, log);
         utils.console.log("Worker pool initialized");
         const state = try allocator.create(MainState);
         errdefer allocator.destroy(state);
@@ -941,10 +941,10 @@ fn logStarting(log: ILog, allocator: std.mem.Allocator) !void {
 //
 // Logs the versions of the tools built into the program (ImageMagick, FFmpeg and FFprobe), each on a line of its own.
 //
-fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool_runner: node_utils.in_process_tools.InProcessRunner) !void {
+fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
     var arena_state = std.heap.ArenaAllocator.init(allocator);
     defer arena_state.deinit();
-    for (try toolVersionLines(arena_state.allocator(), io, log, tool_runner)) |line| {
+    for (try toolVersionLines(arena_state.allocator(), io, log)) |line| {
         log.info(line);
     }
 }
@@ -953,9 +953,9 @@ fn logToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool_run
 // The lines the log gives for the tools the app runs: ImageMagick, FFmpeg and FFprobe, each with its version, or "not
 // found". ImageMagick's check failing is written into its line rather than stopping the app. Allocated with the arena.
 //
-fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, log: ILog, tool_runner: node_utils.in_process_tools.InProcessRunner) ![]const []const u8 {
+fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, log: ILog) ![]const []const u8 {
     const image_magick_line = blk: {
-        const status = tools.Image.verifyImageMagick(arena, io, log, tool_runner) catch {
+        const status = tools.Image.verifyImageMagick(arena, io, log) catch {
             break :blk "ImageMagick: error checking version";
         };
         if (!status.available) {
@@ -963,12 +963,12 @@ fn toolVersionLines(arena: std.mem.Allocator, io: std.Io, log: ILog, tool_runner
         }
         break :blk try std.fmt.allocPrint(arena, "ImageMagick: {s}", .{status.version orelse "unknown"});
     };
-    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, log, tool_runner);
+    const ffmpeg_status = try tools.Video.verifyFfmpeg(arena, io, log);
     const ffmpeg_line = if (ffmpeg_status.available)
         try std.fmt.allocPrint(arena, "FFmpeg: {s}", .{ffmpeg_status.version orelse "unknown"})
     else
         "FFmpeg: not found";
-    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, log, tool_runner);
+    const ffprobe_status = try tools.Video.verifyFfprobe(arena, io, log);
     const ffprobe_line = if (ffprobe_status.available)
         try std.fmt.allocPrint(arena, "FFprobe: {s}", .{ffprobe_status.version orelse "unknown"})
     else

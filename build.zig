@@ -54,9 +54,14 @@ const packages = [_]IPackage{
         .link_libc = false,
     },
     .{
+        .name = "media-tools-zig",
+        .dependencies = &.{ "utils-zig", "node-utils-zig" },
+        .link_libc = true,
+    },
+    .{
         .name = "tools-zig",
-        .dependencies = &.{ "utils-zig", "node-utils-zig", "serialization-zig" },
-        .link_libc = false,
+        .dependencies = &.{ "utils-zig", "node-utils-zig", "serialization-zig", "media-tools-zig" },
+        .link_libc = true,
     },
     .{
         .name = "vault-zig",
@@ -112,11 +117,6 @@ const packages = [_]IPackage{
         .name = "mobile-worker-zig",
         .dependencies = &.{ "utils-zig", "api-zig", "node-api-zig" },
         .link_libc = false,
-    },
-    .{
-        .name = "media-tools-zig",
-        .dependencies = &.{ "utils-zig", "node-utils-zig" },
-        .link_libc = true,
     },
     .{
         .name = "photosphere-core",

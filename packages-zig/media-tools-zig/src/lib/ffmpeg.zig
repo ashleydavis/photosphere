@@ -4,7 +4,7 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const MessageQueue = @import("ziggy").message_queue.MessageQueue;
 
-const in_process_tools = node_utils.in_process_tools;
+const ToolOutput = @import("tool-run.zig").ToolOutput;
 
 //
 // FFmpeg, built into the program and run in its process: the `ffmpeg` and `ffprobe` command line programs (see third-party/ffmpeg),
@@ -15,17 +15,17 @@ const in_process_tools = node_utils.in_process_tools;
 // which the run's own threads share and no other run sees, so commands on several threads run at once. The programs install no signal
 // handlers of their own.
 //
-// `ffprobe` writes its report to a file the runner names, and the runner hands the report back.
+// `ffprobe` writes its report to a file runFfprobe names, and runFfprobe hands the report back.
 //
 // Everything else the programs say goes through FFmpeg's log (av_log). The log has one callback for the whole process
 // (av_log_callback in libavutil/log.c), set once by `Started` before any thread runs a command. The callback is called on whichever
 // thread logs, which for a run is the thread that runs the command or one of the threads the run starts, so it finds the run through
 // the run itself: each run is given a queue of its own, the callback posts each message of the run to it, and the thread that runs the
 // command reads the queue when the run has ended and sends each message to its own log: an error to the log's errors, and anything
-// else to the log as the program's standard error (`log.tool`), where runToolLogged puts the standard error of a program that worked.
+// else to the log as the program's standard error (`log.tool`), where runLogged puts the standard error of a program that worked.
 // A message logged on a thread of no run (a thread of FFmpeg's libraries' own) goes to that thread's log when it is an error.
 //
-// A failed `ffprobe` hands back its error in its report, because the runner asks for it with `-show_error`. A failed `ffmpeg` hands
+// A failed `ffprobe` hands back its error in its report, because runFfprobe asks for it with `-show_error`. A failed `ffmpeg` hands
 // back no text: its errors are in the log.
 //
 
@@ -90,7 +90,7 @@ pub const Ffmpeg = struct {
     // the keyboard, not to print the banner or progress and to say only errors, because the program is not at a terminal. The
     // output is empty: what `ffmpeg` says goes to the log (see the top of this file).
     //
-    pub fn runFfmpeg(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runFfmpeg(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
             return try versionOutput(allocator, "ffmpeg");
         }
@@ -111,10 +111,10 @@ pub const Ffmpeg = struct {
 
     //
     // Runs `ffprobe` with the arguments, which do not include the program's name, and returns its exit code and the report it
-    // wrote, which ffprobe is told to write to a file of the runner's naming. ffprobe is told to put the error in the report when
+    // wrote, which ffprobe is told to write to a file runFfprobe names. ffprobe is told to put the error in the report when
     // it cannot read the file (`-show_error`), so a failed probe hands back its error; a probe that works writes no error.
     //
-    pub fn runFfprobe(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runFfprobe(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
             return try versionOutput(allocator, "ffprobe");
         }
@@ -239,10 +239,10 @@ fn logMessage(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, vl: ?*anyopaqu
 
 //
 // What `<program> -version` prints: the line the version is read from (`ffmpeg version 9.0.2`), then FFmpeg's configuration and
-// license. The programs would print theirs through FFmpeg's log, which the runner sends to the program's log (see the top of this
+// license. The programs would print theirs through FFmpeg's log, which a run sends to the program's log (see the top of this
 // file), so it is put together here.
 //
-pub fn versionOutput(allocator: std.mem.Allocator, program: []const u8) !in_process_tools.ToolOutput {
+pub fn versionOutput(allocator: std.mem.Allocator, program: []const u8) !ToolOutput {
     return .{
         .exit_code = 0,
         .output = try std.fmt.allocPrint(allocator, "{s} version {s}\nconfiguration: {s}\nlicense: {s}\n", .{

@@ -13,7 +13,6 @@ const task_queue = @import("ziggy").task_queue;
 const merkle_tree_zig = @import("merkle-tree-zig");
 const bdb = @import("bdb-zig");
 const node_api = @import("node-api-zig");
-const media_tools = @import("media-tools-zig");
 const pc = @import("picocolors.zig");
 const directory_picker = @import("directory-picker.zig");
 const ensure_tools = @import("ensure-tools.zig");
@@ -48,7 +47,6 @@ const fuzzyMatch = fuzzy_match.fuzzy_match.fuzzyMatch;
 const IQueueBackend = task_queue.queue_backend.IQueueBackend;
 const setQueueBackend = task_queue.queue_backend.setQueueBackend;
 const IUuidGenerator = utils.uuid_generator.IUuidGenerator;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const ITimestampProvider = utils.timestamp_provider.ITimestampProvider;
 const RandomUuidGenerator = utils.random_uuid_generator.RandomUuidGenerator;
 const TimestampProvider = utils.timestamp_provider.TimestampProvider;
@@ -963,8 +961,6 @@ pub const ICommandContext = struct {
     // The worker pool that runs background tasks.
     workerPool: IQueueBackend,
 
-    // Runs the ImageMagick and FFmpeg built into the program, in its process.
-    toolRunner: InProcessRunner,
 };
 
 //
@@ -1013,9 +1009,8 @@ fn cleanupOnTermination(context: ?*anyopaque, io: std.Io, log: ILog, exitCode: u
 // Wraps a command function to inject common dependencies.
 // The caller (index.zig) calls initContext with the parsed options and then calls the command with the returned context.
 // Everything is allocated with the allocator, which must live until the process exits.
-// mediaTools is the ImageMagick and FFmpeg built into the program, which must also live until the process exits.
 //
-pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaTools: *media_tools.MediaTools, options: IBaseCommandOptions) !ICommandContext {
+pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IBaseCommandOptions) !ICommandContext {
     // The S3 library and Winsock start once, here on the main thread, before any worker does, so no lock guards their start.
     storage_zig.s3_client.startLibrary();
     lan_share_network.socket.startSockets();
@@ -1057,7 +1052,7 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaToo
     // machine with one CPU) the only worker waits on tasks nothing is left to run and the import never ends.
     const workers: f64 = if (options.workers) |workersText| jsNumber(workersText) else @floatFromInt(try cpuCount(allocator, io));
     const timeout: f64 = if (options.timeout) |timeoutText| jsNumber(timeoutText) else 2400000;
-    const workerPool = try WorkerPoolBun.init(allocator, mediaTools, workers, timeout, .{
+    const workerPool = try WorkerPoolBun.init(allocator, workers, timeout, .{
         .verbose = options.verbose,
         .tools = options.tools,
         .sessionId = sessionId,
@@ -1070,7 +1065,6 @@ pub fn initContext(allocator: std.mem.Allocator, io: std.Io, log: ILog, mediaToo
         .sessionId = sessionId,
         .sessionTempDir = sessionTempDir,
         .workerPool = workerPool.queueBackend(),
-        .toolRunner = mediaTools.runner(),
     };
 
     // Register cleanup handler for termination
@@ -1136,7 +1130,6 @@ fn didYouMeanList(allocator: std.mem.Allocator, similarNames: []const []const u8
 //
 // Shared database loading function for CLI commands.
 // (Callers pass allowOlderVersions.)
-// toolRunner runs the ImageMagick and FFmpeg built into the program, which are checked before the database is loaded.
 //
 pub fn loadDatabase(
     allocator: std.mem.Allocator,
@@ -1147,14 +1140,13 @@ pub fn loadDatabase(
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
     sessionId: []const u8,
-    toolRunner: InProcessRunner,
     allowOlderVersions: bool,
 ) !IInitResult { //todo: Move into api.
 
     const nonInteractive = options.yes orelse false;
 
     // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, log, toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {
@@ -1318,7 +1310,6 @@ pub fn loadDatabase(
 
 //
 // Creates a new database for the init command.
-// toolRunner runs the ImageMagick and FFmpeg built into the program, which are checked before the database is created.
 //
 pub fn createDatabase(
     allocator: std.mem.Allocator,
@@ -1329,7 +1320,6 @@ pub fn createDatabase(
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
     sessionId: []const u8,
-    toolRunner: InProcessRunner,
 ) !IInitResult { //todo: Move into api.
 
     const nonInteractive = options.base.yes orelse false;
@@ -1339,7 +1329,7 @@ pub fn createDatabase(
     log.verbose(try std.fmt.allocPrint(allocator, "Executing command: {s}", .{command}));
 
     // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, log, toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {

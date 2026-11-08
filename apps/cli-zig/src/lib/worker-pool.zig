@@ -19,9 +19,7 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const ziggy = @import("ziggy");
 const utils = @import("utils-zig");
-const node_utils = @import("node-utils-zig");
 const node_api = @import("node-api-zig");
-const media_tools = @import("media-tools-zig");
 const console_output = @import("console-output.zig");
 const task_queue = ziggy.task_queue;
 const types = task_queue.types;
@@ -59,7 +57,7 @@ const MAX_CONCURRENT_CHILD_TASKS = 10;
 // The task types the workers run: every task handler of the application. Each task that runs ImageMagick or FFmpeg makes the tools
 // built into the program on its own thread.
 //
-const task_types = node_api.task_handlers.taskEntries(media_tools.ThreadTools, registerMediaSources);
+const task_types = node_api.task_handlers.taskEntries(registerMediaSources);
 
 //
 // Registers, on a task's thread before the task runs, the builders of the media sources an import reads (initTaskHandlers in
@@ -221,9 +219,6 @@ const setTimeoutDelay = utils.sleep.setTimeoutDelay;
 // Manages workers.
 //
 pub const WorkerPoolBun = struct {
-    // The tools built into the program, which every worker's tasks run.
-    mediaTools: *media_tools.MediaTools,
-
     // The pool's queue, which the workers send their messages to and the main thread reads. When the pool has abandoned a worker,
     // freeing the pool closes the queue and keeps it, so a late message from that worker is dropped.
     mainQueue: *MessageQueue,
@@ -286,16 +281,14 @@ pub const WorkerPoolBun = struct {
     // Tasks will execute in separate worker threads for true parallelism.
     // taskTimeout: Timeout in milliseconds for tasks.
     // workerOptions: Options to pass to workers for logging and context initialization.
-    // mediaTools: The ImageMagick and FFmpeg built into the program, which must outlive the pool.
     // The thread that calls it is the pool's main thread, which alone uses the pool.
     //
-    pub fn init(allocator: std.mem.Allocator, mediaTools: *media_tools.MediaTools, maxWorkers: f64, taskTimeout: f64, workerOptions: IWorkerPoolOptions) !*WorkerPoolBun {
+    pub fn init(allocator: std.mem.Allocator, maxWorkers: f64, taskTimeout: f64, workerOptions: IWorkerPoolOptions) !*WorkerPoolBun {
         const self = try allocator.create(WorkerPoolBun);
         errdefer allocator.destroy(self);
         const queue = try allocator.create(MessageQueue);
         queue.* = MessageQueue.init();
         self.* = .{
-            .mediaTools = mediaTools,
             .mainQueue = queue,
             .abandonedWorkers = false,
             .nextSenderId = 1,

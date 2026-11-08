@@ -1,7 +1,6 @@
 const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const node_api = @import("node-api-zig");
-const node_utils = @import("node-utils-zig");
 const media_tools = @import("media-tools-zig");
 const utils = @import("utils-zig");
 const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
@@ -13,8 +12,6 @@ const test_files = @import("test-files.zig");
 const test_environment = @import("test-environment.zig");
 const test_jpg_exif = @import("test-jpg-exif.zig");
 const image = node_api.image;
-const MediaTools = media_tools.MediaTools;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 
 //
 // Counts the IDs it generates, so the output paths are known.
@@ -103,8 +100,8 @@ fn expectCoordinates(expected: ?utils.reverse_geocode.ILocation, actual: ?utils.
 // Reads the width, height, format and JPEG quality of an image file with the ImageMagick built into the program, as
 // "<w> <h> <format> <quality>", and whether it still holds any EXIF.
 //
-fn describeImage(log: ILog, allocator: std.mem.Allocator, runner: InProcessRunner, filePath: []const u8) ![]const u8 {
-    const result = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ "identify", "-format", "%w %h %m %Q exif:[%[EXIF:*]]", filePath });
+fn describeImage(log: ILog, allocator: std.mem.Allocator, filePath: []const u8) ![]const u8 {
+    const result = try media_tools.ImageMagick.runMagick(std.testing.io, log, allocator, &.{ "identify", "-format", "%w %h %m %Q exif:[%[EXIF:*]]", filePath });
     if (result.exit_code != 0) {
         std.debug.print("identify failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
         return error.TestUnexpectedResult;
@@ -235,9 +232,6 @@ test "getImageDetails produces the details and the files" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    defer mediaTools.deinit();
-    const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -317,7 +311,7 @@ test "getImageDetails produces the details and the files" {
         const tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "image-details");
         defer temp_dirs.removeTempDir(std.testing.io, tempDir);
         var generator: CountingUuidGenerator = .{};
-        const details = try image.getImageDetails(allocator, std.testing.io, log, runner, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
+        const details = try image.getImageDetails(allocator, std.testing.io, log, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
         try std.testing.expectEqual(expected.resolution, details.resolution);
 
         // Image.resize names each file temp_resize_<id>.jpg in the temp directory, and the IDs are generated in the
@@ -325,9 +319,9 @@ test "getImageDetails produces the details and the files" {
         try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-1.jpg" }), details.displayPath.?);
         try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-2.jpg" }), details.thumbnailPath);
         try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-3.jpg" }), details.microPath);
-        try std.testing.expectEqualStrings(expected.display, try describeImage(log, allocator, runner, details.displayPath.?));
-        try std.testing.expectEqualStrings(expected.thumbnail, try describeImage(log, allocator, runner, details.thumbnailPath));
-        try std.testing.expectEqualStrings(expected.micro, try describeImage(log, allocator, runner, details.microPath));
+        try std.testing.expectEqualStrings(expected.display, try describeImage(log, allocator, details.displayPath.?));
+        try std.testing.expectEqualStrings(expected.thumbnail, try describeImage(log, allocator, details.thumbnailPath));
+        try std.testing.expectEqualStrings(expected.micro, try describeImage(log, allocator, details.microPath));
         try std.testing.expectEqualStrings("image/jpeg", details.thumbnailContentType);
         try expectOptionalString("image/jpeg", details.displayContentType);
         try expectMetadata(allocator, expected.metadata, details.metadata);
@@ -446,9 +440,6 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     defer memory.deinit();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    defer mediaTools.deinit();
-    const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
@@ -463,15 +454,15 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     });
 
     var generator: CountingUuidGenerator = .{};
-    const details = try image.getImageDetails(allocator, io, memory.log, runner, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
+    const details = try image.getImageDetails(allocator, io, memory.log, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
 
     // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, before the smaller versions are made from it:
     // the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
     try std.testing.expectEqual(node_api.media_file_database.IResolution{ .width = 80, .height = 100 }, details.resolution);
-    try std.testing.expectEqualStrings("80 100", (try describeImage(memory.log, allocator, runner, try std.fs.path.join(allocator, &.{ tempDir, "temp_transform_output_generated-1.jpg" })))[0..6]);
-    try std.testing.expectEqualStrings("1000 1250 JPEG 95 exif:[]", try describeImage(memory.log, allocator, runner, details.displayPath.?));
-    try std.testing.expectEqualStrings("300 375 JPEG 90 exif:[]", try describeImage(memory.log, allocator, runner, details.thumbnailPath));
-    try std.testing.expectEqualStrings("40 50 JPEG 75 exif:[]", try describeImage(memory.log, allocator, runner, details.microPath));
+    try std.testing.expectEqualStrings("80 100", (try describeImage(memory.log, allocator, try std.fs.path.join(allocator, &.{ tempDir, "temp_transform_output_generated-1.jpg" })))[0..6]);
+    try std.testing.expectEqualStrings("1000 1250 JPEG 95 exif:[]", try describeImage(memory.log, allocator, details.displayPath.?));
+    try std.testing.expectEqualStrings("300 375 JPEG 90 exif:[]", try describeImage(memory.log, allocator, details.thumbnailPath));
+    try std.testing.expectEqualStrings("40 50 JPEG 75 exif:[]", try describeImage(memory.log, allocator, details.microPath));
 
     try std.testing.expect(details.coordinates == null);
     try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), try std.fmt.allocPrint(allocator, "Ignoring out of range GPS coordinates: lat 95, lng 10.5, for asset {s}.", .{filePath})) != null);
@@ -521,9 +512,6 @@ test "getImageDetails refuses a file whose content type no image tool can read" 
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    var mediaTools = try MediaTools.init();
-    defer mediaTools.deinit();
-    const runner = mediaTools.runner();
     const allocator = arena.allocator();
     const io = std.testing.io;
     const test_env = try test_environment.setupEnvironment(io);
@@ -533,7 +521,7 @@ test "getImageDetails refuses a file whose content type no image tool can read" 
     var uuidGenerator: CountingUuidGenerator = .{};
 
     // A PNG has no EXIF to give its size, so the image tool is asked, and it is asked by the content type.
-    try std.testing.expectError(error.Thrown, image.getImageDetails(allocator, io, log, runner, "../test/test.png", tempDir, "application/x-unknown", uuidGenerator.uuidGenerator(), "test.png"));
+    try std.testing.expectError(error.Thrown, image.getImageDetails(allocator, io, log, "../test/test.png", tempDir, "application/x-unknown", uuidGenerator.uuidGenerator(), "test.png"));
     try std.testing.expectEqualStrings("Unsupported file type: application/x-unknown", utils.errors.lastErrorMessage());
 }
 
@@ -549,21 +537,19 @@ test "getImageDetails makes the pictures of a HEIC from FFmpeg's decode of it, w
     defer temp_dirs.removeTempDir(io, tempDir);
     // The bundled ImageMagick has no HEIC support and a machine's own ffmpeg may be too old to join a HEIC's tiles, so the tools the
     // app ships are used.
-    var mediaTools = try media_tools.MediaTools.init();
-    defer mediaTools.deinit();
     var generator: CountingUuidGenerator = .{};
     const heicPath = "../test/heic/tiled.heic";
-    const details = try image.getImageDetails(allocator, io, log, mediaTools.runner(), heicPath, tempDir, "image/heic", generator.uuidGenerator(), heicPath);
+    const details = try image.getImageDetails(allocator, io, log, heicPath, tempDir, "image/heic", generator.uuidGenerator(), heicPath);
 
     // The 1000x700 picture is a grid of four 512 pixel tiles: the size is the decoded picture's, not a tile's or the grid's 1024x1024.
     try std.testing.expectEqual(node_api.media_file_database.IResolution{ .width = 1000, .height = 700 }, details.resolution);
 
     // The first ID names the decoded JPEG, the next three the display, the thumbnail and the micro image made from it.
-    try std.testing.expectEqualStrings("1000 700", (try describeImage(log, allocator, mediaTools.runner(), try std.fs.path.join(allocator, &.{ tempDir, "temp_heic_generated-1.jpg" })))[0..8]);
+    try std.testing.expectEqualStrings("1000 700", (try describeImage(log, allocator, try std.fs.path.join(allocator, &.{ tempDir, "temp_heic_generated-1.jpg" })))[0..8]);
     try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-2.jpg" }), details.displayPath.?);
-    try std.testing.expectEqualStrings("1428 1000 JPEG 95 exif:[]", try describeImage(log, allocator, mediaTools.runner(), details.displayPath.?));
-    try std.testing.expectEqualStrings("428 300 JPEG 90 exif:[]", try describeImage(log, allocator, mediaTools.runner(), details.thumbnailPath));
-    try std.testing.expectEqualStrings("57 40 JPEG 76 exif:[]", try describeImage(log, allocator, mediaTools.runner(), details.microPath));
+    try std.testing.expectEqualStrings("1428 1000 JPEG 95 exif:[]", try describeImage(log, allocator, details.displayPath.?));
+    try std.testing.expectEqualStrings("428 300 JPEG 90 exif:[]", try describeImage(log, allocator, details.thumbnailPath));
+    try std.testing.expectEqualStrings("57 40 JPEG 76 exif:[]", try describeImage(log, allocator, details.microPath));
 
     try expectOptionalString("2021-05-06T07:08:09.000Z", details.photoDate);
     try std.testing.expectApproxEqAbs(@as(f64, -27.4705), details.coordinates.?.lat, 0.00001);

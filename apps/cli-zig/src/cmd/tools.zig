@@ -11,7 +11,6 @@ const pc = @import("../lib/picocolors.zig");
 const verifyTools = tools.verifyTools;
 const ToolStatus = tools.ToolStatus;
 const exit = node_utils.termination.exit;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 
 //
 // Options of the tools command.
@@ -47,23 +46,23 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 
 //
 // Command that checks for required media processing tools.
-// toolRunner runs the ImageMagick and FFmpeg built into the program. The tools are built in, so there is nothing to
+// The ImageMagick and FFmpeg are built into the program, so there is nothing to
 // install and nothing to ask, and the options change nothing.
 //
-pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, options: *const IToolsCommandOptions) !void {
+pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, options: *const IToolsCommandOptions) !void {
     _ = options;
-    try listTools(allocator, io, log, toolRunner);
+    try listTools(allocator, io, log);
 }
 
 //
 // Prints the status of each tool, then exits: 0 when all are available, otherwise 1 after naming the tools that
 // did not run.
 //
-fn listTools(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !void {
+fn listTools(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
     log.info("");
     log.info(try pc.bold(allocator, "📦 Media Processing Tools Status\n"));
 
-    const toolsStatus = try verifyTools(allocator, io, log, toolRunner);
+    const toolsStatus = try verifyTools(allocator, io, log);
 
     // Show status of each tool
     const toolEntries = [_]IToolEntry{

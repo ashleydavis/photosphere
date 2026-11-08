@@ -175,7 +175,7 @@ test "getToolVersions reports the versions of the ImageMagick and FFmpeg built i
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
 
-    const versions = try bug.getToolVersions(allocator, std.testing.io, log, mediaTools.runner());
+    const versions = try bug.getToolVersions(allocator, std.testing.io, log);
 
     // The versions are the ones the built-in libraries report, read here from the libraries themselves.
     const imageMagickPrefix = "ImageMagick v";

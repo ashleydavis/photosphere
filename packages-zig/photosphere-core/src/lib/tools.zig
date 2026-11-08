@@ -8,7 +8,6 @@
 const std = @import("std");
 const ziggy = @import("ziggy");
 const tools_zig = @import("tools-zig");
-const media_tools = @import("media-tools-zig");
 const utils = @import("utils-zig");
 
 const TaskContext = ziggy.task_runner.TaskContext;
@@ -26,9 +25,7 @@ fn checkTools(services: TaskServices, timers: Timers, io: std.Io, allocator: std
     _ = timers;
     _ = context;
     _ = data;
-    // The tools built into the program, made on the task's thread, report on themselves.
-    var tools = media_tools.ThreadTools.init();
-    const status = try tools_zig.verifyTools(allocator, io, log, tools.runner());
+    const status = try tools_zig.verifyTools(allocator, io, log);
     return try json.stringify(allocator, status);
 }
 

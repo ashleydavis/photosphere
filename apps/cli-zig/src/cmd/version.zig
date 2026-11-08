@@ -12,7 +12,6 @@ const buildMetadata = config.buildMetadata;
 const getCacheDir = node_utils.fs.getCacheDir;
 const getConfigDir = node_utils.fs.getConfigDir;
 const getProcessTmpDir = node_utils.fs.getProcessTmpDir;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const join = node_utils.path.join;
 const CURRENT_DATABASE_VERSION = merkle_tree.merkle_tree.CURRENT_DATABASE_VERSION;
 
@@ -25,9 +24,9 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 
 //
 // Command that displays version information for psi and its dependencies.
-// toolRunner runs the ImageMagick and FFmpeg built into the program, whose versions are shown.
+// The versions of the ImageMagick and FFmpeg built into the program are shown.
 //
-pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !void {
+pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog) !void {
 
     log.info("");
     log.info(try pc.bold(allocator, "📋 Version Information\n"));
@@ -50,7 +49,7 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolR
     }
 
     // Get tool versions
-    const toolsStatus = try verifyTools(allocator, io, log, toolRunner);
+    const toolsStatus = try verifyTools(allocator, io, log);
     const imageMagickName = "ImageMagick (magick)";
 
     // Display dependency versions

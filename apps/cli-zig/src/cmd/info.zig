@@ -12,7 +12,6 @@ const ensure_tools = @import("../lib/ensure-tools.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
 const exit = node_utils.termination.exit;
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
@@ -138,9 +137,6 @@ const ScanState = struct {
     // The io of the command.
     io: std.Io,
 
-    // Runs the ImageMagick and FFmpeg built into the program, which read the media information.
-    toolRunner: InProcessRunner,
-
     // The results collected so far.
     results: *std.ArrayList(FileAnalysis),
 
@@ -153,7 +149,7 @@ const ScanState = struct {
 //
 fn visitScannedFile(context: ?*anyopaque, log: ILog, fileResult: FileScannedResult) anyerror!void {
     const state: *ScanState = @ptrCast(@alignCast(context.?));
-    const analysis = analyzeFile(state.allocator, state.io, log, state.toolRunner, fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath) catch |err| {
+    const analysis = analyzeFile(state.allocator, state.io, log, fileResult.filePath, fileResult.contentType, fileResult.fileStat, fileResult.logicalPath) catch |err| {
         try state.results.append(state.allocator, .{
             .path = fileResult.filePath,
             .fileStat = fileResult.fileStat,
@@ -199,7 +195,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     const sessionTempDir = context.sessionTempDir;
     const sessionId = context.sessionId;
 
-    try ensureMediaProcessingTools(allocator, io, log, context.toolRunner);
+    try ensureMediaProcessingTools(allocator, io, log);
 
     var pathInputs: std.ArrayList([]const u8) = .empty;
     var dbInputs: std.ArrayList([]const u8) = .empty;
@@ -217,7 +213,6 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
         var state: ScanState = .{
             .allocator = allocator,
             .io = io,
-            .toolRunner = context.toolRunner,
             .results = &results,
             .fileCount = 0,
         };
@@ -236,7 +231,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     }
 
     if (dbInputs.items.len > 0) {
-        const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+        const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
         const metadataCollection = try loaded.bsonDatabase.collection("metadata");
         for (dbInputs.items) |input| {
             const kind = classifyInput(input);
@@ -327,9 +322,9 @@ fn assetToFileAnalysis(allocator: std.mem.Allocator, asset: IAsset, logicalPath:
 }
 
 //
-// Hashes a file and reads its media information with the tools toolRunner runs.
+// Hashes a file and reads its media information with the ImageMagick and FFmpeg built into the program.
 //
-fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, contentType: []const u8, fileInfo: IFileStat, logicalPath: []const u8) !FileAnalysis {
+fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, contentType: []const u8, fileInfo: IFileStat, logicalPath: []const u8) !FileAnalysis {
     // filePath is either the temporary unpacked file path or the original source file path
     var fileAnalysis: FileAnalysis = .{
         .path = filePath,
@@ -347,7 +342,7 @@ fn analyzeFile(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: 
 
     // Analyze file content using the unified getFileInfo function
     // Files are already unpacked, so we can use the file path directly
-    if (getFileInfo(allocator, io, log, toolRunner, filePath, contentType)) |maybeAssetInfo| {
+    if (getFileInfo(allocator, io, log, filePath, contentType)) |maybeAssetInfo| {
         if (maybeAssetInfo) |assetInfo| {
             fileAnalysis.assetInfo = assetInfo;
         }

@@ -1460,7 +1460,7 @@ fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.proces
 fn builtInToolsStatus(log: ILog, allocator: std.mem.Allocator) !tools.ToolsStatus {
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    return tools.verifyTools(allocator, std.testing.io, log, mediaTools.runner());
+    return tools.verifyTools(allocator, std.testing.io, log);
 }
 
 //

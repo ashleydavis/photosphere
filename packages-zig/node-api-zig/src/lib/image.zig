@@ -2,7 +2,6 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const serialization_zig = @import("serialization-zig");
 const tools = @import("tools-zig");
 const media_file_database = @import("media-file-database.zig");
@@ -153,7 +152,7 @@ fn dateNow(io: std.Io) f64 {
 //
 // Gets the details of an image.
 //
-pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
+pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, filePath: []const u8, tempDir: []const u8, contentType: []const u8, uuidGenerator: IUuidGenerator, logicalPath: []const u8) !IAssetDetails {
     _ = logicalPath;
     // filePath is always a valid file (already extracted if from zip)
     var imagePath = filePath;
@@ -169,7 +168,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
     // EXIF Orientation of a HEIC is only informative), so the EXIF's turn is not applied on top of it.
     if (tools.heic.isHeicContentType(contentType)) {
         const decodedPath = try std.fs.path.join(allocator, &.{ tempDir, try std.fmt.allocPrint(allocator, "temp_heic_{s}.jpg", .{try uuidGenerator.generate(allocator, io)}) });
-        try tools.heic.decodeHeic(allocator, io, log, toolRunner, imagePath, decodedPath);
+        try tools.heic.decodeHeic(allocator, io, log, imagePath, decodedPath);
         imagePath = decodedPath;
         imageTransformation = null;
     }
@@ -187,7 +186,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
     }
     else {
         const probedContentType = if (tools.heic.isHeicContentType(contentType)) "image/jpeg" else contentType;
-        const assetInfo = try getFileInfo(allocator, io, log, toolRunner, imagePath, probedContentType) orelse {
+        const assetInfo = try getFileInfo(allocator, io, log, imagePath, probedContentType) orelse {
             return errors.throwError("Unsupported file type: {s}", .{contentType});
         };
         resolution = .{ .width = assetInfo.dimensions.width, .height = assetInfo.dimensions.height };
@@ -196,7 +195,7 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
 
     if (imageTransformation) |transformation| {
         // Flips orientation depending on exif data.
-        imagePath = try transformImage(allocator, io, log, toolRunner, imagePath, tempDir, transformation, uuidGenerator);
+        imagePath = try transformImage(allocator, io, log, imagePath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
             // A copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.
             const unswapped = resolution;
@@ -209,15 +208,15 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
 
     // Produced largest first, each from the one before it rather than from the full size original.
     const displayStartedAt = dateNow(io);
-    const displayPath = try resizeImage(allocator, io, log, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const displayPath = try resizeImage(allocator, io, log, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
     const displayMs = dateNow(io) - displayStartedAt;
 
     const thumbnailStartedAt = dateNow(io);
-    const thumbnailPath = try resizeImage(allocator, io, log, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailPath = try resizeImage(allocator, io, log, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, log, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
     const microMs = dateNow(io) - microStartedAt;
 
     return .{
@@ -392,7 +391,7 @@ fn jsRound(value: f64) f64 {
 //
 // Resize an image.
 //
-pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
+pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
 
     var width: f64 = undefined;
     var height: f64 = undefined;
@@ -407,13 +406,13 @@ pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunn
     }
 
     var image = Image.init(inputPath);
-    return image.resize(allocator, io, log, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
+    return image.resize(allocator, io, log, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
 }
 
 //
 // Transforms an image.
 //
-pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
+pub fn transformImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, inputPath: []const u8, tempDir: []const u8, options: IImageTransformation, uuidGenerator: IUuidGenerator) ![]const u8 {
     var image = Image.init(inputPath);
-    return image.transform(allocator, io, log, toolRunner, options, tempDir, uuidGenerator);
+    return image.transform(allocator, io, log, options, tempDir, uuidGenerator);
 }

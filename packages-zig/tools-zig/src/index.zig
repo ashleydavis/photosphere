@@ -15,5 +15,6 @@ pub const types = @import("lib/types.zig");
 // Export tool management functions
 pub const tool_verification = @import("lib/tool-verification.zig");
 pub const verifyTools = tool_verification.verifyTools;
+pub const toolsStatus = tool_verification.toolsStatus;
 pub const ToolStatus = tool_verification.ToolStatus;
 pub const ToolsStatus = tool_verification.ToolsStatus;

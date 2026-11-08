@@ -33,7 +33,7 @@ pub const windows_native_calls = @import("lib/windows-native-calls.zig");
 
 //
 // The task handlers of the node-api package, in the form Ziggy's workers take them, which the app adds to the task types it declares.
-// Each task that runs ImageMagick or FFmpeg makes the tools built into the program on its own thread, and each registers the media
+// A task that runs ImageMagick or FFmpeg calls the tools built into the program directly, and each registers the media
 // sources the platform serves on its thread first.
 //
-pub const node_api_task_entries = @import("node-api-zig").task_handlers.taskEntries(@import("media-tools-zig").ThreadTools, main_state.registerMediaSources);
+pub const node_api_task_entries = @import("node-api-zig").task_handlers.taskEntries(main_state.registerMediaSources);

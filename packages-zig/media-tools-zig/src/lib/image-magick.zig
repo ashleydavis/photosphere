@@ -1,11 +1,10 @@
 const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
-const node_utils = @import("node-utils-zig");
-// The C interface of ImageMagick, for a program that needs more of it than the runner.
+// The C interface of ImageMagick, for a program that needs more of it than runMagick.
 pub const c = @import("magick");
 
-const in_process_tools = node_utils.in_process_tools;
+const ToolOutput = @import("tool-run.zig").ToolOutput;
 const ThreadAllocator = @import("ziggy").utils.thread_allocator.ThreadAllocator;
 
 //
@@ -26,8 +25,8 @@ const ThreadAllocator = @import("ziggy").utils.thread_allocator.ThreadAllocator;
 // ImageMagick's warnings and errors are never printed to the process's standard error. They are handed back the way the standard
 // error of a `magick` program was:
 //
-//   * A command that fails hands back its messages as its output, which runTool puts in the error it fails with.
-//   * The warnings of a command that works go to the log as the tool's standard error (`log.tool`), where runToolLogged puts the
+//   * A command that fails hands back its messages as its output, which runChecked puts in the error it fails with.
+//   * The warnings of a command that works go to the log as the tool's standard error (`log.tool`), where runLogged puts the
 //     standard error of a program that worked.
 //
 
@@ -103,7 +102,7 @@ pub const ImageMagick = struct {
     // Runs `magick` with the arguments and returns the exit code (0 when the command worked, 1 when it failed) and what it printed.
     // A command that fails hands back ImageMagick's messages instead of what it printed.
     //
-    pub fn runMagick(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !in_process_tools.ToolOutput {
+    pub fn runMagick(io: std.Io, log: ILog, allocator: std.mem.Allocator, arguments: []const []const u8) !ToolOutput {
         if (arguments.len == 1 and std.mem.eql(u8, arguments[0], "-version")) {
             return try readVersion(io, allocator);
         }
@@ -201,7 +200,7 @@ pub const ImageMagick = struct {
     //
     // What `magick -version` prints, which ImageMagick writes to a file it is given.
     //
-    fn readVersion(io: std.Io, allocator: std.mem.Allocator) !in_process_tools.ToolOutput {
+    fn readVersion(io: std.Io, allocator: std.mem.Allocator) !ToolOutput {
         var path_buffer: [c.MagickPathExtent]u8 = undefined;
         const path = try acquireTemporaryPath(&path_buffer);
         defer _ = c.RelinquishUniqueFileResource(path.ptr);

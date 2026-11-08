@@ -3,9 +3,7 @@ const ILog = @import("utils-zig").log.ILog;
 const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const version_match = @import("version-match.zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
-const runTool = node_utils.in_process_tools.runTool;
-const runToolLogged = node_utils.in_process_tools.runToolLogged;
+const tool_run = @import("media-tools-zig").tool_run;
 const pathExists = node_utils.fs.pathExists;
 const join = node_utils.path.join;
 const errors = utils.errors;
@@ -58,26 +56,55 @@ pub const Image = struct {
     }
 
     //
-    // Verify that ImageMagick is available. It runs `magick -version` through the runner on every call, so a failure
-    // is never remembered for a later call.
+    // Verify that ImageMagick is available. It runs `magick -version` on every call, so a failure is never remembered for a
+    // later call.
     //
-    pub fn verifyImageMagick(allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !ImageMagickStatus {
-        const result = runTool(allocator, io, log, tools, "magick", &.{"-version"}) catch |err| {
-            return .{
-                .available = false,
-                .@"error" = try std.fmt.allocPrint(allocator, "The ImageMagick built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
-            };
+    pub fn verifyImageMagick(allocator: std.mem.Allocator, io: std.Io, log: ILog) !ImageMagickStatus {
+        const result = tool_run.runChecked(allocator, io, log, .magick, &.{"-version"}) catch |err| {
+            return imageMagickFailed(allocator, err);
         };
+        return imageMagickRan(result);
+    }
+
+    //
+    // The status of ImageMagick when its `-version` failed with the error: not available, with the error.
+    //
+    pub fn imageMagickFailed(allocator: std.mem.Allocator, err: anyerror) !ImageMagickStatus {
+        return .{
+            .available = false,
+            .@"error" = try std.fmt.allocPrint(allocator, "The ImageMagick built into the program did not run: {s}", .{try utils.errors.errorToString(allocator, err)}),
+        };
+    }
+
+    //
+    // The status of ImageMagick when its `-version` printed the output: available, with the version, or "unknown" when the output
+    // names none.
+    //
+    pub fn imageMagickRan(versionOutput: []const u8) ImageMagickStatus {
         return .{
             .available = true,
-            .version = imageMagickVersion(result.stdout),
+            .version = imageMagickVersion(versionOutput),
+        };
+    }
+
+    //
+    // The width and height in what `identify -format "%w %h"` printed, each read with parseInt, so a part that is missing or not a
+    // number is NaN.
+    //
+    pub fn dimensionsFromIdentify(output: []const u8) Dimensions {
+        var parts = std.mem.splitScalar(u8, utils.js_string.trim(output), ' ');
+        const width = parseInt(parts.next() orelse "undefined", null);
+        const height = parseInt(parts.next() orelse "undefined", null);
+        return .{
+            .width = width,
+            .height = height,
         };
     }
 
     //
     // Reads the dimensions of the image, and its date from the EXIF when it has one.
     //
-    fn getImageInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
+    fn getImageInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) !AssetInfo {
         if (self._info) |info| {
             return info;
         }
@@ -87,11 +114,8 @@ pub const Image = struct {
         }
 
         // Get format, dimensions
-        const result = try runToolLogged(allocator, io, log, tools, "magick", &.{ "identify", "-format", "%w %h", self.filePath }, null);
-
-        var parts = std.mem.splitScalar(u8, utils.js_string.trim(result.stdout), ' ');
-        const width = parseInt(parts.next() orelse "undefined", null);
-        const height = parseInt(parts.next() orelse "undefined", null);
+        const result = try tool_run.runLogged(allocator, io, log, .magick, &.{ "identify", "-format", "%w %h", self.filePath }, null);
+        const dimensions = dimensionsFromIdentify(result);
 
         // Get EXIF data for created date
         //
@@ -99,7 +123,7 @@ pub const Image = struct {
         // the space where the ISO 8601 form has a "T" (the Date Time String Format of ECMA-262 allows both) as local
         // time.
         var createdAt: ?f64 = null;
-        if (self.getExifData(allocator, io, log, tools)) |exifData| {
+        if (self.getExifData(allocator, io, log)) |exifData| {
             if (exifData.get("DateTimeOriginal")) |dateTimeOriginal| {
                 if (dateTimeOriginal.len > 0) {
                     // Parse EXIF date format: "2023:12:25 14:30:00"
@@ -114,7 +138,7 @@ pub const Image = struct {
         self._info = .{
             .filePath = self.filePath,
 
-            .dimensions = .{ .width = width, .height = height },
+            .dimensions = dimensions,
 
             .createdAt = createdAt,
 
@@ -131,31 +155,31 @@ pub const Image = struct {
     //
     // Gets the width and height of the image.
     //
-    pub fn getDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !Dimensions {
-        const info = try self.getImageInfo(allocator, io, log, tools);
+    pub fn getDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) !Dimensions {
+        const info = try self.getImageInfo(allocator, io, log);
         return info.dimensions;
     }
 
     //
     // Gets the information about the image.
     //
-    pub fn getInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !AssetInfo {
-        return self.getImageInfo(allocator, io, log, tools);
+    pub fn getInfo(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) !AssetInfo {
+        return self.getImageInfo(allocator, io, log);
     }
 
     //
     // Get EXIF data from the image
     //
-    pub fn getExifData(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) !std.StringArrayHashMapUnmanaged([]const u8) {
+    pub fn getExifData(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) !std.StringArrayHashMapUnmanaged([]const u8) {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        const result = runToolLogged(allocator, io, log, tools, "magick", &.{ "identify", "-format", "%[EXIF:*]", self.filePath }, null) catch |err| {
+        const result = tool_run.runLogged(allocator, io, log, .magick, &.{ "identify", "-format", "%[EXIF:*]", self.filePath }, null) catch |err| {
             return errors.throwError("Failed to get EXIF data: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
 
-        return parseExifOutput(allocator, result.stdout);
+        return parseExifOutput(allocator, result);
     }
 
     //
@@ -223,7 +247,7 @@ pub const Image = struct {
     //
     // Resizes the image into a new file in tempDir and returns its path.
     //
-    pub fn resize(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, options: ResizeOptions, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
+    pub fn resize(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, options: ResizeOptions, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
@@ -295,7 +319,7 @@ pub const Image = struct {
             .actualOutputPath = outputPath1,
         };
 
-        _ = try runToolLogged(allocator, io, log, tools, "magick", arguments.items, .{ .context = &validation, .function = IResizeValidation.validate });
+        _ = try tool_run.runLogged(allocator, io, log, .magick, arguments.items, .{ .context = &validation, .function = IResizeValidation.validate });
 
         return validation.actualOutputPath;
     }
@@ -304,24 +328,33 @@ pub const Image = struct {
     // Extract the dominant color from the image using ImageMagick
     // Returns RGB values as [r, g, b] array
     //
-    pub fn getDominantColor(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) ![3]f64 {
+    pub fn getDominantColor(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) ![3]f64 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
 
-        return self.getDominantColorInner(allocator, io, log, tools) catch |err| {
+        // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
+        const result = tool_run.runLogged(allocator, io, log, .magick, &.{ self.filePath, "-resize", "1x1!", "-format", "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]", "info:" }, null) catch |err| {
+            return errors.throwError("Failed to extract dominant color: {s}", .{try utils.errors.errorToString(allocator, err)});
+        };
+        return dominantColorFromOutput(allocator, result);
+    }
+
+    //
+    // The colour in what getDominantColor's ImageMagick command printed, "r,g,b". Fails with "Failed to extract dominant color: " and
+    // the reason when that is not three whole numbers from 0 to 255.
+    //
+    pub fn dominantColorFromOutput(allocator: std.mem.Allocator, output: []const u8) ![3]f64 {
+        return dominantColorFromOutputInner(allocator, output) catch |err| {
             return errors.throwError("Failed to extract dominant color: {s}", .{try utils.errors.errorToString(allocator, err)});
         };
     }
 
     //
-    // The body of the try block of getDominantColor.
+    // The body of the try block of dominantColorFromOutput.
     //
-    fn getDominantColorInner(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner) ![3]f64 {
-        // Method 1: Simple resize to 1x1 pixel (fastest, good for average color)
-        const result = try runToolLogged(allocator, io, log, tools, "magick", &.{ self.filePath, "-resize", "1x1!", "-format", "%[fx:int(mean.r*255)],%[fx:int(mean.g*255)],%[fx:int(mean.b*255)]", "info:" }, null);
-
-        const rgbString = utils.js_string.trim(result.stdout);
+    fn dominantColorFromOutputInner(allocator: std.mem.Allocator, output: []const u8) ![3]f64 {
+        const rgbString = utils.js_string.trim(output);
         var rgbValues: std.ArrayList(f64) = .empty;
         var values = std.mem.splitScalar(u8, rgbString, ',');
         while (values.next()) |value| {
@@ -343,7 +376,7 @@ pub const Image = struct {
     //
     // Transform an image with rotation and flip operations
     //
-    pub fn transform(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, tools: InProcessRunner, options: IImageTransformation, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
+    pub fn transform(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog, options: IImageTransformation, tempDir: []const u8, uuidGenerator: IUuidGenerator) ![]const u8 {
         if (!pathExists(io, self.filePath)) {
             return errors.throwError("File not found: {s}", .{self.filePath});
         }
@@ -367,7 +400,7 @@ pub const Image = struct {
             try arguments.append(allocator, self.filePath);
             try arguments.appendSlice(allocator, operations.items);
             try arguments.append(allocator, outputPath);
-            _ = try runToolLogged(allocator, io, log, tools, "magick", arguments.items, null);
+            _ = try tool_run.runLogged(allocator, io, log, .magick, arguments.items, null);
 
             // Check if the output file was created successfully.
             if (!pathExists(io, outputPath)) {

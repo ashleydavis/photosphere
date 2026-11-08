@@ -5,7 +5,6 @@ const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const process_argv = @import("process-argv.zig");
 const config = @import("config.zig");
-const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const FileLog = utils.file_log.FileLog;
 const ConsoleLog = utils.log.ConsoleLog;
 const registerTerminationCallback = node_utils.termination.registerTerminationCallback;
@@ -40,11 +39,11 @@ pub const ILogOptions = struct {
 // psi-<start time>-errors.log under <process tmp dir>/photosphere/logs, or with file logging disabled Ziggy's console log. The options
 // decide what the console shows; the log file always gets every line. The file log is closed, writing its footers, when the process
 // ends, by a termination callback.
-// consoleLog is the console log the program starts with, which finding the header writes to. toolRunner runs the ImageMagick and FFmpeg
-// built into the program, whose versions the file log's header gives.
+// consoleLog is the console log the program starts with, which finding the header writes to. The header gives the versions of the
+// ImageMagick and FFmpeg built into the program.
 // The log is allocated with the allocator and must live until the process exits.
 //
-pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, toolRunner: InProcessRunner, options: ILogOptions) !utils.log.ILog {
+pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, options: ILogOptions) !utils.log.ILog {
     if (options.disableFileLogging orelse false) {
         return ConsoleLog.initWith(.{
             .verbose = options.verbose orelse false,
@@ -66,7 +65,7 @@ pub fn configureLog(allocator: std.mem.Allocator, io: std.Io, consoleLog: ILog, 
         .command = command,
         .version = config.version,
         // The file log does not exist until this returns, so what finding the header writes goes to the console log.
-        .header_lines = try headerLines(allocator, io, consoleLog, toolRunner),
+        .header_lines = try headerLines(allocator, io, consoleLog),
         .verbose = options.verbose orelse false,
         .debug = options.debug orelse false,
         .tools = options.tools orelse false,
@@ -92,10 +91,10 @@ fn closeAtExit(context: ?*anyopaque, io: std.Io, _: ILog, exitCode: u8) anyerror
 //
 // The CLI's own lines of the log files' header: its build, the versions of the tools built into it and the whole command line.
 //
-fn headerLines(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) ![]const []const u8 {
-    const imageMagick = try tools.Image.verifyImageMagick(allocator, io, log, toolRunner);
-    const ffmpeg = try tools.Video.verifyFfmpeg(allocator, io, log, toolRunner);
-    const ffprobe = try tools.Video.verifyFfprobe(allocator, io, log, toolRunner);
+fn headerLines(allocator: std.mem.Allocator, io: std.Io, log: ILog) ![]const []const u8 {
+    const imageMagick = try tools.Image.verifyImageMagick(allocator, io, log);
+    const ffmpeg = try tools.Video.verifyFfmpeg(allocator, io, log);
+    const ffprobe = try tools.Video.verifyFfprobe(allocator, io, log);
     return try allocator.dupe([]const u8, &.{
         "--- Photosphere Version ---",
         config.version,
