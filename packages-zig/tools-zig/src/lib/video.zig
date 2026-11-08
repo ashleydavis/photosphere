@@ -114,20 +114,17 @@ pub const Video = struct {
 
         const probeData = switch (try jsonParse(allocator, result.stdout)) {
             .document => |document| document,
-
-            // `probeData.format` of null throws; any other value that is not an object has no format and no streams.
-            .null => return typeError("null is not an object (evaluating 'probeData.format')"),
-            else => return typeError("undefined is not an object (evaluating 'probeData.streams.find')"),
+            else => return errors.throwError("ffprobe output for {s} is not a JSON object", .{self.filePath}),
         };
         const format = probeData.get("format") orelse BsonValue.undefined;
         const streams = switch (probeData.get("streams") orelse BsonValue.undefined) {
             .array => |items| items,
-            .undefined => return typeError("undefined is not an object (evaluating 'probeData.streams.find')"),
-            .null => return typeError("null is not an object (evaluating 'probeData.streams.find')"),
-            else => return typeError("probeData.streams.find is not a function. (In 'probeData.streams.find((s) => s.codec_type === \"video\")', 'probeData.streams.find' is undefined)"),
+            .undefined => return errors.throwError("ffprobe output for {s} has no streams list", .{self.filePath}),
+            .null => return errors.throwError("ffprobe output for {s} has a streams list that is null", .{self.filePath}),
+            else => return errors.throwError("ffprobe output for {s} has a streams value that is not a list", .{self.filePath}),
         };
-        const videoStream = try findStream(streams, "video");
-        const audioStream = try findStream(streams, "audio");
+        const videoStream = try findStream(self.filePath, streams, "video");
+        const audioStream = try findStream(self.filePath, streams, "audio");
         const stream = videoStream orelse {
             return errors.throwError("No video stream found in file", .{});
         };
@@ -135,8 +132,8 @@ pub const Video = struct {
         // Parse creation time if available
         var createdAt: ?f64 = null;
         const tags = switch (format) {
-            .undefined => return typeError("undefined is not an object (evaluating 'format.tags')"),
-            .null => return typeError("null is not an object (evaluating 'format.tags')"),
+            .undefined => return errors.throwError("ffprobe output for {s} has no format section", .{self.filePath}),
+            .null => return errors.throwError("ffprobe output for {s} has a format section that is null", .{self.filePath}),
             else => property(format, "tags"),
         };
         const creationTime = property(tags, "creation_time");
@@ -149,7 +146,7 @@ pub const Video = struct {
         const frameRate = property(.{ .document = stream }, "r_frame_rate");
         if (isTruthy(frameRate)) {
             if (frameRate != .string) {
-                return typeError("videoStream.r_frame_rate.split is not a function. (In 'videoStream.r_frame_rate.split(\"/\")', 'videoStream.r_frame_rate.split' is undefined)");
+                return errors.throwError("ffprobe output for {s} has a video stream whose r_frame_rate is not a string", .{self.filePath});
             }
             var parts = std.mem.splitScalar(u8, frameRate.string, '/');
             const num = stringToNumber(parts.next() orelse "");
@@ -224,9 +221,10 @@ pub const Video = struct {
 };
 
 //
-// The first stream of the given codec type, which throws a TypeError at a null stream it reaches.
+// The first stream of the given codec type, which throws at a null stream it reaches. The path of the video is
+// only for the error message.
 //
-fn findStream(streams: []const BsonValue, codecType: []const u8) !?BsonDocument {
+fn findStream(filePath: []const u8, streams: []const BsonValue, codecType: []const u8) !?BsonDocument {
     for (streams) |stream| {
         switch (stream) {
             .document => |document| {
@@ -235,7 +233,7 @@ fn findStream(streams: []const BsonValue, codecType: []const u8) !?BsonDocument 
                     return document;
                 }
             },
-            .null => return typeError("null is not an object (evaluating 's.codec_type')"),
+            .null => return errors.throwError("ffprobe output for {s} lists a stream that is null", .{filePath}),
             else => {},
         }
     }
@@ -370,14 +368,6 @@ fn isTruthy(value: BsonValue) bool {
         .boolean => |boolean| boolean,
         else => true,
     };
-}
-
-//
-// Throws a TypeError with the message.
-//
-fn typeError(message: []const u8) errors.ThrownError {
-    errors.recordError("TypeError", "{s}", .{message});
-    return error.Thrown;
 }
 
 //

@@ -106,7 +106,7 @@ fn dropContentHash(node: *SortNode) void {
     node.contentHash = null;
 }
 
-test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whose node has no content hash" {
+test "verifyFileHandler fails, naming the file, for a changed file whose node has no content hash" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -118,8 +118,8 @@ test "verifyFileHandler fails like Buffer.compare in Bun for a changed file whos
     defer temp_dirs.removeTempDir(io, std.fs.path.dirname(databaseDir).?);
 
     try std.testing.expectError(error.Thrown, runHandler(allocator, io, log, databaseDir, THUMB_PATH, dropContentHash));
-    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
-    try std.testing.expectEqualStrings("The \"buf2\" argument must be of type Buffer or Uint8Array. Received undefined", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("Error", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("The database's record of " ++ THUMB_PATH ++ " has no content hash to compare the file with", utils.errors.lastErrorMessage());
 }
 
 test "verifyFileHandler does not hash a file whose size and timestamp are unchanged" {
@@ -311,7 +311,7 @@ fn dropTimestamp(node: *SortNode) void {
     node.lastModified = null;
 }
 
-test "verifyFileHandler fails like Bun for a changed file whose node has no timestamp" {
+test "verifyFileHandler fails, naming the file, for a changed file whose node has no timestamp" {
     const log = utils.mute_log.MuteLog.init();
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
@@ -324,8 +324,8 @@ test "verifyFileHandler fails like Bun for a changed file whose node has no time
     try test_files.writeFile(io, try std.fs.path.join(allocator, &.{ databaseDir, THUMB_PATH }), "changed");
 
     try std.testing.expectError(error.Thrown, runHandler(allocator, io, log, databaseDir, THUMB_PATH, dropTimestamp));
-    try std.testing.expectEqualStrings("TypeError", utils.errors.lastErrorName());
-    try std.testing.expectEqualStrings("undefined is not an object (evaluating 'node.lastModified.toLocaleString')", utils.errors.lastErrorMessage());
+    try std.testing.expectEqualStrings("Error", utils.errors.lastErrorName());
+    try std.testing.expectEqualStrings("The database's record of " ++ THUMB_PATH ++ " has no last modified time to report the file's change against", utils.errors.lastErrorMessage());
 }
 
 //

@@ -133,12 +133,12 @@ fn copyField(allocator: std.mem.Allocator, target: *std.json.ObjectMap, source: 
 // file may hold anything at all, and normaliseAutoImportSettings is the only supported way to turn
 // that into settings.
 //
-// (Zig: a source that is null throws here with a TypeError message
-// instead of being dropped; any other value that is not an object has no fields.)
+// (Zig: a source that is null throws here instead of being dropped; any other value that is not an
+// object has no fields.)
 //
 fn yamlSourceToRawSource(allocator: std.mem.Allocator, yamlSource: std.json.Value) !IRawAutoImportSource {
     if (yamlSource == .null) {
-        return errors.throwError("Cannot read properties of null (reading 'type')", .{});
+        return errors.throwError("The auto_import sources list in the config file has an entry that is null", .{});
     }
 
     var rawSource: std.json.ObjectMap = .empty;
