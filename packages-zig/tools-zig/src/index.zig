@@ -11,9 +11,3 @@ pub const getFileInfo = file_info.getFileInfo;
 
 pub const version_match = @import("lib/version-match.zig");
 pub const types = @import("lib/types.zig");
-
-// Export tool management functions
-pub const tool_verification = @import("lib/tool-verification.zig");
-pub const verifyTools = tool_verification.verifyTools;
-pub const ToolStatus = tool_verification.ToolStatus;
-pub const ToolsStatus = tool_verification.ToolsStatus;

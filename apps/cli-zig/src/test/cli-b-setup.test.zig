@@ -814,7 +814,6 @@ test "requireDatabase answers with the no-database result when nothing is open" 
     var tool_context: mcp_types.IMcpToolContext = .{
         .uuidGenerator = undefined,
         .timestampProvider = undefined,
-        .toolRunner = undefined,
         .log = console_log,
         .sessionId = "session",
         .options = .{},

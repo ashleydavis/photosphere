@@ -199,6 +199,60 @@ test "verifyFfprobe and verifyFfmpeg report the built-in tool failing with no in
     try std.testing.expectEqualStrings("The ffmpeg built into the program did not run: Error: Command failed: ffmpeg -version\n", ffmpegStatus.@"error".?);
 }
 
+test "verifyFfprobe and verifyFfmpeg read the version from the tool's output" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "ffprobe",
+            .output = "ffprobe version 6.1.1-3ubuntu5 Copyright (c) 2007-2023 the FFmpeg developers",
+        },
+        .{
+            .name = "ffmpeg",
+            .output = "ffmpeg version n7.0 Copyright (c) 2000-2024 the FFmpeg developers",
+        },
+    });
+
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log, fakeTools.runner());
+    try std.testing.expect(ffprobeStatus.available);
+    try std.testing.expectEqualStrings("6.1.1-3ubuntu5", ffprobeStatus.version.?);
+
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log, fakeTools.runner());
+    try std.testing.expect(ffmpegStatus.available);
+    try std.testing.expectEqualStrings("n7.0", ffmpegStatus.version.?);
+}
+
+test "verifyFfprobe and verifyFfmpeg report unknown when their output has no version in it" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "ffprobe",
+            .output = "Something else",
+        },
+        .{
+            .name = "ffmpeg",
+            .output = "Something else",
+        },
+    });
+
+    const ffprobeStatus = try Video.verifyFfprobe(allocator, io, log, fakeTools.runner());
+    try std.testing.expect(ffprobeStatus.available);
+    try std.testing.expectEqualStrings("unknown", ffprobeStatus.version.?);
+    try std.testing.expect(ffprobeStatus.@"error" == null);
+
+    const ffmpegStatus = try Video.verifyFfmpeg(allocator, io, log, fakeTools.runner());
+    try std.testing.expect(ffmpegStatus.available);
+    try std.testing.expectEqualStrings("unknown", ffmpegStatus.version.?);
+    try std.testing.expect(ffmpegStatus.@"error" == null);
+}
+
 // String() of an array joins its elements with commas, so parseFloat and parseInt read up to the first comma; and a string spreads
 // its UTF-16 code units, so a character outside the BMP gives two entries, each a lone surrogate written as U+FFFD.
 test "ffprobe arrays of several values are read from their joined text and a tag string spreads its code units" {

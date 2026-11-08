@@ -1,5 +1,5 @@
 //
-// The command that checks for the required media processing tools.
+// The command that shows the media processing tools built into psi.
 //
 
 const std = @import("std");
@@ -8,8 +8,8 @@ const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
 const tools = @import("tools-zig");
 const pc = @import("../lib/picocolors.zig");
-const verifyTools = tools.verifyTools;
-const ToolStatus = tools.ToolStatus;
+const Image = tools.Image;
+const Video = tools.Video;
 const exit = node_utils.termination.exit;
 const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 
@@ -22,17 +22,28 @@ pub const IToolsCommandOptions = struct {
 };
 
 //
+// The versions of the ImageMagick and FFmpeg built into the program.
+//
+pub const IBuiltInToolVersions = struct {
+    // The ImageMagick version.
+    magick: []const u8,
+
+    // The ffmpeg version.
+    ffmpeg: []const u8,
+
+    // The ffprobe version.
+    ffprobe: []const u8,
+};
+
+//
 // A tool the command reports on.
 //
 const IToolEntry = struct {
     // The name the report shows for the tool.
     name: []const u8,
 
-    // The status verifyTools gave the tool.
-    status: ToolStatus,
-
-    // True for ImageMagick, which is listed as missing under the name "ImageMagick".
-    isMagick: bool,
+    // The version of the tool.
+    version: []const u8,
 
     // What the tool is used for.
     description: []const u8,
@@ -46,7 +57,30 @@ fn text(allocator: std.mem.Allocator, comptime fmt: []const u8, args: anytype) !
 }
 
 //
-// Command that checks for required media processing tools.
+// The version a check of a tool built into the program read from it. The tools are compiled into the program, so they
+// cannot be missing: a tool that did not run throws with the error of its check.
+//
+fn builtInVersion(status: anytype) ![]const u8 {
+    if (!status.available) {
+        return utils.errors.throwError("{s}", .{status.@"error".?});
+    }
+    return status.version.?;
+}
+
+//
+// Gets the versions of the ImageMagick and FFmpeg built into the program, run through toolRunner. Throws with the
+// tool's error when one of them does not run.
+//
+pub fn getBuiltInToolVersions(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !IBuiltInToolVersions {
+    return .{
+        .magick = try builtInVersion(try Image.verifyImageMagick(allocator, io, log, toolRunner)),
+        .ffmpeg = try builtInVersion(try Video.verifyFfmpeg(allocator, io, log, toolRunner)),
+        .ffprobe = try builtInVersion(try Video.verifyFfprobe(allocator, io, log, toolRunner)),
+    };
+}
+
+//
+// Command that shows the media processing tools built into psi, with their versions.
 // toolRunner runs the ImageMagick and FFmpeg built into the program. The tools are built in, so there is nothing to
 // install and nothing to ask, and the options change nothing.
 //
@@ -56,84 +90,40 @@ pub fn toolsCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRun
 }
 
 //
-// Prints the status of each tool, then exits: 0 when all are available, otherwise 1 after naming the tools that
-// did not run.
+// Prints each tool with its version and what it is used for, then exits with 0.
 //
 fn listTools(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner) !void {
     log.info("");
-    log.info(try pc.bold(allocator, "📦 Media Processing Tools Status\n"));
+    log.info(try pc.bold(allocator, "📦 Media Processing Tools\n"));
 
-    const toolsStatus = try verifyTools(allocator, io, log, toolRunner);
+    const versions = try getBuiltInToolVersions(allocator, io, log, toolRunner);
 
-    // Show status of each tool
     const toolEntries = [_]IToolEntry{
         .{
             .name = "ImageMagick (magick)",
-            .status = toolsStatus.magick,
-            .isMagick = true,
+            .version = versions.magick,
             .description = "Image processing - resizing, format conversion, metadata extraction",
         },
         .{
             .name = "ffmpeg",
-            .status = toolsStatus.ffmpeg,
-            .isMagick = false,
+            .version = versions.ffmpeg,
             .description = "Video processing - format conversion and thumbnail extraction",
         },
         .{
             .name = "ffprobe",
-            .status = toolsStatus.ffprobe,
-            .isMagick = false,
+            .version = versions.ffprobe,
             .description = "Video analysis - metadata extraction, duration, dimensions, codecs",
         },
     };
 
-    var allAvailable = true;
-    var missingTools: std.ArrayList([]const u8) = .empty;
-
-    log.info(try pc.bold(allocator, "Tool Status:"));
+    log.info(try pc.bold(allocator, "Built into psi:"));
     log.info("");
 
     for (toolEntries) |tool| {
-        const status = tool.status;
-        const icon = if (status.available) "✅" else "❌";
-        var statusText: []const u8 = undefined;
-        if (status.available) {
-            var versionText: []const u8 = "";
-            if (status.version) |toolVersion| {
-                if (toolVersion.len > 0) {
-                    versionText = try text(allocator, " (v{s})", .{toolVersion});
-                }
-            }
-            statusText = try pc.green(allocator, try text(allocator, "Available{s}", .{versionText}));
-        }
-        else {
-            statusText = try pc.red(allocator, "Not found");
-        }
-
-        log.info(try text(allocator, "{s} {s}: {s}", .{ icon, try pc.bold(allocator, tool.name), statusText }));
+        log.info(try text(allocator, "{s}: {s}", .{ try pc.bold(allocator, tool.name), try pc.green(allocator, try text(allocator, "v{s}", .{tool.version})) }));
         log.info(try text(allocator, "   {s}", .{tool.description}));
-        if (status.@"error") |toolError| {
-            log.info(try text(allocator, "   {s}", .{try pc.red(allocator, toolError)}));
-        }
-
-        if (!status.available) {
-            allAvailable = false;
-            if (tool.isMagick) {
-                try missingTools.append(allocator, "ImageMagick");
-            }
-            else {
-                try missingTools.append(allocator, tool.name);
-            }
-        }
         log.info("");
     }
 
-    if (allAvailable) {
-        log.info(try pc.green(allocator, "🎉 All tools are available and ready to use!"));
-        exit(io, log, 0);
-    }
-    else {
-        log.info(try pc.yellow(allocator, try text(allocator, "⚠️ {d} tool(s) missing: {s}", .{ missingTools.items.len, try std.mem.join(allocator, ", ", missingTools.items) })));
-        exit(io, log, 1);
-    }
+    exit(io, log, 0);
 }

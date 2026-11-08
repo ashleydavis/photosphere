@@ -13,7 +13,6 @@ const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
 const storage_helper = @import("../lib/storage-helper.zig");
 const directory_picker = @import("../lib/directory-picker.zig");
-const ensure_tools = @import("../lib/ensure-tools.zig");
 const prompts = @import("../lib/clack/prompts.zig");
 const retry = utils.retry.retry;
 const throwError = utils.errors.throwError;
@@ -27,7 +26,6 @@ const selectEncryptionKey = init_cmd.selectEncryptionKey;
 const configureS3IfNeeded = init_cmd.configureS3IfNeeded;
 const createStorageForPath = storage_helper.createStorageForPath;
 const getDirectoryForCommand = directory_picker.getDirectoryForCommand;
-const ensureMediaProcessingTools = ensure_tools.ensureMediaProcessingTools;
 const intro = prompts.intro;
 const confirm = prompts.confirm;
 const outro = prompts.outro;
@@ -174,7 +172,6 @@ pub fn upgradeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, conte
     try intro(io, try pc.blue(allocator, "Upgrading media file database..."), .{});
 
     const nonInteractive = options.base.yes orelse false;
-    try ensureMediaProcessingTools(allocator, io, log, context.toolRunner);
 
     var databaseDir: []const u8 = undefined;
     if (options.base.db) |db| {

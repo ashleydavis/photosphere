@@ -1,12 +1,10 @@
 const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
-const utils = @import("utils-zig");
 const node_utils = @import("node-utils-zig");
-const tools = @import("tools-zig");
 const merkle_tree = @import("merkle-tree-zig");
 const pc = @import("../lib/picocolors.zig");
 const config = @import("../lib/config.zig");
-const verifyTools = tools.verifyTools;
+const getBuiltInToolVersions = @import("tools.zig").getBuiltInToolVersions;
 const version = config.version;
 const buildMetadata = config.buildMetadata;
 const getCacheDir = node_utils.fs.getCacheDir;
@@ -49,37 +47,14 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolR
         }
     }
 
-    // Get tool versions
-    const toolsStatus = try verifyTools(allocator, io, log, toolRunner);
-    const imageMagickName = "ImageMagick (magick)";
+    // The versions of the tools built into the program
+    const toolVersions = try getBuiltInToolVersions(allocator, io, log, toolRunner);
 
-    // Display dependency versions
     log.info("");
     log.info(try pc.bold(allocator, "Dependencies:"));
-
-    // ImageMagick
-    if (toolsStatus.magick.available and toolsStatus.magick.version != null) {
-        log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, imageMagickName), try pc.green(allocator, toolsStatus.magick.version.?) }));
-    }
-    else {
-        log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, imageMagickName), try pc.red(allocator, "Not found") }));
-    }
-
-    // FFmpeg
-    if (toolsStatus.ffmpeg.available and toolsStatus.ffmpeg.version != null) {
-        log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ffmpeg"), try pc.green(allocator, toolsStatus.ffmpeg.version.?) }));
-    }
-    else {
-        log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ffmpeg"), try pc.red(allocator, "Not found") }));
-    }
-
-    // FFprobe
-    if (toolsStatus.ffprobe.available and toolsStatus.ffprobe.version != null) {
-        log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ffprobe"), try pc.green(allocator, toolsStatus.ffprobe.version.?) }));
-    }
-    else {
-        log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ffprobe"), try pc.red(allocator, "Not found") }));
-    }
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ImageMagick (magick)"), try pc.green(allocator, toolVersions.magick) }));
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ffmpeg"), try pc.green(allocator, toolVersions.ffmpeg) }));
+    log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "ffprobe"), try pc.green(allocator, toolVersions.ffprobe) }));
 
     log.info("");
 
@@ -92,13 +67,4 @@ pub fn versionCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolR
     // them. A directory per database rather than one file, and this command has no database in hand
     // to name a single one, so it names the root they all sit under.
     log.info(try text(allocator, "  {s}: {s}", .{ try pc.bold(allocator, "Cache"), try pc.cyan(allocator, try getCacheDir(allocator)) }));
-    log.info("");
-
-    // Show overall status
-    if (toolsStatus.allAvailable) {
-        log.info(try pc.green(allocator, "✅ All dependencies are available"));
-    }
-    else {
-        log.info(try pc.yellow(allocator, try text(allocator, "⚠️  Some dependencies are missing: {s}", .{try std.mem.join(allocator, ", ", toolsStatus.missingTools)})));
-    }
 }
