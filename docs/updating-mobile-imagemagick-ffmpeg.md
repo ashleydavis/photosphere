@@ -4,7 +4,7 @@
 2. Make the generated files again for every target: run `generate-config.sh` of `third-party/imagemagick` and of `third-party/ffmpeg` with each target named in their `.md` files (Android targets need the NDK libc file `apps/photosphere/scripts/sync-android.sh` writes).
 3. Build each library alone for each target: `zig build -Dtarget=<target>` in `third-party/imagemagick` and in `third-party/ffmpeg`.
 4. Run `bun run test:everything`, which covers the unit tests of `packages-zig/media-tools-zig` and the Linux and Android smoke tests that import photos and videos.
-5. Check the security policy in `packages-zig/media-tools-zig/src/lib/image-magick.zig` against the new ImageMagick: any coder the update adds that reaches outside the file being read (a network protocol, a script, another file named inside the input) is added to the coders the policy denies. See [Security policy](mobile-native-media.md#security-policy).
+5. Check the security policy in `packages-zig/media-tools-zig/src/lib/image-magick.zig` against the new ImageMagick: it denies every coder and allows only the ones the program reads and writes by name, so a coder the update adds is refused unless it is added there. If the update renames one of the allowed coders, or reads one of the allowed types through a coder of a new name, the tests in `packages-zig/media-tools-zig/src/test/image-magick.test.zig` fail and the allowed names are brought up to date. See [Security policy](mobile-native-media.md#security-policy).
 6. Update `THIRD-PARTY-NOTICES.md` if a licence or a delegate changed.
 
 An update changes what the Zig CLI (`psi`) ships as well as the Photosphere App, because both link the same libraries.
