@@ -1046,25 +1046,6 @@ require_lan_bridge() {
 }
 
 #
-# Fails the test unless the device's network lets the sync gate allow a sync while "Only sync over Wi-Fi" is on, which it is by default
-# and in every scenario that seeds it on. The gate (packages/api/src/lib/sync-gate.ts) refuses only a connection the WebView reports as
-# cellular, so on Android, whose WebView reports the type of the device's default network, the default network must be Wi-Fi: a CI
-# emulator once stayed on cellular for a whole run, and every scenario that waited for a sync timed out without saying why. The desktop
-# web views and iOS's WKWebView do not report a connection type, the gate reads that as "unknown" and allows it, so there is nothing for
-# this to check on those platforms. Call it before starting the app in any scenario that needs a sync to happen.
-# Usage: require_wifi_for_sync
-#
-require_wifi_for_sync() {
-    if [ "$PLATFORM" != "android" ]; then
-        return 0
-    fi
-    if ! photosphere_android_require_wifi_default_network; then
-        log_error "The device's default network is not Wi-Fi, so the wifi-only sync gate will refuse the sync this test waits for."
-        exit 1
-    fi
-}
-
-#
 # Runs a psi CLI LAN send and fails the test unless it reports a successful transfer. The exit code alone is NOT a usable signal: when
 # the sender never discovers a receiver it prints "No device found within 60 seconds." and still exits 0. Output is written to
 # <tmp_dir>/sender.log and named on failure.

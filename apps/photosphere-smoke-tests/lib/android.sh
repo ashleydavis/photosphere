@@ -1437,18 +1437,6 @@ android_claim_device() {
 }
 
 #
-# Fails unless the claimed device's default network is Wi-Fi (or Ethernet), naming what it is instead. The WebView reports the type of
-# the device's default network to the app, and with "Only sync over Wi-Fi" on the sync gate refuses every automatic sync on cellular, so
-# a scenario that needs a sync would otherwise wait out its timeouts and say nothing about why. Only reads the device: a pool emulator's
-# radios are never changed from here (scripts/android/CLAUDE.md). Claims the device first.
-# Usage: photosphere_android_require_wifi_default_network
-#
-photosphere_android_require_wifi_default_network() {
-    photosphere_android_claim_device || return 1
-    bash "$PHOTOSPHERE_ANDROID_TOOLS_DIR/require-wifi-default-network.sh" "$ANDROID_SERIAL_CLAIMED" 0 {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&-
-}
-
-#
 # Succeeds when this run is on a real phone rather than an emulator. Needs a claimed device. Usage: android_is_real_device
 #
 android_is_real_device() {
