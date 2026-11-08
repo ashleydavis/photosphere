@@ -281,7 +281,7 @@ pub const AssetServerRoutes = struct {
 
         // A request without a JSON body is answered with a 500.
         const body_value = parsed orelse {
-            return self.sendErrorPage(allocator, request, .internal_server_error, "Request has no JSON body: send a JSON object with an \"ops\" array and a JSON Content-Type.");
+            return self.sendErrorPage(allocator, request, .internal_server_error, "TypeError: Cannot read properties of undefined (reading 'ops')");
         };
         const ops_value: ?std.json.Value = switch (body_value) {
             .object => |object| object.get("ops"),
