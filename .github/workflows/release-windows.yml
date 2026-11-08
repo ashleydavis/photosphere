@@ -502,19 +502,13 @@ jobs:
           if [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then
               cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/cli-smoke-logs/"
           fi
-          # upload-artifact refuses a file name holding a character NTFS forbids (" : < > | * ? and a few more), and a smoke test
-          # may name its files with them on purpose (CLI smoke test 139 does), which failed the upload of the directory itself and
-          # kept nothing. A tar archive carries every name exactly as it was. Extract it with: tar -xzf cli-smoke-logs.tar.gz
-          mkdir -p "$RUNNER_TEMP/cli-smoke-logs-archive"
-          cd "$RUNNER_TEMP"
-          tar -czf cli-smoke-logs-archive/cli-smoke-logs.tar.gz cli-smoke-logs
 
       - name: Upload the logs of failed CLI smoke tests
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: cli-smoke-logs-windows
-          path: ${{ runner.temp }}/cli-smoke-logs-archive
+          path: ${{ runner.temp }}/cli-smoke-logs
           retention-days: 5
 
   app-smoke-tests:
@@ -634,19 +628,13 @@ jobs:
           if [ -d "${TMPDIR:-/tmp}/photosphere-tests" ]; then
               cp -R "${TMPDIR:-/tmp}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"
           fi
-          # upload-artifact refuses a file name holding a character NTFS forbids (" : < > | * ? and a few more), and a smoke test
-          # may name its files with them on purpose (CLI smoke test 139 does), which failed the upload of the directory itself and
-          # kept nothing. A tar archive carries every name exactly as it was. Extract it with: tar -xzf app-smoke-logs.tar.gz
-          mkdir -p "$RUNNER_TEMP/app-smoke-logs-archive"
-          cd "$RUNNER_TEMP"
-          tar -czf app-smoke-logs-archive/app-smoke-logs.tar.gz app-smoke-logs
 
       - name: Upload the logs of failed scenarios
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: app-smoke-logs-windows
-          path: ${{ runner.temp }}/app-smoke-logs-archive
+          path: ${{ runner.temp }}/app-smoke-logs
           retention-days: 5
 
   # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
