@@ -39,7 +39,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 ## Rule breaches and leftover code
 
-- **A swallowed error.** `Image.getImageInfo` ignores EXIF errors (`else |_| { // Ignore EXIF errors }`). This breaks the rule that all failures must be noisy.
 - **Leftovers from when the tools were installed separately.** `ensureMediaProcessingTools`, `check-tools`, the missing-tools data for the page and the "Not found" output in `version` all date from that time. The tools are now compiled in, so they cannot be missing.
 - **Out-of-date comment.** "Serialize tool verification to avoid race conditions" in `tools-zig/src/lib/tool-verification.zig`.
 - **JavaScript error text.** `video.zig` raises errors such as `"undefined is not an object (evaluating 'probeData.format')"`. These are copied from the TypeScript port and mean nothing to a Zig reader.

@@ -98,17 +98,16 @@ pub const Image = struct {
         // An EXIF date and time is "2023:12:25 14:30:00", which becomes "2023-12-25 14:30:00". js_date.parseDate reads
         // the space where the ISO 8601 form has a "T" (the Date Time String Format of ECMA-262 allows both) as local
         // time.
+        //
+        // An image with no EXIF is not an error: ImageMagick prints nothing for it and getExifData returns no tags, so
+        // createdAt stays null. A failure to read the EXIF is an error, and its message names the command and the file.
         var createdAt: ?f64 = null;
-        if (self.getExifData(allocator, io, log, tools)) |exifData| {
-            if (exifData.get("DateTimeOriginal")) |dateTimeOriginal| {
-                if (dateTimeOriginal.len > 0) {
-                    // Parse EXIF date format: "2023:12:25 14:30:00"
-                    createdAt = js_date.parseDate(try exifDateToDashes(allocator, dateTimeOriginal));
-                }
+        const exifData = try self.getExifData(allocator, io, log, tools);
+        if (exifData.get("DateTimeOriginal")) |dateTimeOriginal| {
+            if (dateTimeOriginal.len > 0) {
+                // Parse EXIF date format: "2023:12:25 14:30:00"
+                createdAt = js_date.parseDate(try exifDateToDashes(allocator, dateTimeOriginal));
             }
-        }
-        else |_| {
-            // Ignore EXIF errors
         }
 
         self._info = .{
