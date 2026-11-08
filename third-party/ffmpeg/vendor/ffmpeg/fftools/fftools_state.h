@@ -1,4 +1,10 @@
 /*
+ * Written for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 and added to
+ * FFmpeg's source by third-party/ffmpeg/fftools-per-run-state.patch. The dates of later changes
+ * are in the history of that patch.
+ */
+
+/*
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or

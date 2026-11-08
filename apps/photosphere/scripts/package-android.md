@@ -12,6 +12,8 @@ Invoke: `bun run --filter=ziggy package:android -- [--arch "<list>"] [--binary <
 
 The artifacts are named `photosphere-<version>-android-<arch>.apk`.
 
+Each APK carries the licence files every distributed build carries, as `assets/licences`: the script writes them with `scripts/write-licence-files.sh` (see [write-licence-files.md](../../../scripts/write-licence-files.md)) into `native/android/app/build/ziggy/licence-assets/licences`, which `app/build.gradle` names as the assets directory.
+
 ## Why ReleaseSafe
 
 `ReleaseSafe` is what the app's other release builds use, and it is the only release mode that keeps Zig's runtime safety checks, so a bug stops the app with a message instead of corrupting data. `ReleaseSmall` was the choice of Ziggy's example app (now the template in Ziggy's repository) with no reason recorded, and one run measured what it buys: that app's x86_64 APK was about 0.75 MB with `ReleaseSmall` and 1.1 to 1.2 MB with `ReleaseSafe` or `ReleaseFast`, this app's x86_64 APK was about 115 MB against 117 MB, and every mode started on an x86_64 emulator.
