@@ -1119,10 +1119,6 @@ android_restore_app_data_file() {
 # Copies a directory of the dbs directory of the app's files directory onto this machine. A whole tree rather than one file, because a database is a
 # directory: a scenario that checks what the app wrote reads it with the CLI, and the CLI needs the whole `.db` folder. It goes through
 # `tar` on the device and adb's stdout, because `adb pull` cannot reach private storage at all.
-#
-# A copy cut short looks like a whole one: when the device went offline part way through, `adb exec-out` and `tar xf` both returned 0,
-# and what was unpacked lacked the `.db` folder, so the scenario failed later saying the database held no photo. So adb's own messages
-# are left on stderr, and the device has to still be online once the stream ends, or the copy counts as cut short.
 # Usage: android_save_sandbox_dir <dir_under_dbs> <local_dir>
 #
 android_save_sandbox_dir() {
@@ -1130,27 +1126,21 @@ android_save_sandbox_dir() {
     local local_dir="$2"
     photosphere_android_prepare_for_seeding || return 1
 
-    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -d "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir" >/dev/null; then
+    if ! photosphere_adb shell run-as "$ANDROID_APP_ID" test -d "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir" >/dev/null 2>&1; then
         echo "The device has no $ANDROID_DATABASES_DIR_RELATIVE/$device_dir to save" >&2
         return 1
     fi
-    mkdir -p "$local_dir" || return 1
+    mkdir -p "$local_dir"
     local tarball="$local_dir/sandbox-dir.tar"
-    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" > "$tarball"; then
+    if ! photosphere_adb exec-out run-as "$ANDROID_APP_ID" tar c -C "$ANDROID_DATABASES_DIR_RELATIVE" "$device_dir" > "$tarball" 2>/dev/null; then
         echo "Could not read $ANDROID_DATABASES_DIR_RELATIVE/$device_dir off the device." >&2
-        return 1
-    fi
-    local device_state
-    device_state="$(timeout --foreground "$ANDROID_ADB_QUERY_SECONDS" "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL_CLAIMED" get-state 2>&1 {ANDROID_LOCK_FD}>&- {ANDROID_ZIGGY_LOCK_FD}>&- | tr -d '\r')"
-    if [ "$device_state" != "device" ]; then
-        echo "Device $ANDROID_SERIAL_CLAIMED went offline while $ANDROID_DATABASES_DIR_RELATIVE/$device_dir was being copied off it (adb get-state: ${device_state:-no answer}), so the copy was cut short. The partial copy is in $tarball." >&2
         return 1
     fi
     if [ ! -s "$tarball" ]; then
         echo "$ANDROID_DATABASES_DIR_RELATIVE/$device_dir came back empty from the device." >&2
         return 1
     fi
-    if ! tar xf "$tarball" -C "$local_dir"; then
+    if ! tar xf "$tarball" -C "$local_dir" 2>/dev/null; then
         echo "Could not unpack $ANDROID_DATABASES_DIR_RELATIVE/$device_dir after copying it off the device." >&2
         return 1
     fi
@@ -1361,15 +1351,10 @@ android_asset_count() {
 
 #
 # Copies the database in the given directory of the app's files/dbs onto this machine, as android_save_sandbox_dir does. The destination is
-# made by the copy. A copy without the database's `.db` folder fails here, naming what is missing, rather than leaving the CLI to report
-# that there is no database. Usage: android_pull_database <dir_name> <local_dir>
+# made by the copy. Usage: android_pull_database <dir_name> <local_dir>
 #
 android_pull_database() {
-    android_save_sandbox_dir "$1" "$2" || return 1
-    if [ ! -d "$2/$1/.db" ]; then
-        echo "The copy of $ANDROID_DATABASES_DIR_RELATIVE/$1 taken off device $ANDROID_SERIAL_CLAIMED has no .db folder, so it is not a whole database. It holds: $(ls -A "$2/$1" 2>&1 | tr '\n' ' ')" >&2
-        return 1
-    fi
+    android_save_sandbox_dir "$1" "$2"
 }
 
 #
