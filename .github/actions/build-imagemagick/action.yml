@@ -56,7 +56,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: third-party/imagemagick/zig-out
-        key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', '!third-party/imagemagick/zig-out/**', '!third-party/imagemagick/zig-pkg/**', '!third-party/imagemagick/.zig-cache/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
+        key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', '!third-party/imagemagick/zig-out/**', '!third-party/imagemagick/zig-pkg/**', '!third-party/imagemagick/.zig-cache/**', '!third-party/imagemagick/config/aarch64-ios*/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
 
     # After the cache key is worked out, so the files it makes do not change the key a job that only restores the library works out.
     - name: Make ImageMagick's generated files for the target

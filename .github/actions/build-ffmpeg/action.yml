@@ -56,7 +56,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: third-party/ffmpeg/zig-out
-        key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/ffmpeg/**', '!third-party/ffmpeg/zig-out/**', '!third-party/ffmpeg/zig-pkg/**', '!third-party/ffmpeg/.zig-cache/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
+        key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/ffmpeg/**', '!third-party/ffmpeg/zig-out/**', '!third-party/ffmpeg/zig-pkg/**', '!third-party/ffmpeg/.zig-cache/**', '!third-party/ffmpeg/config/aarch64-ios*/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
 
     # After the cache key is worked out, so the files it makes do not change the key a job that only restores the library works out.
     - name: Make FFmpeg's generated files for the target

@@ -1,0 +1,33 @@
+name: Zig packages
+description: >
+  Restores the package archives Zig keeps in its global cache (~/.cache/zig/p, or ~/AppData/Local/zig/p on Windows) for the
+  dependencies the tracked build.zig.zon files name. When the cache has none for them, it fetches every package of every one of
+  those builds before the job's own build runs, so whichever job saves the entry saves all of them. The job has to check the
+  repository out and put Zig on the PATH first.
+
+runs:
+  using: composite
+  steps:
+    # The entry holds exactly the packages its key names, so there are no restore-keys: an older entry would carry the packages of
+    # an older dependency set into the new one, and they would never leave it.
+    - name: Restore the packages Zig fetches
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.os == 'Windows' && '~/AppData/Local/zig/p' || '~/.cache/zig/p' }}
+        key: ${{ runner.os }}-${{ runner.arch }}-zig-packages-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
+
+    # Each build fetches only the packages it reaches, and a hit is never saved again, so every package is fetched before the
+    # entry is saved, whichever job saves it. --fetch=all fetches lazy packages too, and exits before the build script runs. Retried because the downloads come from
+    # GitHub and the libraries' own hosts, and one can fail part way.
+    - name: Fetch every package the build.zig.zon files name
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: ./.github/actions/retry-install
+      with:
+        run: |
+          set -euo pipefail
+          for manifest in $(git ls-files -- '*build.zig.zon'); do
+              directory="$(dirname "$manifest")"
+              echo "Fetching the packages of $directory"
+              (cd "$directory" && zig build --fetch=all)
+          done

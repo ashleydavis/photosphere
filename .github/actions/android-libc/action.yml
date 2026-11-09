@@ -14,6 +14,7 @@ runs:
 
     # setup-android.sh checks that the pinned tools are on the PATH.
     - name: Setup Zig and jq (versions from mise.toml)
+      if: steps.tools.outputs.found != 'yes'
       uses: jdx/mise-action@v2
       with:
         install_args: zig jq

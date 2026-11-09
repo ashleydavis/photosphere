@@ -201,23 +201,16 @@ jobs:
         with:
           install_args: zig jq
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Install dependencies
         uses: ./.github/actions/retry-install
@@ -321,15 +314,8 @@ jobs:
         with:
           install_args: zig
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
 
       - name: Restore the Zig build cache
         uses: actions/cache/restore@v4
@@ -445,22 +431,15 @@ jobs:
         uses: jdx/mise-action@v2
         with:
           install_args: zig
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
       - name: Install dependencies
         uses: ./.github/actions/retry-install
         with:
@@ -565,23 +544,16 @@ jobs:
         with:
           install_args: zig jq
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Install what-changed
         uses: ./.github/actions/install-what-changed
@@ -683,9 +655,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Install dependencies
         uses: ./.github/actions/retry-install
@@ -717,9 +689,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Install dependencies
         uses: ./.github/actions/retry-install
@@ -752,23 +724,16 @@ jobs:
         with:
           install_args: zig
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Install dependencies
         uses: ./.github/actions/retry-install
@@ -860,23 +825,16 @@ jobs:
         with:
           install_args: zig jq
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
 
       - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ runner.os }}-${{ runner.arch }}-bun-
 
       - name: Install dependencies
         uses: ./.github/actions/retry-install
