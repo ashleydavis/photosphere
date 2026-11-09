@@ -58,6 +58,30 @@ for orientation in 1 3 6 8; do
     fi
 done
 
+#
+# Makes the 71x37 JPEG with a broken EXIF segment unless it is already there: broken_exif <file name> <segment>.
+# The segment is a printf format string, put straight after the JPEG's start marker as above. ImageMagick still
+# reads the image and its EXIF identify still succeeds, so each must import with its size.
+#
+broken_exif() {
+    local name="$1"
+    if [ ! -f "$out/$name" ]; then
+        {
+            head -c 2 "$out/71x37-base.jpg"
+            printf "$2"
+            tail -c +3 "$out/71x37-base.jpg"
+        } > "$out/$name.tmp"
+        mv "$out/$name.tmp" "$out/$name"
+    fi
+}
+
+# The IFD claims 65535 entries where it holds one.
+broken_exif 71x37-exif-bad-count.jpg '\xff\xe1\x00\x22Exif\x00\x00II*\x00\x08\x00\x00\x00\xff\xff\x12\x01\x03\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00'
+# The IFD offset points far past the end of the segment.
+broken_exif 71x37-exif-bad-offset.jpg '\xff\xe1\x00\x22Exif\x00\x00II*\x00\xff\xff\xff\x7f\x01\x00\x12\x01\x03\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00'
+# The TIFF header names no byte order ("XX" where "II" or "MM" belongs).
+broken_exif 71x37-exif-bad-header.jpg '\xff\xe1\x00\x22Exif\x00\x00XX*\x00\x08\x00\x00\x00\x01\x00\x12\x01\x03\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00'
+
 
 #
 # Makes one two-second video unless it is already there: make_video <file name> <ffmpeg output arguments>.
