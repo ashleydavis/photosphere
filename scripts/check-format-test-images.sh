@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Imports every image made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
+# Imports every image and video made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
 # the width and height psi recorded for each against the size in its file name. A JPEG whose EXIF Orientation is 6 or
 # 8 is turned a quarter, so its recorded size is the file name's swapped. Exits 1 naming each image that is wrong.
 #

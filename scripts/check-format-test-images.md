@@ -1,6 +1,6 @@
 # check-format-test-images.sh
 
-Imports every image in `test/formats/` into a new database with the built `psi`, then checks the width and height
+Imports every image and video in `test/formats/` into a new database with the built `psi`, then checks the width and height
 `psi` recorded for each against the size at the start of its file name (`53x31-alpha.png` must be 53 × 31). A JPEG
 with an EXIF Orientation of 6 or 8 stands upright when turned, so it must be recorded with the size swapped.
 
