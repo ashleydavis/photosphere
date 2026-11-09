@@ -40,23 +40,40 @@ make 47x19-no-exif.jpg JPEG -size 47x19 gradient:red-green -strip
 # Animated GIF: three frames.
 make 43x17-animated.gif GIF -delay 10 -size 43x17 xc:red -size 43x17 xc:green -size 43x17 xc:blue -loop 0
 
-# A 71x37 JPEG for each EXIF Orientation given. ImageMagick does not write an Orientation tag into a JPEG
-# that has no EXIF, so a minimal EXIF segment holding only that tag is put straight after the JPEG's
-# start marker: APP1, "Exif", a little-endian TIFF header, and one IFD entry (0x0112, SHORT, the value).
+# The same JPEG with each EXIF Orientation given: make_oriented <base JPEG file name> <orientation>...
+# ImageMagick does not write an Orientation tag into a JPEG that has no EXIF, so a minimal EXIF segment
+# holding only that tag is put straight after the JPEG's start marker: APP1, "Exif", a little-endian
+# TIFF header, and one IFD entry (0x0112, SHORT, the value). Each is named <base size>-exif-orientation-<n>.jpg.
+#
+make_oriented() {
+    local base="$1"
+    shift
+    local orientation
+    for orientation in "$@"; do
+        local name="${base%%-*}-exif-orientation-$orientation.jpg"
+        if [ ! -f "$out/$name" ]; then
+            {
+                head -c 2 "$out/$base"
+                printf '\xff\xe1\x00\x22Exif\x00\x00II*\x00\x08\x00\x00\x00\x01\x00\x12\x01\x03\x00\x01\x00\x00\x00'
+                printf "\\x0$orientation"
+                printf '\x00\x00\x00\x00\x00\x00\x00'
+                tail -c +3 "$out/$base"
+            } > "$out/$name.tmp"
+            mv "$out/$name.tmp" "$out/$name"
+        fi
+    done
+}
+
 make 71x37-base.jpg JPEG -size 71x37 gradient:red-blue -strip
-for orientation in 1 3 6 8; do
-    name="71x37-exif-orientation-$orientation.jpg"
-    if [ ! -f "$out/$name" ]; then
-        {
-            head -c 2 "$out/71x37-base.jpg"
-            printf '\xff\xe1\x00\x22Exif\x00\x00II*\x00\x08\x00\x00\x00\x01\x00\x12\x01\x03\x00\x01\x00\x00\x00'
-            printf "\\x0$orientation"
-            printf '\x00\x00\x00\x00\x00\x00\x00'
-            tail -c +3 "$out/71x37-base.jpg"
-        } > "$out/$name.tmp"
-        mv "$out/$name.tmp" "$out/$name"
-    fi
-done
+make_oriented 71x37-base.jpg 1 3 6 8
+
+# Large JPEGs, which the display, thumbnail and micro pictures are made from by decoding them at a reduced size.
+# A 20 megapixel camera's photo, and a photo whose sides are not multiples of 8, so the reduced decode rounds
+# its sides up, with each EXIF Orientation. Red at the top and blue at the bottom, so a picture the wrong way
+# up or turned the wrong way shows.
+make 5472x3648-camera.jpg JPEG -size 5472x3648 gradient:red-blue -quality 90 -strip
+make 4001x2999-base.jpg JPEG -size 4001x2999 gradient:red-blue -quality 90 -strip
+make_oriented 4001x2999-base.jpg 1 3 6 8
 
 
 #
