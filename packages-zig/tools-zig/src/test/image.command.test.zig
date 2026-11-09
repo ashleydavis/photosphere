@@ -82,6 +82,45 @@ test "getInfo reads a width and a height of NaN from output ImageMagick did not 
     try std.testing.expect(blankInfo.createdAt == null);
 }
 
+test "getDimensions runs only the size identify, and getInfo runs the EXIF identify as well" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    var sizeOnly = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "100 90",
+        },
+    });
+    var image = Image.init("../test/test.png");
+    const dimensions = try image.getDimensions(allocator, io, log, sizeOnly.runner());
+    try std.testing.expectEqual(@as(f64, 100), dimensions.width);
+    try std.testing.expectEqual(@as(f64, 90), dimensions.height);
+    try std.testing.expectEqual(@as(usize, 1), sizeOnly.calls.items.len);
+    try std.testing.expectEqualStrings("magick identify -format %w %h\n ../test/test.png", sizeOnly.calls.items[0]);
+
+    // getInfo still reads the EXIF for createdAt, after the size.
+    var full = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "100 90",
+        },
+    });
+    var withInfo = Image.init("../test/test.png");
+    const info = try withInfo.getInfo(allocator, io, log, full.runner());
+    try std.testing.expectEqual(dimensions, info.dimensions);
+    try std.testing.expectEqual(@as(usize, 2), full.calls.items.len);
+    try std.testing.expectEqualStrings("magick identify -format %w %h\n ../test/test.png", full.calls.items[0]);
+    try std.testing.expectEqualStrings("magick identify -format %[EXIF:*] ../test/test.png", full.calls.items[1]);
+
+    // Once getInfo has read the image, getDimensions answers from it without running anything more.
+    try std.testing.expectEqual(info.dimensions, try withInfo.getDimensions(allocator, io, log, full.runner()));
+    try std.testing.expectEqual(@as(usize, 2), full.calls.items.len);
+}
+
 test "getDominantColor refuses output that is not three values between 0 and 255" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

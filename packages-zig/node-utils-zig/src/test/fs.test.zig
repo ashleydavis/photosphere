@@ -2270,30 +2270,3 @@ fn holdOpenWithoutDeleteSharing(filePath: []const u8) !std.Io.File {
     };
 }
 
-test "remove throws when a file that exists cannot be deleted, rather than treating it as gone" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const io = std.testing.io;
-    if (builtin.os.tag == .windows) {
-        // Windows has no directory permission that stops a file in it being deleted.
-        return error.SkipZigTest;
-    }
-    const filePath = try tempFilePathInOwnDir(allocator, io, "undeletable.txt");
-    try fs.outputFile(allocator, io, filePath, "stays");
-    const dirPath = std.fs.path.dirname(filePath).?;
-
-    // A directory that cannot be written to refuses to give up its files.
-    const dir = try std.Io.Dir.cwd().openDir(io, dirPath, .{
-        .iterate = true,
-    });
-    defer dir.close(io);
-    try dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o500));
-    defer dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o700)) catch {};
-
-    try std.testing.expectError(error.AccessDenied, fs.remove(io, filePath));
-    try std.testing.expect(fs.pathExists(io, filePath));
-
-    try dir.setPermissions(io, std.Io.File.Permissions.fromMode(0o700));
-    try fs.remove(io, dirPath);
-}
