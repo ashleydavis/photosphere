@@ -73,7 +73,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 ## Trade-offs worth deciding
 
-- **FFmpeg attack surface.** FFmpeg is built with every decoder and demuxer, which is a large attack surface for files received over LAN share.
 - **LGPL compliance.** `THIRD-PARTY-NOTICES.md` says how static linking meets the LGPL "is not yet decided".
 
 ## Fix

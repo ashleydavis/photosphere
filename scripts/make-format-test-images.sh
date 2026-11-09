@@ -242,4 +242,40 @@ make_video 96x54-h264.mp4 -c:v libx264 -pix_fmt yuv420p -c:a aac
 make_video 112x64-hevc.mp4 -c:v libx265 -x265-params log-level=error -tag:v hvc1 -pix_fmt yuv420p -c:a aac
 make_video 128x72-h264.mov -c:v libx264 -pix_fmt yuv420p -c:a aac
 make_video 144x80-hevc.mov -c:v libx265 -x265-params log-level=error -tag:v hvc1 -pix_fmt yuv420p -c:a aac
+
+# The other video types phones and cameras record that the import takes (its content type starts video/).
+# 3GP from older phones, in H.263 (only the standard sizes, 128x96 is SQCIF) and H.264.
+make_video 128x96-h263.3gp -c:v h263 -c:a aac
+make_video 160x90-h264.3gp -c:v libx264 -pix_fmt yuv420p -c:a aac
+# M4V, the MP4 an iPhone or iTunes names .m4v.
+make_video 192x108-h264.m4v -c:v libx264 -pix_fmt yuv420p -c:a aac
+# AVI from compact cameras: Motion JPEG with PCM sound, and MPEG-4 Part 2 tagged XVID.
+make_video 160x120-mjpeg.avi -c:v mjpeg -pix_fmt yuvj420p -c:a pcm_s16le
+make_video 176x144-mpeg4-xvid.avi -c:v mpeg4 -vtag XVID -c:a mp2
+# MPEG program streams from DVD and older camcorders: MPEG-2 in .mpg and .vob, MPEG-1 in .mpeg.
+make_video 208x112-mpeg2.mpg -c:v mpeg2video -c:a mp2
+make_video 224x128-mpeg2.vob -c:v mpeg2video -c:a mp2 -f vob
+make_video 240x144-mpeg1.mpeg -c:v mpeg1video -c:a mp2
+# Matroska and WebM, from screen recorders and Android apps.
+make_video 256x144-h264.mkv -c:v libx264 -pix_fmt yuv420p -c:a aac
+make_video 272x160-vp9.webm -c:v libvpx-vp9 -pix_fmt yuv420p -an
+make_video 288x160-vp8.webm -c:v libvpx -pix_fmt yuv420p -an
+# Windows Media from older Windows phones and cameras: WMV in ASF, with WMA sound.
+make_video 320x180-wmv2.wmv -c:v wmv2 -c:a wmav2 -f asf
+# MS MPEG-4 v3 (DivX 3) in AVI, from older cameras and phones.
+make_video 336x192-msmpeg4v3.avi -c:v msmpeg4 -c:a mp2
+# DV from MiniDV camcorders, in AVI and MOV. The DV encoder takes only the standard sizes: 720x576 is PAL, at 25 frames
+# a second.
+make_video 720x576-dv.avi -c:v dvvideo -pix_fmt yuv420p -c:a pcm_s16le -ar 48000
+make_video 720x576-dv.mov -c:v dvvideo -pix_fmt yuv420p -c:a pcm_s16le -ar 48000
+
+# A video type the import never adds, named -not-imported so the check expects no record of it.
+# AVCHD camcorders write H.264 in MPEG-TS (.mts), whose content type video/mp2t the scanner leaves out, because a
+# TypeScript .ts file has the same content type.
+make_video 304x176-h264-not-imported.mts -c:v libx264 -pix_fmt yuv420p -c:a aac -f mpegts
+
+# A phone's HEIC: a 1000x700 picture stored as tiles, which the built-in FFmpeg decodes and joins.
+if [ ! -f "$out/1000x700-tiled.heic" ]; then
+    cp "$out/../heic/tiled.heic" "$out/1000x700-tiled.heic"
+fi
 echo "Format test images and videos are in $out"
