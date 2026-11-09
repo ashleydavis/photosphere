@@ -1,14 +1,14 @@
 name: Build ImageMagick
 description: >
   Builds ImageMagick and its delegates with their own build in third-party/imagemagick, into
-  third-party/imagemagick/zig-out where Photosphere's Zig build looks for it. The result is cached, and the build is
+  third-party/imagemagick/zig-out where Photosphere's Zig build looks for it. The result is stored as an artifact, and the build is
   skipped when nothing it is built from has changed, so a job that needs the library runs this too and
   restores it. The job has to check the repository out first.
 
 inputs:
   platform:
     description: >
-      The platform the library is built for, which goes into its cache key (for example linux-x64).
+      The platform the library is built for, which goes into its key (for example linux-x64).
     required: true
 
   build-args:
@@ -28,7 +28,7 @@ inputs:
 runs:
   using: composite
   steps:
-    # Installed even when the build is cached, so the job's later steps can run zig. Not again when an earlier step put it on the
+    # Installed even when the build is stored, so the job's later steps can run zig. Not again when an earlier step put it on the
     # PATH: a second mise-action in a job looks through the workspace for its cache key, and on Windows it failed with EPERM on a
     # file of the zig-pkg the previous library build had fetched.
     - name: Find Zig
@@ -50,17 +50,27 @@ runs:
     # The key covers everything the library is built from: the Zig version in mise.toml, the source in third-party/imagemagick and third-party/zlib-ng (which it builds against),
     # the platform and the build arguments. Any change to one of them builds it again. What a build writes (zig-out, zig-pkg,
     # .zig-cache) is left out of the hash: a job that has already restored or built one library would otherwise see a different hash
-    # for the next library that is built over it, and miss the cache.
-    - name: Restore ImageMagick and its delegates from the cache
-      id: cache
-      uses: actions/cache@v4
-      with:
-        path: third-party/imagemagick/zig-out
-        key: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', '!third-party/imagemagick/zig-out/**', '!third-party/imagemagick/zig-pkg/**', '!third-party/imagemagick/.zig-cache/**', '!third-party/imagemagick/config/aarch64-ios*/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
+    # for the next library that is built over it, and miss the artifact.
+    - name: Look for ImageMagick and its delegates' artifact
+      id: artifact
+      shell: bash
+      run: bash .github/actions/third-party-libraries/find-library-artifact.sh imagemagick-${{ inputs.platform }} "$KEY"
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KEY: imagemagick-${{ runner.os }}-${{ runner.arch }}-${{ inputs.platform }}-baseline-${{ inputs.build-args }}-${{ hashFiles('mise.toml', 'third-party/imagemagick/**', '!third-party/imagemagick/zig-out/**', '!third-party/imagemagick/zig-pkg/**', '!third-party/imagemagick/.zig-cache/**', '!third-party/imagemagick/config/aarch64-ios*/**', 'third-party/zlib-ng/**', '!third-party/zlib-ng/zig-out/**', '!third-party/zlib-ng/zig-pkg/**', '!third-party/zlib-ng/.zig-cache/**') }}
 
-    # After the cache key is worked out, so the files it makes do not change the key a job that only restores the library works out.
+    - name: Download ImageMagick and its delegates
+      if: steps.artifact.outputs.run-id != ''
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ steps.artifact.outputs.name }}
+        run-id: ${{ steps.artifact.outputs.run-id }}
+        github-token: ${{ github.token }}
+        path: third-party/imagemagick/zig-out
+
+    # After the key is worked out, so the files it makes do not change the key a job that only restores the library works out.
     - name: Make ImageMagick's generated files for the target
-      if: steps.cache.outputs.cache-hit != 'true' && inputs.config-name != ''
+      if: steps.artifact.outputs.run-id == '' && inputs.config-name != ''
       shell: bash
       run: |
         if [ ! -d "third-party/imagemagick/config/${{ inputs.config-name }}" ]; then
@@ -68,10 +78,20 @@ runs:
         fi
 
     - name: Build ImageMagick and its delegates
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: steps.artifact.outputs.run-id == ''
       shell: bash
       working-directory: third-party/imagemagick
-      # Built for any CPU of the architecture, not the CPU of the runner that builds it, because the library is cached and run on
+      # Built for any CPU of the architecture, not the CPU of the runner that builds it, because the library is stored and run on
       # other runners. A build for the builder's own CPU crashed zig-unit-tests with "Illegal instruction" in zlib. Word splitting
       # of build-args is intended: it is a space-separated list of arguments.
       run: zig build -Dcpu=baseline ${{ inputs.build-args }}
+
+    - name: Upload ImageMagick and its delegates
+      if: steps.artifact.outputs.run-id == ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.artifact.outputs.name }}
+        path: third-party/imagemagick/zig-out
+        retention-days: 90
+        overwrite: true
+        if-no-files-found: error

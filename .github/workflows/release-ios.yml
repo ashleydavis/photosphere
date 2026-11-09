@@ -1,5 +1,5 @@
 # The Photosphere App for iOS, built once and then tested, packaged and released. prepare-tag resolves the release tag, and each
-# third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and caches it, all side by
+# third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and stores it, all side by
 # side. Then app-build builds the app for the simulator over those libraries and saves it in the cache under a key of its own for
 # this run. The later jobs restore that instead of building: app-smoke-tests runs the simulator build and package packages the
 # app for a device over the restored Zig build cache. zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript, which
@@ -92,10 +92,10 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
-  # The third-party libraries, each built once by its own action and cached, so a library an earlier run has already built is
+  # The third-party libraries, each built once by its own action and stored as an artifact, so a library an earlier run has already built is
   # restored rather than compiled again. Each is built for the iOS simulator the smoke tests run on and for an iOS device, which the
   # package is built for. ImageMagick's and FFmpeg's generated files for iOS are not checked in, so their builds make them first.
-  # Every job that runs the Zig build restores the libraries from that cache with the third-party-libraries action.
+  # Every job that runs the Zig build restores the libraries from those artifacts with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 60
     runs-on: macos-latest
@@ -181,7 +181,7 @@ jobs:
   # by the same build script a developer runs, for the smoke tests. The version comes from the release tag: ios-v1.2.3 is 1.2.3 and
   # a nightly is dev-nightly.<timestamp>. The library jobs build each library for an iOS device, which the package job builds for, for the iOS
   # simulator and for the runner's macOS, which the CLI that makes the smoke tests' fixtures builds for, and this job
-  # restores them from their caches. ImageMagick's and FFmpeg's generated files for iOS
+  # restores them from their artifacts. ImageMagick's and FFmpeg's generated files for iOS
   # are not checked in, so their builds make them first. The simulator app, the Zig build cache and the libraries are saved under
   # photosphere-app-ios-<commit>-<run>, which app-smoke-tests and package restore.
   app-build:
@@ -516,12 +516,12 @@ jobs:
           run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      # The libraries for the runner, which the tests build for, restored from the cache.
+      # The libraries for the runner, which the tests build for, restored from their artifacts.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
           platform: macos-arm64
-          # The same build-args as the library jobs, so the cache key matches theirs: with none the key differed, nothing was
+          # The same build-args as the library jobs, so the key matches theirs: with none the key differed, nothing was
           # restored and the libraries were built from source here, 13 to 15 minutes a run. The library directory is named by
           # architecture and OS only, so the tests find these 11.0-target libraries where they look for the native ones.
           build-args: -Dtarget=aarch64-macos.11.0

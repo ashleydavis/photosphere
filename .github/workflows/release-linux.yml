@@ -1,6 +1,6 @@
 # The Photosphere App and the Zig CLI for Linux, each built once and then tested, packaged and released. prepare-tag resolves the
 # release tag, and each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and
-# caches it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
+# stores it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
 # each saves what it built in the cache under a key of its own for this run. The later jobs restore that instead of building:
 # app-smoke-tests runs the app build, package packages the app over the restored Zig build cache and cli-smoke-tests runs the CLI.
 # zig-unit-tests runs the Zig unit tests on Linux over the Linux libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every other job has passed, publishes the
@@ -93,9 +93,9 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
-  # The third-party libraries, each built once by its own action and cached under the same keys as the Zig CI workflow, so a
+  # The third-party libraries, each built once by its own action and stored as an artifact under the same keys as the Zig CI workflow, so a
   # library either workflow has already built is restored rather than compiled again. Every job that runs the Zig build
-  # restores them from that cache with the third-party-libraries action.
+  # restores them from those artifacts with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 40
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
 
   # Restores the third-party libraries the library jobs built and builds the Photosphere App for Linux by the same build script a
   # developer runs. The version comes from the release tag: linux-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>. Each
-  # library job caches its library, so this job restores it. The build, the Zig build cache and the
+  # library job stores its library, so this job restores it. The build, the Zig build cache and the
   # libraries are saved under photosphere-app-linux-<commit>-<run>, which app-smoke-tests and package restore.
   app-build:
     timeout-minutes: 120
@@ -694,7 +694,7 @@ jobs:
           packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      # The libraries the build jobs built, restored from the cache for the Zig build to link.
+      # The libraries the build jobs built, restored from their artifacts for the Zig build to link.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:

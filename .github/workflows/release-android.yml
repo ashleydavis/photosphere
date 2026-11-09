@@ -1,5 +1,5 @@
 # The Photosphere App for Android, built once and then tested, packaged and released. prepare-tag resolves the release tag, and
-# each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and caches it, all side
+# each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and stores it, all side
 # by side. Then app-build builds the app's debug-type APK over those libraries and saves it in the cache under a key of its own for
 # this run. The later jobs restore that instead of building: app-smoke-tests runs the APK and package packages the release APKs
 # over the restored Zig build cache. zig-unit-tests runs the Zig unit tests on Linux over the Linux libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every
@@ -92,10 +92,10 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
-  # The third-party libraries, each built once by its own action and cached, so a library an earlier run (or another workflow) has
+  # The third-party libraries, each built once by its own action and stored as an artifact, so a library an earlier run (or another workflow) has
   # already built is restored rather than compiled again. Each is built for both Android architectures the app ships, and for the
-  # runner, which the CLI that makes the smoke tests' fixtures builds for. Every job that runs the Zig build restores them from that
-  # cache with the third-party-libraries action.
+  # runner, which the CLI that makes the smoke tests' fixtures builds for. Every job that runs the Zig build restores them from those
+  # artifacts with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -209,7 +209,7 @@ jobs:
   # because their scenarios seed and read the app's data through run-as. The version comes from the release tag: android-v1.2.3 is
   # 1.2.3 and a nightly is dev-nightly.<timestamp>. The library jobs build each library for both Android architectures the app ships, and for the
   # runner, which the CLI that makes the smoke tests' fixtures builds for, and this job restores them from
-  # their caches. The APK, the Zig build cache and the libraries are saved
+  # their artifacts. The APK, the Zig build cache and the libraries are saved
   # under photosphere-app-android-<commit>-<run>, which app-smoke-tests and package restore.
   app-build:
     timeout-minutes: 150
@@ -593,7 +593,7 @@ jobs:
           packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      # The libraries for the runner, which the tests build for, restored from the cache.
+      # The libraries for the runner, which the tests build for, restored from their artifacts.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:

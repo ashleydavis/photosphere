@@ -1,6 +1,6 @@
 # The Photosphere App and the Zig CLI for Windows, each built once and then tested, packaged and released. prepare-tag resolves the
 # release tag, and each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that builds and
-# caches it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
+# stores it, all side by side. Then app-build builds the app and cli-build builds the CLI, side by side, over those libraries, and
 # each saves what it built in the cache under a key of its own for this run. The later jobs restore that instead of building:
 # app-smoke-tests runs the app build, package packages the app over the restored Zig build cache and cli-smoke-tests runs the CLI.
 # zig-unit-tests runs the Zig unit tests on this workflow's runner over its libraries and the TypeScript jobs compile and test the TypeScript. create-release, once every other job has passed, publishes the
@@ -93,10 +93,10 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
-  # The third-party libraries, each built once by its own action and cached, so a library an earlier run has already built is
+  # The third-party libraries, each built once by its own action and stored as an artifact, so a library an earlier run has already built is
   # restored rather than compiled again. Each is built twice: for the runner (x86_64-windows-gnu), which the CLI and the tests
   # build for, and for x86_64-windows-msvc, which the Photosphere App builds for. Every job that runs the Zig build restores
-  # them from that cache with the third-party-libraries action.
+  # them from those artifacts with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 60
     runs-on: windows-latest
@@ -174,7 +174,7 @@ jobs:
   # a developer runs. The version comes from the release tag: windows-v1.2.3 is 1.2.3 and a nightly is dev-nightly.<timestamp>.
   # Windows needs the WebView2 SDK, which the setup step fetches. The library jobs build each library twice: for x86_64-windows-msvc, which the
   # app builds for, and for the runner (x86_64-windows-gnu), which the CLI that makes the smoke tests' fixtures builds for. Each
-  # library job caches its library, so this job restores it. The build, the Zig build cache and
+  # library job stores its library, so this job restores it. The build, the Zig build cache and
   # the libraries are saved under photosphere-app-windows-<commit>-<run>, which app-smoke-tests and package restore.
   app-build:
     timeout-minutes: 150
@@ -749,7 +749,7 @@ jobs:
           run: choco install imagemagick -y
           verify: magick|convert
 
-      # The libraries for the runner, which the tests build for, restored from the cache.
+      # The libraries for the runner, which the tests build for, restored from their artifacts.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:

@@ -1,5 +1,5 @@
 # CI for every push, on Linux only. Each third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) has its own job that
-# builds it for Linux and caches it under the key the release workflows use too. app-build-linux builds the Photosphere App and
+# builds it for Linux and stores it under the key the release workflows use too. app-build-linux builds the Photosphere App and
 # cli-build-linux the Zig CLI over those libraries, zig-unit-tests-linux runs the Zig unit tests over them and the TypeScript jobs compile
 # and test the TypeScript. CI packages nothing and builds for no other platform: the release workflows do both.
 name: CI
@@ -22,7 +22,7 @@ on:
 
 jobs:
   # Builds the AWS SDK for C for Linux, for app-build-linux, cli-build-linux and zig-unit-tests-linux to
-  # restore. The library's build action caches it, so a later run, or a release workflow, restores it rather than building it again.
+  # restore. The library's build action stores it, so a later run, or a release workflow, restores it rather than building it again.
   build-aws-sdk-linux:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
           platform: linux-x64
 
   # Builds zlib-ng for Linux, for app-build-linux, cli-build-linux and zig-unit-tests-linux to
-  # restore. The library's build action caches it, so a later run, or a release workflow, restores it rather than building it again.
+  # restore. The library's build action stores it, so a later run, or a release workflow, restores it rather than building it again.
   build-zlib-ng-linux:
     timeout-minutes: 30
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
           platform: linux-x64
 
   # Builds ImageMagick for Linux, for app-build-linux, cli-build-linux and zig-unit-tests-linux to
-  # restore. The library's build action caches it, so a later run, or a release workflow, restores it rather than building it again.
+  # restore. The library's build action stores it, so a later run, or a release workflow, restores it rather than building it again.
   build-imagemagick-linux:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -64,7 +64,7 @@ jobs:
           platform: linux-x64
 
   # Builds FFmpeg for Linux, for app-build-linux, cli-build-linux and zig-unit-tests-linux to
-  # restore. The library's build action caches it, so a later run, or a release workflow, restores it rather than building it again.
+  # restore. The library's build action stores it, so a later run, or a release workflow, restores it rather than building it again.
   build-ffmpeg-linux:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -318,7 +318,7 @@ jobs:
           packages: imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      # The libraries the build jobs built, restored from the cache for the Zig build to link.
+      # The libraries the build jobs built, restored from their artifacts for the Zig build to link.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:

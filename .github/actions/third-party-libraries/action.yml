@@ -1,8 +1,8 @@
 name: Third-party libraries
 description: >
   Puts the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg into third-party/<library>/zig-out for the job's Zig build, by running
-  each library's build action. Each one restores its library from the cache the build jobs filled, and only builds it when the
-  cache has nothing for it. The job has to check the repository out first.
+  each library's build action. Each one restores its library from the artifacts the build jobs uploaded, and only builds it when the
+  artifacts have nothing for it. The job has to check the repository out first.
 
 inputs:
   platform:
