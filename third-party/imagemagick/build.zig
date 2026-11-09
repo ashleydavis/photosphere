@@ -3,7 +3,7 @@ const imagemagick = @import("imagemagick.zig");
 const zlib_ng = @import("zlib").zlib_ng;
 
 //
-// Builds ImageMagick with its delegates (libjpeg, libpng and libwebp) for the target, over the zlib-ng of third-party/zlib-ng, and
+// Builds ImageMagick with its delegates (libjpeg, libpng, libwebp and lcms2) for the target, over the zlib-ng of third-party/zlib-ng, and
 // installs them under zig-out/<arch>-<os>-<abi>: the static libraries in lib and MagickWand.h translated to Zig as zig/magick.zig.
 // zlib-ng is not installed here: Photosphere's build links the one third-party/zlib-ng installs.
 //
