@@ -36,7 +36,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 ## Rule breaches and leftover code
 
-- **JavaScript error text.** `video.zig` raises errors such as `"undefined is not an object (evaluating 'probeData.format')"`. These are copied from the TypeScript port and mean nothing to a Zig reader.
 
 ## `ThreadTools`
 
