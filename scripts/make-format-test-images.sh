@@ -57,7 +57,8 @@ le32() {
 # the 68 bytes the v4 header adds, which are four zero colour masks, the sRGB colour space and zero endpoints and gamma.
 if [ ! -f "$out/63x35-v4.bmp" ]; then
     "${convert_tool[@]}" -size 63x35 gradient:green-white "BMP3:$out/63x35-v4.bmp.v3"
-    v3_size="$(stat -c %s "$out/63x35-v4.bmp.v3")"
+    # wc -c, not stat, which takes different flags on macOS. Its padding is stripped by the arithmetic it is used in.
+    v3_size="$(wc -c < "$out/63x35-v4.bmp.v3")"
     {
         printf 'BM'
         le32 $((v3_size + 68))
