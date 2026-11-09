@@ -110,6 +110,17 @@ test_sync_original_to_copy() {
         exit 1
     fi
     
+    # The copy holds the file the sync brought over, so its summary must count it as imported, the
+    # same as the original's does. The count is a separate figure from the files tree, so equal root
+    # hashes above do not prove it.
+    local original_summary
+    local copy_summary
+    invoke_command "Get original database summary after sync" "$(get_zig_cli_command) summary --db $original_dir --yes" 0 "original_summary"
+    invoke_command "Get copy database summary after sync" "$(get_zig_cli_command) summary --db $copy_dir --yes" 0 "copy_summary"
+    local original_files_imported=$(parse_numeric "$original_summary" "Files imported:")
+    local copy_files_imported=$(parse_numeric "$copy_summary" "Files imported:")
+    expect_value "$copy_files_imported" "$original_files_imported" "Copy files imported count matches original after sync"
+
     # Verify both databases pass integrity check
     local verify_original_output
     local verify_copy_output

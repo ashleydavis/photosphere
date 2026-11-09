@@ -19,6 +19,8 @@ const node_api = @import("node-api-zig");
 const MemoryStorage = @import("memory-storage.zig").MemoryStorage;
 const sync_helpers = @import("sync-test-helpers.zig");
 const SpyStorage = sync_helpers.SpyStorage;
+const merkle_tree = @import("merkle-tree-zig").merkle_tree;
+const getFilesImported = node_api.media_file_database.getFilesImported;
 const pushFiles = node_api.sync.pushFiles;
 const throughTheDatabases = node_api.sync.throughTheDatabases;
 
@@ -139,4 +141,74 @@ test "a push that copies files still saves the tree, so an interrupted one does 
     for (fileNames) |fileName| {
         try std.testing.expect(try target.asStorage().fileExists(allocator, io, fileName));
     }
+}
+
+//
+// Counts the originals a files tree records.
+//
+fn assetsInTree(allocator: std.mem.Allocator, io: std.Io, log: ILog, store: *MemoryStorage, names: []const []const u8) !u64 {
+    const tree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", store.asStorage(), "FTRE")).?;
+    var count: u64 = 0;
+    for (names) |name| {
+        if (try merkle_tree.getItemInfo(&tree, name) != null) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+//
+// Reads the imported count from the files tree saved in a store.
+//
+fn savedFilesImported(allocator: std.mem.Allocator, io: std.Io, log: ILog, store: *MemoryStorage) !u64 {
+    const tree = (try merkle_tree.loadTree(allocator, io, log, ".db/files.dat", store.asStorage(), "FTRE")).?;
+    return getFilesImported(tree.databaseMetadata);
+}
+
+//
+// A push counts the originals it copies as imported. Its goal is to show that the count survives a
+// push cut off part way through: the count saved with the tree matches the originals that tree
+// records, and the push that picks up afterwards ends with every original counted once.
+//
+// Method: the target refuses the second tree write, so the push saves once at its hundredth file
+// and then fails at its final save, as a phone losing its connection does. The saved tree and its
+// count are read back, then a second push runs with nothing refused.
+//
+test "a push cut off part way through keeps its imported count in step with the files it saved" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var capture: sync_helpers.Capture = undefined;
+    capture.start(allocator);
+    defer capture.stop();
+
+    // Originals sort before thumbnails, so the save at the hundredth file holds only originals and
+    // the thumbnails come after it. Thumbnails are not imports and must not be counted.
+    const assets = try namesFrom(allocator, 150, "asset/a-", ".jpg", true);
+    const thumbs = try namesFrom(allocator, 20, "thumb/a-", ".jpg", true);
+    var source = MemoryStorage.init(allocator);
+    try sync_helpers.fillDatabase(allocator, io, log, source.asStorage(), dbId, try sync_helpers.filesNamed(allocator, try std.mem.concat(allocator, []const u8, &.{ assets, thumbs })), &.{});
+    var targetStore = MemoryStorage.init(allocator);
+    try sync_helpers.fillDatabase(allocator, io, log, targetStore.asStorage(), dbId, &.{}, &.{});
+
+    var interrupted: SpyStorage = .{
+        .allocator = allocator,
+        .inner = targetStore.asStorage(),
+        .treeWritesAllowed = 1,
+    };
+    const interruptedPush = pushFiles(allocator, io, log, source.asStorage(), interrupted.storage(), try sync_helpers.makeBsonDatabase(allocator, interrupted.storage()), throughTheDatabases(source.asStorage(), interrupted.storage()));
+    // The retry around the final save gives up and throws, naming the save it was making.
+    try std.testing.expectError(error.Thrown, interruptedPush);
+    try std.testing.expect(std.mem.indexOf(u8, utils.errors.lastErrorMessage(), "Failed to save the target merkle tree after a push") != null);
+
+    const savedAssets = try assetsInTree(allocator, io, log, &targetStore, assets);
+    try std.testing.expectEqual(@as(u64, 100), savedAssets);
+    try std.testing.expectEqual(savedAssets, try savedFilesImported(allocator, io, log, &targetStore));
+
+    _ = try pushCountingTreeWrites(allocator, io, log, &source, &targetStore);
+
+    try std.testing.expectEqual(@as(u64, 150), try assetsInTree(allocator, io, log, &targetStore, assets));
+    try std.testing.expectEqual(@as(u64, 150), try savedFilesImported(allocator, io, log, &targetStore));
 }

@@ -433,6 +433,10 @@ pub const SpyStorage = struct {
     // The number of writes of the merkle tree.
     treeWrites: u32 = 0,
 
+    // When set, a write of the merkle tree after this many fails, as a push cut off part way through
+    // does.
+    treeWritesAllowed: ?u32 = null,
+
     // What storedHash answers, by path, when set; a path that is not there answers undefined. When null storedHash
     // is passed through.
     hashes: ?*const std.StringHashMapUnmanaged([]const u8) = null,
@@ -552,10 +556,15 @@ pub const SpyStorage = struct {
     }
 
     //
-    // Counts writes of the merkle tree, then passes the write through.
+    // Counts writes of the merkle tree, failing one past treeWritesAllowed, then passes the write through.
     //
     pub fn write(self: *SpyStorage, allocator: std.mem.Allocator, io: std.Io, filePath: []const u8, contentType: ?[]const u8, data: []const u8) !void {
         if (std.mem.eql(u8, filePath, ".db/files.dat")) {
+            if (self.treeWritesAllowed) |allowed| {
+                if (self.treeWrites >= allowed) {
+                    return error.PushInterrupted;
+                }
+            }
             self.treeWrites += 1;
         }
         return self.inner.write(allocator, io, filePath, contentType, data);

@@ -572,6 +572,11 @@ const PushState = struct {
     // The number of files copied.
     filesCopied: u64 = 0,
 
+    // The originals copied since the target's imported count was last brought up to date. They are
+    // added to the count just before each save of the target tree, as import adds a batch, so the
+    // count and the files it describes are always saved together.
+    assetsNotYetCounted: u64 = 0,
+
     // Where the time goes, in milliseconds, reported every so often while a push runs.
     //
     // Without it a slow sync is a number of files a minute and nothing else. The import path has the
@@ -613,6 +618,22 @@ const PushState = struct {
 
     // When the push started.
     pushStartedAt: i64,
+
+    //
+    // Adds the originals copied since the last save to the target's imported count, ready for the
+    // tree to be saved.
+    //
+    fn countAssetsAsImported(self: *PushState) !void {
+        if (self.assetsNotYetCounted == 0) {
+            return;
+        }
+        var databaseMetadata = self.targetMerkleTree.databaseMetadata orelse try media_file_database.emptyDatabaseMetadata(self.allocator);
+        try databaseMetadata.put(self.allocator, "filesImported", .{
+            .number = @floatFromInt(media_file_database.getFilesImported(databaseMetadata) + self.assetsNotYetCounted),
+        });
+        self.targetMerkleTree.databaseMetadata = databaseMetadata;
+        self.assetsNotYetCounted = 0;
+    }
 
     //
     // Says where the push's time has gone so far.
@@ -794,6 +815,12 @@ const PushState = struct {
 
         self.filesCopied += 1;
 
+        // An original is never changed once imported, so one the push copies is one the target did
+        // not have.
+        if (std.mem.startsWith(u8, fileName, "asset/")) {
+            self.assetsNotYetCounted += 1;
+        }
+
         log.verbose(try std.fmt.allocPrint(allocator, "Copied file: {s}", .{fileName}));
     }
 };
@@ -966,6 +993,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourceAsse
         // that has copied nothing yet saves nothing.
         if (state.filesCopied % 100 == 0 and state.filesCopied != filesCopiedAtLastTreeSave) {
             filesCopiedAtLastTreeSave = state.filesCopied;
+            try state.countAssetsAsImported();
             const savedAt = now(io);
             var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(targetMerkleTree, targetAssetStorage)") = .{
                 .allocator = allocator,
@@ -1055,6 +1083,7 @@ pub fn pushFiles(allocator: std.mem.Allocator, io: std.Io, log: ILog, sourceAsse
     // the app was running: it is the whole cost of a sync that has nothing to do, and it was
     // competing for the connection with the import that did.
     if (state.filesCopied > 0 or assetsDeleted > 0) {
+        try state.countAssetsAsImported();
         const savedAt = now(io);
         var saveOperation: retry_operations.SaveMerkleTreeOperation("() => saveMerkleTree(targetMerkleTree, targetAssetStorage)") = .{
             .allocator = allocator,

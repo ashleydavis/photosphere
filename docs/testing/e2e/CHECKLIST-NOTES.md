@@ -10,6 +10,7 @@ Upcoming version: 0.0.9
 
 - Most CLI tests kept their data in the one shared folder `/tmp/psi-test`, so two tests running at once deleted each other's databases. Every CLI test now uses its own folder, `/tmp/psi-cli-<group>-<test>`.
 - `psi add` always reports `Total size: 0 Bytes`, and `psi list` shows `Size: Unknown` for every asset.
+- `psi list` on an S3 database filled by syncing from the Android app shows each phone photo's `Path` as the app's temporary copy, `/data/user/0/au.com.codecapers.photosphere.ziggy/cache/.media-tmp`, rather than where the photo was on the phone.
 
 ### Import
 
@@ -27,6 +28,10 @@ Upcoming version: 0.0.9
 - Failed at Test step 2: `psi list` shows both assets under UUID names (such as `6e4286d9-….jpg`) with a temporary path under `/tmp/photosphere/.../file-scanner`, so the names inside the zip are lost on import. Steps 1 and 3 passed.
 
 ### Inspect
+
+#### database-summary
+
+- `psi summary` on an S3 database filled by syncing from the Android app showed `Files imported: 1`, while the database held 2755 assets and `Total files` was 8138. The count comes from a counter that only imports into that database add to, and sync does not update it. `Total files` and `Total size` were right.
 
 #### list-paging
 
