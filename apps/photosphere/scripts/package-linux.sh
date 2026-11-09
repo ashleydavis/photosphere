@@ -69,15 +69,19 @@ if [ ! -f "$APP_PREFIX/bin/photosphere" ]; then
 fi
 mkdir -p "$OUTPUT_DIR"
 
-# The zip holds the executable, which has the page embedded, in one folder.
+# The zip holds the executable, which has the page embedded, in one folder, with the licence files every distributed build
+# carries in a licences folder beside it (see scripts/write-licence-files.md).
 mkdir -p "$STAGE_DIR/zip/photosphere"
 cp "$APP_PREFIX/bin/photosphere" "$STAGE_DIR/zip/photosphere/"
+bash "$APP_DIR/../../scripts/write-licence-files.sh" "$STAGE_DIR/zip/photosphere/licences"
 rm -f "$OUTPUT_DIR/$BASE_NAME.zip"
 (cd "$STAGE_DIR/zip" && zip -q -r "$OUTPUT_DIR/$BASE_NAME.zip" photosphere)
 
-# The deb installs under /opt, puts a link in /usr/bin and adds a menu entry so the app shows in the applications menu.
+# The deb installs under /opt, with the licence files in /opt/photosphere/licences, puts a link in /usr/bin and adds a menu entry so
+# the app shows in the applications menu.
 mkdir -p "$STAGE_DIR/deb/DEBIAN" "$STAGE_DIR/deb/opt/photosphere" "$STAGE_DIR/deb/usr/bin" "$STAGE_DIR/deb/usr/share/applications" "$STAGE_DIR/deb/usr/share/icons/hicolor/512x512/apps"
 cp "$APP_PREFIX/bin/photosphere" "$STAGE_DIR/deb/opt/photosphere/"
+bash "$APP_DIR/../../scripts/write-licence-files.sh" "$STAGE_DIR/deb/opt/photosphere/licences"
 ln -s /opt/photosphere/photosphere "$STAGE_DIR/deb/usr/bin/photosphere"
 cp "$APP_DIR/icons/photosphere-512.png" "$STAGE_DIR/deb/usr/share/icons/hicolor/512x512/apps/au.com.codecapers.photosphere.png"
 cat > "$STAGE_DIR/deb/usr/share/applications/au.com.codecapers.photosphere.desktop" <<DESKTOP

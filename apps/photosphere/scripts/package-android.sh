@@ -44,6 +44,9 @@ if [ "$arch_list" = "all" ]; then
 fi
 
 mkdir -p "$output_dir"
+# The licence files every distributed build carries (see scripts/write-licence-files.md), which app/build.gradle packs into each
+# APK's assets as assets/licences.
+bash "$PHOTOSPHERE_REPO_ROOT/scripts/write-licence-files.sh" "$PHOTOSPHERE_ANDROID_PROJECT_DIR/app/build/ziggy/licence-assets/licences"
 for arch in $arch_list; do
     # The Zig library --binary names (build-android.sh --minify --output-dir <dir> keeps it in <dir>/jniLibs) goes into the APK as it
     # is, so the release workflow packages the library its app-build job made and smoke tested rather than compiling it a second
