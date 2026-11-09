@@ -588,3 +588,269 @@ test "getImageDetails makes the pictures of a HEIC from FFmpeg's decode of it, w
     try std.testing.expectApproxEqAbs(@as(f64, -27.4705), details.coordinates.?.lat, 0.00001);
     try std.testing.expectApproxEqAbs(@as(f64, 153.026), details.coordinates.?.lng, 0.00001);
 }
+
+//
+// An image of a type the import takes whose size is not in an EXIF it carries, and the size identify reports for it.
+//
+const ISizeCase = struct {
+    // The image, relative to the package directory the tests run in.
+    filePath: []const u8,
+
+    // The content type the import gives the file.
+    contentType: []const u8,
+
+    // The width and height `identify` prints for the file.
+    resolution: node_api.media_file_database.IResolution,
+};
+
+test "getImageDetails reads the size of every non-JPEG image type from the image tool alone" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit(log);
+
+    // Each size is what `identify` prints for the file, and each width and height differ, so a size read the wrong way round fails.
+    // The files under test/formats are made locally by scripts/make-format-test-images.sh, which says how each is made.
+    const cases = [_]ISizeCase{
+        .{
+            .filePath = "../test/test.png",
+            .contentType = "image/png",
+            .resolution = .{
+                .width = 100,
+                .height = 90,
+            },
+        },
+        .{
+            .filePath = "../test/test.webp",
+            .contentType = "image/webp",
+            .resolution = .{
+                .width = 100,
+                .height = 80,
+            },
+        },
+        .{
+            .filePath = "../test/heic/tiled.heic",
+            .contentType = "image/heic",
+            .resolution = .{
+                .width = 1000,
+                .height = 700,
+            },
+        },
+        .{
+            .filePath = "../test/formats/37x23.gif",
+            .contentType = "image/gif",
+            .resolution = .{
+                .width = 37,
+                .height = 23,
+            },
+        },
+        .{
+            .filePath = "../test/formats/41x29.bmp",
+            .contentType = "image/bmp",
+            .resolution = .{
+                .width = 41,
+                .height = 29,
+            },
+        },
+        .{
+            .filePath = "../test/formats/53x31-alpha.png",
+            .contentType = "image/png",
+            .resolution = .{
+                .width = 53,
+                .height = 31,
+            },
+        },
+        .{
+            .filePath = "../test/formats/61x43-lossless.webp",
+            .contentType = "image/webp",
+            .resolution = .{
+                .width = 61,
+                .height = 43,
+            },
+        },
+        .{
+            .filePath = "../test/formats/67x47-lossy.webp",
+            .contentType = "image/webp",
+            .resolution = .{
+                .width = 67,
+                .height = 47,
+            },
+        },
+        .{
+            .filePath = "../test/formats/29x57.gif",
+            .contentType = "image/gif",
+            .resolution = .{
+                .width = 29,
+                .height = 57,
+            },
+        },
+        .{
+            .filePath = "../test/formats/59x33-v3.bmp",
+            .contentType = "image/bmp",
+            .resolution = .{
+                .width = 59,
+                .height = 33,
+            },
+        },
+        // Three frames: the size is the picture's, not the frames' sizes run together.
+        .{
+            .filePath = "../test/formats/43x17-animated.gif",
+            .contentType = "image/gif",
+            .resolution = .{
+                .width = 43,
+                .height = 17,
+            },
+        },
+        .{
+            .filePath = "../test/formats/47x19-no-exif.jpg",
+            .contentType = "image/jpeg",
+            .resolution = .{
+                .width = 47,
+                .height = 19,
+            },
+        },
+        // The same 71x37 picture with an EXIF Orientation of 1, 3, 6 and 8. A turn of a quarter (6 and 8) stands it upright, so
+        // its size is read with the width and height swapped; 1 and 3 keep it as stored.
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-1.jpg",
+            .contentType = "image/jpeg",
+            .resolution = .{
+                .width = 71,
+                .height = 37,
+            },
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-3.jpg",
+            .contentType = "image/jpeg",
+            .resolution = .{
+                .width = 71,
+                .height = 37,
+            },
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-6.jpg",
+            .contentType = "image/jpeg",
+            .resolution = .{
+                .width = 37,
+                .height = 71,
+            },
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-8.jpg",
+            .contentType = "image/jpeg",
+            .resolution = .{
+                .width = 37,
+                .height = 71,
+            },
+        },
+    };
+    for (cases) |expected| {
+        errdefer std.debug.print("case: {s}\n", .{expected.filePath});
+        if (!node_utils.fs.pathExists(io, expected.filePath)) {
+            std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{expected.filePath});
+            return error.FormatTestImageMissing;
+        }
+        const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-size");
+        defer temp_dirs.removeTempDir(io, tempDir);
+        var generator: CountingUuidGenerator = .{};
+        const details = try image.getImageDetails(allocator, io, log, runner, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
+        try std.testing.expectEqual(expected.resolution, details.resolution);
+    }
+}
+
+//
+// A cached 71x37 JPEG with an EXIF Orientation, and how each picture made from it must come out.
+//
+const IOrientationCase = struct {
+    // The file, made by scripts/make-format-test-images.sh.
+    filePath: []const u8,
+
+    // "<w> <h>" of the display, the thumbnail and the micro, once turned upright.
+    displaySize: []const u8,
+    thumbnailSize: []const u8,
+    microSize: []const u8,
+
+    // Which corners are red, as "TL TR BL BR" with 1 for red and 0 for blue: the file is a gradient from red at its
+    // stored top to blue at its stored bottom, so this says which way up each picture is.
+    redCorners: []const u8,
+};
+
+//
+// Reads "<w> <h> <TL> <TR> <BL> <BR>" of an image with the ImageMagick built into the program, each corner 1 when it is
+// more red than blue.
+//
+fn describeOrientation(log: ILog, allocator: std.mem.Allocator, runner: InProcessRunner, filePath: []const u8) ![]const u8 {
+    const result = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ filePath, "-format", "%w %h %[fx:p{0,0}.r>p{0,0}.b] %[fx:p{w-1,0}.r>p{w-1,0}.b] %[fx:p{0,h-1}.r>p{0,h-1}.b] %[fx:p{w-1,h-1}.r>p{w-1,h-1}.b]", "info:" });
+    if (result.exit_code != 0) {
+        std.debug.print("magick failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
+        return error.TestUnexpectedResult;
+    }
+    return std.mem.trimEnd(u8, result.output, "\r\n");
+}
+
+test "getImageDetails makes the display, thumbnail and micro of each cached EXIF Orientation JPEG upright and the right size" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit(log);
+
+    // Upright, 1 keeps red at the top, 3 turns it a half to the bottom, 6 a quarter clockwise to the right and 8 a quarter
+    // anticlockwise to the left (as ImageMagick's -auto-orient also has it). The short side of each picture is its minimum
+    // size (1000, 300, 40) and the long side Math.trunc(71 / 37 * minSize), so 6 and 8 are the sizes of 1 and 3 swapped.
+    const cases = [_]IOrientationCase{
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-1.jpg",
+            .displaySize = "1918 1000",
+            .thumbnailSize = "575 300",
+            .microSize = "76 40",
+            .redCorners = "1 1 0 0",
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-3.jpg",
+            .displaySize = "1918 1000",
+            .thumbnailSize = "575 300",
+            .microSize = "76 40",
+            .redCorners = "0 0 1 1",
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-6.jpg",
+            .displaySize = "1000 1918",
+            .thumbnailSize = "300 575",
+            .microSize = "40 76",
+            .redCorners = "0 1 0 1",
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-8.jpg",
+            .displaySize = "1000 1918",
+            .thumbnailSize = "300 575",
+            .microSize = "40 76",
+            .redCorners = "1 0 1 0",
+        },
+    };
+    for (cases) |expected| {
+        errdefer std.debug.print("case: {s}\n", .{expected.filePath});
+        if (!node_utils.fs.pathExists(io, expected.filePath)) {
+            std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{expected.filePath});
+            return error.FormatTestImageMissing;
+        }
+        const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-orientation");
+        defer temp_dirs.removeTempDir(io, tempDir);
+        var generator: CountingUuidGenerator = .{};
+        const details = try image.getImageDetails(allocator, io, log, runner, expected.filePath, tempDir, "image/jpeg", generator.uuidGenerator(), expected.filePath);
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s} {s}", .{ expected.displaySize, expected.redCorners }), try describeOrientation(log, allocator, runner, details.displayPath.?));
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s} {s}", .{ expected.thumbnailSize, expected.redCorners }), try describeOrientation(log, allocator, runner, details.thumbnailPath));
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s} {s}", .{ expected.microSize, expected.redCorners }), try describeOrientation(log, allocator, runner, details.microPath));
+    }
+}

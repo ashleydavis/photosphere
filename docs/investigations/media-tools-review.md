@@ -33,7 +33,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 
 ## Inefficiencies
 
-- **Wasted `identify` call.** `Image.getImageInfo` always runs a second `identify` for EXIF. For non-JPEG images `getImageDetails` uses only the dimensions, so that result is thrown away.
 - **No reduced-size JPEG decode.** The resize does not pass `-define jpeg:size=WxH`, so large JPEGs are decoded at full size before being shrunk.
 
 ## Rule breaches and leftover code
