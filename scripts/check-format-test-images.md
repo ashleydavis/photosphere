@@ -1,0 +1,16 @@
+# check-format-test-images.sh
+
+Imports every image in `test/formats/` into a new database with the built `psi`, then checks the width and height
+`psi` recorded for each against the size at the start of its file name (`53x31-alpha.png` must be 53 × 31). A JPEG
+with an EXIF Orientation of 6 or 8 stands upright when turned, so it must be recorded with the size swapped.
+
+```
+bun run build:cli
+bash scripts/make-format-test-images.sh
+bash scripts/check-format-test-images.sh [psi executable]
+```
+
+- `psi executable`: optional, defaults to `zig-out/bin/psi`. The script does not build it.
+
+Prints `ok` or `FAIL` per image and exits 1 if any image failed to import or was recorded with the wrong size. The
+database is made in a new `mktemp -d` directory, printed at the start and left behind for inspection.
