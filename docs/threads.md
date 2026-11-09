@@ -34,6 +34,18 @@ The CLI has no Ziggy core and no main thread of Ziggy's. Its own thread owns `Wo
 - A worker that cannot be started is a crashed worker: its task fails and it is replaced.
 - Other CLI threads: the signal watcher (`process-signals.zig`) and the spinner and key swallower of the prompts (`apps/cli-zig/src/lib/clack`).
 
+## What Photosphere's threads do while they have no message
+
+[What a thread does while it has no message](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/threads.md#what-a-thread-does-while-it-has-no-message) in Ziggy's user guide covers the UI thread, the main thread and the workers. Photosphere's own threads wait like this:
+
+- **An HTTP server's accepting thread** sleeps in `accept` on the listening socket.
+- **An HTTP server's server thread** sleeps on its queue until a connection or a message comes. When a connection has sent no request, it waits no longer than until that connection reaches the idle limit, then ends that connection's read so its connection thread is free again.
+- **An HTTP connection thread** with no connection sleeps on its queue until it is given one. While it serves a connection it sleeps in a read on the socket. A handler that holds its connection open (the MCP server's event stream) sleeps on the thread's queue with a timeout (`Request.waitForMessage`).
+- **The CLI's thread** sleeps in `WorkerPoolBun.waitForMessage` while a command waits on its tasks. It waits on its queue no longer than until the next of its timers or task timeouts is due. When it wakes it handles the message, fails the tasks that are past their timeout and runs the timers that are due.
+- **The signal watcher** sleeps in `poll` on a pipe that the signal handler writes to.
+- **The spinner** sleeps between frames of its animation.
+- **The key swallower** waits for a key with a timeout of 100 ms, so it sees its stop flag within that time.
+
 ## Where state is shared
 
 These are the places in Photosphere's code where two threads touch the same memory, outside the message queues:
