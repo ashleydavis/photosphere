@@ -51,23 +51,4 @@ pub fn build(b: *std.Build) !void {
     b.getInstallStep().dependOn(&b.addInstallFileWithDir(aws_c.root_source_file.?, .{
         .custom = b.fmt("{s}/zig", .{directory}),
     }, "aws-c.zig").step);
-    installBuildComplete(b, directory);
-}
-
-//
-// Installs zig-out/<directory>/build-complete after everything else the install step installs. Photosphere's build runs this build
-// when that file is missing, so a build that was killed part way through is finished rather than linked from.
-//
-fn installBuildComplete(b: *std.Build, directory: []const u8) void {
-    const install_steps = b.getInstallStep().dependencies.items;
-    std.debug.assert(install_steps.len > 0);
-    const build_complete = b.addWriteFiles().add("build-complete", "Every library of this build is installed in this directory.\n");
-    const install_build_complete = b.addInstallFileWithDir(build_complete, .{
-        .custom = directory,
-    }, "build-complete");
-    for (install_steps) |install_step| {
-        install_build_complete.step.dependOn(install_step);
-    }
-    b.getInstallStep().dependOn(&install_build_complete.step);
-    std.debug.assert(b.getInstallStep().dependencies.items.len == install_steps.len + 1);
 }
