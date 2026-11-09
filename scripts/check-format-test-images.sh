@@ -2,7 +2,8 @@
 #
 # Imports every image and video made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
 # the width and height psi recorded for each against the size in its file name. A JPEG whose EXIF Orientation is 6 or
-# 8 is turned a quarter, so its recorded size is the file name's swapped. Exits 1 naming each image that is wrong.
+# 8 is turned a quarter, so its recorded size is the file name's swapped. Then checks each image's display, thumbnail and
+# micro copies are sRGB, with no colour profile, in the image's own colours. Exits 1 naming each image that is wrong.
 # psi runs with a PATH that holds nothing, so every file is read by the ImageMagick and FFmpeg built into psi and never by
 # a magick, ffmpeg or ffprobe installed on the machine.
 #
@@ -80,3 +81,112 @@ if [ "$failures" -ne 0 ]; then
     exit 1
 fi
 echo "Every image recorded with the right size"
+
+#
+# The display, thumbnail and micro copies psi makes of each image must be sRGB with no colour profile, and the same colour
+# as the image shown through its own profile: for a file with a colour profile, ImageMagick's conversion of it into sRGB
+# with the sRGB profile ImageMagick ships, and for a file with none, its pixels as they are. Videos are only size checked.
+# These reference colours come from the ImageMagick installed on the machine, which only this part of the check runs.
+#
+if command -v magick >/dev/null 2>&1; then
+    image_tool=(magick)
+else
+    image_tool=(convert)
+fi
+srgb_profile="$root/third-party/imagemagick/vendor/imagemagick/config/sRGB.icm"
+
+#
+# Prints the mean colour of a picture's first frame as three whole numbers from 0 to 255: mean_colour <file> [ImageMagick arguments].
+#
+mean_colour() {
+    local file="$1"
+    shift
+    "${image_tool[@]}" "$file[0]" "$@" -format '%[fx:int(255*mean.r+0.5)] %[fx:int(255*mean.g+0.5)] %[fx:int(255*mean.b+0.5)]' info:
+}
+
+#
+# Checks one copy psi made: check_copy <image name> <copy kind> <copy file> <expected mean colour>. The colour may be 3 off
+# in each channel, for the JPEG compression and the resize of a copy; the conversion of each image with a profile moves
+# its colour much further than that.
+#
+check_copy() {
+    local name="$1"
+    local kind="$2"
+    local copy="$3"
+    local expected="$4"
+    if [ ! -s "$copy" ]; then
+        echo "FAIL  $name $kind: psi made no $kind copy"
+        return 1
+    fi
+    # ImageMagick writes a picture with no colour in it (the white to black WebP) as a one channel Gray JPEG, which a viewer
+    # shows as the sRGB greys; the mean colour below still compares all three channels.
+    local colourspace
+    colourspace="$("${image_tool[@]}" "$copy" -format '%[colorspace]' info:)"
+    if [ "$colourspace" != "sRGB" ] && [ "$colourspace" != "Gray" ]; then
+        echo "FAIL  $name $kind: the copy is $colourspace, not sRGB or Gray"
+        return 1
+    fi
+    if "${image_tool[@]}" "$copy" icc:- > /dev/null 2>&1; then
+        echo "FAIL  $name $kind: the copy still carries a colour profile"
+        return 1
+    fi
+    local actual
+    actual="$(mean_colour "$copy")"
+    local expectedChannels=($expected)
+    local actualChannels=($actual)
+    local channel
+    for channel in 0 1 2; do
+        local difference=$((actualChannels[channel] - expectedChannels[channel]))
+        if [ "$difference" -gt 3 ] || [ "$difference" -lt -3 ]; then
+            echo "FAIL  $name $kind: mean colour $actual, expected $expected"
+            return 1
+        fi
+    done
+    echo "ok    $name $kind: $colourspace, no profile, mean colour $actual (expected $expected)"
+}
+
+colourFailures=0
+for file in "$formats"/*; do
+    name="$(basename "$file")"
+    case "$name" in
+        *.mp4|*.mov)
+            continue
+            ;;
+    esac
+
+    if "${image_tool[@]}" "$file[0]" icc:- > /dev/null 2>&1; then
+        expected="$(mean_colour "$file" -profile "$srgb_profile")"
+    else
+        expected="$(mean_colour "$file")"
+    fi
+
+    # A database of its own for each image, so the display and thumb directories and the micro thumbnail held in the
+    # metadata all belong to it.
+    db="$work/colour/$name"
+    mkdir -p "$db"
+    PATH="$no_tools" "$psi" init --db "$db" --yes > "$work/colour/$name.log" 2>&1
+    PATH="$no_tools" "$psi" add --db "$db" --yes "$file" >> "$work/colour/$name.log" 2>&1 || {
+        echo "FAIL  $name: psi add failed: $work/colour/$name.log"
+        colourFailures=$((colourFailures + 1))
+        continue
+    }
+    check_copy "$name" display "$(ls -d "$db"/display/* | head -n 1)" "$expected" || colourFailures=$((colourFailures + 1))
+    check_copy "$name" thumb "$(ls -d "$db"/thumb/* | head -n 1)" "$expected" || colourFailures=$((colourFailures + 1))
+
+    # The micro thumbnail is a base64 JPEG in the asset's record (and again in the import record), so it is the one
+    # string of the database's files that starts with the base64 of a JPEG's first bytes, /9j/.
+    micros="$(find "$db" -type f ! -path "$db/display/*" ! -path "$db/thumb/*" ! -path "$db/asset/*" -exec cat {} + | tr '\0' '\n' | LC_ALL=C grep -ao '/9j/[A-Za-z0-9+/=]*' | sort -u)"
+    if [ "$(printf '%s\n' "$micros" | grep -c .)" -ne 1 ]; then
+        echo "FAIL  $name micro: expected one micro thumbnail in the database, found: $micros"
+        colourFailures=$((colourFailures + 1))
+        continue
+    fi
+    printf '%s' "$micros" | base64 -d > "$work/colour/$name.micro.jpg"
+    check_copy "$name" micro "$work/colour/$name.micro.jpg" "$expected" || colourFailures=$((colourFailures + 1))
+done
+
+if [ "$colourFailures" -ne 0 ]; then
+    echo "$colourFailures image copies with the wrong colour" >&2
+    exit 1
+fi
+echo "Every image's display, thumbnail and micro copies are sRGB with the right colour"

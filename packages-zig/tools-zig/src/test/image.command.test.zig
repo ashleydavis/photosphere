@@ -218,22 +218,67 @@ test "resize and transform write their numbers as a template string writes a num
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("../test/test.png");
 
-    // Both paths are passed as arguments of their own (`magick <file> -resize <geometry> -strip <output>`), unquoted. The output path is joined with node-utils' path.join, which normalizes every `/` to a `\`
-    // on Windows.
-    const resizeArguments = if (builtin.os.tag == .windows)
-        "../test/test.png -resize 1e+21x -strip -quality 1e-7 out\\temp_resize_fixed.jpg"
-    else
-        "../test/test.png -resize 1e+21x -strip -quality 1e-7 out/temp_resize_fixed.jpg";
+    // Resize writes the sRGB profile into its temp directory before it runs the command, so that directory has to exist.
+    var randomBytes: [8]u8 = undefined;
+    io.random(&randomBytes);
+    const resizeDir = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/image-command-test-resize-{x}", .{std.mem.readInt(u64, &randomBytes, .little)});
+    try std.Io.Dir.cwd().createDirPath(io, resizeDir);
+    defer std.Io.Dir.cwd().deleteTree(io, resizeDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ resizeDir, @errorName(err) });
+
+    // Every path is passed as an argument of its own (`magick <file> -resize <geometry> -profile <sRGB profile> -strip <output>`),
+    // unquoted. The profile and the output paths are joined with node-utils' path.join, which normalizes every `/` to a `\` on Windows.
+    const separator = if (builtin.os.tag == .windows) "\\" else "/";
+    const resizeDirJoined = try std.mem.replaceOwned(u8, allocator, resizeDir, "/", separator);
+    const resizeArguments = try std.mem.concat(allocator, u8, &.{ "../test/test.png -resize 1e+21x -profile ", resizeDirJoined, separator, "temp_resize_fixed.icc -strip -quality 1e-7 ", resizeDirJoined, separator, "temp_resize_fixed.jpg" });
     const transformArguments = if (builtin.os.tag == .windows)
         "../test/test.png -rotate 1e+21 out\\temp_transform_output_fixed.jpg"
     else
         "../test/test.png -rotate 1e+21 out/temp_transform_output_fixed.jpg";
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg", .transformation = null }, "out", uuids.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1e21, .height = 0, .quality = 1e-7, .format = null, .ext = "jpg", .transformation = null }, resizeDir, uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(resizeArguments, try fakeTools.argumentsOf("magick"));
+
+    // The profile is removed after the command, which failed.
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().access(io, try std.fs.path.join(allocator, &.{ resizeDir, "temp_resize_fixed.icc" }), .{}));
 
     try std.testing.expectError(error.Thrown, image.transform(allocator, io, log, fakeTools.runner(), .{ .rotate = 1e21 }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings(transformArguments, try fakeTools.argumentsOf("magick"));
+}
+
+//
+// A new directory for a resize under test to write its sRGB profile into, which it does before it runs the command, and the
+// same path with `/` written as the platform's separator, as the command line shows it.
+//
+const IResizeDir = struct {
+    // The directory, as given to resize.
+    path: []const u8,
+
+    // The directory as it appears in the command line.
+    joined: []const u8,
+};
+
+//
+// Makes the directory a resize under test writes into.
+//
+fn makeResizeDir(allocator: std.mem.Allocator, io: std.Io) !IResizeDir {
+    var randomBytes: [8]u8 = undefined;
+    io.random(&randomBytes);
+    const path = try std.fmt.allocPrint(allocator, ".zig-cache/tmp/image-command-test-resize-{x}", .{std.mem.readInt(u64, &randomBytes, .little)});
+    try std.Io.Dir.cwd().createDirPath(io, path);
+    const separator = if (builtin.os.tag == .windows) "\\" else "/";
+    return .{
+        .path = path,
+        .joined = try std.mem.replaceOwned(u8, allocator, path, "/", separator),
+    };
+}
+
+//
+// The command line of a resize into resizeDir: what comes before `-resize`, then `-resize <geometry>`, the sRGB profile and
+// the strip, then the quality and the output.
+//
+fn resizeCommand(allocator: std.mem.Allocator, resizeDir: IResizeDir, before: []const u8, geometry: []const u8) ![]const u8 {
+    const separator = if (builtin.os.tag == .windows) "\\" else "/";
+    return std.mem.concat(allocator, u8, &.{ before, " -resize ", geometry, " -profile ", resizeDir.joined, separator, "temp_resize_fixed.icc -strip -quality 95 jpeg:", resizeDir.joined, separator, "temp_resize_fixed.jpg" });
 }
 
 test "resize puts a flip and a turn before the resize, in the same command" {
@@ -251,22 +296,16 @@ test "resize puts a flip and a turn before the resize, in the same command" {
     });
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("../test/test.png");
+    const resizeDir = try makeResizeDir(allocator, io);
+    defer std.Io.Dir.cwd().deleteTree(io, resizeDir.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ resizeDir.path, @errorName(err) });
 
     // `-flop` then `-rotate`, as transform writes them, between the input and `-resize`, so the picture is turned before it is made smaller.
-    const transformedArguments = if (builtin.os.tag == .windows)
-        "../test/test.png -flop -rotate 270 -resize 45x50 -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
-    else
-        "../test/test.png -flop -rotate 270 -resize 45x50 -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 45, .height = 50, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = true, .rotate = 270, .changeOrientation = true } }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings(transformedArguments, try fakeTools.argumentsOf("magick"));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 45, .height = 50, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = true, .rotate = 270, .changeOrientation = true } }, resizeDir.path, uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(try resizeCommand(allocator, resizeDir, "../test/test.png -flop -rotate 270", "45x50"), try fakeTools.argumentsOf("magick"));
 
     // A transformation that asks for nothing (no flip, a turn of 0) adds nothing to the command.
-    const plainArguments = if (builtin.os.tag == .windows)
-        "../test/test.png -resize 45x50 -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
-    else
-        "../test/test.png -resize 45x50 -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 45, .height = 50, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = false, .rotate = 0 } }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings(plainArguments, try fakeTools.argumentsOf("magick"));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 45, .height = 50, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = false, .rotate = 0 } }, resizeDir.path, uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(try resizeCommand(allocator, resizeDir, "../test/test.png", "45x50"), try fakeTools.argumentsOf("magick"));
 }
 
 test "resize with a reduced JPEG decode hints it at half as big again as the target, before the input" {
@@ -284,32 +323,22 @@ test "resize with a reduced JPEG decode hints it at half as big again as the tar
     });
     var uuids: FixedUuidGenerator = .{};
     var image = Image.init("../test/test.jpg");
+    const resizeDir = try makeResizeDir(allocator, io);
+    defer std.Io.Dir.cwd().deleteTree(io, resizeDir.path) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ resizeDir.path, @errorName(err) });
 
     // 1333x1000 is hinted as 2000x1500: 1333 * 1.5 is 1999.5, rounded up, and 1000 * 1.5 is 1500. The define comes before
     // the input, as ImageMagick reads it when it decodes the input.
-    const hintedArguments = if (builtin.os.tag == .windows)
-        "-define jpeg:size=2000x1500 ../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
-    else
-        "-define jpeg:size=2000x1500 ../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = null }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings(hintedArguments, try fakeTools.argumentsOf("magick"));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = null }, resizeDir.path, uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(try resizeCommand(allocator, resizeDir, "-define jpeg:size=2000x1500 ../test/test.jpg", "1333x1000!"), try fakeTools.argumentsOf("magick"));
 
     // With a quarter turn the target is the turned size, 1000x1333, and the hint is for the decode, which comes before the
     // turn, so it is given the way the photo is stored: 2000x1500 again, not 1500x2000.
-    const turnedArguments = if (builtin.os.tag == .windows)
-        "-define jpeg:size=2000x1500 ../test/test.jpg -rotate 90 -resize 1000x1333! -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
-    else
-        "-define jpeg:size=2000x1500 ../test/test.jpg -rotate 90 -resize 1000x1333! -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1000, .height = 1333, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = .{ .rotate = 90, .changeOrientation = true } }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings(turnedArguments, try fakeTools.argumentsOf("magick"));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1000, .height = 1333, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = .{ .rotate = 90, .changeOrientation = true } }, resizeDir.path, uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(try resizeCommand(allocator, resizeDir, "-define jpeg:size=2000x1500 ../test/test.jpg -rotate 90", "1000x1333!"), try fakeTools.argumentsOf("magick"));
 
     // Without it there is no hint.
-    const plainArguments = if (builtin.os.tag == .windows)
-        "../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out\\temp_resize_fixed.jpg"
-    else
-        "../test/test.jpg -resize 1333x1000! -strip -quality 95 jpeg:out/temp_resize_fixed.jpg";
-    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .transformation = null }, "out", uuids.uuidGenerator()));
-    try std.testing.expectEqualStrings(plainArguments, try fakeTools.argumentsOf("magick"));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, io, log, fakeTools.runner(), .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .transformation = null }, resizeDir.path, uuids.uuidGenerator()));
+    try std.testing.expectEqualStrings(try resizeCommand(allocator, resizeDir, "../test/test.jpg", "1333x1000!"), try fakeTools.argumentsOf("magick"));
 }
 
 test "resize refuses a reduced JPEG decode without both a width and a height" {

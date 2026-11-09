@@ -23,6 +23,10 @@ What it makes, each with a width and height that differ so a size read the wrong
 - Large JPEGs, red at the top and blue at the bottom, whose pictures are made with a reduced decode: a 5472x3648
   camera photo, and a 4001x2999 photo (sides not multiples of 8) with no EXIF and with an EXIF Orientation of 1, 3, 6
   and 8. `getImageDetails makes the pictures of a large JPEG with its reduced decode...` in the same test file reads them.
+- Pictures with a colour profile that is not sRGB, each one solid colour: a PNG and a JPEG with a Display P3 profile
+  (Display P3 primaries and white point with a 2.2 gamma curve, written byte by byte by the script because neither
+  ImageMagick nor this repository ships a wide gamut RGB profile), and a CMYK JPEG carrying the CMYK profile ImageMagick
+  ships (`third-party/imagemagick/vendor/imagemagick/config/cmyk.icm`). psi must convert these into sRGB in its copies.
 - Two-second videos with sound: H.264 and HEVC, each in MP4 and MOV.
 
 A missing file makes the unit test fail on it and makes check-format-test-images.sh fail naming this script; neither skips.
