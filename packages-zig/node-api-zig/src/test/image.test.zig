@@ -311,6 +311,37 @@ test "getImageDetails produces the details and the files" {
             .coordinates = null,
             .photoDate = null,
         },
+        // 16x12, from the image tool: 1333x1000, 400x300 and 53x40. Made in colour from test.jpg, so the micro reads back
+        // as 76, as test.jpg's does.
+        .{
+            .filePath = "../test/test.gif",
+            .contentType = "image/gif",
+            .resolution = .{
+                .width = 16,
+                .height = 12,
+            },
+            .display = "1333 1000 JPEG 95 exif:[]",
+            .thumbnail = "400 300 JPEG 90 exif:[]",
+            .micro = "53 40 JPEG 76 exif:[]",
+            .metadata = null,
+            .coordinates = null,
+            .photoDate = null,
+        },
+        // 16x12, from the image tool: 1333x1000, 400x300 and 53x40, and a micro that reads back as 76, as the GIF's.
+        .{
+            .filePath = "../test/test.bmp",
+            .contentType = "image/bmp",
+            .resolution = .{
+                .width = 16,
+                .height = 12,
+            },
+            .display = "1333 1000 JPEG 95 exif:[]",
+            .thumbnail = "400 300 JPEG 90 exif:[]",
+            .micro = "53 40 JPEG 76 exif:[]",
+            .metadata = null,
+            .coordinates = null,
+            .photoDate = null,
+        },
     };
     for (cases) |expected| {
         errdefer std.debug.print("case: {s}\n", .{expected.filePath});

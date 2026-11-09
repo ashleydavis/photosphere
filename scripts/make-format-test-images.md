@@ -13,7 +13,9 @@ It takes no arguments and needs ImageMagick (`magick`, or `convert` for ImageMag
 
 What it makes, each with a width and height that differ so a size read the wrong way round shows:
 
-- GIF, BMP (default and V3), PNG with alpha, WebP lossless and lossy, a JPEG with no EXIF.
+- GIF, BMP (default, which is V5, V3, and V4), PNG with alpha, WebP lossless and lossy, a JPEG with no EXIF. ImageMagick 6
+  writes no V4 header, so the script grows a V3 BMP's 40-byte header into the 108-byte V4 one.
+- A HEIC laid out as an iPhone writes one, copied from `test/heic/tiled.heic` as `1000x700-tiled.heic`.
 - An animated GIF, three frames.
 - The same 71x37 JPEG with an EXIF Orientation of 1, 3, 6 and 8. ImageMagick does not write that tag into a JPEG with
   no EXIF, so the script writes a minimal EXIF segment holding only it.

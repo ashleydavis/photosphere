@@ -18,8 +18,8 @@ const ThreadAllocator = @import("ziggy").utils.thread_allocator.ThreadAllocator;
 //
 //   * `identify` hands what it prints back as text.
 //   * `-version` writes the version to a file it is given.
-//   * A command that ends in `info:` or `histogram:info:` writes what it prints to the file named after the colon, so the file name
-//     of a temporary file is put there.
+//   * A command that ends in `info:` writes what it prints to the file named after the colon, so the file name of a temporary file
+//     is put there.
 //
 // Everything else a command prints goes to the process's standard output as it would from `magick`.
 //
@@ -54,13 +54,17 @@ pub const Started = struct {
     // the log of the thread that runs the command, since each thread has a log of its own.
     //
     // The library is built with zero configuration, so it reads no policy.xml and applies no security policy of its own. This sets
-    // one, and fails with ImageMagick's error when it cannot be set. The policy denies:
+    // one, and fails with ImageMagick's error when it cannot be set. ImageMagick takes the last rule that matches, so the policy denies
+    // every coder first and then allows only the ones the program uses:
     //
-    //   * The coders that reach outside the file being read or run a script: the URL coders (HTTP, HTTPS, FTP), MSL, MVG, MSVG, TEXT
-    //     and TXT (which read a text description as an image), EPHEMERAL (which deletes the file it reads), and the display coders
-    //     SHOW, WIN and X. Every other coder stays allowed, because the import reads whatever image type the user has.
-    //   * Every delegate, since none is meant to run a program.
-    //   * Indirect reads, `@file`, which read a list of other paths from a file.
+    //   * Read: JPEG (also named JPG and JPE), PNG, WebP, GIF and BMP, the pictures the import makes smaller pictures of. HEIC is
+    //     made into a JPEG by FFmpeg first, and a video's frame is a JPEG FFmpeg writes.
+    //   * Write: JPEG (and JPG, the name a `.jpg` path is written with), the only type the program writes, and INFO, the text of a
+    //     command that ends in `info:`.
+    //
+    // Every other coder is refused with ImageMagick's NotAuthorized error, whatever its file is named: ImageMagick picks the coder
+    // from the file's first bytes, so an SVG, PostScript or MVG file named `.jpg` is refused too. The policy also denies every
+    // delegate, since none is meant to run a program, and indirect reads, `@file`, which read a list of other paths from a file.
     //
     pub fn start() !Started {
         c.MagickWandGenesis();
@@ -68,7 +72,10 @@ pub const Started = struct {
         defer _ = c.DestroyExceptionInfo(exception);
         if (c.SetMagickSecurityPolicy(
             \\<policymap>
-            \\  <policy domain="coder" rights="none" pattern="{URL,HTTP,HTTPS,FTP,MSL,MVG,MSVG,TEXT,TXT,EPHEMERAL,SHOW,WIN,X}"/>
+            \\  <policy domain="coder" rights="none" pattern="*"/>
+            \\  <policy domain="coder" rights="read|write" pattern="{JPEG,JPG}"/>
+            \\  <policy domain="coder" rights="read" pattern="{JPE,PNG,WEBP,GIF,BMP}"/>
+            \\  <policy domain="coder" rights="write" pattern="INFO"/>
             \\  <policy domain="delegate" rights="none" pattern="*"/>
             \\  <policy domain="path" rights="none" pattern="@*"/>
             \\</policymap>
