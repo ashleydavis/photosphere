@@ -430,15 +430,48 @@ const IThirdPartyLibraries = struct {
 };
 
 //
-// Finds what the build in third-party/<name> installed for the target, under its zig-out/<arch>-<os>-<abi>. Runs that build first
-// every time, so a new checkout needs no separate step, a build that was killed part way through is finished, and a change to the
-// library's sources or configuration is built rather than linked from the old copy. Running it only when its build-complete file
-// was missing linked a stale FFmpeg after its decoder list changed. When nothing has changed it is a cache check of about 0.1s.
+// Finds what the build in third-party/<name> installed for the target, under its zig-out/<arch>-<os>-<abi>, running that build first
+// when what it installed may not match the library's files:
+//
+//   * Its build-complete file is missing: a new checkout, or a build that was killed part way through. That build installs
+//     build-complete after everything else.
+//   * The hash of the library's files this build wrote beside build-complete, inputs-hash, differs from their hash now: the
+//     library's sources or configuration changed since it was built, as when FFmpeg's decoder list changed and the old library
+//     was still linked.
+//
+// When build-complete is there and inputs-hash is not, the libraries were built by running that build directly, as CI does in a job
+// of its own before restoring them from its cache keyed on the same files, and they are taken as they are. Running that build on
+// every build instead rebuilt FFmpeg from scratch in every CI job, which restores only the libraries and not that build's own
+// cache, and the Windows CLI smoke test job was killed doing it.
 //
 fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !IThirdPartyLibraries {
     const directory = b.fmt("third-party/{s}/zig-out/{s}-{s}-{s}", .{ name, @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
     const io = b.graph.io;
-    try buildThirdPartyLibraries(b, target, name);
+    const hashPath = b.fmt("{s}/inputs-hash", .{directory});
+    const currentHash = try thirdPartyInputsHash(b, name);
+    var needsBuild = false;
+    if (b.build_root.handle.access(io, b.fmt("{s}/build-complete", .{directory}), .{})) |_| {
+        const builtHash = b.build_root.handle.readFileAlloc(io, hashPath, b.allocator, .limited(64)) catch |err| switch (err) {
+            error.FileNotFound => currentHash,
+            else => return err,
+        };
+        needsBuild = !std.mem.eql(u8, builtHash, currentHash);
+    }
+    else |err| switch (err) {
+        error.FileNotFound => {
+            needsBuild = true;
+        },
+        else => {
+            return err;
+        },
+    }
+    if (needsBuild) {
+        try buildThirdPartyLibraries(b, target, name);
+    }
+    try b.build_root.handle.writeFile(io, .{
+        .sub_path = hashPath,
+        .data = currentHash,
+    });
     var library_directory = try b.build_root.handle.openDir(io, b.fmt("{s}/lib", .{directory}), .{ .iterate = true });
     defer library_directory.close(io);
     var archives: std.ArrayList(std.Build.LazyPath) = .empty;
@@ -454,6 +487,52 @@ fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name
         .include_directory = b.path(b.fmt("{s}/include", .{directory})),
         .zig_directory = b.path(b.fmt("{s}/zig", .{directory})),
     };
+}
+
+//
+// A hash of every file the build in third-party/<name> builds from, as hex: the files under that directory other than what a build
+// puts there (zig-out, zig-pkg and .zig-cache), and for FFmpeg and ImageMagick those of zlib-ng too, which they build with. The same
+// files CI keys its cache of the libraries on. Each file's hash covers its path and its contents, and the hashes are added, so the
+// order the directories are read in does not matter.
+//
+fn thirdPartyInputsHash(b: *std.Build, name: []const u8) ![]const u8 {
+    var hash: u64 = 0;
+    hash +%= try directoryInputsHash(b, name);
+    if (std.mem.eql(u8, name, "ffmpeg") or std.mem.eql(u8, name, "imagemagick")) {
+        hash +%= try directoryInputsHash(b, "zlib-ng");
+    }
+    return b.fmt("{x:0>16}", .{hash});
+}
+
+//
+// The sum of the hashes of the files a build in third-party/<name> builds from, for thirdPartyInputsHash.
+//
+fn directoryInputsHash(b: *std.Build, name: []const u8) !u64 {
+    const io = b.graph.io;
+    const root = b.fmt("third-party/{s}", .{name});
+    var directory = try b.build_root.handle.openDir(io, root, .{
+        .iterate = true,
+    });
+    defer directory.close(io);
+    var walker = try directory.walk(b.allocator);
+    defer walker.deinit();
+    var hash: u64 = 0;
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file) {
+            continue;
+        }
+        if (std.mem.startsWith(u8, entry.path, "zig-out") or std.mem.startsWith(u8, entry.path, "zig-pkg") or std.mem.startsWith(u8, entry.path, ".zig-cache")) {
+            continue;
+        }
+        const contents = try b.build_root.handle.readFileAlloc(io, b.fmt("{s}/{s}", .{ root, entry.path }), b.allocator, .unlimited);
+        defer b.allocator.free(contents);
+        var file_hash = std.hash.Wyhash.init(0);
+        file_hash.update(name);
+        file_hash.update(entry.path);
+        file_hash.update(contents);
+        hash +%= file_hash.final();
+    }
+    return hash;
 }
 
 //
@@ -476,7 +555,7 @@ fn buildThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, nam
             try std.Io.Dir.cwd().realPathFileAlloc(io, libc_file, b.allocator),
         });
     }
-    std.debug.print("Bringing third-party/{s} up to date for this target (quick when nothing changed): {s}\n", .{ name, try std.mem.join(b.allocator, " ", argv.items) });
+    std.debug.print("third-party/{s} is not built for this target, or its files changed since it was. Building it: {s}\n", .{ name, try std.mem.join(b.allocator, " ", argv.items) });
     var child = try std.process.spawn(io, .{
         .argv = argv.items,
         .cwd = .{
