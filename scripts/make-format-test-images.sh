@@ -111,6 +111,16 @@ make 5472x3648-camera.jpg JPEG -size 5472x3648 gradient:red-blue -quality 90 -st
 make 4001x2999-base.jpg JPEG -size 4001x2999 gradient:red-blue -quality 90 -strip
 make_oriented 4001x2999-base.jpg 1 3 6 8
 
+# The same photo in more sizes, portrait and landscape, whose pictures getImageDetails must make the same sizes with and
+# without the reduced decode.
+make 3648x5472-portrait.jpg JPEG -size 3648x5472 gradient:red-blue -quality 90 -strip
+make 2999x4001-portrait.jpg JPEG -size 2999x4001 gradient:red-blue -quality 90 -strip
+make 1111x1000.jpg JPEG -size 1111x1000 gradient:red-blue -quality 90 -strip
+make 1601x1203.jpg JPEG -size 1601x1203 gradient:red-blue -quality 90 -strip
+
+# A white picture with a black 10x10 square in its top left corner, so a flip or a turn shows where the square ends up.
+make 40x30-corner-square.png PNG -size 40x30 xc:white -fill black -draw "rectangle 0,0 9,9"
+
 #
 # Makes the 71x37 JPEG with a broken EXIF segment unless it is already there: broken_exif <file name> <segment>.
 # The segment is a printf format string, put straight after the JPEG's start marker as above. ImageMagick still

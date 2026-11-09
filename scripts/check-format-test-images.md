@@ -30,7 +30,8 @@ Every `psi` command runs with a `PATH` that is a single empty directory, so each
 FFmpeg built into `psi`, never by a `magick`, `ffmpeg` or `ffprobe` installed on the machine.
 
 Then it checks the colour of the display, thumbnail and micro copies `psi` makes of every image (not the videos, whose
-size alone is checked). Each image is imported again into a database of its own, so its copies are the only ones there:
+size alone is checked, and not the HEIC, which the ImageMagick on the machine cannot read to give its reference colour).
+Each image is imported again into a database of its own, so its copies are the only ones there:
 the display and thumbnail copies are read from the database's `display` and `thumb` directories, and the micro thumbnail
 is the one base64 JPEG in the database's metadata. Each copy must be sRGB (or Gray, for a picture with no colour in it),
 carry no colour profile, and have a mean colour within 3 per channel of the image shown through its own profile: for a file with a colour profile, ImageMagick's

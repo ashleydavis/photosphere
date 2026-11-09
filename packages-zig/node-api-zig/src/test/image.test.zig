@@ -666,15 +666,16 @@ test "getImageDetails makes pictures of a JPEG the same sizes as resizing it wit
     const test_env = try test_environment.setupEnvironment(std.testing.io);
     defer test_env.deinit(log);
 
-    // Sizes whose sides are not multiples of 8, so libjpeg rounds the sides of each reduced decode up, and a 20 megapixel
-    // camera's photo, landscape and portrait.
-    for ([_][]const u8{ "5472x3648", "3648x5472", "4001x2999", "2999x4001", "1111x1000", "1601x1203" }) |sizeText| {
-        errdefer std.debug.print("size: {s}\n", .{sizeText});
+    // Photos from scripts/make-format-test-images.sh whose sides are not multiples of 8, so libjpeg rounds the sides of each
+    // reduced decode up, and a 20 megapixel camera's photo, landscape and portrait.
+    for ([_][]const u8{ "../test/formats/5472x3648-camera.jpg", "../test/formats/3648x5472-portrait.jpg", "../test/formats/4001x2999-base.jpg", "../test/formats/2999x4001-portrait.jpg", "../test/formats/1111x1000.jpg", "../test/formats/1601x1203.jpg" }) |photoPath| {
+        errdefer std.debug.print("photo: {s}\n", .{photoPath});
+        if (!node_utils.fs.pathExists(std.testing.io, photoPath)) {
+            std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{photoPath});
+            return error.FormatTestImageMissing;
+        }
         const tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "image-details-sizes");
         defer temp_dirs.removeTempDir(std.testing.io, tempDir);
-        const photoPath = try std.fs.path.join(allocator, &.{ tempDir, "photo.jpg" });
-        const made = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ "-size", sizeText, "gradient:red-blue", "-quality", "90", photoPath });
-        try std.testing.expectEqual(@as(u8, 0), made.exit_code);
 
         var generator: CountingUuidGenerator = .{};
         const details = try image.getImageDetails(allocator, std.testing.io, log, runner, photoPath, tempDir, "image/jpeg", generator.uuidGenerator(), photoPath);
