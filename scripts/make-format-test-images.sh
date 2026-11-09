@@ -6,6 +6,12 @@
 set -euo pipefail
 
 out="$(cd "$(dirname "$0")/.." && pwd)/test/formats"
+# On Windows (Git Bash) the path is given to ImageMagick and ffmpeg in its Windows form (D:/a/...). Git Bash converts a
+# path that is an argument of its own, but not one behind a format prefix such as GIF:, so ImageMagick was handed
+# /d/a/... and could not open it.
+if command -v cygpath >/dev/null 2>&1; then
+    out="$(cygpath -m "$out")"
+fi
 mkdir -p "$out"
 
 if command -v magick >/dev/null 2>&1; then
