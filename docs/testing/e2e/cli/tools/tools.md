@@ -2,7 +2,7 @@
 
 **Do not skip steps.** Run every step in this test, in the order it is written. An agent taking someone through this test is not authorized to skip, reorder, defer, or merge steps, or to decide a step is not worth running. Only the human can ask for that.
 
-Test that `tools` reports the media tools the CLI needs and whether each was found.
+Test that `tools` reports the media tools built into the CLI, each with its version.
 
 ## Prep
 
@@ -24,7 +24,7 @@ psi tools --yes
 ```
 
 Expected:
-- ImageMagick, ffmpeg and ffprobe are each listed with a version and shown as found.
+- ImageMagick, ffmpeg and ffprobe are each listed with a version.
 - The command exits successfully.
 
 ## Check

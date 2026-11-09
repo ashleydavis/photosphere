@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import eruda from "eruda";
-import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type IToolsStatus, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
+import { PlatformContextProvider, ConfigStoreContextProvider, StateStoreContextProvider, createConfig, convertToPng, TEST_OPEN_DATABASE_EVENT, TEST_SEED_NEWS_EVENT, TEST_STAGE_EXPORT_EVENT, TEST_NOTIFY_DATABASE_EDITED_EVENT, type IPlatformContext, type IPlatformEvent, type IShowNotificationData, type IUpdateAvailableData, type IDatabaseEntry, type ISharedSecretEntry, type IPickFolderOptions, type ISaveDownloadResult, type ISeedNewsItem, type Unsubscribe, UuidGeneratorProvider } from "user-interface";
 import { TaskQueue, type ITaskResult } from "task-queue";
 import { log, RandomUuidGenerator, TestUuidGenerator, type IUuidGenerator, type ILogDetails } from "utils";
 import { planMobileAutoImport } from "api/src/lib/auto-import-mobile";
@@ -691,20 +691,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         return ziggy.runAction(name);
     }, [ziggy]);
 
-    const checkTools = useCallback(async (): Promise<IToolsStatus> => {
-        if (platform.platformKind !== "desktop") {
-            // ImageMagick and ffmpeg are bundled inside the phone app, so they are available.
-            return {
-                magick: { available: true },
-                ffprobe: { available: true },
-                ffmpeg: { available: true },
-                allAvailable: true,
-                missingTools: [],
-            };
-        }
-        return await ziggy.invoke<IToolsStatus>('check-tools', null);
-    }, [ziggy, platform.platformKind]);
-
     const onTaskMessage = useCallback((handler: (taskId: string, message: Record<string, unknown>) => void): (() => void) => {
         taskEventCallbacksRef.current.add(handler);
         return () => {
@@ -960,7 +946,6 @@ export function PlatformProviderZiggy({ children, ziggy, platform }: IPlatformPr
         registerAction,
         runAction,
         platformKind: platform.platformKind,
-        checkTools,
         onTaskMessage,
         onTaskComplete,
         cancelTasks,

@@ -26,7 +26,7 @@ pub fn databaseIdCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, co
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const assetStorage = loaded.assetStorage;
 
     const merkleTree = try loadMerkleTree(allocator, io, log, assetStorage) orelse {

@@ -30,7 +30,7 @@ pub fn removeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, contex
     const dbPath = if (options.base.db) |db| (if (db.len > 0) db else try std.process.currentPathAlloc(io, allocator)) else try std.process.currentPathAlloc(io, allocator);
 
     // Load the database using shared function
-    const loaded = try loadDatabase(allocator, io, log, dbPath, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbPath, &options.base, uuidGenerator, timestampProvider, sessionId, false);
 
     // Remove the asset using the comprehensive removal method
     try removeAsset(allocator, io, log, loaded.assetStorage, loaded.rawAssetStorage, sessionId, loaded.bsonDatabase, loaded.metadataCollection, assetId, true);
