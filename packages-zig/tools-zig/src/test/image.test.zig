@@ -691,3 +691,45 @@ test "resize with a reduced JPEG decode decodes a large JPEG no smaller than the
     _ = try runImageMagick(log, allocator, runner, "convert", &.{ "../test/test.png", "-resize", "50x45!", "-strip", pngReferencePath });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, pngReferencePath), try readFile(allocator, pngPath)));
 }
+
+test "getInfo of an image with no EXIF reads no date and does not fail" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireImageMagick(log, allocator, runner);
+    const tempDir = try makeTempDir(allocator, "no-exif");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
+
+    // A two frame GIF, the kind of file a GIF import reads.
+    const gifPath = try std.fs.path.join(allocator, &.{ tempDir, "animation.gif" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "20x10", "xc:red", "xc:blue", gifPath });
+
+    // `identify -format "%[EXIF:*]"` succeeds and prints nothing for a file with no EXIF, so getExifData finds no tags
+    // and getInfo leaves createdAt null.
+    for ([_][]const u8{ "../test/test.png", "../test/test.webp", "../test/multiple-files/test-1.jpeg", "../test/duplicate-images/a.png", gifPath }) |filePath| {
+        errdefer std.debug.print("file: {s}\n", .{filePath});
+        var image = Image.init(filePath);
+        const exifData = try image.getExifData(allocator, std.testing.io, log, runner);
+        try std.testing.expectEqual(@as(usize, 0), exifData.count());
+        const info = try image.getInfo(allocator, std.testing.io, log, runner);
+        try std.testing.expect(info.createdAt == null);
+        try std.testing.expect(info.dimensions.width > 0);
+        try std.testing.expect(info.dimensions.height > 0);
+    }
+
+    // A HEIC is imported from the JPEG it is decoded to, whose size is read with getInfo. The decoded JPEG of the
+    // fixture carries no EXIF either.
+    const decodedPath = try std.fs.path.join(allocator, &.{ tempDir, "decoded.jpg" });
+    try tools.heic.decodeHeic(allocator, std.testing.io, log, runner, "../test/heic/tiled.heic", decodedPath);
+    var decoded = Image.init(decodedPath);
+    const decodedExif = try decoded.getExifData(allocator, std.testing.io, log, runner);
+    const decodedInfo = try decoded.getInfo(allocator, std.testing.io, log, runner);
+    try std.testing.expectEqual(@as(usize, 0), decodedExif.count());
+    try std.testing.expect(decodedInfo.createdAt == null);
+    try std.testing.expectEqual(@as(f64, 1000), decodedInfo.dimensions.width);
+    try std.testing.expectEqual(@as(f64, 700), decodedInfo.dimensions.height);
+}
