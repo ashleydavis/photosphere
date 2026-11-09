@@ -104,35 +104,83 @@ apple_sync_native() {
     # Xcode links only libphotosphere.a, and a Zig static library does not hold the static libraries it links (the AWS SDK for C, aws-lc,
     # the media libraries), which the build installs under lib/dependencies, so their members go into the new archive too. One archive
     # can hold several members with the same name (an Apple archive keeps only the file's base name, and FFmpeg has several 4xm.o,
-    # aacdec.o and others), so ar x, which writes each under its name, would keep only the last of them. Each member is taken out on its
-    # own into a numbered file instead, as the instance of its name it is (zig ar's N modifier), counted from the names listed before it.
+    # aacdec.o and others), so ar x, which writes each under its name, keeps only the last of them.
+    # Taking the members out one at a time took 16 minutes on a MacOS runner, because FFmpeg has thousands and every zig ar call reads
+    # the whole archive again. So each archive is read a fixed number of times: one ar x takes out every member, which is right for
+    # every name that appears once, and then, for each instance number a duplicated name reaches, one zig ar xN takes that instance
+    # of all such names into a directory of its own (instance 1 as well, since ar x kept the last one). The members are then renamed
+    # to numbered files in archive order, so libtool writes them in that order and with no two of the same name.
     echo "Aligning the members of the Zig library and adding its dependencies..."
     local library="$native_dir/lib/libphotosphere.a"
     local members_dir
     members_dir="$(mktemp -d "$native_dir/members.XXXXXX")" || apple_fail "could not make a directory for the library's members."
-    local archive member instance
+    local tab
+    tab="$(printf '\t')"
+    local archive member instance line_number previous source wanted names
+    local archive_number=0
     local count=0
     for archive in "$library" "$native_dir"/lib/dependencies/*.a; do
         [ -f "$archive" ] || continue
-        local names
+        archive_number=$((archive_number + 1))
+        local archive_dir="$members_dir/archive$archive_number"
+        mkdir -p "$archive_dir/members/all" || apple_fail "could not make a directory for the members of $archive."
         names="$(zig ar t "$archive")" || apple_fail "could not list the members of $archive."
-        : > "$members_dir/seen.txt"
+        zig ar x "$archive" --output "$archive_dir/members/all" || apple_fail "could not take the members out of $archive."
+        # Each line of instances.txt is a member's position in the archive, the instance of its name it is and its name, in archive
+        # order. The instance is counted on a copy sorted by name, where the members of one name sit together, so it costs one pass
+        # instead of a search of the names before it for every member.
+        line_number=0
         while IFS= read -r member; do
             [ -n "$member" ] || continue
-            printf '%s\n' "$member" >> "$members_dir/seen.txt"
-            instance="$(grep -cxF -- "$member" "$members_dir/seen.txt")"
+            line_number=$((line_number + 1))
+            printf '%s\t%s\n' "$line_number" "$member"
+        done <<< "$names" > "$archive_dir/numbered.txt"
+        LC_ALL=C sort -t "$tab" -k2,2 -k1,1n "$archive_dir/numbered.txt" | {
+            previous=""
+            instance=0
+            while IFS="$tab" read -r line_number member; do
+                if [ "$member" = "$previous" ]; then
+                    instance=$((instance + 1))
+                else
+                    instance=1
+                    previous="$member"
+                fi
+                printf '%s\t%s\t%s\n' "$line_number" "$instance" "$member"
+            done
+        } | LC_ALL=C sort -t "$tab" -k1,1n > "$archive_dir/instances.txt" || apple_fail "could not number the members of $archive."
+        # The names with a second instance are exactly the duplicated ones, so they are the names whose first instance is taken too.
+        wanted=2
+        while :; do
+            # Counted apart from the array because bash 3.2 with set -u treats an empty array as unset.
+            local duplicated=()
+            local duplicated_count=0
+            while IFS="$tab" read -r line_number instance member; do
+                if [ "$instance" = "$wanted" ]; then
+                    duplicated+=("$member")
+                    duplicated_count=$((duplicated_count + 1))
+                fi
+            done < "$archive_dir/instances.txt"
+            [ "$duplicated_count" -gt 0 ] || break
+            if [ "$wanted" = "2" ]; then
+                mkdir -p "$archive_dir/members/1" || apple_fail "could not make a directory for the members of $archive."
+                zig ar xPN 1 "$archive" "${duplicated[@]}" --output "$archive_dir/members/1" || apple_fail "could not take the first instance of the duplicated members out of $archive."
+            fi
+            mkdir -p "$archive_dir/members/$wanted" || apple_fail "could not make a directory for the members of $archive."
+            zig ar xPN "$wanted" "$archive" "${duplicated[@]}" --output "$archive_dir/members/$wanted" || apple_fail "could not take instance $wanted of the duplicated members out of $archive."
+            wanted=$((wanted + 1))
+        done
+        # The archives Zig writes record every member's mode as 0 and zig ar x gives the file that mode, so libtool could not read it.
+        find "$archive_dir/members" -type f -exec chmod 644 {} + || apple_fail "could not make the members of $archive readable."
+        while IFS="$tab" read -r line_number instance member; do
             count=$((count + 1))
-            # zig ar takes the instance of a name only with x, which writes the member under its name, so into a directory of its own.
-            mkdir -p "$members_dir/one" || apple_fail "could not make a directory for a member of $archive."
-            zig ar xPN "$instance" "$archive" "$member" --output "$members_dir/one" || apple_fail "could not take $member out of $archive."
-            local extracted
-            extracted="$(find "$members_dir/one" -type f)"
-            [ -n "$extracted" ] || apple_fail "taking $member out of $archive wrote no file."
-            mv "$extracted" "$members_dir/$count.o" || apple_fail "could not move $member out of the extraction directory."
-            # The archives Zig writes record every member's mode as 0 and zig ar x gives the file that mode, so libtool could not read it.
-            chmod 644 "$members_dir/$count.o" || apple_fail "could not make $member from $archive readable."
-            find "$members_dir/one" -depth -mindepth 1 -type d -empty -delete
-        done <<< "$names"
+            if [ "$instance" != "1" ] || [ -f "$archive_dir/members/1/$member" ]; then
+                source="$archive_dir/members/$instance/$member"
+            else
+                source="$archive_dir/members/all/$member"
+            fi
+            [ -f "$source" ] || apple_fail "instance $instance of $member was not taken out of $archive."
+            mv "$source" "$members_dir/$count.o" || apple_fail "could not move $member out of the extraction directory."
+        done < "$archive_dir/instances.txt"
     done
     local members=()
     for ((index = 1; index <= count; index++)); do
