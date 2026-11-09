@@ -125,6 +125,33 @@ fn readFlags(b: *std.Build, path: []const u8) ![]const []const u8 {
 }
 
 //
+// A -D flag holding a hash of every file in the target's config directory. FFmpeg's sources include generated files from there,
+// such as libavcodec/codec_list.c, which Zig's cache of the library does not track: after codec_list.c changed, the old
+// allcodecs.o was linked. Putting the hash in the flags makes any change to the configuration a change to every object's flags,
+// so the library is rebuilt from it. The hashes of the files are added, so the order the directory is read in does not matter.
+//
+fn configHashFlag(b: *std.Build, config_path: []const u8) ![]const u8 {
+    var config_directory = try b.build_root.handle.openDir(b.graph.io, config_path, .{
+        .iterate = true,
+    });
+    defer config_directory.close(b.graph.io);
+    var walker = try config_directory.walk(b.allocator);
+    defer walker.deinit();
+    var hash: u64 = 0;
+    while (try walker.next(b.graph.io)) |entry| {
+        if (entry.kind != .file) {
+            continue;
+        }
+        const contents = try readBuildFile(b, b.fmt("{s}/{s}", .{ config_path, entry.path }));
+        var file_hash = std.hash.Wyhash.init(0);
+        file_hash.update(entry.path);
+        file_hash.update(contents);
+        hash +%= file_hash.final();
+    }
+    return b.fmt("-DPHOTOSPHERE_FFMPEG_CONFIG_HASH=0x{x}", .{hash});
+}
+
+//
 // Whether the list already holds the path.
 //
 fn contains(list: []const []const u8, path: []const u8) bool {
@@ -149,8 +176,9 @@ pub fn buildFfmpeg(b: *std.Build, target: std.Build.ResolvedTarget, zlib: zlib_n
     // shared library allows only for symbols that cannot be replaced by another library's, which FFmpeg's own shared build gets by
     // building with hidden visibility, and so does this.
     const hidden: []const []const u8 = if (target.result.abi.isAndroid()) &.{"-fvisibility=hidden"} else &.{};
-    const library_flags = try joinFlags(b, try readFlags(b, b.fmt("{s}/flags.txt", .{config_path})), hidden);
-    const tool_flags = try joinFlags(b, try readFlags(b, b.fmt("{s}/fftools-flags.txt", .{config_path})), hidden);
+    const config_hash_flag = try configHashFlag(b, config_path);
+    const library_flags = try joinFlags(b, try joinFlags(b, try readFlags(b, b.fmt("{s}/flags.txt", .{config_path})), hidden), &.{config_hash_flag});
+    const tool_flags = try joinFlags(b, try joinFlags(b, try readFlags(b, b.fmt("{s}/fftools-flags.txt", .{config_path})), hidden), &.{config_hash_flag});
     const include_directories = try readFlags(b, b.fmt("{s}/includes.txt", .{config_path}));
 
     const library = b.addLibrary(.{
