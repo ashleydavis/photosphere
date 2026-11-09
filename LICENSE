@@ -22,6 +22,8 @@ SOFTWARE.
 
 ---
 
-Photosphere bundles third-party software with the mobile applications. See
-THIRD-PARTY-NOTICES.md for the licences and copyright notices of those
-components (ImageMagick, ffmpeg, and their delegate libraries).
+Photosphere bundles third-party software with its applications and its command
+line tool. See THIRD-PARTY-NOTICES.md for the licences and copyright notices of
+those components (ImageMagick, FFmpeg and their delegate libraries). FFmpeg is
+used under the GNU Lesser General Public License, version 2.1 or later;
+THIRD-PARTY-NOTICES.md also says how the distributed builds meet it.

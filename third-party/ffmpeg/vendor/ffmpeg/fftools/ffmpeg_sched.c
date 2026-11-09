@@ -1,4 +1,10 @@
 /*
+ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
+ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
+ * several runs can share one process. The dates of later changes are in the history of that patch.
+ */
+
+/*
  * Inter-thread scheduling/synchronization.
  * Copyright (c) 2023 Anton Khirnov
  *

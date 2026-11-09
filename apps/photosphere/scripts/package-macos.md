@@ -1,6 +1,6 @@
 # package-macos
 
-Builds the MacOS app in Release and packs `out/macos/photosphere-<version>-macos-<arch>.dmg` (with a link to `/Applications`) and `out/macos/photosphere-<version>-macos-<arch>.zip`. The build files go in `native/macos/zig-out/package`. The version comes from `--version`, or from `apps/photosphere/package.json` when it is not given. The app is ad hoc signed, not notarized.
+Builds the MacOS app in Release and packs `out/macos/photosphere-<version>-macos-<arch>.dmg` (with a link to `/Applications`) and `out/macos/photosphere-<version>-macos-<arch>.zip`. Each holds `Photosphere.app` and, beside it, a `licences` folder written by `scripts/write-licence-files.sh` (see [write-licence-files.md](../../../scripts/write-licence-files.md)). The licences are kept outside the app because adding a file to the signed app would break its signature. The build files go in `native/macos/zig-out/package`. The version comes from `--version`, or from `apps/photosphere/package.json` when it is not given. The app is ad hoc signed, not notarized.
 
 Run it on a Mac: `bun run --filter=ziggy package:macos`.
 

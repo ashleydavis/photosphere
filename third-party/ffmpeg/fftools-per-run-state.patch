@@ -5,7 +5,18 @@ can run several commands at once, each on a thread of its own. update-ffmpeg.sh 
 diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
 --- a/fftools/cmdutils.c
 +++ b/fftools/cmdutils.c
-@@ -53,18 +53,109 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Various utilities for command line tools
+  * Copyright (c) 2000-2003 Fabrice Bellard
+  *
+@@ -53,18 +59,109 @@
  #include "compat/w32dlfcn.h"
  #endif
  
@@ -16,8 +27,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
 + * fftools_run_begin, and the threads the run starts (see task_wrapper in ffmpeg_sched.c) are given its run, so every thread of
 + * one run shares the run's state and no thread of another run sees it. */
 +static _Thread_local FFToolsRun *current_run;
- 
--int hide_banner = 0;
++
 +const FFToolsCommon fftools_common_defaults = {
 +    .report_file_level = AV_LOG_DEBUG,
 +    .report_print_prefix = 1,
@@ -62,7 +72,8 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
 +    current_run = run;
 +    return 0;
 +}
-+
+ 
+-int hide_banner = 0;
 +void fftools_run_end(void)
 +{
 +    FFToolsRun *run = fftools_run();
@@ -123,7 +134,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
  }
  
  void log_callback_help(void *ptr, int level, const char *fmt, va_list vl)
-@@ -242,8 +333,10 @@
+@@ -242,8 +339,10 @@
  {
      /* new-style options contain an offset into optctx, old-style address of
       * a global var*/
@@ -135,7 +146,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
      char *arg_allocated = NULL;
  
      enum OptionType so_type = po->type;
-@@ -583,7 +676,7 @@
+@@ -583,7 +682,7 @@
      freeenv_utf8(env);
      idx = locate_option(argc, argv, options, "hide_banner");
      if (idx)
@@ -144,7 +155,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
  }
  
  static const AVOption *opt_find(void *obj, const char *name, const char *unit,
-@@ -611,7 +704,7 @@
+@@ -611,7 +710,7 @@
  #endif
  
      if (!strcmp(opt, "debug") || !strcmp(opt, "fdebug"))
@@ -153,7 +164,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
  
      if (!(p = strchr(opt, ':')))
          p = opt + strlen(opt);
-@@ -621,12 +714,12 @@
+@@ -621,12 +720,12 @@
                           AV_OPT_SEARCH_CHILDREN | AV_OPT_SEARCH_FAKE_OBJ)) ||
          ((opt[0] == 'v' || opt[0] == 'a' || opt[0] == 's') &&
           (o = opt_find(&cc, opt + 1, NULL, 0, AV_OPT_SEARCH_FAKE_OBJ)))) {
@@ -168,7 +179,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
          if (consumed)
              av_log(NULL, AV_LOG_VERBOSE, "Routing option %s to both codec and muxer layer\n", opt);
          consumed = 1;
-@@ -640,7 +733,7 @@
+@@ -640,7 +739,7 @@
              av_log(NULL, AV_LOG_ERROR, "Directly using swscale dimensions/format options is not supported, please use the -s or -pix_fmt options\n");
              return AVERROR(EINVAL);
          }
@@ -177,7 +188,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
  
          consumed = 1;
      }
-@@ -653,7 +746,7 @@
+@@ -653,7 +752,7 @@
  #if CONFIG_SWRESAMPLE
      if (!consumed && (o=opt_find(&swr_class, opt, NULL, 0,
                                      AV_OPT_SEARCH_CHILDREN | AV_OPT_SEARCH_FAKE_OBJ))) {
@@ -186,7 +197,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
          consumed = 1;
      }
  #endif
-@@ -704,15 +797,15 @@
+@@ -704,15 +803,15 @@
      *g             = octx->cur_group;
      g->arg         = arg;
      g->group_def   = l->group_def;
@@ -211,7 +222,7 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
  
      memset(&octx->cur_group, 0, sizeof(octx->cur_group));
  
-@@ -901,7 +994,7 @@
+@@ -901,7 +1000,7 @@
          return AVERROR_OPTION_NOT_FOUND;
      }
  
@@ -223,7 +234,18 @@ diff -ruN a/fftools/cmdutils.c b/fftools/cmdutils.c
 diff -ruN a/fftools/cmdutils.h b/fftools/cmdutils.h
 --- a/fftools/cmdutils.h
 +++ b/fftools/cmdutils.h
-@@ -29,6 +29,7 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Various utilities for command line tools
+  * copyright (c) 2003 Fabrice Bellard
+  *
+@@ -29,6 +35,7 @@
  #include "libavfilter/avfilter.h"
  #include "libavformat/avformat.h"
  #include "libswscale/swscale.h"
@@ -231,7 +253,7 @@ diff -ruN a/fftools/cmdutils.h b/fftools/cmdutils.h
  
  #ifdef _WIN32
  #undef main /* We don't want SDL to override our main() */
-@@ -44,10 +45,8 @@
+@@ -44,10 +51,8 @@
   */
  extern const int program_birth_year;
  
@@ -247,7 +269,18 @@ diff -ruN a/fftools/cmdutils.h b/fftools/cmdutils.h
 diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
 --- a/fftools/ffmpeg.c
 +++ b/fftools/ffmpeg.c
-@@ -89,46 +89,14 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Copyright (c) 2000-2003 Fabrice Bellard
+  *
+  * This file is part of FFmpeg.
+@@ -89,46 +95,14 @@
  const char program_name[] = "ffmpeg";
  const int program_birth_year = 2000;
  
@@ -296,7 +329,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
  #endif
  }
  
-@@ -138,89 +106,16 @@
+@@ -138,89 +112,16 @@
      term_exit_sigsafe();
  }
  
@@ -391,7 +424,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
  
              tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
                               |INLCR|IGNCR|ICRNL|IXON);
-@@ -233,21 +128,8 @@
+@@ -233,21 +134,8 @@
  
              tcsetattr (0, TCSANOW, &tty);
          }
@@ -413,7 +446,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
  }
  
  /* read a key without blocking */
-@@ -273,17 +155,15 @@
+@@ -273,17 +161,15 @@
      }
  #elif HAVE_KBHIT
  #    if HAVE_PEEKNAMEDPIPE && HAVE_GETSTDHANDLE
@@ -436,7 +469,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
              // input pipe may have been closed by the program that ran ffmpeg
              return -1;
          }
-@@ -304,68 +184,75 @@
+@@ -304,68 +190,75 @@
      return -1;
  }
  
@@ -542,7 +575,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
  }
  
  OutputStream *ost_iter(OutputStream *prev)
-@@ -373,8 +260,8 @@
+@@ -373,8 +266,8 @@
      int of_idx  = prev ? prev->file->index : 0;
      int ost_idx = prev ? prev->index + 1  : 0;
  
@@ -553,7 +586,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
          if (ost_idx < of->nb_streams)
              return of->streams[ost_idx];
  
-@@ -389,8 +276,8 @@
+@@ -389,8 +282,8 @@
      int if_idx  = prev ? prev->file->index : 0;
      int ist_idx = prev ? prev->index + 1  : 0;
  
@@ -564,7 +597,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
          if (ist_idx < f->nb_streams)
              return f->streams[ist_idx];
  
-@@ -550,7 +437,7 @@
+@@ -550,7 +443,7 @@
  
  void update_benchmark(const char *fmt, ...)
  {
@@ -573,7 +606,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
          BenchmarkTimeStamps t = get_benchmark_time_stamps();
          va_list va;
          char buf[1024];
-@@ -561,23 +448,21 @@
+@@ -561,23 +454,21 @@
              va_end(va);
              av_log(NULL, AV_LOG_INFO,
                     "bench: %8" PRIu64 " user %8" PRIu64 " sys %8" PRIu64 " real %s \n",
@@ -602,7 +635,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
      uint64_t nb_frames_dup = 0, nb_frames_drop = 0;
      int mins, secs, ms, us;
      int64_t hours;
-@@ -585,17 +470,17 @@
+@@ -585,17 +476,17 @@
      int ret;
      float t;
  
@@ -626,7 +659,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
      }
  
      t = (cur_time-timer_start) / 1000000.0;
-@@ -635,11 +520,11 @@
+@@ -635,11 +526,11 @@
          }
      }
  
@@ -643,7 +676,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
      }
  
      us    = FFABS64U(pts) % AV_TIME_BASE;
-@@ -703,9 +588,9 @@
+@@ -703,9 +594,9 @@
  
      av_bprintf(&buf, " elapsed=%"PRId64":%02d:%02d.%02d", hours, mins, secs, ms / 10);
  
@@ -655,7 +688,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
              fprintf(stderr, "%s    %c", buf.str, end);
          } else
              av_log(NULL, AV_LOG_INFO, "%s    %c", buf.str, end);
-@@ -714,21 +599,21 @@
+@@ -714,21 +605,21 @@
      }
      av_bprint_finalize(&buf, NULL);
  
@@ -682,7 +715,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
  }
  
  static void print_stream_maps(void)
-@@ -740,7 +625,7 @@
+@@ -740,7 +631,7 @@
                  av_log(NULL, AV_LOG_INFO, "  Stream #%d:%d (%s) -> %s",
                         ist->file->index, ist->index, ist->dec ? ist->dec->name : "?",
                         ist->filters[j]->name);
@@ -691,7 +724,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
                      av_log(NULL, AV_LOG_INFO, " (graph %d)", ist->filters[j]->graph->index);
                  av_log(NULL, AV_LOG_INFO, "\n");
              }
-@@ -758,7 +643,7 @@
+@@ -758,7 +649,7 @@
          if (ost->filter && !filtergraph_is_simple(ost->filter->graph)) {
              /* output from a complex graph */
              av_log(NULL, AV_LOG_INFO, "  %s", ost->filter->name);
@@ -700,7 +733,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
                  av_log(NULL, AV_LOG_INFO, " (graph %d)", ost->filter->graph->index);
  
              av_log(NULL, AV_LOG_INFO, " -> Stream #%d:%d (%s)\n", ost->file->index,
-@@ -822,19 +707,18 @@
+@@ -822,19 +713,18 @@
  static int check_keyboard_interaction(int64_t cur_time)
  {
      int i, key;
@@ -724,7 +757,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
      if (key == 'c' || key == 'C'){
          char buf[4096], target[64], command[256], arg[256] = {0};
          double time;
-@@ -857,8 +741,8 @@
+@@ -857,8 +747,8 @@
                      fg_send_command(ost->fg_simple, time, target, command, arg,
                                      key == 'C');
              }
@@ -735,7 +768,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
                                  key == 'C');
          } else {
              av_log(NULL, AV_LOG_ERROR,
-@@ -891,26 +775,26 @@
+@@ -891,26 +781,26 @@
  
      print_stream_maps();
  
@@ -767,7 +800,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
              if (check_keyboard_interaction(cur_time) < 0)
                  break;
  
-@@ -921,8 +805,8 @@
+@@ -921,8 +811,8 @@
      ret = sch_stop(sch, &transcode_ts);
  
      /* write the trailer if needed */
@@ -778,7 +811,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
          ret = err_merge(ret, err);
      }
  
-@@ -985,11 +869,9 @@
+@@ -985,11 +875,9 @@
      int ret;
      BenchmarkTimeStamps ti;
  
@@ -793,7 +826,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
      parse_loglevel(argc, argv, options);
  
  #if CONFIG_AVDEVICE
-@@ -1010,14 +892,14 @@
+@@ -1010,14 +898,14 @@
      if (ret < 0)
          goto finish;
  
@@ -810,7 +843,7 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
          av_log(NULL, AV_LOG_FATAL, "At least one output file must be specified\n");
          ret = 1;
          goto finish;
-@@ -1027,20 +909,20 @@
+@@ -1027,20 +915,20 @@
      android_binder_threadpool_init_if_required();
  #endif
  
@@ -841,7 +874,18 @@ diff -ruN a/fftools/ffmpeg.c b/fftools/ffmpeg.c
 diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
 --- a/fftools/ffmpeg_dec.c
 +++ b/fftools/ffmpeg_dec.c
-@@ -412,7 +412,7 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * This file is part of FFmpeg.
+  *
+  * FFmpeg is free software; you can redistribute it and/or
+@@ -412,7 +418,7 @@
      dp->last_frame_pts          = frame->pts;
      dp->last_frame_tb           = frame->time_base;
  
@@ -850,7 +894,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
          av_log(dp, AV_LOG_INFO,
                 "decoder -> pts:%s pts_time:%s "
                 "pkt_dts:%s pkt_dts_time:%s "
-@@ -665,7 +665,7 @@
+@@ -665,7 +671,7 @@
          av_log(dp, AV_LOG_ERROR, "Error decoding subtitles: %s\n",
                 av_err2str(ret));
          dp->dec.decode_errors++;
@@ -859,7 +903,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
      }
  
      if (!got_output)
-@@ -732,7 +732,7 @@
+@@ -732,7 +738,7 @@
              return ret;
  
          dp->dec.decode_errors++;
@@ -868,7 +912,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
              return ret;
      }
  
-@@ -758,16 +758,16 @@
+@@ -758,16 +764,16 @@
              av_log(dp, AV_LOG_ERROR, "Decoding error: %s\n", av_err2str(ret));
              dp->dec.decode_errors++;
  
@@ -888,7 +932,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
                  return AVERROR_INVALIDDATA;
          }
  
-@@ -1006,9 +1006,9 @@
+@@ -1006,9 +1012,9 @@
  
          err_rate = (dp->dec.frames_decoded || dp->dec.decode_errors) ?
                     (float)dp->dec.decode_errors / (dp->dec.frames_decoded + dp->dec.decode_errors) : 0.f;
@@ -900,7 +944,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
              ret = FFMPEG_ERROR_RATE_EXCEEDED;
          } else if (err_rate)
              av_log(dp, AV_LOG_VERBOSE, "Decode error rate %g\n", err_rate);
-@@ -1178,12 +1178,12 @@
+@@ -1178,12 +1184,12 @@
          switch (vs->type) {
          case VIEW_SPECIFIER_TYPE_IDX:
              if (vs->val >= nb_view_ids_av) {
@@ -915,7 +959,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
                      ret = AVERROR(EINVAL);
                      goto fail;
                  }
-@@ -1204,10 +1204,10 @@
+@@ -1204,10 +1210,10 @@
                  }
              }
              if (view_idx < 0) {
@@ -928,7 +972,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
                      ret = AVERROR(EINVAL);
                      goto fail;
                  }
-@@ -1229,10 +1229,10 @@
+@@ -1229,10 +1235,10 @@
                  }
              }
              if (view_idx < 0) {
@@ -941,7 +985,7 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
                      ret = AVERROR(EINVAL);
                      goto fail;
                  }
-@@ -1698,22 +1698,22 @@
+@@ -1698,22 +1704,22 @@
      if (ret < 0)
          return ret;
  
@@ -972,7 +1016,18 @@ diff -ruN a/fftools/ffmpeg_dec.c b/fftools/ffmpeg_dec.c
 diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
 --- a/fftools/ffmpeg_demux.c
 +++ b/fftools/ffmpeg_demux.c
-@@ -231,11 +231,11 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * This file is part of FFmpeg.
+  *
+  * FFmpeg is free software; you can redistribute it and/or
+@@ -231,11 +237,11 @@
      InputFile *ifile = &d->f;
      DemuxStream *ds = ds_from_ist(ist);
      const int fmt_is_discont = ifile->ctx->iformat->flags & AVFMT_TS_DISCONT;
@@ -986,7 +1041,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
          fmt_is_discont && ist->st->pts_wrap_bits < 60) {
          int64_t wrap_dts = av_rescale_q_rnd(pkt->dts + (1LL<<ist->st->pts_wrap_bits),
                                              pkt->time_base, AV_TIME_BASE_Q,
-@@ -247,7 +247,7 @@
+@@ -247,7 +253,7 @@
      if (ds->next_dts != AV_NOPTS_VALUE && !disable_discontinuity_correction) {
          int64_t delta = pkt_dts - ds->next_dts;
          if (fmt_is_discont) {
@@ -995,7 +1050,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                  pkt_dts + AV_TIME_BASE/10 < ds->dts) {
                  d->ts_offset_discont -= delta;
                  av_log(ist, AV_LOG_WARNING,
-@@ -259,7 +259,7 @@
+@@ -259,7 +265,7 @@
                      pkt->pts -= av_rescale_q(delta, AV_TIME_BASE_Q, pkt->time_base);
              }
          } else {
@@ -1004,7 +1059,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                  av_log(ist, AV_LOG_WARNING,
                         "DTS %"PRId64", next:%"PRId64" st:%d invalid dropping\n",
                         pkt->dts, ds->next_dts, pkt->stream_index);
-@@ -268,7 +268,7 @@
+@@ -268,7 +274,7 @@
              if (pkt->pts != AV_NOPTS_VALUE){
                  int64_t pkt_pts = av_rescale_q(pkt->pts, pkt->time_base, AV_TIME_BASE_Q);
                  delta = pkt_pts - ds->next_dts;
@@ -1013,7 +1068,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                      av_log(ist, AV_LOG_WARNING,
                             "PTS %"PRId64", next:%"PRId64" invalid dropping st:%d\n",
                             pkt->pts, ds->next_dts, pkt->stream_index);
-@@ -276,10 +276,10 @@
+@@ -276,10 +282,10 @@
                  }
              }
          }
@@ -1026,7 +1081,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
              d->ts_offset_discont -= delta;
              av_log(ist, AV_LOG_DEBUG,
                     "Inter stream timestamp discontinuity %"PRId64", new offset= %"PRId64"\n",
-@@ -385,7 +385,7 @@
+@@ -385,7 +391,7 @@
      pkt->time_base = ist->st->time_base;
  
  #define SHOW_TS_DEBUG(tag_)                                             \
@@ -1035,7 +1090,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
          av_log(ist, AV_LOG_INFO, "%s -> ist_index:%d:%d type:%s "       \
                 "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s duration:%s duration_time:%s\n", \
                 tag_, ifile->index, pkt->stream_index,                   \
-@@ -482,9 +482,9 @@
+@@ -482,9 +488,9 @@
  
      if (d->recording_time != INT64_MAX) {
          int64_t start_time = 0;
@@ -1047,7 +1102,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
          }
          if (ds->dts >= d->recording_time + start_time)
              *send_flags |= DEMUX_SEND_STREAMCOPY_EOF;
-@@ -495,7 +495,7 @@
+@@ -495,7 +501,7 @@
  
      fd->wallclock[LATENCY_PROBE_DEMUX] = av_gettime_relative();
  
@@ -1056,7 +1111,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
          av_log(ist, AV_LOG_INFO, "demuxer+ffmpeg -> ist_index:%d:%d type:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s duration:%s duration_time:%s off:%s off_time:%s\n",
                 f->index, pkt->stream_index,
                 av_get_media_type_string(ist->par->codec_type),
-@@ -511,8 +511,8 @@
+@@ -511,8 +517,8 @@
  static void readrate_sleep(Demuxer *d)
  {
      InputFile *f = &d->f;
@@ -1067,7 +1122,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                            (f->start_time != AV_NOPTS_VALUE ? f->start_time : 0)
                           );
      int64_t initial_burst = AV_TIME_BASE * d->readrate_initial_burst;
-@@ -778,7 +778,7 @@
+@@ -778,7 +784,7 @@
              else {
                  av_log(d, AV_LOG_ERROR, "Error during demuxing: %s\n",
                         av_err2str(ret));
@@ -1076,7 +1131,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
              }
  
              ret_bsf = demux_bsf_flush(d, &dt);
-@@ -800,8 +800,8 @@
+@@ -800,8 +806,8 @@
              break;
          }
  
@@ -1087,7 +1142,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                               f->ctx->streams[dt.pkt_demux->stream_index]);
          }
  
-@@ -816,10 +816,10 @@
+@@ -816,10 +822,10 @@
          }
  
          if (dt.pkt_demux->flags & AV_PKT_FLAG_CORRUPT) {
@@ -1100,7 +1155,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                  av_packet_unref(dt.pkt_demux);
                  ret = AVERROR_INVALIDDATA;
                  break;
-@@ -1132,9 +1132,9 @@
+@@ -1132,9 +1138,9 @@
      if (ret < 0)
          return ret;
  
@@ -1112,7 +1167,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
              tsoffset += d->f.ctx->start_time;
      }
      opts->trim_start_us = ((d->f.start_time == AV_NOPTS_VALUE) || !d->accurate_seek) ?
-@@ -1166,7 +1166,7 @@
+@@ -1166,7 +1172,7 @@
          if (ret < 0)
              return ret;
          st->codecpar->codec_id = (*pcodec)->id;
@@ -1121,7 +1176,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
              st->codecpar->codec_type = (*pcodec)->type;
          return 0;
      } else {
-@@ -1862,7 +1862,7 @@
+@@ -1862,7 +1868,7 @@
      if (ret < 0)
          goto fail;
  
@@ -1130,7 +1185,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
      istg->fg->is_internal = 1;
  
      ret = 0;
-@@ -1975,7 +1975,7 @@
+@@ -1975,7 +1981,7 @@
      if (ret < 0)
          return ret;
  
@@ -1139,7 +1194,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
          av_log(ist, AV_LOG_FATAL, "Could not open file %s for writing.\n",
                 filename);
          return ret;
-@@ -2007,13 +2007,13 @@
+@@ -2007,13 +2013,13 @@
  
  static Demuxer *demux_alloc(void)
  {
@@ -1155,7 +1210,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
  
      snprintf(d->log_name, sizeof(d->log_name), "in#%d", d->f.index);
  
-@@ -2081,7 +2081,7 @@
+@@ -2081,7 +2087,7 @@
      if (!strcmp(filename, "-"))
          filename = "fd:";
  
@@ -1164,7 +1219,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
                           strcmp(filename, "fd:") &&
                           strcmp(filename, "/dev/stdin");
  
-@@ -2158,7 +2158,7 @@
+@@ -2158,7 +2164,7 @@
      ic->flags |= AVFMT_FLAG_NONBLOCK;
      if (o->bitexact)
          ic->flags |= AVFMT_FLAG_BITEXACT;
@@ -1173,7 +1228,7 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
  
      if (!av_dict_get(o->g->format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
          av_dict_set(&o->g->format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
-@@ -2273,7 +2273,7 @@
+@@ -2273,7 +2279,7 @@
      d->recording_time = recording_time;
      f->input_sync_ref = o->input_sync_ref;
      f->input_ts_offset = o->input_ts_offset;
@@ -1185,7 +1240,18 @@ diff -ruN a/fftools/ffmpeg_demux.c b/fftools/ffmpeg_demux.c
 diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
 --- a/fftools/ffmpeg_enc.c
 +++ b/fftools/ffmpeg_enc.c
-@@ -382,7 +382,7 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * This file is part of FFmpeg.
+  *
+  * FFmpeg is free software; you can redistribute it and/or
+@@ -382,7 +388,7 @@
  
      if (sub->pts == AV_NOPTS_VALUE) {
          av_log(e, AV_LOG_ERROR, "Subtitle packets must have a pts\n");
@@ -1194,7 +1260,7 @@ diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
      }
      if ((of->start_time != AV_NOPTS_VALUE && sub->pts < of->start_time))
          return 0;
-@@ -566,28 +566,28 @@
+@@ -566,28 +572,28 @@
          return 0;
  
      /* this is executed just the first time update_video_stats is called */
@@ -1231,7 +1297,7 @@ diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
      /* compute pts value */
      ti1 = pkt->dts * av_q2d(pkt->time_base);
      if (ti1 < 0.01)
-@@ -595,9 +595,9 @@
+@@ -595,9 +601,9 @@
  
      bitrate     = (pkt->size * 8) / av_q2d(enc->time_base) / 1000.0;
      avg_bitrate = (double)(ep->data_size * 8) / ti1 / 1000.0;
@@ -1243,7 +1309,7 @@ diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
  
      return 0;
  }
-@@ -627,7 +627,7 @@
+@@ -627,7 +633,7 @@
          e->frames_encoded++;
          e->samples_encoded += frame->nb_samples;
  
@@ -1252,7 +1318,7 @@ diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
              av_log(e, AV_LOG_INFO, "encoder <- type:%s "
                     "frame_pts:%s frame_pts_time:%s time_base:%d/%d\n",
                     type_desc,
-@@ -692,7 +692,7 @@
+@@ -692,7 +698,7 @@
          pkt->flags |= AV_PKT_FLAG_TRUSTED;
  
          if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -1261,7 +1327,7 @@ diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
              if (ret < 0)
                  return ret;
          }
-@@ -701,7 +701,7 @@
+@@ -701,7 +707,7 @@
              enc_stats_write(ost, &ost->enc_stats_post, NULL, pkt,
                              ep->packets_encoded);
  
@@ -1273,7 +1339,18 @@ diff -ruN a/fftools/ffmpeg_enc.c b/fftools/ffmpeg_enc.c
 diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
 --- a/fftools/ffmpeg_filter.c
 +++ b/fftools/ffmpeg_filter.c
-@@ -449,7 +449,7 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * ffmpeg filter configuration
+  *
+  * This file is part of FFmpeg.
+@@ -449,7 +455,7 @@
      *data = NULL;
      *len  = 0;
  
@@ -1282,7 +1359,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
      if (ret < 0) {
          av_log(logctx, AV_LOG_ERROR, "Cannot open file '%s': %s\n",
                 path, av_err2str(ret));
-@@ -1106,19 +1106,19 @@
+@@ -1106,19 +1112,19 @@
          *pfg = fg;
          fg->index = -1;
      } else {
@@ -1305,7 +1382,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
      fgp->nb_threads          = -1;
      fgp->sch                 = sch;
  
-@@ -1302,7 +1302,7 @@
+@@ -1302,7 +1308,7 @@
          int dec_idx;
  
          dec_idx = strtol(ifilter->linklabel + 4, &p, 0);
@@ -1314,7 +1391,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
              av_log(fg, AV_LOG_ERROR, "Invalid decoder index %d in filtergraph description %s\n",
                     dec_idx, fg->graph_desc);
              return AVERROR(EINVAL);
-@@ -1315,7 +1315,7 @@
+@@ -1315,7 +1321,7 @@
                  return ret;
          }
  
@@ -1323,7 +1400,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
          if (ret < 0)
              av_log(fg, AV_LOG_ERROR, "Error binding a decoder to filtergraph input %s\n",
                     ifilter->name);
-@@ -1327,8 +1327,8 @@
+@@ -1327,8 +1333,8 @@
          int file_idx;
  
          // try finding an unbound filtergraph output with this label
@@ -1334,7 +1411,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
  
              if (fg == fg_src)
                  continue;
-@@ -1358,12 +1358,12 @@
+@@ -1358,12 +1364,12 @@
  
          // bind to an explicitly specified demuxer stream
          file_idx = strtol(ifilter->linklabel, &p, 0);
@@ -1349,7 +1426,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
  
          ret = stream_specifier_parse(&ss, *p == ':' ? p + 1 : p, 1, fg);
          if (ret < 0) {
-@@ -1397,7 +1397,7 @@
+@@ -1397,7 +1403,7 @@
                     "matches no streams.\n", p, fg->graph_desc);
              return AVERROR(EINVAL);
          }
@@ -1358,7 +1435,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
  
          if (commit)
              av_log(fg, AV_LOG_VERBOSE,
-@@ -1405,8 +1405,8 @@
+@@ -1405,8 +1411,8 @@
                     ifilter->linklabel, ist->file->index, ist->index);
      } else {
          // try finding an unbound filtergraph output
@@ -1369,7 +1446,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
  
              if (fg == fg_src)
                  continue;
-@@ -1482,16 +1482,16 @@
+@@ -1482,16 +1488,16 @@
  {
      int ret;
  
@@ -1391,7 +1468,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
  
          for (int j = 0; j < fg->nb_outputs; j++) {
              OutputFilter *output = fg->outputs[j];
-@@ -1509,19 +1509,19 @@
+@@ -1509,19 +1515,19 @@
                         output->name, j,
                         output->linklabel ? (const char *)output->linklabel : "unlabeled");
                  sch_remove_filtergraph(fgp->sch, fgp->sch_idx);
@@ -1419,7 +1496,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
          if (ret < 0)
              return ret;
      }
-@@ -2069,8 +2069,8 @@
+@@ -2069,8 +2075,8 @@
      if (simple) {
          OutputFilterPriv *ofp = ofp_from_ofilter(fg->outputs[0]);
  
@@ -1430,7 +1507,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
              if (ret < 0)
                  goto fail;
          } else if (fgp->nb_threads >= 0) {
-@@ -2096,11 +2096,11 @@
+@@ -2096,11 +2102,11 @@
              av_free(args);
          }
      } else {
@@ -1445,7 +1522,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
          if (ret < 0)
              return ret;
      }
-@@ -2471,7 +2471,7 @@
+@@ -2471,7 +2477,7 @@
  
  early_exit:
  
@@ -1454,7 +1531,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
          av_log(logctx, AV_LOG_INFO,
                 "filter -> pts:%s pts_time:%s exact:%f time_base:%d/%d\n",
                 frame ? av_ts2str(frame->pts) : "NULL",
-@@ -2561,7 +2561,7 @@
+@@ -2561,7 +2567,7 @@
          av_fallthrough;
      case VSYNC_CFR:
          // FIXME set to 0.5 after we fix some dts/pts bugs like in avidec.c
@@ -1463,7 +1540,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
              *nb_frames = 0;
          } else if (delta < -1.1)
              *nb_frames = 0;
-@@ -2601,7 +2601,7 @@
+@@ -2601,7 +2607,7 @@
      }
      if (*nb_frames > (*nb_frames_prev && fps->last_dropped) + (*nb_frames > *nb_frames_prev)) {
          uint64_t nb_frames_dup;
@@ -1472,7 +1549,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
              av_log(ofp, AV_LOG_ERROR, "%"PRId64" frame duplication too large, skipping\n", *nb_frames - 1);
              atomic_fetch_add(&ofilter->nb_frames_drop, 1);
              *nb_frames = 0;
-@@ -2798,7 +2798,7 @@
+@@ -2798,7 +2804,7 @@
  
      frame->time_base = av_buffersink_get_time_base(filter);
  
@@ -1481,7 +1558,7 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
          av_log(ofp, AV_LOG_INFO, "filter_raw -> pts:%s pts_time:%s time_base:%d/%d\n",
                 av_ts2str(frame->pts), av_ts2timestr(frame->pts, &frame->time_base),
                           frame->time_base.num, frame->time_base.den);
-@@ -3395,7 +3395,7 @@
+@@ -3395,7 +3401,7 @@
  
  finish:
  
@@ -1493,7 +1570,18 @@ diff -ruN a/fftools/ffmpeg_filter.c b/fftools/ffmpeg_filter.c
 diff -ruN a/fftools/ffmpeg.h b/fftools/ffmpeg.h
 --- a/fftools/ffmpeg.h
 +++ b/fftools/ffmpeg.h
-@@ -25,6 +25,9 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * This file is part of FFmpeg.
+  *
+  * FFmpeg is free software; you can redistribute it and/or
+@@ -25,6 +31,9 @@
  #include <stdint.h>
  #include <stdio.h>
  #include <signal.h>
@@ -1503,12 +1591,19 @@ diff -ruN a/fftools/ffmpeg.h b/fftools/ffmpeg.h
  
  #include "cmdutils.h"
  #include "ffmpeg_sched.h"
-@@ -712,65 +715,115 @@
+@@ -712,65 +721,115 @@
      int                 nb_side_data;
  } FrameData;
  
 -extern InputFile   **input_files;
 -extern int        nb_input_files;
+-
+-extern OutputFile   **output_files;
+-extern int         nb_output_files;
+-
+-// complex filtergraphs
+-extern FilterGraph **filtergraphs;
+-extern int        nb_filtergraphs;
 +typedef struct BenchmarkTimeStamps {
 +    int64_t real_usec;
 +    int64_t user_usec;
@@ -1607,22 +1702,15 @@ diff -ruN a/fftools/ffmpeg.h b/fftools/ffmpeg.h
 +    void *read_key_input_handle;
 +} FFmpegState;
  
--extern OutputFile   **output_files;
--extern int         nb_output_files;
-+extern const FFmpegState ffmpeg_defaults;
- 
--// complex filtergraphs
--extern FilterGraph **filtergraphs;
--extern int        nb_filtergraphs;
-+/* The calling thread's run's state of ffmpeg. */
-+#define FFMPEG_STATE(name) (((FFmpegState *)fftools_run()->program)->name)
- 
 -// standalone decoders (not tied to demuxed streams)
 -extern Decoder     **decoders;
 -extern int        nb_decoders;
--
++extern const FFmpegState ffmpeg_defaults;
+ 
 -extern char *vstats_filename;
--
++/* The calling thread's run's state of ffmpeg. */
++#define FFMPEG_STATE(name) (((FFmpegState *)fftools_run()->program)->name)
+ 
 -extern float dts_delta_threshold;
 -extern float dts_error_threshold;
 +/* Sets up what of the run's state cannot be copied from ffmpeg_defaults. */
@@ -1674,7 +1762,18 @@ diff -ruN a/fftools/ffmpeg.h b/fftools/ffmpeg.h
 diff -ruN a/fftools/ffmpeg_hw.c b/fftools/ffmpeg_hw.c
 --- a/fftools/ffmpeg_hw.c
 +++ b/fftools/ffmpeg_hw.c
-@@ -22,18 +22,16 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * This file is part of FFmpeg.
+  *
+  * FFmpeg is free software; you can redistribute it and/or
+@@ -22,18 +28,16 @@
  
  #include "ffmpeg.h"
  
@@ -1696,7 +1795,7 @@ diff -ruN a/fftools/ffmpeg_hw.c b/fftools/ffmpeg_hw.c
          }
      }
      return found;
-@@ -42,9 +40,9 @@
+@@ -42,9 +46,9 @@
  HWDevice *hw_device_get_by_name(const char *name)
  {
      int i;
@@ -1709,7 +1808,7 @@ diff -ruN a/fftools/ffmpeg_hw.c b/fftools/ffmpeg_hw.c
      }
      return NULL;
  }
-@@ -52,16 +50,16 @@
+@@ -52,16 +56,16 @@
  static HWDevice *hw_device_add(void)
  {
      int err;
@@ -1732,7 +1831,7 @@ diff -ruN a/fftools/ffmpeg_hw.c b/fftools/ffmpeg_hw.c
  }
  
  static char *hw_device_default_name(enum AVHWDeviceType type)
-@@ -286,30 +284,30 @@
+@@ -286,30 +290,30 @@
  void hw_device_free_all(void)
  {
      int i;
@@ -1778,7 +1877,18 @@ diff -ruN a/fftools/ffmpeg_hw.c b/fftools/ffmpeg_hw.c
 diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
 --- a/fftools/ffmpeg_mux.c
 +++ b/fftools/ffmpeg_mux.c
-@@ -175,12 +175,12 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * This file is part of FFmpeg.
+  *
+  * FFmpeg is free software; you can redistribute it and/or
+@@ -175,12 +181,12 @@
              int64_t max = ms->last_mux_dts + !(mux->fc->oformat->flags & AVFMT_TS_NONSTRICT);
              if (pkt->dts < max) {
                  int loglevel = max - pkt->dts > 2 || ost->type == AVMEDIA_TYPE_VIDEO ? AV_LOG_WARNING : AV_LOG_DEBUG;
@@ -1793,7 +1903,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
                      return AVERROR(EINVAL);
                  }
  
-@@ -195,7 +195,7 @@
+@@ -195,7 +201,7 @@
      }
      ms->last_mux_dts = pkt->dts;
  
@@ -1802,7 +1912,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
          mux_log_debug_ts(ost, pkt);
  
      return 0;
-@@ -334,7 +334,7 @@
+@@ -334,7 +340,7 @@
                  av_log(ost, AV_LOG_ERROR,
                         "Error applying bitstream filters to a packet: %s",
                         av_err2str(ret));
@@ -1811,7 +1921,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
                      return ret;
                  continue;
              }
-@@ -506,11 +506,11 @@
+@@ -506,11 +512,11 @@
      AVIOContext *sdp_pb;
      AVFormatContext **avc;
  
@@ -1826,7 +1936,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
  
          if (!strcmp(mux->fc->oformat->name, "rtp")) {
              avc[j] = mux->fc;
-@@ -532,7 +532,7 @@
+@@ -532,7 +538,7 @@
          printf("SDP:\n%s\n", sdp);
          fflush(stdout);
      } else {
@@ -1835,7 +1945,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
          if (ret < 0) {
              av_log(NULL, AV_LOG_ERROR, "Failed to open sdp file '%s'\n", filename);
              goto fail;
-@@ -564,7 +564,7 @@
+@@ -564,7 +570,7 @@
      mux->header_written = 1;
  
      av_dump_format(fc, of->index, fc->url, 1);
@@ -1844,7 +1954,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
  
      return 0;
  }
-@@ -662,7 +662,7 @@
+@@ -662,7 +668,7 @@
              pass1_used = 0;
  
          if (!packets_written &&
@@ -1853,7 +1963,7 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
              av_log(ost, AV_LOG_FATAL, "Empty output stream\n");
              ret = err_merge(ret, AVERROR(EINVAL));
          }
-@@ -671,7 +671,7 @@
+@@ -671,7 +677,7 @@
      if (!total_packets_written) {
          int level = AV_LOG_WARNING;
  
@@ -1865,7 +1975,18 @@ diff -ruN a/fftools/ffmpeg_mux.c b/fftools/ffmpeg_mux.c
 diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
 --- a/fftools/ffmpeg_mux_init.c
 +++ b/fftools/ffmpeg_mux_init.c
-@@ -140,12 +140,12 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Muxer/output file setup.
+  *
+  * This file is part of FFmpeg.
+@@ -140,12 +146,12 @@
          if (codec_name) {
              snprintf(filename, sizeof(filename), "%s%s/%s-%s.avpreset", base[i],
                       i != 1 ? "" : "/.avconv", codec_name, preset_name);
@@ -1880,7 +2001,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
          }
      }
      freeenv_utf8(env_home);
-@@ -158,27 +158,25 @@
+@@ -158,27 +164,25 @@
      AVIOContext *io;
  } EncStatsFile;
  
@@ -1914,7 +2035,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
      if (ret < 0) {
          av_log(NULL, AV_LOG_ERROR, "Error opening stats file '%s': %s\n",
                 path, av_err2str(ret));
-@@ -196,12 +194,12 @@
+@@ -196,12 +200,12 @@
  
  void of_enc_stats_close(void)
  {
@@ -1932,7 +2053,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
  }
  
  static int unescape(char **pdst, size_t *dst_len,
-@@ -693,7 +691,7 @@
+@@ -693,7 +697,7 @@
  
              /* compute this stream's global index */
              for (int idx = 0; idx <= ost->file->index; idx++)
@@ -1941,7 +2062,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
  
              snprintf(logfilename, sizeof(logfilename), "%s-%d.log",
                       ost->logfile_prefix ? ost->logfile_prefix :
-@@ -769,7 +767,7 @@
+@@ -769,7 +773,7 @@
                      *vsync_method = VSYNC_VSCFR;
              }
  
@@ -1950,7 +2071,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
                  *vsync_method = VSYNC_VSCFR;
              }
          }
-@@ -1057,7 +1055,7 @@
+@@ -1057,7 +1061,7 @@
      if (!ms->copy_prior_start) {
          ms->ts_copy_start = (mux->of.start_time == AV_NOPTS_VALUE) ?
                              0 : mux->of.start_time;
@@ -1959,7 +2080,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
              ms->ts_copy_start = FFMAX(ms->ts_copy_start,
                                        ifile->start_time + ifile->ts_offset);
          }
-@@ -1563,8 +1561,8 @@
+@@ -1563,8 +1567,8 @@
          return 0;
  
      qcr = avformat_query_codec(oc->oformat, oc->oformat->video_codec, 0);
@@ -1970,7 +2091,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
          InputStreamGroup *file_best_istg = NULL;
          InputStream *file_best_ist = NULL;
          int64_t file_best_score = 0;
-@@ -1668,8 +1666,8 @@
+@@ -1668,8 +1672,8 @@
      if (av_guess_codec(oc->oformat, NULL, oc->url, NULL, AVMEDIA_TYPE_AUDIO) == AV_CODEC_ID_NONE)
          return 0;
  
@@ -1981,7 +2102,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
          InputStream *file_best_ist = NULL;
          int file_best_score = 0;
          for (int i = 0; i < ifile->nb_streams; i++) {
-@@ -1777,8 +1775,8 @@
+@@ -1777,8 +1781,8 @@
          OutputFilter *ofilter = NULL;
          int j, k;
  
@@ -1992,7 +2113,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
              for (k = 0; k < fg->nb_outputs; k++) {
                  const char *linklabel = fg->outputs[k]->linklabel;
                  if (linklabel && !strcmp(linklabel, map->linklabel)) {
-@@ -1804,7 +1802,7 @@
+@@ -1804,7 +1808,7 @@
          const ViewSpecifier *vs = map->vs.type == VIEW_SPECIFIER_TYPE_NONE ?
                                    NULL : &map->vs;
  
@@ -2001,7 +2122,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
          if (ist->user_set_discard == AVDISCARD_ALL) {
              av_log(mux, AV_LOG_FATAL, "Stream #%d:%d is disabled and cannot be mapped.\n",
                     map->file_index, map->stream_index);
-@@ -1820,11 +1818,11 @@
+@@ -1820,11 +1824,11 @@
              return 0;
  
          if (ist->st->codecpar->codec_type == AVMEDIA_TYPE_UNKNOWN &&
@@ -2016,7 +2137,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
                  av_log(mux, AV_LOG_FATAL,
                         "If you want unsupported types ignored instead "
                         "of failing, please use the -ignore_unknown option\n"
-@@ -1862,7 +1860,7 @@
+@@ -1862,7 +1866,7 @@
          const char *p;
          int64_t len;
  
@@ -2025,7 +2146,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
              av_log(mux, AV_LOG_FATAL, "Could not open attachment file %s.\n",
                     o->attachments[i]);
              return err;
-@@ -1952,8 +1950,8 @@
+@@ -1952,8 +1956,8 @@
      int ret;
  
      /* create streams for all unlabeled output pads */
@@ -2036,7 +2157,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
          for (int j = 0; j < fg->nb_outputs; j++) {
              OutputFilter *ofilter = fg->outputs[j];
  
-@@ -2048,7 +2046,7 @@
+@@ -2048,7 +2052,7 @@
      }
  
      if (!oc->nb_streams && !(oc->oformat->flags & AVFMT_NOSTREAMS)) {
@@ -2045,7 +2166,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
          av_log(mux, AV_LOG_ERROR, "Output file does not contain any stream\n");
          return AVERROR(EINVAL);
      }
-@@ -2422,18 +2420,18 @@
+@@ -2422,18 +2426,18 @@
      char *ptr;
  
      file_idx = strtol(map, &ptr, 0);
@@ -2067,7 +2188,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
      ret = of_serialize_options(mux, stg, bp);
      if (ret < 0)
         return ret;
-@@ -2991,13 +2989,13 @@
+@@ -2991,13 +2995,13 @@
          char *p;
          int in_file_index = strtol(o->metadata_map.opt[i].u.str, &p, 0);
  
@@ -2083,7 +2204,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
                              o->metadata_map.opt[i].specifier, *p ? p + 1 : p,
                              &metadata_global_manual, &metadata_streams_manual,
                              &metadata_chapters_manual);
-@@ -3006,12 +3004,12 @@
+@@ -3006,12 +3010,12 @@
      }
  
      /* copy chapters */
@@ -2099,7 +2220,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
                      chapters_input_file = i;
                      break;
                  }
-@@ -3022,12 +3020,12 @@
+@@ -3022,12 +3026,12 @@
          }
      }
      if (chapters_input_file >= 0)
@@ -2115,7 +2236,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
                       AV_DICT_DONT_OVERWRITE);
          if (of->recording_time != INT64_MAX)
              av_dict_set(&oc->metadata, "duration", NULL, 0);
-@@ -3274,13 +3272,13 @@
+@@ -3274,13 +3278,13 @@
  
  static Muxer *mux_alloc(void)
  {
@@ -2131,7 +2252,7 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
  
      snprintf(mux->log_name, sizeof(mux->log_name), "out#%d", mux->of.index);
  
-@@ -3347,7 +3345,7 @@
+@@ -3347,7 +3351,7 @@
      if (recording_time != INT64_MAX)
          oc->duration = recording_time;
  
@@ -2143,7 +2264,18 @@ diff -ruN a/fftools/ffmpeg_mux_init.c b/fftools/ffmpeg_mux_init.c
 diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
 --- a/fftools/ffmpeg_opt.c
 +++ b/fftools/ffmpeg_opt.c
-@@ -49,43 +49,24 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * ffmpeg option parsing
+  *
+  * This file is part of FFmpeg.
+@@ -49,43 +55,24 @@
  #include "libavutil/stereo3d.h"
  #include "graph/graphprint.h"
  
@@ -2205,7 +2337,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
  
  // this struct is passed as the optctx argument
  // to func_arg() for global options
-@@ -373,8 +354,8 @@
+@@ -373,8 +360,8 @@
  /* Correct input file start times based on enabled streams */
  static void correct_input_start_times(void)
  {
@@ -2216,7 +2348,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          AVFormatContext    *is = ifile->ctx;
          int64_t new_start_time = INT64_MAX, diff, abs_start_seek;
  
-@@ -395,12 +376,12 @@
+@@ -395,12 +382,12 @@
          if (diff) {
              av_log(NULL, AV_LOG_VERBOSE, "Correcting start time of Input #%d by %"PRId64" us.\n", i, diff);
              ifile->start_time_effective = new_start_time;
@@ -2232,7 +2364,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
                  ifile->ts_offset = 0;
  
              ifile->ts_offset += ifile->input_ts_offset;
-@@ -410,24 +391,24 @@
+@@ -410,24 +397,24 @@
  
  static int apply_sync_offsets(void)
  {
@@ -2262,7 +2394,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          if (ref->input_sync_ref != -1 && ref->input_sync_ref != self->input_sync_ref) {
              av_log(NULL, AV_LOG_ERROR, "-isync for input %d references a resynced input %d. Sync not set.\n", i, self->input_sync_ref);
              continue;
-@@ -447,7 +428,7 @@
+@@ -447,7 +434,7 @@
              self_seek_start = self->start_time == AV_NOPTS_VALUE ? 0 : self->start_time;
              ref_seek_start  =  ref->start_time == AV_NOPTS_VALUE ? 0 :  ref->start_time;
  
@@ -2271,7 +2403,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
  
              self->ts_offset += adjustment;
  
-@@ -462,8 +443,8 @@
+@@ -462,8 +449,8 @@
  
  static int opt_filter_threads(void *optctx, const char *opt, const char *arg)
  {
@@ -2282,7 +2414,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
      return 0;
  }
  
-@@ -483,7 +464,7 @@
+@@ -483,7 +470,7 @@
      };
      const AVClass *pclass = &class;
  
@@ -2291,7 +2423,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
  }
  
  static int opt_stats_period(void *optctx, const char *opt, const char *arg)
-@@ -498,7 +479,7 @@
+@@ -498,7 +485,7 @@
          return AVERROR(EINVAL);
      }
  
@@ -2300,7 +2432,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
      av_log(NULL, AV_LOG_INFO, "ffmpeg stats and -progress period set to %s.\n", arg);
  
      return 0;
-@@ -565,7 +546,7 @@
+@@ -565,7 +552,7 @@
  
          m->group_index = -1;
          file_idx = strtol(arg, &endptr, 0);
@@ -2309,7 +2441,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
              goto end;
  
          arg = endptr;
-@@ -586,7 +567,7 @@
+@@ -586,7 +573,7 @@
          char *endptr;
  
          file_idx = strtol(arg, &endptr, 0);
@@ -2318,7 +2450,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
              av_log(NULL, AV_LOG_FATAL, "Invalid input file index: %d.\n", file_idx);
              ret = AVERROR(EINVAL);
              goto fail;
-@@ -623,21 +604,21 @@
+@@ -623,21 +610,21 @@
                  if (file_idx == m->file_index &&
                      !m->linklabel &&
                      m->stream_index >= 0 &&
@@ -2347,7 +2479,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
                      disabled = 1;
                      continue;
                  }
-@@ -745,12 +726,12 @@
+@@ -745,12 +732,12 @@
  
  static int opt_filter_hw_device(void *optctx, const char *opt, const char *arg)
  {
@@ -2363,7 +2495,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          av_log(NULL, AV_LOG_ERROR, "Invalid filter device %s.\n", arg);
          return AVERROR(EINVAL);
      }
-@@ -804,7 +785,7 @@
+@@ -804,7 +791,7 @@
          return encoder ? AVERROR_ENCODER_NOT_FOUND :
                           AVERROR_DECODER_NOT_FOUND;
      }
@@ -2372,7 +2504,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          av_log(logctx, AV_LOG_FATAL, "Invalid %s type '%s'\n", codec_string, name);
          return AVERROR(EINVAL);
      }
-@@ -817,14 +798,14 @@
+@@ -817,14 +804,14 @@
  {
      const char *proto_name = avio_find_protocol_name(filename);
  
@@ -2390,7 +2522,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
                  fprintf(stderr,"File '%s' already exists. Overwrite? [y/N] ", filename);
                  fflush(stderr);
                  term_exit();
-@@ -843,8 +824,8 @@
+@@ -843,8 +830,8 @@
      }
  
      if (proto_name && !strcmp(proto_name, "file")) {
@@ -2401,7 +2533,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
               if (file->ctx->iformat->flags & AVFMT_NOFILE)
                   continue;
               if (!strcmp(filename, file->ctx->url)) {
-@@ -895,11 +876,11 @@
+@@ -895,11 +882,11 @@
          arg += 5;
      } else {
          /* Try to determine PAL/NTSC by peeking in the input files */
@@ -2417,7 +2549,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
                      int64_t fr;
                      if (st->codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
                          continue;
-@@ -1015,16 +996,16 @@
+@@ -1015,16 +1002,16 @@
          return AVERROR(EINVAL);
      }
  
@@ -2438,7 +2570,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
      return 0;
  }
  
-@@ -1065,19 +1046,19 @@
+@@ -1065,19 +1052,19 @@
  static int opt_default_new(OptionsContext *o, const char *opt, const char *arg)
  {
      int ret;
@@ -2468,7 +2600,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
  
      return ret;
  }
-@@ -1510,13 +1491,13 @@
+@@ -1510,13 +1497,13 @@
  
      if (!strcmp(arg, "-"))
          arg = "pipe:";
@@ -2484,7 +2616,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
      return 0;
  }
  
-@@ -1556,19 +1537,19 @@
+@@ -1556,19 +1543,19 @@
          { .off       = OFFSET(format) },
          "force container format (auto-detected otherwise)", "fmt" },
      { "y",                      OPT_TYPE_BOOL, 0,
@@ -2509,7 +2641,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "allow recasting stream type in order to force a decoder of different media type" },
      { "c",                      OPT_TYPE_STRING, OPT_PERSTREAM | OPT_INPUT | OPT_OUTPUT | OPT_DECODER | OPT_HAS_CANON,
          { .off       = OFFSET(codec_names) },
-@@ -1642,25 +1623,25 @@
+@@ -1642,25 +1629,25 @@
          "set the number of data frames to output", "number",
          .u1.name_canon = "frames" },
      { "benchmark",              OPT_TYPE_BOOL, OPT_EXPERT,
@@ -2540,7 +2672,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "when dumping packets, also dump the payload" },
      { "re",                     OPT_TYPE_BOOL, OPT_EXPERT | OPT_OFFSET | OPT_INPUT,
          { .off = OFFSET(rate_emu) },
-@@ -1679,16 +1660,16 @@
+@@ -1679,16 +1666,16 @@
          "specify target file type (\"vcd\", \"svcd\", \"dvd\", \"dv\" or \"dv50\" "
          "with optional prefixes \"pal-\", \"ntsc-\" or \"film-\")", "type" },
      { "frame_drop_threshold",   OPT_TYPE_FLOAT, OPT_EXPERT,
@@ -2561,7 +2693,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "copy input stream time base when stream copying", "mode" },
      { "shortest",               OPT_TYPE_BOOL, OPT_EXPERT | OPT_OFFSET | OPT_OUTPUT,
          { .off = OFFSET(shortest) },
-@@ -1700,13 +1681,13 @@
+@@ -1700,13 +1687,13 @@
          { .off = OFFSET(bitexact) },
          "bitexact mode" },
      { "dts_delta_threshold",    OPT_TYPE_FLOAT, OPT_EXPERT,
@@ -2578,7 +2710,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "exit on error", "error" },
      { "abort_on",               OPT_TYPE_FUNC, OPT_FUNC_ARG | OPT_EXPERT,
          { .func_arg = opt_abort_on },
-@@ -1744,7 +1725,7 @@
+@@ -1744,7 +1731,7 @@
          { .func_arg = opt_filter_threads },
          "number of non-complex filter threads" },
      { "filter_buffered_frames", OPT_TYPE_INT, OPT_EXPERT,
@@ -2587,7 +2719,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "maximum number of buffered frames in a filter graph" },
      { "reinit_filter",          OPT_TYPE_INT, OPT_PERSTREAM | OPT_INPUT | OPT_EXPERT,
          { .off = OFFSET(reinit_filters) },
-@@ -1756,25 +1737,25 @@
+@@ -1756,25 +1743,25 @@
          { .func_arg = opt_filter_complex },
          "create a complex filtergraph", "graph_description" },
      { "filter_complex_threads", OPT_TYPE_INT, OPT_EXPERT,
@@ -2619,7 +2751,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "print progress report during encoding", },
      { "stats_period",        OPT_TYPE_FUNC, OPT_FUNC_ARG | OPT_EXPERT,
          { .func_arg = opt_stats_period },
-@@ -1788,10 +1769,10 @@
+@@ -1788,10 +1775,10 @@
      { "stream_loop",         OPT_TYPE_INT, OPT_EXPERT | OPT_INPUT | OPT_OFFSET,
          { .off = OFFSET(loop) }, "set number of times input stream shall be looped", "loop count" },
      { "debug_ts",            OPT_TYPE_BOOL, OPT_EXPERT,
@@ -2632,7 +2764,7 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
          "ratio of decoding errors (0.0: no errors, 1.0: 100% errors) above which ffmpeg returns an error instead of success.", "maximum error rate" },
      { "discard",             OPT_TYPE_STRING, OPT_PERSTREAM | OPT_INPUT | OPT_EXPERT,
          { .off = OFFSET(discard) },
-@@ -1892,7 +1873,7 @@
+@@ -1892,7 +1879,7 @@
          { .func_arg = opt_vstats_file },
          "dump video coding statistics to file", "file" },
      { "vstats_version",             OPT_TYPE_INT,    OPT_VIDEO | OPT_EXPERT,
@@ -2644,7 +2776,18 @@ diff -ruN a/fftools/ffmpeg_opt.c b/fftools/ffmpeg_opt.c
 diff -ruN a/fftools/ffmpeg_sched.c b/fftools/ffmpeg_sched.c
 --- a/fftools/ffmpeg_sched.c
 +++ b/fftools/ffmpeg_sched.c
-@@ -69,6 +69,9 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Inter-thread scheduling/synchronization.
+  * Copyright (c) 2023 Anton Khirnov
+  *
+@@ -69,6 +75,9 @@
  
      pthread_t           thread;
      int                 thread_running;
@@ -2654,7 +2797,7 @@ diff -ruN a/fftools/ffmpeg_sched.c b/fftools/ffmpeg_sched.c
  } SchTask;
  
  typedef struct SchDecOutput {
-@@ -412,6 +415,7 @@
+@@ -412,6 +421,7 @@
  
      av_assert0(!task->thread_running);
  
@@ -2662,7 +2805,7 @@ diff -ruN a/fftools/ffmpeg_sched.c b/fftools/ffmpeg_sched.c
      ret = pthread_create(&task->thread, NULL, task_wrapper, task);
      if (ret) {
          av_log(task->func_arg, AV_LOG_ERROR, "pthread_create() failed: %s\n",
-@@ -2720,6 +2724,8 @@
+@@ -2720,6 +2730,8 @@
      int ret;
      int err = 0;
  
@@ -2674,7 +2817,18 @@ diff -ruN a/fftools/ffmpeg_sched.c b/fftools/ffmpeg_sched.c
 diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
 --- a/fftools/ffprobe.c
 +++ b/fftools/ffprobe.c
-@@ -93,59 +93,14 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Copyright (c) 2007-2010 Stefano Sabatini
+  *
+  * This file is part of FFmpeg.
+@@ -93,59 +99,14 @@
  const char program_name[] = "ffprobe";
  const int program_birth_year = 2007;
  
@@ -2737,7 +2891,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
  typedef struct ReadInterval {
      int id;             ///< identifier
-@@ -155,10 +110,7 @@
+@@ -155,10 +116,7 @@
      int duration_frames;
  } ReadInterval;
  
@@ -2748,7 +2902,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
  /* section structure definition */
  
-@@ -335,28 +287,15 @@
+@@ -335,28 +293,15 @@
      AVDictionary *entries_to_show;
  } EntrySelection;
  
@@ -2777,7 +2931,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
  typedef struct LogBuffer {
      char *context_name;
-@@ -367,13 +306,107 @@
+@@ -367,13 +312,107 @@
      AVClassCategory parent_category;
  }LogBuffer;
  
@@ -2888,7 +3042,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      return selection->show_all_entries || av_dict_get(selection->entries_to_show, key, NULL, 0);
  }
-@@ -383,31 +416,30 @@
+@@ -383,31 +422,30 @@
      AVClass* avc = ptr ? *(AVClass **) ptr : NULL;
      va_list vl2;
      char line[1024];
@@ -2930,7 +3084,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          for (i=strlen(msg) - 1; i>=0 && msg[i] == '\n'; i--) {
              msg[i] = 0;
          }
-@@ -415,15 +447,15 @@
+@@ -415,15 +453,15 @@
              AVClass** parent = *(AVClass ***) (((uint8_t *) ptr) +
                                     avc->parent_log_context_offset);
              if (parent && *parent) {
@@ -2950,7 +3104,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  #endif
  }
  
-@@ -1180,7 +1212,7 @@
+@@ -1180,7 +1218,7 @@
          print_int("vbv_delay",   prop->vbv_delay);
      } else if (sd->type == AV_PKT_DATA_WEBVTT_IDENTIFIER ||
                 sd->type == AV_PKT_DATA_WEBVTT_SETTINGS) {
@@ -2959,7 +3113,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              avtext_print_data(tfc, "data", sd->data, sd->size);
          avtext_print_data_hash(tfc, "data_hash", sd->data, sd->size);
      } else if (sd->type == AV_PKT_DATA_FRAME_CROPPING && sd->size >= sizeof(uint32_t) * 4) {
-@@ -1194,7 +1226,7 @@
+@@ -1194,7 +1232,7 @@
          print_int("size", sd->size);
      } else if (sd->type == AV_PKT_DATA_MATROSKA_BLOCKADDITIONAL && sd->size >= 8) {
          print_int("block_additional_id", AV_RB64(sd->data));
@@ -2968,7 +3122,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              avtext_print_data(tfc, "block_additional_data", sd->data + 8, sd->size - 8);
      }
  }
-@@ -1219,7 +1251,7 @@
+@@ -1219,7 +1257,7 @@
  
      if (!s) {
          print_str_opt("pix_fmt", "unknown");
@@ -2977,7 +3131,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
                 (swapped_pix_fmt = av_pix_fmt_swap_endianness(pix_fmt)) == AV_PIX_FMT_NONE) {
          print_str    ("pix_fmt", s);
      } else {
-@@ -1302,46 +1334,46 @@
+@@ -1302,46 +1340,46 @@
      int i;
  
      if (need_lock)
@@ -3044,7 +3198,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      avtext_print_section_footer(tfc);
  
-@@ -1374,7 +1406,7 @@
+@@ -1374,7 +1412,7 @@
      print_fmt("flags", "%c%c%c",      pkt->flags & AV_PKT_FLAG_KEY ? 'K' : '_',
                pkt->flags & AV_PKT_FLAG_DISCARD ? 'D' : '_',
                pkt->flags & AV_PKT_FLAG_CORRUPT ? 'C' : '_');
@@ -3053,7 +3207,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          avtext_print_data(tfc, "data", pkt->data, pkt->size);
      avtext_print_data_hash(tfc, "data_hash", pkt->data, pkt->size);
  
-@@ -1383,7 +1415,7 @@
+@@ -1383,7 +1421,7 @@
          const uint8_t *side_metadata;
  
          side_metadata = av_packet_get_side_data(pkt, AV_PKT_DATA_STRINGS_METADATA, &size);
@@ -3062,7 +3216,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              AVDictionary *dict = NULL;
              if (av_packet_unpack_dictionary(side_metadata, size, &dict) >= 0)
                  show_tags(tfc, dict, SECTION_ID_PACKET_TAGS);
-@@ -1580,10 +1612,10 @@
+@@ -1580,10 +1618,10 @@
              print_str_opt("channel_layout", "unknown");
          break;
      }
@@ -3076,7 +3230,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      if (frame->nb_side_data)
          print_frame_side_data(tfc, frame, stream);
  
-@@ -1644,19 +1676,19 @@
+@@ -1644,19 +1682,19 @@
          return ret;
      if (got_frame) {
          int is_sub = (par->codec_type == AVMEDIA_TYPE_SUBTITLE);
@@ -3101,7 +3255,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              }
          }
  
-@@ -1738,15 +1770,15 @@
+@@ -1738,15 +1776,15 @@
          goto end;
      }
      while (!av_read_frame(fmt_ctx, pkt)) {
@@ -3125,7 +3279,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              AVRational tb = ifile->streams[pkt->stream_index].st->time_base;
              int64_t pts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
  
-@@ -1771,12 +1803,12 @@
+@@ -1771,12 +1809,12 @@
              }
  
              frame_count++;
@@ -3142,7 +3296,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
                  int packet_new = 1;
                  FrameData *fd;
  
-@@ -1798,7 +1830,7 @@
+@@ -1798,7 +1836,7 @@
      //Flush remaining frames that are cached in the decoder
      for (int i = 0; i < ifile->nb_streams; i++) {
          pkt->stream_index = i;
@@ -3151,7 +3305,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              while (process_frame(tfc, ifile, frame, pkt, &(int){1}) > 0);
          }
      }
-@@ -1817,7 +1849,7 @@
+@@ -1817,7 +1855,7 @@
  {
      int i;
  
@@ -3160,7 +3314,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          return;
      for (i = 0; i < ifile->nb_streams; i++) {
          if (ifile->streams[i].dec_ctx)
-@@ -1831,16 +1863,16 @@
+@@ -1831,16 +1869,16 @@
      int ret = 0;
      int64_t cur_ts = fmt_ctx->start_time;
  
@@ -3180,7 +3334,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              if (ret < 0)
                  break;
          }
-@@ -1904,18 +1936,18 @@
+@@ -1904,18 +1942,18 @@
      dec_ctx = ist->dec_ctx;
      if (cd = avcodec_descriptor_get(par->codec_id)) {
          print_str("codec_name", cd->name);
@@ -3202,7 +3356,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          print_str("profile", profile);
      else {
          if (par->profile != AV_PROFILE_UNKNOWN) {
-@@ -1946,9 +1978,9 @@
+@@ -1946,9 +1984,9 @@
              print_int("coded_width",  dec_ctx->coded_width);
              print_int("coded_height", dec_ctx->coded_height);
  
@@ -3215,7 +3369,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              }
          }
          print_int("has_b_frames", par->video_delay);
-@@ -1986,7 +2018,7 @@
+@@ -1986,7 +2024,7 @@
          else
              print_str_opt("field_order", "unknown");
  
@@ -3224,7 +3378,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              print_int("refs", dec_ctx->refs);
          break;
  
-@@ -2021,7 +2053,7 @@
+@@ -2021,7 +2059,7 @@
          break;
      }
  
@@ -3233,7 +3387,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          if (dec_ctx && dec_ctx->codec->priv_class)
              print_private_data(tfc, dec_ctx->priv_data);
          if (fmt_ctx->iformat->priv_class)
-@@ -2047,11 +2079,11 @@
+@@ -2047,11 +2085,11 @@
      else                                             print_str_opt("bits_per_raw_sample", "N/A");
      if (stream->nb_frames) print_fmt    ("nb_frames", "%"PRId64, stream->nb_frames);
      else                   print_str_opt("nb_frames", "N/A");
@@ -3248,7 +3402,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          avtext_print_data(tfc, "extradata", par->extradata,
                                            par->extradata_size);
  
-@@ -2062,12 +2094,12 @@
+@@ -2062,12 +2100,12 @@
      }
  
      /* Print disposition information */
@@ -3263,7 +3417,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          av_assert0(container < FF_ARRAY_ELEMS(section_tags));
          ret = show_tags(tfc, stream->metadata, section_tags[container]);
      }
-@@ -2096,7 +2128,7 @@
+@@ -2096,7 +2134,7 @@
  
      avtext_print_section_header(tfc, NULL, SECTION_ID_STREAMS);
      for (int i = 0; i < ifile->nb_streams; i++)
@@ -3272,7 +3426,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              ret = show_stream(tfc, fmt_ctx, i, &ifile->streams[i], 0);
              if (ret < 0)
                  break;
-@@ -2117,14 +2149,14 @@
+@@ -2117,14 +2155,14 @@
      print_int("nb_streams", program->nb_stream_indexes);
      print_int("pmt_pid", program->pmt_pid);
      print_int("pcr_pid", program->pcr_pid);
@@ -3289,7 +3443,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              ret = show_stream(tfc, fmt_ctx, program->stream_index[i], &ifile->streams[program->stream_index[i]], IN_PROGRAM);
              if (ret < 0)
                  break;
-@@ -2388,21 +2420,21 @@
+@@ -2388,21 +2426,21 @@
          print_str("type", av_x_if_null(avformat_stream_group_name(stg->type), "unknown"));
      else
          print_str_opt("type", "unknown");
@@ -3315,7 +3469,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              ret = show_stream(tfc, fmt_ctx, stg->streams[i]->index, &ifile->streams[stg->streams[i]->index], IN_STREAM_GROUP);
              if (ret < 0)
                  break;
-@@ -2449,7 +2481,7 @@
+@@ -2449,7 +2487,7 @@
          print_time("start_time", chapter->start, &chapter->time_base);
          print_int("end", chapter->end);
          print_time("end_time", chapter->end, &chapter->time_base);
@@ -3324,7 +3478,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              ret = show_tags(tfc, chapter->metadata, SECTION_ID_CHAPTER_TAGS);
          avtext_print_section_footer(tfc);
      }
-@@ -2470,7 +2502,7 @@
+@@ -2470,7 +2508,7 @@
      print_int("nb_programs",      fmt_ctx->nb_programs);
      print_int("nb_stream_groups", fmt_ctx->nb_stream_groups);
      print_str("format_name",      fmt_ctx->iformat->name);
@@ -3333,7 +3487,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          if (fmt_ctx->iformat->long_name) print_str    ("format_long_name", fmt_ctx->iformat->long_name);
          else                             print_str_opt("format_long_name", "unknown");
      }
-@@ -2481,7 +2513,7 @@
+@@ -2481,7 +2519,7 @@
      if (fmt_ctx->bit_rate > 0) print_val    ("bit_rate", fmt_ctx->bit_rate, unit_bit_per_second_str);
      else                       print_str_opt("bit_rate", "N/A");
      print_int("probe_score", fmt_ctx->probe_score);
@@ -3342,7 +3496,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          ret = show_tags(tfc, fmt_ctx->metadata, SECTION_ID_FORMAT_TAGS);
  
      avtext_print_section_footer(tfc);
-@@ -2516,7 +2548,7 @@
+@@ -2516,7 +2554,7 @@
      int ret;
  
  #define GET_DECODER(type_) \
@@ -3351,7 +3505,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      if (ret < 0) return ret;
  
      GET_DECODER(audio);
-@@ -2571,12 +2603,12 @@
+@@ -2571,12 +2609,12 @@
      err = set_decoders(fmt_ctx);
      if (err < 0)
          return err;
@@ -3367,7 +3521,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          print_error(filename, err);
          return err;
      }
-@@ -2586,15 +2618,15 @@
+@@ -2586,15 +2624,15 @@
      }
      ifile->fmt_ctx = fmt_ctx;
      if (scan_all_pmts_set)
@@ -3387,7 +3541,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          if (err < 0)
              return err;
  
-@@ -2632,7 +2664,7 @@
+@@ -2632,7 +2670,7 @@
          {
              AVDictionary *opts;
  
@@ -3396,7 +3550,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
                                      fmt_ctx, stream, codec, &opts, NULL);
              if (err < 0)
                  exit(1);
-@@ -2645,11 +2677,11 @@
+@@ -2645,11 +2683,11 @@
              if (err < 0)
                  exit(1);
  
@@ -3410,7 +3564,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              }
  
              av_dict_set(&opts, "flags", "+copy_opaque", AV_DICT_MULTIKEY);
-@@ -2694,9 +2726,9 @@
+@@ -2694,9 +2732,9 @@
      int ret;
      int section_id;
  
@@ -3423,7 +3577,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      ret = open_input_file(&ifile, filename, print_filename);
      if (ret < 0)
-@@ -2704,64 +2736,64 @@
+@@ -2704,64 +2742,64 @@
  
  #define CHECK_END if (ret < 0) goto end
  
@@ -3509,7 +3663,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          ret = show_format(tfc, &ifile);
          CHECK_END;
      }
-@@ -2769,15 +2801,15 @@
+@@ -2769,15 +2807,15 @@
  end:
      if (ifile.fmt_ctx)
          close_input_file(&ifile);
@@ -3534,7 +3688,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      return ret;
  }
-@@ -2858,7 +2890,7 @@
+@@ -2858,7 +2896,7 @@
          n = av_get_bits_per_pixel(pixdesc);
          if (n) print_int    ("bits_per_pixel", n);
          else   print_str_opt("bits_per_pixel", "N/A");
@@ -3543,7 +3697,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              avtext_print_section_header(tfc, NULL, SECTION_ID_PIXEL_FORMAT_FLAGS);
              PRINT_PIX_FMT_FLAG(BE,        "big_endian");
              PRINT_PIX_FMT_FLAG(PAL,       "palette");
-@@ -2869,7 +2901,7 @@
+@@ -2869,7 +2907,7 @@
              PRINT_PIX_FMT_FLAG(ALPHA,     "alpha");
              avtext_print_section_footer(tfc);
          }
@@ -3552,7 +3706,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
              avtext_print_section_header(tfc, NULL, SECTION_ID_PIXEL_FORMAT_COMPONENTS);
              for (i = 0; i < pixdesc->nb_components; i++) {
                  avtext_print_section_header(tfc, NULL, SECTION_ID_PIXEL_FORMAT_COMPONENT);
-@@ -2886,25 +2918,25 @@
+@@ -2886,25 +2924,25 @@
  
  static int opt_show_optional_fields(void *optctx, const char *opt, const char *arg)
  {
@@ -3585,7 +3739,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          av_log(NULL, AV_LOG_ERROR, "Unknown input format: %s\n", arg);
          return AVERROR(EINVAL);
      }
-@@ -2914,7 +2946,7 @@
+@@ -2914,7 +2952,7 @@
  static inline void mark_section_show_entries(SectionID section_id,
                                               int show_all_entries, AVDictionary *entries)
  {
@@ -3594,7 +3748,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      selection->show_all_entries = show_all_entries;
      if (show_all_entries) {
-@@ -2997,16 +3029,16 @@
+@@ -2997,16 +3035,16 @@
  
  static int opt_input_file(void *optctx, const char *arg)
  {
@@ -3615,7 +3769,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          return AVERROR(ENOMEM);
  
      return 0;
-@@ -3020,16 +3052,16 @@
+@@ -3020,16 +3058,16 @@
  
  static int opt_output_file_o(void *optctx, const char *opt, const char *arg)
  {
@@ -3636,7 +3790,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          return AVERROR(ENOMEM);
  
      return 0;
-@@ -3037,16 +3069,16 @@
+@@ -3037,16 +3075,16 @@
  
  static int opt_print_filename(void *optctx, const char *opt, const char *arg)
  {
@@ -3658,7 +3812,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      printf("\n");
  
      show_help_children(avformat_get_class(), AV_OPT_FLAG_DECODING_PARAM);
-@@ -3153,35 +3185,35 @@
+@@ -3153,35 +3191,35 @@
              n++;
      n++;
  
@@ -3702,7 +3856,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
  end:
      av_free(spec);
-@@ -3195,10 +3227,10 @@
+@@ -3195,10 +3233,10 @@
  
  static int opt_pretty(void *optctx, const char *opt, const char *arg)
  {
@@ -3717,7 +3871,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      return 0;
  }
  
-@@ -3247,10 +3279,10 @@
+@@ -3247,10 +3285,10 @@
     spec++;
  
     switch (spec[0]) {
@@ -3732,7 +3886,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
     default:
         av_log(NULL, AV_LOG_ERROR,
                "Invalid media specifier '%s' in option '%s'. "
-@@ -3292,52 +3324,52 @@
+@@ -3292,52 +3330,52 @@
  static const OptionDef real_options[] = {
      CMDUTILS_COMMON_OPTIONS
      { "f",                     OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_format}, "force format", "format" },
@@ -3804,7 +3958,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          "read and decode the streams to fill missing information with heuristics" },
      { "c",                     OPT_TYPE_FUNC, OPT_FUNC_ARG, { .func_arg = opt_codec}, "force decoder", "decoder_name" },
      { "codec",                 OPT_TYPE_FUNC, OPT_FUNC_ARG, { .func_arg = opt_codec}, "alias for -c (force decoder)", "decoder_name" },
-@@ -3346,7 +3378,7 @@
+@@ -3346,7 +3384,7 @@
  
  static inline int check_section_show_entries(int section_id)
  {
@@ -3813,7 +3967,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      if (selection->show_all_entries || selection->entries_to_show)
          return 1;
-@@ -3360,7 +3392,7 @@
+@@ -3360,7 +3398,7 @@
  
  #define SET_DO_SHOW(id, varname) do {                                   \
          if (check_section_show_entries(SECTION_ID_##id))                \
@@ -3822,7 +3976,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      } while (0)
  
  int main(int argc, char **argv)
-@@ -3373,28 +3405,26 @@
+@@ -3373,28 +3411,26 @@
      int ret, input_ret;
      AVTextFormatDataDump data_dump_format_id = AV_TEXTFORMAT_DATADUMP_XXD;
  
@@ -3860,7 +4014,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
  
      /* mark things to show, based on -show_entries */
      SET_DO_SHOW(CHAPTERS, chapters);
-@@ -3426,7 +3456,7 @@
+@@ -3426,7 +3462,7 @@
      SET_DO_SHOW(STREAM_GROUP_STREAM_TAGS, stream_tags);
      SET_DO_SHOW(PACKET_TAGS, packet_tags);
  
@@ -3869,7 +4023,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
          av_log(NULL, AV_LOG_ERROR,
                 "-bitexact and -show_program_version or -show_library_versions "
                 "options are incompatible\n");
-@@ -3434,13 +3464,13 @@
+@@ -3434,13 +3470,13 @@
          goto end;
      }
  
@@ -3887,7 +4041,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      if (!f_name) {
          av_log(NULL, AV_LOG_ERROR,
                 "No name specified for the output format\n");
-@@ -3456,20 +3486,20 @@
+@@ -3456,20 +3492,20 @@
          goto end;
      }
  
@@ -3914,7 +4068,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
      } else
          ret = avtextwriter_create_stdout(&wctx);
  
-@@ -3478,37 +3508,37 @@
+@@ -3478,37 +3514,37 @@
  
      AVTextFormatOptions tf_options = {
          .is_key_selected              = is_key_selected_callback,
@@ -3967,7 +4121,7 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
                  show_error(tctx, ret);
          }
  
-@@ -3528,15 +3558,15 @@
+@@ -3528,15 +3564,15 @@
      }
  
  end:
@@ -3993,7 +4147,13 @@ diff -ruN a/fftools/ffprobe.c b/fftools/ffprobe.c
 diff -ruN a/fftools/fftools_state.h b/fftools/fftools_state.h
 --- a/fftools/fftools_state.h
 +++ b/fftools/fftools_state.h
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,125 @@
++/*
++ * Written for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 and added to
++ * FFmpeg's source by third-party/ffmpeg/fftools-per-run-state.patch. The dates of later changes
++ * are in the history of that patch.
++ */
++
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -4116,7 +4276,18 @@ diff -ruN a/fftools/fftools_state.h b/fftools/fftools_state.h
 diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
 --- a/fftools/graph/graphprint.c
 +++ b/fftools/graph/graphprint.c
-@@ -156,7 +156,6 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Copyright (c) 2018-2025 - softworkz
+  *
+  * This file is part of FFmpeg.
+@@ -156,7 +162,6 @@
  } while (0)
  
  
@@ -4124,7 +4295,7 @@ diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
  
  static inline char *upcase_string(char *dst, size_t dst_size, const char *src)
  {
-@@ -875,7 +874,7 @@
+@@ -875,7 +880,7 @@
  
      av_bprint_init(target_buf, 0, AV_BPRINT_SIZE_UNLIMITED);
  
@@ -4133,7 +4304,7 @@ diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
  
      text_formatter = avtext_get_formatter_by_name(w_name);
      if (!text_formatter) {
-@@ -892,7 +891,7 @@
+@@ -892,7 +897,7 @@
      }
  
      AVTextFormatOptions tf_options = { .show_optional_fields = -1 };
@@ -4142,7 +4313,7 @@ diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
      if (w_args)
          ++w_args; // consume '='
      ret = avtext_context_open(&tfc, text_formatter, wctx, w_args, sections, FF_ARRAY_ELEMS(sections), tf_options, NULL);
-@@ -910,7 +909,7 @@
+@@ -910,7 +915,7 @@
      gpc->tfc = tfc;
      av_bprint_init(&gpc->pbuf, 0, AV_BPRINT_SIZE_UNLIMITED);
  
@@ -4151,7 +4322,7 @@ diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
      gpc->is_diagram = !!(tfc->formatter->flags & AV_TEXTFORMAT_FLAG_IS_DIAGRAM_FORMATTER);
      if (gpc->is_diagram) {
          tfc->opts.show_value_unit = 1;
-@@ -1038,15 +1037,15 @@
+@@ -1038,15 +1043,15 @@
  
      avtext_print_section_footer(tfc); // SECTION_ID_ROOT
  
@@ -4171,7 +4342,7 @@ diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
                  goto cleanup;
              }
  
-@@ -1057,7 +1056,7 @@
+@@ -1057,7 +1062,7 @@
          }
      }
  
@@ -4183,7 +4354,18 @@ diff -ruN a/fftools/graph/graphprint.c b/fftools/graph/graphprint.c
 diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
 --- a/fftools/opt_common.c
 +++ b/fftools/opt_common.c
-@@ -73,8 +73,8 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Option handlers shared between the tools.
+  *
+  * This file is part of FFmpeg.
+@@ -73,8 +79,8 @@
      SHOW_ENCODER,
  };
  
@@ -4194,7 +4376,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  
  int show_license(void *optctx, const char *opt, const char *arg)
  {
-@@ -150,8 +150,6 @@
+@@ -150,8 +156,6 @@
      return 0;
  }
  
@@ -4203,7 +4385,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  #define INDENT        1
  #define SHOW_VERSION  2
  #define SHOW_CONFIG   4
-@@ -174,11 +172,11 @@
+@@ -174,11 +178,11 @@
          if (flags & SHOW_CONFIG) {                                      \
              const char *cfg = libname##_configuration();                \
              if (strcmp(FFMPEG_CONFIGURATION, cfg)) {                    \
@@ -4217,7 +4399,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
                  }                                                       \
                  av_log(NULL, level, "%s%-11s configuration: %s\n",      \
                          indent, #libname, cfg);                         \
-@@ -240,7 +238,7 @@
+@@ -240,7 +244,7 @@
  void show_banner(int argc, char **argv, const OptionDef *options)
  {
      int idx = locate_option(argc, argv, options, "version");
@@ -4226,7 +4408,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
          return;
  
      print_program_info (INDENT|SHOW_COPYRIGHT, AV_LOG_INFO);
-@@ -250,7 +248,7 @@
+@@ -250,7 +254,7 @@
  
  int show_version(void *optctx, const char *opt, const char *arg)
  {
@@ -4235,7 +4417,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      print_program_info (SHOW_COPYRIGHT, AV_LOG_INFO);
      print_all_libs_info(SHOW_VERSION, AV_LOG_INFO);
  
-@@ -259,7 +257,7 @@
+@@ -259,7 +263,7 @@
  
  int show_buildconf(void *optctx, const char *opt, const char *arg)
  {
@@ -4244,7 +4426,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      print_buildconf      (INDENT|0, AV_LOG_INFO);
  
      return 0;
-@@ -590,7 +588,7 @@
+@@ -590,7 +594,7 @@
  int show_help(void *optctx, const char *opt, const char *arg)
  {
      char *topic, *par;
@@ -4253,7 +4435,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  
      topic = av_strdup(arg ? arg : "");
      if (!topic)
-@@ -1074,42 +1072,23 @@
+@@ -1074,42 +1078,23 @@
      return 0;
  }
  
@@ -4307,7 +4489,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  }
  
  static void expand_filename_template(AVBPrint *bp, const char *template,
-@@ -1144,15 +1123,14 @@
+@@ -1144,15 +1129,14 @@
  {
      va_list vl2;
      char line[1024];
@@ -4327,7 +4509,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      }
  }
  
-@@ -1166,7 +1144,7 @@
+@@ -1166,7 +1150,7 @@
      struct tm *tm;
      AVBPrint filename;
  
@@ -4336,7 +4518,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
          return 0;
      time(&now);
      tm = localtime(&now);
-@@ -1188,7 +1166,7 @@
+@@ -1188,7 +1172,7 @@
              val = NULL;
          } else if (!strcmp(key, "level")) {
              char *tail;
@@ -4345,7 +4527,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
              if (*tail) {
                  av_log(NULL, AV_LOG_FATAL, "Invalid report file level\n");
                  av_free(key);
-@@ -1213,18 +1191,18 @@
+@@ -1213,18 +1197,18 @@
          return AVERROR(ENOMEM);
      }
  
@@ -4369,7 +4551,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      av_log(NULL, AV_LOG_INFO,
             "%s started on %04d-%02d-%02d at %02d:%02d:%02d\n"
             "Report written to \"%s\"\n"
-@@ -1232,11 +1210,11 @@
+@@ -1232,11 +1216,11 @@
             program_name,
             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
             tm->tm_hour, tm->tm_min, tm->tm_sec,
@@ -4383,7 +4565,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  
      return 0;
  }
-@@ -1248,16 +1226,7 @@
+@@ -1248,16 +1232,7 @@
  
  int opt_max_alloc(void *optctx, const char *opt, const char *arg)
  {
@@ -4401,7 +4583,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  }
  
  int opt_loglevel(void *optctx, const char *opt, const char *arg)
-@@ -1275,8 +1244,8 @@
+@@ -1275,8 +1250,8 @@
      };
      const char *token;
      char *tail;
@@ -4412,7 +4594,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      int cmd, i = 0;
  
      av_assert0(arg);
-@@ -1324,7 +1293,7 @@
+@@ -1324,7 +1299,7 @@
      } else if (*arg == '+') {
          arg++;
      } else if (!i) {
@@ -4421,7 +4603,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      }
  
      for (i = 0; i < FF_ARRAY_ELEMS(log_levels); i++) {
-@@ -1349,8 +1318,8 @@
+@@ -1349,8 +1324,8 @@
      }
  
  end:
@@ -4432,7 +4614,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      return 0;
  }
  
-@@ -1446,9 +1415,9 @@
+@@ -1446,9 +1421,9 @@
      char *dev = NULL;
      AVDictionary *opts = NULL;
      int ret = 0;
@@ -4444,7 +4626,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  
      if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
          goto fail;
-@@ -1474,7 +1443,7 @@
+@@ -1474,7 +1449,7 @@
    fail:
      av_dict_free(&opts);
      av_free(dev);
@@ -4453,7 +4635,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
      return ret;
  }
  
-@@ -1484,9 +1453,9 @@
+@@ -1484,9 +1459,9 @@
      char *dev = NULL;
      AVDictionary *opts = NULL;
      int ret = 0;
@@ -4465,7 +4647,7 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
  
      if ((ret = show_sinks_sources_parse_arg(arg, &dev, &opts)) < 0)
          goto fail;
-@@ -1510,7 +1479,7 @@
+@@ -1510,7 +1485,7 @@
    fail:
      av_dict_free(&opts);
      av_free(dev);
@@ -4477,7 +4659,18 @@ diff -ruN a/fftools/opt_common.c b/fftools/opt_common.c
 diff -ruN a/fftools/opt_common.h b/fftools/opt_common.h
 --- a/fftools/opt_common.h
 +++ b/fftools/opt_common.h
-@@ -226,7 +226,7 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Option handlers shared between the tools.
+  *
+  * This file is part of FFmpeg.
+@@ -226,7 +232,7 @@
      { "max_alloc",    OPT_TYPE_FUNC, OPT_FUNC_ARG | OPT_EXPERT, { .func_arg = opt_max_alloc },    "set maximum size of a single allocated block", "bytes" }, \
      { "cpuflags",     OPT_TYPE_FUNC, OPT_FUNC_ARG | OPT_EXPERT, { .func_arg = opt_cpuflags },     "force specific cpu flags", "flags" },     \
      { "cpucount",     OPT_TYPE_FUNC, OPT_FUNC_ARG | OPT_EXPERT, { .func_arg = opt_cpucount },     "force specific cpu count", "count" },     \
@@ -4489,7 +4682,18 @@ diff -ruN a/fftools/opt_common.h b/fftools/opt_common.h
 diff -ruN a/fftools/resources/resman.c b/fftools/resources/resman.c
 --- a/fftools/resources/resman.c
 +++ b/fftools/resources/resman.c
-@@ -36,6 +36,7 @@
+@@ -1,4 +1,10 @@
+ /*
++ * Changed for Photosphere (https://github.com/ashleydavis/photosphere) on 2026-11-03 by
++ * third-party/ffmpeg/fftools-per-run-state.patch, so that the program keeps its state per run and
++ * several runs can share one process. The dates of later changes are in the history of that patch.
++ */
++
++/*
+  * Copyright (c) 2025 - softworkz
+  *
+  * This file is part of FFmpeg.
+@@ -36,6 +42,7 @@
  #include "libavutil/pixdesc.h"
  #include "libavutil/dict.h"
  #include "libavutil/common.h"
@@ -4497,7 +4701,7 @@ diff -ruN a/fftools/resources/resman.c b/fftools/resources/resman.c
  
  extern const unsigned char ff_graph_html_data[];
  extern const unsigned int ff_graph_html_len;
-@@ -58,9 +59,6 @@
+@@ -58,9 +65,6 @@
      AVDictionary *resource_dic;
  } ResourceManagerContext;
  
@@ -4507,7 +4711,7 @@ diff -ruN a/fftools/resources/resman.c b/fftools/resources/resman.c
  
  
  #if CONFIG_RESOURCE_COMPRESSION
-@@ -119,16 +117,18 @@
+@@ -119,16 +123,18 @@
  
  void ff_resman_uninit(void)
  {
@@ -4529,7 +4733,7 @@ diff -ruN a/fftools/resources/resman.c b/fftools/resources/resman.c
      ResourceManagerContext *ctx = &resman_ctx;
      FFResourceDefinition resource_definition = { 0 };
      AVDictionaryEntry *dic_entry;
-@@ -144,7 +144,8 @@
+@@ -144,7 +150,8 @@
  
      av_assert1(resource_definition.name);
  
@@ -4539,7 +4743,7 @@ diff -ruN a/fftools/resources/resman.c b/fftools/resources/resman.c
  
      dic_entry = av_dict_get(ctx->resource_dic, resource_definition.name, NULL, 0);
  
-@@ -191,6 +192,7 @@
+@@ -191,6 +198,7 @@
      res = dic_entry->value;
  
  end:

@@ -11,4 +11,6 @@ Run it as `bun run --filter=ziggy package:windows -- [arch] [--binary <prefix>] 
 
 The executable carries the icon (`apps/photosphere/icons/photosphere.ico`) as a resource, compiled from `apps/photosphere/native/windows/photosphere.rc`, and the installer uses the same file for its entry in Installed apps and the Start menu shortcut.
 
+Both packages are made from a copy of the app, in a new `stage-*` directory of the install prefix, with a `licences` folder beside `photosphere.exe` written by `scripts/write-licence-files.sh` (see [write-licence-files.md](../../../scripts/write-licence-files.md)), so the zip holds it and the MSI installs it in `%LOCALAPPDATA%\Programs\Photosphere\licences`.
+
 The installer is described by `package-windows.wxs` beside the script and built with the WiX Toolset that `fetch-wix.sh` puts in `apps/photosphere/wix/`: `candle` compiles it with the `Version` and `SourceDir` variables, and `light` links the MSI. The script stops with a message before building anything when WiX has not been fetched; run setup. The MSI installs for the current user only, into `%LOCALAPPDATA%\Programs\Photosphere`, with a Start menu shortcut, and needs no administrator rights. Its version must be numeric (`major.minor.build`), which Windows Installer requires. The zip needs `zip`, or `tar.exe` on Windows.

@@ -51,12 +51,17 @@ if [ -z "$APP" ]; then
 fi
 [ -d "$APP" ] || apple_fail "$APP is not a directory, so there is no app to package."
 
-# The disk image holds the app and a link to /Applications. The staging directory is reused between runs and brought into
-# line with the new build.
-mkdir -p "$BUILD_DIR/dmg-staging/Photosphere.app"
+# The disk image holds the app, a link to /Applications and a licences folder with the licence files every distributed build
+# carries (see scripts/write-licence-files.md), and the zip holds the app and the same licences folder. The licences go beside
+# the app rather than inside it, because the app is signed and a file added to it would break its signature. The staging
+# directories are reused between runs and brought into line with the new build.
+mkdir -p "$BUILD_DIR/dmg-staging/Photosphere.app" "$BUILD_DIR/zip-staging/Photosphere.app"
 rsync -a --delete "$APP/" "$BUILD_DIR/dmg-staging/Photosphere.app/"
 ln -sfn /Applications "$BUILD_DIR/dmg-staging/Applications"
+bash "$APPLE_REPO_ROOT/scripts/write-licence-files.sh" "$BUILD_DIR/dmg-staging/licences"
 hdiutil create -volname "Photosphere" -srcfolder "$BUILD_DIR/dmg-staging" -ov -format UDZO "$OUTPUT_DIR/$BASE_NAME.dmg"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUTPUT_DIR/$BASE_NAME.zip"
+rsync -a --delete "$APP/" "$BUILD_DIR/zip-staging/Photosphere.app/"
+bash "$APPLE_REPO_ROOT/scripts/write-licence-files.sh" "$BUILD_DIR/zip-staging/licences"
+ditto -c -k --sequesterRsrc "$BUILD_DIR/zip-staging" "$OUTPUT_DIR/$BASE_NAME.zip"
 
 echo "Packed $OUTPUT_DIR/$BASE_NAME.dmg and $OUTPUT_DIR/$BASE_NAME.zip"

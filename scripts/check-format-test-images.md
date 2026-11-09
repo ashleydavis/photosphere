@@ -4,6 +4,10 @@ Imports every image and video in `test/formats/` into a new database with the bu
 `psi` recorded for each against the size at the start of its file name (`53x31-alpha.png` must be 53 × 31). A JPEG
 with an EXIF Orientation of 6 or 8 stands upright when turned, so it must be recorded with the size swapped.
 
+It then checks that the import made each file a thumbnail that is a JPEG of the same shape as the recorded size, allowing
+for the rounding of one side to whole pixels. A video's thumbnail is made from a frame the FFmpeg built into `psi` decoded,
+so this is the check that each video decodes, not only that its size can be read.
+
 Both the import and `psi info <file>` read each image's EXIF as well as its size, and a failed EXIF read is an error, not
 an image with no date. So every file, including the JPEGs with no EXIF or a broken EXIF segment, must import, and a file
 `psi info` could not read is reported with the error it printed, which for an EXIF read names the `identify` command and
@@ -44,6 +48,6 @@ bash scripts/check-format-test-images.sh [psi executable]
 - `psi executable`: optional, defaults to `zig-out/bin/psi`. The script does not build it.
 
 Prints `ok` or `FAIL` per file, per copy and per refused type, and exits 1 if any image or video failed to import, was
-recorded with the wrong size or is missing a picture, if a `-not-imported` file was imported, if a copy is not sRGB,
-keeps a profile or has the wrong colour, or if a type outside the policy was not refused. The
+recorded with the wrong size, is missing a picture or has a thumbnail of the wrong shape, if a `-not-imported` file was
+imported, if a copy is not sRGB, keeps a profile or has the wrong colour, or if a type outside the policy was not refused. The
 database is made in a new `mktemp -d` directory, printed at the start and left behind for inspection.

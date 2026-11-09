@@ -28,6 +28,8 @@ android {
     sourceSets {
         main {
             jniLibs.srcDirs = ['build/ziggy/jniLibs']
+            // The licence files scripts/package-android.sh writes for a release APK, packed as assets/licences.
+            assets.srcDirs = ['build/ziggy/licence-assets']
         }
     }
 

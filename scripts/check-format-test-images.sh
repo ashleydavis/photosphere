@@ -6,7 +6,7 @@
 # each (made from a screenshot, for a video) and a JPEG display picture of each image, that no file named -not-imported
 # was imported, that types the ImageMagick security policy does not allow are refused, and that each image's display,
 # thumbnail and micro copies are sRGB, with no colour profile, in the image's own colours. Exits 1 naming each file or
-# type that is wrong.
+# type that is wrong. Each thumbnail must also have its file's shape.
 # psi runs with a PATH that holds nothing, so every file is read by the ImageMagick and FFmpeg built into psi and never by
 # a magick, ffmpeg or ffprobe installed on the machine.
 #
@@ -35,6 +35,9 @@ echo "Database: $work/db"
 # An empty directory as the whole PATH: no magick, ffmpeg or ffprobe can be found on it.
 no_tools="$work/no-tools-path"
 mkdir "$no_tools"
+# Copies of the thumbnails, named so psi info can read them.
+thumbs="$work/thumbs"
+mkdir "$thumbs"
 PATH="$no_tools" "$psi" init --db "$work/db" --yes > "$work/init.log" 2>&1 || {
     cat "$work/init.log" >&2
     exit 1
@@ -113,7 +116,31 @@ for file in "$formats"/*; do
         failures=$((failures + 1))
         continue
     fi
-    echo "ok    $name: $recorded, with a JPEG $pictures"
+
+    # The thumbnail must also have the file's shape. psi info names a file's type from its extension, so the thumbnail is
+    # read through a copy named .jpg.
+    cp "$work/db/thumb/$assetId" "$thumbs/$name.jpg"
+    thumbInfo="$(PATH="$no_tools" "$psi" info "$thumbs/$name.jpg")"
+    thumbType="$(printf '%s\n' "$thumbInfo" | sed -n 's/^ *Type: //p')"
+    thumbSize="$(printf '%s\n' "$thumbInfo" | sed -n 's/^ *Dimensions: //p')"
+    if [ "$thumbType" != "image/jpeg" ] || [ -z "$thumbSize" ]; then
+        echo "FAIL  $name: thumbnail is '$thumbType' '$thumbSize', not a JPEG psi can read"
+        failures=$((failures + 1))
+        continue
+    fi
+    thumbWidth="${thumbSize%% ×*}"
+    thumbHeight="${thumbSize##*× }"
+    # The thumbnail's sides are whole pixels, so its shape may differ from the image's by the rounding of one side: up to one
+    # pixel of the thumbnail on the image's shorter side.
+    shapeDifference=$((thumbWidth * height - thumbHeight * width))
+    shapeDifference="${shapeDifference#-}"
+    shorterSide=$((width < height ? width : height))
+    if [ "$shapeDifference" -gt "$shorterSide" ]; then
+        echo "FAIL  $name: thumbnail is $thumbSize, not the shape of $expected"
+        failures=$((failures + 1))
+        continue
+    fi
+    echo "ok    $name: $recorded, with a JPEG $pictures, thumbnail $thumbSize"
 done
 
 if [ "$failures" -ne 0 ]; then
