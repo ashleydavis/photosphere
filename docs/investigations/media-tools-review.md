@@ -31,12 +31,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
   - `ffmpeg` decodes it to a JPEG, which ImageMagick then works on.
 - Tool checks: `tools`, `version` and `bug` in the CLI, `ensureMediaProcessingTools` before `init`, `info` and `upgrade`, and the app's `check-tools` message.
 
-## Inefficiencies
-
-
-## Rule breaches and leftover code
-
-
 ## `ThreadTools`
 
 - `ThreadTools` (`media-tools-zig/src/lib/media-tools.zig`) is an empty struct. `init()` returns `.{}` and `runner()` returns an `InProcessRunner` whose `run` ignores `context`.
@@ -70,9 +64,6 @@ How the Zig CLI (`apps/cli-zig`) and the Photosphere App use ImageMagick and FFm
 - `tools-zig` and `node-api-zig` link libc, ImageMagick and FFmpeg, so their test binaries get larger and slower to build.
 - The tests that use `FakeToolRunner` (`image.command.test.zig`, `video.probe.test.zig`, `tool-verification.test.zig`) assert the argument list joined with spaces. They are replaced by tests that run the real tools on fixture files.
 - The `node-api-zig` test environment, which runs tasks with no tools, runs them with the real tools. `MediaTools` has to be started in that environment.
-
-## Trade-offs worth deciding
-
 
 ## Fix
 
