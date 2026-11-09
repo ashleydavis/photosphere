@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Makes the images the format tests read, into test/formats/ (gitignored, not committed).
-# An image already there is kept, so this is quick after the first run. Needs ImageMagick.
+# Makes the images and videos the format tests read, into test/formats/ (gitignored, not committed).
+# A file already there is kept, so this is quick after the first run. Needs ImageMagick and ffmpeg.
 #
 set -euo pipefail
 
@@ -58,4 +58,24 @@ for orientation in 1 3 6 8; do
     fi
 done
 
-echo "Format test images are in $out"
+
+#
+# Makes one two-second video unless it is already there: make_video <file name> <ffmpeg output arguments>.
+# A test pattern with a moving element and a tone, so a screenshot at any moment has something in it.
+#
+make_video() {
+    local name="$1"
+    shift
+    if [ ! -f "$out/$name" ]; then
+        local size="${name%%-*}"
+        ffmpeg -v error -y -f lavfi -i "testsrc2=size=$size:rate=25:duration=2" -f lavfi -i "sine=frequency=440:duration=2" -shortest "$@" "$out/$name.tmp.${name##*.}"
+        mv "$out/$name.tmp.${name##*.}" "$out/$name"
+    fi
+}
+
+# The video types the program takes, in the codecs phones record them in. Needs ffmpeg with libx264 and libx265.
+make_video 96x54-h264.mp4 -c:v libx264 -pix_fmt yuv420p -c:a aac
+make_video 112x64-hevc.mp4 -c:v libx265 -x265-params log-level=error -tag:v hvc1 -pix_fmt yuv420p -c:a aac
+make_video 128x72-h264.mov -c:v libx264 -pix_fmt yuv420p -c:a aac
+make_video 144x80-hevc.mov -c:v libx265 -x265-params log-level=error -tag:v hvc1 -pix_fmt yuv420p -c:a aac
+echo "Format test images and videos are in $out"
