@@ -2,7 +2,9 @@
 #
 # Imports every image and video made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
 # the width and height psi recorded for each against the size in its file name. A JPEG whose EXIF Orientation is 6 or
-# 8 is turned a quarter, so its recorded size is the file name's swapped. Exits 1 naming each image that is wrong.
+# 8 is turned a quarter, so its recorded size is the file name's swapped. It also checks the import stored a JPEG thumbnail of
+# each (made from a screenshot, for a video) and a JPEG display picture of each image, and that no file named -not-imported
+# was imported. Exits 1 naming each file that is wrong.
 # psi runs with a PATH that holds nothing, so every file is read by the ImageMagick and FFmpeg built into psi and never by
 # a magick, ffmpeg or ffprobe installed on the machine.
 #
@@ -56,6 +58,19 @@ for file in "$formats"/*; do
             ;;
     esac
 
+    # A file named -not-imported is a type the import never adds, so the database must hold no asset of that name.
+    case "$name" in
+        *-not-imported.*)
+            if PATH="$no_tools" "$psi" list --db "$work/db" --yes --page-size 100000 2>&1 | grep -qF "$name"; then
+                echo "FAIL  $name: imported, but this type must not be"
+                failures=$((failures + 1))
+            else
+                echo "ok    $name: not imported"
+            fi
+            continue
+            ;;
+    esac
+
     # psi info reads the file's size and its EXIF, and prints the error instead of a hash when either read fails.
     fileInfo="$(PATH="$no_tools" "$psi" info "$file")"
     hash="$(printf '%s\n' "$fileInfo" | sed -n 's/^ *Hash: //p')"
@@ -65,18 +80,42 @@ for file in "$formats"/*; do
         failures=$((failures + 1))
         continue
     fi
-    recorded="$(PATH="$no_tools" "$psi" info --db "$work/db" "$hash" | sed -n 's/^ *Dimensions: //p')"
+    assetInfo="$(PATH="$no_tools" "$psi" info --db "$work/db" "$hash")"
+    recorded="$(printf '%s\n' "$assetInfo" | sed -n 's/^ *Dimensions: //p')"
     expected="$width × $height"
-    if [ "$recorded" = "$expected" ]; then
-        echo "ok    $name: $recorded"
-    else
+    if [ "$recorded" != "$expected" ]; then
         echo "FAIL  $name: expected $expected, recorded '$recorded'"
         failures=$((failures + 1))
+        continue
     fi
+
+    # The import made a thumbnail of it, from a screenshot for a video, and a display picture of an image, each a JPEG:
+    # a file that starts with the JPEG start-of-image marker FF D8 FF. A video has no display picture.
+    assetId="$(printf '%s\n' "$assetInfo" | sed -n 's/^ *Asset ID: //p')"
+    case "$(printf '%s\n' "$assetInfo" | sed -n 's/^ *Type: //p')" in
+        video/*)
+            pictures="thumb"
+            ;;
+        *)
+            pictures="thumb display"
+            ;;
+    esac
+    missing=""
+    for kind in $pictures; do
+        if [ "$(od -An -tx1 -N3 "$work/db/$kind/$assetId" 2>/dev/null | tr -d ' ')" != "ffd8ff" ]; then
+            missing="$missing $kind"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        echo "FAIL  $name: $recorded, but no JPEG$missing in the database"
+        failures=$((failures + 1))
+        continue
+    fi
+    echo "ok    $name: $recorded, with a JPEG $pictures"
 done
 
 if [ "$failures" -ne 0 ]; then
-    echo "$failures image(s) recorded with the wrong size" >&2
+    echo "$failures file(s) failed the check" >&2
     exit 1
 fi
-echo "Every image recorded with the right size"
+echo "Every image and video recorded with the right size and its pictures, and no -not-imported file imported"

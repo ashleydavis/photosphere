@@ -20,5 +20,13 @@ What it makes, each with a width and height that differ so a size read the wrong
   segment, and a TIFF header with no byte order. ImageMagick still reads these and their EXIF, so they must import;
   an EXIF read that fails is an error, so a file like these that stopped importing would show in the check.
 - Two-second videos with sound: H.264 and HEVC, each in MP4 and MOV.
+- The other video types phones and cameras record that the import takes: H.263 and H.264 in 3GP, H.264 in M4V and
+  MKV, Motion JPEG with PCM sound and MPEG-4 Part 2 (tagged XVID) in AVI, MPEG-2 in MPG and VOB, MPEG-1 in MPEG, and
+  VP9 and VP8 in WebM. The built-in FFmpeg is built with the demuxer and decoder of each.
+- Two videos named `-not-imported`, which the import must not add: H.264 in MPEG-TS (`.mts`, as AVCHD camcorders
+  write), whose content type `video/mp2t` the scanner leaves out because a TypeScript `.ts` file has it too, and WMV in
+  ASF (`.wmv`), which the built-in FFmpeg is not built to read.
+- `1000x700-tiled.heic`, a copy of `test/heic/tiled.heic`: a phone's HEIC stored as tiles, which the built-in FFmpeg
+  decodes and joins.
 
 A missing file makes the unit test fail on it and makes check-format-test-images.sh fail naming this script; neither skips.
