@@ -100,7 +100,7 @@ test "getDimensions runs only the size identify, and getInfo runs the EXIF ident
     try std.testing.expectEqual(@as(f64, 100), dimensions.width);
     try std.testing.expectEqual(@as(f64, 90), dimensions.height);
     try std.testing.expectEqual(@as(usize, 1), sizeOnly.calls.items.len);
-    try std.testing.expectEqualStrings("magick identify -format %w %h ../test/test.png", sizeOnly.calls.items[0]);
+    try std.testing.expectEqualStrings("magick identify -format %w %h\n ../test/test.png", sizeOnly.calls.items[0]);
 
     // getInfo still reads the EXIF for createdAt, after the size.
     var full = FakeToolRunner.init(allocator, &.{
@@ -113,7 +113,7 @@ test "getDimensions runs only the size identify, and getInfo runs the EXIF ident
     const info = try withInfo.getInfo(allocator, io, log, full.runner());
     try std.testing.expectEqual(dimensions, info.dimensions);
     try std.testing.expectEqual(@as(usize, 2), full.calls.items.len);
-    try std.testing.expectEqualStrings("magick identify -format %w %h ../test/test.png", full.calls.items[0]);
+    try std.testing.expectEqualStrings("magick identify -format %w %h\n ../test/test.png", full.calls.items[0]);
     try std.testing.expectEqualStrings("magick identify -format %[EXIF:*] ../test/test.png", full.calls.items[1]);
 
     // Once getInfo has read the image, getDimensions answers from it without running anything more.
