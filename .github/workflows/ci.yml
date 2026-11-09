@@ -138,12 +138,41 @@ jobs:
         with:
           platform: linux-x64
 
+      # The app build's Zig build cache, restored from the latest run that saved one for this platform, so the build
+      # compiles only what changed instead of the whole app. Saved again after the build, as the CLI build does.
+      - name: Restore the app build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-app-build-linux-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-app-build-linux-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
       # The app is built into out/app, laid out as apps/photosphere-smoke-tests/run.md describes.
       - name: Build
         shell: bash
         run: |
           build_dir="$PWD/out/app"
           bun run --filter=ziggy build:linux -- --prefix "$build_dir"
+
+      - name: Save the app build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-app-build-linux-${{ github.sha }}
 
   # Builds the Zig CLI for Linux over the Linux third-party libraries the library jobs built, which it restores.
   cli-build-linux:
