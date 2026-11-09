@@ -25,6 +25,9 @@ What it makes, each with a width and height that differ so a size read the wrong
 - Large JPEGs, red at the top and blue at the bottom, whose pictures are made with a reduced decode: a 5472x3648
   camera photo, and a 4001x2999 photo (sides not multiples of 8) with no EXIF and with an EXIF Orientation of 1, 3, 6
   and 8. `getImageDetails makes the pictures of a large JPEG with its reduced decode...` in the same test file reads them.
+- The same photo in four more sizes, 3648x5472, 2999x4001, 1111x1000 and 1601x1203, whose pictures getImageDetails must
+  make the same sizes with and without the reduced decode.
+- A white 40x30 PNG with a black 10x10 square in its top left corner, so a flip or a turn shows where the square ends up.
 - Pictures with a colour profile that is not sRGB, each one solid colour: a PNG and a JPEG with a Display P3 profile
   (Display P3 primaries and white point with a 2.2 gamma curve, written byte by byte by the script because neither
   ImageMagick nor this repository ships a wide gamut RGB profile), and a CMYK JPEG carrying the CMYK profile ImageMagick

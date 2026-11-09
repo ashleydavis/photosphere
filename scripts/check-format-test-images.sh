@@ -187,7 +187,8 @@ echo "Every type outside the policy refused"
 # The display, thumbnail and micro copies psi makes of each image must be sRGB with no colour profile, and the same colour
 # as the image shown through its own profile: for a file with a colour profile, ImageMagick's conversion of it into sRGB
 # with the sRGB profile ImageMagick ships, and for a file with none, its pixels as they are. Videos are only size checked,
-# and a -not-imported file has no copies.
+# a -not-imported file has no copies, and a HEIC is skipped because the ImageMagick on the machine cannot read one to give
+# its reference colour.
 # These reference colours come from the ImageMagick installed on the machine, which only this part of the check runs.
 #
 if command -v magick >/dev/null 2>&1; then
@@ -251,7 +252,7 @@ colourFailures=0
 for file in "$formats"/*; do
     name="$(basename "$file")"
     case "$name" in
-        *.mp4|*.mov|*.m4v|*.3gp|*.mkv|*.webm|*.avi|*.mpg|*.mpeg|*.vob|*.wmv|*.mts|*-not-imported.*)
+        *.mp4|*.mov|*.m4v|*.3gp|*.mkv|*.webm|*.avi|*.mpg|*.mpeg|*.vob|*.wmv|*.mts|*-not-imported.*|*.heic)
             continue
             ;;
     esac

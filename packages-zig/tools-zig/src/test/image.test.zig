@@ -90,104 +90,6 @@ fn makeTempDir(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
 const srgb_profile_path = "../third-party/imagemagick/vendor/imagemagick/config/sRGB.icm";
 
 //
-// A CIE xyY colour, lcms2's cmsCIExyY.
-//
-const ICmsXyY = extern struct {
-    // The chromaticity x.
-    x: f64,
-
-    // The chromaticity y.
-    y: f64,
-
-    // The luminance.
-    Y: f64,
-};
-
-//
-// The chromaticities of the three primaries of an RGB colour space, lcms2's cmsCIExyYTRIPLE.
-//
-const ICmsXyYTriple = extern struct {
-    // The red primary.
-    red: ICmsXyY,
-
-    // The green primary.
-    green: ICmsXyY,
-
-    // The blue primary.
-    blue: ICmsXyY,
-};
-
-//
-// lcms2's cmsBuildParametricToneCurve (lcms2 is the colour management library built into the program with ImageMagick): makes a
-// tone curve of one of its parametric types.
-//
-extern fn cmsBuildParametricToneCurve(context: ?*anyopaque, curveType: i32, parameters: [*]const f64) ?*anyopaque;
-
-//
-// lcms2's cmsCreateRGBProfile: makes an RGB profile from a white point, three primaries and a transfer curve for each channel.
-//
-extern fn cmsCreateRGBProfile(whitePoint: *const ICmsXyY, primaries: *const ICmsXyYTriple, transferFunction: *const [3]*anyopaque) ?*anyopaque;
-
-//
-// lcms2's cmsSaveProfileToMem: writes a profile as ICC bytes, or with no memory gives the number of bytes it needs.
-//
-extern fn cmsSaveProfileToMem(profile: *anyopaque, memory: ?*anyopaque, bytesNeeded: *u32) i32;
-
-//
-// lcms2's cmsCloseProfile: frees a profile.
-//
-extern fn cmsCloseProfile(profile: *anyopaque) i32;
-
-//
-// lcms2's cmsFreeToneCurve: frees a tone curve.
-//
-extern fn cmsFreeToneCurve(curve: *anyopaque) void;
-
-//
-// Makes a Display P3 ICC profile with lcms2, the colour space of the photos an iPhone takes: the DCI-P3 primaries (red 0.680, 0.320;
-// green 0.265, 0.690; blue 0.150, 0.060), the D65 white point (0.3127, 0.3290) and the sRGB transfer curve (lcms2's parametric curve
-// type 4 with sRGB's parameters), which is how Display P3 is defined.
-//
-fn displayP3Profile(allocator: std.mem.Allocator) ![]const u8 {
-    const whitePoint: ICmsXyY = .{
-        .x = 0.3127,
-        .y = 0.3290,
-        .Y = 1.0,
-    };
-    const primaries: ICmsXyYTriple = .{
-        .red = .{
-            .x = 0.680,
-            .y = 0.320,
-            .Y = 1.0,
-        },
-        .green = .{
-            .x = 0.265,
-            .y = 0.690,
-            .Y = 1.0,
-        },
-        .blue = .{
-            .x = 0.150,
-            .y = 0.060,
-            .Y = 1.0,
-        },
-    };
-    const srgbCurveParameters = [_]f64{ 2.4, 1.0 / 1.055, 0.055 / 1.055, 1.0 / 12.92, 0.04045 };
-    const curve = cmsBuildParametricToneCurve(null, 4, &srgbCurveParameters) orelse return error.ToneCurveNotMade;
-    defer cmsFreeToneCurve(curve);
-    const profile = cmsCreateRGBProfile(&whitePoint, &primaries, &.{ curve, curve, curve }) orelse return error.ProfileNotMade;
-    defer _ = cmsCloseProfile(profile);
-    var length: u32 = 0;
-    if (cmsSaveProfileToMem(profile, null, &length) == 0) {
-        return error.ProfileNotSaved;
-    }
-    const bytes = try allocator.alloc(u8, length);
-    if (cmsSaveProfileToMem(profile, bytes.ptr, &length) == 0) {
-        return error.ProfileNotSaved;
-    }
-    return bytes[0..length];
-}
-
-//
 // Reads the mean colour of an image file with ImageMagick, as its red, green and blue numbers from 0 to 255, rounded. The numbers are
 // the ones in the file, whatever colour profile it has.
 //
@@ -411,32 +313,36 @@ test "resize converts a Display P3 picture into sRGB, so its colours survive the
     const tempDir = try makeTempDir(allocator, "resize-display-p3");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
-    // A flat picture of the sRGB colour (200, 100, 50), converted into Display P3 and tagged with that profile, as an iPhone writes
-    // its photos: the first -profile tags the new picture as sRGB, the second converts its pixels from sRGB into Display P3.
-    const p3ProfilePath = try std.fs.path.join(allocator, &.{ tempDir, "display-p3.icc" });
-    try std.Io.Dir.cwd().writeFile(std.testing.io, .{
-        .sub_path = p3ProfilePath,
-        .data = try displayP3Profile(allocator),
-    });
-    const sourcePath = try std.fs.path.join(allocator, &.{ tempDir, "display-p3.jpg" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "64x48", "xc:rgb(200,100,50)", "-profile", srgb_profile_path, "-profile", p3ProfilePath, "-quality", "100", sourcePath });
+    // A flat picture tagged with a Display P3 profile, as an iPhone writes its photos, from scripts/make-format-test-images.sh.
+    // The built-in ImageMagick's security policy lets it read only JPEG, PNG, WebP, GIF and BMP pictures, so the picture is made
+    // by that script rather than drawn here.
+    const sourcePath = "../test/formats/79x45-display-p3.jpg";
+    if (!node_utils.fs.pathExists(std.testing.io, sourcePath)) {
+        std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{sourcePath});
+        return error.FormatTestImageMissing;
+    }
+
+    // Its colour in sRGB: the picture converted from its own profile into sRGB with the sRGB profile ImageMagick ships.
+    const srgbPath = try std.fs.path.join(allocator, &.{ tempDir, "srgb.jpg" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ sourcePath, "-profile", srgb_profile_path, "-quality", "100", srgbPath });
+    const srgbColour = try meanColour(log, allocator, runner, srgbPath);
 
     // The picture holds the colour's Display P3 numbers, which are not its sRGB numbers: read as sRGB, as every viewer reads a
     // picture with no profile, they are another colour. A resize that only stripped the profile wrote these numbers.
     const sourceColour = try meanColour(log, allocator, runner, sourcePath);
-    try std.testing.expect(@abs(sourceColour[0] - 200) > 5 or @abs(sourceColour[1] - 100) > 5 or @abs(sourceColour[2] - 50) > 5);
+    try std.testing.expect(@abs(sourceColour[0] - srgbColour[0]) > 5 or @abs(sourceColour[1] - srgbColour[1]) > 5 or @abs(sourceColour[2] - srgbColour[2]) > 5);
 
     var generator: FixedUuidGenerator = .{ .id = "display-p3" };
     var image = Image.init(sourcePath);
     const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 32, .height = 24, .quality = 90, .format = "jpeg", .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator());
 
-    // The resized copy holds the sRGB numbers again, within 2 of each: the conversion into Display P3 and back is exact to within
-    // a rounding of each 8 bit number either way, and JPEG at quality 100 and then 90 moves a flat colour by at most one more.
+    // The resized copy holds the sRGB numbers, within 3 of each: the sRGB reference was written at quality 100 and the copy at
+    // 90, and each JPEG moves a flat colour by a rounding of each 8 bit number.
     const outputColour = try meanColour(log, allocator, runner, outputPath);
-    errdefer std.debug.print("Display P3 numbers {any}, resized numbers {any}\n", .{ sourceColour, outputColour });
-    try std.testing.expect(@abs(outputColour[0] - 200) <= 2);
-    try std.testing.expect(@abs(outputColour[1] - 100) <= 2);
-    try std.testing.expect(@abs(outputColour[2] - 50) <= 2);
+    errdefer std.debug.print("Display P3 numbers {any}, sRGB numbers {any}, resized numbers {any}\n", .{ sourceColour, srgbColour, outputColour });
+    try std.testing.expect(@abs(outputColour[0] - srgbColour[0]) <= 3);
+    try std.testing.expect(@abs(outputColour[1] - srgbColour[1]) <= 3);
+    try std.testing.expect(@abs(outputColour[2] - srgbColour[2]) <= 3);
 }
 
 test "transform writes the image the transform command writes" {
@@ -482,24 +388,33 @@ test "resize with a transformation flips and turns the image before it resizes i
     const tempDir = try makeTempDir(allocator, "resize-transformed");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
-    // A white 40x30 picture with a black 10x10 square in its top left corner, so a flip or a turn shows where the square ends up.
-    const sourcePath = try std.fs.path.join(allocator, &.{ tempDir, "source.png" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "40x30", "xc:white", "-fill", "black", "-draw", "rectangle 0,0 9,9", sourcePath });
+    // A white 40x30 picture with a black 10x10 square in its top left corner, so a flip or a turn shows where the square ends up,
+    // from scripts/make-format-test-images.sh: the built-in ImageMagick's security policy lets it draw nothing of its own.
+    const sourcePath = "../test/formats/40x30-corner-square.png";
+    if (!node_utils.fs.pathExists(std.testing.io, sourcePath)) {
+        std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{sourcePath});
+        return error.FormatTestImageMissing;
+    }
 
-    // Flipped, the square is top right; turned a quarter clockwise after that, it is bottom right of a 30x40 picture,
-    // which the resize doubles to 60x80. PNG keeps it lossless so the pixels can be compared exactly.
+    // Flipped, the square is top right; turned a quarter clockwise after that, it is bottom right of a 30x40 picture, which the
+    // resize doubles to 60x80. The policy lets ImageMagick write only JPEG, so the square's middle is near black and the opposite
+    // corner near white rather than exactly 0 and 255.
     var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
     var image = Image.init(sourcePath);
-    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 60, .height = 80, .quality = null, .format = null, .ext = "png", .transformation = .{ .flipX = true, .rotate = 90, .changeOrientation = true } }, tempDir, generator.uuidGenerator());
-    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_fixed-id.png" }), outputPath);
-    try std.testing.expectEqualStrings("60 80 PNG", (try describeImage(log, allocator, runner, outputPath))[0.."60 80 PNG".len]);
-    try std.testing.expectEqualStrings("0 255", try runImageMagick(log, allocator, runner, "convert", &.{ outputPath, "-format", "%[fx:int(p{55,75}.r*255)] %[fx:int(p{5,5}.r*255)]", "info:" }));
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 60, .height = 80, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = .{ .flipX = true, .rotate = 90, .changeOrientation = true } }, tempDir, generator.uuidGenerator());
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_fixed-id.jpg" }), outputPath);
+    try std.testing.expectEqualStrings("60 80 JPEG", (try describeImage(log, allocator, runner, outputPath))[0.."60 80 JPEG".len]);
+    const corners = try runImageMagick(log, allocator, runner, "convert", &.{ outputPath, "-format", "%[fx:int(p{50,70}.r*255)] %[fx:int(p{5,5}.r*255)]", "info:" });
+    var cornerValues = std.mem.splitScalar(u8, corners, ' ');
+    const squareValue = try std.fmt.parseInt(i32, cornerValues.next().?, 10);
+    const oppositeValue = try std.fmt.parseInt(i32, cornerValues.next().?, 10);
+    errdefer std.debug.print("square {d}, opposite corner {d}\n", .{ squareValue, oppositeValue });
+    try std.testing.expect(squareValue < 16);
+    try std.testing.expect(oppositeValue > 239);
 
-    // The same pixels as turning the picture into a file of its own first and resizing that, which is what was done before.
-    const turnedPath = try std.fs.path.join(allocator, &.{ tempDir, "turned.png" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ sourcePath, "-flop", "-rotate", "90", turnedPath });
-    const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.png" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ turnedPath, "-resize", "60x80", "-strip", referencePath });
+    // The same bytes as one command that flips and turns the picture and then resizes it, in that order.
+    const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ sourcePath, "-flop", "-rotate", "90", "-resize", "60x80", "-profile", srgb_profile_path, "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
 }
 
@@ -857,9 +772,13 @@ test "resize with a reduced JPEG decode decodes a large JPEG no smaller than the
     const tempDir = try makeTempDir(allocator, "resize-jpeg-size");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
-    // A 5472x3648 JPEG, the size of a 20 megapixel camera's photo.
-    const largePath = try std.fs.path.join(allocator, &.{ tempDir, "large.jpg" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "5472x3648", "gradient:red-blue", "-quality", "90", largePath });
+    // A 5472x3648 JPEG, the size of a 20 megapixel camera's photo, from scripts/make-format-test-images.sh: the built-in
+    // ImageMagick's security policy lets it draw nothing of its own.
+    const largePath = "../test/formats/5472x3648-camera.jpg";
+    if (!node_utils.fs.pathExists(std.testing.io, largePath)) {
+        std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{largePath});
+        return error.FormatTestImageMissing;
+    }
     try std.testing.expectEqualStrings("5472 3648 JPEG 90", try describeImage(log, allocator, runner, largePath));
 
     // 1500x1000 is hinted as 2250x1500, which the bundled ImageMagick decodes at 3/8, 2052x1368: smaller than the original
@@ -875,20 +794,21 @@ test "resize with a reduced JPEG decode decodes a large JPEG no smaller than the
     // The same bytes as the command with the hint, and not those of the command without it, so the resize decoded at the
     // reduced size.
     const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-define", "jpeg:size=2250x1500", largePath, "-resize", "1500x1000!", "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-define", "jpeg:size=2250x1500", largePath, "-resize", "1500x1000!", "-profile", srgb_profile_path, "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
     const fullDecodePath = try std.fs.path.join(allocator, &.{ tempDir, "full-decode.jpg" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ largePath, "-resize", "1500x1000!", "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", fullDecodePath }) });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ largePath, "-resize", "1500x1000!", "-profile", srgb_profile_path, "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", fullDecodePath }) });
     try std.testing.expect(!std.mem.eql(u8, try readFile(allocator, fullDecodePath), try readFile(allocator, outputPath)));
 
-    // A PNG is resized to the same bytes as without the hint, as only the JPEG decoder reads it.
+    // A PNG is resized to the same bytes as without the hint, as only the JPEG decoder reads it. The copies are JPEGs, the only
+    // type the built-in ImageMagick's security policy lets it write.
     var pngGenerator: FixedUuidGenerator = .{ .id = "png" };
     var png = Image.init("../test/test.png");
-    const pngPath = try png.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 45, .quality = null, .format = null, .ext = "png", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = null }, tempDir, pngGenerator.uuidGenerator());
+    const pngPath = try png.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 45, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = null }, tempDir, pngGenerator.uuidGenerator());
     try std.testing.expectEqualStrings("50 45", try runImageMagick(log, allocator, runner, "identify", &.{ "-format", "%w %h", pngPath }));
-    const pngReferencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.png" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "../test/test.png", "-resize", "50x45!", "-strip", pngReferencePath });
-    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, pngReferencePath), try readFile(allocator, pngPath)));
+    var pngPlainGenerator: FixedUuidGenerator = .{ .id = "png-plain" };
+    const pngPlainPath = try png.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 45, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .transformation = null }, tempDir, pngPlainGenerator.uuidGenerator());
+    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, pngPlainPath), try readFile(allocator, pngPath)));
 }
 
 test "getInfo of an image with no EXIF reads no date and does not fail" {
@@ -903,9 +823,13 @@ test "getInfo of an image with no EXIF reads no date and does not fail" {
     const tempDir = try makeTempDir(allocator, "no-exif");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
-    // A two frame GIF, the kind of file a GIF import reads.
-    const gifPath = try std.fs.path.join(allocator, &.{ tempDir, "animation.gif" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "20x10", "xc:red", "xc:blue", gifPath });
+    // A three frame GIF, the kind of file a GIF import reads, from scripts/make-format-test-images.sh: the built-in ImageMagick's
+    // security policy lets it draw nothing of its own.
+    const gifPath = "../test/formats/43x17-animated.gif";
+    if (!node_utils.fs.pathExists(std.testing.io, gifPath)) {
+        std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{gifPath});
+        return error.FormatTestImageMissing;
+    }
 
     // `identify -format "%[EXIF:*]"` succeeds and prints nothing for a file with no EXIF, so getExifData finds no tags
     // and getInfo leaves createdAt null.

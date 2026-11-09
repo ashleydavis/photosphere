@@ -58,7 +58,8 @@ pub const Started = struct {
     // every coder first and then allows only the ones the program uses:
     //
     //   * Read: JPEG (also named JPG and JPE), PNG, WebP, GIF and BMP, the pictures the import makes smaller pictures of. HEIC is
-    //     made into a JPEG by FFmpeg first, and a video's frame is a JPEG FFmpeg writes.
+    //     made into a JPEG by FFmpeg first, and a video's frame is a JPEG FFmpeg writes. Also ICC (read as ICM), the sRGB colour profile a
+    //     resize writes beside its output and reads back with `-profile` to convert a picture into sRGB before the strip.
     //   * Write: JPEG (and JPG, the name a `.jpg` path is written with), the only type the program writes, and INFO, the text of a
     //     command that ends in `info:`.
     //
@@ -74,7 +75,7 @@ pub const Started = struct {
             \\<policymap>
             \\  <policy domain="coder" rights="none" pattern="*"/>
             \\  <policy domain="coder" rights="read|write" pattern="{JPEG,JPG}"/>
-            \\  <policy domain="coder" rights="read" pattern="{JPE,PNG,WEBP,GIF,BMP}"/>
+            \\  <policy domain="coder" rights="read" pattern="{JPE,PNG,WEBP,GIF,BMP,ICC,ICM}"/>
             \\  <policy domain="coder" rights="write" pattern="INFO"/>
             \\  <policy domain="delegate" rights="none" pattern="*"/>
             \\  <policy domain="path" rights="none" pattern="@*"/>
