@@ -379,14 +379,23 @@ expect_image() {
     local format_output
     local magick_error
     local full_command="$IMAGEMAGICK_IDENTIFY_CMD -format \"%m\" \"$file_path\""
-    format_output=$(eval "$full_command" 2>&1)
+    # The format is read from identify's standard output only. Its warnings go to standard error, and are kept apart so they
+    # are shown when the check fails: ImageMagick 7.1.2-35 prints "ParseError missing >" for valid XMP holding a "/" inside
+    # rdf:Seq, and merged into the output it turned "JPEG" into an unknown format.
+    local magick_error_file
+    magick_error_file=$(mktemp)
+    format_output=$(eval "$full_command" 2>"$magick_error_file")
     local exit_code=$?
-    
+    magick_error=$(cat "$magick_error_file")
+    rm -f "$magick_error_file"
+
     if [ $exit_code -ne 0 ] || [ -z "$format_output" ]; then
         log_error "$description: ImageMagick validation failed - corrupt or invalid image at $file_path"
         echo "Failed command: $full_command"
         echo "ImageMagick output:"
         echo "$format_output"
+        echo "ImageMagick errors:"
+        echo "$magick_error"
         exit 1
     fi
     
@@ -401,10 +410,12 @@ expect_image() {
         "BMP") mime_type="image/bmp" ;;
         *) mime_type="image/unknown" ;;
     esac
-    
+
     # Check if mime type matches expected
     if [ "$mime_type" != "$expected_mime" ]; then
         log_error "$description: Wrong mime type - expected $expected_mime, got $mime_type (format: $format_output) at $file_path"
+        echo "ImageMagick errors:"
+        echo "$magick_error"
         exit 1
     fi
     
