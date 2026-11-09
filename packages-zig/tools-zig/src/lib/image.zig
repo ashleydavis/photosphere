@@ -291,6 +291,33 @@ pub const Image = struct {
         // whose EXIF says it is on its side is not first written out whole and turned and then read
         // back: that cost a full size decode, a full size encode and a generation of JPEG loss.
         var arguments: std.ArrayList([]const u8) = .empty;
+
+        // When asked for, a JPEG is decoded straight to a reduced size (libjpeg's DCT scaling, in
+        // eighths) rather than decoded whole and then shrunk, which is most of the time and memory of
+        // resizing a large photo. Every other format ignores the hint.
+        //
+        // The hint is half as big again as the target, not the target itself, so the reduced image is
+        // never smaller than the target on either side. The ImageMagick bundled here (over IJG libjpeg
+        // 9) rounds the scale to the nearest eighth, not up: hinted at exactly 1333x1000, a 2560x1920
+        // photo decodes at 4/8 to 1280x960, which the resize then has to blow back up. At 1.5 times the
+        // target the nearest eighth is always at least the scale the target needs.
+        //
+        // libjpeg rounds each side of the reduced image up, which shifts its proportions a little, so a
+        // caller that needs the same size as without the hint gives an exact size (maintainAspectRatio
+        // false) rather than a box to fit into.
+        //
+        // The hint is for the decode, which happens before any turn, so for a quarter turn its sides are the target's
+        // swapped back to the way the image is stored.
+        if (options.reducedJpegDecode) {
+            if (!isTruthy(width) or !isTruthy(height)) {
+                return errors.throwError("A reduced JPEG decode needs both a width and a height, given {s}x{s}", .{ try numberText(allocator, width), try numberText(allocator, height) });
+            }
+            const turned = if (options.transformation) |transformation| transformation.changeOrientation orelse false else false;
+            const storedWidth = if (turned) height else width;
+            const storedHeight = if (turned) width else height;
+            try arguments.appendSlice(allocator, &.{ "-define", try std.fmt.allocPrint(allocator, "jpeg:size={s}x{s}", .{ try numberText(allocator, @ceil(storedWidth * 1.5)), try numberText(allocator, @ceil(storedHeight * 1.5)) }) });
+        }
+
         try arguments.append(allocator, self.filePath);
         if (options.transformation) |transformation| {
             try arguments.appendSlice(allocator, try transformOperations(allocator, transformation));

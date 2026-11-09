@@ -590,6 +590,205 @@ test "getImageDetails makes the pictures of a HEIC from FFmpeg's decode of it, w
 }
 
 //
+// Expects fitInBox to fit an image of the first size into a box of the second at the third.
+//
+fn expectFit(size: [2]f64, box: [2]f64, expected: [2]f64) !void {
+    const fitted = image.fitInBox(.{
+        .width = size[0],
+        .height = size[1],
+    }, .{
+        .width = box[0],
+        .height = box[1],
+    });
+    try std.testing.expectEqual(expected[0], fitted.width);
+    try std.testing.expectEqual(expected[1], fitted.height);
+}
+
+test "fitInBox gives the size ImageMagick fits an image into a box at" {
+    // The long side fills the box and the short side is rounded half up: 2560x1920 into 1333x1000 is scaled by
+    // 1333 / 2560, which makes the short side 999.75, so 1000.
+    try expectFit(.{ 2560, 1920 }, .{ 1333, 1000 }, .{ 1333, 1000 });
+
+    // The 1111x1000 display of a 100x90 PNG into 333x300 is scaled by 333 / 1111, the smaller scale, which makes the short
+    // side 299.73, so 300.
+    try expectFit(.{ 1111, 1000 }, .{ 333, 300 }, .{ 333, 300 });
+
+    // When the height needs the smaller scale it is the one that fills the box: 3000x4000 into 1000x1000 is 750x1000.
+    try expectFit(.{ 3000, 4000 }, .{ 1000, 1000 }, .{ 750, 1000 });
+
+    // A side is never less than 1: 4000x10 into 40x40 makes the short side 0.1.
+    try expectFit(.{ 4000, 10 }, .{ 40, 40 }, .{ 40, 1 });
+
+    // An image already the box's size is left alone, and a smaller one is scaled up.
+    try expectFit(.{ 53, 40 }, .{ 53, 40 }, .{ 53, 40 });
+    try expectFit(.{ 100, 80 }, .{ 1250, 1000 }, .{ 1250, 1000 });
+}
+
+test "getImageDetails makes pictures of a JPEG the same sizes as resizing it without the reduced decode does" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    const test_env = try test_environment.setupEnvironment(std.testing.io);
+    defer test_env.deinit(log);
+
+    // Sizes whose sides are not multiples of 8, so libjpeg rounds the sides of each reduced decode up, and a 20 megapixel
+    // camera's photo, landscape and portrait.
+    for ([_][]const u8{ "5472x3648", "3648x5472", "4001x2999", "2999x4001", "1111x1000", "1601x1203" }) |sizeText| {
+        errdefer std.debug.print("size: {s}\n", .{sizeText});
+        const tempDir = try temp_dirs.makeTempDir(allocator, std.testing.io, "image-details-sizes");
+        defer temp_dirs.removeTempDir(std.testing.io, tempDir);
+        const photoPath = try std.fs.path.join(allocator, &.{ tempDir, "photo.jpg" });
+        const made = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ "-size", sizeText, "gradient:red-blue", "-quality", "90", photoPath });
+        try std.testing.expectEqual(@as(u8, 0), made.exit_code);
+
+        var generator: CountingUuidGenerator = .{};
+        const details = try image.getImageDetails(allocator, std.testing.io, log, runner, photoPath, tempDir, "image/jpeg", generator.uuidGenerator(), photoPath);
+
+        // The pictures as resizeImage makes them, each fitted into its box from the one before it with no reduced decode.
+        var plainGenerator: CountingUuidGenerator = .{
+            .generated = 100,
+        };
+        const plainDisplay = try image.resizeImage(allocator, std.testing.io, log, runner, photoPath, tempDir, details.resolution, node_api.media_file_database.DISPLAY_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.DISPLAY_QUALITY, null);
+        const plainThumbnail = try image.resizeImage(allocator, std.testing.io, log, runner, plainDisplay, tempDir, details.resolution, node_api.media_file_database.THUMBNAIL_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.THUMBNAIL_QUALITY, null);
+        const plainMicro = try image.resizeImage(allocator, std.testing.io, log, runner, plainThumbnail, tempDir, details.resolution, node_api.media_file_database.MICRO_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.MICRO_QUALITY, null);
+
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainDisplay), try describeImage(log, allocator, runner, details.displayPath.?));
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainThumbnail), try describeImage(log, allocator, runner, details.thumbnailPath));
+        try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, plainMicro), try describeImage(log, allocator, runner, details.microPath));
+    }
+}
+
+//
+// A large JPEG from scripts/make-format-test-images.sh and the sizes of the pictures made of it, turned as its EXIF says.
+//
+const ILargeJpegCase = struct {
+    // The image, relative to the package directory the tests run in.
+    filePath: []const u8,
+
+    // The width and height of the display, thumbnail and micro pictures, as `identify` prints them ("<width> <height>").
+    displaySize: []const u8,
+
+    // See displaySize.
+    thumbnailSize: []const u8,
+
+    // See displaySize.
+    microSize: []const u8,
+};
+
+//
+// How different two pictures of the same size are: ImageMagick's normalised root mean square error, 0 when every pixel is
+// the same and 1 when every pixel is as far apart as it can be.
+//
+fn pictureDifference(log: ILog, allocator: std.mem.Allocator, runner: InProcessRunner, firstPath: []const u8, secondPath: []const u8) !f64 {
+    const result = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ firstPath, secondPath, "-metric", "RMSE", "-compare", "-format", "%[distortion]", "info:" });
+    if (result.exit_code != 0) {
+        std.debug.print("compare failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
+        return error.TestUnexpectedResult;
+    }
+    return std.fmt.parseFloat(f64, std.mem.trim(u8, result.output, " \r\n"));
+}
+
+test "getImageDetails makes the pictures of a large JPEG with its reduced decode at the size and the way up a full decode makes them" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit(log);
+
+    // Red at the top and blue at the bottom as stored. An Orientation of 3 turns it upside down, and 6 and 8 a quarter each
+    // way, which stands it upright, so its pictures are the stored proportions swapped.
+    const cases = [_]ILargeJpegCase{
+        .{
+            .filePath = "../test/formats/5472x3648-camera.jpg",
+            .displaySize = "1500 1000",
+            .thumbnailSize = "450 300",
+            .microSize = "60 40",
+        },
+        .{
+            .filePath = "../test/formats/4001x2999-base.jpg",
+            .displaySize = "1334 1000",
+            .thumbnailSize = "400 300",
+            .microSize = "53 40",
+        },
+        .{
+            .filePath = "../test/formats/4001x2999-exif-orientation-1.jpg",
+            .displaySize = "1334 1000",
+            .thumbnailSize = "400 300",
+            .microSize = "53 40",
+        },
+        .{
+            .filePath = "../test/formats/4001x2999-exif-orientation-3.jpg",
+            .displaySize = "1334 1000",
+            .thumbnailSize = "400 300",
+            .microSize = "53 40",
+        },
+        .{
+            .filePath = "../test/formats/4001x2999-exif-orientation-6.jpg",
+            .displaySize = "1000 1334",
+            .thumbnailSize = "300 400",
+            .microSize = "40 53",
+        },
+        .{
+            .filePath = "../test/formats/4001x2999-exif-orientation-8.jpg",
+            .displaySize = "1000 1334",
+            .thumbnailSize = "300 400",
+            .microSize = "40 53",
+        },
+    };
+    for (cases) |expected| {
+        errdefer std.debug.print("case: {s}\n", .{expected.filePath});
+        if (!node_utils.fs.pathExists(io, expected.filePath)) {
+            std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{expected.filePath});
+            return error.FormatTestImageMissing;
+        }
+        const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-large-jpeg");
+        defer temp_dirs.removeTempDir(io, tempDir);
+
+        var generator: CountingUuidGenerator = .{};
+        const details = try image.getImageDetails(allocator, io, log, runner, expected.filePath, tempDir, "image/jpeg", generator.uuidGenerator(), expected.filePath);
+
+        // The pictures made the way they were before the reduced decode, from a full decode turned by ImageMagick's own
+        // reading of the EXIF rather than by getImageDetails, each fitted into its box from the one before it.
+        const uprightPath = try std.fs.path.join(allocator, &.{ tempDir, "upright.jpg" });
+        const turned = try runner.run(runner.context, io, log, allocator, "magick", &.{ expected.filePath, "-auto-orient", "-quality", "100", uprightPath });
+        try std.testing.expectEqual(@as(u8, 0), turned.exit_code);
+        var plainGenerator: CountingUuidGenerator = .{
+            .generated = 100,
+        };
+        const plainDisplay = try image.resizeImage(allocator, io, log, runner, uprightPath, tempDir, details.resolution, node_api.media_file_database.DISPLAY_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.DISPLAY_QUALITY, null);
+        const plainThumbnail = try image.resizeImage(allocator, io, log, runner, plainDisplay, tempDir, details.resolution, node_api.media_file_database.THUMBNAIL_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.THUMBNAIL_QUALITY, null);
+        const plainMicro = try image.resizeImage(allocator, io, log, runner, plainThumbnail, tempDir, details.resolution, node_api.media_file_database.MICRO_MIN_SIZE, plainGenerator.uuidGenerator(), node_api.media_file_database.MICRO_QUALITY, null);
+
+        const pictures = [_][3][]const u8{
+            .{ details.displayPath.?, plainDisplay, expected.displaySize },
+            .{ details.thumbnailPath, plainThumbnail, expected.thumbnailSize },
+            .{ details.microPath, plainMicro, expected.microSize },
+        };
+        for (pictures) |picture| {
+            errdefer std.debug.print("picture: {s}\n", .{picture[0]});
+            const description = try describeImage(log, allocator, runner, picture[0]);
+            try std.testing.expectEqualStrings(try describeImage(log, allocator, runner, picture[1]), description);
+            try std.testing.expect(std.mem.startsWith(u8, description, try std.fmt.allocPrint(allocator, "{s} ", .{picture[2]})));
+
+            // A picture the wrong way up or turned the wrong way puts blue where red is in the full decode's, which is a
+            // difference of about a half. The reduced decode's own difference, the blur of decoding at an eighth's scale, measured
+            // at most 0.0055 over these pictures (the micro pictures), so the limit is a little under twice that.
+            const difference = try pictureDifference(log, allocator, runner, picture[0], picture[1]);
+            try std.testing.expect(difference < 0.01);
+        }
+    }
+}
+
+//
 // An image of a type the import takes whose size is not in an EXIF it carries, and the size identify reports for it.
 //
 const ISizeCase = struct {
