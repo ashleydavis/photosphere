@@ -670,168 +670,171 @@ jobs:
   # in minutes since the epoch. The packages are built and not run: running them needs an emulator, which the smoke test job and
   # the local test runs provide. They are saved under photosphere-package-android-<commit>-<run>, which create-release restores.
   # It runs beside the smoke tests.
-  package:
-    timeout-minutes: 120
-    needs: [prepare-tag, app-build]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # The package and create-release jobs are switched off for now. The Android APK is signed with each runner's own
+  # debug key, so a newer one will not install over an older one, and the iOS .ipa is unsigned and will not install
+  # at all, so nothing the mobile releases published could be used. Uncomment both jobs to publish them again.
+#  package:
+#    timeout-minutes: 120
+#    needs: [prepare-tag, app-build]
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+#      - name: Setup Bun
+#        uses: oven-sh/setup-bun@v2
+#        with:
+#          bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+#      - name: Setup Node.js
+#        uses: actions/setup-node@v4
+#        with:
+#          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Zig (version from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
+#      - name: Setup Zig (version from mise.toml)
+#        uses: jdx/mise-action@v2
+#        with:
+#          install_args: zig jq
 
-      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/zig/p
-          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
-          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-
+#      - name: Cache the packages Zig fetches (the AWS SDK for C archives in Zig's global cache)
+#        uses: actions/cache@v4
+#        with:
+#          path: ~/.cache/zig/p
+#          # The tracked build.zig.zon files by name: the cache's post step works the key out again, and over a workspace the job has
+#          # filled, 'build.zig.zon', 'third-party/*/build.zig.zon' took longer than the 120 seconds allowed and failed Release iOS app-smoke-tests after every scenario passed.
+#          key: ${{ runner.os }}-${{ runner.arch }}-zig-${{ hashFiles('build.zig.zon', 'third-party/*/build.zig.zon') }}
+#          restore-keys: |
+#            ${{ runner.os }}-${{ runner.arch }}-zig-
 
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+#      - name: Cache Bun dependencies
+#        uses: actions/cache@v4
+#        with:
+#          path: ~/.bun/install/cache
+#          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+#          restore-keys: |
+#            ${{ runner.os }}-bun-
 
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
+#      - name: Install dependencies
+#        uses: ./.github/actions/retry-install
+#        with:
+#          run: bun install
 
-      - name: Set up the Android C library
-        uses: ./.github/actions/android-libc
+#      - name: Set up the Android C library
+#        uses: ./.github/actions/android-libc
 
-      - name: Restore the Photosphere App build
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            out/app
-            .zig-cache
-            third-party/aws/zig-out
-            third-party/zlib-ng/zig-out
-            third-party/imagemagick/zig-out
-            third-party/ffmpeg/zig-out
-          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
-          fail-on-cache-miss: true
+#      - name: Restore the Photosphere App build
+#        uses: actions/cache/restore@v4
+#        with:
+#          path: |
+#            out/app
+#            .zig-cache
+#            third-party/aws/zig-out
+#            third-party/zlib-ng/zig-out
+#            third-party/imagemagick/zig-out
+#            third-party/ffmpeg/zig-out
+#          key: photosphere-app-android-${{ github.sha }}-${{ github.run_id }}
+#          fail-on-cache-miss: true
 
-      - name: Set config
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
-            VERSION="${{ needs.prepare-tag.outputs.tag }}"
-            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
-            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
-          else
-            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+#      - name: Set config
+#        shell: bash
+#        run: |
+#          if [ "${{ needs.prepare-tag.outputs.is-release }}" = "true" ]; then
+#            VERSION="${{ needs.prepare-tag.outputs.tag }}"
+#            VERSION="${VERSION#"${RELEASE_PLATFORM}-v"}"
+#            VERSION="$(bash ./scripts/set-build-config.sh --tag "$VERSION" --commit "${{ github.sha }}")"
+#          else
+#            VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+#          fi
+#          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Package (Android)
-        shell: bash
-        run: bun run --filter=ziggy package:android -- --binary "$PWD/out/app" --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))" --output-dir "$PWD/out/package"
+#      - name: Package (Android)
+#        shell: bash
+#        run: bun run --filter=ziggy package:android -- --binary "$PWD/out/app" --version-name "$VERSION" --version-code "$(( $(date +%s) / 60 ))" --output-dir "$PWD/out/package"
 
-      - name: Save the Photosphere App package
-        uses: actions/cache/save@v4
-        with:
-          path: out/package
-          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
+#      - name: Save the Photosphere App package
+#        uses: actions/cache/save@v4
+#        with:
+#          path: out/package
+#          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
 
-  # Publishes the packages the package job made, restored from the cache under its key, once every other job has passed. A restore
-  # matches only a save of the same paths, so it restores the whole save.
-  create-release:
-    timeout-minutes: 20
-    needs: [prepare-tag, app-build, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#  # Publishes the packages the package job made, restored from the cache under its key, once every other job has passed. A restore
+#  # matches only a save of the same paths, so it restores the whole save.
+#  create-release:
+#    timeout-minutes: 20
+#    needs: [prepare-tag, app-build, app-smoke-tests, package, typescript-compile, typescript-unit-tests, zig-unit-tests]
+#    runs-on: ubuntu-latest
+#    permissions:
+#      contents: write
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
 
-      - name: Restore the Photosphere App package
-        uses: actions/cache/restore@v4
-        with:
-          path: out/package
-          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
-          fail-on-cache-miss: true
+#      - name: Restore the Photosphere App package
+#        uses: actions/cache/restore@v4
+#        with:
+#          path: out/package
+#          key: photosphere-package-android-${{ github.sha }}-${{ github.run_id }}
+#          fail-on-cache-miss: true
 
-      - name: Put the Photosphere App packages where the release steps read them
-        shell: bash
-        run: |
-          mkdir -p ./artifacts/app
-          cp out/package/*.apk ./artifacts/app/
-          ls -la ./artifacts/app
+#      - name: Put the Photosphere App packages where the release steps read them
+#        shell: bash
+#        run: |
+#          mkdir -p ./artifacts/app
+#          cp out/package/*.apk ./artifacts/app/
+#          ls -la ./artifacts/app
 
-      - name: Generate release notes
-        id: release-notes
-        run: |
-          # The CLI commits made since the last release tag, as bullets. The same script produces the
-          # notes for the Android tester builds, so a release and a tester build never describe the
-          # same commits differently. The tag being built is excluded so a tagged release measures
-          # from the tag before it; for a nightly the tag is empty and nothing is excluded.
-          RELEASE_NOTES=$(bash ./scripts/release-notes.sh \
-            --prefix cli \
-            --exclude-tag "${{ needs.prepare-tag.outputs.tag }}" \
-            --tag-pattern "${RELEASE_PLATFORM}-v*.*.*" \
-            --empty-message "- No CLI-related commits found")
+#      - name: Generate release notes
+#        id: release-notes
+#        run: |
+#          # The CLI commits made since the last release tag, as bullets. The same script produces the
+#          # notes for the Android tester builds, so a release and a tester build never describe the
+#          # same commits differently. The tag being built is excluded so a tagged release measures
+#          # from the tag before it; for a nightly the tag is empty and nothing is excluded.
+#          RELEASE_NOTES=$(bash ./scripts/release-notes.sh \
+#            --prefix cli \
+#            --exclude-tag "${{ needs.prepare-tag.outputs.tag }}" \
+#            --tag-pattern "${RELEASE_PLATFORM}-v*.*.*" \
+#            --empty-message "- No CLI-related commits found")
 
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+#          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+#          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+#          echo "EOF" >> $GITHUB_OUTPUT
 
-          echo "Generated release notes:"
-          echo "$RELEASE_NOTES"
+#          echo "Generated release notes:"
+#          echo "$RELEASE_NOTES"
 
-      - name: Delete existing nightly release
-        if: needs.prepare-tag.outputs.is-release != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release delete "${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
-        continue-on-error: true
+#      - name: Delete existing nightly release
+#        if: needs.prepare-tag.outputs.is-release != 'true'
+#        env:
+#          GH_TOKEN: ${{ github.token }}
+#        run: |
+#          gh release delete "${RELEASE_PLATFORM}-nightly" --yes --cleanup-tag || true
+#        continue-on-error: true
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || format('{0}-nightly', env.RELEASE_PLATFORM) }}
-          # The zig- tag does not exist yet, so the release creates it. Without this it would be created on the default branch rather than on the commit that was built.
-          target_commitish: ${{ github.sha }}
-          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
-          draft: false
-          prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
-          files: |
-            ./artifacts/app/*
-          body: |
-            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
+#      - name: Create Release
+#        uses: softprops/action-gh-release@v1
+#        with:
+#          tag_name: ${{ needs.prepare-tag.outputs.is-release == 'true' && needs.prepare-tag.outputs.tag || format('{0}-nightly', env.RELEASE_PLATFORM) }}
+#          # The zig- tag does not exist yet, so the release creates it. Without this it would be created on the default branch rather than on the commit that was built.
+#          target_commitish: ${{ github.sha }}
+#          name: ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} Nightly', env.RELEASE_PLATFORM_NAME) }}
+#          draft: false
+#          prerelease: ${{ needs.prepare-tag.outputs.is-release != 'true' }}
+#          files: |
+#            ./artifacts/app/*
+#          body: |
+#            ${{ needs.prepare-tag.outputs.is-release == 'true' && format('Photosphere {0} release {1}', env.RELEASE_PLATFORM_NAME, needs.prepare-tag.outputs.tag) || format('Photosphere {0} nightly build - {1}', env.RELEASE_PLATFORM_NAME, github.sha) }}
 
-            ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
-            ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}
+#            ${{ needs.prepare-tag.outputs.is-release != 'true' && '⚠️ **This is a nightly build and may be unstable**' || '' }}
+#            ${{ needs.prepare-tag.outputs.is-release != 'true' && format('Built from commit: {0}', github.sha) || '' }}
 
-            ## What's Changed
-            ${{ steps.release-notes.outputs.RELEASE_NOTES }}
+#            ## What's Changed
+#            ${{ steps.release-notes.outputs.RELEASE_NOTES }}
 
-            ## Download
-            - **Android**: `.apk`
+#            ## Download
+#            - **Android**: `.apk`
 
-            ## Bundled tools and licences
-            The mobile apps bundle in-process builds of ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and FFmpeg (LGPL-2.1+), along with ImageMagick's libjpeg, libpng, libwebp and zlib delegates. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).
+#            ## Bundled tools and licences
+#            The mobile apps bundle in-process builds of ImageMagick (ImageMagick licence, an Apache-2.0-style licence) and FFmpeg (LGPL-2.1+), along with ImageMagick's libjpeg, libpng, libwebp and zlib delegates. Full attribution and licences are in [THIRD-PARTY-NOTICES.md](https://github.com/ashleydavis/photosphere/blob/main/THIRD-PARTY-NOTICES.md).
