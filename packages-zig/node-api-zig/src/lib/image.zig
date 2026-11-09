@@ -198,9 +198,9 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
     }
     const probeMs = dateNow(io) - probeStartedAt;
 
+    // The flip and turn the EXIF asks for are made by the command that makes the display picture, not
+    // written out first as a whole turned copy, so the resolution is what the picture is once turned.
     if (imageTransformation) |transformation| {
-        // Flips orientation depending on exif data.
-        imagePath = try transformImage(allocator, io, log, toolRunner, imagePath, tempDir, transformation, uuidGenerator);
         if (transformation.changeOrientation orelse false) {
             // A copy is swapped, as assigning a literal to resolution would overwrite its width before the height reads it.
             const unswapped = resolution;
@@ -211,17 +211,18 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, tool
         }
     }
 
-    // Produced largest first, each from the one before it rather than from the full size original.
+    // Produced largest first, each from the one before it rather than from the full size original. Only the display is
+    // turned, as the thumbnail and the micro are made from it once it already is.
     const displayStartedAt = dateNow(io);
-    const displayPath = try resizeImage(allocator, io, log, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY);
+    const displayPath = try resizeImage(allocator, io, log, toolRunner, imagePath, tempDir, resolution, DISPLAY_MIN_SIZE, uuidGenerator, DISPLAY_QUALITY, imageTransformation);
     const displayMs = dateNow(io) - displayStartedAt;
 
     const thumbnailStartedAt = dateNow(io);
-    const thumbnailPath = try resizeImage(allocator, io, log, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY);
+    const thumbnailPath = try resizeImage(allocator, io, log, toolRunner, displayPath, tempDir, resolution, THUMBNAIL_MIN_SIZE, uuidGenerator, THUMBNAIL_QUALITY, null);
     const thumbnailMs = dateNow(io) - thumbnailStartedAt;
 
     const microStartedAt = dateNow(io);
-    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY);
+    const microPath = try resizeImage(allocator, io, log, toolRunner, thumbnailPath, tempDir, resolution, MICRO_MIN_SIZE, uuidGenerator, MICRO_QUALITY, null);
     const microMs = dateNow(io) - microStartedAt;
 
     return .{
@@ -394,9 +395,10 @@ fn jsRound(value: f64) f64 {
 }
 
 //
-// Resize an image.
+// Resize an image, flipping and turning it first when a transformation is given. The resolution is the
+// image's once it has been turned.
 //
-pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64) ![]const u8 {
+pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunner: InProcessRunner, inputPath: []const u8, tempDir: []const u8, resolution: IResolution, minSize: f64, uuidGenerator: IUuidGenerator, quality: f64, transformation: ?IImageTransformation) ![]const u8 {
 
     var width: f64 = undefined;
     var height: f64 = undefined;
@@ -411,7 +413,7 @@ pub fn resizeImage(allocator: std.mem.Allocator, io: std.Io, log: ILog, toolRunn
     }
 
     var image = Image.init(inputPath);
-    return image.resize(allocator, io, log, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg" }, tempDir, uuidGenerator);
+    return image.resize(allocator, io, log, toolRunner, .{ .width = width, .height = height, .quality = jsRound(quality), .format = "jpeg", .ext = "jpg", .transformation = transformation }, tempDir, uuidGenerator);
 }
 
 //

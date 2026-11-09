@@ -184,7 +184,7 @@ test "resize refuses when the second output path is already taken" {
     const secondOutputPath = try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_second-0.png" });
     try std.Io.Dir.cwd().writeFile(std.testing.io, .{ .sub_path = secondOutputPath, .data = "already here" });
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{secondOutputPath}), utils.errors.lastErrorMessage());
 }
 
@@ -240,7 +240,7 @@ test "resize writes the image the resize command writes" {
     var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
 
     var image = Image.init("../test/test.jpg");
-    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg" }, tempDir, generator.uuidGenerator());
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 1333, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator());
 
     // The path is the temp directory joined with temp_resize_ and the generated id, then a dot and the extension.
     try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_fixed-id.jpg" }), outputPath);
@@ -257,7 +257,7 @@ test "resize writes the image the resize command writes" {
     try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
 
     // A second resize to the same path is refused.
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 10, .quality = 95, .format = "jpeg", .ext = "jpg" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 10, .quality = 95, .format = "jpeg", .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{outputPath}), utils.errors.lastErrorMessage());
 }
 
@@ -290,6 +290,39 @@ test "transform writes the image the transform command writes" {
 
     // No transformation returns the original.
     try std.testing.expectEqualStrings("../test/test.png", try image.transform(allocator, std.testing.io, log, runner, .{}, tempDir, generator.uuidGenerator()));
+}
+
+test "resize with a transformation flips and turns the image before it resizes it, as a transform and then a resize would" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireImageMagick(log, allocator, runner);
+    const tempDir = try makeTempDir(allocator, "resize-transformed");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
+
+    // A white 40x30 picture with a black 10x10 square in its top left corner, so a flip or a turn shows where the square ends up.
+    const sourcePath = try std.fs.path.join(allocator, &.{ tempDir, "source.png" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "40x30", "xc:white", "-fill", "black", "-draw", "rectangle 0,0 9,9", sourcePath });
+
+    // Flipped, the square is top right; turned a quarter clockwise after that, it is bottom right of a 30x40 picture,
+    // which the resize doubles to 60x80. PNG keeps it lossless so the pixels can be compared exactly.
+    var generator: FixedUuidGenerator = .{ .id = "fixed-id" };
+    var image = Image.init(sourcePath);
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 60, .height = 80, .quality = null, .format = null, .ext = "png", .transformation = .{ .flipX = true, .rotate = 90, .changeOrientation = true } }, tempDir, generator.uuidGenerator());
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_fixed-id.png" }), outputPath);
+    try std.testing.expectEqualStrings("60 80 PNG", (try describeImage(log, allocator, runner, outputPath))[0.."60 80 PNG".len]);
+    try std.testing.expectEqualStrings("0 255", try runImageMagick(log, allocator, runner, "convert", &.{ outputPath, "-format", "%[fx:int(p{55,75}.r*255)] %[fx:int(p{5,5}.r*255)]", "info:" }));
+
+    // The same pixels as turning the picture into a file of its own first and resizing that, which is what was done before.
+    const turnedPath = try std.fs.path.join(allocator, &.{ tempDir, "turned.png" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ sourcePath, "-flop", "-rotate", "90", turnedPath });
+    const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.png" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ turnedPath, "-resize", "60x80", "-strip", referencePath });
+    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
 }
 
 test "getDominantColor gives the color the command prints" {
@@ -338,7 +371,7 @@ test "every operation fails for a file that does not exist" {
     try std.testing.expectError(error.Thrown, image.getExifData(allocator, std.testing.io, log, runner));
     try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 10, .quality = null, .format = null, .ext = "jpg" }, ".", generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 10, .quality = null, .format = null, .ext = "jpg", .transformation = null }, ".", generator.uuidGenerator()));
     try std.testing.expectEqualStrings(expectedMessage, utils.errors.lastErrorMessage());
 
     try std.testing.expectError(error.Thrown, image.getDominantColor(allocator, std.testing.io, log, runner));
@@ -363,17 +396,17 @@ test "resize to only a width or only a height keeps the aspect ratio" {
 
     // The 100x90 PNG to 50 wide is 50x45 (`-resize 50x`), written in the format of the extension (no format given).
     var widthGenerator: FixedUuidGenerator = .{ .id = "width" };
-    const widthPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, widthGenerator.uuidGenerator());
+    const widthPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, widthGenerator.uuidGenerator());
     try std.testing.expectEqualStrings("50 45 PNG", (try describeImage(log, allocator, runner, widthPath))[0.."50 45 PNG".len]);
 
     // To 45 high is 50x45 too (`-resize x45`).
     var heightGenerator: FixedUuidGenerator = .{ .id = "height" };
-    const heightPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 0, .height = 45, .quality = null, .format = null, .ext = "png" }, tempDir, heightGenerator.uuidGenerator());
+    const heightPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 0, .height = 45, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, heightGenerator.uuidGenerator());
     try std.testing.expectEqualStrings("50 45 PNG", (try describeImage(log, allocator, runner, heightPath))[0.."50 45 PNG".len]);
 
     // Without keeping the aspect ratio both sides are what was asked for (`-resize 20x30!`).
     var exactGenerator: FixedUuidGenerator = .{ .id = "exact" };
-    const exactPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 20, .height = 30, .quality = null, .format = null, .maintainAspectRatio = false, .ext = "png" }, tempDir, exactGenerator.uuidGenerator());
+    const exactPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 20, .height = 30, .quality = null, .format = null, .maintainAspectRatio = false, .ext = "png", .transformation = null }, tempDir, exactGenerator.uuidGenerator());
     try std.testing.expectEqualStrings("20 30 PNG", (try describeImage(log, allocator, runner, exactPath))[0.."20 30 PNG".len]);
 }
 
@@ -390,9 +423,9 @@ test "resize refuses a quality outside 0 to 100" {
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
     var generator: FixedUuidGenerator = .{ .id = "quality" };
     var image = Image.init("../test/test.png");
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = 101, .format = null, .ext = "jpg" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = 101, .format = null, .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings("Quality must be between 0 and 100", utils.errors.lastErrorMessage());
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = -1, .format = null, .ext = "jpg" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = -1, .format = null, .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings("Quality must be between 0 and 100", utils.errors.lastErrorMessage());
 }
 
@@ -414,11 +447,11 @@ test "resize of an animation returns the first frame ImageMagick writes" {
     _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "20x10", "xc:red", "xc:blue", animationPath });
     var generator: FixedUuidGenerator = .{ .id = "animation" };
     var image = Image.init(animationPath);
-    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, generator.uuidGenerator());
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, generator.uuidGenerator());
     try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_animation-0.png" }), outputPath);
 
     // A resize whose first frame path is taken is refused.
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{outputPath}), utils.errors.lastErrorMessage());
 }
 
@@ -444,7 +477,7 @@ test "resize fails loudly when ImageMagick writes nothing" {
     var generator: FixedUuidGenerator = .{ .id = "nothing" };
     var image = Image.init("../test/test.png");
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, memory.log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png" }, missingDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, memory.log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, missingDir, generator.uuidGenerator()));
     try std.testing.expect(std.mem.indexOf(u8, memory.stderr(), "Failed to execute command: ") != null);
 }
 
@@ -593,6 +626,7 @@ test "every operation works on a file whose name holds $, a backtick and a doubl
             .quality = 90,
             .format = format,
             .ext = "jpg",
+            .transformation = null,
         };
         var specialGenerator: FixedUuidGenerator = .{ .id = if (format == null) "special-plain" else "special-format" };
         var plainGenerator: FixedUuidGenerator = .{ .id = if (format == null) "plain-plain" else "plain-format" };
