@@ -77,19 +77,7 @@ pub const Image = struct {
             return info;
         }
 
-        if (!pathExists(io, self.filePath)) {
-            return errors.throwError("File not found: {s}", .{self.filePath});
-        }
-
-        // Get format, dimensions
-        const read = image_magick.readImageInfo(allocator, log, self.filePath) catch |err| {
-            log.exception(try std.fmt.allocPrint(allocator, "Failed to read the size of {s}", .{self.filePath}), err);
-            return err;
-        };
-        const dimensions: Dimensions = .{
-            .width = @floatFromInt(read.width),
-            .height = @floatFromInt(read.height),
-        };
+        const dimensions = try self.readDimensions(allocator, io, log);
 
         // Get EXIF data for created date
         //
@@ -127,11 +115,35 @@ pub const Image = struct {
     }
 
     //
-    // Gets the width and height of the image.
+    // Reads the width and height of the image with ImageMagick's readImageInfo, and nothing else. It is the size of the first frame
+    // only: an animated image is a list of frames, and its size is the first one's, so a 43x17 GIF reads as 43 by 17 and never as
+    // 43 by 1743.
+    //
+    fn readDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) !Dimensions {
+        if (!pathExists(io, self.filePath)) {
+            return errors.throwError("File not found: {s}", .{self.filePath});
+        }
+
+        const read = image_magick.readImageInfo(allocator, log, self.filePath) catch |err| {
+            log.exception(try std.fmt.allocPrint(allocator, "Failed to read the size of {s}", .{self.filePath}), err);
+            return err;
+        };
+        return .{
+            .width = @floatFromInt(read.width),
+            .height = @floatFromInt(read.height),
+        };
+    }
+
+    //
+    // Gets the width and height of the image. When getInfo has already read the image its answer is used; otherwise only the
+    // size is asked for, because the EXIF read getInfo also makes is a second pass over the file that a caller wanting the
+    // size alone has no use for.
     //
     pub fn getDimensions(self: *Image, allocator: std.mem.Allocator, io: std.Io, log: ILog) !Dimensions {
-        const info = try self.getImageInfo(allocator, io, log);
-        return info.dimensions;
+        if (self._info) |info| {
+            return info.dimensions;
+        }
+        return self.readDimensions(allocator, io, log);
     }
 
     //

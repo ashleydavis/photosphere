@@ -2,6 +2,7 @@ const std = @import("std");
 const ILog = @import("utils-zig").log.ILog;
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
+const node_utils = @import("node-utils-zig");
 const MemoryLog = @import("utils-zig").memory_log.MemoryLog;
 const media_tools = @import("media-tools-zig");
 const Image = tools.Image;
@@ -190,6 +191,80 @@ test "getInfo reads the dimensions and the date of an image" {
     }
 }
 
+
+//
+// The ImageMagick calls a verbose log shows, in the order they were made: each line's text from "ImageMagick: " on.
+//
+fn imageMagickCalls(allocator: std.mem.Allocator, output: []const u8) ![]const []const u8 {
+    var calls: std.ArrayList([]const u8) = .empty;
+    var lines = std.mem.splitScalar(u8, output, '\n');
+    while (lines.next()) |line| {
+        if (std.mem.indexOf(u8, line, "ImageMagick: ")) |start| {
+            try calls.append(allocator, line[start..]);
+        }
+    }
+    return calls.items;
+}
+
+test "getDimensions reads only the size, and getInfo reads the EXIF as well" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+
+    // The checked in test.png is 100x90.
+    const sizeOnly = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
+    });
+    defer sizeOnly.deinit();
+    var image = Image.init("../test/test.png");
+    const dimensions = try image.getDimensions(allocator, io, sizeOnly.log);
+    try std.testing.expectEqual(@as(f64, 100), dimensions.width);
+    try std.testing.expectEqual(@as(f64, 90), dimensions.height);
+    const sizeOnlyCalls = try imageMagickCalls(allocator, sizeOnly.stdout());
+    try std.testing.expectEqual(@as(usize, 1), sizeOnlyCalls.len);
+    try std.testing.expectEqualStrings("ImageMagick: reading the size of ../test/test.png", sizeOnlyCalls[0]);
+
+    // getInfo still reads the EXIF for createdAt, after the size.
+    const full = try MemoryLog.init(std.testing.allocator, .{
+        .verbose = true,
+        .debug = false,
+        .tools = false,
+    });
+    defer full.deinit();
+    var withInfo = Image.init("../test/test.png");
+    const info = try withInfo.getInfo(allocator, io, full.log);
+    try std.testing.expectEqual(dimensions, info.dimensions);
+    const fullCalls = try imageMagickCalls(allocator, full.stdout());
+    try std.testing.expectEqual(@as(usize, 2), fullCalls.len);
+    try std.testing.expectEqualStrings("ImageMagick: reading the size of ../test/test.png", fullCalls[0]);
+    try std.testing.expectEqualStrings("ImageMagick: reading the EXIF of ../test/test.png", fullCalls[1]);
+
+    // Once getInfo has read the image, getDimensions answers from it without calling ImageMagick again.
+    try std.testing.expectEqual(info.dimensions, try withInfo.getDimensions(allocator, io, full.log));
+    try std.testing.expectEqual(@as(usize, 2), (try imageMagickCalls(allocator, full.stdout())).len);
+}
+
+test "getDimensions reads only the first frame of an animated image" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const io = std.testing.io;
+
+    // Three 43x17 frames, made locally by scripts/make-format-test-images.sh. Reading the frames' sizes run together would read
+    // 43 by 1743.
+    const animated = "../test/formats/43x17-animated.gif";
+    if (!node_utils.fs.pathExists(io, animated)) {
+        std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{animated});
+        return error.FormatTestImageMissing;
+    }
+    var image = Image.init(animated);
+    const dimensions = try image.getDimensions(arena.allocator(), io, log);
+    try std.testing.expectEqual(@as(f64, 43), dimensions.width);
+    try std.testing.expectEqual(@as(f64, 17), dimensions.height);
+}
 
 test "getExifData reads the tags of a real image" {
     const log = utils.mute_log.MuteLog.init();
