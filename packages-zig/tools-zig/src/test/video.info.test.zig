@@ -371,8 +371,8 @@ const IContainerCase = struct {
 
 //
 // A video of every container the bundled FFmpeg's demuxers read, between them holding every video codec its decoders decode,
-// each with audio where the container takes a codec the ffmpeg on the path encodes without an extra library. There is no audio
-// decoder in the bundled FFmpeg, so the audio shows that ffprobe still reports it and that a screenshot ignores it.
+// each with audio where the container takes a codec the ffmpeg on the path encodes without an extra library. There is no AAC or
+// MP2 decoder in the bundled FFmpeg (WMA is its only audio), so the audio shows that ffprobe still reports it and that a screenshot ignores it.
 //
 const CONTAINER_CASES = [_]IContainerCase{
     .{

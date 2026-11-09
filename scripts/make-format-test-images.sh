@@ -120,13 +120,19 @@ make_video 240x144-mpeg1.mpeg -c:v mpeg1video -c:a mp2
 make_video 256x144-h264.mkv -c:v libx264 -pix_fmt yuv420p -c:a aac
 make_video 272x160-vp9.webm -c:v libvpx-vp9 -pix_fmt yuv420p -an
 make_video 288x160-vp8.webm -c:v libvpx -pix_fmt yuv420p -an
+# Windows Media from older Windows phones and cameras: WMV in ASF, with WMA sound.
+make_video 320x180-wmv2.wmv -c:v wmv2 -c:a wmav2 -f asf
+# MS MPEG-4 v3 (DivX 3) in AVI, from older cameras and phones.
+make_video 336x192-msmpeg4v3.avi -c:v msmpeg4 -c:a mp2
+# DV from MiniDV camcorders, in AVI and MOV. The DV encoder takes only the standard sizes: 720x576 is PAL, at 25 frames
+# a second.
+make_video 720x576-dv.avi -c:v dvvideo -pix_fmt yuv420p -c:a pcm_s16le -ar 48000
+make_video 720x576-dv.mov -c:v dvvideo -pix_fmt yuv420p -c:a pcm_s16le -ar 48000
 
-# Video types the import never adds, named -not-imported so the check expects no record of them.
+# A video type the import never adds, named -not-imported so the check expects no record of it.
 # AVCHD camcorders write H.264 in MPEG-TS (.mts), whose content type video/mp2t the scanner leaves out, because a
 # TypeScript .ts file has the same content type.
 make_video 304x176-h264-not-imported.mts -c:v libx264 -pix_fmt yuv420p -c:a aac -f mpegts
-# Windows Media (ASF holding WMV), which the built-in FFmpeg is not built to read: the import refuses it.
-make_video 320x180-wmv2-not-imported.wmv -c:v wmv2 -c:a mp2 -f asf
 
 # A phone's HEIC: a 1000x700 picture stored as tiles, which the built-in FFmpeg decodes and joins.
 if [ ! -f "$out/1000x700-tiled.heic" ]; then

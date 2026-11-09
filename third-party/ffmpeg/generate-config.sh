@@ -173,17 +173,20 @@ ln -sfn "$ZLIB_TARGET_DIR/lib" "$ZLIB_DIR/lib"
 # component off, and the lists below turn back on exactly what the app uses:
 #
 # - Demuxers, for the containers phones and cameras record into: mov (MP4, MOV, M4V, 3GP and 3G2, and HEIC and HEIF stills, which
-#   are the same ISO media format), matroska (MKV and WebM), avi (older cameras' AVI) and mpegps (MPG, MPEG and VOB from older
-#   cameras and camcorders), with mpegvideo, the demuxer of raw MPEG-1 and MPEG-2 video, because mpegps names the codec of a video
+#   are the same ISO media format), matroska (MKV and WebM), avi (older cameras' AVI), mpegps (MPG, MPEG and VOB from older
+#   cameras and camcorders), asf (WMV from older Windows phones and cameras) and dv (DV from MiniDV camcorders), with mpegvideo,
+#   the demuxer of raw MPEG-1 and MPEG-2 video, because mpegps names the codec of a video
 #   stream by asking the raw video demuxers which of them reads its first packets, and finds no codec without it. The import takes
 #   any file whose content type is video/, and one in any other container is refused because no demuxer reads it.
 # - Decoders, for the video in those containers: h264 and hevc (every current phone, and the tiles of a HEIC), vp8 and vp9 (WebM),
-#   mpeg4 and h263 (older phones' MP4 and 3GP), mjpeg (cameras' AVI and MOV), mpeg1video and mpeg2video (MPG and VOB) and prores
-#   (a Pro iPhone's ProRes). There is no audio decoder: ffprobe reports an audio stream and its codec from the container without
+#   mpeg4 and h263 (older phones' MP4 and 3GP), mjpeg (cameras' AVI and MOV), mpeg1video and mpeg2video (MPG and VOB), prores
+#   (a Pro iPhone's ProRes), wmv1, wmv2, wmv3 and vc1 (WMV), msmpeg4v1, msmpeg4v2 and msmpeg4v3 (Microsoft's MPEG-4, in older
+#   WMV and AVI) and dvvideo (DV in its own files, AVI and MOV). The WMA decoders wmav1, wmav2 and wmapro are built so a WMV keeps
+#   reading as it did before the trim. There is no other audio decoder: ffprobe reports an audio stream and its codec from the container without
 #   one, and the ffmpeg program never decodes the audio of a file it turns into a JPEG. There is no AV1 decoder: FFmpeg's own
 #   decodes only through hardware acceleration, which is not built.
 # - Parsers, which ffprobe and ffmpeg use to find the size and the frames of a stream the container does not describe in full:
-#   h264, hevc, vp8, vp9, mpeg4video, h263, mjpeg and mpegvideo (MPEG-1 and MPEG-2). The bitstream filters the decoders need
+#   h264, hevc, vp8, vp9, mpeg4video, h263, mjpeg, mpegvideo (MPEG-1 and MPEG-2) and vc1. The bitstream filters the decoders need
 #   (vp9_superframe_split) are turned on by configure itself.
 # - For output only what writing one JPEG takes: the mjpeg encoder, the image2 muxer and the filters a conversion to one picture
 #   uses. xstack is one of those filters because a phone's HEIC is a grid of tiles, which the ffmpeg program joins with xstack
@@ -201,9 +204,9 @@ cd "$WORK_DIR/build"
     --disable-autodetect --enable-zlib \
     --disable-doc --disable-debug --disable-network --disable-avdevice \
     --disable-x86asm --disable-everything \
-    --enable-demuxer=mov,matroska,avi,mpegps,mpegvideo \
-    --enable-decoder=h264,hevc,vp8,vp9,mpeg4,h263,mjpeg,mpeg1video,mpeg2video,prores \
-    --enable-parser=h264,hevc,vp8,vp9,mpeg4video,h263,mjpeg,mpegvideo \
+    --enable-demuxer=mov,matroska,avi,mpegps,mpegvideo,asf,dv \
+    --enable-decoder=h264,hevc,vp8,vp9,mpeg4,h263,mjpeg,mpeg1video,mpeg2video,prores,wmv1,wmv2,wmv3,vc1,msmpeg4v1,msmpeg4v2,msmpeg4v3,dvvideo,wmav1,wmav2,wmapro \
+    --enable-parser=h264,hevc,vp8,vp9,mpeg4video,h263,mjpeg,mpegvideo,vc1 \
     --enable-encoder=mjpeg \
     --enable-muxer=image2 \
     --enable-protocol=file \
