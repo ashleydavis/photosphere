@@ -220,6 +220,28 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
+      # The app build's Zig build cache, restored from the latest run that saved one for this platform, so the build
+      # compiles only what changed instead of the whole app. Saved again after the build, as the CLI build does.
+      - name: Restore the app build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-app-build-macos-arm64-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-app-build-macos-arm64-
+
+      - name: Start a fresh Zig build cache when the restored one has grown too big
+        shell: bash
+        run: |
+          if [ -d .zig-cache ]; then
+              megabytes="$(du -sm .zig-cache | cut -f1)"
+              echo "Restored Zig build cache: ${megabytes} MB"
+              if [ "$megabytes" -ge 5120 ]; then
+                  mv .zig-cache "$RUNNER_TEMP/stale-zig-cache"
+                  echo "Moved it aside to start a fresh one"
+              fi
+          fi
+
       # The app is built into out/app, laid out as apps/photosphere-smoke-tests/run.md describes, which is where the smoke tests take
       # it from. Only the app is saved, not the rest of Xcode's derived data.
       - name: Build
@@ -227,6 +249,13 @@ jobs:
         # The release build, with the page minified, so the smoke tests run what ships and the package job packages this build
         # rather than compiling the app again.
         run: bun run --filter=ziggy build:macos -- --configuration Release --minify --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+
+      - name: Save the app build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-app-build-macos-arm64-${{ github.sha }}
 
       - name: Save the Photosphere App build
         uses: actions/cache/save@v4
