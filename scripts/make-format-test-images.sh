@@ -37,6 +37,42 @@ make 61x43-lossless.webp WEBP -size 61x43 gradient:green-yellow -define webp:los
 make 67x47-lossy.webp WEBP -size 67x47 gradient:white-black -quality 60
 make 47x19-no-exif.jpg JPEG -size 47x19 gradient:red-green -strip
 
+#
+# Prints a number as the four bytes of a little-endian 32-bit field: le32 <number>.
+#
+le32() {
+    local hex
+    hex="$(printf '%08x' "$1")"
+    printf "\\x${hex:6:2}\\x${hex:4:2}\\x${hex:2:2}\\x${hex:0:2}"
+}
+
+# A BMP with the 108-byte v4 header. ImageMagick 6 writes only the v2, v3 and v5 headers, so a v3 BMP (24 bits,
+# uncompressed, its pixels at byte 54) is grown into one: the file size, the pixel offset and the header size go up by
+# the 68 bytes the v4 header adds, which are four zero colour masks, the sRGB colour space and zero endpoints and gamma.
+if [ ! -f "$out/63x35-v4.bmp" ]; then
+    "${convert_tool[@]}" -size 63x35 gradient:green-white "BMP3:$out/63x35-v4.bmp.v3"
+    v3_size="$(stat -c %s "$out/63x35-v4.bmp.v3")"
+    {
+        printf 'BM'
+        le32 $((v3_size + 68))
+        le32 0
+        le32 $((54 + 68))
+        le32 108
+        tail -c +19 "$out/63x35-v4.bmp.v3" | head -c 36
+        head -c 16 /dev/zero
+        printf 'BGRs'
+        head -c 48 /dev/zero
+        tail -c +55 "$out/63x35-v4.bmp.v3"
+    } > "$out/63x35-v4.bmp.tmp"
+    rm "$out/63x35-v4.bmp.v3"
+    mv "$out/63x35-v4.bmp.tmp" "$out/63x35-v4.bmp"
+fi
+
+# A HEIC laid out as an iPhone writes one, copied from the committed test picture under its size.
+if [ ! -f "$out/1000x700-tiled.heic" ]; then
+    cp "$out/../heic/tiled.heic" "$out/1000x700-tiled.heic"
+fi
+
 # Animated GIF: three frames.
 make 43x17-animated.gif GIF -delay 10 -size 43x17 xc:red -size 43x17 xc:green -size 43x17 xc:blue -loop 0
 

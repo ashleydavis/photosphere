@@ -2,7 +2,9 @@
 #
 # Imports every image and video made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
 # the width and height psi recorded for each against the size in its file name. A JPEG whose EXIF Orientation is 6 or
-# 8 is turned a quarter, so its recorded size is the file name's swapped. Exits 1 naming each image that is wrong.
+# 8 is turned a quarter, so its recorded size is the file name's swapped. It checks each has its JPEG thumbnail (and,
+# for an image, display picture) in the database, and that types the ImageMagick security policy does not allow are
+# refused. Exits 1 naming each image or type that is wrong.
 # psi runs with a PATH that holds nothing, so every file is read by the ImageMagick and FFmpeg built into psi and never by
 # a magick, ffmpeg or ffprobe installed on the machine.
 #
@@ -65,10 +67,33 @@ for file in "$formats"/*; do
         failures=$((failures + 1))
         continue
     fi
-    recorded="$(PATH="$no_tools" "$psi" info --db "$work/db" "$hash" | sed -n 's/^ *Dimensions: //p')"
+    assetInfo="$(PATH="$no_tools" "$psi" info --db "$work/db" "$hash")"
+    recorded="$(printf '%s\n' "$assetInfo" | sed -n 's/^ *Dimensions: //p')"
+    assetId="$(printf '%s\n' "$assetInfo" | sed -n 's/^ *Asset ID: //p')"
     expected="$width × $height"
-    if [ "$recorded" = "$expected" ]; then
-        echo "ok    $name: $recorded"
+
+    # The thumbnail and, for an image, the display picture are JPEGs the built-in ImageMagick wrote (for a video, from the
+    # frame FFmpeg took), so each must be in the database and start with the JPEG start-of-image marker.
+    case "$name" in
+        *.mp4|*.mov)
+            pictures="thumb"
+            ;;
+        *)
+            pictures="thumb display"
+            ;;
+    esac
+    missing=""
+    for picture in $pictures; do
+        if [ -z "$assetId" ] || [ "$(od -A n -t x1 -N 3 "$work/db/$picture/$assetId" 2>/dev/null | tr -d ' ')" != "ffd8ff" ]; then
+            missing="$missing $picture"
+        fi
+    done
+
+    if [ -n "$missing" ]; then
+        echo "FAIL  $name: no JPEG$missing picture in the database for asset '$assetId'"
+        failures=$((failures + 1))
+    elif [ "$recorded" = "$expected" ]; then
+        echo "ok    $name: $recorded, $pictures"
     else
         echo "FAIL  $name: expected $expected, recorded '$recorded'"
         failures=$((failures + 1))
@@ -76,7 +101,41 @@ for file in "$formats"/*; do
 done
 
 if [ "$failures" -ne 0 ]; then
-    echo "$failures image(s) recorded with the wrong size" >&2
+    echo "$failures image(s) not imported, recorded with the wrong size or missing a picture" >&2
     exit 1
 fi
-echo "Every image recorded with the right size"
+echo "Every image recorded with the right size and its pictures"
+
+# The built-in ImageMagick reads only JPEG, PNG, WebP, GIF and BMP, and picks the coder from a file's first bytes, not its
+# name. So an SVG, a PostScript file and a portable pixmap named as images the program takes must each be refused with
+# ImageMagick's NotAuthorized error naming the coder, and none of them may import.
+refused="$work/refused"
+mkdir "$refused"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="20" height="10" fill="red"/></svg>\n' > "$refused/svg.png"
+printf '%%!PS-Adobe-3.0\nnewpath 0 0 moveto 20 0 lineto 20 10 lineto closepath fill showpage\n' > "$refused/ps.jpg"
+printf 'P3\n3 2\n255\n255 0 0 0 255 0 0 0 255 255 255 0 255 255 255 0 0 0\n' > "$refused/ppm.png"
+PATH="$no_tools" "$psi" init --db "$work/refused-db" --yes > "$work/refused-init.log" 2>&1 || {
+    cat "$work/refused-init.log" >&2
+    exit 1
+}
+# The import is expected to fail for every file, so its exit code is not the check: what it printed is.
+PATH="$no_tools" "$psi" add --db "$work/refused-db" --yes "$refused" > "$work/refused-add.log" 2>&1 || true
+for coder in SVG PS PPM; do
+    if grep -q "NotAuthorized \`$coder'" "$work/refused-add.log"; then
+        echo "ok    $coder refused: NotAuthorized"
+    else
+        echo "FAIL  $coder was not refused with NotAuthorized: $work/refused-add.log"
+        failures=$((failures + 1))
+    fi
+done
+if grep -q "^Files added: *0$" "$work/refused-add.log"; then
+    echo "ok    no refused file imported"
+else
+    echo "FAIL  a refused file was imported: $(grep "^Files added:" "$work/refused-add.log")"
+    failures=$((failures + 1))
+fi
+if [ "$failures" -ne 0 ]; then
+    echo "$failures refused type(s) were not refused" >&2
+    exit 1
+fi
+echo "Every type outside the policy refused"
