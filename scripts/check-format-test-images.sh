@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Imports every image made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
+# Imports every image and video made by scripts/make-format-test-images.sh into a new database with the built psi, then checks
 # the width and height psi recorded for each against the size in its file name. A JPEG whose EXIF Orientation is 6 or
 # 8 is turned a quarter, so its recorded size is the file name's swapped. Exits 1 naming each image that is wrong.
 #
@@ -49,10 +49,12 @@ for file in "$formats"/*; do
             ;;
     esac
 
-    hash="$("$psi" info "$file" | sed -n 's/^ *Hash: //p')"
+    # psi info reads the file's size and its EXIF, and prints the error instead of a hash when either read fails.
+    fileInfo="$("$psi" info "$file")"
+    hash="$(printf '%s\n' "$fileInfo" | sed -n 's/^ *Hash: //p')"
     # psi info with no hash would list the current directory, so a file psi could not read is reported as not imported.
     if [ -z "$hash" ]; then
-        echo "FAIL  $name: psi could not read it"
+        echo "FAIL  $name: psi could not read it: $(printf '%s\n' "$fileInfo" | sed -n 's/^ *Error: //p')"
         failures=$((failures + 1))
         continue
     fi
