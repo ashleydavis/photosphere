@@ -19,6 +19,10 @@ What it makes, each with a width and height that differ so a size read the wrong
 - The same 71x37 JPEG with a broken EXIF segment: an IFD claiming 65535 entries, an IFD offset past the end of the
   segment, and a TIFF header with no byte order. ImageMagick still reads these and their EXIF, so they must import;
   an EXIF read that fails is an error, so a file like these that stopped importing would show in the check.
+- Pictures with a colour profile that is not sRGB, each one solid colour: a PNG and a JPEG with a Display P3 profile
+  (Display P3 primaries and white point with a 2.2 gamma curve, written byte by byte by the script because neither
+  ImageMagick nor this repository ships a wide gamut RGB profile), and a CMYK JPEG carrying the CMYK profile ImageMagick
+  ships (`third-party/imagemagick/vendor/imagemagick/config/cmyk.icm`). psi must convert these into sRGB in its copies.
 - Two-second videos with sound: H.264 and HEVC, each in MP4 and MOV.
 
 A missing file makes the unit test fail on it and makes check-format-test-images.sh fail naming this script; neither skips.

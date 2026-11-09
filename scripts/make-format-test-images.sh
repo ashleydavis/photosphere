@@ -84,6 +84,69 @@ broken_exif 71x37-exif-bad-header.jpg '\xff\xe1\x00\x22Exif\x00\x00XX*\x00\x08\x
 
 
 #
+# Pictures carrying a colour profile that is not sRGB, which psi must convert into sRGB before it strips the profile from
+# the display, thumbnail and micro copies. Each is one solid colour, so the check can compare a copy's colour with
+# ImageMagick's own sRGB conversion of the file however the copy was resized.
+#
+# No wide gamut RGB profile ships with ImageMagick or this repository, so one is written here byte by byte: an ICC v2
+# display profile with the Display P3 primaries and white point (adapted to D50, as Apple's Display P3 profile gives them)
+# and a plain 2.2 gamma curve, 432 bytes. Layout: the 128 byte header, a table of 8 tags, then the tags' data
+# (description, white point, the three primaries, and one curve the three TRC tags share).
+#
+# ImageMagick takes a profile by the extension of its file name, so the file is named .icc in a directory of its own.
+p3_directory="$(mktemp -d)"
+p3_profile="$p3_directory/display-p3.icc"
+zeros() {
+    head -c "$1" /dev/zero
+}
+{
+    # Header: size 432, no CMM, version 2.1, display class, RGB data, XYZ connection space, no date.
+    printf '\x00\x00\x01\xb0'
+    zeros 4
+    printf '\x02\x10\x00\x00mntrRGB XYZ '
+    zeros 12
+    # The signature, then platform, flags, manufacturer, model, attributes and rendering intent, all zero.
+    printf 'acsp'
+    zeros 28
+    # The D50 illuminant (0.9642, 1.0, 0.8249), then creator, profile ID and the reserved bytes, all zero.
+    printf '\x00\x00\xf6\xd6\x00\x01\x00\x00\x00\x00\xd3\x2d'
+    zeros 48
+    # Tag table: 8 tags, each a signature, an offset and a size.
+    printf '\x00\x00\x00\x08'
+    printf 'desc\x00\x00\x00\xe4\x00\x00\x00\x6a'
+    printf 'wtpt\x00\x00\x01\x50\x00\x00\x00\x14'
+    printf 'rXYZ\x00\x00\x01\x64\x00\x00\x00\x14'
+    printf 'gXYZ\x00\x00\x01\x78\x00\x00\x00\x14'
+    printf 'bXYZ\x00\x00\x01\x8c\x00\x00\x00\x14'
+    printf 'rTRC\x00\x00\x01\xa0\x00\x00\x00\x0e'
+    printf 'gTRC\x00\x00\x01\xa0\x00\x00\x00\x0e'
+    printf 'bTRC\x00\x00\x01\xa0\x00\x00\x00\x0e'
+    # desc at 228: "Display P3 g2.2" and its terminating zero (16 bytes), empty Unicode and ScriptCode parts, padded to 4.
+    printf 'desc'
+    zeros 4
+    printf '\x00\x00\x00\x10Display P3 g2.2\x00'
+    zeros 80
+    # wtpt at 336: D50. Then the red, green and blue primaries, each X, Y, Z as s15Fixed16 numbers:
+    # red 0.5151 0.2412 -0.0010, green 0.2920 0.6922 0.0419, blue 0.1572 0.0666 0.7841.
+    printf 'XYZ \x00\x00\x00\x00\x00\x00\xf6\xd6\x00\x01\x00\x00\x00\x00\xd3\x2d'
+    printf 'XYZ \x00\x00\x00\x00\x00\x00\x83\xde\x00\x00\x3d\xbf\xff\xff\xff\xbb'
+    printf 'XYZ \x00\x00\x00\x00\x00\x00\x4a\xbe\x00\x00\xb1\x37\x00\x00\x0a\xb9'
+    printf 'XYZ \x00\x00\x00\x00\x00\x00\x28\x3b\x00\x00\x11\x0a\x00\x00\xc8\xb9'
+    # The curve at 416: one entry, a gamma of 2.2 as u8Fixed8 (0x0233), padded to 4.
+    printf 'curv\x00\x00\x00\x00\x00\x00\x00\x01\x02\x33\x00\x00'
+} > "$p3_profile"
+
+# The same colour as a PNG and a JPEG, with the Display P3 profile attached to the pixels as they are (no conversion).
+make 73x41-display-p3.png PNG24 -size 73x41 'xc:rgb(200,70,60)' -profile "$p3_profile"
+make 79x45-display-p3.jpg JPEG -size 79x45 'xc:rgb(60,170,90)' -quality 95 -profile "$p3_profile"
+rm -f "$p3_profile"
+rmdir "$p3_directory"
+
+# A CMYK JPEG carrying the CMYK profile ImageMagick ships: an sRGB colour converted into it by that profile.
+icc="$(cd "$(dirname "$0")/.." && pwd)/third-party/imagemagick/vendor/imagemagick/config"
+make 83x47-cmyk.jpg JPEG -size 83x47 'xc:rgb(90,120,200)' -profile "$icc/sRGB.icm" -profile "$icc/cmyk.icm" -quality 95
+
+#
 # Makes one two-second video unless it is already there: make_video <file name> <ffmpeg output arguments>.
 # A test pattern with a moving element and a tone, so a screenshot at any moment has something in it.
 #
