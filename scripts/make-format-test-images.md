@@ -30,5 +30,13 @@ What it makes, each with a width and height that differ so a size read the wrong
   ImageMagick nor this repository ships a wide gamut RGB profile), and a CMYK JPEG carrying the CMYK profile ImageMagick
   ships (`third-party/imagemagick/vendor/imagemagick/config/cmyk.icm`). psi must convert these into sRGB in its copies.
 - Two-second videos with sound: H.264 and HEVC, each in MP4 and MOV.
+- The other video types phones and cameras record that the import takes: H.263 and H.264 in 3GP, H.264 in M4V and
+  MKV, Motion JPEG with PCM sound and MPEG-4 Part 2 (tagged XVID) in AVI, MPEG-2 in MPG and VOB, MPEG-1 in MPEG,
+  VP9 and VP8 in WebM, WMV 8 with WMA sound in ASF (`.wmv`), Microsoft MPEG-4 v3 (DivX 3) in AVI, and PAL DV (720x576, one
+  of the two sizes the DV encoder takes) in AVI and MOV. The built-in FFmpeg is built with the demuxer and decoder of each.
+- A video named `-not-imported`, which the import must not add: H.264 in MPEG-TS (`.mts`, as AVCHD camcorders
+  write), whose content type `video/mp2t` the scanner leaves out because a TypeScript `.ts` file has it too.
+- `1000x700-tiled.heic`, a copy of `test/heic/tiled.heic`: a phone's HEIC stored as tiles, which the built-in FFmpeg
+  decodes and joins.
 
 A missing file makes the unit test fail on it and makes check-format-test-images.sh fail naming this script; neither skips.
