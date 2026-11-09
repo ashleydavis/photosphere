@@ -9,6 +9,9 @@ an image with no date. So every file, including the JPEGs with no EXIF or a brok
 `psi info` could not read is reported with the error it printed, which for an EXIF read names the `identify` command and
 the file.
 
+Every `psi` command runs with a `PATH` that is a single empty directory, so each file is read by the ImageMagick and
+FFmpeg built into `psi`, never by a `magick`, `ffmpeg` or `ffprobe` installed on the machine.
+
 ```
 bun run build:cli
 bash scripts/make-format-test-images.sh
