@@ -188,7 +188,7 @@ pub fn debugMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILo
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const assetStorage = loaded.assetStorage;
     const bsonDatabase = loaded.bsonDatabase;
 
@@ -506,7 +506,7 @@ pub fn debugFindCollisionsCommand(allocator: std.mem.Allocator, io: std.Io, log:
     const dbDir = try resolveDbDir(allocator, io, log, &options.base);
 
     // Load the database
-    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const assetStorage = loaded.assetStorage;
     const dbDirResolved = loaded.databaseDir;
 
@@ -675,7 +675,7 @@ pub fn debugFindDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, log:
     // Load the database first to get the directory for default paths
     const dbDir = try resolveDbDir(allocator, io, log, &options.base);
 
-    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const dbDirResolved = loaded.databaseDir;
 
     // Get input file path (default to collisions.json in database directory)
@@ -796,7 +796,7 @@ pub fn debugRemoveDuplicatesCommand(allocator: std.mem.Allocator, io: std.Io, lo
     // Load the database first to get the directory for default paths
     const dbDir = try resolveDbDir(allocator, io, log, &options.base);
 
-    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const dbDirResolved = loaded.databaseDir;
 
     // Get input file path (default to duplicates.json in database directory)
@@ -886,7 +886,7 @@ pub fn debugBuildSortIndexCommand(allocator: std.mem.Allocator, io: std.Io, log:
     const uuidGenerator = context.uuidGenerator;
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
-    const loaded = try loadDatabase(allocator, io, log, options.db, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.db, options, uuidGenerator, timestampProvider, sessionId, false);
     const metadataCollection = loaded.metadataCollection;
     const databaseDir = loaded.databaseDir;
 
@@ -971,7 +971,7 @@ pub fn debugBuildFilesTreeCommand(allocator: std.mem.Allocator, io: std.Io, log:
 
     const dbDir = try resolveDbDir(allocator, io, log, options);
 
-    const loaded = try loadDatabase(allocator, io, log, dbDir, options, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, dbDir, options, uuidGenerator, timestampProvider, sessionId, false);
     const dbDirResolved = loaded.databaseDir;
 
     log.info("");
@@ -1007,7 +1007,7 @@ pub const IDebugRecordCommandOptions = struct {
 // shown unless --all is given. A record that is not there is reported and is not an error.
 //
 pub fn debugRecordCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, recordId: []const u8, options: *IDebugRecordCommandOptions) !void {
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, false);
 
     log.info(try pc.green(allocator, "Collection: metadata"));
     log.info(try pc.green(allocator, try std.fmt.allocPrint(allocator, "Record ID: {s}", .{recordId})));
@@ -1059,7 +1059,7 @@ pub fn parseFieldValue(allocator: std.mem.Allocator, value: []const u8, isJson: 
 // A record that is not there is an error.
 //
 pub fn debugSetFieldCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, recordId: []const u8, fieldName: []const u8, value: []const u8, options: *IDebugSetFieldCommandOptions) !void {
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, context.uuidGenerator, context.timestampProvider, context.sessionId, false);
 
     const parsedValue = parseFieldValue(allocator, value, options.json orelse false) catch {
         log.@"error"(try pc.red(allocator, try std.fmt.allocPrint(allocator, "\u{2717} Invalid JSON value: {s}", .{value})));
@@ -1131,7 +1131,7 @@ fn leafNames(comptime NodeT: type, allocator: std.mem.Allocator, root: *NodeT) !
 // merkle tree. A tree that is missing or out of order is an error, and the first leaf out of order is named.
 //
 pub fn debugCheckMerkleTreeCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context: ICommandContext, options: *IBaseCommandOptions) !void {
-    const loaded = try loadDatabase(allocator, io, log, options.db, options, context.uuidGenerator, context.timestampProvider, context.sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.db, options, context.uuidGenerator, context.timestampProvider, context.sessionId, false);
 
     const filesTree = try loadMerkleTree(allocator, io, log, loaded.assetStorage) orelse {
         log.@"error"(try pc.red(allocator, "\u{2717} Failed to load the files merkle tree"));

@@ -6,4 +6,4 @@ Manual test scripts for the `psi tools` command.
 
 ## Tests
 
-- [tools.md](tools.md) - `tools` reports the media tools
+- [tools.md](tools.md) - `tools` reports the media tools built into the CLI and their versions

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAssetDatabase } from "../../context/asset-database-source";
 import { useImport } from "../../context/import-context";
-import { usePlatform, type IToolsStatus } from "../../context/platform-context";
+import { usePlatform } from "../../context/platform-context";
 import { log } from "utils";
 import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
@@ -22,90 +22,6 @@ function NoDatabaseLoaded() {
             <Typography level="body-md" sx={{ color: "text.secondary" }}>
                 Open a database to import photos.
             </Typography>
-        </Box>
-    );
-}
-
-//
-// Panel shown when required tools are missing, with platform-specific install instructions.
-//
-function ToolsMissingPanel({ toolsStatus, onCheckAgain }: { toolsStatus: IToolsStatus; onCheckAgain: () => void }) {
-    const missingList = toolsStatus.missingTools.join(' and ');
-    const isMac = typeof process !== 'undefined' && process.platform === 'darwin';
-    const isWin = typeof process !== 'undefined' && process.platform === 'win32';
-
-    return (
-        <Box sx={{ maxWidth: 600, mx: "auto", p: 3 }}>
-            <Typography level="h4" sx={{ mb: 2, color: "warning.plainColor" }}>
-                Required tools are not installed
-            </Typography>
-            <Typography level="body-md" sx={{ mb: 3 }}>
-                {missingList} {toolsStatus.missingTools.length === 1 ? 'is' : 'are'} required to import photos and videos.
-            </Typography>
-
-            {isMac && (
-                <Box sx={{ mb: 3 }}>
-                    <Typography level="title-sm" sx={{ mb: 1 }}>macOS — Using Homebrew (recommended):</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        brew install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>macOS — Manual download:</Typography>
-                    <Typography level="body-sm">
-                        ImageMagick: <a href="https://imagemagick.org/script/download.php#macosx" target="_blank" rel="noreferrer">imagemagick.org</a>
-                        {' '}&nbsp;·&nbsp;{' '}
-                        ffmpeg: <a href="https://evermeet.cx/ffmpeg/" target="_blank" rel="noreferrer">evermeet.cx/ffmpeg</a>
-                    </Typography>
-                </Box>
-            )}
-
-            {isWin && (
-                <Box sx={{ mb: 3 }}>
-                    <Typography level="title-sm" sx={{ mb: 1 }}>Windows — Using Chocolatey (recommended):</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        choco install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Windows — Using Scoop:</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        scoop install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Windows — Manual download:</Typography>
-                    <Typography level="body-sm">
-                        ImageMagick: <a href="https://imagemagick.org/script/download.php#windows" target="_blank" rel="noreferrer">imagemagick.org</a>
-                        {' '}&nbsp;·&nbsp;{' '}
-                        ffmpeg: <a href="https://www.gyan.dev/ffmpeg/builds/" target="_blank" rel="noreferrer">gyan.dev/ffmpeg</a>
-                    </Typography>
-                </Box>
-            )}
-
-            {!isMac && !isWin && (
-                <Box sx={{ mb: 3 }}>
-                    <Typography level="title-sm" sx={{ mb: 1 }}>Linux — Ubuntu/Debian:</Typography>
-                    <Box component="pre" sx={{ p: 2, borderRadius: "sm", bgcolor: "background.level1", fontSize: "sm", overflowX: "auto" }}>
-                        sudo apt update && sudo apt install imagemagick ffmpeg
-                    </Box>
-                    <Typography level="title-sm" sx={{ mt: 2, mb: 1 }}>Other distributions:</Typography>
-                    <Typography level="body-sm">
-                        Fedora/RHEL: <code>dnf install ImageMagick ffmpeg</code>
-                        {' '}&nbsp;·&nbsp;{' '}
-                        Arch: <code>pacman -S imagemagick ffmpeg</code>
-                    </Typography>
-                </Box>
-            )}
-
-            <Typography level="body-sm" sx={{ mb: 3 }}>
-                For full instructions see:{' '}
-                <a href="https://github.com/ashleydavis/photosphere/wiki/Required-Tools" target="_blank" rel="noreferrer">
-                    Required Tools documentation
-                </a>
-            </Typography>
-
-            <Typography level="body-sm" sx={{ mb: 2 }}>
-                After installing, click the button below to re-check.
-            </Typography>
-
-            <Button variant="soft" color="neutral" onClick={onCheckAgain}>
-                Check again
-            </Button>
         </Box>
     );
 }
@@ -172,7 +88,7 @@ function ImportItemRow({ item }: { item: IImportItem }) {
 }
 
 //
-// The import page component. Manages tool checking, import triggering, and displays
+// The import page component. Manages import triggering, and displays
 // per-file progress during an import session.
 //
 export function ImportPage() {
@@ -182,10 +98,6 @@ export function ImportPage() {
 
     // Drives the phone layout: stacked full-width import buttons, chips for the summary.
     const isMobile = useIsMobile();
-
-    // Tool check state: undefined = checking, null = check not run yet (but we auto-run on mount)
-    const [toolsStatus, setToolsStatus] = useState<IToolsStatus | null>(null);
-    const [isCheckingTools, setIsCheckingTools] = useState<boolean>(false);
 
     // True while files are being dragged over the drop zone.
     const [isDragOver, setIsDragOver] = useState<boolean>(false);
@@ -203,34 +115,16 @@ export function ImportPage() {
     }, [importItems.length]);
 
     //
-    // Run tool check on mount (when a database is loaded), and again whenever the page returns to
-    // idle. Status lives in the context above this page and survives navigation, so after one import
-    // it is 'completed' or 'cancelled' rather than 'idle'. Depending on databasePath alone meant a
-    // revisit ran the effect once, failed the guard, and left toolsStatus undefined, which switches
-    // allowDragAndDrop off and makes every subsequent drop vanish without a word.
+    // Tells the log the page is ready for an import when a database is loaded and the page is idle:
+    // on mount, and again whenever the page returns to idle. Status lives in the context above this
+    // page and survives navigation, so after one import it is 'completed' or 'cancelled' rather than
+    // 'idle'.
     //
     useEffect(() => {
         if (databasePath && status === 'idle') {
-            runToolCheck();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [databasePath, status]);
-
-    //
-    // Runs the tool check and updates toolsStatus.
-    //
-    useEffect(() => {
-        if (toolsStatus?.allAvailable) {
             log.event('Import page ready');
         }
-    }, [toolsStatus]);
-
-    async function runToolCheck() {
-        setIsCheckingTools(true);
-        const result = await platform.checkTools();
-        setToolsStatus(result);
-        setIsCheckingTools(false);
-    }
+    }, [databasePath, status]);
 
     //
     // Opens a directory picker and starts an import.
@@ -285,9 +179,9 @@ export function ImportPage() {
         return <NoDatabaseLoaded />;
     }
 
-    // Drag-and-drop import is only offered on platforms that support it (desktop) and once the media
-    // tools are available. Mobile/web hide the drop zone and offer the native photo picker instead.
-    const allowDragAndDrop = platform.platformKind === "desktop" && (toolsStatus?.allAvailable ?? false);
+    // Drag-and-drop import is only offered on platforms that support it (desktop). Mobile/web hide the
+    // drop zone and offer the native photo picker instead.
+    const allowDragAndDrop = platform.platformKind === "desktop";
 
     const successCount = importItems.filter(item => item.status === 'success').length;
     const skippedCount = importItems.filter(item => item.status === 'skipped').length;
@@ -355,83 +249,69 @@ export function ImportPage() {
                             bgcolor: isDragOver ? "primary.softBg" : undefined,
                         }}
                     >
-                        {isCheckingTools && (
-                            <CircularProgress size="md" />
-                        )}
-
-                        {!isCheckingTools && toolsStatus === null && (
-                            <CircularProgress size="md" />
-                        )}
-
-                        {!isCheckingTools && toolsStatus !== null && toolsStatus.allAvailable && (
-                            // On a phone the import buttons stack and run the full width of the
-                            // screen: a row of two "lg" buttons is what clipped this page's actions
-                            // at the edges before, and a single obvious target beats two small ones.
-                            <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
-                                <Box
-                                    sx={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        width: isMobile ? 96 : 80,
-                                        height: isMobile ? 96 : 80,
-                                        borderRadius: "50%",
-                                        backgroundColor: "background.level2",
-                                        mb: 2,
-                                    }}
-                                    >
-                                    <FileUpload sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
-                                </Box>
-                                <Typography level={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
-                                <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
-                                    {allowDragAndDrop
-                                        ? "Drop files or directories here, or use the buttons below."
-                                        : "Choose photos and videos from your device."}
-                                </Typography>
-                                <Box
-                                    sx={{
-                                        display: "flex",
-                                        flexDirection: isMobile ? "column" : "row",
-                                        gap: 1.5,
-                                        justifyContent: "center",
-                                        width: "100%",
-                                        maxWidth: isMobile ? 420 : undefined,
-                                        mx: "auto",
-                                    }}
-                                    >
+                        {/* On a phone the import buttons stack and run the full width of the
+                            screen: a row of two "lg" buttons is what clipped this page's actions
+                            at the edges before, and a single obvious target beats two small ones. */}
+                        <Box sx={{ textAlign: "center", width: "100%", px: isMobile ? 3 : 0 }}>
+                            <Box
+                                sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    width: isMobile ? 96 : 80,
+                                    height: isMobile ? 96 : 80,
+                                    borderRadius: "50%",
+                                    backgroundColor: "background.level2",
+                                    mb: 2,
+                                }}
+                                >
+                                <FileUpload sx={{ fontSize: isMobile ? 48 : 40, color: "text.secondary" }} />
+                            </Box>
+                            <Typography level={isMobile ? "h3" : "h4"} sx={{ mb: 1 }}>Import photos</Typography>
+                            <Typography level="body-md" sx={{ mb: 4, color: "text.secondary" }}>
+                                {allowDragAndDrop
+                                    ? "Drop files or directories here, or use the buttons below."
+                                    : "Choose photos and videos from your device."}
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    flexDirection: isMobile ? "column" : "row",
+                                    gap: 1.5,
+                                    justifyContent: "center",
+                                    width: "100%",
+                                    maxWidth: isMobile ? 420 : undefined,
+                                    mx: "auto",
+                                }}
+                                >
+                                <Button
+                                    data-id="import-files-button"
+                                    variant={isMobile ? "solid" : "soft"}
+                                    color={isMobile ? "primary" : "neutral"}
+                                    size="lg"
+                                    startDecorator={<FileUpload />}
+                                    onClick={handleImportFiles}
+                                    disabled={isPicking}
+                                    sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
+                                >
+                                    {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
+                                </Button>
+                                {platform.platformKind === "desktop" && (
                                     <Button
-                                        data-id="import-files-button"
-                                        variant={isMobile ? "solid" : "soft"}
-                                        color={isMobile ? "primary" : "neutral"}
+                                        data-id="import-directory-button"
+                                        variant="soft"
+                                        color="neutral"
                                         size="lg"
                                         startDecorator={<FileUpload />}
-                                        onClick={handleImportFiles}
+                                        onClick={handleImportDirectories}
                                         disabled={isPicking}
-                                        sx={{ minHeight: isMobile ? 52 : undefined, borderRadius: isMobile ? "md" : undefined }}
+                                        sx={{ minHeight: isMobile ? 52 : undefined }}
                                     >
-                                        {platform.platformKind === "desktop" ? "Import files" : "Select photos"}
+                                        Import directory
                                     </Button>
-                                    {platform.platformKind === "desktop" && (
-                                        <Button
-                                            data-id="import-directory-button"
-                                            variant="soft"
-                                            color="neutral"
-                                            size="lg"
-                                            startDecorator={<FileUpload />}
-                                            onClick={handleImportDirectories}
-                                            disabled={isPicking}
-                                            sx={{ minHeight: isMobile ? 52 : undefined }}
-                                        >
-                                            Import directory
-                                        </Button>
-                                    )}
-                                </Box>
+                                )}
                             </Box>
-                        )}
-
-                        {!isCheckingTools && toolsStatus !== null && !toolsStatus.allAvailable && (
-                            <ToolsMissingPanel toolsStatus={toolsStatus} onCheckAgain={runToolCheck} />
-                        )}
+                        </Box>
                     </Box>
                 )}
 

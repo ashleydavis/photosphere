@@ -8,7 +8,6 @@ const node_path = @import("node-utils-zig").path;
 const utils = @import("utils-zig");
 const encryption = @import("encryption-zig");
 const cli = @import("cli-zig");
-const tools = @import("tools-zig");
 const media_tools = @import("media-tools-zig");
 
 //
@@ -1454,22 +1453,21 @@ fn expectedCacheDir(allocator: std.mem.Allocator, environment: *const std.proces
 }
 
 //
-// The status of the ImageMagick and FFmpeg built into the program, read through a MediaTools of the test's own, which
+// The versions of the ImageMagick and FFmpeg built into the program, read through a MediaTools of the test's own, which
 // links the same libraries as psi.
 //
-fn builtInToolsStatus(log: ILog, allocator: std.mem.Allocator) !tools.ToolsStatus {
+fn builtInToolVersions(log: ILog, allocator: std.mem.Allocator) !cli.tools_cmd.IBuiltInToolVersions {
     var mediaTools = try media_tools.MediaTools.init();
     defer mediaTools.deinit();
-    return tools.verifyTools(allocator, std.testing.io, log, mediaTools.runner());
+    return cli.tools_cmd.getBuiltInToolVersions(allocator, std.testing.io, log, mediaTools.runner());
 }
 
 //
-// Expects the report of `psi version`: every dependency available, with the version of the tool built into the
+// Expects the report of `psi version`: every dependency with the version of the tool built into the
 // program.
 //
 fn expectVersionReport(log: ILog, allocator: std.mem.Allocator, environment: *const std.process.Environ.Map, root: []const u8, stdout: []const u8) !void {
-    const toolsStatus = try builtInToolsStatus(log, allocator);
-    try std.testing.expect(toolsStatus.allAvailable);
+    const toolVersions = try builtInToolVersions(log, allocator);
     const tempDir = try std.fs.path.join(allocator, &.{ root, "tmp", "photosphere" });
     const expected = try std.fmt.allocPrint(allocator,
         \\
@@ -1489,12 +1487,10 @@ fn expectVersionReport(log: ILog, allocator: std.mem.Allocator, environment: *co
         \\  Log files: {s}
         \\  Cache: {s}
         \\
-        \\✅ All dependencies are available
-        \\
     , .{
-        toolsStatus.magick.version.?,
-        toolsStatus.ffmpeg.version.?,
-        toolsStatus.ffprobe.version.?,
+        toolVersions.magick,
+        toolVersions.ffmpeg,
+        toolVersions.ffprobe,
         try std.fs.path.join(allocator, &.{ root, "config" }),
         tempDir,
         try std.fs.path.join(allocator, &.{ tempDir, "logs" }),
@@ -2064,9 +2060,9 @@ test "hash reads an encrypted file through its key" {
 }
 
 //
-// The report `psi tools` prints before the status of the tools.
+// The report `psi tools` prints before the tools.
 //
-const tools_report_header = "\n📦 Media Processing Tools Status\n\nTool Status:\n\n";
+const tools_report_header = "\n📦 Media Processing Tools\n\nBuilt into psi:\n\n";
 
 //
 // Runs the Zig CLI with the arguments, writing the keys to its stdin (a pipe) and then closing it. TERM is set to
@@ -2131,7 +2127,7 @@ fn usePathOfEmptyDirectory(allocator: std.mem.Allocator, environment: *std.proce
     return binDir;
 }
 
-test "tools reports every tool available" {
+test "tools reports the version of every tool built into psi" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -2142,24 +2138,22 @@ test "tools reports every tool available" {
 
     // No tool on the PATH: the tools psi reports are the ones built into it.
     _ = try usePathOfEmptyDirectory(allocator, environment, root);
-    const toolsStatus = try builtInToolsStatus(log, allocator);
-    try std.testing.expect(toolsStatus.allAvailable);
+    const toolVersions = try builtInToolVersions(log, allocator);
     const expectedReport = try std.fmt.allocPrint(allocator, tools_report_header ++
-        \\✅ ImageMagick (magick): Available (v{s})
+        \\ImageMagick (magick): v{s}
         \\   Image processing - resizing, format conversion, metadata extraction
         \\
-        \\✅ ffmpeg: Available (v{s})
+        \\ffmpeg: v{s}
         \\   Video processing - format conversion and thumbnail extraction
         \\
-        \\✅ ffprobe: Available (v{s})
+        \\ffprobe: v{s}
         \\   Video analysis - metadata extraction, duration, dimensions, codecs
         \\
-        \\🎉 All tools are available and ready to use!
         \\
     , .{
-        toolsStatus.magick.version.?,
-        toolsStatus.ffmpeg.version.?,
-        toolsStatus.ffprobe.version.?,
+        toolVersions.magick,
+        toolVersions.ffmpeg,
+        toolVersions.ffprobe,
     });
 
     for ([_][]const []const u8{ &.{ "tools", "--yes" }, &.{"tools"}, &.{ "tools", "-y" } }) |args| {
@@ -2383,7 +2377,7 @@ const program_help =
     \\  replicate|rep [options]                        Replicates an asset database from source to destination location.
     \\  summary|sum [options]                          Displays a summary of the media file database including total files, size, and tree hash.
     \\  sync [options]                                 Synchronize changes between two databases, once or by watching for more.
-    \\  tools [options]                                Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).
+    \\  tools [options]                                Shows the media processing tools built into psi (ImageMagick, ffmpeg, ffprobe) and their versions.
     \\  upgrade [options]                              Upgrades a media file database to the latest version.
     \\  verify|ver [options]                           Verifies the integrity of the media file database by checking file hashes.
     \\  version                                        Displays version information for psi and its dependencies.
@@ -2472,7 +2466,7 @@ const examples_listing =
     \\Configuration:
     \\
     \\  tools:
-    \\    psi tools                        Checks the status of all required media processing tools.
+    \\    psi tools                        Shows the media processing tools built into psi and their versions.
     \\
     \\File Analysis:
     \\
@@ -4003,8 +3997,7 @@ fn bugSummary(allocator: std.mem.Allocator, title: []const u8, logFile: []const 
 // details of the bug.
 //
 fn bugUrl(log: ILog, allocator: std.mem.Allocator, title: []const u8, details: []const u8, logHeader: []const u8, logFile: []const u8) ![]const u8 {
-    const toolsStatus = try builtInToolsStatus(log, allocator);
-    try std.testing.expect(toolsStatus.allAvailable);
+    const toolVersions = try builtInToolVersions(log, allocator);
     const body = try std.fmt.allocPrint(allocator, "{s}\n\n## System Information\n- Photosphere Version: dev\n- Platform: {s} {s}\n- OS Release: {s}\n- Node.js Version: {s}\n\n" ++
         "## Tool Versions\n- ImageMagick: ImageMagick v{s}\n- FFmpeg: ffmpeg v{s}\n- FFprobe: ffprobe v{s}\n\n" ++
         "## Log Header\n```\n{s}\n```\n\n## Log File\nPlease attach the full log file located at:\n`{s}`\n\n" ++
@@ -4015,9 +4008,9 @@ fn bugUrl(log: ILog, allocator: std.mem.Allocator, title: []const u8, details: [
         cli.file_logger.osArch(),
         try cli.file_logger.osRelease(allocator),
         cli.file_logger.processVersion(),
-        toolsStatus.magick.version.?,
-        toolsStatus.ffmpeg.version.?,
-        toolsStatus.ffprobe.version.?,
+        toolVersions.magick,
+        toolVersions.ffmpeg,
+        toolVersions.ffprobe,
         logHeader,
         logFile,
     });

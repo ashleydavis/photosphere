@@ -8,7 +8,6 @@ const bdb = @import("bdb-zig");
 const serialization = @import("serialization-zig");
 const pc = @import("../lib/picocolors.zig");
 const init_cmd = @import("../lib/init-cmd.zig");
-const ensure_tools = @import("../lib/ensure-tools.zig");
 const terminal_utils = @import("../lib/terminal-utils.zig");
 const format = @import("../lib/format.zig");
 const exit = node_utils.termination.exit;
@@ -16,7 +15,6 @@ const InProcessRunner = node_utils.in_process_tools.InProcessRunner;
 const loadDatabase = init_cmd.loadDatabase;
 const IBaseCommandOptions = init_cmd.IBaseCommandOptions;
 const ICommandContext = init_cmd.ICommandContext;
-const ensureMediaProcessingTools = ensure_tools.ensureMediaProcessingTools;
 const clearProgressMessage = terminal_utils.clearProgressMessage;
 const writeProgress = terminal_utils.writeProgress;
 const scanPaths = node_api.file_scanner.scanPaths;
@@ -199,8 +197,6 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     const sessionTempDir = context.sessionTempDir;
     const sessionId = context.sessionId;
 
-    try ensureMediaProcessingTools(allocator, io, log, context.toolRunner);
-
     var pathInputs: std.ArrayList([]const u8) = .empty;
     var dbInputs: std.ArrayList([]const u8) = .empty;
     for (inputs) |input| {
@@ -236,7 +232,7 @@ pub fn infoCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, context:
     }
 
     if (dbInputs.items.len > 0) {
-        const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+        const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
         const metadataCollection = try loaded.bsonDatabase.collection("metadata");
         for (dbInputs.items) |input| {
             const kind = classifyInput(input);

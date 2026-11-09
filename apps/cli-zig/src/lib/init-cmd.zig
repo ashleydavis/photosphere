@@ -16,7 +16,6 @@ const node_api = @import("node-api-zig");
 const media_tools = @import("media-tools-zig");
 const pc = @import("picocolors.zig");
 const directory_picker = @import("directory-picker.zig");
-const ensure_tools = @import("ensure-tools.zig");
 const prompts = @import("clack/prompts.zig");
 const worker_pool = @import("worker-pool.zig");
 const process_argv = @import("process-argv.zig");
@@ -35,7 +34,6 @@ const loadTreeVersion = merkle_tree_zig.merkle_tree.loadTreeVersion;
 const BsonDatabase = bdb.database.BsonDatabase;
 const IBsonCollection = bdb.collection.IBsonCollection;
 const getDirectoryForCommand = directory_picker.getDirectoryForCommand;
-const ensureMediaProcessingTools = ensure_tools.ensureMediaProcessingTools;
 const IEncryptionKeyPem = encryption.key_utils.IEncryptionKeyPem;
 const generateKeyPair = encryption.key_utils.generateKeyPair;
 const exportPublicKeyToPem = encryption.key_utils.exportPublicKeyToPem;
@@ -1136,7 +1134,6 @@ fn didYouMeanList(allocator: std.mem.Allocator, similarNames: []const []const u8
 //
 // Shared database loading function for CLI commands.
 // (Callers pass allowOlderVersions.)
-// toolRunner runs the ImageMagick and FFmpeg built into the program, which are checked before the database is loaded.
 //
 pub fn loadDatabase(
     allocator: std.mem.Allocator,
@@ -1147,14 +1144,10 @@ pub fn loadDatabase(
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
     sessionId: []const u8,
-    toolRunner: InProcessRunner,
     allowOlderVersions: bool,
 ) !IInitResult { //todo: Move into api.
 
     const nonInteractive = options.yes orelse false;
-
-    // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, log, toolRunner);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {
@@ -1318,7 +1311,6 @@ pub fn loadDatabase(
 
 //
 // Creates a new database for the init command.
-// toolRunner runs the ImageMagick and FFmpeg built into the program, which are checked before the database is created.
 //
 pub fn createDatabase(
     allocator: std.mem.Allocator,
@@ -1329,7 +1321,6 @@ pub fn createDatabase(
     uuidGenerator: IUuidGenerator,
     timestampProvider: ITimestampProvider,
     sessionId: []const u8,
-    toolRunner: InProcessRunner,
 ) !IInitResult { //todo: Move into api.
 
     const nonInteractive = options.base.yes orelse false;
@@ -1337,9 +1328,6 @@ pub fn createDatabase(
     // Log the command being executed
     const command = try std.mem.join(allocator, " ", process_argv.userArgs());
     log.verbose(try std.fmt.allocPrint(allocator, "Executing command: {s}", .{command}));
-
-    // Ensure media processing tools are available
-    try ensureMediaProcessingTools(allocator, io, log, toolRunner);
 
     var dbDir: []const u8 = undefined;
     if (dbDirOption) |value| {

@@ -164,6 +164,44 @@ test "verifyImageMagick reports a magick that fails with no install advice, and 
     try std.testing.expect(std.mem.startsWith(u8, builtIn.version.?, "7."));
 }
 
+test "verifyImageMagick reads the version from the tool's output" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "Version: ImageMagick 7.1.1-29 Q16-HDRI x86_64 https://imagemagick.org",
+        },
+    });
+
+    const status = try tools.Image.verifyImageMagick(allocator, io, log, fakeTools.runner());
+
+    try std.testing.expect(status.available);
+    try std.testing.expectEqualStrings("7.1.1-29", status.version.?);
+}
+
+test "verifyImageMagick reports unknown when the version cannot be found" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var fakeTools = FakeToolRunner.init(allocator, &.{
+        .{
+            .name = "magick",
+            .output = "Something else",
+        },
+    });
+
+    const status = try tools.Image.verifyImageMagick(allocator, io, log, fakeTools.runner());
+
+    try std.testing.expect(status.available);
+    try std.testing.expectEqualStrings("unknown", status.version.?);
+}
+
 test "resize and transform write their numbers as a template string writes a number" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

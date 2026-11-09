@@ -26,7 +26,6 @@ pub const string_width = @import("src/lib/clack/third-party/string-width.zig");
 pub const readline = @import("src/lib/clack/third-party/readline.zig");
 pub const sisteransi = @import("src/lib/clack/third-party/sisteransi.zig");
 pub const clack_core = @import("src/lib/clack/core/index.zig");
-pub const ensure_tools = @import("src/lib/ensure-tools.zig");
 pub const directory_picker = @import("src/lib/directory-picker.zig");
 pub const storage_helper = @import("src/lib/storage-helper.zig");
 pub const init_cmd = @import("src/lib/init-cmd.zig");
@@ -2150,7 +2149,7 @@ pub fn createProgram(allocator: std.mem.Allocator, state: *IProgramState) !*Comm
 
     const toolsDefinition = program
         .command("tools", .{})
-        .description("Checks for required media processing tools (ImageMagick, ffmpeg, ffprobe).");
+        .description("Shows the media processing tools built into psi (ImageMagick, ffmpeg, ffprobe) and their versions.");
     _ = optionFrom(toolsDefinition, yesOption);
     _ = toolsDefinition
         .addHelpText(.after, try getCommandExamplesHelp(allocator, "tools"))

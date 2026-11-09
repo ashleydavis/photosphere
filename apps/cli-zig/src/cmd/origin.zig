@@ -87,7 +87,7 @@ pub fn originCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, contex
     const timestampProvider = context.timestampProvider;
     const sessionId = context.sessionId;
 
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &options.base, uuidGenerator, timestampProvider, sessionId, false);
     const config = try loadDatabaseConfig(allocator, io, log, loaded.rawAssetStorage);
 
     const origin = getOrigin(config);

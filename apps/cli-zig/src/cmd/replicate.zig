@@ -137,7 +137,7 @@ pub fn replicateCommand(allocator: std.mem.Allocator, io: std.Io, log: ILog, con
         .verbose = options.base.verbose,
         .yes = options.base.yes,
     };
-    const loaded = try loadDatabase(allocator, io, log, options.base.db, &loadOptions, uuidGenerator, timestampProvider, sessionId, context.toolRunner, false);
+    const loaded = try loadDatabase(allocator, io, log, options.base.db, &loadOptions, uuidGenerator, timestampProvider, sessionId, false);
     const sourceRawAssetStorage = loaded.rawAssetStorage;
     const srcDir = loaded.databaseDir;
 
