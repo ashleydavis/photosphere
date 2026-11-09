@@ -767,6 +767,11 @@ jobs:
               fi
           fi
 
+      # The getImageDetails format test reads images from test/formats, which are made on the machine rather than committed.
+      - name: Make the format test images
+        shell: bash
+        run: bash scripts/make-format-test-images.sh
+
       # Built for any x86-64 CPU. Built for the runner's own, which differs from run to run, every compile step missed the build cache
       # restored above, so each run compiled everything again.
       - name: Run the Zig unit tests
