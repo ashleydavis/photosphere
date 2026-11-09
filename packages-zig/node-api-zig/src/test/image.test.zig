@@ -465,11 +465,30 @@ test "getImageDetails turns a photo its Orientation says is on its side, and ign
     var generator: CountingUuidGenerator = .{};
     const details = try image.getImageDetails(allocator, io, memory.log, runner, filePath, tempDir, "image/jpeg", generator.uuidGenerator(), filePath);
 
-    // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, before the smaller versions are made from it:
-    // the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
+    // Orientation 6 turns the 100x80 photo a quarter turn, into 80x100, as the display is made, and the smaller versions
+    // are made from the display: the short side is now the width, so each is minSize wide and Math.trunc(100 / 80 * minSize) high.
     try std.testing.expectEqual(node_api.media_file_database.IResolution{ .width = 80, .height = 100 }, details.resolution);
-    try std.testing.expectEqualStrings("80 100", (try describeImage(memory.log, allocator, runner, try std.fs.path.join(allocator, &.{ tempDir, "temp_transform_output_generated-1.jpg" })))[0..6]);
     try std.testing.expectEqualStrings("1000 1250 JPEG 95 exif:[]", try describeImage(memory.log, allocator, runner, details.displayPath.?));
+
+    // The turn is made by the command that writes the display, so no whole turned copy of the photo is written: the
+    // temp directory holds the photo and the three pictures, named by the first three generated IDs.
+    var tempEntries: std.ArrayList([]const u8) = .empty;
+    var tempDirHandle = try std.Io.Dir.cwd().openDir(io, tempDir, .{ .iterate = true });
+    defer tempDirHandle.close(io);
+    var entries = tempDirHandle.iterate();
+    while (try entries.next(io)) |entry| {
+        try tempEntries.append(allocator, try allocator.dupe(u8, entry.name));
+    }
+    std.mem.sort([]const u8, tempEntries.items, {}, struct {
+        //
+        // Orders names alphabetically.
+        //
+        fn lessThan(_: void, left: []const u8, right: []const u8) bool {
+            return std.mem.lessThan(u8, left, right);
+        }
+    }.lessThan);
+    try std.testing.expectEqualStrings("exif.jpg temp_resize_generated-1.jpg temp_resize_generated-2.jpg temp_resize_generated-3.jpg", try std.mem.join(allocator, " ", tempEntries.items));
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_generated-1.jpg" }), details.displayPath.?);
     try std.testing.expectEqualStrings("300 375 JPEG 90 exif:[]", try describeImage(memory.log, allocator, runner, details.thumbnailPath));
     try std.testing.expectEqualStrings("40 50 JPEG 75 exif:[]", try describeImage(memory.log, allocator, runner, details.microPath));
 
@@ -742,5 +761,96 @@ test "getImageDetails reads the size of every non-JPEG image type from the image
         var generator: CountingUuidGenerator = .{};
         const details = try image.getImageDetails(allocator, io, log, runner, expected.filePath, tempDir, expected.contentType, generator.uuidGenerator(), expected.filePath);
         try std.testing.expectEqual(expected.resolution, details.resolution);
+    }
+}
+
+//
+// A cached 71x37 JPEG with an EXIF Orientation, and how each picture made from it must come out.
+//
+const IOrientationCase = struct {
+    // The file, made by scripts/make-format-test-images.sh.
+    filePath: []const u8,
+
+    // "<w> <h>" of the display, the thumbnail and the micro, once turned upright.
+    displaySize: []const u8,
+    thumbnailSize: []const u8,
+    microSize: []const u8,
+
+    // Which corners are red, as "TL TR BL BR" with 1 for red and 0 for blue: the file is a gradient from red at its
+    // stored top to blue at its stored bottom, so this says which way up each picture is.
+    redCorners: []const u8,
+};
+
+//
+// Reads "<w> <h> <TL> <TR> <BL> <BR>" of an image with the ImageMagick built into the program, each corner 1 when it is
+// more red than blue.
+//
+fn describeOrientation(log: ILog, allocator: std.mem.Allocator, runner: InProcessRunner, filePath: []const u8) ![]const u8 {
+    const result = try runner.run(runner.context, std.testing.io, log, allocator, "magick", &.{ filePath, "-format", "%w %h %[fx:p{0,0}.r>p{0,0}.b] %[fx:p{w-1,0}.r>p{w-1,0}.b] %[fx:p{0,h-1}.r>p{0,h-1}.b] %[fx:p{w-1,h-1}.r>p{w-1,h-1}.b]", "info:" });
+    if (result.exit_code != 0) {
+        std.debug.print("magick failed with exit code {d}:\n{s}\n", .{ result.exit_code, result.output });
+        return error.TestUnexpectedResult;
+    }
+    return std.mem.trimEnd(u8, result.output, "\r\n");
+}
+
+test "getImageDetails makes the display, thumbnail and micro of each cached EXIF Orientation JPEG upright and the right size" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const test_env = try test_environment.setupEnvironment(io);
+    defer test_env.deinit(log);
+
+    // Upright, 1 keeps red at the top, 3 turns it a half to the bottom, 6 a quarter clockwise to the right and 8 a quarter
+    // anticlockwise to the left (as ImageMagick's -auto-orient also has it). The short side of each picture is its minimum
+    // size (1000, 300, 40) and the long side Math.trunc(71 / 37 * minSize), so 6 and 8 are the sizes of 1 and 3 swapped.
+    const cases = [_]IOrientationCase{
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-1.jpg",
+            .displaySize = "1918 1000",
+            .thumbnailSize = "575 300",
+            .microSize = "76 40",
+            .redCorners = "1 1 0 0",
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-3.jpg",
+            .displaySize = "1918 1000",
+            .thumbnailSize = "575 300",
+            .microSize = "76 40",
+            .redCorners = "0 0 1 1",
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-6.jpg",
+            .displaySize = "1000 1918",
+            .thumbnailSize = "300 575",
+            .microSize = "40 76",
+            .redCorners = "0 1 0 1",
+        },
+        .{
+            .filePath = "../test/formats/71x37-exif-orientation-8.jpg",
+            .displaySize = "1000 1918",
+            .thumbnailSize = "300 575",
+            .microSize = "40 76",
+            .redCorners = "1 0 1 0",
+        },
+    };
+    for (cases) |expected| {
+        errdefer std.debug.print("case: {s}\n", .{expected.filePath});
+        if (!node_utils.fs.pathExists(io, expected.filePath)) {
+            std.debug.print("{s} is missing: run bash scripts/make-format-test-images.sh\n", .{expected.filePath});
+            return error.FormatTestImageMissing;
+        }
+        const tempDir = try temp_dirs.makeTempDir(allocator, io, "image-details-orientation");
+        defer temp_dirs.removeTempDir(io, tempDir);
+        var generator: CountingUuidGenerator = .{};
+        const details = try image.getImageDetails(allocator, io, log, runner, expected.filePath, tempDir, "image/jpeg", generator.uuidGenerator(), expected.filePath);
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s} {s}", .{ expected.displaySize, expected.redCorners }), try describeOrientation(log, allocator, runner, details.displayPath.?));
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s} {s}", .{ expected.thumbnailSize, expected.redCorners }), try describeOrientation(log, allocator, runner, details.thumbnailPath));
+        try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "{s} {s}", .{ expected.microSize, expected.redCorners }), try describeOrientation(log, allocator, runner, details.microPath));
     }
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 const serialization_zig = @import("serialization-zig");
 const BsonValue = serialization_zig.bson.BsonValue;
+const IImageTransformation = @import("utils-zig").image.IImageTransformation;
 
 //
 // The width and height of an image or video.
@@ -57,5 +58,8 @@ pub const ResizeOptions = struct {
 
     // Keep the aspect ratio (true when not given).
     maintainAspectRatio: ?bool = null,
+
+    // The flip and turn applied to the image before it is resized, in the same command, or null for none.
+    transformation: ?IImageTransformation,
 };
 
