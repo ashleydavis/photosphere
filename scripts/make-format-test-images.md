@@ -16,6 +16,9 @@ What it makes, each with a width and height that differ so a size read the wrong
 - An animated GIF, three frames.
 - The same 71x37 JPEG with an EXIF Orientation of 1, 3, 6 and 8. ImageMagick does not write that tag into a JPEG with
   no EXIF, so the script writes a minimal EXIF segment holding only it.
+- The same 71x37 JPEG with a broken EXIF segment: an IFD claiming 65535 entries, an IFD offset past the end of the
+  segment, and a TIFF header with no byte order. ImageMagick still reads these and their EXIF, so they must import;
+  an EXIF read that fails is an error, so a file like these that stopped importing would show in the check.
 - Two-second videos with sound: H.264 and HEVC, each in MP4 and MOV.
 
 A missing file makes the unit test fail on it and makes check-format-test-images.sh fail naming this script; neither skips.
