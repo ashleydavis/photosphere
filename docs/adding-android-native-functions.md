@@ -29,11 +29,7 @@ host.setProperty("myThing", (JSCallFunction) args ->
     safeString(() -> hostBridge.myThing((String) args[0])));
 ```
 
-Always wrap the call in one of these, never call raw. A thrown Java exception cannot cross into QuickJS and will crash the app.
-
-- `safeString(...)` — the function returns a string.
-- `safeBoolean(...)` — the function returns true/false.
-- `safeVoid(...)` — the function returns nothing.
+Always wrap the call in the `safe...` helper that matches what the function returns, never call raw. A thrown Java exception cannot cross into QuickJS and will crash the app.
 
 ### Passing data
 

@@ -1,21 +1,12 @@
 # Threads
 
-How the Photosphere App and the Zig CLI use threads. The Photosphere App runs on the threads of [Ziggy](https://github.com/ashleydavis/ziggy): the native app's UI thread, the main thread and the worker threads. [Threads](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/threads.md) in Ziggy's user guide describes those threads, what each may touch and the messages between them. This doc covers what Photosphere adds and how it uses them. For how to write and queue a task, see [Tasks](tasks.md).
+How the Photosphere App and the Zig CLI use threads. The Photosphere App runs on the threads of [Ziggy](https://github.com/ashleydavis/ziggy): the native app's UI thread, the main thread and the worker threads. [Threads](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/threads.md) in Ziggy's user guide describes those threads, what each may touch and the messages between them. This doc covers what Photosphere adds and how it uses them. For how Photosphere writes and queues tasks, see [Tasks](tasks.md).
 
-Photosphere keeps Ziggy's rule: threads share no state. The only thing two threads both touch is a message queue that carries copies of JSON text (see `CLAUDE.md`).
+## Photosphere's state
 
-## Photosphere's state on the main thread
+Photosphere's `MainState` (`packages-zig/photosphere-core/src/lib/main-state.zig`) is the app's state on the main thread: the open databases, whether a sync is running, what automatic import is doing and the timers. `onCreate` makes it and `onDestroy` destroys it after every task has ended. The main thread applies what a task sends back in `onTaskEnd` and `onTaskEvent` (`main-process.zig`). See [Threads and state](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#threads-and-state) in Ziggy's guide for the rules this follows.
 
-Photosphere's `MainState` (`packages-zig/photosphere-core/src/lib/main-state.zig`) is the app's state: the open databases, whether a sync is running, what automatic import is doing and the timers. `onCreate` makes it on the main thread and `onDestroy` destroys it there after every task has ended. Only the message handlers, menu functions and timers read it. They all run on the main thread.
-
-A task never reaches `MainState`. It gets what it needs in its data. The main thread applies what the task sends back in `onTaskEnd` and `onTaskEvent` (`main-process.zig`).
-
-## How Photosphere uses the main thread and the workers
-
-- **Messages that wait on something slow** (the keychain, a file, a dialog, the phone) return `.task` from their handler, so the work runs on a worker and the main thread goes on to the next message.
-- **Work the app starts itself** (the periodic and debounced sync, automatic import, the background passes, the update and news checks) is queued from the main thread with `services.addTask` and cancelled with `services.cancelTasks`. The timers that start it are the main thread's.
-- **Child tasks.** `import-assets` makes a `TaskQueue` on its worker, queues `hash-file` and `upload-asset` children through it and waits for them.
-- **Caches a task builds** (vaults, the hash cache, the S3 client, the last error) are `threadlocal`, so each worker has its own copy.
+The caches a task builds (vaults, the hash cache, the S3 client, the last error) are `threadlocal`, so each worker has its own copy.
 
 ## The asset server and the MCP server
 
@@ -52,14 +43,3 @@ These are the places in Photosphere's code where two threads touch the same memo
 
 - Atomic flags: the LAN share sender and receiver's cancel and done flags (`lan-share-network-zig`), the CLI's pending signals, the spinner's stop flag and the `sync` command's stop flag.
 - The CLI spinner's mutexes (`apps/cli-zig/src/lib/clack/prompts/spinner.zig`).
-
-## Key files
-
-| File | What it holds |
-|---|---|
-| `packages-zig/photosphere-core/src/lib/main-state.zig` | Photosphere's state on the main thread and the timers that queue its work. |
-| `packages-zig/photosphere-core/src/lib/main-process.zig` | `onTaskEnd`, `onTaskEvent` and the main command. |
-| `packages-zig/node-utils-zig/src/lib/http-server.zig` | The threads of the asset server and the MCP server. |
-| `packages-zig/node-api-zig/src/lib/asset-server.zig` | The asset server. |
-| `packages-zig/photosphere-core/src/lib/mcp-server.zig` | The MCP server. |
-| `apps/cli-zig/src/lib/worker-pool.zig` | The CLI's worker pool. |

@@ -12,7 +12,7 @@ Frontend (TypeScript, in the web view)
     -> ZiggyQueueBackend.addTask                apps/photosphere-frontend/src/lib/ziggy-queue-backend.ts
     -> window.ziggy.addTask                     the add-task system message
 Backend (Zig, in the core)
-    -> main thread: worker pool queues it       an interactive task at the head, a background task at the end
+    -> main thread: worker pool queues it
     -> worker thread: runs the task's handler   packages-zig/node-api-zig/src/lib/<name>.worker.zig
     -> events and the result go to the main thread as JSON messages
     -> main thread sends task-event and task-completed to the page
@@ -20,7 +20,8 @@ Frontend
     -> ZiggyQueueBackend -> TaskQueue onTaskMessage / onTaskComplete / awaitTask
 ```
 
-- A task's input is JSON data and its result is JSON. That is all that crosses between the threads, because the threads share no state.
+[Tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md) in Ziggy's guide describes the part in the core: the queue, priority, cancelling and how a task's JSON input, events and result move between the threads.
+
 - Every task belongs to a source, a string that groups tasks so they can be cancelled together. The frontend usually uses the database path or an import session id.
 - The main thread sends the page `task-event` and `task-completed` for every task, including tasks the backend queued itself, so the interface sees all background work.
 
@@ -88,9 +89,7 @@ A message whose response waits on something slow (a picker, the vault, the phone
 
 ### Tasks the main thread queues
 
-The app queues work of its own from the main thread: the periodic and debounced sync, automatic import, the background passes and the update and news checks. A handler, timer or task end callback queues a task with `services.addTask(io, allocator, task_id, task_type, source, data_json, priority)` and cancels a source with `services.cancelTasks(io, allocator, source)`. See `main-state.zig` and `main-process.zig`.
-
-The main thread hears how every task ends in `onTaskEnd` and every event a task sends in `onTaskEvent` (`main-process.zig`). That is how it applies what a task sends back, since a task never touches the main thread's state.
+The app queues work of its own from the main thread: the periodic and debounced sync, automatic import, the background passes and the update and news checks. A handler, timer or task end callback queues a task with `services.addTask(io, allocator, task_id, task_type, source, data_json, priority)` and cancels a source with `services.cancelTasks(io, allocator, source)`. See `main-state.zig` and `main-process.zig`. [Threads](threads.md#photospheres-state) covers how the main thread hears back from these tasks.
 
 ### Child tasks
 
@@ -109,7 +108,7 @@ try queue.awaitAllTasks(io, allocator, timers);
 
 ### Priority and cancelling
 
-Priority and cancelling work as Ziggy's guide describes (see [Tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md)). Queue a task the user is waiting on as `interactive`, so it runs ahead of the sync and import work already queued. A handler that can be cancelled checks `context.isCancelled(io, allocator)` at the boundaries of its loops.
+Priority and cancelling work as [Tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md) in Ziggy's guide describes. Queue a task the user is waiting on as `interactive`, so it runs ahead of the sync and import work already queued.
 
 ### The CLI
 
@@ -259,22 +258,3 @@ Because the event and the completion of every task reach the page, this works th
 5. Write the unit test under `packages-zig/node-api-zig/src/test` and a smoke test scenario when the task is reachable from a page.
 
 A task that only the Photosphere App runs and that needs the task services (a native call, a message to the main thread) is declared in `apps/photosphere/core/src/app.zig` with its handler in `packages-zig/photosphere-core/src/lib` instead.
-
-## Key files
-
-| File | Purpose |
-|------|---------|
-| `packages-zig/node-api-zig/src/lib/task-handlers.zig` | Every task queue handler by task type and `taskEntries`, which makes them Ziggy task types |
-| `packages-zig/node-api-zig/src/lib/*.worker.zig` | The task handlers |
-| `packages-zig/node-api-zig/src/lib/open-storage.zig` | Opens a database's storage with its credentials and encryption |
-| `apps/photosphere/core/src/app.zig` | The app's declaration: its own task types, keep-alive kinds and the node-api tasks added to them |
-| `packages-zig/photosphere-core/src/lib/main-state.zig` | The main thread's timers that queue sync, import and the background passes |
-| `packages-zig/photosphere-core/src/lib/main-process.zig` | `onTaskEnd`, `onTaskEvent` and the `cancel-tasks` main command |
-| `apps/cli-zig/src/lib/worker-pool.zig` | The CLI's worker pool |
-| [`task-queue/`](https://github.com/ashleydavis/ziggy/tree/HEAD/packages/ziggy/core/src/lib/task-queue) in Ziggy | The Zig `TaskQueue`, `ITaskContext`, `IJobTag` and `sendJobProgress` |
-| [`worker-pool.zig`](https://github.com/ashleydavis/ziggy/blob/HEAD/packages/ziggy/core/src/lib/worker-pool.zig) and [`worker.zig`](https://github.com/ashleydavis/ziggy/blob/HEAD/packages/ziggy/core/src/lib/worker.zig) in Ziggy | The pool on the main thread and the worker threads |
-| `apps/photosphere-frontend/src/lib/ziggy-queue-backend.ts` | The page's queue backend, which forwards to the core over `window.ziggy` |
-| `packages/task-queue/src/lib/task-queue.ts` | The TypeScript `TaskQueue`: queue tasks, await results, subscribe to events |
-| `packages/task-queue/src/lib/types.ts` | `ITaskResult`, `TaskStatus`, `TaskPriority`, `IJobTag` and the callbacks |
-| `packages/user-interface/src/lib/jobs.ts` | Builds the job list from job progress and task completions |
-| `packages/user-interface/src/context/jobs-context.tsx` | Provides the job list and `cancelJob` to the interface |
