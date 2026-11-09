@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 const tools = @import("tools-zig");
 const utils = @import("utils-zig");
 const media_tools = @import("media-tools-zig");
+const node_utils = @import("node-utils-zig");
 const fake_tool_runner = @import("fake-tool-runner.zig");
 const Image = tools.Image;
 const MediaTools = media_tools.MediaTools;
@@ -288,4 +289,45 @@ test "resize refuses a reduced JPEG decode without both a width and a height" {
     var image = Image.init("../test/test.jpg");
     try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, fakeTools.runner(), .{ .width = 0, .height = 45, .quality = null, .format = null, .ext = "jpg", .reducedJpegDecode = true, .transformation = null }, "out", uuids.uuidGenerator()));
     try std.testing.expectEqualStrings("A reduced JPEG decode needs both a width and a height, given 0x45", utils.errors.lastErrorMessage());
+}
+
+//
+// A magick whose `identify -format "%[EXIF:*]"` fails, as it does when ImageMagick cannot read a file's EXIF, and which
+// prints "100 90" for anything else, so the `identify -format "%w %h"` before it reads a size.
+//
+fn runFailingExif(context: ?*anyopaque, _: std.Io, _: ILog, _: std.mem.Allocator, _: []const u8, arguments: []const []const u8) anyerror!node_utils.in_process_tools.ToolOutput {
+    _ = context;
+    for (arguments) |argument| {
+        if (std.mem.eql(u8, argument, "%[EXIF:*]")) {
+            return .{
+                .exit_code = 1,
+                .output = "",
+            };
+        }
+    }
+    return .{
+        .exit_code = 0,
+        .output = "100 90",
+    };
+}
+
+test "getInfo fails, naming the command and the file, when the EXIF cannot be read" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    const failingExif: node_utils.in_process_tools.InProcessRunner = .{
+        .context = null,
+        .run = runFailingExif,
+    };
+
+    // The size is read, but the EXIF read fails, and that failure is the result rather than an image with no date.
+    var image = Image.init("../test/test.png");
+    try std.testing.expectError(error.Thrown, image.getInfo(allocator, io, log, failingExif));
+    try std.testing.expectEqualStrings("Failed to get EXIF data: Error: Failed to execute command: magick identify -format %[EXIF:*] ../test/test.png", utils.errors.lastErrorMessage());
+
+    // getFileInfo, which import and validation call, reports it for the file.
+    try std.testing.expectError(error.Thrown, tools.getFileInfo(allocator, io, log, failingExif, "../test/test.png", "image/png"));
+    try std.testing.expectEqualStrings("Failed to get image info for ../test/test.png: Error: Failed to get EXIF data: Error: Failed to execute command: magick identify -format %[EXIF:*] ../test/test.png\nThrown", utils.errors.lastErrorMessage());
 }
