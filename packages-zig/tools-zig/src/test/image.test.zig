@@ -242,12 +242,13 @@ test "getInfo reads the dimensions and the date of an image" {
     const allocator = arena.allocator();
     try requireImageMagick(log, allocator, runner);
 
-    // The sizes are those in the files' headers (the JPEG frame header, the PNG IHDR chunk and the WebP VP8 frame).
+    // The sizes are those in the files' headers (the JPEG frame header, the PNG IHDR chunk, the WebP VP8 frame, the GIF
+    // image descriptor and the BMP info header).
     // test.jpg has an EXIF DateTimeOriginal of "2025:05:27 09:54:16", so createdAt is set to
     // `new Date("2025-05-27 09:54:16")` (the date colons are rewritten as dashes and the rest is handed to
     // `new Date`). Node and Bun read that date-time with no zone offset as local time, which measured
     // 1748303656000 on a machine at UTC+10:00; js-date.zig assumes local time is UTC (a documented deviation
-    // from JavaScript), so the value read here is the UTC reading, ten hours later. The PNG and WebP have no
+    // from JavaScript), so the value read here is the UTC reading, ten hours later. The PNG, WebP, GIF and BMP have no
     // EXIF, so createdAt stays undefined.
     const cases = [_]IExpectedImageInfo{
         .{
@@ -266,6 +267,18 @@ test "getInfo reads the dimensions and the date of an image" {
             .filePath = "../test/test.webp",
             .width = 100,
             .height = 80,
+            .createdAt = null,
+        },
+        .{
+            .filePath = "../test/test.gif",
+            .width = 16,
+            .height = 12,
+            .createdAt = null,
+        },
+        .{
+            .filePath = "../test/test.bmp",
+            .width = 16,
+            .height = 12,
             .createdAt = null,
         },
     };
@@ -561,18 +574,18 @@ test "resize to only a width or only a height keeps the aspect ratio" {
 
     // The 100x90 PNG to 50 wide is 50x45 (`-resize 50x`), written in the format of the extension (no format given).
     var widthGenerator: FixedUuidGenerator = .{ .id = "width" };
-    const widthPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, widthGenerator.uuidGenerator());
-    try std.testing.expectEqualStrings("50 45 PNG", (try describeImage(log, allocator, runner, widthPath))[0.."50 45 PNG".len]);
+    const widthPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 0, .quality = null, .format = null, .ext = "jpg", .transformation = null }, tempDir, widthGenerator.uuidGenerator());
+    try std.testing.expectEqualStrings("50 45 JPEG", (try describeImage(log, allocator, runner, widthPath))[0.."50 45 JPEG".len]);
 
     // To 45 high is 50x45 too (`-resize x45`).
     var heightGenerator: FixedUuidGenerator = .{ .id = "height" };
-    const heightPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 0, .height = 45, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, heightGenerator.uuidGenerator());
-    try std.testing.expectEqualStrings("50 45 PNG", (try describeImage(log, allocator, runner, heightPath))[0.."50 45 PNG".len]);
+    const heightPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 0, .height = 45, .quality = null, .format = null, .ext = "jpg", .transformation = null }, tempDir, heightGenerator.uuidGenerator());
+    try std.testing.expectEqualStrings("50 45 JPEG", (try describeImage(log, allocator, runner, heightPath))[0.."50 45 JPEG".len]);
 
     // Without keeping the aspect ratio both sides are what was asked for (`-resize 20x30!`).
     var exactGenerator: FixedUuidGenerator = .{ .id = "exact" };
-    const exactPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 20, .height = 30, .quality = null, .format = null, .maintainAspectRatio = false, .ext = "png", .transformation = null }, tempDir, exactGenerator.uuidGenerator());
-    try std.testing.expectEqualStrings("20 30 PNG", (try describeImage(log, allocator, runner, exactPath))[0.."20 30 PNG".len]);
+    const exactPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 20, .height = 30, .quality = null, .format = null, .maintainAspectRatio = false, .ext = "jpg", .transformation = null }, tempDir, exactGenerator.uuidGenerator());
+    try std.testing.expectEqualStrings("20 30 JPEG", (try describeImage(log, allocator, runner, exactPath))[0.."20 30 JPEG".len]);
 }
 
 test "resize refuses a quality outside 0 to 100" {
@@ -606,17 +619,15 @@ test "resize of an animation returns the first frame ImageMagick writes" {
     const tempDir = try makeTempDir(allocator, "resize-animation");
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
 
-    // A two frame GIF resized to PNG is written as <base>-0.png and <base>-1.png, so the validation moves on to the
-    // second output path.
-    const animationPath = try std.fs.path.join(allocator, &.{ tempDir, "animation.gif" });
-    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "20x10", "xc:red", "xc:blue", animationPath });
+    // A two frame GIF (a red and a blue frame of 20x10) resized to JPEG is written as <base>-0.jpg and <base>-1.jpg, so
+    // the validation moves on to the second output path.
     var generator: FixedUuidGenerator = .{ .id = "animation" };
-    var image = Image.init(animationPath);
-    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, generator.uuidGenerator());
-    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_animation-0.png" }), outputPath);
+    var image = Image.init("../test/animation.gif");
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator());
+    try std.testing.expectEqualStrings(try std.fs.path.join(allocator, &.{ tempDir, "temp_resize_animation-0.jpg" }), outputPath);
 
     // A resize whose first frame path is taken is refused.
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, tempDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "jpg", .transformation = null }, tempDir, generator.uuidGenerator()));
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Output file already exists: {s}", .{outputPath}), utils.errors.lastErrorMessage());
 }
 
@@ -664,7 +675,7 @@ test "resize fails loudly when the output directory does not exist" {
     var generator: FixedUuidGenerator = .{ .id = "missing" };
     var image = Image.init("../test/test.png");
 
-    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "png", .transformation = null }, missingDir, generator.uuidGenerator()));
+    try std.testing.expectError(error.Thrown, image.resize(allocator, std.testing.io, log, runner, .{ .width = 10, .height = 0, .quality = null, .format = null, .ext = "jpg", .transformation = null }, missingDir, generator.uuidGenerator()));
     const profilePath = try std.fs.path.join(allocator, &.{ missingDir, "temp_resize_missing.icc" });
     try std.testing.expectEqualStrings(try std.fmt.allocPrint(allocator, "Failed to write the sRGB colour profile to {s}: FileNotFound", .{profilePath}), utils.errors.lastErrorMessage());
 }
