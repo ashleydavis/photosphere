@@ -645,3 +645,49 @@ test "every operation works on a file whose name holds $, a backtick and a doubl
 
     try std.testing.expectEqual(try plain.getDominantColor(allocator, std.testing.io, log, runner), try special.getDominantColor(allocator, std.testing.io, log, runner));
 }
+
+test "resize with a reduced JPEG decode decodes a large JPEG no smaller than the target, and a PNG as without it" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+    const runner = mediaTools.runner();
+    const allocator = arena.allocator();
+    try requireImageMagick(log, allocator, runner);
+    const tempDir = try makeTempDir(allocator, "resize-jpeg-size");
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, tempDir) catch |err| std.debug.panic("The test directory {s} could not be deleted: {s}", .{ tempDir, @errorName(err) });
+
+    // A 5472x3648 JPEG, the size of a 20 megapixel camera's photo.
+    const largePath = try std.fs.path.join(allocator, &.{ tempDir, "large.jpg" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-size", "5472x3648", "gradient:red-blue", "-quality", "90", largePath });
+    try std.testing.expectEqualStrings("5472 3648 JPEG 90", try describeImage(log, allocator, runner, largePath));
+
+    // 1500x1000 is hinted as 2250x1500, which the bundled ImageMagick decodes at 3/8, 2052x1368: smaller than the original
+    // and no smaller than the target. Hinted at the target itself it rounds to 2/8, 1368x912, smaller than the target.
+    try std.testing.expectEqualStrings("2052 1368", try runImageMagick(log, allocator, runner, "convert", &.{ "-define", "jpeg:size=2250x1500", largePath, "-format", "%w %h", "info:" }));
+    try std.testing.expectEqualStrings("1368 912", try runImageMagick(log, allocator, runner, "convert", &.{ "-define", "jpeg:size=1500x1000", largePath, "-format", "%w %h", "info:" }));
+
+    var generator: FixedUuidGenerator = .{ .id = "large" };
+    var image = Image.init(largePath);
+    const outputPath = try image.resize(allocator, std.testing.io, log, runner, .{ .width = 1500, .height = 1000, .quality = 95, .format = "jpeg", .ext = "jpg", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = null }, tempDir, generator.uuidGenerator());
+    try std.testing.expectEqualStrings("1500 1000 JPEG 95", try describeImage(log, allocator, runner, outputPath));
+
+    // The same bytes as the command with the hint, and not those of the command without it, so the resize decoded at the
+    // reduced size.
+    const referencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.jpg" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "-define", "jpeg:size=2250x1500", largePath, "-resize", "1500x1000!", "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", referencePath }) });
+    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, referencePath), try readFile(allocator, outputPath)));
+    const fullDecodePath = try std.fs.path.join(allocator, &.{ tempDir, "full-decode.jpg" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ largePath, "-resize", "1500x1000!", "-strip", "-quality", "95", try std.mem.concat(allocator, u8, &.{ "jpeg:", fullDecodePath }) });
+    try std.testing.expect(!std.mem.eql(u8, try readFile(allocator, fullDecodePath), try readFile(allocator, outputPath)));
+
+    // A PNG is resized to the same bytes as without the hint, as only the JPEG decoder reads it.
+    var pngGenerator: FixedUuidGenerator = .{ .id = "png" };
+    var png = Image.init("../test/test.png");
+    const pngPath = try png.resize(allocator, std.testing.io, log, runner, .{ .width = 50, .height = 45, .quality = null, .format = null, .ext = "png", .maintainAspectRatio = false, .reducedJpegDecode = true, .transformation = null }, tempDir, pngGenerator.uuidGenerator());
+    try std.testing.expectEqualStrings("50 45", try runImageMagick(log, allocator, runner, "identify", &.{ "-format", "%w %h", pngPath }));
+    const pngReferencePath = try std.fs.path.join(allocator, &.{ tempDir, "reference.png" });
+    _ = try runImageMagick(log, allocator, runner, "convert", &.{ "../test/test.png", "-resize", "50x45!", "-strip", pngReferencePath });
+    try std.testing.expect(std.mem.eql(u8, try readFile(allocator, pngReferencePath), try readFile(allocator, pngPath)));
+}
