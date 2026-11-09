@@ -17,7 +17,6 @@ const convertExifCoordinates = utils.reverse_geocode.convertExifCoordinates;
 const isLocationInRange = utils.reverse_geocode.isLocationInRange;
 const getImageTransformation = utils.image.getImageTransformation;
 const readFileHead = node_utils.fs.readFileHead;
-const getFileInfo = tools.getFileInfo;
 const Image = tools.Image;
 const IAssetDetails = media_file_database.IAssetDetails;
 const IResolution = media_file_database.IResolution;
@@ -185,11 +184,16 @@ pub fn getImageDetails(allocator: std.mem.Allocator, io: std.Io, log: ILog, file
         resolution = dimensions;
     }
     else {
-        const probedContentType = if (tools.heic.isHeicContentType(contentType)) "image/jpeg" else contentType;
-        const assetInfo = try getFileInfo(allocator, io, log, imagePath, probedContentType) orelse {
+        // Only the size is asked for. getFileInfo would also run the image tool's EXIF identify for a date that is not
+        // used here, a second pass over every PNG, WebP and other non-JPEG imported. A HEIC is the JPEG decoded above by now.
+        if (!std.mem.startsWith(u8, contentType, "image/")) {
             return errors.throwError("Unsupported file type: {s}", .{contentType});
+        }
+        var image = Image.init(imagePath);
+        const dimensions = image.getDimensions(allocator, io, log) catch |err| {
+            return errors.throwError("Failed to get image info for {s}: {s}\n{s}", .{ imagePath, try utils.errors.errorToString(allocator, err), @errorName(err) });
         };
-        resolution = .{ .width = assetInfo.dimensions.width, .height = assetInfo.dimensions.height };
+        resolution = .{ .width = dimensions.width, .height = dimensions.height };
     }
     const probeMs = dateNow(io) - probeStartedAt;
 

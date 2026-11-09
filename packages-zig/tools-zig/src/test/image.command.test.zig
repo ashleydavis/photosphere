@@ -60,6 +60,149 @@ test "dimensionsFromIdentify reads a width and a height of NaN from output Image
     try std.testing.expect(std.math.isNan(blank.height));
 }
 
+test "dimensionsFromIdentify reads only the first line, so the frames of an animated image do not run together" {
+    // An animated image prints a line per frame. Reading past the first line would make 43x17 read as 43 by 1743.
+    const animated = Image.dimensionsFromIdentify("43 17\n43 17\n43 17\n");
+    try std.testing.expectEqual(@as(f64, 43), animated.width);
+    try std.testing.expectEqual(@as(f64, 17), animated.height);
+}
+
+//
+// A log that keeps the verbose messages tool_run.runLogged writes as it starts each command, so a test can see every command run,
+// in order, and ignores everything else.
+//
+const CommandLog = struct {
+    // Every "Executing ..." message the log was given, one per command run.
+    commands: std.ArrayList([]const u8),
+
+    // The allocator the messages are kept with.
+    allocator: std.mem.Allocator,
+
+    //
+    // Keeps a verbose message that starts a command.
+    //
+    fn verbose(ptr: *anyopaque, message: []const u8) void {
+        const self: *CommandLog = @ptrCast(@alignCast(ptr));
+        if (std.mem.startsWith(u8, message, "Executing ")) {
+            self.commands.append(self.allocator, self.allocator.dupe(u8, message) catch @panic("out of memory keeping a command")) catch @panic("out of memory keeping a command");
+        }
+    }
+
+    //
+    // Ignores a message.
+    //
+    fn ignoreMessage(ptr: *anyopaque, message: []const u8) void {
+        _ = ptr;
+        _ = message;
+    }
+
+    //
+    // Ignores an error.
+    //
+    fn ignoreException(ptr: *anyopaque, message: []const u8, err: anyerror) void {
+        _ = ptr;
+        _ = message;
+        _ = @intFromError(err);
+    }
+
+    //
+    // Ignores a tool's output.
+    //
+    fn ignoreTool(ptr: *anyopaque, tool_name: []const u8, data: utils.log.IToolOutput) void {
+        _ = ptr;
+        _ = tool_name;
+        _ = data;
+    }
+
+    //
+    // Verbose logging is on, since the commands are verbose messages.
+    //
+    fn verboseEnabled(ptr: *anyopaque) bool {
+        _ = ptr;
+        return true;
+    }
+
+    //
+    // The log has no file.
+    //
+    fn getLogDetails(ptr: *anyopaque, allocator: std.mem.Allocator, io: std.Io) anyerror!utils.log.ILogDetails {
+        _ = ptr;
+        _ = allocator;
+        _ = io;
+        return utils.log.noLogDetails;
+    }
+
+    //
+    // This log writes no file.
+    //
+    fn logFilePath(ptr: *anyopaque) ?[]const u8 {
+        _ = ptr;
+        return null;
+    }
+
+    // The ILog functions of the log.
+    const vtable: utils.log.ILog.VTable = .{
+        .info = ignoreMessage,
+        .verbose = verbose,
+        .@"error" = ignoreMessage,
+        .exception = ignoreException,
+        .warn = ignoreMessage,
+        .debug = ignoreMessage,
+        .tool = ignoreTool,
+        .event = ignoreMessage,
+        .verboseEnabled = verboseEnabled,
+        .getLogDetails = getLogDetails,
+        .logFilePath = logFilePath,
+    };
+
+    //
+    // The ILog of the log.
+    //
+    fn ilog(self: *CommandLog) utils.log.ILog {
+        return .{
+            .ptr = self,
+            .vtable = &vtable,
+        };
+    }
+};
+
+test "getDimensions runs only the size identify, and getInfo runs the EXIF identify as well" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const io = std.testing.io;
+    var mediaTools = try MediaTools.init();
+    defer mediaTools.deinit();
+
+    // The real ImageMagick reads the checked in test.png, which is 100x90.
+    var sizeOnly: CommandLog = .{
+        .commands = .empty,
+        .allocator = allocator,
+    };
+    var image = Image.init("../test/test.png");
+    const dimensions = try image.getDimensions(allocator, io, sizeOnly.ilog());
+    try std.testing.expectEqual(@as(f64, 100), dimensions.width);
+    try std.testing.expectEqual(@as(f64, 90), dimensions.height);
+    try std.testing.expectEqual(@as(usize, 1), sizeOnly.commands.items.len);
+    try std.testing.expectEqualStrings("Executing magick with command: \"magick identify -format %w %h\n ../test/test.png\"", sizeOnly.commands.items[0]);
+
+    // getInfo still reads the EXIF for createdAt, after the size.
+    var full: CommandLog = .{
+        .commands = .empty,
+        .allocator = allocator,
+    };
+    var withInfo = Image.init("../test/test.png");
+    const info = try withInfo.getInfo(allocator, io, full.ilog());
+    try std.testing.expectEqual(dimensions, info.dimensions);
+    try std.testing.expectEqual(@as(usize, 2), full.commands.items.len);
+    try std.testing.expectEqualStrings("Executing magick with command: \"magick identify -format %w %h\n ../test/test.png\"", full.commands.items[0]);
+    try std.testing.expectEqualStrings("Executing magick with command: \"magick identify -format %[EXIF:*] ../test/test.png\"", full.commands.items[1]);
+
+    // Once getInfo has read the image, getDimensions answers from it without running anything more.
+    try std.testing.expectEqual(info.dimensions, try withInfo.getDimensions(allocator, io, full.ilog()));
+    try std.testing.expectEqual(@as(usize, 2), full.commands.items.len);
+}
+
 test "getInfo reads the size identify prints and no date from an image with no EXIF" {
     // The real ImageMagick reads the checked in test.png, which is 100x90 and has no EXIF, so its EXIF output is empty and createdAt
     // stays null.

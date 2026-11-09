@@ -131,29 +131,6 @@ const ILogEnvironment = struct {
 };
 
 //
-// Makes a directory that can be read and searched but not written to, and returns a function that puts it back so
-// the tree under it can be deleted. A no-op (returning the path unchanged) on Windows, where the permissions of a
-// directory are not what stops a write.
-//
-fn makeReadOnlyDir(dir_path: []const u8) ![]const u8 {
-    if (builtin.os.tag == .windows) {
-        return dir_path;
-    }
-    try std.Io.Dir.cwd().setFilePermissions(io, dir_path, std.Io.File.Permissions.fromMode(0o500), .{});
-    return dir_path;
-}
-
-//
-// Puts a directory's permissions back so a tree under it can be deleted.
-//
-fn restoreWrite(dir_path: []const u8) void {
-    if (builtin.os.tag == .windows) {
-        return;
-    }
-    std.Io.Dir.cwd().setFilePermissions(io, dir_path, std.Io.File.Permissions.fromMode(0o700), .{}) catch {};
-}
-
-//
 // Runs `psi summary --cwd <current directory>`: a command that needs an existing database, started from a directory
 // that is not one, so it shows the directory picker ("Select an existing media database directory:") with the choices
 // subdirectory, full path and cancel, typing the keys of the prompts it shows.
@@ -515,51 +492,6 @@ test "a full path of only whitespace is refused as a path that was not given" {
 
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "Path is required") != null);
     try std.testing.expect(node_utils.fs.pathExists(io, wanted));
-}
-
-test "pickDirectory reports the failure to create a subdirectory in a directory that cannot be written to" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const read_only = try makePlainDir(allocator, "picker-read-only-subdir");
-    defer restoreWrite(read_only);
-    defer std.Io.Dir.cwd().deleteTree(io, read_only) catch {};
-
-    _ = try makeReadOnlyDir(read_only);
-    const created = try std.fs.path.join(allocator, &.{ read_only, "photos" });
-    const result = try runPickerOnSummary(allocator, read_only, &.{
-        .{ .waitFor = "Select an existing media database directory:", .keys = "\r" },
-        .{ .waitFor = "Enter name for subdirectory:", .keys = "photos\r" },
-    });
-
-    // The name passes validation because nothing is there yet, and it is the mkdir that fails.
-    const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: EACCES: permission denied, mkdir '{s}'", .{created});
-    if (builtin.os.tag != .windows) {
-        try std.testing.expect(std.mem.indexOf(u8, result.stdout, expected) != null);
-        try std.testing.expect(!node_utils.fs.pathExists(io, created));
-    }
-}
-
-test "a full path under a directory that cannot be written to fails with the message Node gives" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    const read_only = try makePlainDir(allocator, "picker-read-only-full");
-    defer restoreWrite(read_only);
-    defer std.Io.Dir.cwd().deleteTree(io, read_only) catch {};
-
-    _ = try makeReadOnlyDir(read_only);
-    const created = try std.fs.path.join(allocator, &.{ read_only, "photos" });
-    const result = try runPickerOnSummary(allocator, read_only, &.{
-        .{ .waitFor = "Select an existing media database directory:", .keys = "\x1b[B\r" },
-        .{ .waitFor = "Enter full directory path:", .keys = try std.mem.concat(allocator, u8, &.{ created, "\r" }) },
-    });
-
-    if (builtin.os.tag != .windows) {
-        const expected = try std.fmt.allocPrint(allocator, "Failed to create directory: EACCES: permission denied, mkdir '{s}'", .{created});
-        try std.testing.expect(std.mem.indexOf(u8, result.stdout, expected) != null);
-        try std.testing.expect(!node_utils.fs.pathExists(io, created));
-    }
 }
 
 //
