@@ -1,5 +1,5 @@
 # The tests on Windows, on every push and on demand, made to report as fast as possible. They test what Release Windows tests and build
-# what it builds, as it builds it, packages included, and publish nothing. app-build builds and packages the Photosphere App and
+# what it builds, with the Zig code in Debug, packages included, and publish nothing. app-build builds and packages the Photosphere App and
 # cli-build builds the Zig CLI, side by side, and the app smoke tests are split across runners, each running one shard of the scenarios
 # on that app and CLI. The CLI smoke tests build their own CLI and the Zig unit tests start at once, so neither waits for a build.
 #
@@ -63,11 +63,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-release-app-build-
 
-      # The release build, stripped and minified, as Release Windows builds it. The prefix is given in the drive-letter form, because
+      # Stripped and minified as Release Windows builds it, with the Zig code in Debug, which compiles fastest. The prefix is given in the drive-letter form, because
       # the build script hands it to zig.
       - name: Build the app
         shell: bash
-        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --strip --minify
+        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --strip --minify --optimize Debug
 
       - name: Save the app build's Zig build cache
         if: always()
@@ -128,10 +128,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-release-cli-build-
 
-      # ReleaseSafe, as Release Windows builds it.
+      # Stamped as Release Windows builds it, with the Zig code in Debug, which compiles fastest.
       - name: Build the Zig CLI
         shell: bash
-        run: zig build -Dcpu=baseline --prefix out/psi
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
 
       - name: Save the CLI build's Zig build cache
         if: always()
@@ -257,7 +257,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
-      # The CLI is built stamped and in ReleaseSafe, as Release Windows builds the one its CLI smoke tests run. It is built here, from
+      # The CLI is built stamped, as Release Windows builds the one its CLI smoke tests run. It is built here, from
       # a second checkout so the stamp stays out of this one, rather than waiting for cli-build, which takes about as long as the wait.
       - name: Checkout code again, for the Zig CLI build
         uses: actions/checkout@v4
@@ -286,7 +286,7 @@ jobs:
       - name: Build the Zig CLI
         shell: bash
         working-directory: ./psi-src
-        run: zig build -Dcpu=baseline --prefix ../out/psi
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix ../out/psi
 
       # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh).
       - name: Run the Zig CLI smoke tests

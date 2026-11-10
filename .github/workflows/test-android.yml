@@ -1,5 +1,5 @@
 # The tests on Android, on every push and on demand, made to report as fast as possible. They test what Release Android tests and build
-# what it builds, as it builds it, and publish nothing (Release Android's packaging is switched off). build builds the Photosphere App
+# what it builds, with the Zig code in Debug, and publish nothing (Release Android's packaging is switched off). build builds the Photosphere App
 # as Release Android does and the Zig CLI for the runner, which makes the scenarios' fixtures, and uploads both. The app smoke tests are
 # split across runners, each running one shard of the scenarios on its own emulator. The Zig unit tests are not run here: Release
 # Android runs them with the same command on the same Linux runner as Test Linux does.
@@ -90,15 +90,15 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-zig-test-release-build-android-
 
       # As Release Android builds it: the debug-type APK the scenarios need (they seed and read the app's data through run-as) of the
-      # ReleaseSafe library for both architectures the app ships, with the page minified. The APK is copied to out/app/photosphere.apk,
+      # library, in Debug, which compiles fastest, for both architectures the app ships, with the page minified. The APK is copied to out/app/photosphere.apk,
       # where the smoke tests take it from.
       - name: Build the app
         shell: bash
-        run: bun run --filter=ziggy build:android -- --minify --output-dir "$PWD/out/app"
+        run: bun run --filter=ziggy build:android -- --minify --optimize Debug --output-dir "$PWD/out/app"
 
       - name: Build the Zig CLI
         shell: bash
-        run: zig build -Dcpu=baseline --prefix out/psi
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
 
       - name: Save the build's Zig build cache
         if: always()

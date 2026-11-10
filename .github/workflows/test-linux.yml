@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Builds the app and the CLI exactly as Release Linux does (the version stamped in, ReleaseSafe, the app minified and stripped) and
+  # Builds the app and the CLI as Release Linux does (the version stamped in, the app minified and stripped) but with the Zig code in Debug, which compiles fastest, and
   # uploads them as one tar, which keeps the executable bits an artifact would lose, then packages the app as Release Linux does. It is
   # the only job that may build a third-party library, when no stored artifact has it, so two jobs never upload the same library at once.
   build:
@@ -72,11 +72,11 @@ jobs:
 
       - name: Build the app
         shell: bash
-        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --minify --strip
+        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --minify --strip --optimize Debug
 
       - name: Build the Zig CLI
         shell: bash
-        run: zig build -Dcpu=baseline --prefix out/psi
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
 
       - name: Save the build's Zig build cache
         if: always()
