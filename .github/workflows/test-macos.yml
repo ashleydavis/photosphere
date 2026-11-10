@@ -1,7 +1,9 @@
-# The tests on macOS, called by Test macOS arm64 and Test macOS x64 with the runner and the architecture. build builds the Photosphere
-# App and the Zig CLI once, in Debug because it compiles fastest, and uploads both. The app smoke tests are split across runners, each
-# running one shard of the scenarios on that build, beside the CLI smoke tests and the Zig unit tests. Every job here takes one of the
-# account's five macOS runners, which Test iOS shares, so the jobs are as few as keep the run short.
+# The tests on macOS, called by Test macOS arm64 and Test macOS x64 with the runner and the architecture. Every job here takes one of
+# the account's five macOS runners, which Test iOS shares, so each platform has two jobs and both start at once: app builds the
+# Photosphere App and the Zig CLI side by side and runs every app smoke scenario on that runner, and cli builds the Zig CLI and runs
+# the CLI smoke tests and the Zig unit tests. Both build in ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from
+# connect on macOS ("programmer bug caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles.
+
 name: Test macOS
 
 on:
@@ -19,13 +21,9 @@ on:
         description: The Zig target the third-party libraries are built for, such as aarch64-macos.11.0.
         type: string
         required: true
-      shards:
-        description: The app smoke test shards as a JSON list of their indexes, such as [1, 2].
+      app-parallel:
+        description: How many app smoke scenarios run at once on the runner.
         type: string
-        required: true
-      shard-count:
-        description: How many shards there are, the length of shards.
-        type: number
         required: true
 
 env:
@@ -33,75 +31,9 @@ env:
   NODE_VERSION: "24.15.0"
 
 jobs:
-  # Builds the app and the CLI in Debug and uploads them as one tar, which keeps the app bundle's symlinks and executable bits. It is
-  # the only job that may build a third-party library, when no stored artifact has it, so two jobs never upload the same library at once.
-  build:
+  app:
     timeout-minutes: 60
     runs-on: ${{ inputs.runner }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup
-        uses: ./.github/actions/test-setup
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: ${{ inputs.platform }}
-          build-args: -Dtarget=${{ inputs.target }}
-
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
-      - name: Restore the Debug build's Zig build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-
-
-      - name: Build the app
-        shell: bash
-        run: bun run --filter=ziggy build:macos -- --configuration Release --optimize Debug --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
-
-      - name: Build the Zig CLI
-        shell: bash
-        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
-
-      - name: Save the Debug build's Zig build cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
-
-      - name: Pack the build
-        shell: bash
-        run: tar -cf "$RUNNER_TEMP/build.tar" out/app/xcode/Build/Products/Release/Photosphere.app out/psi
-
-      - name: Upload the build
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-build-${{ inputs.platform }}
-          path: ${{ runner.temp }}/build.tar
-          retention-days: 1
-          compression-level: 1
-
-  # One shard of the app smoke tests per runner, in a real window on the runner's own display.
-  app-smoke-tests:
-    timeout-minutes: 30
-    needs: [build]
-    runs-on: ${{ inputs.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ${{ fromJSON(inputs.shards) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -119,21 +51,59 @@ jobs:
           run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      - name: Download the build
-        uses: actions/download-artifact@v4
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
         with:
-          name: test-build-${{ inputs.platform }}
-          path: ${{ runner.temp }}
+          platform: ${{ inputs.platform }}
+          build-args: -Dtarget=${{ inputs.target }}
 
-      - name: Unpack the build
+      - name: Set config
         shell: bash
-        run: tar -xf "$RUNNER_TEMP/build.tar"
+        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
 
-      - name: Run shard ${{ matrix.shard }} of the Photosphere App smoke tests
-        timeout-minutes: 25
+      - name: Restore the build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-
+
+      # Side by side, because each spends most of its time compiling one Zig module, which takes one core.
+      - name: Build the app and the Zig CLI
+        shell: bash
+        run: |
+          bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
+          app_pid=$!
+          zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+          psi_pid=$!
+          app_status=0
+          wait "$app_pid" || app_status=$?
+          psi_status=0
+          wait "$psi_pid" || psi_status=$?
+          echo "::group::App build"
+          cat "$RUNNER_TEMP/app-build.log"
+          echo "::endgroup::"
+          echo "::group::Zig CLI build"
+          cat "$RUNNER_TEMP/psi-build.log"
+          echo "::endgroup::"
+          if [ "$app_status" -ne 0 ] || [ "$psi_status" -ne 0 ]; then
+              echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
+              exit 1
+          fi
+
+      - name: Save the build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-${{ github.sha }}
+
+      - name: Run the Photosphere App smoke tests
+        timeout-minutes: 30
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/${{ inputs.shard-count }}
+          PHOTOSPHERE_TEST_PARALLEL: ${{ inputs.app-parallel }}
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy
 
       - name: Collect the logs of failed scenarios and any crash reports
@@ -152,13 +122,12 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: app-smoke-logs-${{ inputs.platform }}-${{ matrix.shard }}
+          name: app-smoke-logs-${{ inputs.platform }}
           path: ${{ runner.temp }}/app-smoke-logs
           retention-days: 5
 
-  cli-smoke-tests:
-    timeout-minutes: 40
-    needs: [build]
+  cli:
+    timeout-minutes: 60
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Checkout code
@@ -176,30 +145,28 @@ jobs:
           run: brew install imagemagick ffmpeg tree
           verify: magick|convert ffmpeg ffprobe
 
-      # Scenario 75 runs `zig build test-integration`, which links the libraries.
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
           platform: ${{ inputs.platform }}
           build-args: -Dtarget=${{ inputs.target }}
 
-      - name: Restore the Zig unit tests' build cache
-        uses: actions/cache/restore@v4
+      - name: Set config
+        shell: bash
+        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
+
+      # One cache for the CLI build, the unit tests and scenario 75's `zig build test-integration`, which share most compile steps.
+      - name: Cache Zig's build cache
+        uses: actions/cache@v4
         with:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
-      - name: Download the build
-        uses: actions/download-artifact@v4
-        with:
-          name: test-build-${{ inputs.platform }}
-          path: ${{ runner.temp }}
-
-      - name: Unpack the build
+      - name: Build the Zig CLI
         shell: bash
-        run: tar -xf "$RUNNER_TEMP/build.tar"
+        run: zig build -Dcpu=baseline --prefix out/psi
 
       - name: Run the Zig CLI smoke tests
         timeout-minutes: 30
@@ -224,47 +191,15 @@ jobs:
           path: ${{ runner.temp }}/cli-smoke-logs
           retention-days: 5
 
-  # The unit tests of the Zig CLI and of every Zig package. After build only so that build is the one job that may build a library.
-  zig-unit-tests:
-    timeout-minutes: 40
-    needs: [build]
-    runs-on: ${{ inputs.runner }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup
-        uses: ./.github/actions/test-setup
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install media processing tools
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
-
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: ${{ inputs.platform }}
-          build-args: -Dtarget=${{ inputs.target }}
-
-      - name: Cache Zig's build cache
-        uses: actions/cache@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
-
       # The getImageDetails format test reads images from test/formats, which are made on the machine rather than committed.
       - name: Make the format test images
+        if: ${{ !cancelled() }}
         shell: bash
         run: bash scripts/make-format-test-images.sh
 
+      # Run whether or not the CLI smoke tests passed, so one push reports both.
       - name: Run the Zig unit tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 30
         shell: bash
         run: zig build test -Dcpu=baseline --summary all --test-timeout 20m

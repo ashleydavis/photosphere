@@ -98,7 +98,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -163,7 +163,7 @@ jobs:
           PHOTOSPHERE_NO_LAN_BRIDGE: "1"
           PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
           PHOTOSPHERE_SMOKE_PSI: ${{ github.workspace }}/out/psi/bin/psi
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/3
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
         with:
           api-level: 35
           arch: x86_64

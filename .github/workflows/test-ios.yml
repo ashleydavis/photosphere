@@ -1,5 +1,5 @@
 # The tests on iOS, on every push and on demand, made to report as fast as possible. build builds the Photosphere App for the iOS
-# simulator, with its Zig library in Debug because it compiles fastest, and the Zig CLI for the runner's macOS, which makes the scenarios'
+# simulator, in ReleaseSafe, and the Zig CLI for the runner's macOS, which makes the scenarios'
 # fixtures, and uploads both. The app smoke tests are split across runners, each running one shard of the scenarios on its own simulator.
 # The Zig unit tests are not run here: on this runner they are the same command as Test macOS arm64 runs. Every job here takes one of
 # the account's five macOS runners, which the macOS test workflows share. Nothing is packaged: the release workflow does that.
@@ -55,28 +55,45 @@ jobs:
         shell: bash
         run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
 
-      - name: Restore the Debug build's Zig build cache
+      - name: Restore the build's Zig build cache
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-ios-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-ios-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-
 
-      - name: Build the app for the iOS simulator
+      # ReleaseSafe, because in Debug Zig's standard library aborts on an EISCONN from connect on Apple platforms ("programmer bug
+      # caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles. Side by side, because each spends most
+      # of its time compiling one Zig module, which takes one core.
+      - name: Build the app for the iOS simulator and the Zig CLI
         shell: bash
-        run: bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --optimize Debug --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+        run: |
+          bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
+          app_pid=$!
+          zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+          psi_pid=$!
+          app_status=0
+          wait "$app_pid" || app_status=$?
+          psi_status=0
+          wait "$psi_pid" || psi_status=$?
+          echo "::group::App build"
+          cat "$RUNNER_TEMP/app-build.log"
+          echo "::endgroup::"
+          echo "::group::Zig CLI build"
+          cat "$RUNNER_TEMP/psi-build.log"
+          echo "::endgroup::"
+          if [ "$app_status" -ne 0 ] || [ "$psi_status" -ne 0 ]; then
+              echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
+              exit 1
+          fi
 
-      - name: Build the Zig CLI
-        shell: bash
-        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
-
-      - name: Save the Debug build's Zig build cache
+      - name: Save the build's Zig build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-ios-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-${{ github.sha }}
 
       - name: Pack the build
         shell: bash
@@ -100,6 +117,20 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
+      # Booting a simulator on a fresh runner took 3 to 6 minutes, all of it inside the first scenario, and the scenario after it
+      # once timed out waiting for the app while the simulator was still settling. Started first, the boot runs while the job sets
+      # up. It is the simulator apple_pick_simulator would choose, the first iPhone, and that function takes a booted one first.
+      - name: Start booting the simulator
+        shell: bash
+        run: |
+          udid="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | first | .udid // empty')"
+          if [ -z "$udid" ]; then
+              echo "There is no available iPhone simulator." >&2
+              exit 1
+          fi
+          echo "Booting $udid"
+          xcrun simctl boot "$udid"
+
       - name: Checkout code
         uses: actions/checkout@v4
 

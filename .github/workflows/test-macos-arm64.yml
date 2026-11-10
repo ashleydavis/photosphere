@@ -20,5 +20,5 @@ jobs:
       runner: macos-latest
       platform: macos-arm64
       target: aarch64-macos.11.0
-      shards: "[1, 2]"
-      shard-count: 2
+      # The runner has 3 cores.
+      app-parallel: "3"
