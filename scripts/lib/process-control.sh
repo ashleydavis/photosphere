@@ -400,7 +400,7 @@ process_control_watch_launcher() {
         esac
         sleep 1
     done
-    own_pgid="$(process_group_of "$BASHPID")"
+    own_pgid="$(process_group_of "$$")"
     if [ -z "$own_pgid" ]; then
         return 0
     fi
@@ -454,7 +454,9 @@ launch_in_process_group() {
         for close_fd in $PROCESS_CONTROL_CLOSE_FDS; do
             exec {close_fd}>&-
         done
-        process_control_watch_launcher "$launcher_pid" "$BASHPID" &
+        # $$, not BASHPID: macOS ships bash 3.2, which has no BASHPID, and under set -u the reference ended the launch
+        # with "BASHPID: unbound variable", failing every scenario that started the app on the iOS simulator.
+        process_control_watch_launcher "$launcher_pid" "$$" &
         # A program is exec'd so the pid printed below is the program's own, as it was before this
         # subshell existed. Run as a child, the program had a pid of its own and the subshell's pid
         # never became it: on Windows the app's Windows pid is read from /proc/<pid>/winpid until it

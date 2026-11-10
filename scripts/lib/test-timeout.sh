@@ -203,6 +203,7 @@ run_test_function_with_timeout() {
     # as the killer in run_test_with_timeout.
     (
         local inherited_background_pid=$!
+        local watchdog_pid=$$
         local sleeping="no"
         trap 'if [ "$sleeping" = "yes" ] && [ "$!" != "$inherited_background_pid" ]; then kill "$!" 2>/dev/null; fi; exit 0' TERM
         local started_at=$SECONDS
@@ -220,7 +221,7 @@ run_test_function_with_timeout() {
         : > "$timeout_marker"
         local child
         for child in $(process_children "$script_pid"); do
-            if [ "$child" = "$BASHPID" ]; then
+            if [ "$child" = "$watchdog_pid" ]; then
                 continue
             fi
             kill_process_tree "$child"
@@ -324,6 +325,7 @@ start_suite_watchdog() {
         # Each poll's sleep is recorded and stopped by this TERM trap, so stopping the watchdog never
         # leaves a sleep behind. It used to be stopped with `pkill -P`, which Git Bash does not have.
         local inherited_background_pid=$!
+        local watchdog_pid=$$
         local sleeping="no"
         trap 'if [ "$sleeping" = "yes" ] && [ "$!" != "$inherited_background_pid" ]; then kill "$!" 2>/dev/null; fi; exit 0' TERM
         local started_at=$SECONDS
@@ -365,7 +367,7 @@ start_suite_watchdog() {
         children="$(process_children "$script_pid")"
         kill -TERM "$script_pid" 2>/dev/null || true
         for child in $children; do
-            if [ "$child" = "$BASHPID" ]; then
+            if [ "$child" = "$watchdog_pid" ]; then
                 continue
             fi
             kill_process_tree "$child"
