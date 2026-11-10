@@ -402,7 +402,7 @@ jobs:
 
   cli-smoke-tests:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
-    # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
+    # between platforms. The unit tests are in their own job, so a failure in one is not
     # reported as a failure of the other.
     # The binary is not built here: cli-build builds it and this job restores it from the cache, so the Zig CLI
     # is compiled once and both this job and the release use it.

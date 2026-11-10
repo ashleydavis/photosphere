@@ -87,7 +87,7 @@ jobs:
           echo "is-release=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Resolved tag: '$TAG' (is-release: $IS_RELEASE)"
 
-  # The third-party libraries, each built once by its own action and stored as an artifact under the same keys as the Zig CI workflow, so a
+  # The third-party libraries, each built once by its own action and stored as an artifact, so a
   # library either workflow has already built is restored rather than compiled again. Every job that runs the Zig build
   # restores them from those artifacts with the third-party-libraries action.
   build-aws-sdk:
@@ -370,7 +370,7 @@ jobs:
 
   cli-smoke-tests:
     # The Zig CLI smoke suites, because the byte-identical output (gzip OS byte, paths, file times) differs
-    # between platforms. The unit tests are in the Zig CI workflow, so a failure in one is not
+    # between platforms. The unit tests are in their own job, so a failure in one is not
     # reported as a failure of the other.
     # The binary is not built here: cli-build builds it and this job restores it from the cache, so the Zig CLI
     # is compiled once and both this job and the release use it.

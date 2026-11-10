@@ -1,47 +1,24 @@
 # Workflows
 
-The jobs of the GitHub Actions workflows in `.github/workflows`, what each one needs, and where each one gets its input and puts its output. Jobs hand their output to each other through the GitHub Actions cache. No workflow uses GitHub artifacts. Every job also keeps the Bun and Zig package caches in the GitHub cache; they are left out below.
+The jobs of the GitHub Actions workflows in `.github/workflows`, what each one needs, and where each one gets its input and puts its output. The release workflows hand their builds from job to job through the GitHub Actions cache; the test workflows hand theirs on as GitHub artifacts of the run, kept for a day. Every job also keeps the Bun and Zig package caches in the GitHub cache; they are left out below.
 
 A third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) is built by its own build action in `.github/actions/build-<library>`, which caches it under a key made from the platform, the build arguments and the library's source, so the same library is built once whichever workflow asks for it. A job that needs the libraries restores them with the `third-party-libraries` action, which runs the same build actions and gets a cache hit.
 
-## CI (`ci.yml`)
+## Test (`test-<platform>.yml`)
 
-Runs on every push to a branch, every pull request into `main` and every manual run, on Linux only. It packages nothing and builds for no other platform: the release workflows do both.
+One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `android` and `ios`. Each runs on every push to a branch and every manual run, and Test Linux also on every pull request into `main`. A newer push to the same branch cancels the run still going. Each builds what its release workflow builds, as it builds it, packages it where the release workflow does, and runs every test the release workflow runs, then publishes nothing. It is made fast by splitting the app smoke scenarios across runners (`PHOTOSPHERE_SMOKE_SHARD`, see `apps/photosphere-smoke-tests/run.md`), by starting every job it can at once, and by running each test once: the TypeScript is compiled and tested in Test Linux only, and the Zig unit tests are not run in Test Android or Test iOS, whose release workflows run them with the same command on the same runner as Test Linux and Test macOS arm64 do.
 
-```
-ci.yml  "CI"
-│
-│   Library jobs: one job per library, for Linux.
-│     needs:  none
-│     output → GitHub cache (one key per library)
-├── build-aws-sdk-linux                (ubuntu-latest)
-├── build-zlib-ng-linux                (ubuntu-latest)
-├── build-imagemagick-linux            (ubuntu-latest)
-├── build-ffmpeg-linux                 (ubuntu-latest)
-│
-├── app-build-linux                    (ubuntu-latest)
-│     needs:  the 4 library jobs
-│     Builds the app. No packaging.
-│     input  ← libraries from GitHub cache
-│     output → none kept (it only proves the app builds)
-├── cli-build-linux                    (ubuntu-latest)
-│     needs:  the 4 library jobs
-│     Builds the CLI.
-│     input  ← libraries from GitHub cache
-│     output → Zig build cache to GitHub cache (zig-build-<sha>)
-├── typescript-compile                 (ubuntu-latest)
-│     needs:  none
-│     output → none
-├── typescript-unit-tests              (ubuntu-latest)
-│     needs:  none
-│     output → none
-└── zig-unit-tests-linux                     (ubuntu-latest)
-      needs:  the 4 library jobs, cli-build-linux
-      Runs zig build test.
-      input  ← libraries; its own Zig build cache; the cli-build-linux
-               Zig build cache (zig-build-<sha>), from GitHub cache
-      output → Zig build cache to GitHub cache, for its next run
-```
+The library jobs of the release workflows are left out: each job restores the libraries with the `third-party-libraries` action, which builds and stores any library no stored artifact has.
+
+The macOS and iOS workflows share the account's five macOS runners, so their jobs are few and none waits on another job's upload: a job that waits holds a runner that the job it waits for may be queued for.
+
+| Workflow | Jobs |
+|---|---|
+| `test-linux.yml` | `build` (app and CLI as Release Linux builds them, then the packages), `dev-build` (the app and CLI as a developer builds them: unstamped, not minified, not stripped), `app-smoke-tests` (4 shards), `cli-smoke-tests`, `zig-unit-tests`, `typescript` (compile and unit tests) |
+| `test-windows.yml` | `app-build` (then the packages), `cli-build`, `app-smoke-tests` (6 shards), `cli-smoke-tests` (builds its own CLI), `zig-unit-tests` |
+| `test-macos-arm64.yml`, `test-macos-x64.yml` | Both call `test-macos.yml`: `app` (builds the app and the CLI side by side, packages the app, runs every app scenario) and `cli` (the Zig unit tests beside the CLI build, then the CLI smoke tests) |
+| `test-android.yml` | `build`, `app-smoke-tests` (4 shards, an emulator each) |
+| `test-ios.yml` | `build`, `app-smoke-tests` (2 shards, two simulators each) |
 
 ## Release (`release-<platform>.yml`)
 
@@ -136,25 +113,23 @@ The Android library jobs build each library for the runner, Android x86_64 and A
 
 Each arrow points from a job to a job that needs it. A job with no arrow into it starts when the workflow starts.
 
-### `ci.yml`
+### `test-<platform>.yml`
 
 ```mermaid
 flowchart LR
-    build-aws-sdk-linux --> app-build-linux
-    build-zlib-ng-linux --> app-build-linux
-    build-imagemagick-linux --> app-build-linux
-    build-ffmpeg-linux --> app-build-linux
-    build-aws-sdk-linux --> cli-build-linux
-    build-zlib-ng-linux --> cli-build-linux
-    build-imagemagick-linux --> cli-build-linux
-    build-ffmpeg-linux --> cli-build-linux
-    build-aws-sdk-linux --> zig-unit-tests-linux
-    build-zlib-ng-linux --> zig-unit-tests-linux
-    build-imagemagick-linux --> zig-unit-tests-linux
-    build-ffmpeg-linux --> zig-unit-tests-linux
-    cli-build-linux --> zig-unit-tests-linux
-    typescript-compile
-    typescript-unit-tests
+    linux-build["linux: build"] --> linux-app["linux: app-smoke-tests"]
+    linux-build --> linux-cli["linux: cli-smoke-tests"]
+    linux-build --> linux-zig["linux: zig-unit-tests"]
+    linux-dev["linux: dev-build"]
+    linux-ts["linux: typescript"]
+    win-app-build["windows: app-build"] --> win-app["windows: app-smoke-tests"]
+    win-cli-build["windows: cli-build"] --> win-app
+    win-cli["windows: cli-smoke-tests"]
+    win-zig["windows: zig-unit-tests"]
+    mac-app["macos: app"]
+    mac-cli["macos: cli"]
+    android-build["android: build"] --> android-app["android: app-smoke-tests"]
+    ios-build["ios: build"] --> ios-app["ios: app-smoke-tests"]
     linkStyle default stroke:#ffffff,stroke-width:2px
 ```
 

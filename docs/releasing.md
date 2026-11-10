@@ -17,9 +17,9 @@ The version the app reports is the tag with its platform prefix removed: `linux-
 
 Each platform's versions are independent. Releasing `linux-v1.2.3` releases nothing on the other platforms; push a tag for each platform you want released.
 
-For now the release workflows run only when started manually from the Actions tab: their push and pull request triggers, release tag pushes included, are commented out until every platform's workflow passes. Until then a pushed tag starts nothing, and pushes and pull requests build no nightly.
+A release workflow runs when its platform's tag is pushed or when it is started from the Actions tab. A push to a branch starts no release workflow: it starts the test workflows (`test-<platform>.yml`, see [Workflows](workflows.md)), which build and test what the release workflows build and test and publish nothing.
 
-The TypeScript is compiled and unit tested on Linux in every release workflow's `typescript-compile` and `typescript-unit-tests` jobs. The Zig unit tests run in its `zig-unit-tests` job on the workflow's own runner (Linux for Android, macOS for iOS). The CI workflow (`.github/workflows/ci.yml`) runs the same TypeScript jobs and `zig-unit-tests-linux`, all on Linux, for every push to a branch, every pull request into `main` and every manual run.
+The TypeScript is compiled and unit tested on Linux in every release workflow's `typescript-compile` and `typescript-unit-tests` jobs. The Zig unit tests run in its `zig-unit-tests` job on the workflow's own runner (Linux for Android, macOS for iOS).
 
 ## Making a release
 

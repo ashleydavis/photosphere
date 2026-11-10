@@ -15,6 +15,10 @@ on:
     branches:
       - "**"
 
+  pull_request:
+    branches:
+      - main
+
   workflow_dispatch:
 
 # A newer push to the same branch supersedes a run still going, so only the latest commit's results are waited for.
@@ -102,6 +106,55 @@ jobs:
         run: |
           ls -la out/package
           ls out/package/*.zip out/package/*.deb
+
+  # The app as a developer builds it, unstamped, with the page not minified and the binary not stripped, which build does not make.
+  # Beside build, so it adds no time.
+  dev-build:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/test-setup
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install the app's runtime libraries
+        uses: ./.github/actions/install-apt-packages
+        with:
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0
+          verify: ""
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: linux-x64
+
+      - name: Restore the developer build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-dev-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-dev-build-
+
+      - name: Build the app
+        shell: bash
+        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app"
+
+      - name: Build the Zig CLI
+        shell: bash
+        run: zig build -Dcpu=baseline --prefix out/cli --prefix-exe-dir .
+
+      - name: Save the developer build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-dev-build-${{ github.sha }}
 
   # One shard of the app smoke tests per runner, under xvfb.
   app-smoke-tests:
