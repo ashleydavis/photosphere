@@ -1,9 +1,9 @@
-# The tests on iOS, on every push and on demand, made to report as fast as possible. The app smoke tests are split across runners, each
-# running one shard of the scenarios on its own simulator. Every shard starts at once and boots its simulator first, which takes about six
-# minutes on a fresh runner. Meanwhile shard 1 builds the Photosphere App for the iOS simulator and the Zig CLI for the runner's macOS,
-# which makes the scenarios' fixtures, and uploads both, and the other shards wait for them, so the build and the boots overlap. The Zig
-# unit tests are not run here: on this runner they are the same command as Test macOS arm64 runs. Every job here takes one of the
-# account's five macOS runners, which the macOS test workflows share. Nothing is packaged: the release workflow does that.
+# The tests on iOS, on every push and on demand, made to report as fast as possible. build builds the Photosphere App for the iOS
+# simulator and the Zig CLI for the runner's macOS, which makes the scenarios' fixtures, and uploads both. The app smoke tests are split
+# across runners, each running one shard of the scenarios on its own simulator. The shards depend on build rather than waiting for its
+# upload, because a shard that waits holds one of the account's five macOS runners, which the macOS test workflows share, and the build
+# may be queued for one. The Zig unit tests are not run here: on this runner they are the same command as Test macOS arm64 runs.
+# Nothing is packaged: the release workflow does that.
 name: Test iOS
 
 env:
@@ -23,8 +23,92 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    timeout-minutes: 60
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/test-setup
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check the iOS toolchain
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Restore the third-party libraries for the runner
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-arm64
+          build-args: -Dtarget=aarch64-macos.11.0
+
+      - name: Restore the third-party libraries for the iOS simulator
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Restore the build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-
+
+      # ReleaseSafe, because in Debug Zig's standard library aborts on an EISCONN from connect on Apple platforms ("programmer bug
+      # caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles. Side by side, because each spends most
+      # of its time compiling one Zig module, which takes one core, and they use different library directories.
+      - name: Build the app for the iOS simulator and the Zig CLI
+        shell: bash
+        run: |
+          bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
+          app_pid=$!
+          zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+          psi_pid=$!
+          app_status=0
+          wait "$app_pid" || app_status=$?
+          psi_status=0
+          wait "$psi_pid" || psi_status=$?
+          echo "::group::App build"
+          cat "$RUNNER_TEMP/app-build.log"
+          echo "::endgroup::"
+          echo "::group::Zig CLI build"
+          cat "$RUNNER_TEMP/psi-build.log"
+          echo "::endgroup::"
+          if [ "$app_status" -ne 0 ] || [ "$psi_status" -ne 0 ]; then
+              echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
+              exit 1
+          fi
+
+      - name: Save the build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-${{ github.sha }}
+
+      # A tar, which keeps the app bundle's symlinks and the executable bits an artifact would lose.
+      - name: Pack the build
+        shell: bash
+        run: tar -cf "$RUNNER_TEMP/build.tar" out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app out/psi
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-ios
+          path: ${{ runner.temp }}/build.tar
+          retention-days: 1
+          compression-level: 1
+
+  # One shard of the app smoke tests per runner, each on the runner's first available iPhone simulator.
   app-smoke-tests:
-    timeout-minutes: 50
+    timeout-minutes: 40
+    needs: [build]
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -52,120 +136,25 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Check the iOS toolchain
-        run: bun run --filter=ziggy setup:ios
-
-      - name: Restore the third-party libraries for the runner
-        if: matrix.shard == 1
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: macos-arm64
-          build-args: -Dtarget=aarch64-macos.11.0
-
-      - name: Restore the third-party libraries for the iOS simulator
-        if: matrix.shard == 1
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: ios
-          build-args: -Dtarget=aarch64-ios.14.0-simulator
-          config-name: aarch64-ios-simulator
-
-      - name: Restore the build's Zig build cache
-        if: matrix.shard == 1
-        uses: actions/cache/restore@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-
-
-      # ReleaseSafe, because in Debug Zig's standard library aborts on an EISCONN from connect on Apple platforms ("programmer bug
-      # caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles. Side by side, because each spends most
-      # of its time compiling one Zig module, which takes one core, and they use different library directories.
-      - name: Build the app for the iOS simulator and the Zig CLI
-        if: matrix.shard == 1
-        shell: bash
-        run: |
-          bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
-          app_pid=$!
-          zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
-          psi_pid=$!
-          app_status=0
-          wait "$app_pid" || app_status=$?
-          psi_status=0
-          wait "$psi_pid" || psi_status=$?
-          echo "::group::App build"
-          cat "$RUNNER_TEMP/app-build.log"
-          echo "::endgroup::"
-          echo "::group::Zig CLI build"
-          cat "$RUNNER_TEMP/psi-build.log"
-          echo "::endgroup::"
-          if [ "$app_status" -ne 0 ] || [ "$psi_status" -ne 0 ]; then
-              echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
-              exit 1
-          fi
-
-      - name: Save the build's Zig build cache
-        if: always() && matrix.shard == 1
-        uses: actions/cache/save@v4
-        with:
-          path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-ios-${{ github.sha }}
-
-      # A tar, which keeps the app bundle's symlinks and the executable bits an artifact would lose.
-      - name: Pack the build
-        if: matrix.shard == 1
-        shell: bash
-        run: tar -cf "$RUNNER_TEMP/build.tar" out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app out/psi
-
-      - name: Upload the build
-        if: matrix.shard == 1
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-build-ios
-          path: ${{ runner.temp }}/build.tar
-          retention-days: 1
-          compression-level: 1
-
-      # A shard 1 that has ended without uploading the build ends the wait at once.
-      - name: Wait for the build shard 1 makes
-        if: matrix.shard != 1
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for attempt in $(seq 1 240); do
-              if gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" --jq '.artifacts[].name' | grep -qx "test-build-ios"; then
-                  exit 0
-              fi
-              ended="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --jq '.jobs[] | select(.name == "app-smoke-tests (1)" and .status == "completed") | .conclusion')"
-              if [ -n "$ended" ]; then
-                  echo "::error::Shard 1 ended ($ended) without uploading the build."
-                  exit 1
-              fi
-              sleep 5
-          done
-          echo "::error::Shard 1 did not upload the build within 20 minutes."
-          exit 1
-
-      - name: Download the build
-        if: matrix.shard != 1
-        uses: actions/download-artifact@v4
-        with:
-          name: test-build-ios
-          path: ${{ runner.temp }}
-
-      - name: Unpack the build
-        if: matrix.shard != 1
-        shell: bash
-        run: tar -xf "$RUNNER_TEMP/build.tar"
-
       # The scenarios build their database fixtures with the CLI, which needs ImageMagick and ffmpeg.
       - name: Install media processing tools
         uses: ./.github/actions/retry-install
         with:
           run: brew install imagemagick ffmpeg tree rsync
           verify: magick|convert ffmpeg ffprobe
+
+      - name: Check the iOS toolchain
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Download the build
+        uses: actions/download-artifact@v4
+        with:
+          name: test-build-ios
+          path: ${{ runner.temp }}
+
+      - name: Unpack the build
+        shell: bash
+        run: tar -xf "$RUNNER_TEMP/build.tar"
 
       - name: Run shard ${{ matrix.shard }} of the Photosphere App iOS smoke tests
         timeout-minutes: 35
