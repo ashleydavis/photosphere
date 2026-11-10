@@ -1,7 +1,7 @@
 # The tests on macOS, called by Test macOS arm64 and Test macOS x64 with the runner and the architecture. Every job here takes one of
 # the account's five macOS runners, which Test iOS shares, so each platform has two jobs and both start at once: app builds the
-# Photosphere App and the Zig CLI side by side and runs every app smoke scenario on that runner, and cli builds the Zig CLI and runs
-# the CLI smoke tests and the Zig unit tests. Both build in ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from
+# Photosphere App and the Zig CLI and runs every app smoke scenario on that runner, and cli runs the Zig unit tests, then builds the
+# Zig CLI and runs the CLI smoke tests. Both build in ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from
 # connect on macOS ("programmer bug caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles.
 
 name: Test macOS
@@ -69,28 +69,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-
 
-      # Side by side, because each spends most of its time compiling one Zig module, which takes one core.
-      - name: Build the app and the Zig CLI
+      - name: Build the app
         shell: bash
-        run: |
-          bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
-          app_pid=$!
-          zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
-          psi_pid=$!
-          app_status=0
-          wait "$app_pid" || app_status=$?
-          psi_status=0
-          wait "$psi_pid" || psi_status=$?
-          echo "::group::App build"
-          cat "$RUNNER_TEMP/app-build.log"
-          echo "::endgroup::"
-          echo "::group::Zig CLI build"
-          cat "$RUNNER_TEMP/psi-build.log"
-          echo "::endgroup::"
-          if [ "$app_status" -ne 0 ] || [ "$psi_status" -ne 0 ]; then
-              echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
-              exit 1
-          fi
+        run: bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+
+      # After the app, not beside it: both builds check and write the same third-party library directory, and run side by side one
+      # found it gone part way ("FileNotFound" in findThirdPartyLibraries).
+      - name: Build the Zig CLI
+        shell: bash
+        run: zig build -Dcpu=baseline --prefix out/psi
 
       - name: Save the build's Zig build cache
         if: always()
@@ -151,11 +138,7 @@ jobs:
           platform: ${{ inputs.platform }}
           build-args: -Dtarget=${{ inputs.target }}
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
-      # One cache for the CLI build, the unit tests and scenario 75's `zig build test-integration`, which share most compile steps.
+      # One cache for the unit tests, the CLI build and scenario 75's `zig build test-integration`, which share most compile steps.
       - name: Cache Zig's build cache
         uses: actions/cache@v4
         with:
@@ -164,11 +147,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
+      # The getImageDetails format test reads images from test/formats, which are made on the machine rather than committed.
+      - name: Make the format test images
+        shell: bash
+        run: bash scripts/make-format-test-images.sh
+
+      # Before Set config, because the version tests expect the configuration the repository holds, not a stamped one.
+      - name: Run the Zig unit tests
+        timeout-minutes: 30
+        shell: bash
+        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+
+      - name: Set config
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
+
+      # Run whether or not the unit tests passed, so one push reports both.
       - name: Build the Zig CLI
+        if: ${{ !cancelled() }}
         shell: bash
         run: zig build -Dcpu=baseline --prefix out/psi
 
       - name: Run the Zig CLI smoke tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 30
         working-directory: ./apps/cli-zig
         shell: bash
@@ -190,16 +192,3 @@ jobs:
           name: cli-smoke-logs-${{ inputs.platform }}
           path: ${{ runner.temp }}/cli-smoke-logs
           retention-days: 5
-
-      # The getImageDetails format test reads images from test/formats, which are made on the machine rather than committed.
-      - name: Make the format test images
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: bash scripts/make-format-test-images.sh
-
-      # Run whether or not the CLI smoke tests passed, so one push reports both.
-      - name: Run the Zig unit tests
-        if: ${{ !cancelled() }}
-        timeout-minutes: 30
-        shell: bash
-        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
