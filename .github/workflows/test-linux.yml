@@ -220,11 +220,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      # No Bun or Node.js: the Zig tests use neither.
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
 
       - name: Install media processing tools
         uses: ./.github/actions/install-apt-packages
