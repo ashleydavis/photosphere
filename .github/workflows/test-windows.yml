@@ -80,15 +80,16 @@ jobs:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
 
+      # A relative path, because Git Bash's tar reads the drive letter of an absolute one as a remote host ("Cannot connect to D:").
       - name: Pack the build
         shell: bash
-        run: tar -cf "$RUNNER_TEMP/build.tar" out/app out/psi
+        run: tar -cf build.tar out/app out/psi
 
       - name: Upload the build
         uses: actions/upload-artifact@v4
         with:
           name: test-build-windows
-          path: ${{ runner.temp }}/build.tar
+          path: build.tar
           retention-days: 1
           compression-level: 1
 
@@ -129,11 +130,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: test-build-windows
-          path: ${{ runner.temp }}
+          path: .
 
       - name: Unpack the build
         shell: bash
-        run: tar -xf "$RUNNER_TEMP/build.tar"
+        run: tar -xf build.tar
 
       # The paths are given in the drive-letter form, which both Git Bash and the native Windows programs the runner starts accept.
       - name: Run shard ${{ matrix.shard }} of the Photosphere App smoke tests
@@ -201,11 +202,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: test-build-windows
-          path: ${{ runner.temp }}
+          path: .
 
       - name: Unpack the build
         shell: bash
-        run: tar -xf "$RUNNER_TEMP/build.tar"
+        run: tar -xf build.tar
 
       # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh).
       - name: Run the Zig CLI smoke tests
