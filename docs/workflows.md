@@ -6,7 +6,7 @@ A third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) is bu
 
 ## Test (`test-<platform>.yml`)
 
-One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `android` and `ios`. Each runs on every push to a branch and every manual run, and Test Linux also on every pull request into `main`. A newer push to the same branch cancels the run still going. Each builds what its release workflow builds, stamped and minified as it builds it but with the Zig code in Debug on Linux, Windows and Android because Debug compiles fastest (macOS and iOS keep ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from connect there), packages it where the release workflow does, and runs every test the release workflow runs, then publishes nothing. It is made fast by splitting the app smoke scenarios across runners (`PHOTOSPHERE_SMOKE_SHARD`, see `apps/photosphere-smoke-tests/run.md`), by starting every job it can at once, and by running each test once: the TypeScript is compiled and tested in Test Linux only, and the Zig unit tests are not run in Test Android or Test iOS, whose release workflows run them with the same command on the same runner as Test Linux and Test macOS arm64 do.
+One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `android` and `ios`. Each runs on every push to a branch and every manual run, and Test Linux also on every pull request into `main`. A newer push to the same branch cancels the run still going. Each runs every unit and smoke test its release workflow runs, unchanged, and nothing else: it does not test what ships, which the release workflows do. So its builds are the ones that compile fastest: unstamped, not minified, not stripped, not packaged, the Android APK for x86_64 alone, and the Zig code in Debug on Linux, Windows and Android (macOS and iOS use ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from connect there). It is made fast by splitting the app smoke scenarios across runners (`PHOTOSPHERE_SMOKE_SHARD`, see `apps/photosphere-smoke-tests/run.md`), by starting every job it can at once, and by running each test once: the TypeScript is compiled and tested in Test Linux only, and the Zig unit tests are not run in Test Android or Test iOS, whose release workflows run them with the same command on the same runner as Test Linux and Test macOS arm64 do.
 
 The library jobs of the release workflows are left out: each job restores the libraries with the `third-party-libraries` action, which builds and stores any library no stored artifact has.
 
@@ -14,9 +14,9 @@ The macOS and iOS workflows share the account's five macOS runners, so their job
 
 | Workflow | Jobs |
 |---|---|
-| `test-linux.yml` | `build` (app and CLI as Release Linux builds them, then the packages), `dev-build` (the app and CLI as a developer builds them: unstamped, not minified, not stripped), `app-smoke-tests` (4 shards), `cli-smoke-tests`, `zig-unit-tests`, `typescript` (compile and unit tests) |
-| `test-windows.yml` | `app-build` (then the packages), `cli-build`, `app-smoke-tests` (6 shards), `cli-smoke-tests` (builds its own CLI), `zig-unit-tests` |
-| `test-macos-arm64.yml`, `test-macos-x64.yml` | Both call `test-macos.yml`: `app` (builds the app and the CLI side by side, packages the app, runs every app scenario) and `cli` (the Zig unit tests beside the CLI build, then the CLI smoke tests) |
+| `test-linux.yml` | `build` (the app and the CLI), `app-smoke-tests` (4 shards), `cli-smoke-tests`, `zig-unit-tests`, `typescript` (compile and unit tests) |
+| `test-windows.yml` | `app-build`, `cli-build`, `app-smoke-tests` (6 shards), `cli-smoke-tests` (builds its own CLI), `zig-unit-tests` |
+| `test-macos-arm64.yml`, `test-macos-x64.yml` | Both call `test-macos.yml`: `app` (builds the app and the CLI side by side, runs every app scenario) and `cli` (the Zig unit tests beside the CLI build, then the CLI smoke tests) |
 | `test-android.yml` | `build`, `app-smoke-tests` (4 shards, an emulator each) |
 | `test-ios.yml` | `build`, `app-smoke-tests` (2 shards, two simulators each) |
 
@@ -120,7 +120,6 @@ flowchart LR
     linux-build["linux: build"] --> linux-app["linux: app-smoke-tests"]
     linux-build --> linux-cli["linux: cli-smoke-tests"]
     linux-build --> linux-zig["linux: zig-unit-tests"]
-    linux-dev["linux: dev-build"]
     linux-ts["linux: typescript"]
     win-app-build["windows: app-build"] --> win-app["windows: app-smoke-tests"]
     win-cli-build["windows: cli-build"] --> win-app

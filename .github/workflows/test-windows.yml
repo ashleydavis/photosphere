@@ -1,7 +1,7 @@
-# The tests on Windows, on every push and on demand, made to report as fast as possible. They test what Release Windows tests and build
-# what it builds, with the Zig code in Debug, packages included, and publish nothing. app-build builds and packages the Photosphere App and
-# cli-build builds the Zig CLI, side by side, and the app smoke tests are split across runners, each running one shard of the scenarios
-# on that app and CLI. The CLI smoke tests build their own CLI and the Zig unit tests start at once, so neither waits for a build.
+# The tests on Windows, on every push and on demand, made to report as fast as possible. They run every test Release Windows runs, on
+# builds in Debug, which compiles fastest, and unstamped: what ships is tested by the release workflow. app-build builds the Photosphere
+# App and cli-build builds the Zig CLI, side by side, and the app smoke tests are split across runners, each running one shard of the
+# scenarios on that app and CLI. The CLI smoke tests build their own CLI and the Zig unit tests start at once, so neither waits for a build.
 #
 # Each job restores the third-party libraries it links, and builds and stores any that no stored artifact has. When a library changes,
 # more than one job builds it and stores it, which costs that one run time but keeps every other run from waiting on a job of its own.
@@ -49,32 +49,25 @@ jobs:
           platform: windows-x64
           build-args: -Dtarget=x86_64-windows-msvc
 
-      - name: Set config
-        shell: bash
-        run: |
-          VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
       - name: Restore the app build's Zig build cache
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-app-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-app-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-release-app-build-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-app-build-
 
-      # Stripped and minified as Release Windows builds it, with the Zig code in Debug, which compiles fastest. The prefix is given in the drive-letter form, because
-      # the build script hands it to zig.
+      # The prefix is given in the drive-letter form, because the build script hands it to zig.
       - name: Build the app
         shell: bash
-        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --strip --minify --optimize Debug
+        run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --optimize Debug
 
       - name: Save the app build's Zig build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-app-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-app-build-${{ github.sha }}
 
       - name: Upload the app
         uses: actions/upload-artifact@v4
@@ -83,17 +76,6 @@ jobs:
           path: out/app
           retention-days: 1
           compression-level: 1
-
-      # As Release Windows packages it: a zip and an MSI installer, unsigned.
-      - name: Package
-        shell: bash
-        run: bun run --filter=ziggy package:windows -- x64 --binary "$(cygpath -m "$PWD/out/app")" --version "$VERSION" --output-dir "$(cygpath -m "$PWD/out/package")"
-
-      - name: Check the packages were made
-        shell: bash
-        run: |
-          ls -la out/package
-          ls out/package/*.zip out/package/*.msi
 
   # The Zig CLI for the runner (x86_64-windows-gnu), which the app smoke tests' scenarios run.
   cli-build:
@@ -116,19 +98,14 @@ jobs:
         with:
           platform: windows-x64
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Restore the CLI build's Zig build cache
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-cli-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-release-cli-build-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-
 
-      # Stamped as Release Windows builds it, with the Zig code in Debug, which compiles fastest.
       - name: Build the Zig CLI
         shell: bash
         run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
@@ -138,7 +115,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-cli-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-${{ github.sha }}
 
       - name: Upload the Zig CLI
         uses: actions/upload-artifact@v4
@@ -247,8 +224,7 @@ jobs:
         with:
           platform: windows-x64
 
-      # The unit tests' cache for scenario 75's `zig build test-integration`, which runs in this checkout, unstamped, as in Release
-      # Windows.
+      # The unit tests' cache for scenario 75's `zig build test-integration`, with the CLI build's laid over it.
       - name: Restore the Zig unit tests' build cache
         uses: actions/cache/restore@v4
         with:
@@ -257,36 +233,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
-      # The CLI is built stamped, as Release Windows builds the one its CLI smoke tests run. It is built here, from
-      # a second checkout so the stamp stays out of this one, rather than waiting for cli-build, which takes about as long as the wait.
-      - name: Checkout code again, for the Zig CLI build
-        uses: actions/checkout@v4
-        with:
-          path: psi-src
-
-      - name: Copy the third-party libraries into the second checkout
-        shell: bash
-        run: |
-          for library in aws zlib-ng imagemagick ffmpeg; do
-              cp -R "third-party/$library/zig-out" "psi-src/third-party/$library/"
-          done
-
-      - name: Set config in the second checkout
-        shell: bash
-        run: bash psi-src/scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Restore the CLI build's Zig build cache
         uses: actions/cache/restore@v4
         with:
-          path: psi-src/.zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-cli-build-${{ github.sha }}
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-release-cli-build-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-
 
+      # Built here rather than waiting for cli-build, which takes about as long as the wait would.
       - name: Build the Zig CLI
         shell: bash
-        working-directory: ./psi-src
-        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix ../out/psi
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
 
       # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh).
       - name: Run the Zig CLI smoke tests
