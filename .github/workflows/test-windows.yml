@@ -50,10 +50,6 @@ jobs:
           platform: windows-x64
           build-args: -Dtarget=x86_64-windows-msvc
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Restore the app build's Zig build cache
         uses: actions/cache/restore@v4
         with:
@@ -102,10 +98,6 @@ jobs:
         uses: ./.github/actions/third-party-libraries
         with:
           platform: windows-x64
-
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
 
       - name: Restore the CLI build's Zig build cache
         uses: actions/cache/restore@v4
@@ -232,10 +224,6 @@ jobs:
         uses: ./.github/actions/third-party-libraries
         with:
           platform: windows-x64
-
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
 
       # The unit tests' cache for scenario 75's `zig build test-integration`, with the Debug CLI build's laid over it.
       - name: Restore the Zig unit tests' build cache

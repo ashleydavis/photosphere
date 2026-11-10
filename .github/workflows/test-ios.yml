@@ -51,10 +51,6 @@ jobs:
           build-args: -Dtarget=aarch64-ios.14.0-simulator
           config-name: aarch64-ios-simulator
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Restore the build's Zig build cache
         uses: actions/cache/restore@v4
         with:

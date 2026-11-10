@@ -69,10 +69,6 @@ jobs:
           platform: android
           build-args: -Dtarget=x86_64-linux-android --libc ../../tmp/android-libc/x86_64.txt
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Restore the Debug build's Zig build cache
         uses: actions/cache/restore@v4
         with:

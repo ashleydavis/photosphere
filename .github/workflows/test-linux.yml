@@ -49,10 +49,6 @@ jobs:
         with:
           platform: linux-x64
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Restore the Debug build's Zig build cache
         uses: actions/cache/restore@v4
         with:

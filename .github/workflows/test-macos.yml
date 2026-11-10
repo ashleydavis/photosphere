@@ -1,8 +1,10 @@
 # The tests on macOS, called by Test macOS arm64 and Test macOS x64 with the runner and the architecture. Every job here takes one of
-# the account's five macOS runners, which Test iOS shares, so each platform has two jobs and both start at once: app builds the
-# Photosphere App and the Zig CLI and runs every app smoke scenario on that runner, and cli runs the Zig unit tests, then builds the
-# Zig CLI and runs the CLI smoke tests. Both build in ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from
-# connect on macOS ("programmer bug caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles.
+# the account's five macOS runners, which Test iOS shares, so each platform has two jobs and both start at once. cli builds the Zig CLI
+# and uploads it, then runs the Zig unit tests and the CLI smoke tests. app builds the Photosphere App, takes the CLI cli uploaded, which
+# is ready by then, and runs every app smoke scenario on that runner. Both build in ReleaseSafe: in Debug, Zig's standard library aborts
+# on an EISCONN from connect on macOS ("programmer bug caused syscall error: ISCONN"), where ReleaseSafe returns an error the code
+# handles. Nothing stamps a version into the build, as nothing does in a test run on a developer's machine, so a push that changes no
+# Zig code finds every compile step in the Zig build cache.
 
 name: Test macOS
 
@@ -57,11 +59,7 @@ jobs:
           platform: ${{ inputs.platform }}
           build-args: -Dtarget=${{ inputs.target }}
 
-      - name: Set config
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
-      - name: Restore the build's Zig build cache
+      - name: Restore the app build's Zig build cache
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
@@ -73,24 +71,51 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
 
-      # After the app, not beside it: both builds check and write the same third-party library directory, and run side by side one
-      # found it gone part way ("FileNotFound" in findThirdPartyLibraries).
-      - name: Build the Zig CLI
-        shell: bash
-        run: zig build -Dcpu=baseline --prefix out/psi
-
-      - name: Save the build's Zig build cache
+      - name: Save the app build's Zig build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-${{ github.sha }}
 
+      # cli uploads the CLI before its tests, and builds less than this job does, so it is nearly always there already. A cli job that
+      # has ended without uploading it ends the wait at once.
+      - name: Wait for the Zig CLI the cli job builds
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in $(seq 1 120); do
+              if gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" --jq '.artifacts[].name' | grep -qx "test-psi-${{ inputs.platform }}"; then
+                  exit 0
+              fi
+              ended="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --jq '.jobs[] | select((.name | endswith("cli")) and .status == "completed") | .conclusion')"
+              if [ -n "$ended" ]; then
+                  echo "::error::The cli job ended ($ended) without uploading the Zig CLI."
+                  exit 1
+              fi
+              sleep 5
+          done
+          echo "::error::The cli job did not upload the Zig CLI within 10 minutes."
+          exit 1
+
+      - name: Download the Zig CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: test-psi-${{ inputs.platform }}
+          path: ${{ runner.temp }}
+
+      - name: Unpack the Zig CLI
+        shell: bash
+        run: tar -xf "$RUNNER_TEMP/psi.tar"
+
+      # Shard 1 of 1 is every scenario, and like any shard it records no what-changed baseline, which this runner has no use for.
       - name: Run the Photosphere App smoke tests
         timeout-minutes: 30
         shell: bash
         env:
           PHOTOSPHERE_TEST_PARALLEL: ${{ inputs.app-parallel }}
+          PHOTOSPHERE_SMOKE_SHARD: 1/1
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy
 
       - name: Collect the logs of failed scenarios and any crash reports
@@ -126,19 +151,13 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install media processing tools
-        uses: ./.github/actions/retry-install
-        with:
-          run: brew install imagemagick ffmpeg tree
-          verify: magick|convert ffmpeg ffprobe
-
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
           platform: ${{ inputs.platform }}
           build-args: -Dtarget=${{ inputs.target }}
 
-      # One cache for the unit tests, the CLI build and scenario 75's `zig build test-integration`, which share most compile steps.
+      # One cache for the CLI build, the unit tests and scenario 75's `zig build test-integration`, which share most compile steps.
       - name: Cache Zig's build cache
         uses: actions/cache@v4
         with:
@@ -147,28 +166,40 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
+      - name: Build the Zig CLI
+        shell: bash
+        run: zig build -Dcpu=baseline --prefix out/psi
+
+      # A tar, which keeps the executable bit an artifact would lose.
+      - name: Pack the Zig CLI
+        shell: bash
+        run: tar -cf "$RUNNER_TEMP/psi.tar" out/psi
+
+      - name: Upload the Zig CLI for the app job
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-psi-${{ inputs.platform }}
+          path: ${{ runner.temp }}/psi.tar
+          retention-days: 1
+          compression-level: 1
+
+      - name: Install media processing tools
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree
+          verify: magick|convert ffmpeg ffprobe
+
       # The getImageDetails format test reads images from test/formats, which are made on the machine rather than committed.
       - name: Make the format test images
         shell: bash
         run: bash scripts/make-format-test-images.sh
 
-      # Before Set config, because the version tests expect the configuration the repository holds, not a stamped one.
       - name: Run the Zig unit tests
         timeout-minutes: 30
         shell: bash
         run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
 
-      - name: Set config
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       # Run whether or not the unit tests passed, so one push reports both.
-      - name: Build the Zig CLI
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: zig build -Dcpu=baseline --prefix out/psi
-
       - name: Run the Zig CLI smoke tests
         if: ${{ !cancelled() }}
         timeout-minutes: 30
