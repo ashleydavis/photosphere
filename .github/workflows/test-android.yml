@@ -35,8 +35,28 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Set up the Android C library
-        uses: ./.github/actions/android-libc
+      # Only the NDK and the libc files, not the android-libc action: its SDK setup also installs the emulator and a system image,
+      # which this job never runs and which took 2.7 of its 3.4 minutes. The runner's SDK has the platform and build tools Gradle needs.
+      - name: Restore the Android NDK
+        uses: actions/cache/restore@v4
+        with:
+          path: /usr/local/lib/android/sdk/ndk/25.1.8937393
+          key: ${{ runner.os }}-android-ndk-25.1.8937393
+
+      - name: Install the Android NDK when the cache has none
+        shell: bash
+        run: |
+          if [ ! -d "$ANDROID_HOME/ndk/25.1.8937393" ]; then
+              "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'ndk;25.1.8937393'
+          fi
+
+      - name: Write the libc files
+        shell: bash
+        run: |
+          set -euo pipefail
+          source apps/photosphere/scripts/android-common.sh
+          mkdir -p tmp/android-libc
+          photosphere_android_write_libc_file x86_64 tmp/android-libc/x86_64.txt "$(photosphere_android_min_sdk)"
 
       - name: Restore the third-party libraries for the runner
         uses: ./.github/actions/third-party-libraries
