@@ -198,7 +198,7 @@ The two loops did once take a single lock around a whole pass, so a sync skipped
 
 What the two contend on is the database write lock, and neither holds it for a whole pass. `import-assets` takes it per batch of imported assets and releases it in a `finally`, and `syncDatabases` takes it around the pull and again around the push. A sync that finds the lock held retries for a few seconds and then fails that pass with the reason in the log; the loop waits its usual gap and asks again, and the pass after that lands in one of the gaps between the import's batches. Neither loop can be starved by the other for good, because neither holds the lock for anything like the length of a pass.
 
-Engine slots are not contended either. A sync pass queues one `sync-database` task and that task queues no children, so it occupies one slot of `EnginePool.POOL_SIZE` for its own length and cannot exhaust the pool underneath an import. See [Mobile background tasks](mobile-background-tasks.md) for what a slot is and why running out is a hang rather than a slowdown.
+Workers are not contended either. A sync pass queues one `sync-database` task and that task queues no children, so it holds one worker for its own length and cannot use up the pool underneath an import. See [Child tasks](tasks.md#child-tasks) for why running out is a hang rather than a slowdown.
 
 ## What each platform can do
 
@@ -264,5 +264,5 @@ The background tests are Android only. Each of `50-background-sync`, `57-prefetc
 
 - [Prefetch, syncing and importing on a phone, against a real library](performance/mobile-sync-at-scale.md) - what all of this actually costs on a Pixel 6 against a database of 8,231 photos, and what does not work at that size.
 - [Automatic photo backup](automatic-photo-backup.md) - what puts the photos in the database in the first place, and the loop this one is modelled on.
-- [Mobile background tasks](mobile-background-tasks.md) - the engine pool both background loops run on.
+- [Tasks](tasks.md) - the worker pool both background loops run on.
 - [Tasks](tasks.md) - adding a new task type and wiring it up on every platform.

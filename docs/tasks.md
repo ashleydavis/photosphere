@@ -103,7 +103,9 @@ try queue.awaitAllTasks(io, allocator, timers);
 ```
 
 - `onTaskComplete`, `onTaskEvent`, `onAnyTaskEvent` and `awaitTask` work as they do in TypeScript.
-- `context.maxConcurrentChildTasks` is how many children one task may have running at once, so an import never takes the whole pool.
+- `context.maxConcurrentChildTasks` is how many children one task may have running at once, so an import never takes the whole pool. The native app sets it, and the size of the pool, when it makes the backend: on Android in `MainActivity`.
+- A parent keeps its worker while it waits, so a chain of tasks that wait on their children needs a worker for every level at once. When every worker holds a waiting parent the import hangs without an error, a timeout or a log line: the task shows as running and its counts stay at zero. Count the levels before adding a task that waits on children.
+- A test of a task that queues children waits for the work to have happened, such as a photo arriving in the database, never only for the task to start. A hung chain starts normally.
 - Ziggy's guide covers how the children are queued and what happens when every worker holds a parent waiting on its children: see [Child tasks](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#child-tasks) and [Code written against the task queue](https://github.com/ashleydavis/ziggy/blob/HEAD/docs/user-guide/tasks.md#code-written-against-the-task-queue).
 
 ### Priority and cancelling

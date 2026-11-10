@@ -218,7 +218,7 @@ On the desktop the settings live on the configuration dialog and the settings pa
 
 On mobile the same thing happens and the user does the same thing: switch the toggle on, and the app makes its private database, asks for the photo permission, walks the device photo library and imports what it finds, including photos taken while it is running. It runs the same `import-assets` task the CLI and the desktop run, reading the photo library through the same host bridge the rest of the worker code uses. The only difference is which media source is registered underneath.
 
-The `import-assets` task holds an engine slot for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. On a phone that whole chain has to fit inside `EnginePool.POOL_SIZE`, which is sized for it with room to spare. Shrinking the pool deadlocks automatic import, and the failure is silent: the setting stays on, the task stays running, and the counts stay at zero. See [Mobile background tasks](mobile-background-tasks.md) before changing anything about that.
+The `import-assets` task holds a worker for as long as the run lasts, and the `hash-file` and `upload-asset` tasks it queues hold more. The whole chain has to fit in the pool, and running out hangs automatic import without an error: the setting stays on, the task stays running and the counts stay at zero. See [Child tasks](tasks.md#child-tasks) before changing the pool size or the child limit.
 
 ## While the app is not on screen
 
