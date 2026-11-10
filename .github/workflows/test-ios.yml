@@ -1,6 +1,6 @@
 # The tests on iOS, on every push and on demand, made to report as fast as possible. build builds the Photosphere App for the iOS
 # simulator and the Zig CLI for the runner's macOS, which makes the scenarios' fixtures, and uploads both. The app smoke tests are split
-# across runners, each running one shard of the scenarios on its own simulator. The shards depend on build rather than waiting for its
+# across runners, each running one shard of the scenarios on two simulators of its own. The shards depend on build rather than waiting for its
 # upload, because a shard that waits holds one of the account's five macOS runners, which the macOS test workflows share, and the build
 # may be queued for one. The Zig unit tests are not run here: on this runner they are the same command as Test macOS arm64 runs.
 # Nothing is packaged: the release workflow does that.
@@ -113,19 +113,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     steps:
-      # The simulator apple_pick_simulator would choose, the first iPhone, and that function takes a booted one first.
-      - name: Start booting the simulator
+      # Two simulators a runner, so each runner runs two scenarios at once and the shards take two of the five macOS runners rather
+      # than four. PHOTOSPHERE_IOS_SIMULATORS hands them to the scenarios.
+      - name: Start booting two simulators
         shell: bash
         run: |
-          udid="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | first | .udid // empty')"
-          if [ -z "$udid" ]; then
-              echo "There is no available iPhone simulator." >&2
+          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:2] | .[].udid')"
+          count="$(printf '%s\n' "$udids" | grep -c .)"
+          if [ "$count" -lt 2 ]; then
+              echo "There are $count available iPhone simulators, and the shards need two." >&2
               exit 1
           fi
-          echo "Booting $udid"
-          xcrun simctl boot "$udid"
+          for udid in $udids; do
+              echo "Booting $udid"
+              xcrun simctl boot "$udid"
+          done
+          echo "PHOTOSPHERE_IOS_SIMULATORS=$(printf '%s ' $udids)" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -160,7 +165,7 @@ jobs:
         timeout-minutes: 35
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/3
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/2
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy:ios
 
       - name: Collect the logs of failed scenarios and any crash reports

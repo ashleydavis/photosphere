@@ -3,8 +3,9 @@
 # The iOS platform library of Photosphere's smoke tests. See common.sh for what it implements.
 #
 # When an iPhone or iPad is connected the scenarios run on it, as run-ios.sh runs the app there, and ios-device.sh, sourced below,
-# replaces everything here. Otherwise the app runs on an iOS simulator that already exists: PHOTOSPHERE_IOS_SIMULATOR names one,
-# otherwise a running one or the first available iPhone is used (see apple_pick_simulator). Nothing is created or deleted.
+# replaces everything here. Otherwise the app runs on an iOS simulator that already exists: PHOTOSPHERE_IOS_SIMULATORS names several,
+# by identifier separated by spaces, and scenarios run on them side by side, each claiming whichever is free; else PHOTOSPHERE_IOS_SIMULATOR
+# names one, otherwise a running one or the first available iPhone is used (see apple_pick_simulator). Nothing is created or deleted.
 #
 # A simulator process shares the host's file system and network, so the settings, the vault and the logs are
 # host paths inside the scenario's directory, and the app reaches its remote control server at 127.0.0.1. Variables named SIMCTL_CHILD_<name>
@@ -65,9 +66,32 @@ IOS_SIMULATOR_UDID=""
 #
 photosphere_ios_claim_simulator() {
     local udid="$1"
-    local lock_dir="${TMPDIR:-/tmp}/photosphere-ios-simulator-$udid.lock"
     local waited=0
-    local owner
+    while ! photosphere_ios_try_claim_simulator "$udid"; do
+        if [ "$waited" -ge 1800 ]; then
+            echo "The simulator $udid was not free within 1800s; scenario process $(cat "$(photosphere_ios_lock_dir "$udid")/owner" 2>/dev/null || echo unknown) holds it." >&2
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+}
+
+#
+# Prints the lock directory of a simulator. Usage: photosphere_ios_lock_dir <udid>
+#
+photosphere_ios_lock_dir() {
+    echo "${TMPDIR:-/tmp}/photosphere-ios-simulator-$1.lock"
+}
+
+#
+# Claims a simulator for this scenario if it is free, as photosphere_ios_claim_simulator does, without waiting. Succeeds when this
+# scenario holds it afterwards, including when it already did. Usage: photosphere_ios_try_claim_simulator <udid>
+#
+photosphere_ios_try_claim_simulator() {
+    local udid="$1"
+    local lock_dir owner
+    lock_dir="$(photosphere_ios_lock_dir "$udid")"
     while ! mkdir "$lock_dir" 2>/dev/null; do
         owner="$(cat "$lock_dir/owner" 2>/dev/null || true)"
         if [ "$owner" = "$$" ]; then
@@ -79,14 +103,36 @@ photosphere_ios_claim_simulator() {
             rmdir "$lock_dir" 2>/dev/null || true
             continue
         fi
+        return 1
+    done
+    echo "$$" > "$lock_dir/owner"
+}
+
+#
+# Claims whichever of the simulators PHOTOSPHERE_IOS_SIMULATORS names (identifiers separated by spaces) is free first, waiting while
+# every one is held by another scenario, boots it when it is not running, and prints its identifier.
+#
+photosphere_ios_claim_listed_simulator() {
+    local waited=0
+    local udid
+    while true; do
+        for udid in $PHOTOSPHERE_IOS_SIMULATORS; do
+            if photosphere_ios_try_claim_simulator "$udid"; then
+                xcrun simctl bootstatus "$udid" -b >&2 || {
+                    echo "Could not boot the simulator $udid." >&2
+                    return 1
+                }
+                echo "$udid"
+                return 0
+            fi
+        done
         if [ "$waited" -ge 1800 ]; then
-            echo "The simulator $udid was not free within 1800s; scenario process ${owner:-unknown} holds it." >&2
+            echo "None of the simulators $PHOTOSPHERE_IOS_SIMULATORS was free within 1800s." >&2
             return 1
         fi
         sleep 1
         waited=$((waited + 1))
     done
-    echo "$$" > "$lock_dir/owner"
 }
 
 #
@@ -98,15 +144,26 @@ photosphere_ios_pick_simulator() {
         return 0
     fi
     local udid
+    if [ -n "${PHOTOSPHERE_IOS_SIMULATORS:-}" ]; then
+        udid="$(photosphere_ios_claim_listed_simulator)" || return 1
+        IOS_SIMULATOR_UDID="$udid"
+        return 0
+    fi
     udid="$(apple_pick_simulator)" || return 1
     photosphere_ios_claim_simulator "$udid" || return 1
     IOS_SIMULATOR_UDID="$udid"
 }
 
 #
-# Prints how many devices scenarios can run on at once. The run uses one simulator, and a simulator runs one copy of the app.
+# Prints how many devices scenarios can run on at once: the simulators PHOTOSPHERE_IOS_SIMULATORS names, else the one simulator the
+# run picks. A simulator runs one copy of the app.
 #
 photosphere_platform_device_limit() {
+    if [ -n "${PHOTOSPHERE_IOS_SIMULATORS:-}" ]; then
+        set -- $PHOTOSPHERE_IOS_SIMULATORS
+        echo "$#"
+        return 0
+    fi
     echo 1
 }
 
