@@ -92,7 +92,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -124,7 +124,10 @@ jobs:
         timeout-minutes: 25
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/6
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
+          # Three at once on the runner's four cores, so four shards take the time six took two at a time, on two fewer runners under
+          # the account's limit of 20 jobs at once, which the Windows shards were queueing on.
+          PHOTOSPHERE_TEST_PARALLEL: "3"
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy
 
       - name: Collect the logs of failed scenarios
@@ -258,8 +261,8 @@ jobs:
         shell: bash
         run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
 
-  # Compiles the TypeScript, which is the only check of its types: the unit tests run it without checking them.
-  typescript-compile:
+  # Compiles the TypeScript, which is the only check of its types (the unit tests run it without checking them), and runs its unit tests.
+  typescript:
     timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
@@ -292,32 +295,10 @@ jobs:
         timeout-minutes: 12
         run: bun run compile
 
-  typescript-unit-tests:
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
-
-      - name: Run unit tests
+      # In the compile's job rather than one of their own, to keep a runner free under the account's limit of 20 jobs at once, and
+      # run whether or not the compile passed, so one push reports both.
+      - name: Run the TypeScript unit tests
+        if: ${{ !cancelled() }}
         timeout-minutes: 12
         run: |
           chmod +x ./run-tests.sh
