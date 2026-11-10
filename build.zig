@@ -229,6 +229,9 @@ pub fn build(b: *std.Build) !void {
     const test_cli_step = internalStep(b, "tests of the CLI");
     test_step.dependOn(test_packages_step);
     test_step.dependOn(test_cli_step);
+    // The two halves of `test` on their own, so CI can run them on two machines at once: each half compiles its own large test program.
+    b.step("test-packages", "Run the unit tests of the packages, one half of test").dependOn(test_packages_step);
+    b.step("test-cli", "Run the tests of the CLI, the other half of test").dependOn(test_cli_step);
     const stand_ins = addStandIns(b, target, optimize);
     try addUnitTests(b, test_packages_step, modules, target, optimize, stand_ins);
     // The tests inside the build helper files (they are compiled by the build itself, so they are not under a package's src/test).

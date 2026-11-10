@@ -134,6 +134,11 @@ jobs:
           packages: imagemagick ffmpeg
           verify: magick|convert ffmpeg ffprobe
 
+      # The SDK set up before the emulator starts, as Release Android's smoke job sets it up (the emulator, platform-tools and the
+      # platform), so the emulator runs in the environment the release workflow's smoke tests pass in.
+      - name: Set up the Android SDK
+        uses: ./.github/actions/android-libc
+
       # The runner comes with NDKs the app does not use, and with them and the system image installed, too little disk is left for
       # the emulator's userdata partition: it stops at once with "Not enough space to create userdata partition".
       - name: Uninstall the NDKs the app does not use

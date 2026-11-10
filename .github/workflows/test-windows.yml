@@ -229,9 +229,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-packages-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-packages-
 
       - name: Restore the CLI build's Zig build cache
         uses: actions/cache/restore@v4
@@ -274,10 +274,15 @@ jobs:
           path: ${{ runner.temp }}/cli-smoke-logs
           retention-days: 5
 
-  # The unit tests of the Zig CLI and of every Zig package.
+  # The unit tests of every Zig package and the tests of the Zig CLI, the two halves of `zig build test`, one a runner: each compiles a
+  # test program of its own, and one after the other the two compiles and runs took 13.7 minutes, the longest job of the workflow.
   zig-unit-tests:
     timeout-minutes: 40
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [packages, cli]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -309,16 +314,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-build-${{ matrix.part }}-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-build-${{ matrix.part }}-
 
       # The getImageDetails format test reads images from test/formats, which are made on the machine rather than committed.
       - name: Make the format test images
         shell: bash
         run: bash scripts/make-format-test-images.sh
 
-      - name: Run the Zig unit tests
+      - name: Run the Zig tests (${{ matrix.part }})
         timeout-minutes: 30
         shell: bash
-        run: zig build test -Dcpu=baseline --summary all --test-timeout 20m
+        run: zig build test-${{ matrix.part }} -Dcpu=baseline --summary all --test-timeout 20m
