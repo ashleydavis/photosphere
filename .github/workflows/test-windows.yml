@@ -134,7 +134,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -176,7 +176,7 @@ jobs:
         timeout-minutes: 25
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/5
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/6
         run: PHOTOSPHERE_SMOKE_BUILD="$(cygpath -m "$PWD/out/app")" PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/out/psi/bin/psi.exe")" bun run test:ziggy
 
       - name: Collect the logs of failed scenarios
