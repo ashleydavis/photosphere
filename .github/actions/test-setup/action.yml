@@ -1,0 +1,47 @@
+name: Test setup
+description: >
+  The setup every job of the test workflows starts with: Bun, Node.js, Zig and jq at the versions mise.toml pins, the packages Zig
+  fetches, the Bun cache and `bun install`. The job has to check the repository out first.
+
+inputs:
+  bun-version:
+    description: The Bun version, as the workflow's BUN_VERSION gives it.
+    required: true
+
+  node-version:
+    description: The Node.js version, as the workflow's NODE_VERSION gives it.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Setup Zig and jq (versions from mise.toml)
+      uses: jdx/mise-action@v2
+      with:
+        install_args: zig jq
+
+    - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+      uses: ./.github/actions/zig-packages
+
+    - name: Cache Bun dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-bun-
+
+    - name: Install dependencies
+      uses: ./.github/actions/retry-install
+      with:
+        run: bun install

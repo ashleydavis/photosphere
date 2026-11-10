@@ -16,6 +16,26 @@ source "$REPO_ROOT/scripts/lib/test-concurrency.sh"
 PLATFORM="${1:-}"
 SCENARIO_FILTER="${2:-${PHOTOSPHERE_SMOKE_SCENARIO:-}}"
 
+# One shard of the scenarios, as <index>/<count> with the index counted from 1, so a CI workflow can split them across runners. The
+# scenarios are dealt out in turn: the first to shard 1, the second to shard 2 and so on. Empty runs every scenario.
+SHARD="${PHOTOSPHERE_SMOKE_SHARD:-}"
+SHARD_INDEX=1
+SHARD_COUNT=1
+if [ -n "$SHARD" ]; then
+    SHARD_INDEX="${SHARD%%/*}"
+    SHARD_COUNT="${SHARD##*/}"
+    case "$SHARD_INDEX/$SHARD_COUNT" in
+        */*/*|*[!0-9/]*|/*|*/)
+            echo "PHOTOSPHERE_SMOKE_SHARD is '$SHARD', which is not <index>/<count>." >&2
+            exit 2
+            ;;
+    esac
+    if [ "$SHARD_COUNT" -lt 1 ] || [ "$SHARD_INDEX" -lt 1 ] || [ "$SHARD_INDEX" -gt "$SHARD_COUNT" ]; then
+        echo "PHOTOSPHERE_SMOKE_SHARD is '$SHARD': the index must be from 1 to the count." >&2
+        exit 2
+    fi
+fi
+
 case "$PLATFORM" in
     linux|windows|macos|android|ios)
         ;;
@@ -141,6 +161,7 @@ report_scenario() {
 }
 
 scenarios=()
+scenario_position=0
 while IFS= read -r scenario_dir; do
     [ -f "$scenario_dir/test.sh" ] || continue
     scenario_name="$(basename "$scenario_dir")"
@@ -148,8 +169,15 @@ while IFS= read -r scenario_dir; do
     if [ -n "$SCENARIO_FILTER" ] && [ "$SCENARIO_FILTER" != "$scenario_name" ] && [ "$SCENARIO_FILTER" != "$scenario_number" ]; then
         continue
     fi
+    scenario_position=$((scenario_position + 1))
+    if [ $(( (scenario_position - 1) % SHARD_COUNT + 1 )) -ne "$SHARD_INDEX" ]; then
+        continue
+    fi
     scenarios+=("$scenario_dir/test.sh")
 done < <(list_scenarios)
+if [ -n "$SHARD" ]; then
+    echo "Shard $SHARD_INDEX of $SHARD_COUNT."
+fi
 
 # As wide as the machine allows on every platform, the same way the other suites decide it. A platform whose scenarios each need a
 # device of their own also says how many it has, and the pool is never wider than that. Never more than there are scenarios.
@@ -189,7 +217,7 @@ fi
 # the end of the whole command, so a scenario named there reached what-changed instead of this script. It is recorded only for a full
 # run: the baseline says the whole target passed, and stamping it after one scenario would leave every other scenario skipped by
 # test:everything until something else changed.
-if [ -z "$SCENARIO_FILTER" ]; then
+if [ -z "$SCENARIO_FILTER" ] && [ -z "$SHARD" ]; then
     case "$PLATFORM" in
         android)
             baseline_target="test:ziggy:and"

@@ -6,6 +6,7 @@ Runs Photosphere's smoke test scenarios for one platform. Invoked by the root `p
 
 - `<platform>`: `linux`, `windows`, `macos`, `android` or `ios`. Each has a platform library in `lib/<platform>.sh` that puts the app in place, starts it and stops it. On iOS that is a connected iPhone or iPad when there is one (see `lib/ios-device.sh`), otherwise a simulator.
 - `[scenario]`: optional scenario number or full directory name, to run one scenario, as in `bun run test:ziggy:and -- 40`. `PHOTOSPHERE_SMOKE_SCENARIO=<number or name>` does the same. A run of one scenario does not record the what-changed baseline; a full run that passes does.
+- `PHOTOSPHERE_SMOKE_SHARD=<index>/<count>`: run one shard of the scenarios, so CI can split them across runners. The scenarios are dealt out in turn, the first to shard 1, the second to shard 2 and so on, with the index counted from 1. A shard does not record the what-changed baseline.
 
 ## Behaviour
 

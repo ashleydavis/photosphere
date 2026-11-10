@@ -1,0 +1,24 @@
+# The tests on macOS arm64, on every push and on demand, made to report as fast as possible. test-macos.yml says what runs.
+name: Test macOS arm64
+
+on:
+  push:
+    branches:
+      - "**"
+
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes a run still going, so only the latest commit's results are waited for.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/test-macos.yml
+    with:
+      runner: macos-latest
+      platform: macos-arm64
+      target: aarch64-macos.11.0
+      shards: "[1, 2]"
+      shard-count: 2

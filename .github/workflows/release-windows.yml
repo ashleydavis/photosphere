@@ -17,16 +17,10 @@ env:
   RELEASE_PLATFORM_NAME: "Windows"
 
 on:
-  # TODO: Turn the push and pull request triggers back on once every Zig release workflow passes. Until then each one is run manually.
+  # A release runs on demand or when its tag is pushed. The test workflows test every push.
   push:
-    branches:
-      - "*"
-  #   tags:
-  #     - 'windows-v*.*.*'
-
-  # pull_request:
-  #   branches:
-  #     - main
+    tags:
+      - 'windows-v*.*.*'
 
   workflow_dispatch:
     inputs:

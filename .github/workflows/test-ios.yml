@@ -1,0 +1,157 @@
+# The tests on iOS, on every push and on demand, made to report as fast as possible. build builds the Photosphere App for the iOS
+# simulator, with its Zig library in Debug because it compiles fastest, and the Zig CLI for the runner's macOS, which makes the scenarios'
+# fixtures, and uploads both. The app smoke tests are split across runners, each running one shard of the scenarios on its own simulator.
+# The Zig unit tests are not run here: on this runner they are the same command as Test macOS arm64 runs. Every job here takes one of
+# the account's five macOS runners, which the macOS test workflows share. Nothing is packaged: the release workflow does that.
+name: Test iOS
+
+env:
+  BUN_VERSION: "1.3.14"
+  NODE_VERSION: "24.15.0"
+
+on:
+  push:
+    branches:
+      - "**"
+
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes a run still going, so only the latest commit's results are waited for.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    timeout-minutes: 60
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/test-setup
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check the iOS toolchain
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Restore the third-party libraries for the runner
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: macos-arm64
+          build-args: -Dtarget=aarch64-macos.11.0
+
+      - name: Restore the third-party libraries for the iOS simulator
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: ios
+          build-args: -Dtarget=aarch64-ios.14.0-simulator
+          config-name: aarch64-ios-simulator
+
+      - name: Set config
+        shell: bash
+        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
+
+      - name: Restore the Debug build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-ios-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-ios-
+
+      - name: Build the app for the iOS simulator
+        shell: bash
+        run: bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --optimize Debug --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode"
+
+      - name: Build the Zig CLI
+        shell: bash
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
+
+      - name: Save the Debug build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-ios-${{ github.sha }}
+
+      - name: Pack the build
+        shell: bash
+        run: tar -cf "$RUNNER_TEMP/build.tar" out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app out/psi
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build-ios
+          path: ${{ runner.temp }}/build.tar
+          retention-days: 1
+          compression-level: 1
+
+  # One shard of the app smoke tests per runner, each on the runner's first available iPhone simulator.
+  app-smoke-tests:
+    timeout-minutes: 40
+    needs: [build]
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/test-setup
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+
+      # The scenarios build their database fixtures with the CLI, which needs ImageMagick and ffmpeg.
+      - name: Install media processing tools
+        uses: ./.github/actions/retry-install
+        with:
+          run: brew install imagemagick ffmpeg tree rsync
+          verify: magick|convert ffmpeg ffprobe
+
+      - name: Check the iOS toolchain
+        run: bun run --filter=ziggy setup:ios
+
+      - name: Download the build
+        uses: actions/download-artifact@v4
+        with:
+          name: test-build-ios
+          path: ${{ runner.temp }}
+
+      - name: Unpack the build
+        shell: bash
+        run: tar -xf "$RUNNER_TEMP/build.tar"
+
+      - name: Run shard ${{ matrix.shard }} of the Photosphere App iOS smoke tests
+        timeout-minutes: 35
+        shell: bash
+        env:
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/3
+        run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy:ios
+
+      - name: Collect the logs of failed scenarios and any crash reports
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/app-smoke-logs/crash-reports"
+          if [ -d "${TMPDIR%/}/photosphere-tests" ]; then
+              cp -R "${TMPDIR%/}/photosphere-tests" "$RUNNER_TEMP/app-smoke-logs/"
+          fi
+          if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
+              cp -R "$HOME/Library/Logs/DiagnosticReports/." "$RUNNER_TEMP/app-smoke-logs/crash-reports/"
+          fi
+
+      - name: Upload the logs of failed scenarios and any crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-smoke-logs-ios-${{ matrix.shard }}
+          path: ${{ runner.temp }}/app-smoke-logs
+          retention-days: 5
