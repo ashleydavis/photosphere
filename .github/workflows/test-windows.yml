@@ -1,7 +1,11 @@
-# The tests on Windows, on every push and on demand, made to report as fast as possible. build builds the Photosphere App and the Zig
-# CLI once, in Debug because it compiles fastest, and uploads both. The app smoke tests are split across runners, each running one
-# shard of the scenarios on that build, beside the CLI smoke tests and the Zig unit tests. Nothing is packaged or released: the release
-# workflow does that, on a tag or on demand.
+# The tests on Windows, on every push and on demand, made to report as fast as possible. Everything is built in Debug, because it
+# compiles fastest. app-build builds the Photosphere App and cli-build the Zig CLI, side by side, and the app smoke tests are split
+# across runners, each running one shard of the scenarios on that app and CLI. The CLI smoke tests build their own CLI and the Zig unit
+# tests start at once, so neither waits for a build. Nothing is packaged or released: the release workflow does that, on a tag or on
+# demand.
+#
+# Each job restores the third-party libraries it links, and builds and stores any that no stored artifact has. When a library changes,
+# more than one job builds it and stores it, which costs that one run time but keeps every other run from waiting on a job of its own.
 name: Test Windows
 
 env:
@@ -22,9 +26,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Builds the app (for the MSVC ABI) and the CLI (for the runner, x86_64-windows-gnu) in Debug and uploads them as one tar. It is the
-  # only job that may build a third-party library, when no stored artifact has it, so two jobs never upload the same library at once.
-  build:
+  # The app, for the MSVC ABI, which links the libraries built for it.
+  app-build:
     timeout-minutes: 60
     runs-on: windows-latest
     steps:
@@ -41,11 +44,6 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy setup
 
-      - name: Restore the third-party libraries
-        uses: ./.github/actions/third-party-libraries
-        with:
-          platform: windows-x64
-
       - name: Restore the third-party libraries for the MSVC ABI
         uses: ./.github/actions/third-party-libraries
         with:
@@ -56,52 +54,95 @@ jobs:
         shell: bash
         run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
 
-      - name: Restore the Debug build's Zig build cache
+      - name: Restore the app build's Zig build cache
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-app-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-app-build-
 
       # The prefix is given in the drive-letter form, because the build script hands it to zig.
       - name: Build the app
         shell: bash
         run: bun run --filter=ziggy build:windows -- --prefix "$(cygpath -m "$PWD/out/app")" --optimize Debug
 
-      - name: Build the Zig CLI
-        shell: bash
-        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
-
-      - name: Save the Debug build's Zig build cache
+      - name: Save the app build's Zig build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-app-build-${{ github.sha }}
 
-      # A relative path, because Git Bash's tar reads the drive letter of an absolute one as a remote host ("Cannot connect to D:").
-      - name: Pack the build
-        shell: bash
-        run: tar -cf build.tar out/app out/psi
-
-      - name: Upload the build
+      - name: Upload the app
         uses: actions/upload-artifact@v4
         with:
-          name: test-build-windows
-          path: build.tar
+          name: test-app-windows
+          path: out/app
+          retention-days: 1
+          compression-level: 1
+
+  # The Zig CLI for the runner (x86_64-windows-gnu), which the app smoke tests' scenarios run.
+  cli-build:
+    timeout-minutes: 60
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: jdx/mise-action@v2
+        with:
+          install_args: zig jq
+
+      - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+        uses: ./.github/actions/zig-packages
+
+      - name: Restore the third-party libraries
+        uses: ./.github/actions/third-party-libraries
+        with:
+          platform: windows-x64
+
+      - name: Set config
+        shell: bash
+        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
+
+      - name: Restore the CLI build's Zig build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-
+
+      - name: Build the Zig CLI
+        shell: bash
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
+
+      - name: Save the CLI build's Zig build cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-${{ github.sha }}
+
+      - name: Upload the Zig CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-psi-windows
+          path: out/psi
           retention-days: 1
           compression-level: 1
 
   # One shard of the app smoke tests per runner.
   app-smoke-tests:
     timeout-minutes: 30
-    needs: [build]
+    needs: [app-build, cli-build]
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,22 +167,24 @@ jobs:
         shell: bash
         run: bun run --filter=ziggy setup
 
-      - name: Download the build
+      - name: Download the app
         uses: actions/download-artifact@v4
         with:
-          name: test-build-windows
-          path: .
+          name: test-app-windows
+          path: out/app
 
-      - name: Unpack the build
-        shell: bash
-        run: tar -xf build.tar
+      - name: Download the Zig CLI
+        uses: actions/download-artifact@v4
+        with:
+          name: test-psi-windows
+          path: out/psi
 
       # The paths are given in the drive-letter form, which both Git Bash and the native Windows programs the runner starts accept.
       - name: Run shard ${{ matrix.shard }} of the Photosphere App smoke tests
         timeout-minutes: 25
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/5
         run: PHOTOSPHERE_SMOKE_BUILD="$(cygpath -m "$PWD/out/app")" PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/out/psi/bin/psi.exe")" bun run test:ziggy
 
       - name: Collect the logs of failed scenarios
@@ -161,9 +204,9 @@ jobs:
           path: ${{ runner.temp }}/app-smoke-logs
           retention-days: 5
 
+  # Builds its own CLI rather than waiting for cli-build, which takes about as long as the wait would.
   cli-smoke-tests:
     timeout-minutes: 40
-    needs: [build]
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -190,6 +233,11 @@ jobs:
         with:
           platform: windows-x64
 
+      - name: Set config
+        shell: bash
+        run: bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
+
+      # The unit tests' cache for scenario 75's `zig build test-integration`, with the Debug CLI build's laid over it.
       - name: Restore the Zig unit tests' build cache
         uses: actions/cache/restore@v4
         with:
@@ -198,15 +246,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
-      - name: Download the build
-        uses: actions/download-artifact@v4
+      - name: Restore the CLI build's Zig build cache
+        uses: actions/cache/restore@v4
         with:
-          name: test-build-windows
-          path: .
+          path: .zig-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-cli-build-
 
-      - name: Unpack the build
+      - name: Build the Zig CLI
         shell: bash
-        run: tar -xf build.tar
+        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
 
       # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh).
       - name: Run the Zig CLI smoke tests
@@ -232,10 +282,9 @@ jobs:
           path: ${{ runner.temp }}/cli-smoke-logs
           retention-days: 5
 
-  # The unit tests of the Zig CLI and of every Zig package. After build only so that build is the one job that may build a library.
+  # The unit tests of the Zig CLI and of every Zig package.
   zig-unit-tests:
     timeout-minutes: 40
-    needs: [build]
     runs-on: windows-latest
     steps:
       - name: Checkout code
