@@ -1,7 +1,8 @@
-# The tests on Linux, on every push and on demand, made to report as fast as possible. build builds the Photosphere App and the Zig CLI
-# once, in Debug because it compiles fastest, and uploads both. The app smoke tests are split across runners, each running one shard
-# of the scenarios on that build, beside the CLI smoke tests and the Zig unit tests. The TypeScript is compiled and tested here only,
-# because it is the same on every platform. Nothing is packaged or released: the release workflows do that, on a tag or on demand.
+# The tests on Linux, on every push and on demand, made to report as fast as possible. They test what Release Linux tests and build
+# what it builds, packages included, and publish nothing. build builds the Photosphere App and the Zig CLI once, as Release Linux does,
+# uploads both and packages the app. The app smoke tests are split across runners, each running one shard of the scenarios on that
+# build, beside the CLI smoke tests and the Zig unit tests. The TypeScript is compiled and tested here only, because it is the same on
+# every platform: the release workflows each ran it on the same Linux runner.
 name: Test Linux
 
 env:
@@ -22,8 +23,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Builds the app and the CLI in Debug and uploads them as one tar, which keeps the executable bits an artifact would lose. It is the
-  # only job that may build a third-party library, when no stored artifact has it, so two jobs never upload the same library at once.
+  # Builds the app and the CLI exactly as Release Linux does (the version stamped in, ReleaseSafe, the app minified and stripped) and
+  # uploads them as one tar, which keeps the executable bits an artifact would lose, then packages the app as Release Linux does. It is
+  # the only job that may build a third-party library, when no stored artifact has it, so two jobs never upload the same library at once.
   build:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -37,40 +39,47 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
 
-      # The Linux native app links the runtime libraries by file name, so no development packages are needed.
-      - name: Install the app's runtime libraries
+      # The Linux native app links the runtime libraries by file name, so no development packages are needed. WebKitGTK plays video
+      # through GStreamer, so the package depends on those plugins.
+      - name: Install the build and packaging tools
         uses: ./.github/actions/install-apt-packages
         with:
-          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0
-          verify: ""
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav zip
+          verify: zip
 
       - name: Restore the third-party libraries
         uses: ./.github/actions/third-party-libraries
         with:
           platform: linux-x64
 
-      - name: Restore the Debug build's Zig build cache
+      - name: Set config
+        shell: bash
+        run: |
+          VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore the build's Zig build cache
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-build-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-
+            ${{ runner.os }}-${{ runner.arch }}-zig-test-release-build-
 
       - name: Build the app
         shell: bash
-        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --optimize Debug
+        run: bun run --filter=ziggy build:linux -- --prefix "$PWD/out/app" --minify --strip
 
       - name: Build the Zig CLI
         shell: bash
-        run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
+        run: zig build -Dcpu=baseline --prefix out/psi
 
-      - name: Save the Debug build's Zig build cache
+      - name: Save the build's Zig build cache
         if: always()
         uses: actions/cache/save@v4
         with:
           path: .zig-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-debug-build-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-test-release-build-${{ github.sha }}
 
       - name: Pack the build
         shell: bash
@@ -83,6 +92,16 @@ jobs:
           path: ${{ runner.temp }}/build.tar
           retention-days: 1
           compression-level: 1
+
+      - name: Package
+        shell: bash
+        run: bun run --filter=ziggy package:linux -- --binary "$PWD/out/app" --version "$VERSION" --output-dir "$PWD/out/package"
+
+      - name: Check the packages were made
+        shell: bash
+        run: |
+          ls -la out/package
+          ls out/package/*.zip out/package/*.deb
 
   # One shard of the app smoke tests per runner, under xvfb.
   app-smoke-tests:
@@ -196,6 +215,10 @@ jobs:
         working-directory: ./apps/cli-zig
         shell: bash
         run: PHOTOSPHERE_SMOKE_PSI="$PWD/../../out/psi/bin/psi" ./smoke-tests-zig.sh
+
+      - name: Test the Zig version command
+        shell: bash
+        run: out/psi/bin/psi version
 
       - name: Collect the logs of failed CLI smoke tests
         if: failure()

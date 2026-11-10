@@ -1,13 +1,13 @@
 # The tests on macOS, called by Test macOS arm64 and Test macOS x64 with the runner and the architecture. Every job here takes one of
 # the account's five macOS runners, which Test iOS shares, so each platform has two jobs, both start at once and neither waits on the
-# other. app builds the Photosphere App and the Zig CLI and runs every app smoke scenario on that runner. cli runs the Zig unit tests
-# and builds the Zig CLI, then runs the CLI smoke tests. Each job builds its CLI from a second checkout, beside its other compile:
-# both builds check and write the third-party library directories of the checkout they run in, and in one checkout side by side one
-# found its directory gone part way ("FileNotFound" in findThirdPartyLibraries).
+# other. app builds the Photosphere App and the Zig CLI, packages the app and runs every app smoke scenario on that runner. cli runs
+# the Zig unit tests and builds the Zig CLI, then runs the CLI smoke tests. Each job builds its CLI from a second checkout, beside its
+# other compile: both builds check and write the third-party library directories of the checkout they run in, and in one checkout side
+# by side one found its directory gone part way ("FileNotFound" in findThirdPartyLibraries). The second checkout also keeps the CLI's
+# version stamp out of the checkout the unit tests run in, unstamped, as the release workflow runs them.
 #
-# Everything is built in ReleaseSafe: in Debug, Zig's standard library aborts on an EISCONN from connect on macOS ("programmer bug
-# caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles. Nothing stamps a version into the build, as
-# nothing does in a test run on a developer's machine, so a push that changes no Zig code finds every compile step in the cache.
+# Everything is tested and built as the release workflow tests and builds it (stamped, ReleaseSafe, the page minified), packages
+# included, and nothing is published.
 
 name: Test macOS
 
@@ -77,6 +77,14 @@ jobs:
               cp -R "third-party/$library/zig-out" "psi-src/third-party/$library/"
           done
 
+      # Both builds are stamped with the version, as the release workflow's are.
+      - name: Set config
+        shell: bash
+        run: |
+          VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          bash psi-src/scripts/set-build-config.sh --commit "${{ github.sha }}" > /dev/null
+
       - name: Restore the app build's Zig build cache
         uses: actions/cache/restore@v4
         with:
@@ -97,7 +105,7 @@ jobs:
       - name: Build the app and the Zig CLI
         shell: bash
         run: |
-          /usr/bin/time -p bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
+          /usr/bin/time -p bun run --filter=ziggy build:macos -- --configuration Release --minify --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
           app_pid=$!
           (cd psi-src && /usr/bin/time -p zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
           psi_pid=$!
@@ -129,6 +137,17 @@ jobs:
         with:
           path: psi-src/.zig-cache
           key: ${{ runner.os }}-${{ runner.arch }}-zig-test-psi-build-${{ github.sha }}
+
+      # As the release workflow packages it: a dmg and a zip, ad hoc signed.
+      - name: Package
+        shell: bash
+        run: bun run --filter=ziggy package:macos -- --binary "$PWD/out/app/xcode/Build/Products/Release/Photosphere.app" --version "$VERSION" --output-dir "$PWD/out/package"
+
+      - name: Check the packages were made
+        shell: bash
+        run: |
+          ls -la out/package
+          ls out/package/*.dmg out/package/*.zip
 
       # Shard 1 of 1 is every scenario, and like any shard it records no what-changed baseline, which this runner has no use for.
       - name: Run the Photosphere App smoke tests
@@ -205,6 +224,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
+      # The CLI is stamped with the version, as the release workflow's is. Only the second checkout is: the unit tests run in this one,
+      # unstamped, as the release workflow runs them.
+      - name: Set config in the second checkout
+        shell: bash
+        run: bash psi-src/scripts/set-build-config.sh --commit "${{ github.sha }}"
+
       - name: Restore the Zig CLI build's Zig build cache
         uses: actions/cache/restore@v4
         with:
@@ -248,6 +273,10 @@ jobs:
         working-directory: ./apps/cli-zig
         shell: bash
         run: PHOTOSPHERE_SMOKE_PSI="$PWD/../../out/psi/bin/psi" ./smoke-tests-zig.sh
+
+      - name: Test the Zig version command
+        shell: bash
+        run: out/psi/bin/psi version
 
       - name: Report the Zig unit tests
         if: ${{ !cancelled() }}
