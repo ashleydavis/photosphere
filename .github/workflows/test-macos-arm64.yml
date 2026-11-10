@@ -20,5 +20,5 @@ jobs:
       runner: macos-latest
       platform: macos-arm64
       target: aarch64-macos.11.0
-      # The runner has 3 cores.
-      app-parallel: "3"
+      # The runner has 3 cores. Three at once took 7.4 minutes; the scenarios spend much of their time waiting on the app.
+      app-parallel: "4"
