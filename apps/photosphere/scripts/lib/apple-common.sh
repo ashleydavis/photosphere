@@ -125,7 +125,6 @@ apple_sync_native() {
         local archive_dir="$members_dir/archive$archive_number"
         mkdir -p "$archive_dir/members/all" || apple_fail "could not make a directory for the members of $archive."
         names="$(zig ar t "$archive")" || apple_fail "could not list the members of $archive."
-        zig ar x "$archive" --output "$archive_dir/members/all" || apple_fail "could not take the members out of $archive."
         # Each line of instances.txt is a member's position in the archive, the instance of its name it is and its name, in archive
         # order. The instance is counted on a copy sorted by name, where the members of one name sit together, so it costs one pass
         # instead of a search of the names before it for every member.
@@ -148,6 +147,18 @@ apple_sync_native() {
                 printf '%s\t%s\t%s\n' "$line_number" "$instance" "$member"
             done
         } | LC_ALL=C sort -t "$tab" -k1,1n > "$archive_dir/instances.txt" || apple_fail "could not number the members of $archive."
+        # Only the names that occur once are taken out together. zig ar x gives each file the mode its archive records, which Zig writes
+        # as 0, so on macOS a second member of the same name could not overwrite the first ("animate.o: Permission denied"). The
+        # duplicated names are taken out instance by instance below, each instance into a directory of its own.
+        local single=()
+        local single_count=0
+        while IFS= read -r member; do
+            single+=("$member")
+            single_count=$((single_count + 1))
+        done < <(cut -f3 "$archive_dir/instances.txt" | LC_ALL=C sort | uniq -u)
+        if [ "$single_count" -gt 0 ]; then
+            zig ar x "$archive" "${single[@]}" --output "$archive_dir/members/all" || apple_fail "could not take the members out of $archive."
+        fi
         # The names with a second instance are exactly the duplicated ones, so they are the names whose first instance is taken too.
         wanted=2
         while :; do
