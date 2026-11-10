@@ -69,9 +69,9 @@ jobs:
       - name: Build the app for the iOS simulator and the Zig CLI
         shell: bash
         run: |
-          bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
+          /usr/bin/time -p bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
           app_pid=$!
-          zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+          /usr/bin/time -p zig build -Dcpu=baseline --prefix out/psi > "$RUNNER_TEMP/psi-build.log" 2>&1 &
           psi_pid=$!
           app_status=0
           wait "$app_pid" || app_status=$?

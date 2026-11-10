@@ -97,9 +97,9 @@ jobs:
       - name: Build the app and the Zig CLI
         shell: bash
         run: |
-          bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
+          /usr/bin/time -p bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
           app_pid=$!
-          (cd psi-src && zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+          (cd psi-src && /usr/bin/time -p zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
           psi_pid=$!
           app_status=0
           wait "$app_pid" || app_status=$?
@@ -223,9 +223,9 @@ jobs:
       - name: Run the Zig unit tests and build the Zig CLI
         shell: bash
         run: |
-          zig build test -Dcpu=baseline --summary all --test-timeout 20m > "$RUNNER_TEMP/unit-tests.log" 2>&1 &
+          /usr/bin/time -p zig build test -Dcpu=baseline --summary all --test-timeout 20m > "$RUNNER_TEMP/unit-tests.log" 2>&1 &
           test_pid=$!
-          (cd psi-src && zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+          (cd psi-src && /usr/bin/time -p zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
           psi_pid=$!
           test_status=0
           wait "$test_pid" || test_status=$?
