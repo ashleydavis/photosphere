@@ -157,26 +157,9 @@ jobs:
       # Two simulators a runner, so each shard runs two scenarios at once: four shards with the build are five jobs, the account's
       # whole quota of macOS runners, and eight scenarios run at once rather than four. PHOTOSPHERE_IOS_SIMULATORS hands them to the
       # scenarios.
-      # The simulators' data directories, which hold the result of the one-time data migration a simulator runs the first time it boots
-      # at an Xcode version. On a slow runner that migration took three minutes of the boot's wait here, and it never runs again once
-      # done. The key is the Xcode version alone, with no restore-keys: a directory migrated by another Xcode is not what this one
-      # expects, so a miss must build it afresh.
-      - name: Work out the simulators' data cache key
-        id: simulator-data
-        shell: bash
-        run: echo "key=${{ runner.os }}-${{ runner.arch }}-ios-simulator-data-$(xcodebuild -version | head -1 | tr ' ' '-')" >> "$GITHUB_OUTPUT"
-
-      - name: Restore the simulators' data
-        id: restored-simulator-data
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/Library/Developer/CoreSimulator/Devices
-          key: ${{ steps.simulator-data.outputs.key }}
-
-      - name: Show the simulators' data size
-        shell: bash
-        run: du -sh ~/Library/Developer/CoreSimulator/Devices 2>/dev/null || true
-
+      # No cache of the simulators' data. It was added to skip the one-time data migration a simulator runs at a new Xcode version, but
+      # restoring several gigabytes of device directories took longer than the migration it saved: a shard's restore and the steps
+      # around it ran from 11:20 to 11:24 before any scenario, on every shard.
       - name: Start booting two simulators
         shell: bash
         run: |
@@ -273,15 +256,6 @@ jobs:
               xcrun simctl terminate "$udid" au.com.codecapers.photosphere.ziggy > /dev/null 2>&1 || true
               echo "The first launch on $udid took ${waited}s"
           done
-
-      # Saved only once a boot has finished, so what is saved is a device the migration has already run on. A failed save changes
-      # nothing: the next run migrates as it did before.
-      - name: Save the simulators' data
-        if: steps.restored-simulator-data.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/Library/Developer/CoreSimulator/Devices
-          key: ${{ steps.simulator-data.outputs.key }}
 
       - name: Run shard ${{ matrix.shard }} of the Photosphere App iOS smoke tests
         timeout-minutes: 12
