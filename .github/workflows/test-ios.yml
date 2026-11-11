@@ -249,6 +249,31 @@ jobs:
               xcrun simctl bootstatus "$udid" -b
           done
 
+      # The first launch of the app on a simulator can block for ten minutes while the simulator finishes its own first-run work.
+      # Inside a scenario that block ran into the scenario's 600 second limit and cost a whole shard: 604 seconds twice, and the app
+      # appeared a second after the second one was killed. Launched here first, and capped, the wait happens once per simulator
+      # before any scenario, and a simulator that will not launch says so here rather than failing a scenario it never ran.
+      - name: Launch the app once on each simulator, so the first launch is not a scenario's
+        shell: bash
+        run: |
+          for udid in $PHOTOSPHERE_IOS_SIMULATORS; do
+              echo "Launching the app once on $udid"
+              xcrun simctl launch "$udid" au.com.codecapers.photosphere.ziggy > /dev/null 2>&1 &
+              launch_pid=$!
+              waited=0
+              while kill -0 "$launch_pid" 2>/dev/null; do
+                  if [ "$waited" -ge 240 ]; then
+                      echo "::warning::The first launch on $udid took longer than 240s and was abandoned."
+                      kill "$launch_pid" 2>/dev/null || true
+                      break
+                  fi
+                  sleep 1
+                  waited=$((waited + 1))
+              done
+              xcrun simctl terminate "$udid" au.com.codecapers.photosphere.ziggy > /dev/null 2>&1 || true
+              echo "The first launch on $udid took ${waited}s"
+          done
+
       # Saved only once a boot has finished, so what is saved is a device the migration has already run on. A failed save changes
       # nothing: the next run migrates as it did before.
       - name: Save the simulators' data
