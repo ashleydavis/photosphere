@@ -462,8 +462,9 @@ pub const MainState = struct {
     // the active database changes.
     //
     // next_database_path is the database about to become active, or null when none is. Tasks are cancelled only when that is a
-    // different database from the one running now. Cancelling is by database path, and the load that fills the gallery is tagged with
-    // that same path, so cancelling on a reopen of the database already open kills the load the page has just started for it.
+    // different database from the one running now, because cancelling on a reopen of the database already open cancels the sync the
+    // same open is about to schedule. The load that fills the gallery is not among the tasks cancelled here: the page tags each load
+    // with an id of its own rather than the database path, and cancels it through the queue it built for that load.
     //
     pub fn resetSyncState(self: *MainState, services: HandlerServices, timers: Timers, io: std.Io, allocator: std.mem.Allocator, next_database_path: ?[]const u8) void {
         // (`currentDatabasePath &&` is false for an empty path as well as for none.)

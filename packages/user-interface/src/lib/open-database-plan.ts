@@ -22,6 +22,24 @@ export interface IOpenDatabaseInputs {
 }
 
 //
+// What the effect that loads a database knows when React runs its cleanup, which is the render being
+// replaced going away rather than anything the user did.
+//
+export interface ILoadTeardownInputs {
+    //
+    // The id of the load this effect started or claimed when it ran, or undefined when this render
+    // had no database to load. Each load gets an id of its own, so this names one load and no other.
+    //
+    startedLoadId: string | undefined;
+
+    //
+    // The id of the load running right now, or undefined when no load is running. This is read at
+    // cleanup time, so it may already be a load something else started.
+    //
+    currentLoadId: string | undefined;
+}
+
+//
 // What openDatabase should do about the database that is already open.
 //
 export interface IOpenDatabasePlan {
@@ -89,4 +107,31 @@ export function planOpenDatabase(inputs: IOpenDatabaseInputs): IOpenDatabasePlan
         closeFirst: inputs.openDatabasePath !== undefined,
         startLoadDirectly: false,
     };
+}
+
+//
+// Whether the database-path effect should tear down a load when it is cleaned up.
+//
+// That effect tears its load down so a path change leaves nothing behind, but a reopen of the same
+// database closes it and sets the path straight back, and nothing separates the two: the close empties
+// the load, and the load that replaces it is started by openDatabase before React renders the path
+// back. By the time the cleanup for the previous path runs, the load it finds is that replacement.
+// Cancelling it kills the load the user is waiting on, and the effect then starts a second load as
+// well, so two run at once against one database.
+//
+// This is here beside planOpenDatabase because it is the other half of the same reopen: that function
+// decides to start the load from openDatabase, and this one keeps the effect from cancelling it. Smoke
+// test 26, s3-database-lifecycle, showed both loads starting and both finishing with 0 assets.
+//
+// The comparison is by load id, not by database path. A reopen of the same database gives both loads
+// the same path, so a path comparison says yes and cancels the replacement, which is the bug itself.
+// An id belongs to one load, so a load this effect did not start is left alone whichever database it
+// is for.
+//
+export function planLoadTeardown(inputs: ILoadTeardownInputs): boolean {
+    if (inputs.startedLoadId === undefined) {
+        return false;
+    }
+
+    return inputs.currentLoadId === inputs.startedLoadId;
 }

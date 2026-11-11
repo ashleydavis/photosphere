@@ -187,10 +187,10 @@ test "loadAssets queues the load as interactive, because the user is waiting on 
     setQueueBackend(backend.queueBackend());
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
+    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "load-1");
     defer queue.deinit(io, allocator, log);
 
-    try loadAssets(allocator, io, log, queue, "/photos/db");
+    try loadAssets(allocator, io, log, queue, "/photos/db", "load-1");
 
     try std.testing.expectEqual(@as(usize, 1), backend.addedTasks.items.len);
     try std.testing.expectEqual(TaskPriority.Interactive, backend.addedTasks.items[0].priority.?);
@@ -207,20 +207,23 @@ test "loadAssets queues a load-assets task naming the database" {
     setQueueBackend(backend.queueBackend());
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
+    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "load-1");
     defer queue.deinit(io, allocator, log);
 
-    try loadAssets(allocator, io, log, queue, "/photos/db");
+    try loadAssets(allocator, io, log, queue, "/photos/db", "load-1");
 
     try std.testing.expectEqualStrings("load-assets", backend.addedTasks.items[0].type);
-    try std.testing.expectEqualStrings("/photos/db", backend.addedTasks.items[0].taskId.?);
+    try std.testing.expectEqualStrings("load-1", backend.addedTasks.items[0].taskId.?);
     try std.testing.expectEqualStrings(
-        "{\"databasePath\":\"/photos/db\",\"job\":{\"id\":\"load:/photos/db\",\"name\":\"Loading assets\",\"cancelSource\":\"/photos/db\"}}",
+        "{\"databasePath\":\"/photos/db\",\"job\":{\"id\":\"load:/photos/db\",\"name\":\"Loading assets\",\"cancelSource\":\"load-1\"}}",
         backend.addedTasks.items[0].dataJson,
     );
 }
 
-test "loadAssets cancels by the database path, which is the source its caller's queue is tagged with" {
+// The load is tagged with the id of that one load, never with the database path. cancelTasks() takes a source and a cancelled load
+// stops paging and reports success with no assets, so a load tagged with the path is killed by every cancel of that path: the load it
+// replaced and the load that replaced it both reported 0 assets and the gallery stayed empty (smoke test 26).
+test "loadAssets cancels by the id of the one load, which is the source its caller's queue is tagged with" {
     const log = utils.mute_log.MuteLog.init();
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -231,14 +234,38 @@ test "loadAssets cancels by the database path, which is the source its caller's 
     setQueueBackend(backend.queueBackend());
     defer setQueueBackend(null);
     var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
-    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "/photos/db");
+    const queue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "load-1");
     defer queue.deinit(io, allocator, log);
 
-    try loadAssets(allocator, io, log, queue, "/photos/db");
+    try loadAssets(allocator, io, log, queue, "/photos/db", "load-1");
 
-    // Callers build their TaskQueue with the database path as its source, and cancelTasks() takes a source. A cancel source that
-    // did not match it would leave the Cancel button doing nothing at all.
     const data = try std.json.parseFromSliceLeaky(std.json.Value, allocator, backend.addedTasks.items[0].dataJson, .{});
-    try std.testing.expectEqualStrings("/photos/db", data.object.get("job").?.object.get("cancelSource").?.string);
+    try std.testing.expectEqualStrings("load-1", data.object.get("job").?.object.get("cancelSource").?.string);
     try std.testing.expectEqualStrings(queue.source, data.object.get("job").?.object.get("cancelSource").?.string);
+}
+
+test "loadAssets cancels a second load of the same database under its own id" {
+    const log = utils.mute_log.MuteLog.init();
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var backend: RecordingQueueBackend = .{
+        .allocator = allocator,
+    };
+    setQueueBackend(backend.queueBackend());
+    defer setQueueBackend(null);
+    var uuidGenerator: utils.test_uuid_generator.TestUuidGenerator = .{};
+    const firstQueue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "load-1");
+    defer firstQueue.deinit(io, allocator, log);
+    const secondQueue = try TaskQueue.init(allocator, uuidGenerator.uuidGenerator(), "load-2");
+    defer secondQueue.deinit(io, allocator, log);
+
+    try loadAssets(allocator, io, log, firstQueue, "/photos/db", "load-1");
+    try loadAssets(allocator, io, log, secondQueue, "/photos/db", "load-2");
+
+    try std.testing.expectEqual(@as(usize, 2), backend.addedTasks.items.len);
+    const firstData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, backend.addedTasks.items[0].dataJson, .{});
+    const secondData = try std.json.parseFromSliceLeaky(std.json.Value, allocator, backend.addedTasks.items[1].dataJson, .{});
+    try std.testing.expectEqualStrings("load-1", firstData.object.get("job").?.object.get("cancelSource").?.string);
+    try std.testing.expectEqualStrings("load-2", secondData.object.get("job").?.object.get("cancelSource").?.string);
 }
