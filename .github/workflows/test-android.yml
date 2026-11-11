@@ -188,7 +188,33 @@ jobs:
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'system-images;android-35;google_apis;x86_64'
 
       # The emulator options are the release workflow's: emulator 36.6.11 and `-gpu swangle_indirect`, for the reasons it gives.
+      #
+      # Two attempts at the shard, each on a fresh emulator. About one emulator in four goes offline part-way through a shard ("adb:
+      # error: device offline"), which fails every scenario after it, and it has done so in most runs of this workflow while the release
+      # workflow's single emulator passes every time. The first attempt's failure is kept and the second's verdict decides the job, so a
+      # shard that fails both ways fails, and a shard that hit a dead emulator once still reports its real result. The second attempt
+      # runs only when the first failed.
       - name: Run shard ${{ matrix.shard }} of the Photosphere App Android smoke tests
+        id: attempt-1
+        continue-on-error: true
+        timeout-minutes: 12
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          PHOTOSPHERE_NO_LAN_BRIDGE: "1"
+          PHOTOSPHERE_SMOKE_BUILD: ${{ github.workspace }}/out/app
+          PHOTOSPHERE_SMOKE_PSI: ${{ github.workspace }}/out/psi/bin/psi
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disk-size: 4096M
+          emulator-build: 15507667
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bun run test:ziggy:and
+
+      - name: Run shard ${{ matrix.shard }} again, on a fresh emulator, when the first attempt failed
+        if: steps.attempt-1.outcome == 'failure'
         timeout-minutes: 12
         uses: reactivecircus/android-emulator-runner@v2
         env:
