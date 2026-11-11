@@ -152,17 +152,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4]
     steps:
-      # One simulator a runner: four shards and the build are five jobs, the account's whole quota of macOS runners, and each shard
-      # runs half the scenarios two shards did. PHOTOSPHERE_IOS_SIMULATORS hands it to the scenarios.
-      - name: Start booting a simulator
+      # Two simulators a runner, so each shard runs two scenarios at once: four shards with the build are five jobs, the account's
+      # whole quota of macOS runners, and eight scenarios run at once rather than four. PHOTOSPHERE_IOS_SIMULATORS hands them to the
+      # scenarios.
+      - name: Start booting two simulators
         shell: bash
         run: |
-          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:1] | .[].udid')"
+          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:2] | .[].udid')"
           count="$(printf '%s\n' "$udids" | grep -c .)"
-          if [ "$count" -lt 1 ]; then
-              echo "There are no available iPhone simulators." >&2
+          if [ "$count" -lt 2 ]; then
+              echo "There are $count available iPhone simulators, and each shard needs two." >&2
               exit 1
           fi
           for udid in $udids; do
@@ -214,7 +215,7 @@ jobs:
         timeout-minutes: 12
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/6
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy:ios
 
       - name: Collect the logs of failed scenarios and any crash reports
