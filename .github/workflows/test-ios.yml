@@ -163,6 +163,12 @@ jobs:
               xcrun simctl boot "$udid"
           done
           echo "PHOTOSPHERE_IOS_SIMULATORS=$(printf '%s ' $udids)" >> "$GITHUB_ENV"
+          # Waited for here rather than inside the first scenario, which paid 9.5 minutes for installing and launching on two
+          # simulators that were still starting: the first scenario of shard 2 took that long and the scenario after it timed out.
+          for udid in $udids; do
+              echo "Waiting for $udid to finish booting"
+              xcrun simctl bootstatus "$udid" -b
+          done
 
       - name: Checkout code
         uses: actions/checkout@v4
