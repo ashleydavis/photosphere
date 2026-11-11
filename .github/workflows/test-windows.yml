@@ -230,9 +230,15 @@ jobs:
           retention-days: 5
 
   # Builds its own CLI rather than waiting for cli-build, which takes about as long as the wait would.
+  # The Zig CLI smoke suites, split across two runners: all 133 tests in one job took 12.8 minutes on Windows, which was the longest job
+  # in the workflow. Each shard runs half of them, dealt in turn, so no test is run twice and none is missed.
   cli-smoke-tests:
     timeout-minutes: 40
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -290,10 +296,12 @@ jobs:
         run: zig build -Dcpu=baseline -Doptimize=Debug --prefix out/psi
 
       # In the drive-letter form, as the suite holds every path on Windows (see scripts/lib/test-lib.sh).
-      - name: Run the Zig CLI smoke tests
-        timeout-minutes: 30
+      - name: Run shard ${{ matrix.shard }} of the Zig CLI smoke tests
+        timeout-minutes: 20
         working-directory: ./apps/cli-zig
         shell: bash
+        env:
+          PHOTOSPHERE_CLI_SMOKE_SHARD: ${{ matrix.shard }}/2
         run: PHOTOSPHERE_SMOKE_PSI="$(cygpath -m "$PWD/../../out/psi/bin/psi.exe")" ./smoke-tests-zig.sh
 
       - name: Test the Zig version command

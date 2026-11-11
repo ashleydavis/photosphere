@@ -564,9 +564,37 @@ print_failed_logs() {
     done
 }
 
-# Discover all test scripts under smoke-tests-zig/ in sorted order
+# Discover all test scripts under smoke-tests-zig/ in sorted order.
+#
+# PHOTOSPHERE_CLI_SMOKE_SHARD=<index>/<count>, counted from 1, keeps only this shard of them, dealt in turn: the first test to shard 1,
+# the second to shard 2 and so on. It exists so CI can run the suite on two runners at once, which is what brings its 13 minutes on
+# windows-latest under the 10 minute target. Unset, every test is discovered as before.
 discover_tests() {
-    find smoke-tests-zig -name "test.sh" | sort -V
+    local shard_index=1
+    local shard_count=1
+    local shard="${PHOTOSPHERE_CLI_SMOKE_SHARD:-}"
+    if [ -n "$shard" ]; then
+        shard_index="${shard%%/*}"
+        shard_count="${shard##*/}"
+        case "$shard_index/$shard_count" in
+            */*/*|*[!0-9/]*|/*|*/)
+                echo "PHOTOSPHERE_CLI_SMOKE_SHARD is '$shard', which is not <index>/<count>." >&2
+                exit 2
+                ;;
+        esac
+        if [ "$shard_count" -lt 1 ] || [ "$shard_index" -lt 1 ] || [ "$shard_index" -gt "$shard_count" ]; then
+            echo "PHOTOSPHERE_CLI_SMOKE_SHARD is '$shard': the index must be from 1 to the count." >&2
+            exit 2
+        fi
+    fi
+    local position=0
+    local script_path
+    while IFS= read -r script_path; do
+        position=$((position + 1))
+        if [ $(( (position - 1) % shard_count + 1 )) -eq "$shard_index" ]; then
+            printf '%s\n' "$script_path"
+        fi
+    done < <(find smoke-tests-zig -name "test.sh" | sort -V)
 }
 
 #
