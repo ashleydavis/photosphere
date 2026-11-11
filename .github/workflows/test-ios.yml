@@ -64,7 +64,7 @@ jobs:
           path: |
             out/app
             out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
 
       - name: Restore the build's Zig build cache
         if: steps.built.outputs.cache-hit != 'true'
@@ -108,7 +108,7 @@ jobs:
           path: |
             out/app
             out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
 
       - name: Save the build's Zig build cache
         if: always()
