@@ -217,13 +217,35 @@ jobs:
       # The install of this app on a simulator that has never had it took most of a shard's scenarios in the first run: the first
       # scenario was still in it when the step's 12 minutes ran out. Installed here, once per simulator, each scenario's own install
       # finds what it expects and the cost is paid once, beside the setup, instead of inside the first scenario's time.
+      #
+      # The two installs run side by side because each is minutes of copying and they do not touch each other's simulator: one at a
+      # time this step was 295 seconds on a runner whose two simulators are independent.
       - name: Install the app on each simulator
         shell: bash
         run: |
+          set -uo pipefail
+          app="$PWD/out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app"
+          pids=""
+          udids=""
           for udid in $PHOTOSPHERE_IOS_SIMULATORS; do
-              echo "Installing the app on $udid"
-              xcrun simctl install "$udid" "$PWD/out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app"
+              xcrun simctl install "$udid" "$app" > "$RUNNER_TEMP/install-$udid.log" 2>&1 &
+              pids="$pids $!"
+              udids="$udids $udid"
           done
+          set -- $udids
+          failed=0
+          for pid in $pids; do
+              udid="$1"
+              shift
+              if wait "$pid"; then
+                  echo "Installed the app on $udid"
+              else
+                  echo "::error::Installing the app on $udid failed."
+                  cat "$RUNNER_TEMP/install-$udid.log" >&2
+                  failed=1
+              fi
+          done
+          exit "$failed"
 
       # The boot started above has had the whole of the setup to itself, and has to be finished before any scenario starts: a
       # scenario that begins on a simulator that is still starting waits minutes for its app.
