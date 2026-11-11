@@ -186,8 +186,8 @@ jobs:
           run: brew install imagemagick ffmpeg tree rsync
           verify: magick|convert ffmpeg ffprobe
 
-      - name: Check the iOS toolchain
-        run: bun run --filter=ziggy setup:ios
+      # No toolchain check: setup:ios runs xcodebuild -version and looks for simctl, and this job only installs the app on a
+      # simulator. The build job, which runs Xcode, checks it. It cost 1.4 minutes a shard.
 
       - name: Download the build
         uses: actions/download-artifact@v4
