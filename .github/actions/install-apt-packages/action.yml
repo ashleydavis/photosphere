@@ -79,7 +79,11 @@ runs:
 
           # Downloading and installing are separate calls so that the download is the only part that
           # can touch the mirror, and it is skipped entirely for every .deb the cache already holds.
-          sudo apt-get install -y -d -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
-          sudo apt-get install -y -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+          #
+          # Both are under `timeout`, so a mirror that accepts a connection and then stalls costs this
+          # many seconds rather than the job's whole budget: one Test Linux run spent 20 minutes in
+          # this step, which was 19 seconds with the cache, and then had to be cancelled.
+          sudo timeout 600 apt-get install -y -d -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+          sudo timeout 300 apt-get install -y -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
 
           sudo chown -R "$(id -u):$(id -g)" "$HOME/apt-debs"
