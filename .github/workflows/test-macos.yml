@@ -77,9 +77,15 @@ jobs:
               cp -R "third-party/$library/zig-out" "psi-src/third-party/$library/"
           done
 
-      # The finished app and CLI, keyed on everything they are built from. The archive alignment and Xcode never cache, so a commit
-      # that changes only the tests still paid the whole build; with this it pays nothing. An exact match only, so nothing is restored
-      # for a commit whose Zig code, page or libraries differ.
+      # The key of the finished app and CLI, computed once here and used for the restore and the save alike: computing it in both
+      # places gave two different keys, because hashFiles is not stable across a build. The archive alignment and Xcode never cache,
+      # so a commit that changes only the tests still paid the whole build; with this it pays nothing. An exact match only, so nothing
+      # is restored for a commit whose Zig code, page or libraries differ.
+      - name: Work out the built-app cache key
+        id: built-key
+        shell: bash
+        run: echo "key=${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}" >> "$GITHUB_OUTPUT"
+
       - name: Restore the built app and CLI
         id: built
         uses: actions/cache/restore@v4
@@ -87,7 +93,7 @@ jobs:
           path: |
             out/app
             out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ steps.built-key.outputs.key }}
 
       - name: Restore the app build's Zig build cache
         if: steps.built.outputs.cache-hit != 'true'
@@ -138,7 +144,7 @@ jobs:
           path: |
             out/app
             out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ steps.built-key.outputs.key }}
 
       - name: Save the app build's Zig build cache
         if: always()
@@ -229,13 +235,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
-      # The CLI the app job's build saved, when the Zig code it is made from is unchanged, so this job does not compile it again.
+      # The CLI the app job's build saved, when the Zig code it is made from is unchanged, so this job does not compile it again. The
+      # key is worked out once here, as the app job does, and used to restore and to save alike.
+      - name: Work out the built-app cache key
+        id: built-key
+        shell: bash
+        run: echo "key=${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}" >> "$GITHUB_OUTPUT"
+
       - name: Restore the built app and CLI
         id: built
         uses: actions/cache/restore@v4
         with:
           path: out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ steps.built-key.outputs.key }}
 
       - name: Restore the Zig CLI build's Zig build cache
         if: steps.built.outputs.cache-hit != 'true'

@@ -57,6 +57,13 @@ jobs:
 
       # The finished app and CLI, keyed on everything they are built from, so a commit that changes only the tests pays no build. An
       # exact match only, so nothing is restored for a commit whose Zig code, page or libraries differ.
+      # Worked out once here and used to restore and to save alike: computing it in both places gave two keys, because hashFiles is
+      # not stable across a build.
+      - name: Work out the built-app cache key
+        id: built-key
+        shell: bash
+        run: echo "key=${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}" >> "$GITHUB_OUTPUT"
+
       - name: Restore the built app and CLI
         id: built
         uses: actions/cache/restore@v4
@@ -64,7 +71,7 @@ jobs:
           path: |
             out/app
             out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ steps.built-key.outputs.key }}
 
       - name: Restore the build's Zig build cache
         if: steps.built.outputs.cache-hit != 'true'
@@ -108,7 +115,7 @@ jobs:
           path: |
             out/app
             out/psi
-          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
+          key: ${{ steps.built-key.outputs.key }}
 
       - name: Save the build's Zig build cache
         if: always()
