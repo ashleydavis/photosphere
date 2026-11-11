@@ -171,12 +171,9 @@ jobs:
               xcrun simctl boot "$udid"
           done
           echo "PHOTOSPHERE_IOS_SIMULATORS=$(printf '%s ' $udids)" >> "$GITHUB_ENV"
-          # Waited for here rather than inside the first scenario, which paid minutes for installing and launching on a simulator that
-          # was still starting: the first scenario of a shard took 9.5 minutes and the scenario after it timed out.
-          for udid in $udids; do
-              echo "Waiting for $udid to finish booting"
-              xcrun simctl bootstatus "$udid" -b
-          done
+          echo "PHOTOSPHERE_IOS_UDIDS_WAITING=$(printf '%s ' $udids)" >> "$GITHUB_ENV"
+          # Not waited for here: booting runs beside the checkout, the setup and the install below, and is waited for just before the
+          # scenarios start. Waiting here made the boot and the install serial: on a slow runner those two steps alone took 11 minutes.
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -220,6 +217,16 @@ jobs:
           for udid in $PHOTOSPHERE_IOS_SIMULATORS; do
               echo "Installing the app on $udid"
               xcrun simctl install "$udid" "$PWD/out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app"
+          done
+
+      # The boot started above has had the whole of the setup to itself, and has to be finished before any scenario starts: a
+      # scenario that begins on a simulator that is still starting waits minutes for its app.
+      - name: Wait for the simulators to finish booting
+        shell: bash
+        run: |
+          for udid in $PHOTOSPHERE_IOS_UDIDS_WAITING; do
+              echo "Waiting for $udid to finish booting"
+              xcrun simctl bootstatus "$udid" -b
           done
 
       - name: Run shard ${{ matrix.shard }} of the Photosphere App iOS smoke tests
