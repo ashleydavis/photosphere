@@ -316,29 +316,15 @@ jobs:
               exit 1
           fi
 
-      # Both suites at once: separately they were 5m4s of Zig unit tests and 4m24s of CLI smoke tests one after the other, which with the
-      # setup made the job 17 minutes. They use different temporary directories and only read the built psi, so neither disturbs the
-      # other. The CLI smoke tests run whether or not the unit tests passed, so one push reports both.
-      - name: Run the Zig unit tests and the Zig CLI smoke tests
+      # One after the other, not at once. Running them side by side on macOS x64 failed worker-pool.test's "times out a task, reports it
+      # failed and replaces the worker" with "expected 1, found 2": the two suites share the machine's cores and the checkout's Zig
+      # cache, and that test counts workers. The CLI smoke tests run whether or not the unit tests passed, so one push reports both.
+      - name: Run the Zig CLI smoke tests
+        if: ${{ !cancelled() }}
+        timeout-minutes: 30
+        working-directory: ./apps/cli-zig
         shell: bash
-        run: |
-          (cd apps/cli-zig && PHOTOSPHERE_SMOKE_PSI="$PWD/../../out/psi/bin/psi" ./smoke-tests-zig.sh) > "$RUNNER_TEMP/cli-smoke.log" 2>&1 &
-          smoke_pid=$!
-          unit_status=0
-          zig build test -Dcpu=baseline --summary all --test-timeout 20m || unit_status=$?
-          smoke_status=0
-          wait "$smoke_pid" || smoke_status=$?
-          echo "::group::Zig CLI smoke tests"
-          cat "$RUNNER_TEMP/cli-smoke.log"
-          echo "::endgroup::"
-          if [ "$unit_status" -ne 0 ]; then
-              echo "::error::The Zig unit tests exited $unit_status."
-              exit 1
-          fi
-          if [ "$smoke_status" -ne 0 ]; then
-              echo "::error::The Zig CLI smoke tests exited $smoke_status."
-              exit 1
-          fi
+        run: PHOTOSPHERE_SMOKE_PSI="$PWD/../../out/psi/bin/psi" ./smoke-tests-zig.sh
 
       - name: Test the Zig version command
         shell: bash
