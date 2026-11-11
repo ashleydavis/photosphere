@@ -165,8 +165,15 @@ report_scenario() {
     fi
 }
 
-scenarios=()
-scenario_position=0
+#
+# Prints how long a scenario took the last time it ran, in seconds, when scenario-costs.tsv has a figure for it, and nothing when it
+# does not. The costs are sorted by name. Usage: scenario_cost <scenario name>
+#
+scenario_cost() {
+    awk -F "$tab" -v name="$1" '$1 == name { print $2; exit }' "$SMOKE_DIR/scenario-costs.tsv"
+}
+
+candidates=()
 while IFS= read -r scenario_dir; do
     [ -f "$scenario_dir/test.sh" ] || continue
     scenario_name="$(basename "$scenario_dir")"
@@ -174,12 +181,51 @@ while IFS= read -r scenario_dir; do
     if [ -n "$SCENARIO_FILTER" ] && [ "$SCENARIO_FILTER" != "$scenario_name" ] && [ "$SCENARIO_FILTER" != "$scenario_number" ]; then
         continue
     fi
-    scenario_position=$((scenario_position + 1))
-    if [ $(( (scenario_position - 1) % SHARD_COUNT + 1 )) -ne "$SHARD_INDEX" ]; then
-        continue
-    fi
-    scenarios+=("$scenario_dir/test.sh")
+    candidates+=("$scenario_dir/test.sh")
 done < <(list_scenarios)
+
+# Dealt by cost rather than by position. A shard that takes the slowest scenarios and another that takes the quickest finish minutes
+# apart on the same work: on Linux, 50-background-sync took 273 seconds where a typical scenario took 40, and whichever shard it landed
+# on was the one the whole workflow waited for. Each scenario goes to the shard holding the least work so far, slowest first, which
+# leaves the shards within one scenario of each other. A scenario with no recorded cost is taken as the median, so a new one is neither
+# treated as free nor given a place at the front.
+tab="$(printf '\t')"
+median_cost="$(cut -f2 "$SMOKE_DIR/scenario-costs.tsv" | sort -n | awk '{ values[NR] = $1 } END { if (NR > 0) print values[int((NR + 1) / 2)] }')"
+shard_load=()
+shard_index=0
+while [ "$shard_index" -lt "$SHARD_COUNT" ]; do
+    shard_load+=("0")
+    shard_index=$((shard_index + 1))
+done
+costed=()
+for test_script in "${candidates[@]}"; do
+    scenario_dir="$(dirname "$test_script")"
+    cost="$(scenario_cost "$(basename "$scenario_dir")")"
+    if [ -z "$cost" ]; then
+        cost="$median_cost"
+    fi
+    costed+=("$cost"$'\t'"$scenario_dir")
+done
+# Slowest first, so the largest scenarios are placed while every shard is still empty and the rest fill in around them.
+while IFS= read -r line; do
+    cost="${line%%$'\t'*}"
+    scenario_dir="${line#*$'\t'}"
+    least=1
+    shard_index=2
+    while [ "$shard_index" -le "$SHARD_COUNT" ]; do
+        if [ "${shard_load[$((shard_index - 1))]}" -lt "${shard_load[$((least - 1))]}" ]; then
+            least=$shard_index
+        fi
+        shard_index=$((shard_index + 1))
+    done
+    shard_load[$((least - 1))]=$(( ${shard_load[$((least - 1))]} + cost ))
+    if [ "$least" -eq "$SHARD_INDEX" ]; then
+        scenarios+=("$scenario_dir/test.sh")
+    fi
+done < <(printf '%s\n' "${costed[@]}" | sort -t "$tab" -k1,1rn)
+if [ "$SHARD_COUNT" -gt "${#candidates[@]}" ]; then
+    echo "Shard $SHARD_INDEX of $SHARD_COUNT: there are fewer scenarios than shards." >&2
+fi
 if [ -n "$SHARD" ]; then
     echo "Shard $SHARD_INDEX of $SHARD_COUNT."
 fi
