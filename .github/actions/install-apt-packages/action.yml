@@ -69,8 +69,14 @@ runs:
     - name: Install
       uses: ./.github/actions/retry-install
       with:
+        # A download that never answered counts as a failed install, so the retry action tries again rather than letting the job
+        # go on. This is the check the exit code does not give: one Test Linux run spent 18.5 minutes in this step with every
+        # Ubuntu host unresolvable, and apt left it reporting success with no library installed, so the app build failed on a
+        # missing libjavascriptcoregtk-4.1.so.0 two steps later.
         verify: ${{ inputs.verify }}
         run: |
+          set -uo pipefail
+
           # apt runs as root and writes here, so the directory is created first and handed back to
           # the runner user afterwards, or the cache step that saves it cannot read what it wrote.
           # partial/ is apt's own scratch directory inside an archives directory; it refuses to
@@ -80,10 +86,33 @@ runs:
           # Downloading and installing are separate calls so that the download is the only part that
           # can touch the mirror, and it is skipped entirely for every .deb the cache already holds.
           #
-          # Both are under `timeout`, so a mirror that accepts a connection and then stalls costs this
-          # many seconds rather than the job's whole budget: one Test Linux run spent 20 minutes in
-          # this step, which was 19 seconds with the cache, and then had to be cancelled.
-          sudo timeout 600 apt-get install -y -d -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
-          sudo timeout 300 apt-get install -y -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+          # The acquire options are what make a dead mirror cost seconds rather than the job's whole
+          # budget. apt's own retries took each of 11 unresolvable hosts to a 20 second give-up in turn,
+          # 18.5 minutes in all, and it then exited 0; with one retry each and a 10 second connection
+          # timeout the same host list fails in about two minutes and the retry action sees the failure.
+          # timeout(1) is the backstop on the whole command.
+          apt_options=(-o Acquire::http::Timeout=10 -o Acquire::ftp::Timeout=10 -o Acquire::Retries=1)
+          sudo timeout 300 apt-get install -y -d "${apt_options[@]}" -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+          download_status=$?
+          if [ "$download_status" -ne 0 ]; then
+              echo "The download of the packages failed (exit $download_status)." >&2
+              exit "$download_status"
+          fi
+
+          sudo timeout 180 apt-get install -y "${apt_options[@]}" -o Dir::Cache::archives="$HOME/apt-debs" ${{ inputs.packages }}
+          install_status=$?
+          if [ "$install_status" -ne 0 ]; then
+              echo "The install of the packages failed (exit $install_status)." >&2
+              exit "$install_status"
+          fi
+
+          # apt can exit 0 having fetched nothing, which is what happened when every host was unresolvable, so each package is
+          # asked whether dpkg now has it.
+          for package in ${{ inputs.packages }}; do
+              if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+                  echo "The package $package is not installed after apt said it had run." >&2
+                  exit 1
+              fi
+          done
 
           sudo chown -R "$(id -u):$(id -g)" "$HOME/apt-debs"
