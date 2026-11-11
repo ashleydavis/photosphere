@@ -124,10 +124,14 @@ failed_names=""
 # Usage: start_scenario <scenario test.sh path>
 #
 start_scenario() {
-    local scenario_dir scenario_name test_dir
+    local scenario_dir scenario_name test_dir started
     scenario_dir="$(dirname "$1")"
     scenario_name="$(basename "$scenario_dir")"
     test_dir="$(photosphere_test_temp_dir "photosphere-app-$scenario_name")"
+    started=$SECONDS
+    # The seconds it began are recorded beside its output, so how long each scenario takes can be read back afterwards. The output
+    # is printed when a scenario finishes, so the times in it say nothing about duration.
+    echo "$started" > "$test_dir/scenario-started-seconds"
     PHOTOSPHERE_TMP_DIR="$test_dir" run_test_with_timeout "$PHOTOSPHERE_PER_TEST_TIMEOUT" bash "$1" < /dev/null > "$test_dir/scenario-run.log" 2>&1 &
     TEST_POOL_JOB_PID=$!
     TEST_POOL_JOB_CONTEXT="$test_dir"
@@ -142,6 +146,7 @@ report_scenario() {
     local scenario_name test_dir="$3"
     scenario_name="$(basename "$(dirname "$2")")"
     echo "--- $scenario_name"
+    echo "Took $((SECONDS - $(cat "$test_dir/scenario-started-seconds")))s"
     cat "$test_dir/scenario-run.log"
     if [ "$status" -eq 0 ]; then
         echo "PASSED: $scenario_name"
