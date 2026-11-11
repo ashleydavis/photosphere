@@ -77,7 +77,20 @@ jobs:
               cp -R "third-party/$library/zig-out" "psi-src/third-party/$library/"
           done
 
+      # The finished app and CLI, keyed on everything they are built from. The archive alignment and Xcode never cache, so a commit
+      # that changes only the tests still paid the whole build; with this it pays nothing. An exact match only, so nothing is restored
+      # for a commit whose Zig code, page or libraries differ.
+      - name: Restore the built app and CLI
+        id: built
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app
+            out/psi
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'third-party/*/zig-out/**', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}
+
       - name: Restore the app build's Zig build cache
+        if: steps.built.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
@@ -86,6 +99,7 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-zig-test-app-build-
 
       - name: Restore the Zig CLI build's Zig build cache
+        if: steps.built.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: psi-src/.zig-cache
@@ -95,6 +109,7 @@ jobs:
 
       # Side by side, because each spends most of its time compiling one Zig module, which takes one core.
       - name: Build the app and the Zig CLI
+        if: steps.built.outputs.cache-hit != 'true'
         shell: bash
         run: |
           /usr/bin/time -p bun run --filter=ziggy build:macos -- --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
@@ -115,6 +130,15 @@ jobs:
               echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
               exit 1
           fi
+
+      - name: Save the built app and CLI
+        if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            out/app
+            out/psi
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'third-party/*/zig-out/**', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}
 
       - name: Save the app build's Zig build cache
         if: always()
@@ -205,7 +229,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-zig-test-build-baseline-
 
+      # The CLI the app job's build saved, when the Zig code it is made from is unchanged, so this job does not compile it again.
+      - name: Restore the built app and CLI
+        id: built
+        uses: actions/cache/restore@v4
+        with:
+          path: out/psi
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-${{ inputs.platform }}-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'third-party/*/zig-out/**', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/macos/**', 'apps/photosphere/scripts/**') }}
+
       - name: Restore the Zig CLI build's Zig build cache
+        if: steps.built.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: psi-src/.zig-cache
@@ -225,18 +258,26 @@ jobs:
         run: |
           /usr/bin/time -p zig build test -Dcpu=baseline --summary all --test-timeout 20m > "$RUNNER_TEMP/unit-tests.log" 2>&1 &
           test_pid=$!
-          (cd psi-src && /usr/bin/time -p zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
-          psi_pid=$!
+          psi_status=0
+          if [ "${{ steps.built.outputs.cache-hit }}" = "true" ]; then
+              psi_pid=""
+          else
+              (cd psi-src && /usr/bin/time -p zig build -Dcpu=baseline --prefix "$GITHUB_WORKSPACE/out/psi") > "$RUNNER_TEMP/psi-build.log" 2>&1 &
+              psi_pid=$!
+          fi
           test_status=0
           wait "$test_pid" || test_status=$?
-          psi_status=0
-          wait "$psi_pid" || psi_status=$?
+          if [ -n "$psi_pid" ]; then
+              wait "$psi_pid" || psi_status=$?
+          fi
           echo "::group::Zig unit tests"
           cat "$RUNNER_TEMP/unit-tests.log"
           echo "::endgroup::"
-          echo "::group::Zig CLI build"
-          cat "$RUNNER_TEMP/psi-build.log"
-          echo "::endgroup::"
+          if [ -n "$psi_pid" ]; then
+              echo "::group::Zig CLI build"
+              cat "$RUNNER_TEMP/psi-build.log"
+              echo "::endgroup::"
+          fi
           echo "UNIT_TEST_STATUS=$test_status" >> "$GITHUB_ENV"
           if [ "$psi_status" -ne 0 ]; then
               echo "::error::The Zig CLI build exited $psi_status."

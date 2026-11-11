@@ -55,7 +55,19 @@ jobs:
           build-args: -Dtarget=aarch64-ios.14.0-simulator
           config-name: aarch64-ios-simulator
 
+      # The finished app and CLI, keyed on everything they are built from, so a commit that changes only the tests pays no build. An
+      # exact match only, so nothing is restored for a commit whose Zig code, page or libraries differ.
+      - name: Restore the built app and CLI
+        id: built
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            out/app
+            out/psi
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'third-party/*/zig-out/**', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
+
       - name: Restore the build's Zig build cache
+        if: steps.built.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: .zig-cache
@@ -67,6 +79,7 @@ jobs:
       # caused syscall error: ISCONN"), where ReleaseSafe returns an error the code handles. Side by side, because each spends most
       # of its time compiling one Zig module, which takes one core, and they use different library directories.
       - name: Build the app for the iOS simulator and the Zig CLI
+        if: steps.built.outputs.cache-hit != 'true'
         shell: bash
         run: |
           /usr/bin/time -p bun run --filter=ziggy build:ios -- --sdk simulator --configuration Release --native-dir "$PWD/out/app/native" --build-dir "$PWD/out/app/xcode" > "$RUNNER_TEMP/app-build.log" 2>&1 &
@@ -87,6 +100,15 @@ jobs:
               echo "::error::The app build exited $app_status and the Zig CLI build $psi_status."
               exit 1
           fi
+
+      - name: Save the built app and CLI
+        if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            out/app
+            out/psi
+          key: ${{ runner.os }}-${{ runner.arch }}-test-built-ios-${{ hashFiles('mise.toml', '**/*.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'third-party/*/zig-out/**', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/ios/**', 'apps/photosphere/scripts/**') }}
 
       - name: Save the build's Zig build cache
         if: always()
