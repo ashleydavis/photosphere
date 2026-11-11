@@ -29,11 +29,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       # Only the NDK and the libc files, not the android-libc action: its SDK setup also installs the emulator and a system image,
       # which this job never runs and which took 2.7 of its 3.4 minutes. The runner's SDK has the platform and build tools Gradle needs.
@@ -121,11 +128,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig-tools
 
       # The scenarios build their database fixtures with the CLI, which needs ImageMagick and ffmpeg.
       - name: Install media processing tools

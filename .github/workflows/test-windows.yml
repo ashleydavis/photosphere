@@ -33,11 +33,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       - name: Fetch the WebView2 SDK and the WiX Toolset
         shell: bash
@@ -161,11 +168,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig-tools
 
       # The scenarios build their database fixtures with the CLI, which needs ImageMagick and ffmpeg.
       - name: Install ffmpeg
@@ -228,11 +237,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      # Node.js as the release workflow's CLI smoke job has it, so this job runs what that one runs.
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      # This job builds psi for its own smoke tests, so it resolves the packages Zig needs.
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       - name: Install ffmpeg
         uses: ./.github/actions/install-ffmpeg-windows

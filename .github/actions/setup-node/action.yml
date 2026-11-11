@@ -1,0 +1,17 @@
+name: Setup Node.js
+description: >
+  Node.js at the version the workflow's NODE_VERSION gives. The job has to check the repository out first, if only because every job
+  does.
+
+inputs:
+  node-version:
+    description: The Node.js version, as the workflow's NODE_VERSION gives it.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}

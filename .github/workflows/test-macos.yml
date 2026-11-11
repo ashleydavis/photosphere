@@ -51,11 +51,18 @@ jobs:
         with:
           path: psi-src
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       # The scenarios build their database fixtures with the CLI, which needs ImageMagick and ffmpeg.
       - name: Install media processing tools
@@ -201,11 +208,19 @@ jobs:
         with:
           path: psi-src
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      # This job builds psi, so it resolves the packages Zig needs.
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       - name: Install media processing tools
         uses: ./.github/actions/retry-install

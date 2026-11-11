@@ -1,0 +1,16 @@
+name: Setup Zig
+description: >
+  Zig and jq at the versions mise.toml pins, and the packages Zig resolves, which the job's own build uses when it fetches every
+  package itself. A job that runs no `zig build` needs only the Zig version, so it uses setup-zig-tools. The job has to check the
+  repository out first.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Zig and jq (versions from mise.toml)
+      uses: jdx/mise-action@v2
+      with:
+        install_args: zig jq
+
+    - name: Restore the packages Zig fetches, or fetch all of them when the cache has none
+      uses: ./.github/actions/zig-packages

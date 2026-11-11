@@ -37,11 +37,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       # The Linux native app links the runtime libraries by file name, so no development packages are needed.
       - name: Install the app's runtime libraries
@@ -103,11 +110,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig-tools
 
       # The app's runtime libraries, xvfb, which lib/linux.sh runs the app under, and the media tools the scenarios' fixtures need.
       - name: Install the runtime libraries, xvfb and media processing tools
@@ -161,11 +170,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      # Scenario 75 runs `zig build test-integration`, so this job resolves the packages Zig needs.
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       - name: Install media processing tools
         uses: ./.github/actions/install-apt-packages

@@ -1,0 +1,12 @@
+name: Setup Zig tools
+description: >
+  Zig and jq at the versions mise.toml pins, without the packages Zig resolves. For a job that runs no `zig build`: the smoke shards
+  run the app and the scenarios, and find the psi they use already built.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Zig and jq (versions from mise.toml)
+      uses: jdx/mise-action@v2
+      with:
+        install_args: zig jq

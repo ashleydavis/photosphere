@@ -33,11 +33,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup
-        uses: ./.github/actions/test-setup
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Zig and jq (versions from mise.toml)
+        uses: ./.github/actions/setup-zig
 
       - name: Check the iOS toolchain
         run: bun run --filter=ziggy setup:ios
@@ -145,7 +152,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       # One simulator a runner: four shards and the build are five jobs, the account's whole quota of macOS runners, and each shard
       # runs half the scenarios two shards did. PHOTOSPHERE_IOS_SIMULATORS hands it to the scenarios.
@@ -173,31 +180,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Bun for the remote control server and the S3 emulator, Bun's install cache for `bun install`, and Zig and jq from mise.toml.
-      # No Node.js, and no fetching of the Zig packages: this job installs the app on a simulator and runs the scenarios, and it
-      # never runs zig build, because the psi it uses is the one the build job uploaded. Both cost it minutes.
+      # No Node.js and no Zig packages: this job installs the app on a simulator and runs the scenarios, and it never runs
+      # zig build, because the psi it uses is the one the build job uploaded. Both cost it minutes.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: ./.github/actions/setup-bun
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Zig and jq (versions from mise.toml)
-        uses: jdx/mise-action@v2
-        with:
-          install_args: zig jq
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-bun-
-
-      - name: Install dependencies
-        uses: ./.github/actions/retry-install
-        with:
-          run: bun install
+        uses: ./.github/actions/setup-zig-tools
 
       # The scenarios build their database fixtures with the CLI, which needs ImageMagick and ffmpeg.
       - name: Install media processing tools
@@ -223,7 +214,7 @@ jobs:
         timeout-minutes: 12
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/6
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy:ios
 
       - name: Collect the logs of failed scenarios and any crash reports

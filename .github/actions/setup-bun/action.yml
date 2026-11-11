@@ -1,0 +1,30 @@
+name: Setup Bun
+description: >
+  Bun at the version the workflow's BUN_VERSION gives, the cache of the packages it installs, and `bun install`. The job has to check
+  the repository out first.
+
+inputs:
+  bun-version:
+    description: The Bun version, as the workflow's BUN_VERSION gives it.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Cache Bun dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-bun-
+
+    - name: Install dependencies
+      uses: ./.github/actions/retry-install
+      with:
+        run: bun install
