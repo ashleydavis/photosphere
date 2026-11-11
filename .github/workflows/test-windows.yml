@@ -154,9 +154,11 @@ jobs:
           run: choco install imagemagick -y
           verify: magick|convert
 
+      # Retried: it downloads the WebView2 SDK, and one shard's download failed with a 502 from the server in a passing run's set.
       - name: Fetch the WebView2 SDK and the WiX Toolset
-        shell: bash
-        run: bun run --filter=ziggy setup
+        uses: ./.github/actions/retry-install
+        with:
+          run: bun run --filter=ziggy setup
 
       - name: Download the app
         uses: actions/download-artifact@v4
