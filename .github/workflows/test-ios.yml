@@ -154,19 +154,22 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      # Three simulators a runner, so each shard runs three scenarios at once: four shards with the build are five jobs, exactly the
-      # account's quota of macOS runners, so nothing queues behind anything else in this workflow. Six shards wanted seven jobs, and
-      # three of them then started between six and fifteen minutes in, which is most of what put this workflow past 20 minutes.
+      # Two simulators a runner, and four shards: eight scenarios at once, and five jobs with the build, which is exactly the account's
+      # quota of macOS runners so nothing in this workflow queues behind anything else in it.
+      #
+      # Three simulators a runner was tried and is worse: on a 3-core runner the boot of three took 8.8 minutes and simctl install then
+      # hung for 12, so no scenario started on any shard in 20 minutes. Six shards of two wanted seven jobs, and three of them started
+      # six to fifteen minutes in, which was most of what put this workflow past 20 minutes.
       #
       # No cache of the simulators' data: it was tried to skip the one-time data migration a simulator runs at a new Xcode version, but
       # restoring several gigabytes took longer than the migration it saved, four minutes before any scenario on every shard.
-      - name: Start booting three simulators
+      - name: Start booting two simulators
         shell: bash
         run: |
-          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:3] | .[].udid')"
+          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:2] | .[].udid')"
           count="$(printf '%s\n' "$udids" | grep -c .)"
-          if [ "$count" -lt 3 ]; then
-              echo "There are $count available iPhone simulators, and each shard needs three." >&2
+          if [ "$count" -lt 2 ]; then
+              echo "There are $count available iPhone simulators, and each shard needs two." >&2
               exit 1
           fi
           for udid in $udids; do
@@ -261,8 +264,8 @@ jobs:
         timeout-minutes: 12
         shell: bash
         env:
-          # Three at once, matching the three simulators this job boots.
-          PHOTOSPHERE_TEST_PARALLEL: "3"
+          # Two at once, matching the two simulators this job boots.
+          PHOTOSPHERE_TEST_PARALLEL: "2"
           PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy:ios
 
