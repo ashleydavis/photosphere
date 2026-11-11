@@ -250,7 +250,12 @@ control_command() {
     done
     printf '%s\n' "$command_json" >&3
     local answer=""
-    if ! read -r -t 90 -u 3 answer; then
+    # Seconds to wait for this one answer. It was 90, and a scenario that sends a dozen commands to an app that has stopped answering
+    # spent 18 minutes of a shard's budget in reads that could never return: on iOS a shard took 566 and 608 seconds that way, and the
+    # shard then failed. A command is answered in well under a second by a working app, and a scenario that has to wait longer than
+    # this is already failing, so it fails here rather than at its own timeout.
+    local answer_timeout="${PHOTOSPHERE_CONTROL_ANSWER_SECONDS:-20}"
+    if ! read -r -t "$answer_timeout" -u 3 answer; then
         exec 3>&-
         return 1
     fi

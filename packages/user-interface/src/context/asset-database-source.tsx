@@ -1012,11 +1012,19 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 });
         }
 
-        // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes
+        // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes.
+        //
+        // Only a load that is still this effect's own is torn down. React runs this cleanup after the render that changed the path,
+        // and by then a load of the new path may already be running: closeDatabase sets the path to undefined, and the effects that
+        // openDatabase and this one start run before this cleanup does. Cancelling then killed the new load and cleared its marker,
+        // so the next call for the same database saw no load in progress and started a second one. Both cleared the gallery, both
+        // found nothing, and the gallery settled on the second: scenario 26 timed out on "Gallery loaded: 2 assets" with two
+        // "Starting load" lines and two "Load assets task completed: 0 assets loaded" in the log.
         return () => {
-            if (databasePath) {
-                cancelDatabaseLoad(databasePath);
+            if (!databasePath || loadingDatabasePath.current !== databasePath) {
+                return;
             }
+            cancelDatabaseLoad(databasePath);
             loadingDatabasePath.current = undefined;
         };
     }, [databasePath]);
