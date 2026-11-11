@@ -145,17 +145,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     steps:
-      # Two simulators a runner, so each runner runs two scenarios at once and the shards take two of the five macOS runners rather
-      # than four. PHOTOSPHERE_IOS_SIMULATORS hands them to the scenarios.
-      - name: Start booting two simulators
+      # One simulator a runner: four shards and the build are five jobs, the account's whole quota of macOS runners, and each shard
+      # runs half the scenarios two shards did. PHOTOSPHERE_IOS_SIMULATORS hands it to the scenarios.
+      - name: Start booting a simulator
         shell: bash
         run: |
-          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:2] | .[].udid')"
+          udids="$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))] | .[0:1] | .[].udid')"
           count="$(printf '%s\n' "$udids" | grep -c .)"
-          if [ "$count" -lt 2 ]; then
-              echo "There are $count available iPhone simulators, and the shards need two." >&2
+          if [ "$count" -lt 1 ]; then
+              echo "There are no available iPhone simulators." >&2
               exit 1
           fi
           for udid in $udids; do
@@ -163,8 +163,8 @@ jobs:
               xcrun simctl boot "$udid"
           done
           echo "PHOTOSPHERE_IOS_SIMULATORS=$(printf '%s ' $udids)" >> "$GITHUB_ENV"
-          # Waited for here rather than inside the first scenario, which paid 9.5 minutes for installing and launching on two
-          # simulators that were still starting: the first scenario of shard 2 took that long and the scenario after it timed out.
+          # Waited for here rather than inside the first scenario, which paid minutes for installing and launching on a simulator that
+          # was still starting: the first scenario of a shard took 9.5 minutes and the scenario after it timed out.
           for udid in $udids; do
               echo "Waiting for $udid to finish booting"
               xcrun simctl bootstatus "$udid" -b
@@ -203,7 +203,7 @@ jobs:
         timeout-minutes: 35
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/2
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
         run: PHOTOSPHERE_SMOKE_BUILD="$PWD/out/app" PHOTOSPHERE_SMOKE_PSI="$PWD/out/psi/bin/psi" bun run test:ziggy:ios
 
       - name: Collect the logs of failed scenarios and any crash reports
