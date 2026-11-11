@@ -61,7 +61,7 @@ jobs:
       - name: Work out the app cache key
         id: app-key
         shell: bash
-        run: echo "key=${{ runner.os }}-${{ runner.arch }}-test-built-app-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/windows/**', 'apps/photosphere/scripts/**') }}" >> "$GITHUB_OUTPUT"
+        run: echo "key=${{ runner.os }}-${{ runner.arch }}-test-built-app-${{ hashFiles('mise.toml', 'packages-zig/**/src/**', 'packages-zig/**/build.zig', 'packages-zig/*.zig', 'apps/cli-zig/src/**', 'apps/cli-zig/build.zig', 'build.zig', 'build.zig.zon', 'third-party/*/build.zig.zon', 'apps/photosphere-frontend/src/**', 'packages/**/src/**', 'apps/photosphere/native/windows/**') }}" >> "$GITHUB_OUTPUT"
 
       - name: Restore the built app
         id: app-built
