@@ -56,11 +56,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
+      # No Node.js: nothing here runs one. The scenarios drive the app through Bun, and the build and Xcode run their own tools.
       - name: Setup Zig and jq (versions from mise.toml)
         uses: ./.github/actions/setup-zig
 
@@ -213,11 +209,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
+      # No Node.js: this job runs the Zig suites and nothing else.
       # This job builds psi, so it resolves the packages Zig needs.
       - name: Setup Zig and jq (versions from mise.toml)
         uses: ./.github/actions/setup-zig
