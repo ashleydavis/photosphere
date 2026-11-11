@@ -20,5 +20,6 @@ jobs:
       runner: macos-15-intel
       platform: macos-x64
       target: x86_64-macos.11.0
-      # The runner has 4 cores.
-      app-parallel: "4"
+      # The runner has 4 cores, and the scenarios spend most of their time waiting on the app rather than computing: four at once took
+      # the 68 scenarios 549 seconds.
+      app-parallel: "6"
