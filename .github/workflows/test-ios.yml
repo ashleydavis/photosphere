@@ -211,6 +211,17 @@ jobs:
         shell: bash
         run: tar -xf "$RUNNER_TEMP/build.tar"
 
+      # The install of this app on a simulator that has never had it took most of a shard's scenarios in the first run: the first
+      # scenario was still in it when the step's 12 minutes ran out. Installed here, once per simulator, each scenario's own install
+      # finds what it expects and the cost is paid once, beside the setup, instead of inside the first scenario's time.
+      - name: Install the app on each simulator
+        shell: bash
+        run: |
+          for udid in $PHOTOSPHERE_IOS_SIMULATORS; do
+              echo "Installing the app on $udid"
+              xcrun simctl install "$udid" "$PWD/out/app/xcode/Build/Products/Release-iphonesimulator/Photosphere.app"
+          done
+
       - name: Run shard ${{ matrix.shard }} of the Photosphere App iOS smoke tests
         timeout-minutes: 12
         shell: bash
