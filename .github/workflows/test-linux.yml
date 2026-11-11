@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -139,7 +139,7 @@ jobs:
         timeout-minutes: 12
         shell: bash
         env:
-          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4
+          PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/5
           # Three at once on the runner's four cores, so four shards take the time six took two at a time, on two fewer runners under
           # the account's limit of 20 jobs at once, which the Windows shards were queueing on.
           PHOTOSPHERE_TEST_PARALLEL: "3"
