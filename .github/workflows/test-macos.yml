@@ -162,7 +162,7 @@ jobs:
 
       # Shard 1 of 1 is every scenario, and like any shard it records no what-changed baseline, which this runner has no use for.
       - name: Run the Photosphere App smoke tests
-        timeout-minutes: 30
+        timeout-minutes: 12
         shell: bash
         env:
           PHOTOSPHERE_TEST_PARALLEL: ${{ inputs.app-parallel }}

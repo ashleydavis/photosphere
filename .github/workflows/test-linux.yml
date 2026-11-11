@@ -127,7 +127,7 @@ jobs:
         run: tar -xf "$RUNNER_TEMP/build.tar"
 
       - name: Run shard ${{ matrix.shard }} of the Photosphere App smoke tests
-        timeout-minutes: 25
+        timeout-minutes: 12
         shell: bash
         env:
           PHOTOSPHERE_SMOKE_SHARD: ${{ matrix.shard }}/4

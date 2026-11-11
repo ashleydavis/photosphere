@@ -180,7 +180,7 @@ jobs:
 
       # The emulator options are the release workflow's: emulator 36.6.11 and `-gpu swangle_indirect`, for the reasons it gives.
       - name: Run shard ${{ matrix.shard }} of the Photosphere App Android smoke tests
-        timeout-minutes: 35
+        timeout-minutes: 12
         uses: reactivecircus/android-emulator-runner@v2
         env:
           PHOTOSPHERE_NO_LAN_BRIDGE: "1"
