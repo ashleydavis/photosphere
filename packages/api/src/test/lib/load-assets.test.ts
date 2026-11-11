@@ -64,7 +64,7 @@ describe("loadAssets", () => {
     test("queues the load as interactive, because the user is waiting on an empty gallery", () => {
         const queue = new RecordingTaskQueue();
 
-        loadAssets(queue, "/photos/db");
+        loadAssets(queue, "/photos/db", "load-1");
 
         expect(queue.addedTasks).toHaveLength(1);
         expect(queue.addedTasks[0].priority).toBe(TaskPriority.Interactive);
@@ -73,7 +73,7 @@ describe("loadAssets", () => {
     test("queues a load-assets task naming the database", () => {
         const queue = new RecordingTaskQueue();
 
-        loadAssets(queue, "/photos/db");
+        loadAssets(queue, "/photos/db", "load-1");
 
         expect(queue.addedTasks[0].type).toBe("load-assets");
         expect(queue.addedTasks[0].data).toEqual({
@@ -81,19 +81,32 @@ describe("loadAssets", () => {
             job: {
                 id: "load:/photos/db",
                 name: "Loading assets",
-                cancelSource: "/photos/db",
+                cancelSource: "load-1",
             },
         });
     });
 
-    test("cancels by the database path, which is the source its caller's queue is tagged with", () => {
+    // The load is tagged with the id of that one load, never with the database path. cancelTasks()
+    // takes a source and a cancelled load stops paging and reports success with no assets, so a load
+    // tagged with the path is killed by every cancel of that path: the load it replaced and the load
+    // that replaced it both reported 0 assets and the gallery stayed empty (smoke test 26).
+    test("cancels by the id of the one load, which is the source its caller's queue is tagged with", () => {
         const queue = new RecordingTaskQueue();
 
-        loadAssets(queue, "/photos/db");
+        loadAssets(queue, "/photos/db", "load-1");
 
-        // Callers build their TaskQueue with the database path as its source (see
-        // asset-database-source), and cancelTasks() takes a source. A cancel source that did not
-        // match it would leave the Cancel button doing nothing at all.
-        expect(queue.addedTasks[0].data.job.cancelSource).toBe("/photos/db");
+        expect(queue.addedTasks[0].data.job.cancelSource).toBe("load-1");
+        expect(queue.addedTasks[0].data.job.cancelSource).not.toBe("/photos/db");
+    });
+
+    test("a second load of the same database is queued under its own id, so cancelling one leaves the other running", () => {
+        const firstQueue = new RecordingTaskQueue();
+        const secondQueue = new RecordingTaskQueue();
+
+        loadAssets(firstQueue, "/photos/db", "load-1");
+        loadAssets(secondQueue, "/photos/db", "load-2");
+
+        expect(firstQueue.addedTasks[0].data.job.cancelSource).toBe("load-1");
+        expect(secondQueue.addedTasks[0].data.job.cancelSource).toBe("load-2");
     });
 });

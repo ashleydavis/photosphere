@@ -16,7 +16,7 @@ import type { IDownloadAssetItem } from "./platform-context";
 import { useToast } from "./toast-context";
 import { useUuidGenerator } from "./uuid-generator-context";
 import { markRecentArrival } from "../lib/recent-arrivals";
-import { planOpenDatabase } from "../lib/open-database-plan";
+import { planLoadTeardown, planOpenDatabase } from "../lib/open-database-plan";
 
 //
 // Input data for the move-assets background task.
@@ -190,6 +190,13 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     // The TaskQueue instance for the current in-progress load, used to cancel it.
     //
     const currentLoadQueue = useRef<TaskQueue | undefined>(undefined);
+
+    //
+    // The id of the load running right now, or undefined when none is. Every load gets an id of its
+    // own that nothing else uses, so a teardown can name the one load it started rather than the
+    // database, which two loads of a reopened database share.
+    //
+    const currentLoadId = useRef<string | undefined>(undefined);
 
     //
     // Set to true while working on something.
@@ -746,6 +753,7 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             currentLoadQueue.current.shutdown();
             currentLoadQueue.current = undefined;
         }
+        currentLoadId.current = undefined;
         if (unsubscribeCurrentLoad.current) {
             unsubscribeCurrentLoad.current();
             unsubscribeCurrentLoad.current = undefined;
@@ -754,6 +762,11 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
 
     //
     // Load assets into memory.
+    //
+    // The id of the load this starts, or of the load already running for this database, is in
+    // currentLoadId when this returns. That is readable synchronously: everything below runs before
+    // the returned promise resolves, so a caller can record which one load it now owns and tear down
+    // only that one later.
     //
     async function loadAssets(dbPath: string) {
         if (!dbPath) {
@@ -789,8 +802,16 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
         //
         onReset.current.invoke();
 
-        const queue = new TaskQueue(uuidGenerator, dbPath);
+        //
+        // The queue's source is this load and nothing else, never the database path. shutdown() cancels
+        // its whole source, so a load tagged with the path is cancelled by every other cancel of that
+        // path, including the one for the load it just replaced: that load's task is then cancelled
+        // before it pages anything, reports success with 0 assets, and the gallery stays empty.
+        //
+        const loadId = uuidGenerator.generate();
+        const queue = new TaskQueue(uuidGenerator, loadId);
         currentLoadQueue.current = queue;
+        currentLoadId.current = loadId;
 
         // Store the database path at the time the load started
         const currentDatabasePath = dbPath;
@@ -859,8 +880,8 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
             unsubscribeMessage();
         };
 
-        // Queue the load-assets task using the same queue instance with database path
-        loadAssetsApi(queue, dbPath);
+        // Queue the load-assets task using the same queue instance and the same id
+        loadAssetsApi(queue, dbPath, loadId);
     }
 
     //
@@ -1002,6 +1023,19 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
     }, [platform, databasePath]);
 
     //
+    // Cancel whatever load is running when the provider unmounts. The database-path effect below
+    // tears down only the load it owns, and a load started directly by openDatabase can take over
+    // from it with no path change to re-run that effect, so on unmount it would otherwise be left
+    // running. An unmount ends every load, so this one does not ask which.
+    //
+    useEffect(() => {
+        return () => {
+            cancelDatabaseLoad("");
+            loadingDatabasePath.current = undefined;
+        };
+    }, []);
+
+    //
     // Load assets when database path changes.
     //
     useEffect(() => {
@@ -1012,20 +1046,29 @@ export function AssetDatabaseProvider({ children, queueBackend, restApiUrl }: IA
                 });
         }
 
-        // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes.
         //
-        // Only a load that is still this effect's own is torn down. React runs this cleanup after the render that changed the path,
-        // and by then a load of the new path may already be running: closeDatabase sets the path to undefined, and the effects that
-        // openDatabase and this one start run before this cleanup does. Cancelling then killed the new load and cleared its marker,
-        // so the next call for the same database saw no load in progress and started a second one. Both cleared the gallery, both
-        // found nothing, and the gallery settled on the second: scenario 26 timed out on "Gallery loaded: 2 assets" with two
-        // "Starting load" lines and two "Load assets task completed: 0 assets loaded" in the log.
+        // The load this effect is responsible for: the one it started, or the one already running when
+        // it ran. Recorded now, while that is knowable, because by cleanup time the load running may
+        // be a later one. Undefined when this render had no database to load.
+        //
+        const effectLoadId = databasePath ? currentLoadId.current : undefined;
+
+        //
+        // Cleanup: cancel tasks and unsubscribe if component unmounts or database path changes, but
+        // only the load this effect owned. A reopen of the same database starts its replacement load
+        // from openDatabase before React renders the path back, so the load running at cleanup is that
+        // replacement, and cancelling it kills the load the user is waiting on. Matching on the
+        // database path cannot tell the two apart, because a reopen gives both loads the same path.
+        // See planLoadTeardown.
+        //
         return () => {
-            if (!databasePath || loadingDatabasePath.current !== databasePath) {
-                return;
+            if (planLoadTeardown({
+                startedLoadId: effectLoadId,
+                currentLoadId: currentLoadId.current,
+            })) {
+                cancelDatabaseLoad(databasePath ?? "");
+                loadingDatabasePath.current = undefined;
             }
-            cancelDatabaseLoad(databasePath);
-            loadingDatabasePath.current = undefined;
         };
     }, [databasePath]);
 

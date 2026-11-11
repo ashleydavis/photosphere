@@ -1,4 +1,4 @@
-import { planOpenDatabase } from "../../lib/open-database-plan";
+import { planLoadTeardown, planOpenDatabase } from "../../lib/open-database-plan";
 
 describe("planOpenDatabase", () => {
 
@@ -70,5 +70,41 @@ describe("planOpenDatabase", () => {
             closeFirst: true,
             startLoadDirectly: true,
         });
+    });
+});
+
+describe("planLoadTeardown", () => {
+
+    test("the effect rendered with no database started no load to tear down", () => {
+        expect(planLoadTeardown({
+            startedLoadId: undefined,
+            currentLoadId: undefined,
+        })).toBe(false);
+    });
+
+    test("tears down the load the cleaned-up effect started", () => {
+        expect(planLoadTeardown({
+            startedLoadId: "load-1",
+            currentLoadId: "load-1",
+        })).toBe(true);
+    });
+
+    // A reopen of the same database closes it and starts the replacement load from openDatabase
+    // before React renders the path back, so the load running at cleanup is that replacement. Both
+    // loads are for the same database, which is why comparing database paths cannot tell them apart:
+    // the cleanup cancelled the replacement and the effect started a second load, and both reported
+    // 0 assets (smoke test 26). Comparing ids does tell them apart.
+    test("leaves a replacement load alone, even though it is for the same database", () => {
+        expect(planLoadTeardown({
+            startedLoadId: "load-1",
+            currentLoadId: "load-2",
+        })).toBe(false);
+    });
+
+    test("nothing to tear down when no load is running any more", () => {
+        expect(planLoadTeardown({
+            startedLoadId: "load-1",
+            currentLoadId: undefined,
+        })).toBe(false);
     });
 });
