@@ -6,16 +6,10 @@ A third-party library (the AWS SDK for C, zlib-ng, ImageMagick and FFmpeg) is bu
 
 ## Test (`test-<platform>.yml`)
 
-One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `android` and `ios`. Each runs on every push to a branch and every manual run. Each is the release workflow for that platform with `package` and `create-release` taken out, so it runs the same tests over the same builds and libraries, and packages and publishes nothing. See [Releasing](releasing.md) for the release workflows.
+One workflow per platform: `linux`, `windows`, `macos-arm64`, `macos-x64`, `android` and `ios`. Each runs on every push to a branch and every manual run. Each is the release workflow for that platform with `prepare-tag`, `package` and `create-release` taken out, so it runs the same tests over the same builds and libraries, and resolves no tag, packages nothing and publishes nothing. See [Releasing](releasing.md) for the release workflows.
 
 ```
 test-<platform>.yml
-├── prepare-tag
-│   │ needs:  none
-│   │ Resolves no tag on a test run: there is no tag to resolve and
-│   │ nothing is released.
-│   └── linux                     (ubuntu-latest)
-│
 │   Library jobs: one job per library, for this platform.
 │     needs:  none
 │     output → GitHub cache
@@ -25,14 +19,14 @@ test-<platform>.yml
 ├── build-ffmpeg                       (<platform runner>)
 │
 ├── app-build
-│   │ needs:  prepare-tag, the 4 library jobs
-│   │ Builds the app.
+│   │ needs:  the 4 library jobs
+│   │ Builds the app, stamped with the commit.
 │   │ input  ← libraries from GitHub cache
 │   │ output → GitHub cache (photosphere-app-<platform>)
 │   └── <platform>                (<platform runner>)
 ├── cli-build  (desktop only)
-│   │ needs:  prepare-tag, the 4 library jobs
-│   │ Builds the CLI.
+│   │ needs:  the 4 library jobs
+│   │ Builds the CLI, stamped with the commit.
 │   │ input  ← libraries and its Zig build cache from GitHub cache
 │   │ output → GitHub cache (photosphere-cli-<platform>, and its Zig
 │   │          build cache)
@@ -162,17 +156,15 @@ Each arrow points from a job to a job that needs it. A job with no arrow into it
 
 ### `test-<platform>.yml`
 
-`cli-build` and `cli-smoke-tests` are in the desktop workflows only (Linux, Windows and macOS). `zig-unit-tests` runs on the workflow's own runner and needs `cli-build` in the desktop workflows and `app-build` in the Android and iOS ones. There is no `package` and no `create-release`.
+`cli-build` and `cli-smoke-tests` are in the desktop workflows only (Linux, Windows and macOS). `zig-unit-tests` runs on the workflow's own runner and needs `cli-build` in the desktop workflows and `app-build` in the Android and iOS ones. There is no `prepare-tag`, no `package` and no `create-release`.
 
 ```mermaid
 flowchart LR
-    prepare-tag --> app-build
     lib-aws["build-aws-sdk"] --> app-build
     lib-zlib["build-zlib-ng"] --> app-build
     lib-im["build-imagemagick"] --> app-build
     lib-ff["build-ffmpeg"] --> app-build
-    prepare-tag --> cli-build["cli-build (desktop)"]
-    lib-aws --> cli-build
+    lib-aws --> cli-build["cli-build (desktop)"]
     lib-zlib --> cli-build
     lib-im --> cli-build
     lib-ff --> cli-build
