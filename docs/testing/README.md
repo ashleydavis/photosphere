@@ -205,6 +205,8 @@ bun run perf
 
 The Zig CLI runs ImageMagick and FFmpeg from the libraries built into it and never starts an installed copy. The tests still need them installed: the smoke test scripts and some unit test helpers run installed `magick`, `ffmpeg` and `ffprobe` to make and check fixtures, so ImageMagick and FFmpeg must be on the PATH of any machine that runs the tests.
 
+The format tests read images and videos made on the machine rather than committed, by `scripts/make-format-test-images.sh`. `zig build test` runs it first, and it keeps any files already there, so nothing has to be made by hand. It needs the installed ImageMagick and FFmpeg above.
+
 ## UI stories
 
 The stories browser mounts every page, modal, dialog, and component in isolation with mock data, so each UI surface can be checked without seeding a real database. It is the main tool for reviewing how the UI looks, including how it fits on a small screen.

@@ -439,10 +439,14 @@ const IThirdPartyLibraries = struct {
 //     library's sources or configuration changed since it was built, as when FFmpeg's decoder list changed and the old library
 //     was still linked.
 //
-// When build-complete is there and inputs-hash is not, the libraries were built by running that build directly, as CI does in a job
-// of its own before restoring them from its cache keyed on the same files, and they are taken as they are. Running that build on
-// every build instead rebuilt FFmpeg from scratch in every CI job, which restores only the libraries and not that build's own
-// cache, and the Windows CLI smoke test job was killed doing it.
+// When build-complete is there and inputs-hash is not, the library was not built by this build: either a build ran directly in
+// third-party/<name>, as a developer does and as CI does in a job of its own, or its output was restored from a CI artifact, which
+// holds zig-out and nothing else. The two are told apart by that build's own .zig-cache, which a direct build leaves in that
+// directory and an artifact does not carry: with a cache there, this build runs that build, which is a cache check unless the
+// library is stale (a library built before its files last changed has no inputs-hash, so this is the path that rebuilds it).
+// Without one, the library was restored, and its artifact key in CI covers the same files, so it is taken as it is: running that
+// build on every build instead rebuilt FFmpeg from scratch in every CI job that restores only the library, and the Windows CLI smoke
+// test job was killed doing it.
 //
 fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) !IThirdPartyLibraries {
     const directory = b.fmt("third-party/{s}/zig-out/{s}-{s}-{s}", .{ name, @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), @tagName(target.result.abi) });
@@ -452,10 +456,18 @@ fn findThirdPartyLibraries(b: *std.Build, target: std.Build.ResolvedTarget, name
     var needsBuild = false;
     if (b.build_root.handle.access(io, b.fmt("{s}/build-complete", .{directory}), .{})) |_| {
         const builtHash = b.build_root.handle.readFileAlloc(io, hashPath, b.allocator, .limited(64)) catch |err| switch (err) {
-            error.FileNotFound => currentHash,
+            error.FileNotFound => null,
             else => return err,
         };
-        needsBuild = !std.mem.eql(u8, builtHash, currentHash);
+        if (builtHash) |hash| {
+            needsBuild = !std.mem.eql(u8, hash, currentHash);
+        }
+        else {
+            needsBuild = if (b.build_root.handle.access(io, b.fmt("third-party/{s}/.zig-cache", .{name}), .{})) |_| true else |err| switch (err) {
+                error.FileNotFound => false,
+                else => return err,
+            };
+        }
     }
     else |err| switch (err) {
         error.FileNotFound => {
@@ -670,7 +682,16 @@ fn addUnitTests(
         .root_module = tests,
         .use_llvm = if (coverage_dir != null) true else null,
     });
+    // The images and videos the format tests read, which are made on the machine rather than committed (see
+    // scripts/make-format-test-images.sh, which keeps any that are already there). Steps run before the tests, so a test never fails
+    // for want of one.
+    const make_format_test_images = b.addSystemCommand(&.{
+        "bash",
+        "scripts/make-format-test-images.sh",
+    });
+    make_format_test_images.has_side_effects = true;
     const run_test = if (coverage_dir) |directory| try addCoverageRun(b, unit_test, directory) else b.addRunArtifact(unit_test);
+    run_test.step.dependOn(&make_format_test_images.step);
     run_test.setCwd(b.path("packages-zig"));
     addStandInsToPath(b, run_test, target, stand_ins);
     test_step.dependOn(&run_test.step);
