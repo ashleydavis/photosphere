@@ -20,13 +20,14 @@ test-<platform>.yml
 │
 ├── app-build
 │   │ needs:  the 4 library jobs
-│   │ Builds the app, stamped with the commit.
+│   │ Builds the app, unstamped: it reports the version in the
+│   │ checked-in config.
 │   │ input  ← libraries from GitHub cache
 │   │ output → GitHub cache (photosphere-app-<platform>)
 │   └── <platform>                (<platform runner>)
 ├── cli-build  (desktop only)
 │   │ needs:  the 4 library jobs
-│   │ Builds the CLI, stamped with the commit.
+│   │ Builds the CLI, unstamped, as the app is.
 │   │ input  ← libraries and its Zig build cache from GitHub cache
 │   │ output → GitHub cache (photosphere-cli-<platform>, and its Zig
 │   │          build cache)
@@ -148,7 +149,7 @@ The platform runner of each release workflow:
 | `release-android.yml` | `ubuntu-latest` |
 | `release-ios.yml` | `macos-15` |
 
-The Android library jobs build each library for the runner, Android x86_64 and Android arm64. The iOS library jobs build for the iOS simulator and an iOS device; the iOS `app-build` also restores the macOS arm64 libraries for the runner, which no job in that workflow builds, so on a cache miss it builds them itself.
+The Android library jobs build each library for the runner, Android x86_64 and Android arm64. The iOS library jobs build for the iOS simulator; the iOS `app-build` also restores the macOS arm64 libraries for the runner, which no job in that workflow builds, so on a cache miss it builds them itself.
 
 ## Dependency graphs
 

@@ -88,8 +88,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -127,12 +125,6 @@ jobs:
         with:
           platform: macos-arm64
           build-args: -Dtarget=aarch64-macos.11.0
-
-      - name: Set config
-        shell: bash
-        run: |
-          VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       # The app build's Zig build cache, restored from the latest run that saved one for this platform, so the build
       # compiles only what changed instead of the whole app. Saved again after the build, as the CLI build does.
@@ -242,11 +234,6 @@ jobs:
           build-args: -Dtarget=aarch64-macos.11.0
 
       # Stamps the commit into the CLI's config before it is compiled, the same way app-build does for
-      - name: Set config
-        shell: bash
-        run: |
-          bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
-
       - name: Build the Zig CLI natively for macOS arm64
         working-directory: .
         run: zig build -Dcpu=baseline --prefix apps/cli-zig/bin/arm64/mac --prefix-exe-dir .

@@ -145,8 +145,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -198,12 +196,6 @@ jobs:
         with:
           platform: android
           build-args: -Dtarget=aarch64-linux-android --libc ../../tmp/android-libc/arm64.txt
-
-      - name: Set config
-        shell: bash
-        run: |
-          VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       # The app build's Zig build cache, restored from the latest run that saved one for this platform, so the build
       # compiles only what changed instead of the whole app. Saved again after the build, as the CLI build does.

@@ -20,9 +20,9 @@ on:
 
 jobs:
 
-  # The third-party libraries, each built once by its own action and stored as an artifact under the same keys as the Zig CI workflow, so a
-  # library either workflow has already built is restored rather than compiled again. Every job that runs the Zig build
-  # restores them from those artifacts with the third-party-libraries action.
+  # The third-party libraries, each built once by its own action and stored as an artifact under the same keys the release
+  # workflows use, so a library either kind of workflow has already built is restored rather than compiled again. Every job that
+  # runs the Zig build restores them from those artifacts with the third-party-libraries action.
   build-aws-sdk:
     timeout-minutes: 40
     runs-on: ubuntu-latest
@@ -72,8 +72,8 @@ jobs:
           platform: linux-x64
 
   # Restores the third-party libraries the library jobs built and builds the Photosphere App for Linux by the same build script a
-  # developer runs, stamped with the commit only. Each library job stores its library, so this job restores it. The build, the Zig
-  # build cache and the libraries are saved under photosphere-app-linux-<commit>-<run>, which app-smoke-tests restores.
+  # developer runs, unstamped. Each library job stores its library, so this job restores it. The build, the Zig build cache and the
+  # libraries are saved under photosphere-app-linux-<commit>-<run>, which app-smoke-tests restores.
   app-build:
     timeout-minutes: 120
     needs: [build-aws-sdk, build-zlib-ng, build-imagemagick, build-ffmpeg]
@@ -81,8 +81,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -111,12 +109,12 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-bun-
 
       # The Linux native app links the runtime libraries by file name, so no development packages are needed. WebKitGTK plays
-      # video through GStreamer, so the packaged app depends on those plugins.
-      - name: Install the build and packaging tools (Linux)
+      # video through GStreamer, so the app needs those plugins.
+      - name: Install the app's runtime libraries (Linux)
         uses: ./.github/actions/install-apt-packages
         with:
-          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav zip
-          verify: zip
+          packages: libgtk-3-0 libwebkit2gtk-4.1-0 libgdk-pixbuf-2.0-0 gstreamer1.0-plugins-good gstreamer1.0-libav
+          verify: ""
 
       - name: Install dependencies
         uses: ./.github/actions/retry-install
@@ -127,12 +125,6 @@ jobs:
         uses: ./.github/actions/third-party-libraries
         with:
           platform: linux-x64
-
-      - name: Set config
-        shell: bash
-        run: |
-          VERSION="$(bash ./scripts/set-build-config.sh --commit "${{ github.sha }}")"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       # The app build's Zig build cache, restored from the latest run that saved one for this platform, so the build
       # compiles only what changed instead of the whole app. Saved again after the build, as the CLI build does.
@@ -239,12 +231,6 @@ jobs:
         uses: ./.github/actions/third-party-libraries
         with:
           platform: linux-x64
-
-      # Stamps the commit into the CLI's config before it is compiled, the same way app-build does for the app.
-      - name: Set config
-        shell: bash
-        run: |
-          bash ./scripts/set-build-config.sh --commit "${{ github.sha }}"
 
       - name: Build the Zig CLI natively for Linux x64
         working-directory: .
