@@ -69,8 +69,10 @@ runs:
         path: third-party/ffmpeg/zig-out
 
     # After the key is worked out, so the files it makes do not change the key a job that only restores the library works out.
+    # Made whether the library was stored or not: the stored artifact holds zig-out and nothing else, so a job that restores it has
+    # no config directory of its own. The directory is left alone when it is already there.
     - name: Make FFmpeg's generated files for the target
-      if: steps.artifact.outputs.run-id == '' && inputs.config-name != ''
+      if: inputs.config-name != ''
       shell: bash
       run: |
         if [ ! -d "third-party/ffmpeg/config/${{ inputs.config-name }}" ]; then
