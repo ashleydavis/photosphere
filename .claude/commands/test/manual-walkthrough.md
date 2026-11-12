@@ -11,6 +11,7 @@ Take the human through `docs/testing/e2e/CHECKLIST.md`, one test at a time and o
 - Read `docs/testing/e2e/CHECKLIST.md` and `docs/testing/e2e/CHECKLIST-NOTES.md`.
 - If arguments were given (`$ARGUMENTS`), start at the section or test they name. Otherwise start at the first unticked test.
 - Take the human only through untested tests, marked `- [ ]`. Skip tests marked `- [x]` (passed) or `- [-]` (failed), unless the arguments ask for them.
+- An entry that links no test file (the Platforms entries) has no steps to walk. Say what it checks and ask the human whether it passed, then mark it `- [x]` or `- [-]`.
 
 ## For each test
 
@@ -59,6 +60,7 @@ When the human asks you to run desktop steps yourself, drive the app through a r
 - **Never reset or rerun prep in the middle of a test.** Once the test's prep has run, do not run a reset (`android:reset`, `ios:reset` or anything else that wipes the app), reinstall the app or rerun prep, and do not propose it. When a step cannot be repeated as written, report the state the app is in and wait.
 - Notes go only in `CHECKLIST-NOTES.md`, never in `CHECKLIST.md`. A note says what happened to the app or the test, never who did or decided something: no mention of "the human". A note never names a particular emulator, simulator or device (no serial, AVD name or pool index); name the platform only. Use the same `##` section, `###` group and `####` test name headings as the checklist, adding a heading when it is missing.
 - Commands given to the human never start with `mise exec --`.
+- Never read git history (`git log`, `git show`, `git blame`, `git diff` against an old commit). The checklist, the notes and the test files are the only sources.
 - Keep every message short: the step, the command, what to expect. No waffle.
 
 ## At the end of a section

@@ -18,6 +18,7 @@ Run every untested test (marked `- [ ]`) linked from `docs/testing/e2e/CHECKLIST
 ## Running a test
 
 - Run every step in the order the test file writes it: Prep, Test and Check. Do not skip, reorder or merge steps.
+- Never read git history (`git log`, `git show`, `git blame`, `git diff` against an old commit). The checklist, the notes and the test files are the only sources.
 - **Do not skip prep.** Run every command in every code block of the Prep section. A skipped prep command makes a test fail for no reason.
 - Every test keeps its data in its own `/tmp/psi-…` folder, named in its Prep, so tests in different subagents never share state. Do not use any other folder.
 - Desktop steps: start a remote control server with `bun run ziggy-remote-control-server --app-port 0 --script-port 0` (it prints the two ports it listens on), then start the build hidden under `xvfb-run` with `--remote-control 127.0.0.1:<app port>`, the test's export block and the variables `photosphere_platform_start` in `apps/photosphere-smoke-tests/lib/linux.sh` sets, and drive it through the server's script port the way `apps/photosphere-smoke-tests/lib/common.sh` does (`click`, `type`, `navigate`, `pick-answer`, `get-value`, `long-press`, `long-press-click`, `screenshot`, `quit`). Elements are found only by `data-id`, in `packages/user-interface/src`. Use bash for the control connection, since zsh has no `/dev/tcp`. Take a screenshot and look at it for every step whose expectation is about what the window shows.
